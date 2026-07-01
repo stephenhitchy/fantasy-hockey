@@ -1,0 +1,26 @@
+<div class="auth-container">
+  <h1>{{ isRegistering() ? 'Create Account' : 'Login' }}</h1>
+
+  @if (isRegistering()) {
+    <input [(ngModel)]="username" placeholder="Username" />
+  }
+
+  <input [(ngModel)]="email" placeholder="Email" type="email" />
+  <input [(ngModel)]="password" placeholder="Password" type="password" />
+
+  <button (click)="submit()">
+    {{ isRegistering() ? 'Register' : 'Login' }}
+  </button>
+
+  <button class="switch-button" (click)="toggleMode()">
+    {{ isRegistering() ? 'Already have an account?' : 'Need an account?' }}
+  </button>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+
+  @if (successMessage()) {
+    <p class="success">{{ successMessage() }}</p>
+  }
+</div>
