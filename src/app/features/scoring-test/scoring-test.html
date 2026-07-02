@@ -1,0 +1,25 @@
+<h1>Scoring Test</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Type</th>
+      <th>Scenario</th>
+      <th>Game Points</th>
+      <th>6-Game Pace</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    @for (test of testCases; track test.name) {
+      <tr>
+        <td>{{ test.name }}</td>
+        <td>{{ test.type }}</td>
+        <td>{{ test.description }}</td>
+        <td>{{ test.points }}</td>
+        <td>{{ (test.points * 6).toFixed(1) }}</td>
+      </tr>
+    }
+  </tbody>
+</table>

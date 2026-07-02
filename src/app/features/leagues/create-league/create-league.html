@@ -1,0 +1,13 @@
+<h1>Create League</h1>
+
+<input [(ngModel)]="name" placeholder="League name" />
+
+<input [(ngModel)]="maxTeams" type="number" min="2" max="12" />
+
+<button (click)="submit()" [disabled]="loading()">
+  {{ loading() ? 'Creating...' : 'Create League' }}
+</button>
+
+@if (errorMessage()) {
+  <p>{{ errorMessage() }}</p>
+}

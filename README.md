@@ -2,58 +2,257 @@
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.5.
 
-## Development server
+# 🏒 Cycle Hockey
 
-To start a local development server, run:
+A modern fantasy hockey web application built with Angular and Firebase that reimagines traditional fantasy hockey by replacing weekly matchups with an **6-Game Cycle System**.
 
-```bash
-ng serve
-```
+The goal of this project is to create a fairer, more engaging fantasy hockey experience while serving as a full-stack portfolio project demonstrating modern web development techniques.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+---
 
-## Code scaffolding
+# Tech Stack
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+- Angular 22
+- TypeScript
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Hosting (planned)
+- NHL Public API (planned)
 
-```bash
-ng generate component component-name
-```
+---
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+# Vision
 
-```bash
-ng generate --help
-```
+Most fantasy hockey leagues use weekly matchups.
 
-## Building
+The problem is that NHL scheduling is uneven.
 
-To build the project run:
+One fantasy team may play:
 
-```bash
-ng build
-```
+- 2 games
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+while another plays:
 
-## Running unit tests
+- 5 games
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+during the same matchup.
 
-```bash
-ng test
-```
+This project solves that problem.
 
-## Running end-to-end tests
+Instead of weekly matchups, every matchup lasts until every rostered player has completed **8 NHL games**.
 
-For end-to-end (e2e) testing, run:
+Once a player completes their eighth game:
 
-```bash
-ng e2e
-```
+- future games immediately begin counting toward the next matchup cycle.
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+This creates a much fairer fantasy experience.
 
-## Additional Resources
+---
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+# Core Features
+
+## User Accounts
+
+- Register
+- Login
+- Logout
+- Persistent authentication
+
+---
+
+## League System
+
+- Create leagues
+- Join leagues using invite codes
+- Commissioner controls
+- Custom scoring rules
+
+---
+
+## Fantasy Teams
+
+Each user owns one fantasy team per league.
+
+Teams will include:
+
+- Starting lineup
+- Bench
+- Waiver wire
+- Trades
+- Transaction history
+
+---
+
+## 8-Game Matchup System
+
+Traditional fantasy hockey:
+
+Week 1
+
+Player A
+4 games
+
+Player B
+2 games
+
+Result:
+Not equal.
+
+Fantasy Hockey App:
+
+Cycle 1
+
+Every player contributes exactly 8 NHL games.
+
+No scheduling advantage.
+
+---
+
+# Scoring Philosophy
+
+This project intentionally uses larger fantasy point values than most platforms.
+
+Large scores create:
+
+- exciting player performances
+- meaningful live updates
+- satisfying fantasy totals
+
+However, scoring is carefully balanced so that elite NHL players consistently outperform depth players over a season.
+
+Goals and assists remain the primary source of fantasy points, while secondary statistics ensure role players still provide value.
+
+Examples include:
+
+- Shots
+- Hits
+- Blocked shots
+- Plus / Minus
+
+Defensemen receive additional balancing to better reflect their overall on-ice impact.
+
+---
+
+# Example Scoring
+
+Goal ..................... +12
+
+Primary Assist ........... +8
+
+Secondary Assist ......... +5
+
+Shot on Goal ............. +1
+
+Hit ...................... +0.75
+
+Blocked Shot ............. +1.25
+
+Plus ..................... +2
+
+Minus .................... -2
+
+Power Play Point ......... +2
+
+Short-Handed Point ....... +3
+
+Game Winning Goal ........ +3
+
+Defenseman Cycle Bonus ... +8
+
+2 Goal Game Bonus ........ +4
+
+Hat Trick Bonus .......... +8
+
+---
+
+# Planned Features
+
+## League Management
+
+- Invite Codes
+- Commissioner Dashboard
+- League Settings
+
+## Draft
+
+- Snake Draft
+- Draft Timer
+- Draft Board
+
+## Players
+
+- NHL Player Search
+- Player Profiles
+- Live Statistics
+- Injury Status
+
+## Live Matchups
+
+- Live fantasy scoring
+- Game notifications
+- Win probability
+- Projected cycle score
+
+## Team Management
+
+- Waivers
+- Trades
+- Lineup changes
+- Team history
+
+## Statistics
+
+- League records
+- Season leaders
+- Trophy room
+- Hall of Fame
+
+---
+
+# Current Progress
+
+- [x] Angular project created
+- [x] Firebase connected
+- [x] Firestore connected
+- [x] Authentication
+- [x] User profiles
+- [x] Dashboard
+- [x] League creation
+- [x] League detail page
+
+- [ ] Join league
+- [ ] Fantasy teams
+- [ ] NHL API integration
+- [ ] Player database
+- [ ] Draft
+- [ ] Scoring engine
+- [ ] Matchup cycles
+- [ ] Playoffs
+
+---
+
+# Future Improvements
+
+- Mobile responsive UI
+- Dark mode
+- Commissioner analytics
+- Trade review system
+- Custom scoring editor
+- Push notifications
+
+---
+
+# Purpose
+
+This application is being developed as both a personal project and a portfolio piece to demonstrate:
+
+- Angular
+- TypeScript
+- Firebase
+- Authentication
+- Cloud databases
+- API integration
+- Software architecture
+- Real-time data processing
+
+while building a fantasy hockey platform that friends can use throughout the NHL season.

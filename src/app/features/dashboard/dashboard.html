@@ -1,5 +1,18 @@
-<h1>Dashboard</h1>
+<section>
+  <h2>My Leagues</h2>
 
-<p>Welcome, {{ email() }}</p>
+  @if (leagues().length === 0) {
+    <p>No leagues yet.</p>
+  } @else {
+    @for (league of leagues(); track league.id) {
+        <div [routerLink]="['/leagues', league.id]">
+            <h3>{{ league.name }}</h3>
+            <p>Invite Code: {{ league.inviteCode }}</p>
+            <p>Max Teams: {{ league.maxTeams }}</p>
+        </div>
+    }
+  }
 
-<button (click)="logout()">Logout</button>
+  <button routerLink="/leagues/create">Create League</button>
+  <button>Join League</button>
+</section>
