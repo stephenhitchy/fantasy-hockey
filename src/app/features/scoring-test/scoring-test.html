@@ -25,133 +25,169 @@
 </table>
 
 <section class="api-smoke-test">
-  <h2>Real NHL Data Test</h2>
+  <h2>Player Scoring Lab</h2>
 
   <p>
-    Load six games from Connor McDavid's 2025–26 regular-season game log.
-    This is only a data test; it does not change roster data or scoring yet.
+    Test six real games for any forward or defenseman using your current scoring rules.
   </p>
 
-  <button type="button" (click)="loadMcDavidGameLog()">
-    Load McDavid Game Log
-  </button>
+  <div class="player-lab-controls">
+    <label>
+      Player Name
+      <input type="text" [(ngModel)]="playerName" />
+    </label>
 
-  @if (apiStatus()) {
-    <p>{{ apiStatus() }}</p>
-  }
+    <label>
+      NHL Player ID
+      <input type="number" min="1" [(ngModel)]="playerId" />
+    </label>
 
-  @if (apiGames().length > 0) {
-    <details>
-      <summary>Show returned game data</summary>
+    <label>
+      Position
+      <select [(ngModel)]="playerPosition">
+        <option value="F">Forward</option>
+        <option value="D">Defenseman</option>
+      </select>
+    </label>
 
-      <pre>{{ apiGames() | json }}</pre>
-    </details>
+    <label>
+      Season
+      <input type="text" [(ngModel)]="season" />
+    </label>
+  </div>
+
+  <div class="lab-actions">
+    <button type="button" (click)="loadPlayerGameLog()">
+      Load Six Games
+    </button>
 
     <button
       type="button"
-      (click)="loadMcDavidBoxscores()"
+      (click)="loadPlayerFullStatsAndScore()"
       [disabled]="apiGames().length === 0"
     >
-      Load McDavid Hits, Blocks & Scoring
+      Score Six Games
     </button>
+
+    <button
+      type="button"
+      (click)="loadAssistAudit()"
+      [disabled]="apiGames().length === 0"
+    >
+      Assist Audit
+    </button>
+  </div>
+
+  @if (apiStatus()) {
+    <p>{{ apiStatus() }}</p>
   }
 
   @if (realStatsStatus()) {
     <p>{{ realStatsStatus() }}</p>
   }
 
-  @if (realStatRows().length > 0) {
-    <h3>McDavid — Real Six-Game Scorecard</h3>
-
-    <p>
-      <strong>Cycle Total: {{ realCyclePoints() }} points</strong>
-    </p>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Opponent</th>
-          <th>G</th>
-          <th>Primary A</th>
-          <th>Secondary A</th>
-          <th>SOG</th>
-          <th>HIT</th>
-          <th>BLK</th>
-          <th>PPP</th>
-          <th>TOI</th>
-          <th>Fantasy Pts</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        @for (game of realStatRows(); track game.gameId) {
-          <tr>
-            <td>{{ game.date }}</td>
-            <td>{{ game.matchup }}</td>
-            <td>{{ game.goals }}</td>
-            <td>{{ game.primaryAssists }}</td>
-            <td>{{ game.secondaryAssists }}</td>
-            <td>{{ game.shots }}</td>
-            <td>{{ game.hits }}</td>
-            <td>{{ game.blocks }}</td>
-            <td>{{ game.powerPlayPoints }}</td>
-            <td>{{ game.toi }}</td>
-            <td><strong>{{ game.breakdown.total }}</strong></td>
-          </tr>
-        }
-      </tbody>
-    </table>
-
-    <h3>Why Each Game Scored That Way</h3>
-
-    @for (game of realStatRows(); track game.gameId) {
-      <details>
-        <summary>
-          {{ game.date }} {{ game.matchup }}
-          — {{ game.breakdown.total }} points
-        </summary>
-
-        <div class="point-breakdown">
-          @for (line of game.breakdown.lines; track line.label) {
-            <div class="point-line">
-              <span>{{ line.label }}</span>
-              <strong>+{{ line.points }}</strong>
-            </div>
-          }
+  @if (loadedPlayer(); as player) {
+    @if (realStatRows().length > 0) {
+      <section class="lab-result-header">
+        <div>
+          <p class="eyebrow">Real Six-Game Sample</p>
+          <h3>{{ player.name }}</h3>
+          <p>
+            {{ player.position === 'F' ? 'Forward' : 'Defenseman' }}
+            · {{ realStatRows().length }} Games
+          </p>
         </div>
-      </details>
+
+        <div class="lab-total">
+          <strong>{{ realCyclePoints() }}</strong>
+          <span>Cycle Pts</span>
+          <small>{{ realPointsPerGame() }} Pts/Game</small>
+        </div>
+      </section>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Opponent</th>
+            <th>G</th>
+            <th>Primary A</th>
+            <th>Secondary A</th>
+            <th>SOG</th>
+            <th>HIT</th>
+            <th>BLK</th>
+            <th>PPP</th>
+            <th>SHP</th>
+            <th>+/-</th>
+            <th>TOI</th>
+            <th>Fantasy Pts</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          @for (game of realStatRows(); track game.gameId) {
+            <tr>
+              <td>{{ game.date }}</td>
+              <td>{{ game.matchup }}</td>
+              <td>{{ game.goals }}</td>
+              <td>{{ game.primaryAssists }}</td>
+              <td>{{ game.secondaryAssists }}</td>
+              <td>{{ game.shots }}</td>
+              <td>{{ game.hits }}</td>
+              <td>{{ game.blocks }}</td>
+              <td>{{ game.powerPlayPoints }}</td>
+              <td>{{ game.shortHandedPoints }}</td>
+              <td>{{ game.plusMinus }}</td>
+              <td>{{ game.toi }}</td>
+              <td><strong>{{ game.breakdown.total }}</strong></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <h3>Why Each Game Scored That Way</h3>
+
+      @for (game of realStatRows(); track game.gameId) {
+        <details>
+          <summary>
+            {{ game.date }} {{ game.matchup }}
+            — {{ game.breakdown.total }} points
+          </summary>
+
+          <div class="point-breakdown">
+            @for (line of game.breakdown.lines; track line.label) {
+              <div class="point-line">
+                <span>{{ line.label }}</span>
+                <strong>+{{ line.points }}</strong>
+              </div>
+            }
+          </div>
+        </details>
+      }
     }
+  }
+
+  @if (apiGames().length > 0) {
+    <details>
+      <summary>Show raw NHL game-log data</summary>
+      <pre>{{ apiGames() | json }}</pre>
+    </details>
   }
 </section>
 
 <section class="api-smoke-test">
-  <h2>Assist Order Test</h2>
+  <h2>Assist Order Audit</h2>
 
   <p>
-    This loads play-by-play from McDavid’s four-assist game so we can identify
-    primary and secondary assists correctly.
+    This checks whether the selected player was credited as Assist 1 or Assist 2
+    in a game where they recorded an assist.
   </p>
-
-  <button type="button" (click)="loadMcDavidFourAssistPlayByPlay()">
-    Load McDavid Assist Play-by-Play
-  </button>
 
   @if (playByPlayStatus()) {
     <p>{{ playByPlayStatus() }}</p>
   }
 
-  @if (playByPlayEvents().length > 0) {
-    <details>
-      <summary>Show play-by-play data</summary>
-
-      <pre>{{ playByPlayEvents() | json }}</pre>
-    </details>
-  }
-
   @if (goalEventRows().length > 0) {
-    <h3>Goal Events — Assist Order Test</h3>
-
     <table>
       <thead>
         <tr>
@@ -160,7 +196,7 @@
           <th>Scorer ID</th>
           <th>Assist 1 ID</th>
           <th>Assist 2 ID</th>
-          <th>McDavid Credit</th>
+          <th>Player Credit</th>
         </tr>
       </thead>
 
@@ -172,10 +208,17 @@
             <td>{{ goal.scorerId ?? '—' }}</td>
             <td>{{ goal.assist1Id ?? '—' }}</td>
             <td>{{ goal.assist2Id ?? '—' }}</td>
-            <td>{{ goal.mcdavidCredit }}</td>
+            <td>{{ goal.playerCredit }}</td>
           </tr>
         }
       </tbody>
     </table>
+  }
+
+  @if (playByPlayEvents().length > 0) {
+    <details>
+      <summary>Show raw play-by-play data</summary>
+      <pre>{{ playByPlayEvents() | json }}</pre>
+    </details>
   }
 </section>

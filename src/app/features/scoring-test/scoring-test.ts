@@ -1,33 +1,38 @@
 import { Component, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
   getGamePlayByPlay,
   getRegularSeasonGameLog,
-  NhlPlayerGameLogEntry,
-  getSkaterAssistBreakdown
+  getSkaterAssistBreakdown,
+  NhlPlayerGameLogEntry
 } from '../../core/nhl/nhl-api.service';
 import {
+  calculateGoalieGamePoints,
   calculateSkaterGameBreakdown,
+  calculateSkaterGamePoints,
   type GamePointBreakdown,
+  type GoalieGameStats,
   type SkaterGameStats
 } from '../../core/scoring/scoring-engine';
-
 import { defaultScoringRules } from '../../core/scoring/scoring-rules';
-import {
-  calculateGoalieGamePoints,
-  calculateSkaterGamePoints,
-  GoalieGameStats,
-} from '../../core/scoring/scoring-engine';
 
-
+type SkaterPosition = 'F' | 'D';
 
 interface ScoringTestCase {
   name: string;
   type: 'skater' | 'goalie';
   description: string;
   points: number;
+}
+
+interface LabPlayer {
+  id: number;
+  name: string;
+  position: SkaterPosition;
+  season: string;
 }
 
 interface RealSkaterGameRow {
@@ -68,7 +73,7 @@ interface GoalEventRow {
   scorerId: number | null;
   assist1Id: number | null;
   assist2Id: number | null;
-  mcdavidCredit: string;
+  playerCredit: string;
 }
 
 function isGoalPlay(play: unknown): play is GoalPlay {
@@ -91,195 +96,30 @@ function toiToMinutes(toi: string): number {
 
 @Component({
   selector: 'app-scoring-test',
-  imports: [JsonPipe],
+  imports: [FormsModule, JsonPipe],
   templateUrl: './scoring-test.html',
   styleUrl: './scoring-test.css'
 })
 export class ScoringTest {
-realCyclePoints = signal(0);
-apiStatus = signal('');
-apiGames = signal<NhlPlayerGameLogEntry[]>([]);
-realStatsStatus = signal('');
-realStatRows = signal<RealSkaterGameRow[]>([]);
-playByPlayStatus = signal('');
-playByPlayEvents = signal<unknown[]>([]);
-goalEventRows = signal<GoalEventRow[]>([]);
+  playerId = 8478402;
+  playerName = 'Connor McDavid';
+  playerPosition: SkaterPosition = 'F';
+  season = '20252026';
 
-async loadMcDavidBoxscores(): Promise<void> {
-  const games = this.apiGames();
+  loadedPlayer = signal<LabPlayer | null>(null);
 
-  if (games.length === 0) {
-    this.realStatsStatus.set('Load the McDavid game log first.');
-    return;
-  }
+  apiStatus = signal('');
+  apiGames = signal<NhlPlayerGameLogEntry[]>([]);
 
-  this.realStatsStatus.set(
-    'Loading full stats and scoring six real games...'
-  );
+  realStatsStatus = signal('');
+  realStatRows = signal<RealSkaterGameRow[]>([]);
+  realCyclePoints = signal(0);
+  realPointsPerGame = signal(0);
 
-  this.realStatRows.set([]);
-  this.realCyclePoints.set(0);
+  playByPlayStatus = signal('');
+  playByPlayEvents = signal<unknown[]>([]);
+  goalEventRows = signal<GoalEventRow[]>([]);
 
-  try {
-    const rows = await Promise.all(
-      games.map(async (game) => {
-        const [boxscore, playByPlay] = await Promise.all([
-          getGameBoxscore(game.gameId),
-          getGamePlayByPlay(game.gameId)
-        ]);
-
-        const playerLine = findSkaterBoxscoreLine(
-          boxscore,
-          8478402
-        );
-
-        if (!playerLine) {
-          throw new Error(
-            `McDavid was not found in boxscore ${game.gameId}.`
-          );
-        }
-
-        const assists = getSkaterAssistBreakdown(
-          playByPlay,
-          8478402
-        );
-
-        const stats: SkaterGameStats = {
-          position: 'F',
-          goals: game.goals,
-          primaryAssists: assists.primaryAssists,
-          secondaryAssists: assists.secondaryAssists,
-          shotsOnGoal: playerLine.sog,
-          hits: playerLine.hits,
-          blockedShots: playerLine.blockedShots,
-          plusMinus: game.plusMinus,
-          powerPlayPoints: game.powerPlayPoints,
-          shortHandedPoints: game.shorthandedPoints,
-          gameWinningGoal: game.gameWinningGoals > 0,
-          overtimeGoal: game.otGoals > 0,
-          timeOnIceMinutes: toiToMinutes(playerLine.toi)
-        };
-
-        return {
-          gameId: game.gameId,
-          date: game.gameDate,
-          matchup: `${game.homeRoadFlag === 'H' ? 'vs' : '@'} ${game.opponentAbbrev}`,
-          goals: game.goals,
-          primaryAssists: assists.primaryAssists,
-          secondaryAssists: assists.secondaryAssists,
-          shots: playerLine.sog,
-          hits: playerLine.hits,
-          blocks: playerLine.blockedShots,
-          powerPlayPoints: game.powerPlayPoints,
-          shortHandedPoints: game.shorthandedPoints,
-          plusMinus: game.plusMinus,
-          toi: playerLine.toi,
-          breakdown: calculateSkaterGameBreakdown(
-            stats,
-            defaultScoringRules
-          )
-        };
-      })
-    );
-
-    const cyclePoints = rows.reduce(
-      (total, game) => total + game.breakdown.total,
-      0
-    );
-
-    this.realStatRows.set(rows);
-    this.realCyclePoints.set(Number(cyclePoints.toFixed(2)));
-
-    this.realStatsStatus.set(
-      `Loaded and scored ${rows.length} real games.`
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
-
-    this.realStatsStatus.set(message);
-  }
-}
-
-async loadMcDavidFourAssistPlayByPlay(): Promise<void> {
-  this.playByPlayStatus.set(
-    'Loading play-by-play from McDavid’s four-assist game...'
-  );
-
-  this.playByPlayEvents.set([]);
-  this.goalEventRows.set([]);
-
-  try {
-    const response = await getGamePlayByPlay(2025021311);
-
-    const plays = Array.isArray(response.plays)
-      ? response.plays
-      : [];
-
-    const goalRows = plays
-      .filter(isGoalPlay)
-      .map((play) => {
-        const details = play.details ?? {};
-
-        let mcdavidCredit = 'No McDavid credit';
-
-        if (details.scoringPlayerId === 8478402) {
-          mcdavidCredit = 'McDavid scored';
-        } else if (details.assist1PlayerId === 8478402) {
-          mcdavidCredit = 'McDavid: Assist 1';
-        } else if (details.assist2PlayerId === 8478402) {
-          mcdavidCredit = 'McDavid: Assist 2';
-        }
-
-        return {
-          eventId: play.eventId,
-          period: play.periodDescriptor?.number ?? null,
-          time: play.timeInPeriod ?? '--:--',
-          scorerId: details.scoringPlayerId ?? null,
-          assist1Id: details.assist1PlayerId ?? null,
-          assist2Id: details.assist2PlayerId ?? null,
-          mcdavidCredit
-        };
-      });
-
-    this.playByPlayEvents.set(plays);
-    this.goalEventRows.set(goalRows);
-
-    this.playByPlayStatus.set(
-      `Loaded ${plays.length} play-by-play events and ${goalRows.length} goal events.`
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown play-by-play error';
-
-    this.playByPlayStatus.set(message);
-  }
-}
-
-async loadMcDavidGameLog(): Promise<void> {
-  this.apiStatus.set('Loading NHL game log...');
-  this.apiGames.set([]);
-
-  try {
-    const response = await getRegularSeasonGameLog(
-      8478402,
-      '20252026'
-    );
-
-    const games = Array.isArray(response.gameLog)
-      ? response.gameLog.slice(0, 6)
-      : [];
-
-    this.apiGames.set(games);
-    this.apiStatus.set(`Loaded ${games.length} games.`);
-    console.log('Connor McDavid game log:', response);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown NHL API error';
-
-    this.apiStatus.set(message);
-  }
-}
   testCases: ScoringTestCase[] = [
     this.createSkaterTest('Connor McDavid', 'Superstar forward game', {
       position: 'F',
@@ -345,6 +185,249 @@ async loadMcDavidGameLog(): Promise<void> {
       shutout: false
     })
   ];
+
+  async loadPlayerGameLog(): Promise<void> {
+    const player = this.getPlayerFromForm();
+
+    if (!player) {
+      return;
+    }
+
+    this.resetLabResults();
+    this.loadedPlayer.set(player);
+    this.apiStatus.set(`Loading ${player.name}'s NHL game log...`);
+
+    try {
+      const response = await getRegularSeasonGameLog(
+        player.id,
+        player.season
+      );
+
+      const games = Array.isArray(response.gameLog)
+        ? response.gameLog.slice(0, 6)
+        : [];
+
+      this.apiGames.set(games);
+      this.apiStatus.set(
+        `Loaded ${games.length} games for ${player.name}.`
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown NHL API error';
+
+      this.apiStatus.set(message);
+    }
+  }
+
+  async loadPlayerFullStatsAndScore(): Promise<void> {
+    const player = this.loadedPlayer();
+    const games = this.apiGames();
+
+    if (!player || games.length === 0) {
+      this.realStatsStatus.set('Load a player game log first.');
+      return;
+    }
+
+    this.realStatsStatus.set(
+      `Loading and scoring ${player.name}'s six-game sample...`
+    );
+
+    this.realStatRows.set([]);
+    this.realCyclePoints.set(0);
+    this.realPointsPerGame.set(0);
+
+    try {
+      const rows = await Promise.all(
+        games.map(async (game) => {
+          const [boxscore, playByPlay] = await Promise.all([
+            getGameBoxscore(game.gameId),
+            getGamePlayByPlay(game.gameId)
+          ]);
+
+          const playerLine = findSkaterBoxscoreLine(
+            boxscore,
+            player.id
+          );
+
+          if (!playerLine) {
+            throw new Error(
+              `${player.name} was not found in boxscore ${game.gameId}.`
+            );
+          }
+
+          const assists = getSkaterAssistBreakdown(
+            playByPlay,
+            player.id
+          );
+
+          const stats: SkaterGameStats = {
+            position: player.position,
+            goals: game.goals,
+            primaryAssists: assists.primaryAssists,
+            secondaryAssists: assists.secondaryAssists,
+            shotsOnGoal: playerLine.sog,
+            hits: playerLine.hits,
+            blockedShots: playerLine.blockedShots,
+            plusMinus: game.plusMinus,
+            powerPlayPoints: game.powerPlayPoints,
+            shortHandedPoints: game.shorthandedPoints,
+            gameWinningGoal: game.gameWinningGoals > 0,
+            overtimeGoal: game.otGoals > 0,
+            timeOnIceMinutes: toiToMinutes(playerLine.toi)
+          };
+
+          return {
+            gameId: game.gameId,
+            date: game.gameDate,
+            matchup: `${game.homeRoadFlag === 'H' ? 'vs' : '@'} ${game.opponentAbbrev}`,
+            goals: game.goals,
+            primaryAssists: assists.primaryAssists,
+            secondaryAssists: assists.secondaryAssists,
+            shots: playerLine.sog,
+            hits: playerLine.hits,
+            blocks: playerLine.blockedShots,
+            powerPlayPoints: game.powerPlayPoints,
+            shortHandedPoints: game.shorthandedPoints,
+            plusMinus: game.plusMinus,
+            toi: playerLine.toi,
+            breakdown: calculateSkaterGameBreakdown(
+              stats,
+              defaultScoringRules
+            )
+          };
+        })
+      );
+
+      const cyclePoints = rows.reduce(
+        (total, game) => total + game.breakdown.total,
+        0
+      );
+
+      this.realStatRows.set(rows);
+      this.realCyclePoints.set(Number(cyclePoints.toFixed(2)));
+      this.realPointsPerGame.set(
+        rows.length > 0
+          ? Number((cyclePoints / rows.length).toFixed(2))
+          : 0
+      );
+
+      this.realStatsStatus.set(
+        `Loaded and scored ${rows.length} real games for ${player.name}.`
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      this.realStatsStatus.set(message);
+    }
+  }
+
+  async loadAssistAudit(): Promise<void> {
+    const player = this.loadedPlayer();
+    const games = this.apiGames();
+
+    if (!player || games.length === 0) {
+      this.playByPlayStatus.set('Load a player game log first.');
+      return;
+    }
+
+    const gameToInspect =
+      games.find((game) => game.assists > 0) ?? games[0];
+
+    this.playByPlayStatus.set(
+      `Loading assist audit for ${player.name} on ${gameToInspect.gameDate}...`
+    );
+
+    this.playByPlayEvents.set([]);
+    this.goalEventRows.set([]);
+
+    try {
+      const response = await getGamePlayByPlay(gameToInspect.gameId);
+
+      const plays = Array.isArray(response.plays)
+        ? response.plays
+        : [];
+
+      const goalRows = plays
+        .filter(isGoalPlay)
+        .map((play) => {
+          const details = play.details ?? {};
+
+          let playerCredit = 'No player credit';
+
+          if (details.scoringPlayerId === player.id) {
+            playerCredit = `${player.name} scored`;
+          } else if (details.assist1PlayerId === player.id) {
+            playerCredit = `${player.name}: Assist 1`;
+          } else if (details.assist2PlayerId === player.id) {
+            playerCredit = `${player.name}: Assist 2`;
+          }
+
+          return {
+            eventId: play.eventId,
+            period: play.periodDescriptor?.number ?? null,
+            time: play.timeInPeriod ?? '--:--',
+            scorerId: details.scoringPlayerId ?? null,
+            assist1Id: details.assist1PlayerId ?? null,
+            assist2Id: details.assist2PlayerId ?? null,
+            playerCredit
+          };
+        });
+
+      this.playByPlayEvents.set(plays);
+      this.goalEventRows.set(goalRows);
+
+      this.playByPlayStatus.set(
+        `Loaded ${goalRows.length} goal events from ${gameToInspect.gameDate}.`
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown play-by-play error';
+
+      this.playByPlayStatus.set(message);
+    }
+  }
+
+  private getPlayerFromForm(): LabPlayer | null {
+    const id = Number(this.playerId);
+    const name = this.playerName.trim();
+    const season = this.season.trim();
+
+    if (!Number.isInteger(id) || id <= 0) {
+      this.apiStatus.set('Enter a valid NHL player ID.');
+      return null;
+    }
+
+    if (!name) {
+      this.apiStatus.set('Enter a player name.');
+      return null;
+    }
+
+    if (!/^\d{8}$/.test(season)) {
+      this.apiStatus.set(
+        'Season must use the format YYYYYYYY, such as 20252026.'
+      );
+      return null;
+    }
+
+    return {
+      id,
+      name,
+      position: this.playerPosition,
+      season
+    };
+  }
+
+  private resetLabResults(): void {
+    this.apiGames.set([]);
+    this.realStatRows.set([]);
+    this.realCyclePoints.set(0);
+    this.realPointsPerGame.set(0);
+    this.realStatsStatus.set('');
+    this.playByPlayEvents.set([]);
+    this.goalEventRows.set([]);
+    this.playByPlayStatus.set('');
+  }
 
   private createSkaterTest(
     name: string,
