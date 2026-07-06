@@ -1,0 +1,156 @@
+.roster-board {
+  margin-top: 32px;
+}
+
+.roster-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.roster-board-header h2 {
+  margin: 0 0 4px;
+}
+
+.roster-board-header p {
+  margin: 0;
+}
+
+.roster-count {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef3f8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  gap: 16px;
+}
+
+.position-group {
+  border: 1px solid #dce3ea;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+}
+
+.position-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #dce3ea;
+  background: #f6f8fa;
+}
+
+.position-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.position-heading span {
+  font-weight: 700;
+}
+
+.position-slots {
+  padding: 10px;
+}
+
+.roster-slot {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.roster-slot + .roster-slot {
+  margin-top: 6px;
+}
+
+.slot-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #101820;
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.player-copy {
+  min-width: 0;
+}
+
+.player-copy strong,
+.player-copy span {
+  display: block;
+}
+
+.player-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.player-copy span,
+.cycle-points span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.cycle-points {
+  text-align: right;
+}
+
+.cycle-points strong {
+  display: block;
+  font-size: 16px;
+}
+
+.empty-slot {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.team-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.player-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.player-button:hover .player-copy strong {
+  text-decoration: underline;
+}

@@ -1,0 +1,7 @@
+{
+  "/v1/**": {
+    "target": "https://api-web.nhle.com",
+    "secure": true,
+    "changeOrigin": true
+  }
+}

@@ -30,9 +30,9 @@ export interface ScoringRules {
 export const defaultScoringRules: ScoringRules = {
   requiredGamesPerCycle: 6,
 
-  goal: 8,
-  primaryAssist: 5,
-  secondaryAssist: 3,
+  goal: 6,
+  primaryAssist: 5.5,
+  secondaryAssist: 3.5,
   shotOnGoal: 0.6,
   hit: 0.45,
   blockedShot: 0.75,
@@ -43,12 +43,12 @@ export const defaultScoringRules: ScoringRules = {
   twoGoalGameBonus: 2.5,
   hatTrickBonus: 5,
 
-  forwardToiMultiplier: 0.12,
+  forwardToiMultiplier: 0.2,
 
-  defenseToiBaseMultiplier: 0.25,
-  defenseToiPlusMinusModifier: 0.06,
-  defenseToiFloor: 0.12,
-  defenseToiCeiling: 0.36,
+  defenseToiBaseMultiplier: 0.4,
+  defenseToiPlusMinusModifier: 0.1,
+  defenseToiFloor: 0.2,
+  defenseToiCeiling: 0.6,
 
   goalieSave: 0.35,
   goalieWin: 6,

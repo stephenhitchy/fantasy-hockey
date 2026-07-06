@@ -1,0 +1,67 @@
+<section class="roster-board">
+  <div class="roster-board-header">
+    <div>
+      <h2>Roster</h2>
+      <p>Your drafted players will appear here.</p>
+    </div>
+
+    <span class="roster-count">20 Starting Slots</span>
+  </div>
+
+  <div class="roster-grid">
+    @for (group of rosterGroups; track group.position) {
+      <section class="position-group">
+        <div class="position-heading">
+          <h3>{{ group.label }}</h3>
+          <span>{{ group.slotCount }}</span>
+        </div>
+
+        <div class="position-slots">
+          @for (slot of group.slots; track slot.slotNumber) {
+            <div class="roster-slot">
+              <span class="slot-label">
+                {{ group.position }} {{ slot.slotNumber }}
+              </span>
+
+              @if (slot.player; as player) {
+                <button
+                    class="player-row player-button"
+                    type="button"
+                    [routerLink]="['/players', player.id]"
+                    >
+                  @if (player.teamLogoUrl) {
+                    <img
+                        class="team-logo"
+                        [src]="player.teamLogoUrl"
+                        [alt]="player.nhlTeamAbbreviation + ' logo'"
+                    />
+                    } @else {
+                    <span class="team-mark">
+                        {{ player.nhlTeamAbbreviation }}
+                    </span>
+                    }
+
+                  <div class="player-copy">
+                    <strong>{{ player.fullName }}</strong>
+                    <span>
+  {{ player.cycleScore.gamesCounted }} / 6 Games
+  •
+  {{ getPointsPerGame(player) }} Pts/G
+</span>
+                  </div>
+
+                  <div class="cycle-points">
+                    <strong>{{ player.cycleScore.fantasyPoints }}</strong>
+                    <span>Cycle Pts</span>
+                  </div>
+                </button>
+              } @else {
+                <span class="empty-slot">Empty slot</span>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+  </div>
+</section>

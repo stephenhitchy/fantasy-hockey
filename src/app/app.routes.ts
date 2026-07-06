@@ -8,6 +8,7 @@ import { TeamSettings } from './features/team/team-settings/team-settings';
 import { JoinLeague } from './features/leagues/join-league/join-league';
 import { AccountSettings } from './features/account/account-settings/account-settings';
 import { MainLayout } from './layouts/main-layout/main-layout';
+import { PlayerDetail } from './features/players/player-detail/player-detail';
 
 export const routes: Routes = [
   { path: '', component: Auth },
@@ -22,7 +23,8 @@ export const routes: Routes = [
       { path: 'account/settings', component: AccountSettings },
       { path: 'scoring-test', component: ScoringTest },
       { path: 'leagues/:leagueId/team', component: TeamSettings },
-      { path: 'leagues/:leagueId', component: LeagueDetail }
+      { path: 'leagues/:leagueId', component: LeagueDetail },
+      { path: 'players/:playerId', component: PlayerDetail }
     ]
   }
 ];

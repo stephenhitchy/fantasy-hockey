@@ -1,0 +1,75 @@
+<section class="player-detail">
+  <button class="back-button" type="button" (click)="goBack()">
+    ← Back to My Team
+  </button>
+
+  @if (playerDetail; as detail) {
+    <header class="player-header">
+      @if (detail.player.teamLogoUrl) {
+        <img
+          class="player-logo"
+          [src]="detail.player.teamLogoUrl"
+          [alt]="detail.player.nhlTeamAbbreviation + ' logo'"
+        />
+      }
+
+      <div>
+        <p class="eyebrow">Demo Cycle Breakdown</p>
+        <h1>{{ detail.player.fullName }}</h1>
+        <p>
+          {{ detail.player.position }}
+          •
+          {{ detail.player.nhlTeamAbbreviation }}
+          •
+          {{ gameBreakdowns.length }} / 6 Games Counted
+        </p>
+      </div>
+
+      <div class="cycle-total">
+        <strong>{{ cycleTotal }}</strong>
+        <span>Cycle Pts</span>
+      </div>
+    </header>
+
+    <section class="game-log">
+      <div class="section-heading">
+        <div>
+          <h2>Game-by-Game Breakdown</h2>
+          <p>Every stat is scored with your league’s current rules.</p>
+        </div>
+      </div>
+
+      @for (game of gameBreakdowns; track game.id) {
+        <article class="game-card">
+          <div class="game-card-header">
+            <div>
+              <strong>{{ game.date }} · {{ game.opponent }}</strong>
+              <span>{{ game.result }}</span>
+            </div>
+
+            <div class="game-total">
+              <strong>{{ game.breakdown.total }}</strong>
+              <span>Points</span>
+            </div>
+          </div>
+
+          <p class="stat-summary">{{ game.statSummary }}</p>
+
+          <div class="point-breakdown">
+            @for (line of game.breakdown.lines; track line.label) {
+              <div class="point-line">
+                <span>{{ line.label }}</span>
+                <strong>+{{ line.points }}</strong>
+              </div>
+            }
+          </div>
+        </article>
+      }
+    </section>
+  } @else {
+    <section class="missing-player">
+      <h1>Player not found</h1>
+      <p>This demo player does not have a mock game log yet.</p>
+    </section>
+  }
+</section>

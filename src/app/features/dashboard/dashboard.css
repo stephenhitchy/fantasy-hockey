@@ -1,0 +1,92 @@
+.dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  margin-bottom: 4px;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.quick-actions button,
+.league-card button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #101820;
+  color: white;
+  cursor: pointer;
+}
+
+.league-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.league-card {
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  padding: 20px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.league-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.league-card-header h3 {
+  margin: 0;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e9f5ff;
+}
+
+.team-name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.league-meta {
+  margin: 16px 0;
+}
+
+.top-players {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f6f8fa;
+}
+
+.top-players h4 {
+  margin-top: 0;
+}
+
+.league-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.secondary-button {
+  background: #eef3f8 !important;
+  color: #101820 !important;
+  border: 1px solid #dce3ea !important;
+}

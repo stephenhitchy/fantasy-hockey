@@ -1,12 +1,11 @@
 import { ActivatedRoute, Router } from '@angular/router';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import { Component, signal } from '@angular/core';
-import { JsonPipe } from '@angular/common';
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 @Component({
   selector: 'app-league-detail',
-  imports: [JsonPipe],
+  imports: [],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css'
 })

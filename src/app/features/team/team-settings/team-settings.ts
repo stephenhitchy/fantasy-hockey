@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { auth } from '../../../core/firebase';
+import { RosterBoard } from '../../../shared/roster-board/roster-board';
 import {
   FantasyTeam,
   getFantasyTeam,
@@ -20,7 +21,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule],
+  imports: [FormsModule, RosterBoard],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css'
 })

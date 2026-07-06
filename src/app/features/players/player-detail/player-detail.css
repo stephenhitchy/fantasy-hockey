@@ -1,0 +1,154 @@
+.player-detail {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.back-button {
+  margin-bottom: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.player-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 28px;
+  padding: 24px;
+  border: 1px solid #dce3ea;
+  border-radius: 16px;
+  background: white;
+}
+
+.player-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.player-header h1 {
+  margin: 2px 0 6px;
+}
+
+.player-header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cycle-total {
+  min-width: 96px;
+  text-align: right;
+}
+
+.cycle-total strong,
+.cycle-total span {
+  display: block;
+}
+
+.cycle-total strong {
+  font-size: 28px;
+}
+
+.cycle-total span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.section-heading {
+  margin-bottom: 16px;
+}
+
+.section-heading h2,
+.section-heading p {
+  margin: 0;
+}
+
+.section-heading p {
+  margin-top: 4px;
+  color: #6b7280;
+}
+
+.game-card {
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid #dce3ea;
+  border-radius: 12px;
+  background: white;
+}
+
+.game-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.game-card-header span,
+.game-total span {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.game-total {
+  text-align: right;
+}
+
+.game-total strong {
+  font-size: 20px;
+}
+
+.stat-summary {
+  margin: 16px 0 12px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.point-breakdown {
+  border-top: 1px solid #e5e7eb;
+}
+
+.point-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.point-line strong {
+  white-space: nowrap;
+}
+
+.missing-player {
+  padding: 24px;
+  border: 1px solid #dce3ea;
+  border-radius: 12px;
+  background: white;
+}
+
+@media (max-width: 640px) {
+  .player-header {
+    grid-template-columns: auto 1fr;
+  }
+
+  .cycle-total {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}

@@ -1,50 +1,66 @@
-<section>
-  <h2>My Leagues</h2>
+@if (loading()) {
+  <p>Loading...</p>
+} @else {
+  <section class="dashboard">
+    <header class="dashboard-header">
+      <h1>Welcome back, {{ profile()?.username || profile()?.email }}!</h1>
+      <p>Manage your fantasy hockey leagues and teams.</p>
+    </header>
 
-  @if (leagueSummaries().length === 0) {
-    <p>No leagues yet.</p>
-  } @else {
-    @for (league of leagueSummaries(); track league.leagueId) {
-      <div>
-        <h3>{{ league.leagueName }}</h3>
-        <p>My Team: {{ league.myTeamName }}</p>
-        <p>Teams: {{ league.teamCount }} / {{ league.maxTeams }}</p>
-        <p>Invite Code: {{ league.inviteCode }}</p>
+    <section class="quick-actions">
+      <button routerLink="/leagues/create">Create League</button>
+      <button routerLink="/leagues/join">Join League</button>
+      <button routerLink="/account/settings">Account Settings</button>
+    </section>
 
-        <h4>Top Players This Cycle</h4>
+    <section>
+      <h2>My Leagues</h2>
 
-        <p>
-          {{ league.topOffensivePlayer?.teamLogo }}
-          Offense:
-          {{ league.topOffensivePlayer?.name }}
-          —
-          {{ league.topOffensivePlayer?.points }} pts
-        </p>
+      @if (leagueSummaries().length === 0) {
+        <p>No leagues yet.</p>
+      } @else {
+        <div class="league-grid">
+          @for (league of leagueSummaries(); track league.leagueId) {
+            <article class="league-card">
+              <div class="league-card-header">
+                <h3>🏆 {{ league.leagueName }}</h3>
 
-        <p>
-          {{ league.topDefensivePlayer?.teamLogo }}
-          Defense:
-          {{ league.topDefensivePlayer?.name }}
-          —
-          {{ league.topDefensivePlayer?.points }} pts
-        </p>
+                @if (league.isCommissioner) {
+                  <span class="badge">Commissioner</span>
+                }
+              </div>
 
-        <p>
-          {{ league.topGoalie?.teamLogo }}
-          Goalie:
-          {{ league.topGoalie?.name }}
-          —
-          {{ league.topGoalie?.points }} pts
-        </p>
+              <p class="team-name">🏒 {{ league.myTeamName }}</p>
 
-        <button [routerLink]="['/leagues', league.leagueId]">
-          Open League
-        </button>
-      </div>
-    }
-  }
+              <div class="league-meta">
+                <p><strong>Teams:</strong> {{ league.teamCount }} / {{ league.maxTeams }}</p>
+                <p><strong>Invite:</strong> {{ league.inviteCode }}</p>
+              </div>
 
-  <button routerLink="/leagues/create">Create League</button>
-  <button routerLink="/leagues/join">Join League</button>
-  <button routerLink="/account/settings">Account Settings</button>
-</section>
+              <section class="top-players">
+                <h4>Top Players This Cycle</h4>
+
+                <p>{{ league.topOffensivePlayer?.teamLogo }} Offense: {{ league.topOffensivePlayer?.name }} — {{ league.topOffensivePlayer?.points }} pts</p>
+                <p>{{ league.topDefensivePlayer?.teamLogo }} Defense: {{ league.topDefensivePlayer?.name }} — {{ league.topDefensivePlayer?.points }} pts</p>
+                <p>{{ league.topGoalie?.teamLogo }} Goalie: {{ league.topGoalie?.name }} — {{ league.topGoalie?.points }} pts</p>
+              </section>
+
+              <div class="league-actions">
+                <button [routerLink]="['/leagues', league.leagueId]">
+                    Open League
+                </button>
+
+                <button
+                    class="secondary-button"
+                    [routerLink]="['/leagues', league.leagueId, 'team']"
+                >
+                    My Team
+                </button>
+                </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </section>
+}

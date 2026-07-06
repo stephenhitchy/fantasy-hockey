@@ -23,75 +23,200 @@ export interface GoalieGameStats {
   shutout: boolean;
 }
 
+export interface PointBreakdownLine {
+  label: string;
+  points: number;
+}
+
+export interface GamePointBreakdown {
+  total: number;
+  lines: PointBreakdownLine[];
+}
+
 function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+  return Math.min(Math.max(value, min), max);
+}
+
+function rounded(value: number): number {
+  return Number(value.toFixed(2));
 }
 
 function getGoalieSavePercentagePoints(
   savePercentage: number,
   tiers: GoalieSavePercentageTier[]
 ): number {
-  const tier = tiers.find(tier => savePercentage >= tier.minSavePercentage);
-  return tier?.points ?? 0;
+  const matchingTier = tiers.find(
+    (tier) => savePercentage >= tier.minSavePercentage
+  );
+
+  return matchingTier?.points ?? 0;
+}
+
+export function calculateSkaterGameBreakdown(
+  stats: SkaterGameStats,
+  rules: ScoringRules
+): GamePointBreakdown {
+  const lines: PointBreakdownLine[] = [];
+  let total = 0;
+
+  function addLine(label: string, points: number) {
+    if (points === 0) {
+      return;
+    }
+
+    const roundedPoints = rounded(points);
+
+    lines.push({
+      label,
+      points: roundedPoints
+    });
+
+    total += roundedPoints;
+  }
+
+  addLine(
+    `Goals (${stats.goals})`,
+    stats.goals * rules.goal
+  );
+
+  addLine(
+    `Primary Assists (${stats.primaryAssists})`,
+    stats.primaryAssists * rules.primaryAssist
+  );
+
+  addLine(
+    `Secondary Assists (${stats.secondaryAssists})`,
+    stats.secondaryAssists * rules.secondaryAssist
+  );
+
+  addLine(
+    `Shots on Goal (${stats.shotsOnGoal})`,
+    stats.shotsOnGoal * rules.shotOnGoal
+  );
+
+  addLine(
+    `Hits (${stats.hits})`,
+    stats.hits * rules.hit
+  );
+
+  addLine(
+    `Blocked Shots (${stats.blockedShots})`,
+    stats.blockedShots * rules.blockedShot
+  );
+
+  addLine(
+    `Power-Play Points (${stats.powerPlayPoints})`,
+    stats.powerPlayPoints * rules.powerPlayPoint
+  );
+
+  addLine(
+    `Short-Handed Points (${stats.shortHandedPoints})`,
+    stats.shortHandedPoints * rules.shortHandedPoint
+  );
+
+  if (stats.gameWinningGoal) {
+    addLine('Game-Winning Goal', rules.gameWinningGoal);
+  }
+
+  if (stats.overtimeGoal) {
+    addLine('Overtime Goal', rules.overtimeGoal);
+  }
+
+  if (stats.goals >= 3) {
+    addLine('Hat Trick Bonus', rules.hatTrickBonus);
+  } else if (stats.goals === 2) {
+    addLine('Two-Goal Game Bonus', rules.twoGoalGameBonus);
+  }
+
+  if (stats.position === 'D') {
+    const toiMultiplier = clamp(
+      rules.defenseToiBaseMultiplier +
+        stats.plusMinus * rules.defenseToiPlusMinusModifier,
+      rules.defenseToiFloor,
+      rules.defenseToiCeiling
+    );
+
+    addLine(
+      `Time on Ice (${stats.timeOnIceMinutes} min × ${toiMultiplier.toFixed(2)})`,
+      stats.timeOnIceMinutes * toiMultiplier
+    );
+  } else {
+    addLine(
+      `Time on Ice (${stats.timeOnIceMinutes} min × ${rules.forwardToiMultiplier.toFixed(2)})`,
+      stats.timeOnIceMinutes * rules.forwardToiMultiplier
+    );
+  }
+
+  return {
+    total: rounded(total),
+    lines
+  };
+}
+
+export function calculateGoalieGameBreakdown(
+  stats: GoalieGameStats,
+  rules: ScoringRules
+): GamePointBreakdown {
+  const lines: PointBreakdownLine[] = [];
+  let total = 0;
+
+  function addLine(label: string, points: number) {
+    if (points === 0) {
+      return;
+    }
+
+    const roundedPoints = rounded(points);
+
+    lines.push({
+      label,
+      points: roundedPoints
+    });
+
+    total += roundedPoints;
+  }
+
+  const savePercentage =
+    stats.shotsAgainst > 0
+      ? stats.saves / stats.shotsAgainst
+      : 0;
+
+  addLine(
+    `Saves (${stats.saves})`,
+    stats.saves * rules.goalieSave
+  );
+
+  addLine(
+    `Save Percentage (${(savePercentage * 100).toFixed(1)}%)`,
+    getGoalieSavePercentagePoints(
+      savePercentage,
+      rules.goalieSavePercentageTiers
+    )
+  );
+
+  if (stats.won) {
+    addLine('Win', rules.goalieWin);
+  }
+
+  if (stats.shutout) {
+    addLine('Shutout', rules.goalieShutout);
+  }
+
+  return {
+    total: rounded(total),
+    lines
+  };
 }
 
 export function calculateSkaterGamePoints(
   stats: SkaterGameStats,
   rules: ScoringRules
 ): number {
-  let points = 0;
-
-  points += stats.goals * rules.goal;
-  points += stats.primaryAssists * rules.primaryAssist;
-  points += stats.secondaryAssists * rules.secondaryAssist;
-  points += stats.shotsOnGoal * rules.shotOnGoal;
-  points += stats.hits * rules.hit;
-  points += stats.blockedShots * rules.blockedShot;
-  points += stats.powerPlayPoints * rules.powerPlayPoint;
-  points += stats.shortHandedPoints * rules.shortHandedPoint;
-
-  if (stats.gameWinningGoal) points += rules.gameWinningGoal;
-  if (stats.overtimeGoal) points += rules.overtimeGoal;
-
-  if (stats.goals >= 3) {
-    points += rules.hatTrickBonus;
-  } else if (stats.goals === 2) {
-    points += rules.twoGoalGameBonus;
-  }
-
-  if (stats.position === 'D') {
-    const multiplier = clamp(
-      rules.defenseToiBaseMultiplier + stats.plusMinus * rules.defenseToiPlusMinusModifier,
-      rules.defenseToiFloor,
-      rules.defenseToiCeiling
-    );
-
-    points += stats.timeOnIceMinutes * multiplier;
-  } else {
-    points += stats.timeOnIceMinutes * rules.forwardToiMultiplier;
-  }
-
-  return Number(points.toFixed(2));
+  return calculateSkaterGameBreakdown(stats, rules).total;
 }
 
 export function calculateGoalieGamePoints(
   stats: GoalieGameStats,
   rules: ScoringRules
 ): number {
-  const savePercentage =
-    stats.shotsAgainst > 0 ? stats.saves / stats.shotsAgainst : 0;
-
-  let points = 0;
-
-  points += getGoalieSavePercentagePoints(
-    savePercentage,
-    rules.goalieSavePercentageTiers
-  );
-
-  points += stats.saves * rules.goalieSave;
-
-  if (stats.won) points += rules.goalieWin;
-  if (stats.shutout) points += rules.goalieShutout;
-
-  return Number(points.toFixed(2));
+  return calculateGoalieGameBreakdown(stats, rules).total;
 }
