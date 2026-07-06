@@ -1,0 +1,115 @@
+<section class="team-goalie-lab">
+  <h2>Team Goalie Unit Lab</h2>
+
+  <p>
+    One fantasy score is created for every team game, combining every goalie
+    who played for that team.
+  </p>
+
+  <div class="team-controls">
+    <label>
+      Team Name
+      <input type="text" [(ngModel)]="teamName" />
+    </label>
+
+    <label>
+      Team Abbreviation
+      <input type="text" maxlength="3" [(ngModel)]="teamAbbreviation" />
+    </label>
+
+    <label>
+      Season
+      <input type="text" [(ngModel)]="season" />
+    </label>
+  </div>
+
+  <div class="team-actions">
+    <button type="button" (click)="loadSixTeamGames()">
+      Load Six Team Games
+    </button>
+
+    <button
+      type="button"
+      (click)="scoreTeamGoalieUnit()"
+      [disabled]="teamGames().length === 0"
+    >
+      Score Goalie Unit
+    </button>
+  </div>
+
+  @if (status()) {
+    <p class="status">{{ status() }}</p>
+  }
+
+  @if (loadedTeam(); as team) {
+    @if (gameRows().length > 0) {
+      <section class="result-header">
+        <div>
+          <p class="eyebrow">Real Six-Game Sample</p>
+          <h3>{{ team.name }} Goalie Unit</h3>
+          <p>{{ gameRows().length }} Team Games Counted</p>
+        </div>
+
+        <div class="cycle-total">
+          <strong>{{ cyclePoints() }}</strong>
+          <span>Cycle Pts</span>
+          <small>{{ pointsPerGame() }} Pts/Game</small>
+        </div>
+      </section>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Opponent</th>
+              <th>Goalie Appearance(s)</th>
+              <th>Saves</th>
+              <th>Shots</th>
+              <th>SV%</th>
+              <th>Result</th>
+              <th>Shutout</th>
+              <th>Fantasy Pts</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (game of gameRows(); track game.gameId) {
+              <tr>
+                <td>{{ game.date }}</td>
+                <td>{{ game.matchup }}</td>
+                <td>{{ game.goalieAppearances }}</td>
+                <td>{{ game.saves }}</td>
+                <td>{{ game.shotsAgainst }}</td>
+                <td>{{ game.savePercentage }}</td>
+                <td>{{ game.result }}</td>
+                <td>{{ game.shutout ? 'Yes' : '—' }}</td>
+                <td><strong>{{ game.breakdown.total }}</strong></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why Each Team Game Scored That Way</h3>
+
+      @for (game of gameRows(); track game.gameId) {
+        <details>
+          <summary>
+            {{ game.date }} {{ game.matchup }}
+            — {{ game.breakdown.total }} points
+          </summary>
+
+          <div class="point-breakdown">
+            @for (line of game.breakdown.lines; track line.label) {
+              <div class="point-line">
+                <span>{{ line.label }}</span>
+                <strong>+{{ line.points }}</strong>
+              </div>
+            }
+          </div>
+        </details>
+      }
+    }
+  }
+</section>

@@ -68,7 +68,7 @@
     >
       Score Six Games
     </button>
-
+    <app-team-goalie-lab></app-team-goalie-lab>
     <button
       type="button"
       (click)="loadAssistAudit()"
@@ -220,5 +220,124 @@
       <summary>Show raw play-by-play data</summary>
       <pre>{{ playByPlayEvents() | json }}</pre>
     </details>
+  }
+</section>
+
+<section class="api-smoke-test">
+  <h2>Goalie Scoring Lab</h2>
+
+  <p>
+    Test six real goalie appearances using your current save, save-percentage,
+    win, and shutout scoring rules.
+  </p>
+
+  <div class="player-lab-controls">
+    <label>
+      Goalie Name
+      <input type="text" [(ngModel)]="goaliePlayerName" />
+    </label>
+
+    <label>
+      NHL Player ID
+      <input type="number" min="1" [(ngModel)]="goaliePlayerId" />
+    </label>
+
+    <label>
+      Season
+      <input type="text" [(ngModel)]="goalieSeason" />
+    </label>
+  </div>
+
+  <div class="lab-actions">
+    <button type="button" (click)="loadGoalieGameLog()">
+      Load Six Goalie Games
+    </button>
+
+    <button
+      type="button"
+      (click)="scoreGoalieGames()"
+      [disabled]="goalieGames().length === 0"
+    >
+      Score Six Goalie Games
+    </button>
+  </div>
+
+  @if (goalieApiStatus()) {
+    <p>{{ goalieApiStatus() }}</p>
+  }
+
+  @if (goalieStatsStatus()) {
+    <p>{{ goalieStatsStatus() }}</p>
+  }
+
+  @if (loadedGoalie(); as goalie) {
+    @if (realGoalieRows().length > 0) {
+      <section class="lab-result-header">
+        <div>
+          <p class="eyebrow">Real Six-Game Sample</p>
+          <h3>{{ goalie.name }}</h3>
+          <p>Goalie · {{ realGoalieRows().length }} Games</p>
+        </div>
+
+        <div class="lab-total">
+          <strong>{{ goalieCyclePoints() }}</strong>
+          <span>Cycle Pts</span>
+          <small>{{ goaliePointsPerGame() }} Pts/Game</small>
+        </div>
+      </section>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Opponent</th>
+            <th>Saves</th>
+            <th>Shots</th>
+            <th>SV%</th>
+            <th>Decision</th>
+            <th>Shutout</th>
+            <th>TOI</th>
+            <th>Fantasy Pts</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          @for (game of realGoalieRows(); track game.gameId) {
+            <tr>
+              <td>{{ game.date }}</td>
+              <td>{{ game.matchup }}</td>
+              <td>{{ game.saves }}</td>
+              <td>{{ game.shotsAgainst }}</td>
+              <td>{{ game.savePercentage }}</td>
+              <td>{{ game.decision }}</td>
+              <td>{{ game.shutout ? 'Yes' : '—' }}</td>
+              <td>{{ game.toi }}</td>
+              <td><strong>{{ game.breakdown.total }}</strong></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <h3>Why Each Game Scored That Way</h3>
+
+      @for (game of realGoalieRows(); track game.gameId) {
+        <details>
+          <summary>
+            {{ game.date }} {{ game.matchup }}
+            —
+            {{ game.breakdown.total }} points
+          </summary>
+
+          <div class="point-breakdown">
+            @for (line of game.breakdown.lines; track line.label) {
+              <div class="point-line">
+                <span>{{ line.label }}</span>
+                <strong>+{{ line.points }}</strong>
+              </div>
+            }
+          </div>
+        </details>
+      }
+    }
   }
 </section>

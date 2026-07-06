@@ -1,18 +1,21 @@
 import { Component, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TeamGoalieLab } from './team-goalie-lab/team-goalie-lab';
 import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
   getGamePlayByPlay,
   getRegularSeasonGameLog,
   getSkaterAssistBreakdown,
+  findGoalieBoxscoreLine,
   NhlPlayerGameLogEntry
 } from '../../core/nhl/nhl-api.service';
 import {
   calculateGoalieGamePoints,
   calculateSkaterGameBreakdown,
   calculateSkaterGamePoints,
+  calculateGoalieGameBreakdown,
   type GamePointBreakdown,
   type GoalieGameStats,
   type SkaterGameStats
@@ -26,6 +29,25 @@ interface ScoringTestCase {
   type: 'skater' | 'goalie';
   description: string;
   points: number;
+}
+
+interface LabGoalie {
+  id: number;
+  name: string;
+  season: string;
+}
+
+interface RealGoalieGameRow {
+  gameId: number;
+  date: string;
+  matchup: string;
+  saves: number;
+  shotsAgainst: number;
+  savePercentage: string;
+  decision: string;
+  shutout: boolean;
+  toi: string;
+  breakdown: GamePointBreakdown;
 }
 
 interface LabPlayer {
@@ -96,7 +118,7 @@ function toiToMinutes(toi: string): number {
 
 @Component({
   selector: 'app-scoring-test',
-  imports: [FormsModule, JsonPipe],
+  imports: [FormsModule, JsonPipe, TeamGoalieLab],
   templateUrl: './scoring-test.html',
   styleUrl: './scoring-test.css'
 })
@@ -119,6 +141,20 @@ export class ScoringTest {
   playByPlayStatus = signal('');
   playByPlayEvents = signal<unknown[]>([]);
   goalEventRows = signal<GoalEventRow[]>([]);
+
+  goaliePlayerId = 8476945;
+  goaliePlayerName = 'Connor Hellebuyck';
+  goalieSeason = '20252026';
+
+  loadedGoalie = signal<LabGoalie | null>(null);
+
+  goalieApiStatus = signal('');
+  goalieGames = signal<NhlPlayerGameLogEntry[]>([]);
+
+  goalieStatsStatus = signal('');
+  realGoalieRows = signal<RealGoalieGameRow[]>([]);
+  goalieCyclePoints = signal(0);
+  goaliePointsPerGame = signal(0);
 
   testCases: ScoringTestCase[] = [
     this.createSkaterTest('Connor McDavid', 'Superstar forward game', {
@@ -387,6 +423,164 @@ export class ScoringTest {
       this.playByPlayStatus.set(message);
     }
   }
+
+  async loadGoalieGameLog(): Promise<void> {
+  const goalie = this.getGoalieFromForm();
+
+  if (!goalie) {
+    return;
+  }
+
+  this.loadedGoalie.set(goalie);
+  this.goalieGames.set([]);
+  this.realGoalieRows.set([]);
+  this.goalieCyclePoints.set(0);
+  this.goaliePointsPerGame.set(0);
+  this.goalieStatsStatus.set('');
+
+  this.goalieApiStatus.set(`Loading ${goalie.name}'s NHL game log...`);
+
+  try {
+    const response = await getRegularSeasonGameLog(
+      goalie.id,
+      goalie.season
+    );
+
+    const games = Array.isArray(response.gameLog)
+      ? response.gameLog.slice(0, 6)
+      : [];
+
+    this.goalieGames.set(games);
+    this.goalieApiStatus.set(
+      `Loaded ${games.length} games for ${goalie.name}.`
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown NHL API error';
+
+    this.goalieApiStatus.set(message);
+  }
+}
+
+async scoreGoalieGames(): Promise<void> {
+  const goalie = this.loadedGoalie();
+  const games = this.goalieGames();
+
+  if (!goalie || games.length === 0) {
+    this.goalieStatsStatus.set('Load a goalie game log first.');
+    return;
+  }
+
+  this.goalieStatsStatus.set(
+    `Loading and scoring ${goalie.name}'s six-game sample...`
+  );
+
+  this.realGoalieRows.set([]);
+  this.goalieCyclePoints.set(0);
+  this.goaliePointsPerGame.set(0);
+
+  try {
+    const rows = await Promise.all(
+      games.map(async (game) => {
+        const boxscore = await getGameBoxscore(game.gameId);
+
+        const goalieLine = findGoalieBoxscoreLine(
+          boxscore,
+          goalie.id
+        );
+
+        if (!goalieLine) {
+          throw new Error(
+            `${goalie.name} was not found in boxscore ${game.gameId}.`
+          );
+        }
+
+        const shutout =
+          goalieLine.starter &&
+          goalieLine.decision === 'W' &&
+          goalieLine.goalsAgainst === 0;
+
+        const stats: GoalieGameStats = {
+          saves: goalieLine.saves,
+          shotsAgainst: goalieLine.shotsAgainst,
+          won: goalieLine.decision === 'W',
+          shutout
+        };
+
+        return {
+          gameId: game.gameId,
+          date: game.gameDate,
+          matchup: `${game.homeRoadFlag === 'H' ? 'vs' : '@'} ${game.opponentAbbrev}`,
+          saves: goalieLine.saves,
+          shotsAgainst: goalieLine.shotsAgainst,
+          savePercentage:
+            goalieLine.shotsAgainst > 0
+              ? (goalieLine.saves / goalieLine.shotsAgainst).toFixed(3)
+              : '0.000',
+          decision: goalieLine.decision ?? '—',
+          shutout,
+          toi: goalieLine.toi,
+          breakdown: calculateGoalieGameBreakdown(
+            stats,
+            defaultScoringRules
+          )
+        };
+      })
+    );
+
+    const cyclePoints = rows.reduce(
+      (total, game) => total + game.breakdown.total,
+      0
+    );
+
+    this.realGoalieRows.set(rows);
+    this.goalieCyclePoints.set(Number(cyclePoints.toFixed(2)));
+
+    this.goaliePointsPerGame.set(
+      rows.length > 0
+        ? Number((cyclePoints / rows.length).toFixed(2))
+        : 0
+    );
+
+    this.goalieStatsStatus.set(
+      `Loaded and scored ${rows.length} real games for ${goalie.name}.`
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown error';
+
+    this.goalieStatsStatus.set(message);
+  }
+}
+
+private getGoalieFromForm(): LabGoalie | null {
+  const id = Number(this.goaliePlayerId);
+  const name = this.goaliePlayerName.trim();
+  const season = this.goalieSeason.trim();
+
+  if (!Number.isInteger(id) || id <= 0) {
+    this.goalieApiStatus.set('Enter a valid NHL goalie ID.');
+    return null;
+  }
+
+  if (!name) {
+    this.goalieApiStatus.set('Enter a goalie name.');
+    return null;
+  }
+
+  if (!/^\d{8}$/.test(season)) {
+    this.goalieApiStatus.set(
+      'Season must use the format YYYYYYYY, such as 20252026.'
+    );
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    season
+  };
+}
 
   private getPlayerFromForm(): LabPlayer | null {
     const id = Number(this.playerId);
