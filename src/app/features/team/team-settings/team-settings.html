@@ -1,0 +1,26 @@
+@if (loading()) {
+  <p>Loading team...</p>
+} @else if (!team()) {
+  <p>Team not found.</p>
+} @else {
+  <h1>My Team</h1>
+
+  <h2>{{ team()?.teamName }}</h2>
+
+  <label>
+    Team Name
+    <input [(ngModel)]="teamName" />
+  </label>
+
+  <button (click)="saveTeamName()" [disabled]="saving()">
+    {{ saving() ? 'Saving...' : 'Save Team Name' }}
+  </button>
+
+  @if (successMessage()) {
+    <p>{{ successMessage() }}</p>
+  }
+
+  @if (errorMessage()) {
+    <p>{{ errorMessage() }}</p>
+  }
+}

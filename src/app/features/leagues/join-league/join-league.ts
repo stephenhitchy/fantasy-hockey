@@ -1,0 +1,44 @@
+import { Component, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { auth } from '../../../core/firebase';
+import { getUserProfile } from '../../../core/user/user.service';
+import { joinLeagueByInviteCode } from '../../../core/league/league.service';
+
+@Component({
+  selector: 'app-join-league',
+  imports: [FormsModule],
+  templateUrl: './join-league.html',
+  styleUrl: './join-league.css'
+})
+export class JoinLeague {
+  inviteCode = '';
+  loading = signal(false);
+  errorMessage = signal('');
+
+  constructor(private router: Router) {}
+
+  async submit() {
+    this.errorMessage.set('');
+    this.loading.set(true);
+
+    try {
+      const user = auth.currentUser;
+
+      if (!user) {
+        throw new Error('You must be logged in.');
+      }
+
+      const profile = await getUserProfile(user.uid);
+      const username = profile?.username || user.email || 'Unknown User';
+
+      const leagueId = await joinLeagueByInviteCode(this.inviteCode, username);
+
+      await this.router.navigate(['/leagues', leagueId]);
+    } catch (error: any) {
+      this.errorMessage.set(error.message);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+}

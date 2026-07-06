@@ -1,5 +1,6 @@
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+
 
 export interface UserProfile {
   uid: string;
@@ -17,4 +18,12 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   }
 
   return userSnap.data() as UserProfile;
+}
+
+export async function updateUsername(uid: string, username: string): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+
+  await updateDoc(userRef, {
+    username
+  });
 }

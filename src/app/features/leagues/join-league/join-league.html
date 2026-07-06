@@ -1,0 +1,11 @@
+<h1>Join League</h1>
+
+<input [(ngModel)]="inviteCode" placeholder="Invite code" />
+
+<button (click)="submit()" [disabled]="loading()">
+  {{ loading() ? 'Joining...' : 'Join League' }}
+</button>
+
+@if (errorMessage()) {
+  <p>{{ errorMessage() }}</p>
+}

@@ -1,0 +1,24 @@
+@if (loading()) {
+  <p>Loading account...</p>
+} @else {
+  <h1>Account Settings</h1>
+
+  <p>Email: {{ profile()?.email }}</p>
+
+  <label>
+    Username
+    <input [(ngModel)]="username" />
+  </label>
+
+  <button (click)="saveUsername()" [disabled]="saving()">
+    {{ saving() ? 'Saving...' : 'Save Username' }}
+  </button>
+
+  @if (successMessage()) {
+    <p>{{ successMessage() }}</p>
+  }
+
+  @if (errorMessage()) {
+    <p>{{ errorMessage() }}</p>
+  }
+}

@@ -1,18 +1,50 @@
 <section>
   <h2>My Leagues</h2>
 
-  @if (leagues().length === 0) {
+  @if (leagueSummaries().length === 0) {
     <p>No leagues yet.</p>
   } @else {
-    @for (league of leagues(); track league.id) {
-        <div [routerLink]="['/leagues', league.id]">
-            <h3>{{ league.name }}</h3>
-            <p>Invite Code: {{ league.inviteCode }}</p>
-            <p>Max Teams: {{ league.maxTeams }}</p>
-        </div>
+    @for (league of leagueSummaries(); track league.leagueId) {
+      <div>
+        <h3>{{ league.leagueName }}</h3>
+        <p>My Team: {{ league.myTeamName }}</p>
+        <p>Teams: {{ league.teamCount }} / {{ league.maxTeams }}</p>
+        <p>Invite Code: {{ league.inviteCode }}</p>
+
+        <h4>Top Players This Cycle</h4>
+
+        <p>
+          {{ league.topOffensivePlayer?.teamLogo }}
+          Offense:
+          {{ league.topOffensivePlayer?.name }}
+          —
+          {{ league.topOffensivePlayer?.points }} pts
+        </p>
+
+        <p>
+          {{ league.topDefensivePlayer?.teamLogo }}
+          Defense:
+          {{ league.topDefensivePlayer?.name }}
+          —
+          {{ league.topDefensivePlayer?.points }} pts
+        </p>
+
+        <p>
+          {{ league.topGoalie?.teamLogo }}
+          Goalie:
+          {{ league.topGoalie?.name }}
+          —
+          {{ league.topGoalie?.points }} pts
+        </p>
+
+        <button [routerLink]="['/leagues', league.leagueId]">
+          Open League
+        </button>
+      </div>
     }
   }
 
   <button routerLink="/leagues/create">Create League</button>
-  <button>Join League</button>
+  <button routerLink="/leagues/join">Join League</button>
+  <button routerLink="/account/settings">Account Settings</button>
 </section>
