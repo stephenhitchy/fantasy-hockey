@@ -1,7 +1,7 @@
 @if (loading()) {
   <p>Loading team...</p>
 } @else if (!team()) {
-  <p>Team not found.</p>
+  <p>{{ errorMessage() || 'Team not found.' }}</p>
 } @else {
   <h1>My Team</h1>
 
@@ -23,6 +23,6 @@
   @if (errorMessage()) {
     <p>{{ errorMessage() }}</p>
   }
-}
 
-<app-roster-board></app-roster-board>
+  <app-roster-board [roster]="roster()"></app-roster-board>
+}

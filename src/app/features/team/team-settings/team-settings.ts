@@ -1,14 +1,24 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { onAuthStateChanged, User } from 'firebase/auth';
+
 import { auth } from '../../../core/firebase';
-import { RosterBoard } from '../../../shared/roster-board/roster-board';
 import {
   FantasyTeam,
   getFantasyTeam,
   updateTeamName
 } from '../../../core/team/team.service';
-import { onAuthStateChanged, User } from 'firebase/auth';
+
+import {
+  FantasyRoster
+} from '../../../core/team/roster.models';
+
+import {
+  getOrCreateFantasyRoster
+} from '../../../core/team/roster.service';
+
+import { RosterBoard } from '../../../shared/roster-board/roster-board';
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -27,7 +37,10 @@ function waitForAuthUser(): Promise<User | null> {
 })
 export class TeamSettings {
   leagueId = '';
+
   team = signal<FantasyTeam | null>(null);
+  roster = signal<FantasyRoster | null>(null);
+
   teamName = '';
   loading = signal(true);
   saving = signal(false);
@@ -41,27 +54,45 @@ export class TeamSettings {
     this.loadTeam();
   }
 
-  async loadTeam() {
+  async loadTeam(): Promise<void> {
+    const leagueId = this.route.snapshot.paramMap.get('leagueId');
+    const user = await waitForAuthUser();
 
-    
-  const leagueId = this.route.snapshot.paramMap.get('leagueId');
-  const user = await waitForAuthUser();
-
-  if (!leagueId || !user) {
-    await this.router.navigate(['/']);
-    return;
-  }
+    if (!leagueId || !user) {
+      await this.router.navigate(['/']);
+      return;
+    }
 
     this.leagueId = leagueId;
 
-    const team = await getFantasyTeam(leagueId, user.uid);
+    try {
+      const team = await getFantasyTeam(leagueId, user.uid);
 
-    this.team.set(team);
-    this.teamName = team?.teamName ?? '';
-    this.loading.set(false);
+      if (!team) {
+        this.team.set(null);
+        return;
+      }
+
+      const roster = await getOrCreateFantasyRoster(
+        leagueId,
+        user.uid
+      );
+
+      this.team.set(team);
+      this.roster.set(roster);
+      this.teamName = team.teamName;
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load this team.'
+      );
+    } finally {
+      this.loading.set(false);
+    }
   }
 
-  async saveTeamName() {
+  async saveTeamName(): Promise<void> {
     this.errorMessage.set('');
     this.successMessage.set('');
 
@@ -80,19 +111,26 @@ export class TeamSettings {
     this.saving.set(true);
 
     try {
-      await updateTeamName(this.leagueId, user.uid, this.teamName.trim());
+      const updatedName = this.teamName.trim();
 
-      const updatedTeam = this.team();
-      if (updatedTeam) {
+      await updateTeamName(this.leagueId, user.uid, updatedName);
+
+      const currentTeam = this.team();
+
+      if (currentTeam) {
         this.team.set({
-          ...updatedTeam,
-          teamName: this.teamName.trim()
+          ...currentTeam,
+          teamName: updatedName
         });
       }
 
       this.successMessage.set('Team name updated!');
-    } catch (error: any) {
-      this.errorMessage.set(error.message);
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update team name.'
+      );
     } finally {
       this.saving.set(false);
     }

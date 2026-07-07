@@ -1,67 +1,217 @@
 <section class="roster-board">
-  <div class="roster-board-header">
+  <header class="roster-board-header">
     <div>
-      <h2>Roster</h2>
-      <p>Your drafted players will appear here.</p>
+      <span class="eyebrow">Fantasy Hockey</span>
+      <h2>Active Roster</h2>
+      <p>Set your lineup before the next cycle begins.</p>
     </div>
 
-    <span class="roster-count">20 Starting Slots</span>
-  </div>
+    <div class="roster-summary">
+      <strong>{{ startingRosterSize }}</strong>
+      <span>Active Slots</span>
+    </div>
+  </header>
 
-  <div class="roster-grid">
-    @for (group of rosterGroups; track group.position) {
-      <section class="position-group">
-        <div class="position-heading">
-          <h3>{{ group.label }}</h3>
-          <span>{{ group.slotCount }}</span>
-        </div>
+  <section class="roster-section">
+    <div class="section-heading">
+      <h3>Forwards</h3>
+      <span>3 LW · 3 C · 3 RW</span>
+    </div>
 
-        <div class="position-slots">
-          @for (slot of group.slots; track slot.slotNumber) {
-            <div class="roster-slot">
-              <span class="slot-label">
-                {{ group.position }} {{ slot.slotNumber }}
-              </span>
+    <div class="forwards-grid">
+      @for (group of forwardGroups; track group.position) {
+        <section class="position-panel">
+          <div class="position-panel-header">
+            <h4>{{ group.label }}</h4>
+            <span>{{ group.slotCount }}</span>
+          </div>
 
-              @if (slot.player; as player) {
-                <button
-                    class="player-row player-button"
-                    type="button"
-                    [routerLink]="['/players', player.id]"
+          <div class="slot-list">
+            @for (slotNumber of group.slotNumbers; track slotNumber) {
+              <div class="roster-slot">
+                @if (getActiveAsset(group.position, slotNumber); as asset) {
+                  @if (asset.assetType === 'skater') {
+                    <a
+                      class="asset-card asset-card-link"
+                      [routerLink]="['/players', asset.player.id]"
                     >
-                  @if (player.teamLogoUrl) {
-                    <img
-                        class="team-logo"
-                        [src]="player.teamLogoUrl"
-                        [alt]="player.nhlTeamAbbreviation + ' logo'"
-                    />
-                    } @else {
-                    <span class="team-mark">
-                        {{ player.nhlTeamAbbreviation }}
-                    </span>
-                    }
+                      <span class="slot-number">
+                        {{ group.position }}{{ slotNumber }}
+                      </span>
 
-                  <div class="player-copy">
-                    <strong>{{ player.fullName }}</strong>
-                    <span>
-  {{ player.cycleScore.gamesCounted }} / 6 Games
-  •
-  {{ getPointsPerGame(player) }} Pts/G
-</span>
-                  </div>
+                      @if (asset.player.teamLogoUrl) {
+                        <img
+                          class="team-logo"
+                          [src]="asset.player.teamLogoUrl"
+                          [alt]="asset.player.nhlTeamAbbreviation + ' logo'"
+                        />
+                      } @else {
+                        <span class="team-mark">
+                          {{ asset.player.nhlTeamAbbreviation }}
+                        </span>
+                      }
 
-                  <div class="cycle-points">
-                    <strong>{{ player.cycleScore.fantasyPoints }}</strong>
-                    <span>Cycle Pts</span>
+                      <div class="asset-copy">
+                        <strong>{{ asset.player.fullName }}</strong>
+                        <span>
+                          {{ asset.player.nhlTeamAbbreviation }}
+                          ·
+                          {{ asset.cycleScore.gamesCounted }}/6 Games
+                        </span>
+                      </div>
+
+                      <div class="asset-score">
+                        <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
+                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                      </div>
+                    </a>
+                  }
+                } @else {
+                  <div class="empty-card">
+                    <span>{{ group.position }}{{ slotNumber }}</span>
+                    <strong>Empty Slot</strong>
                   </div>
-                </button>
-              } @else {
-                <span class="empty-slot">Empty slot</span>
-              }
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </section>
+
+  <section class="roster-section back-end-section">
+    <div class="section-heading">
+      <h3>Defense & Goaltending</h3>
+      <span>4 D · 1 Team Goalie Unit</span>
+    </div>
+
+    <div class="back-end-grid">
+      @for (group of backEndGroups; track group.position) {
+        <section
+          class="position-panel"
+          [class.defense-panel]="group.position === 'D'"
+          [class.goalie-panel]="group.position === 'G'"
+        >
+          <div class="position-panel-header">
+            <h4>{{ group.label }}</h4>
+            <span>{{ group.slotCount }}</span>
+          </div>
+
+          <div class="slot-list">
+            @for (slotNumber of group.slotNumbers; track slotNumber) {
+              <div class="roster-slot">
+                @if (getActiveAsset(group.position, slotNumber); as asset) {
+                  @if (asset.assetType === 'skater') {
+                    <a
+                      class="asset-card asset-card-link"
+                      [routerLink]="['/players', asset.player.id]"
+                    >
+                      <span class="slot-number">
+                        D{{ slotNumber }}
+                      </span>
+
+                      @if (asset.player.teamLogoUrl) {
+                        <img
+                          class="team-logo"
+                          [src]="asset.player.teamLogoUrl"
+                          [alt]="asset.player.nhlTeamAbbreviation + ' logo'"
+                        />
+                      } @else {
+                        <span class="team-mark">
+                          {{ asset.player.nhlTeamAbbreviation }}
+                        </span>
+                      }
+
+                      <div class="asset-copy">
+                        <strong>{{ asset.player.fullName }}</strong>
+                        <span>
+                          {{ asset.player.nhlTeamAbbreviation }}
+                          ·
+                          {{ asset.cycleScore.gamesCounted }}/6 Games
+                        </span>
+                      </div>
+
+                      <div class="asset-score">
+                        <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
+                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                      </div>
+                    </a>
+                  } @else {
+                    <div class="asset-card goalie-unit-card">
+                      <span class="slot-number">G1</span>
+
+                      @if (asset.teamLogoUrl) {
+                        <img
+                          class="team-logo"
+                          [src]="asset.teamLogoUrl"
+                          [alt]="asset.teamAbbreviation + ' logo'"
+                        />
+                      } @else {
+                        <span class="team-mark">
+                          {{ asset.teamAbbreviation }}
+                        </span>
+                      }
+
+                      <div class="asset-copy">
+                        <strong>{{ asset.teamName }}</strong>
+                        <span>
+                          Goalie Unit ·
+                          {{ asset.cycleScore.gamesCounted }}/6 Team Games
+                        </span>
+                      </div>
+
+                      <div class="asset-score">
+                        <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
+                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                      </div>
+                    </div>
+                  }
+                } @else {
+                  <div class="empty-card">
+                    <span>{{ group.position }}{{ slotNumber }}</span>
+                    <strong>Empty Slot</strong>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </section>
+
+  <section class="ir-section">
+    <div class="section-heading">
+      <div>
+        <h3>Injured Reserve</h3>
+        <span>Injured players can be held here between cycles.</span>
+      </div>
+
+      <strong>{{ irSlotCount }} IR Slots</strong>
+    </div>
+
+    <div class="ir-grid">
+      @for (slotNumber of irSlots; track slotNumber) {
+        @if (getIrAsset(slotNumber); as asset) {
+          <a
+            class="ir-slot ir-slot-filled"
+            [routerLink]="['/players', asset.player.id]"
+          >
+            <span>IR{{ slotNumber }}</span>
+
+            <div class="ir-copy">
+              <strong>{{ asset.player.fullName }}</strong>
+              <small>{{ asset.position }} · {{ asset.player.nhlTeamAbbreviation }}</small>
             </div>
-          }
-        </div>
-      </section>
-    }
-  </div>
+          </a>
+        } @else {
+          <div class="ir-slot">
+            <span>IR{{ slotNumber }}</span>
+            <strong>Empty</strong>
+          </div>
+        }
+      }
+    </div>
+  </section>
 </section>

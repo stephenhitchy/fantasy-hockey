@@ -1,0 +1,190 @@
+@if (loading()) {
+  <p>Loading draft setup...</p>
+} @else if (!league()) {
+  <p>{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="draft-setup-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="draft-header">
+      <div>
+        <span class="eyebrow">Commissioner Tools</span>
+        <h1>Draft Setup</h1>
+        <p>{{ league()?.name }}</p>
+      </div>
+
+      <div class="draft-badge">
+        <strong>{{ totalRounds }}</strong>
+        <span>Rounds</span>
+      </div>
+    </header>
+
+    <section class="draft-summary">
+      <div class="summary-card">
+        <span>Format</span>
+        <strong>Snake Draft</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Teams</span>
+        <strong>{{ teams().length }}</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Roster Size</span>
+        <strong>14 Active Assets</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Goalie Rule</span>
+        <strong>1 Team Unit</strong>
+      </div>
+    </section>
+
+    <section class="requirements-card">
+      <h2>Draft Requirements</h2>
+      <p>
+        Managers can draft any eligible position on each turn.
+        The completed roster must contain the following assets.
+      </p>
+
+      <div class="requirements-list">
+        <span>3 LW</span>
+        <span>3 C</span>
+        <span>3 RW</span>
+        <span>4 D</span>
+        <span>1 Team Goalie Unit</span>
+      </div>
+    </section>
+
+    @if (isDraftLocked()) {
+      <p class="locked-message">
+        This draft is already in progress or complete. Draft order changes are locked.
+      </p>
+    }
+
+    @if (errorMessage()) {
+      <p class="form-message error-message">
+        {{ errorMessage() }}
+      </p>
+    }
+
+    @if (successMessage()) {
+      <p class="form-message success-message">
+        {{ successMessage() }}
+      </p>
+    }
+
+    <section class="order-card">
+      <div class="section-title-row">
+        <div>
+          <h2>Round 1 Order</h2>
+          <p>
+            Even-numbered rounds automatically reverse this order.
+          </p>
+        </div>
+
+        <div class="order-actions">
+          <button
+            type="button"
+            class="secondary-button"
+            (click)="resetOrder()"
+            [disabled]="isDraftLocked()"
+          >
+            Reset
+          </button>
+
+          <button
+            type="button"
+            class="secondary-button"
+            (click)="randomizeOrder()"
+            [disabled]="isDraftLocked()"
+          >
+            Randomize
+          </button>
+        </div>
+      </div>
+
+      @if (teams().length === 0) {
+        <p>No teams have joined this league yet.</p>
+      } @else {
+        <div class="order-list">
+          @for (ownerId of roundOneOrder(); track ownerId; let index = $index) {
+            <article class="order-row">
+              <div class="pick-number">
+                {{ index + 1 }}
+              </div>
+
+              <div class="team-order-copy">
+                <strong>{{ getTeamName(ownerId) }}</strong>
+                <span>Round 1 Pick {{ index + 1 }}</span>
+              </div>
+
+              <div class="move-buttons">
+                <button
+                  type="button"
+                  aria-label="Move team up"
+                  (click)="moveTeam(index, -1)"
+                  [disabled]="index === 0 || isDraftLocked()"
+                >
+                  ↑
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Move team down"
+                  (click)="moveTeam(index, 1)"
+                  [disabled]="index === roundOneOrder().length - 1 || isDraftLocked()"
+                >
+                  ↓
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+
+      <button
+        type="button"
+        class="save-button"
+        (click)="saveDraftOrder()"
+        [disabled]="saving() || isDraftLocked() || roundOneOrder().length === 0"
+      >
+        {{ saving() ? 'Saving Draft Order...' : 'Save Draft Order' }}
+      </button>
+    </section>
+
+    <section class="preview-card">
+      <div class="section-title-row">
+        <div>
+          <h2>Snake Draft Preview</h2>
+          <p>
+            This previews every pick based on the current round-one order.
+          </p>
+        </div>
+      </div>
+
+      <div class="round-preview-grid">
+        @for (round of previewRounds(); track round.round) {
+          <section class="round-card">
+            <h3>Round {{ round.round }}</h3>
+
+            <ol>
+              @for (pick of round.picks; track pick.overallPick) {
+                <li>
+                  <span>#{{ pick.overallPick }}</span>
+                  <strong>{{ getTeamName(pick.ownerId) }}</strong>
+                </li>
+              }
+            </ol>
+          </section>
+        }
+      </div>
+    </section>
+  </section>
+}

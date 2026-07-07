@@ -1,30 +1,79 @@
 @if (loading()) {
   <p>Loading league...</p>
 } @else if (!league()) {
-  <p>League not found.</p>
+  <p>{{ errorMessage() || 'League not found.' }}</p>
 } @else {
-  <h1>🏒 {{ league()?.name }}</h1>
+  <section class="league-page">
+    <header class="league-header">
+      <div>
+        <span class="eyebrow">Fantasy Hockey League</span>
+        <h1>🏒 {{ league()?.name }}</h1>
+        <p>Cycle Matchups · {{ teams().length }} / {{ league()?.maxTeams }} Teams</p>
+      </div>
 
-  <p>Teams: {{ teams().length }} / {{ league()?.maxTeams }}</p>
-  <p>Format: Cycle Matchups</p>
-  <p>Games Per Cycle: {{ league()?.scoringRules?.requiredGamesPerCycle }}</p>
+      <div class="league-actions">
+        <a
+          class="secondary-action"
+          [routerLink]="['/leagues', leagueId, 'team']"
+        >
+          My Team
+        </a>
 
-  <h2>Invite Code</h2>
-  <p>{{ league()?.inviteCode }}</p>
+        @if (isCommissioner()) {
+          <a
+            class="primary-action"
+            [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
+          >
+            Draft Setup
+          </a>
+        }
+      </div>
+    </header>
 
-  <button (click)="copyInviteCode()">Copy Invite Code</button>
+    <section class="league-info-grid">
+      <article class="league-info-card">
+        <span>Format</span>
+        <strong>Cycle Matchups</strong>
+      </article>
 
-  @if (copyMessage()) {
-    <p>{{ copyMessage() }}</p>
-  }
+      <article class="league-info-card">
+        <span>Games Per Cycle</span>
+        <strong>{{ league()?.scoringRules?.requiredGamesPerCycle }}</strong>
+      </article>
 
-  <h2>Teams</h2>
+      <article class="league-info-card">
+        <span>Roster Format</span>
+        <strong>14 Active + 4 IR</strong>
+      </article>
+    </section>
 
-  @for (team of teams(); track team.id) {
-    <div>
-      <h3>{{ team.teamName }}</h3>
-      <p>Record: {{ team.wins }}-{{ team.losses }}-{{ team.ties }}</p>
-      <p>Points For: {{ team.pointsFor }}</p>
-    </div>
-  }
+    <section class="invite-card">
+      <div>
+        <h2>Invite Code</h2>
+        <strong class="invite-code">{{ league()?.inviteCode }}</strong>
+      </div>
+
+      <div>
+        <button (click)="copyInviteCode()">Copy Invite Code</button>
+
+        @if (copyMessage()) {
+          <span class="copy-message">{{ copyMessage() }}</span>
+        }
+      </div>
+    </section>
+
+    <section class="teams-section">
+      <h2>Teams</h2>
+
+      <div class="teams-grid">
+        @for (team of teams(); track team.id) {
+          <article class="team-card">
+            <h3>{{ team.teamName }}</h3>
+            <p>Record: {{ team.wins }}-{{ team.losses }}-{{ team.ties }}</p>
+            <p>Points For: {{ team.pointsFor }}</p>
+          </article>
+        }
+      </div>
+    </section>
+  </section>
 }
