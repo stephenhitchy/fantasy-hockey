@@ -1,4 +1,8 @@
-import { GoalieSavePercentageTier, ScoringRules } from './scoring-rules';
+import {
+  DiminishingReturnValues,
+  GoalieSavePercentageTier,
+  ScoringRules
+} from './scoring-rules';
 
 export interface SkaterGameStats {
   position: 'F' | 'D';
@@ -41,6 +45,43 @@ function rounded(value: number): number {
   return Number(value.toFixed(2));
 }
 
+function calculateDiminishingPoints(
+  count: number,
+  values: DiminishingReturnValues
+): number {
+  if (count <= 0) {
+    return 0;
+  }
+
+  let points = values.first;
+
+  if (count >= 2) {
+    points += values.second;
+  }
+
+  if (count >= 3) {
+    points += (count - 2) * values.additional;
+  }
+
+  return points;
+}
+
+function diminishingLabel(
+  label: string,
+  count: number,
+  values: DiminishingReturnValues
+): string {
+  if (count === 1) {
+    return `${label} (1 × ${values.first})`;
+  }
+
+  if (count === 2) {
+    return `${label} (${values.first} + ${values.second})`;
+  }
+
+  return `${label} (${values.first} + ${values.second} + ${count - 2} × ${values.additional})`;
+}
+
 function getGoalieSavePercentagePoints(
   savePercentage: number,
   tiers: GoalieSavePercentageTier[]
@@ -59,7 +100,12 @@ export function calculateSkaterGameBreakdown(
   const lines: PointBreakdownLine[] = [];
   let total = 0;
 
-  function addLine(label: string, points: number) {
+  const positionRules =
+    stats.position === 'D'
+      ? rules.defense
+      : rules.forward;
+
+  function addLine(label: string, points: number): void {
     if (points === 0) {
       return;
     }
@@ -74,44 +120,67 @@ export function calculateSkaterGameBreakdown(
     total += roundedPoints;
   }
 
-  addLine(
-    `Goals (${stats.goals})`,
-    stats.goals * rules.goal
+  const goalPoints = calculateDiminishingPoints(
+    stats.goals,
+    positionRules.goal
   );
 
   addLine(
-    `Primary Assists (${stats.primaryAssists})`,
-    stats.primaryAssists * rules.primaryAssist
+    diminishingLabel('Goals', stats.goals, positionRules.goal),
+    goalPoints
+  );
+
+  const primaryAssistPoints = calculateDiminishingPoints(
+    stats.primaryAssists,
+    positionRules.primaryAssist
   );
 
   addLine(
-    `Secondary Assists (${stats.secondaryAssists})`,
-    stats.secondaryAssists * rules.secondaryAssist
+    diminishingLabel(
+      'Primary Assists',
+      stats.primaryAssists,
+      positionRules.primaryAssist
+    ),
+    primaryAssistPoints
+  );
+
+  const secondaryAssistPoints = calculateDiminishingPoints(
+    stats.secondaryAssists,
+    positionRules.secondaryAssist
+  );
+
+  addLine(
+    diminishingLabel(
+      'Secondary Assists',
+      stats.secondaryAssists,
+      positionRules.secondaryAssist
+    ),
+    secondaryAssistPoints
   );
 
   addLine(
     `Shots on Goal (${stats.shotsOnGoal})`,
-    stats.shotsOnGoal * rules.shotOnGoal
+    stats.shotsOnGoal * positionRules.shotOnGoal
   );
 
   addLine(
     `Hits (${stats.hits})`,
-    stats.hits * rules.hit
+    stats.hits * positionRules.hit
   );
 
   addLine(
     `Blocked Shots (${stats.blockedShots})`,
-    stats.blockedShots * rules.blockedShot
+    stats.blockedShots * positionRules.blockedShot
   );
 
   addLine(
     `Power-Play Points (${stats.powerPlayPoints})`,
-    stats.powerPlayPoints * rules.powerPlayPoint
+    stats.powerPlayPoints * positionRules.powerPlayPoint
   );
 
   addLine(
     `Short-Handed Points (${stats.shortHandedPoints})`,
-    stats.shortHandedPoints * rules.shortHandedPoint
+    stats.shortHandedPoints * positionRules.shortHandedPoint
   );
 
   if (stats.gameWinningGoal) {
@@ -122,12 +191,6 @@ export function calculateSkaterGameBreakdown(
     addLine('Overtime Goal', rules.overtimeGoal);
   }
 
-  if (stats.goals >= 3) {
-    addLine('Hat Trick Bonus', rules.hatTrickBonus);
-  } else if (stats.goals === 2) {
-    addLine('Two-Goal Game Bonus', rules.twoGoalGameBonus);
-  }
-
   if (stats.position === 'D') {
     const toiMultiplier = clamp(
       rules.defenseToiBaseMultiplier +
@@ -136,8 +199,13 @@ export function calculateSkaterGameBreakdown(
       rules.defenseToiCeiling
     );
 
+    const plusMinusLabel =
+      stats.plusMinus >= 0
+        ? `+${stats.plusMinus}`
+        : `${stats.plusMinus}`;
+
     addLine(
-      `Time on Ice (${stats.timeOnIceMinutes} min × ${toiMultiplier.toFixed(2)})`,
+      `Defensive TOI (${stats.timeOnIceMinutes} min × ${toiMultiplier.toFixed(2)}; ${plusMinusLabel} +/-)`,
       stats.timeOnIceMinutes * toiMultiplier
     );
   } else {
@@ -160,7 +228,7 @@ export function calculateGoalieGameBreakdown(
   const lines: PointBreakdownLine[] = [];
   let total = 0;
 
-  function addLine(label: string, points: number) {
+  function addLine(label: string, points: number): void {
     if (points === 0) {
       return;
     }
