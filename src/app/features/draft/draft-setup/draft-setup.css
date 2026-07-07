@@ -372,3 +372,124 @@
     flex: 1;
   }
 }
+
+.schedule-card {
+  margin-bottom: 18px;
+  padding: 22px;
+  border: 1px solid #d8e1ea;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.06);
+}
+
+.schedule-status {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #edf1f5;
+  color: #5e7085;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.schedule-status.status-scheduled {
+  background: #e9f2ff;
+  color: #295987;
+}
+
+.schedule-status.status-ready {
+  background: #fff3d5;
+  color: #80570d;
+}
+
+.saved-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid #dce5ee;
+  border-radius: 9px;
+  background: #f7fafc;
+}
+
+.saved-schedule strong {
+  color: #1d3048;
+  font-size: 15px;
+}
+
+.saved-schedule span {
+  color: #64768a;
+  font-size: 13px;
+}
+
+.empty-schedule {
+  border-style: dashed;
+}
+
+.schedule-input-group {
+  display: grid;
+  gap: 7px;
+  max-width: 320px;
+}
+
+.schedule-input-group span {
+  color: #465d77;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.schedule-input-group input {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #bdcad8;
+  border-radius: 8px;
+  background: white;
+  color: #223852;
+  font: inherit;
+}
+
+.schedule-input-group input:focus {
+  outline: 2px solid #9cb7d2;
+  outline-offset: 1px;
+}
+
+.schedule-help {
+  margin: 10px 0 0;
+  color: #6a7c91;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.clear-schedule-button {
+  margin-top: 13px;
+  padding: 8px 10px;
+  border: 1px solid #bdcad8;
+  border-radius: 8px;
+  background: white;
+  color: #344f6d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.clear-schedule-button:hover:not(:disabled) {
+  border-color: #6f8daa;
+  background: #f4f8fc;
+}
+
+.clear-schedule-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 560px) {
+  .schedule-status {
+    white-space: normal;
+  }
+
+  .schedule-input-group {
+    max-width: none;
+  }
+}

@@ -62,9 +62,69 @@
       </div>
     </section>
 
-    @if (isDraftLocked()) {
+    <section class="schedule-card">
+      <div class="section-title-row">
+        <div>
+          <h2>Draft Start Time</h2>
+          <p>
+            Schedule when the draft becomes available to league members.
+          </p>
+        </div>
+
+        <span
+          class="schedule-status"
+          [class.status-scheduled]="savedStartDate() && !startTimeReached()"
+          [class.status-ready]="startTimeReached()"
+        >
+          {{ scheduleStatus() }}
+        </span>
+      </div>
+
+      @if (savedStartDate()) {
+        <div class="saved-schedule">
+          <strong>{{ formatScheduledStart() }}</strong>
+          <span>{{ countdownText() }}</span>
+        </div>
+      } @else {
+        <div class="saved-schedule empty-schedule">
+          <strong>No draft time scheduled</strong>
+          <span>Save a future date and time when you are ready.</span>
+        </div>
+      }
+
+      <label class="schedule-input-group">
+        <span>Draft date and time</span>
+
+        <input
+          type="datetime-local"
+          [(ngModel)]="draftStartInput"
+          [min]="minimumStartInput"
+          [disabled]="isDraftLocked()"
+        />
+      </label>
+
+      <p class="schedule-help">
+        The date and time use your local timezone when saved. Every manager will see
+        the same draft start moment in their own local timezone.
+      </p>
+
+      <button
+        type="button"
+        class="clear-schedule-button"
+        (click)="clearDraftStartTime()"
+        [disabled]="isDraftLocked() || !draftStartInput"
+      >
+        Clear Scheduled Time
+      </button>
+    </section>
+
+    @if (draft()?.status === 'live' || draft()?.status === 'complete') {
       <p class="locked-message">
-        This draft is already in progress or complete. Draft order changes are locked.
+        This draft is already in progress or complete. Draft settings are locked.
+      </p>
+    } @else if (startTimeReached()) {
+      <p class="locked-message">
+        The scheduled draft start time has arrived. Draft settings are now locked.
       </p>
     }
 
@@ -155,7 +215,11 @@
         (click)="saveDraftOrder()"
         [disabled]="saving() || isDraftLocked() || roundOneOrder().length === 0"
       >
-        {{ saving() ? 'Saving Draft Order...' : 'Save Draft Order' }}
+        {{
+          saving()
+            ? 'Saving Draft Setup...'
+            : 'Save Draft Order and Start Time'
+        }}
       </button>
     </section>
 

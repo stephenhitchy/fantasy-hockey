@@ -1,4 +1,8 @@
-export type DraftStatus = 'setup' | 'live' | 'complete';
+export type DraftStatus =
+  | 'setup'
+  | 'scheduled'
+  | 'live'
+  | 'complete';
 
 export type DraftPosition = 'LW' | 'C' | 'RW' | 'D' | 'G';
 
@@ -17,8 +21,12 @@ export interface FantasyDraft {
   totalRounds: number;
   rosterRequirements: DraftRosterRequirements;
   roundOneOrder: string[];
+
+  scheduledStartAt: unknown | null;
+
   createdAt?: unknown;
   updatedAt?: unknown;
+  startedAt?: unknown;
 }
 
 export interface DraftPickPreview {

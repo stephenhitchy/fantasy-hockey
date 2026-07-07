@@ -59,6 +59,7 @@
 
 .secondary-action {
   border: 1px solid #bdcad8;
+  background: white;
   color: #294563;
 }
 
@@ -103,6 +104,99 @@
   color: #1d3048;
 }
 
+.draft-status-card {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #d9e2eb;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
+}
+
+.draft-status-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.draft-section-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #6a7d92;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.draft-status-heading h2 {
+  margin: 0;
+  color: #1b2d45;
+  font-size: 20px;
+}
+
+.draft-status-badge {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #edf1f5;
+  color: #5f7082;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-scheduled {
+  background: #e8f2ff;
+  color: #295987;
+}
+
+.status-ready {
+  background: #fff3d7;
+  color: #80580e;
+}
+
+.status-live {
+  background: #e4f8e9;
+  color: #20663a;
+}
+
+.status-complete {
+  background: #eeeeff;
+  color: #4c4f8a;
+}
+
+.draft-status-description {
+  margin: 12px 0 0;
+  color: #63758a;
+  font-size: 14px;
+}
+
+.draft-time-display {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 15px;
+  padding: 13px 14px;
+  border: 1px solid #dce5ee;
+  border-radius: 9px;
+  background: #f7fafc;
+}
+
+.draft-time-display strong {
+  color: #1d3048;
+  font-size: 15px;
+}
+
+.draft-time-display span {
+  color: #66798d;
+  font-size: 13px;
+}
+
+.empty-draft-time {
+  border-style: dashed;
+}
+
 .invite-card {
   display: flex;
   align-items: center;
@@ -137,6 +231,10 @@
   font: inherit;
   font-size: 14px;
   font-weight: 800;
+}
+
+.invite-card button:hover {
+  background: #294563;
 }
 
 .copy-message {
@@ -177,7 +275,8 @@
 
 @media (max-width: 720px) {
   .league-header,
-  .invite-card {
+  .invite-card,
+  .draft-status-heading {
     align-items: flex-start;
     flex-direction: column;
   }

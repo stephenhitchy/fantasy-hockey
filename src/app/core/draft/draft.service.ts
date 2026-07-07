@@ -1,6 +1,8 @@
 import {
   doc,
   getDoc,
+  onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc
 } from 'firebase/firestore';
@@ -40,6 +42,33 @@ function getDraftRef(leagueId: string) {
   );
 }
 
+function normalizeDraft(
+  data: Partial<FantasyDraft>
+): FantasyDraft {
+  const scheduledStartAt = data.scheduledStartAt ?? null;
+
+  return {
+    schemaVersion: data.schemaVersion ?? 1,
+    status:
+      data.status ??
+      (scheduledStartAt ? 'scheduled' : 'setup'),
+    format: 'snake',
+    totalRounds:
+      data.totalRounds ?? DEFAULT_DRAFT_TOTAL_ROUNDS,
+    rosterRequirements:
+      data.rosterRequirements ?? {
+        ...DEFAULT_DRAFT_ROSTER_REQUIREMENTS
+      },
+    roundOneOrder: Array.isArray(data.roundOneOrder)
+      ? data.roundOneOrder
+      : [],
+    scheduledStartAt,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    startedAt: data.startedAt
+  };
+}
+
 export function createDefaultFantasyDraft(
   roundOneOrder: string[]
 ): FantasyDraft {
@@ -51,7 +80,8 @@ export function createDefaultFantasyDraft(
     rosterRequirements: {
       ...DEFAULT_DRAFT_ROSTER_REQUIREMENTS
     },
-    roundOneOrder
+    roundOneOrder,
+    scheduledStartAt: null
   };
 }
 
@@ -64,7 +94,27 @@ export async function getFantasyDraft(
     return null;
   }
 
-  return snapshot.data() as FantasyDraft;
+  return normalizeDraft(
+    snapshot.data() as Partial<FantasyDraft>
+  );
+}
+
+export function listenToFantasyDraft(
+  leagueId: string,
+  callback: (draft: FantasyDraft | null) => void
+): () => void {
+  return onSnapshot(getDraftRef(leagueId), (snapshot) => {
+    if (!snapshot.exists()) {
+      callback(null);
+      return;
+    }
+
+    callback(
+      normalizeDraft(
+        snapshot.data() as Partial<FantasyDraft>
+      )
+    );
+  });
 }
 
 export async function saveFantasyDraft(
@@ -80,10 +130,97 @@ export async function saveFantasyDraft(
       totalRounds: draft.totalRounds,
       rosterRequirements: draft.rosterRequirements,
       roundOneOrder: draft.roundOneOrder,
+      scheduledStartAt: draft.scheduledStartAt ?? null,
       updatedAt: serverTimestamp()
     },
     { merge: true }
   );
+}
+
+export function getScheduledStartDate(
+  draft: FantasyDraft | null
+): Date | null {
+  const value = draft?.scheduledStartAt;
+
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value
+  ) {
+    const timestampLike = value as {
+      toDate?: () => Date;
+    };
+
+    if (typeof timestampLike.toDate === 'function') {
+      return timestampLike.toDate();
+    }
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsedDate = new Date(value);
+
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+
+  return null;
+}
+
+export function isDraftStartTimeReached(
+  draft: FantasyDraft | null,
+  now: Date = new Date()
+): boolean {
+  const startDate = getScheduledStartDate(draft);
+
+  return Boolean(
+    startDate &&
+    now.getTime() >= startDate.getTime()
+  );
+}
+
+export async function activateScheduledDraftIfReady(
+  leagueId: string
+): Promise<FantasyDraft | null> {
+  const draftRef = getDraftRef(leagueId);
+
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(draftRef);
+
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    const draft = normalizeDraft(
+      snapshot.data() as Partial<FantasyDraft>
+    );
+
+    if (
+      draft.status !== 'scheduled' ||
+      !isDraftStartTimeReached(draft)
+    ) {
+      return draft;
+    }
+
+    transaction.update(draftRef, {
+      status: 'live',
+      startedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    return {
+      ...draft,
+      status: 'live'
+    };
+  });
 }
 
 export function buildSnakePickPreview(

@@ -47,6 +47,41 @@
       </article>
     </section>
 
+    <section class="draft-status-card">
+      <div class="draft-status-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Draft</span>
+          <h2>Draft Status</h2>
+        </div>
+
+        <span
+          class="draft-status-badge"
+          [class.status-scheduled]="draft()?.status === 'scheduled' && !startTimeReached()"
+          [class.status-ready]="startTimeReached()"
+          [class.status-live]="draft()?.status === 'live'"
+          [class.status-complete]="draft()?.status === 'complete'"
+        >
+          {{ draftStatusLabel() }}
+        </span>
+      </div>
+
+      <p class="draft-status-description">
+        {{ draftStatusDescription() }}
+      </p>
+
+      @if (scheduledStartDate()) {
+        <div class="draft-time-display">
+          <strong>{{ formatDraftStart() }}</strong>
+          <span>{{ countdownText() }}</span>
+        </div>
+      } @else {
+        <div class="draft-time-display empty-draft-time">
+          <strong>No date selected yet</strong>
+          <span>Check back once the commissioner schedules the draft.</span>
+        </div>
+      }
+    </section>
+
     <section class="invite-card">
       <div>
         <h2>Invite Code</h2>
