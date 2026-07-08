@@ -8,15 +8,15 @@
   <section class="asset-detail-page">
     <a
       class="back-link"
-      [routerLink]="['/leagues', leagueId, 'cycles', 1]"
+      [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
     >
-      ← Back to Cycle 1
+      ← Back to Cycle {{ cycleNumber }}
     </a>
 
     @if (!cycle()) {
       <section class="empty-card">
-        <h1>Cycle 1 has not started.</h1>
-        <p>This player detail page will work once Cycle 1 exists.</p>
+        <h1>Cycle {{ cycleNumber }} has not started.</h1>
+        <p>This player detail page will work once the cycle exists.</p>
       </section>
     } @else if (!picksLoaded()) {
       <section class="empty-card">
@@ -40,7 +40,7 @@
             }
 
             <div>
-              <span class="eyebrow">Cycle 1 Detail</span>
+              <span class="eyebrow">Cycle {{ cycleNumber }} Detail</span>
               <h1>{{ getAssetName(selectedAsset) }}</h1>
               <p>
                 {{ getAssetTeamLabel(selectedAsset) }}
@@ -60,23 +60,23 @@
 
         <section class="summary-grid">
           <article>
-            <span>Cycle Window</span>
-            <strong>{{ getCycleWindowLabel() }}</strong>
+            <span>Cycle Range</span>
+            <strong>{{ getCycleGameRangeLabel() }}</strong>
           </article>
 
           <article>
-            <span>Games Played</span>
-            <strong>{{ gamesPlayed() }}</strong>
+            <span>Counted Games</span>
+            <strong>{{ countedGames() }} / {{ scheduledGames() }}</strong>
+          </article>
+
+          <article>
+            <span>Actual Games Played</span>
+            <strong>{{ actualGamesPlayed() }}</strong>
           </article>
 
           <article>
             <span>Games Left</span>
             <strong>{{ gamesLeft() }}</strong>
-          </article>
-
-          <article>
-            <span>Scheduled Games</span>
-            <strong>{{ scheduledGames() }}</strong>
           </article>
         </section>
 
@@ -93,29 +93,39 @@
         <section class="game-list-card">
           <div class="section-heading">
             <span class="eyebrow">Game Breakdown</span>
-            <h2>Fantasy Scoring by Game</h2>
+            <h2>Fantasy Scoring by Counted NHL Team Game</h2>
+            <p>
+              Injured, scratched, benched, or otherwise missed games still count
+              once the player's NHL team plays that game. Missed games are worth 0 points.
+            </p>
           </div>
 
           @if (gameRows().length === 0 && !detailLoading()) {
             <p class="empty-copy">
-              No NHL games were found for this player in the cycle window.
+              No NHL team games were found for this asset in Cycle {{ cycleNumber }}.
             </p>
           } @else {
             <div class="game-list">
               @for (row of gameRows(); track row.gameId) {
                 <article
                   class="game-detail-row"
-                  [class]="getGameRowClass(row)"
+                  [class.played-game]="row.appeared"
+                  [class.counted-dnp-game]="!row.appeared && row.counted"
+                  [class.scheduled-game]="!row.final"
                 >
                   <div class="game-main">
                     <div>
                       <strong>
-                        {{ row.gameDate }}
+                        Cycle Game {{ row.cycleGameNumber }}
                         ·
-                        vs {{ row.opponentAbbreviation }}
+                        NHL Team Game {{ row.teamGameNumber }}
+                        ·
+                        {{ row.gameDate }}
                       </strong>
 
                       <span>
+                        vs {{ row.opponentAbbreviation }}
+                        ·
                         {{ row.scoreLabel }}
                       </span>
                     </div>

@@ -1,0 +1,178 @@
+@if (loading()) {
+  <p class="page-loading">Loading matchup overview...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="matchup-overview-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
+    >
+      ← Back to {{ getCycleLabel() }}
+    </a>
+
+    <header class="matchup-overview-header">
+      <div>
+        <span class="eyebrow">Fantasy Season</span>
+        <h1>{{ getCycleLabel() }} Matchup Overview</h1>
+        <p>{{ league()?.name }}</p>
+      </div>
+
+      <div class="overview-header-actions">
+        <a
+          class="overview-header-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+        >
+          Schedule Preview
+        </a>
+
+        <a
+          class="overview-header-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
+        >
+          Detailed View
+        </a>
+      </div>
+    </header>
+
+    <section class="overview-status-card">
+      <div>
+        <span class="eyebrow">Cycle Status</span>
+        <strong>{{ getCycleStatusLabel() }}</strong>
+        <p>{{ getOverviewStatusText() }}</p>
+      </div>
+
+      <span
+        class="overview-status-pill"
+        [class.status-pill-active]="cycle()?.status === 'active'"
+        [class.status-pill-complete]="cycle()?.status === 'complete'"
+      >
+        {{ getCycleStatusLabel() }}
+      </span>
+    </section>
+
+    @if (getMatchupList().length === 0) {
+      <section class="empty-overview-card">
+        <h2>No matchups found.</h2>
+        <p>
+          This cycle does not have any matchups yet. Once the cycle is created,
+          this overview will show every matchup in one place.
+        </p>
+      </section>
+    } @else {
+      <section class="overview-matchup-grid">
+        @for (matchup of getMatchupList(); track matchup.id) {
+          <article
+            class="overview-matchup-card"
+            [class]="getMatchupCardClass(matchup)"
+          >
+            <header>
+              <div>
+                <span class="eyebrow">{{ matchup.id }}</span>
+                <h2>
+                  {{ getTeamName(matchup.teamAOwnerId) }}
+                  @if (matchup.teamBOwnerId) {
+                    <span>vs</span>
+                    {{ getTeamName(matchup.teamBOwnerId) }}
+                  } @else {
+                    <span>Bye</span>
+                  }
+                </h2>
+              </div>
+
+              <span class="matchup-status-pill">
+                {{ getMatchupStatusLabel(matchup) }}
+              </span>
+            </header>
+
+            <div class="overview-team-grid">
+              <section
+                class="overview-team-card"
+                [class.overview-winner-team]="isWinner(matchup, matchup.teamAOwnerId)"
+                [class.overview-loser-team]="isLoser(matchup, matchup.teamAOwnerId)"
+              >
+                <div class="overview-team-title-row">
+                  <div>
+                    <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                    <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                  </div>
+
+                  @if (getResultLabel(matchup, matchup.teamAOwnerId)) {
+                    <em
+                      [class.result-winner]="isWinner(matchup, matchup.teamAOwnerId)"
+                      [class.result-loser]="isLoser(matchup, matchup.teamAOwnerId)"
+                    >
+                      {{ getResultLabel(matchup, matchup.teamAOwnerId) }}
+                    </em>
+                  }
+                </div>
+
+                <div class="overview-score-grid">
+                  <div>
+                    <small>Projection</small>
+                    <b>{{ getScoreDisplay(getTeamProjectedScore(matchup.teamAOwnerId)) }}</b>
+                  </div>
+
+                  <div>
+                    <small>{{ getScoreLabel() }}</small>
+                    <b>{{ getScoreDisplay(getTeamActualScore(matchup, matchup.teamAOwnerId)) }}</b>
+                  </div>
+                </div>
+              </section>
+
+              @if (matchup.teamBOwnerId) {
+                <div class="overview-vs">vs</div>
+
+                <section
+                  class="overview-team-card"
+                  [class.overview-winner-team]="isWinner(matchup, matchup.teamBOwnerId)"
+                  [class.overview-loser-team]="isLoser(matchup, matchup.teamBOwnerId)"
+                >
+                  <div class="overview-team-title-row">
+                    <div>
+                      <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                      <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                    </div>
+
+                    @if (getResultLabel(matchup, matchup.teamBOwnerId)) {
+                      <em
+                        [class.result-winner]="isWinner(matchup, matchup.teamBOwnerId)"
+                        [class.result-loser]="isLoser(matchup, matchup.teamBOwnerId)"
+                      >
+                        {{ getResultLabel(matchup, matchup.teamBOwnerId) }}
+                      </em>
+                    }
+                  </div>
+
+                  <div class="overview-score-grid">
+                    <div>
+                      <small>Projection</small>
+                      <b>{{ getScoreDisplay(getTeamProjectedScore(matchup.teamBOwnerId)) }}</b>
+                    </div>
+
+                    <div>
+                      <small>{{ getScoreLabel() }}</small>
+                      <b>{{ getScoreDisplay(getTeamActualScore(matchup, matchup.teamBOwnerId)) }}</b>
+                    </div>
+                  </div>
+                </section>
+              } @else {
+                <div class="overview-vs bye-vs">bye</div>
+              }
+            </div>
+
+            <footer>
+              <p>{{ getMatchupResultText(matchup) }}</p>
+
+              <a
+                [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber, 'matchups', matchup.id]"
+              >
+                Open Detailed Matchup
+              </a>
+            </footer>
+          </article>
+        }
+      </section>
+    }
+  </section>
+}

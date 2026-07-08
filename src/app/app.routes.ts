@@ -16,6 +16,7 @@ import { CycleOne } from './features/cycles/cycle-one/cycle-one';
 import { ProjectionLab } from './features/projections/projection-lab/projection-lab';
 import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-asset-detail';
 import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
+import { CycleMatchupOverview } from './features/cycles/matchup-overview/cycle-matchup-overview';
 
 export const routes: Routes = [
   {
@@ -69,6 +70,14 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',
         component: CycleSchedulePreview
+      },
+      {
+        path: 'leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId',
+        component: CycleOne
+      },
+      {
+        path: 'leagues/:leagueId/cycles/:cycleNumber/matchups',
+        component: CycleMatchupOverview
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',

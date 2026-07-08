@@ -1060,3 +1060,145 @@
 .readiness-line-waiting {
   color: #ffd58a;
 }
+
+/* Auto league status + collapsed dev controls */
+.auto-status-card,
+.dev-controls-card {
+  border: 1px solid rgba(198, 213, 228, 0.16);
+  border-radius: 16px;
+  background: rgba(17, 26, 42, 0.94);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  color: #e8f0f8;
+  margin-bottom: 16px;
+}
+
+.auto-status-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+}
+
+.auto-status-card strong {
+  display: block;
+  color: white;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.auto-status-card p {
+  margin: 7px 0 0;
+  color: #a7b7c8;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.auto-status-card small {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(184, 212, 239, 0.12);
+  color: #b8d4ef;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.auto-status-active {
+  border-color: rgba(184, 212, 239, 0.2);
+}
+
+.auto-status-ready,
+.auto-status-complete {
+  border-color: rgba(80, 190, 120, 0.55);
+  background:
+    linear-gradient(180deg, rgba(80, 190, 120, 0.12), rgba(17, 26, 42, 0.94)),
+    rgba(17, 26, 42, 0.94);
+}
+
+.auto-status-working {
+  border-color: rgba(255, 213, 138, 0.55);
+  background:
+    linear-gradient(180deg, rgba(255, 213, 138, 0.12), rgba(17, 26, 42, 0.94)),
+    rgba(17, 26, 42, 0.94);
+}
+
+.auto-status-error {
+  border-color: rgba(255, 120, 120, 0.6);
+  background:
+    linear-gradient(180deg, rgba(255, 120, 120, 0.12), rgba(17, 26, 42, 0.94)),
+    rgba(17, 26, 42, 0.94);
+}
+
+.dev-controls-card {
+  margin-top: -4px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.dev-controls-card summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 16px;
+}
+
+.dev-controls-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-controls-card summary span {
+  color: #b8d4ef;
+  font-size: 13px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dev-controls-card summary small {
+  color: #90a7bf;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dev-controls-card summary::after {
+  content: '+';
+  color: #b8d4ef;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.dev-controls-card[open] summary::after {
+  content: '–';
+}
+
+.dev-controls-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 16px;
+  border-top: 1px solid rgba(198, 213, 228, 0.12);
+}
+
+.dev-controls-body .score-sync-actions,
+.dev-controls-body .cycle-complete-actions,
+.dev-controls-body .next-cycle-actions {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .auto-status-card {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-status-card small {
+    white-space: normal;
+  }
+
+  .dev-controls-card summary {
+    align-items: flex-start;
+  }
+}

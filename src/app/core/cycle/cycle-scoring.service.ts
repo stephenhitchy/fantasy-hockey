@@ -46,6 +46,12 @@ export interface CycleScoringResult {
   teamScores: Record<string, number>;
   teamGameCounts: Record<string, number>;
   teamCycleComplete: Record<string, boolean>;
+
+  /**
+   * True when at least one drafted roster asset has an NHL team game in this cycle.
+   * This prevents the app from auto-completing empty off-season cycles forever.
+   */
+  cycleHasScheduledGames: boolean;
 }
 
 export interface CalculateCycleScoringInput {
@@ -569,10 +575,15 @@ export async function calculateCycleScoring(
       });
   }
 
+  const cycleHasScheduledGames = Object.values(assetScores).some(
+    (summary) => summary.scheduledGames > 0
+  );
+
   return {
     assetScores,
     teamScores,
     teamGameCounts,
-    teamCycleComplete
+    teamCycleComplete,
+    cycleHasScheduledGames
   };
 }

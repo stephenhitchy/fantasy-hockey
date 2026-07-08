@@ -75,6 +75,7 @@ function waitForAuthUser(): Promise<User | null> {
 })
 export class CycleSchedulePreview implements OnDestroy {
   leagueId = '';
+  userId = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -83,6 +84,7 @@ export class CycleSchedulePreview implements OnDestroy {
   schedulePreview = signal<CycleSchedulePreviewCycle[]>([]);
   existingCycles = signal<Record<number, FantasyCycle | null>>({});
   existingMatchups = signal<Record<number, FantasyMatchup[]>>({});
+  selectedOwnerId = signal('');
 
   loading = signal(true);
   errorMessage = signal('');
@@ -99,6 +101,10 @@ export class CycleSchedulePreview implements OnDestroy {
 
   readonly hasByeWeeks = computed(() =>
     this.teams().length % 2 === 1
+  );
+
+  readonly selectedTeamName = computed(() =>
+    this.getTeamName(this.selectedOwnerId())
   );
 
   constructor(
@@ -122,6 +128,7 @@ export class CycleSchedulePreview implements OnDestroy {
     }
 
     this.leagueId = leagueId;
+    this.userId = user.uid;
 
     try {
       const [league, teams, draft, playerPool] = await Promise.all([
@@ -139,6 +146,12 @@ export class CycleSchedulePreview implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
       this.playerPool.set(playerPool);
+
+      const defaultOwnerId = teams.some((team) => team.ownerId === user.uid)
+        ? user.uid
+        : teams[0]?.ownerId ?? '';
+
+      this.selectedOwnerId.set(defaultOwnerId);
 
       const previewCycleCount = Math.max(
         MIN_SCHEDULE_PREVIEW_CYCLES,
@@ -162,6 +175,97 @@ export class CycleSchedulePreview implements OnDestroy {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  setSelectedOwnerIdFromEvent(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    this.selectedOwnerId.set(target?.value ?? '');
+  }
+
+  getSelectedTeamMatchup(
+    cycle: CycleSchedulePreviewCycle
+  ): CycleSchedulePreviewMatchup | null {
+    const selectedOwnerId = this.selectedOwnerId();
+
+    if (!selectedOwnerId) {
+      return null;
+    }
+
+    return cycle.matchups.find(
+      (matchup) =>
+        matchup.teamAOwnerId === selectedOwnerId ||
+        matchup.teamBOwnerId === selectedOwnerId
+    ) ?? null;
+  }
+
+  getOpponentOwnerId(
+    matchup: CycleSchedulePreviewMatchup
+  ): string | null {
+    const selectedOwnerId = this.selectedOwnerId();
+
+    if (matchup.teamAOwnerId === selectedOwnerId) {
+      return matchup.teamBOwnerId;
+    }
+
+    if (matchup.teamBOwnerId === selectedOwnerId) {
+      return matchup.teamAOwnerId;
+    }
+
+    return null;
+  }
+
+  getSelectedTeamActualScore(
+    cycleNumber: number,
+    matchup: CycleSchedulePreviewMatchup
+  ): number | null {
+    return this.getTeamActualScore(
+      cycleNumber,
+      matchup,
+      this.selectedOwnerId()
+    );
+  }
+
+  getOpponentActualScore(
+    cycleNumber: number,
+    matchup: CycleSchedulePreviewMatchup
+  ): number | null {
+    return this.getTeamActualScore(
+      cycleNumber,
+      matchup,
+      this.getOpponentOwnerId(matchup)
+    );
+  }
+
+  getSelectedTeamResultLabel(
+    cycleNumber: number,
+    matchup: CycleSchedulePreviewMatchup
+  ): string {
+    return this.getPreviewResultLabel(
+      cycleNumber,
+      matchup,
+      this.selectedOwnerId()
+    );
+  }
+
+  getOpponentResultLabel(
+    cycleNumber: number,
+    matchup: CycleSchedulePreviewMatchup
+  ): string {
+    return this.getPreviewResultLabel(
+      cycleNumber,
+      matchup,
+      this.getOpponentOwnerId(matchup)
+    );
+  }
+
+  getSelectedScheduleSummaryText(): string {
+    const selectedOwnerId = this.selectedOwnerId();
+
+    if (!selectedOwnerId) {
+      return 'Choose a team to preview its season schedule.';
+    }
+
+    return `Showing ${this.selectedTeamName()}'s schedule. Use the dropdown to view another team's schedule.`;
   }
 
   getTeamName(ownerId: string | null): string {

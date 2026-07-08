@@ -14,7 +14,7 @@
     <header class="cycle-header">
       <div>
         <span class="eyebrow">Fantasy Season</span>
-        <h1>{{ getCycleLabel() }} Matchups</h1>
+        <h1>{{ getDetailedMatchupHeading() }}</h1>
         <p>{{ league()?.name }}</p>
       </div>
 
@@ -24,6 +24,13 @@
           [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
         >
           Schedule Preview
+        </a>
+
+        <a
+          class="schedule-preview-header-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber, 'matchups']"
+        >
+          Matchup Overview
         </a>
 
         <span
@@ -59,6 +66,21 @@
   >
     {{ getCurrentScoringStatusText() }}
   </small>
+</section>
+
+<section
+  class="auto-status-card"
+  [class.auto-status-error]="getAutoLeagueStatusClass() === 'auto-status-error'"
+  [class.auto-status-working]="getAutoLeagueStatusClass() === 'auto-status-working'"
+  [class.auto-status-complete]="getAutoLeagueStatusClass() === 'auto-status-complete'"
+  [class.auto-status-ready]="getAutoLeagueStatusClass() === 'auto-status-ready'"
+  [class.auto-status-active]="getAutoLeagueStatusClass() === 'auto-status-active'"
+>
+  <div>
+    <span class="eyebrow">Auto League Flow</span>
+    <strong>{{ getAutoLeagueStatusTitle() }}</strong>
+    <p>{{ getAutoLeagueStatusText() }}</p>
+  </div>
 
   <small
     [class.schedule-warning]="
@@ -73,115 +95,112 @@
   >
     {{ getCycleCompletionReadinessText() }}
   </small>
+</section>
 
-  @if (autoFlowMessage()) {
-    <small class="cycle-complete-success">
-      {{ autoFlowMessage() }}
-    </small>
-  }
+<details class="dev-controls-card">
+  <summary>
+    <span>Dev Controls</span>
+    <small>Manual fallback tools for testing</small>
+  </summary>
 
-  @if (autoFlowError()) {
-    <small class="schedule-warning">
-      {{ autoFlowError() }}
-    </small>
-  }
-
-  <div class="score-sync-actions">
-    <button
-      type="button"
-      class="score-sync-button"
-      (click)="syncCurrentScoresToFirestore()"
-      [disabled]="
-        syncingScores() ||
-        scoringLoading() ||
-        !cycleScoring() ||
-        cycle()?.status === 'complete'
-      "
-    >
-      {{
-        syncingScores()
-          ? 'Syncing Scores...'
-          : 'Sync Current Scores'
-      }}
-    </button>
-
-    @if (syncScoreMessage()) {
-      <small class="score-sync-success">
-        {{ syncScoreMessage() }}
-      </small>
-    }
-
-    @if (syncScoreError()) {
-      <small class="schedule-warning">
-        {{ syncScoreError() }}
-      </small>
-    }
-  </div>
-
-  <div class="cycle-complete-actions">
-  <button
-    type="button"
-    class="complete-cycle-button"
-    (click)="completeCurrentCycleFromCurrentScores()"
-    [disabled]="
-      completingCycle() ||
-      scoringLoading() ||
-      !cycleScoring() ||
-      !areAllMatchupsReadyToComplete() ||
-      cycle()?.status === 'complete'
-    "
-  >
-    {{
-      completingCycle()
-        ? 'Completing Cycle...'
-        : cycle()?.status === 'complete'
-          ? 'Cycle Complete'
-          : 'Complete ' + getCycleLabel()
-    }}
-  </button>
-
-  @if (completeCycleMessage()) {
-    <small class="cycle-complete-success">
-      {{ completeCycleMessage() }}
-    </small>
-  }
-
-  @if (completeCycleError()) {
-    <small class="schedule-warning">
-      {{ completeCycleError() }}
-    </small>
-  }
-</div>
-
-  @if (cycle()?.status === 'complete') {
-    <div class="next-cycle-actions">
+  <div class="dev-controls-body">
+    <div class="score-sync-actions">
       <button
         type="button"
-        class="start-next-cycle-button"
-        (click)="startNextCycleFromCurrentCycle()"
-        [disabled]="startingNextCycle()"
+        class="score-sync-button"
+        (click)="syncCurrentScoresToFirestore()"
+        [disabled]="
+          syncingScores() ||
+          scoringLoading() ||
+          !cycleScoring() ||
+          cycle()?.status === 'complete'
+        "
       >
         {{
-          startingNextCycle()
-            ? 'Starting Next Cycle...'
-            : 'Start ' + getNextCycleLabel()
+          syncingScores()
+            ? 'Syncing Scores...'
+            : 'Sync Current Scores'
         }}
       </button>
 
-      @if (startNextCycleMessage()) {
-        <small class="cycle-complete-success">
-          {{ startNextCycleMessage() }}
+      @if (syncScoreMessage()) {
+        <small class="score-sync-success">
+          {{ syncScoreMessage() }}
         </small>
       }
 
-      @if (startNextCycleError()) {
+      @if (syncScoreError()) {
         <small class="schedule-warning">
-          {{ startNextCycleError() }}
+          {{ syncScoreError() }}
         </small>
       }
     </div>
-  }
-</section>
+
+    <div class="cycle-complete-actions">
+      <button
+        type="button"
+        class="complete-cycle-button"
+        (click)="completeCurrentCycleFromCurrentScores()"
+        [disabled]="
+          completingCycle() ||
+          scoringLoading() ||
+          !cycleScoring() ||
+          !areAllMatchupsReadyToComplete() ||
+          cycle()?.status === 'complete'
+        "
+      >
+        {{
+          completingCycle()
+            ? 'Completing Cycle...'
+            : cycle()?.status === 'complete'
+              ? 'Cycle Complete'
+              : 'Complete ' + getCycleLabel()
+        }}
+      </button>
+
+      @if (completeCycleMessage()) {
+        <small class="cycle-complete-success">
+          {{ completeCycleMessage() }}
+        </small>
+      }
+
+      @if (completeCycleError()) {
+        <small class="schedule-warning">
+          {{ completeCycleError() }}
+        </small>
+      }
+    </div>
+
+    @if (cycle()?.status === 'complete') {
+      <div class="next-cycle-actions">
+        <button
+          type="button"
+          class="start-next-cycle-button"
+          (click)="startNextCycleFromCurrentCycle()"
+          [disabled]="startingNextCycle()"
+        >
+          {{
+            startingNextCycle()
+              ? 'Starting Next Cycle...'
+              : 'Start/Open ' + getNextCycleLabel()
+          }}
+        </button>
+
+        @if (startNextCycleMessage()) {
+          <small class="cycle-complete-success">
+            {{ startNextCycleMessage() }}
+          </small>
+        }
+
+        @if (startNextCycleError()) {
+          <small class="schedule-warning">
+            {{ startNextCycleError() }}
+          </small>
+        }
+      </div>
+    }
+  </div>
+</details>
 
     @if (!cycle()) {
       <section class="empty-cycle-card">
@@ -191,95 +210,11 @@
         </p>
       </section>
     } @else {
-      @if (myMatchup(); as matchup) {
-        <section class="my-matchup-card">
-          <span class="eyebrow">Your Matchup</span>
-
-          <div class="matchup-scoreboard">
-            <article
-  [class.scoreboard-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
-  [class.scoreboard-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
->
-              <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
-
-              @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
-                <span
-                  class="scoreboard-result-badge"
-                  [class.scoreboard-result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
-                  [class.scoreboard-result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
-                >
-                  {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
-                </span>
-              }
-
-              <div class="score-pair">
-                <div>
-                  <span>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</span>
-                  <small>Current</small>
-                </div>
-
-                <div>
-                  <span>
-                    {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}
-                  </span>
-                  <small>Projected</small>
-                </div>
-              </div>
-            </article>
-
-            <div class="scoreboard-vs">vs</div>
-
-            <article
-  [class.scoreboard-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
-  [class.scoreboard-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
->
-              <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
-
-              @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
-                <span
-                  class="scoreboard-result-badge"
-                  [class.scoreboard-result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
-                  [class.scoreboard-result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
-                >
-                  {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
-                </span>
-              }
-
-              <div class="score-pair">
-                <div>
-                  <span>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</span>
-                  <small>Current</small>
-                </div>
-
-                <div>
-                  <span>
-                    {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}
-                  </span>
-                  <small>Projected</small>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <p class="projection-note">
-            {{ getProjectedWinnerLabel(matchup) }}
-          </p>
-
-          <p
-            class="projection-note matchup-readiness-line"
-            [class.readiness-line-ready]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-            [class.readiness-line-waiting]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-          >
-            {{ getMatchupReadinessLabel(matchup) }}
-          </p>
-        </section>
-      }
-
       <section class="matchups-section">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">League Matchups</span>
-            <h2>All {{ getCycleLabel() }} Matchups</h2>
+            <span class="eyebrow">Detailed Matchup View</span>
+            <h2>{{ getDetailedMatchupHeading() }}</h2>
           </div>
 
           <div class="matchup-view-selector">
@@ -309,8 +244,21 @@
           </div>
         </div>
 
-        <div class="matchup-grid">
-          @for (matchup of matchups(); track matchup.id) {
+        @if (getDisplayedMatchups().length === 0) {
+          <section class="empty-cycle-card">
+            <h2>Matchup not found.</h2>
+            <p>{{ getNoDisplayedMatchupMessage() }}</p>
+
+            <a
+              class="schedule-preview-header-link"
+              [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber, 'matchups']"
+            >
+              Back to Matchup Overview
+            </a>
+          </section>
+        } @else {
+          <div class="matchup-grid">
+          @for (matchup of getDisplayedMatchups(); track matchup.id) {
             <article
               class="matchup-detail-card"
               [class.my-matchup-outline]="isMyMatchup(matchup)"
@@ -976,7 +924,8 @@
               </p>
             </article>
           }
-        </div>
+          </div>
+        }
       </section>
     }
   </section>

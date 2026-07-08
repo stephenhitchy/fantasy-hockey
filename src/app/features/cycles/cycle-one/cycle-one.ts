@@ -90,6 +90,7 @@ export class CycleOne implements OnDestroy {
   leagueId = '';
   userId = '';
   cycleNumber = 1;
+  matchupId: string | null = null;
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -123,6 +124,149 @@ export class CycleOne implements OnDestroy {
 
   autoFlowMessage = signal('');
   autoFlowError = signal('');
+
+  getAutoLeagueStatusTitle(): string {
+    const cycle = this.cycle();
+
+    if (!cycle) {
+      return `${this.getCycleLabel()} Not Started`;
+    }
+
+    if (this.autoFlowError() || this.completeCycleError() || this.startNextCycleError()) {
+      return 'Auto Flow Needs Attention';
+    }
+
+    if (this.completingCycle()) {
+      return `Completing ${this.getCycleLabel()}`;
+    }
+
+    if (this.startingNextCycle()) {
+      return `Preparing ${this.getNextCycleLabel()}`;
+    }
+
+    if (cycle.status === 'complete') {
+      return `${this.getCycleLabel()} Complete`;
+    }
+
+    if (this.scoringLoading()) {
+      return 'Checking Current Scores';
+    }
+
+    if (!this.cycleScoring()) {
+      return 'Waiting for Scoring Data';
+    }
+
+    if (!this.hasCurrentCycleScheduledGames()) {
+      return 'Season Schedule Complete';
+    }
+
+    if (this.areAllMatchupsReadyToComplete()) {
+      return `${this.getCycleLabel()} Ready to Finish`;
+    }
+
+    return `${this.getCycleLabel()} Active`;
+  }
+
+  getAutoLeagueStatusText(): string {
+    const cycle = this.cycle();
+
+    if (!cycle) {
+      return `${this.getCycleLabel()} will appear here once it has been created.`;
+    }
+
+    const activeError =
+      this.autoFlowError() ||
+      this.completeCycleError() ||
+      this.startNextCycleError();
+
+    if (activeError) {
+      return activeError;
+    }
+
+    if (this.completingCycle()) {
+      return 'All roster games are complete. Final scores, winners, and team records are being saved now.';
+    }
+
+    if (this.startingNextCycle()) {
+      return `${this.getNextCycleLabel()} is being created or opened automatically.`;
+    }
+
+    if (this.autoFlowMessage()) {
+      return this.autoFlowMessage();
+    }
+
+    if (cycle.status === 'complete') {
+      return `${this.getCycleLabel()} has final scores saved. The next cycle will be created or opened automatically when the flow continues.`;
+    }
+
+    if (this.scoringLoading()) {
+      return 'The app is loading NHL game results and recalculating fantasy scores.';
+    }
+
+    if (!this.cycleScoring()) {
+      return 'Current scoring is waiting for drafted roster data and NHL game data.';
+    }
+
+    if (!this.hasCurrentCycleScheduledGames()) {
+      return this.getNoMoreGamesMessage();
+    }
+
+    if (this.areAllMatchupsReadyToComplete()) {
+      return `${this.getCycleLabel()} is ready. It will complete automatically and then move forward to ${this.getNextCycleLabel()}.`;
+    }
+
+    const gamesLeft = this.matchups().reduce(
+      (total, matchup) => total + this.getMatchupRosterGamesLeft(matchup),
+      0
+    );
+
+    const gameLabel = gamesLeft === 1 ? 'counted roster game' : 'counted roster games';
+
+    return `Waiting on ${gamesLeft} ${gameLabel}. Missed or injured player games still count once that player's NHL team game is final.`;
+  }
+
+  getAutoLeagueStatusClass(): string {
+    const cycle = this.cycle();
+
+    if (this.autoFlowError() || this.completeCycleError() || this.startNextCycleError()) {
+      return 'auto-status-error';
+    }
+
+    if (this.completingCycle() || this.startingNextCycle()) {
+      return 'auto-status-working';
+    }
+
+    if (cycle?.status === 'complete') {
+      return 'auto-status-complete';
+    }
+
+    if (this.cycleScoring() && !this.hasCurrentCycleScheduledGames()) {
+      return 'auto-status-complete';
+    }
+
+    if (this.cycleScoring() && this.areAllMatchupsReadyToComplete()) {
+      return 'auto-status-ready';
+    }
+
+    return 'auto-status-active';
+  }
+
+
+  hasCurrentCycleScheduledGames(): boolean {
+    const scoring = this.cycleScoring();
+
+    if (typeof scoring?.cycleHasScheduledGames === 'boolean') {
+      return scoring.cycleHasScheduledGames;
+    }
+
+    return Object.values(scoring?.assetScores ?? {}).some(
+      (summary) => summary.scheduledGames > 0
+    );
+  }
+
+  getNoMoreGamesMessage(): string {
+    return `${this.getCycleLabel()} has no NHL team games left to score. The app will stop creating new cycles until more games are available.`;
+  }
 
   setMatchupView(viewMode: MatchupViewMode): void {
   this.matchupView.set(viewMode);
@@ -212,6 +356,8 @@ export class CycleOne implements OnDestroy {
     this.teams.set(
       await getLeagueTeams(this.leagueId)
     );
+
+    await this.startOrOpenNextCycleAfterCompletion('manual', true);
   } catch (error: unknown) {
     this.completeCycleError.set(
       error instanceof Error
@@ -239,66 +385,12 @@ export class CycleOne implements OnDestroy {
 
   if (cycle.status !== 'complete') {
     this.startNextCycleError.set(
-      `${this.getCycleLabel()} must be complete before starting ${this.getNextCycleLabel()}.`
+      `${this.getCycleLabel()} must be complete before opening ${this.getNextCycleLabel()}.`
     );
     return;
   }
 
-  if (this.teams().length < 2) {
-    this.startNextCycleError.set(
-      'At least two teams are required to start the next cycle.'
-    );
-    return;
-  }
-
-  this.startingNextCycle.set(true);
-
-  try {
-    await startNextCycle(
-      this.leagueId,
-      this.teams(),
-      this.cycleNumber
-    );
-
-    this.startNextCycleMessage.set(
-      `${this.getNextCycleLabel()} was started.`
-    );
-
-    await this.router.navigate([
-      '/leagues',
-      this.leagueId,
-      'cycles',
-      this.cycleNumber + 1
-    ]);
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error
-        ? error.message
-        : `Unable to start ${this.getNextCycleLabel()}.`;
-
-    if (
-      errorMessage.includes(
-        `${this.getNextCycleLabel()} has already been started`
-      )
-    ) {
-      this.startNextCycleMessage.set(
-        `${this.getNextCycleLabel()} already exists. Opening it now.`
-      );
-
-      await this.router.navigate([
-        '/leagues',
-        this.leagueId,
-        'cycles',
-        this.cycleNumber + 1
-      ]);
-
-      return;
-    }
-
-    this.startNextCycleError.set(errorMessage);
-  } finally {
-    this.startingNextCycle.set(false);
-  }
+  await this.startOrOpenNextCycleAfterCompletion('manual');
 }
 
   isMatchupComplete(matchup: FantasyMatchup): boolean {
@@ -361,7 +453,7 @@ export class CycleOne implements OnDestroy {
     return true;
   }
 
-  if (!this.cycleScoring()) {
+  if (!this.cycleScoring() || !this.hasCurrentCycleScheduledGames()) {
     return false;
   }
 
@@ -376,6 +468,7 @@ export class CycleOne implements OnDestroy {
 
   return (
     Boolean(this.cycleScoring()) &&
+    this.hasCurrentCycleScheduledGames() &&
     matchups.length > 0 &&
     matchups.every((matchup) => this.isMatchupReadyToComplete(matchup))
   );
@@ -392,6 +485,10 @@ export class CycleOne implements OnDestroy {
 
   if (!this.cycleScoring()) {
     return 'Waiting for Scores';
+  }
+
+  if (!this.hasCurrentCycleScheduledGames()) {
+    return 'No NHL Games Left';
   }
 
   if (this.isMatchupReadyToComplete(matchup)) {
@@ -553,6 +650,7 @@ export class CycleOne implements OnDestroy {
   private scoringLoadKey: string | null = null;
   private scoringRequestId = 0;
   private autoCompleteAttemptKey: string | null = null;
+  private autoStartNextCycleAttemptKey: string | null = null;
 
   private async loadCurrentCycleScoringIfReady(): Promise<void> {
   const cycle = this.cycle();
@@ -650,6 +748,11 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
+    if (!this.hasCurrentCycleScheduledGames()) {
+      this.autoFlowMessage.set(this.getNoMoreGamesMessage());
+      return;
+    }
+
     if (this.scoringLoading() || this.completingCycle()) {
       return;
     }
@@ -686,6 +789,8 @@ export class CycleOne implements OnDestroy {
       this.teams.set(
         await getLeagueTeams(this.leagueId)
       );
+
+      await this.startOrOpenNextCycleAfterCompletion('automatic', true);
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -701,6 +806,168 @@ export class CycleOne implements OnDestroy {
       this.autoFlowError.set(message);
     } finally {
       this.completingCycle.set(false);
+    }
+  }
+
+
+  private async hasAnyRosterGamesForCycle(cycleNumber: number): Promise<boolean> {
+    const league = this.league();
+    const picks = this.picks();
+
+    if (!league || picks.length === 0) {
+      return false;
+    }
+
+    const scoringRules = league.scoringRules ?? defaultScoringRules;
+    const requiredGamesPerCycle =
+      scoringRules.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+
+    const startIndex = (cycleNumber - 1) * requiredGamesPerCycle;
+    const endIndex = cycleNumber * requiredGamesPerCycle;
+    const season = this.getNhlSeasonForDate(
+      this.getProjectionWindowStartDate() ?? new Date()
+    );
+
+    const teamAbbreviations = [
+      ...new Set(
+        picks.map((pick) => this.getAssetNhlTeamAbbreviation(pick.asset))
+      )
+    ];
+
+    for (const teamAbbreviation of teamAbbreviations) {
+      try {
+        const schedule = await getNhlTeamSeasonSchedule(
+          teamAbbreviation,
+          season
+        );
+
+        if (schedule.slice(startIndex, endIndex).length > 0) {
+          return true;
+        }
+      } catch (error: unknown) {
+        console.warn(
+          `Unable to check next-cycle games for ${teamAbbreviation}.`,
+          error
+        );
+      }
+    }
+
+    return false;
+  }
+
+
+  private async startOrOpenNextCycleAfterCompletion(
+    source: 'automatic' | 'manual',
+    allowBeforeCycleSnapshotUpdates: boolean = false
+  ): Promise<void> {
+    const cycle = this.cycle();
+
+    if (!cycle) {
+      return;
+    }
+
+    if (!allowBeforeCycleSnapshotUpdates && cycle.status !== 'complete') {
+      return;
+    }
+
+    if (this.teams().length < 2) {
+      const message = 'At least two teams are required to start the next cycle.';
+      this.startNextCycleError.set(message);
+      this.autoFlowError.set(message);
+      return;
+    }
+
+    const nextCycleNumber = this.cycleNumber + 1;
+    const nextCycleHasGames = await this.hasAnyRosterGamesForCycle(nextCycleNumber);
+
+    if (!nextCycleHasGames) {
+      const message = `No NHL team games were found for ${this.getNextCycleLabel()}. The season flow is stopping instead of creating empty cycles.`;
+      this.startNextCycleMessage.set(message);
+      this.autoFlowMessage.set(message);
+      return;
+    }
+
+    const attemptKey = [
+      this.leagueId,
+      this.cycleNumber,
+      cycle.id,
+      this.getNextCycleLabel()
+    ].join('::');
+
+    if (
+      this.autoStartNextCycleAttemptKey === attemptKey ||
+      this.startingNextCycle()
+    ) {
+      return;
+    }
+
+    this.autoStartNextCycleAttemptKey = attemptKey;
+    this.startingNextCycle.set(true);
+    this.startNextCycleMessage.set('');
+    this.startNextCycleError.set('');
+    this.autoFlowError.set('');
+
+    const preparingMessage =
+      source === 'automatic'
+        ? `${this.getNextCycleLabel()} is being prepared automatically...`
+        : `${this.getNextCycleLabel()} is being prepared...`;
+
+    this.autoFlowMessage.set(preparingMessage);
+
+    try {
+      await startNextCycle(
+        this.leagueId,
+        this.teams(),
+        this.cycleNumber
+      );
+
+      const successMessage =
+        source === 'automatic'
+          ? `${this.getNextCycleLabel()} was started automatically. Opening it now...`
+          : `${this.getNextCycleLabel()} was started. Opening it now...`;
+
+      this.startNextCycleMessage.set(successMessage);
+      this.autoFlowMessage.set(successMessage);
+
+      await this.router.navigate([
+        '/leagues',
+        this.leagueId,
+        'cycles',
+        nextCycleNumber
+      ]);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : `Unable to start ${this.getNextCycleLabel()}.`;
+
+      if (
+        errorMessage.includes(
+          `${this.getNextCycleLabel()} has already been started`
+        )
+      ) {
+        const alreadyStartedMessage =
+          `${this.getNextCycleLabel()} already exists. Opening it now...`;
+
+        this.startNextCycleMessage.set(alreadyStartedMessage);
+        this.autoFlowMessage.set(alreadyStartedMessage);
+
+        await this.router.navigate([
+          '/leagues',
+          this.leagueId,
+          'cycles',
+          nextCycleNumber
+        ]);
+
+        return;
+      }
+
+      this.autoStartNextCycleAttemptKey = null;
+      this.startNextCycleError.set(errorMessage);
+      this.autoFlowError.set(errorMessage);
+    } finally {
+      this.startingNextCycle.set(false);
     }
   }
 
@@ -770,6 +1037,8 @@ export class CycleOne implements OnDestroy {
   private resetPageStateForNewRoute(): void {
     this.stopLiveListeners();
 
+    this.matchupId = null;
+
     this.league.set(null);
     this.teams.set([]);
     this.cycle.set(null);
@@ -801,6 +1070,7 @@ export class CycleOne implements OnDestroy {
     this.scheduleLoadStartedForCycleId = null;
     this.scoringLoadKey = null;
     this.autoCompleteAttemptKey = null;
+    this.autoStartNextCycleAttemptKey = null;
     this.scoringRequestId += 1;
   }
 
@@ -811,6 +1081,8 @@ export class CycleOne implements OnDestroy {
     const cycleNumber = Number.isInteger(parsedCycleNumber) && parsedCycleNumber > 0
       ? parsedCycleNumber
       : 1;
+
+    const matchupId = params.get('matchupId');
 
     const requestId = ++this.pageLoadRequestId;
     this.resetPageStateForNewRoute();
@@ -828,6 +1100,7 @@ export class CycleOne implements OnDestroy {
 
     this.leagueId = leagueId;
     this.cycleNumber = cycleNumber;
+    this.matchupId = matchupId;
     this.userId = user.uid;
 
     try {
@@ -896,6 +1169,42 @@ export class CycleOne implements OnDestroy {
 
   getNextCycleLabel(): string {
     return `Cycle ${this.cycleNumber + 1}`;
+  }
+
+  getDetailedMatchupHeading(): string {
+    if (this.matchupId) {
+      return `${this.getCycleLabel()} ${this.matchupId}`;
+    }
+
+    if (this.myMatchup()) {
+      return `Your ${this.getCycleLabel()} Matchup`;
+    }
+
+    return `${this.getCycleLabel()} Matchup Detail`;
+  }
+
+  getDisplayedMatchups(): FantasyMatchup[] {
+    const matchups = this.matchups();
+
+    if (this.matchupId) {
+      return matchups.filter((matchup) => matchup.id === this.matchupId);
+    }
+
+    const myMatchup = this.myMatchup();
+
+    if (myMatchup) {
+      return [myMatchup];
+    }
+
+    return matchups.slice(0, 1);
+  }
+
+  getNoDisplayedMatchupMessage(): string {
+    if (this.matchupId) {
+      return `${this.matchupId} was not found for ${this.getCycleLabel()}.`;
+    }
+
+    return `No matchup was found for ${this.getCycleLabel()}.`;
   }
 
   getTeamName(ownerId: string | null): string {
@@ -1247,6 +1556,10 @@ export class CycleOne implements OnDestroy {
 
   if (!this.cycleScoring()) {
     return 'Current scoring is waiting for drafted player data.';
+  }
+
+  if (!this.hasCurrentCycleScheduledGames()) {
+    return this.getNoMoreGamesMessage();
   }
 
   const scoringRules = this.league()?.scoringRules ?? defaultScoringRules;

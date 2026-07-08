@@ -32,7 +32,7 @@ import {
 } from '../../../core/cycle/cycle.models';
 
 import {
-  listenToCycleOne
+  listenToCycle
 } from '../../../core/cycle/cycle.service';
 
 import {
@@ -49,7 +49,6 @@ import {
   calculateGoalieGameBreakdown,
   calculateSkaterGameBreakdown,
   GoalieGameStats,
-  PointBreakdownLine,
   SkaterGameStats
 } from '../../../core/scoring/scoring-engine';
 
@@ -72,24 +71,38 @@ import {
   NhlTeamSeasonGame
 } from '../../../core/nhl/nhl-api.service';
 
-const CYCLE_PROJECTION_WINDOW_DAYS = 14;
+const TEST_CYCLE_START_DATE: Date | null =
+  new Date('2026-01-10T12:00:00');
 
 interface DetailStatChip {
   label: string;
   value: string;
 }
 
+interface DetailBreakdownLine {
+  label: string;
+  points: number;
+}
+
+interface FinalGameData {
+  boxscore: NhlGameBoxscoreResponse;
+  playByPlay: NhlGamePlayByPlayResponse;
+}
+
 interface CycleAssetGameDetail {
   gameId: number;
   gameDate: string;
+  teamGameNumber: number;
+  cycleGameNumber: number;
   opponentAbbreviation: string;
   scoreLabel: string;
   statusLabel: string;
   final: boolean;
-  played: boolean;
+  counted: boolean;
+  appeared: boolean;
   fantasyPoints: number | null;
   statChips: DetailStatChip[];
-  breakdownLines: PointBreakdownLine[];
+  breakdownLines: DetailBreakdownLine[];
 }
 
 function waitForAuthUser(): Promise<User | null> {
@@ -111,6 +124,7 @@ export class CycleAssetDetail implements OnDestroy {
   leagueId = '';
   assetKey = '';
   userId = '';
+  cycleNumber = 1;
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -144,16 +158,19 @@ export class CycleAssetDetail implements OnDestroy {
     Number(
       this.gameRows()
         .reduce(
-          (total, row) =>
-            total + (row.fantasyPoints ?? 0),
+          (total, row) => total + (row.fantasyPoints ?? 0),
           0
         )
         .toFixed(1)
     )
   );
 
-  readonly gamesPlayed = computed(() =>
-    this.gameRows().filter((row) => row.played).length
+  readonly countedGames = computed(() =>
+    this.gameRows().filter((row) => row.counted).length
+  );
+
+  readonly actualGamesPlayed = computed(() =>
+    this.gameRows().filter((row) => row.appeared).length
   );
 
   readonly scheduledGames = computed(() =>
@@ -161,10 +178,7 @@ export class CycleAssetDetail implements OnDestroy {
   );
 
   readonly gamesLeft = computed(() =>
-    Math.max(
-      0,
-      this.scheduledGames() - this.gamesPlayed()
-    )
+    Math.max(0, this.scheduledGames() - this.countedGames())
   );
 
   constructor(
@@ -186,9 +200,20 @@ export class CycleAssetDetail implements OnDestroy {
     const assetKey =
       this.route.snapshot.paramMap.get('assetKey');
 
+    const cycleNumberRaw =
+      this.route.snapshot.paramMap.get('cycleNumber');
+
+    const parsedCycleNumber = Number(cycleNumberRaw ?? 1);
+
     const user = await waitForAuthUser();
 
-    if (!leagueId || !assetKey || !user) {
+    if (
+      !leagueId ||
+      !assetKey ||
+      !user ||
+      !Number.isInteger(parsedCycleNumber) ||
+      parsedCycleNumber < 1
+    ) {
       await this.router.navigate(['/']);
       return;
     }
@@ -196,6 +221,7 @@ export class CycleAssetDetail implements OnDestroy {
     this.leagueId = leagueId;
     this.assetKey = assetKey;
     this.userId = user.uid;
+    this.cycleNumber = parsedCycleNumber;
 
     try {
       const [league, teams] = await Promise.all([
@@ -211,8 +237,9 @@ export class CycleAssetDetail implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
 
-      this.stopCycleListener = listenToCycleOne(
+      this.stopCycleListener = listenToCycle(
         leagueId,
+        this.cycleNumber,
         (cycle) => {
           this.cycle.set(cycle);
           void this.loadAssetDetailsIfReady();
@@ -284,15 +311,17 @@ export class CycleAssetDetail implements OnDestroy {
     return value.toFixed(1);
   }
 
-  getCycleWindowLabel(): string {
-    const startDate = this.getCycleWindowStartDate();
-    const endDate = this.getCycleWindowEndDate();
+  getCycleGameRangeLabel(): string {
+    const requiredGamesPerCycle =
+      this.getRequiredGamesPerCycle();
 
-    if (!startDate || !endDate) {
-      return 'Cycle window unavailable';
-    }
+    const startGameNumber =
+      ((this.cycleNumber - 1) * requiredGamesPerCycle) + 1;
 
-    return `${startDate.toLocaleDateString()} – ${endDate.toLocaleDateString()}`;
+    const endGameNumber =
+      this.cycleNumber * requiredGamesPerCycle;
+
+    return `NHL team games ${startGameNumber}–${endGameNumber}`;
   }
 
   getGameRowClass(row: CycleAssetGameDetail): string {
@@ -300,7 +329,11 @@ export class CycleAssetDetail implements OnDestroy {
       return 'scheduled-game';
     }
 
-    if (row.played) {
+    if (!row.appeared && row.counted) {
+      return 'counted-dnp-game';
+    }
+
+    if (row.appeared) {
       return 'played-game';
     }
 
@@ -316,14 +349,8 @@ export class CycleAssetDetail implements OnDestroy {
       return;
     }
 
-    const startDate =
-      this.getCycleWindowStartDate() ?? new Date();
-
-    const endDate =
-      this.getCycleWindowEndDateFromStart(startDate);
-
     const season =
-      this.getNhlSeasonForDate(startDate);
+      this.getNhlSeasonForDate(this.getSeasonReferenceDate());
 
     const scoringRules =
       league.scoringRules ?? defaultScoringRules;
@@ -334,9 +361,9 @@ export class CycleAssetDetail implements OnDestroy {
 
     const loadKey = [
       cycle.id,
+      this.cycleNumber,
       asset.assetKey,
-      this.getDateKey(startDate),
-      this.getDateKey(endDate),
+      season,
       requiredGamesPerCycle
     ].join('::');
 
@@ -352,32 +379,29 @@ export class CycleAssetDetail implements OnDestroy {
 
     try {
       const schedule =
-        await getNhlTeamSeasonSchedule(
+        await this.loadRegularSeasonSchedule(
           this.getAssetTeamLabel(asset),
           season
         );
 
-      const games = schedule
-        .filter((game) =>
-          this.isGameInCycleWindow(
-            game.gameDate,
-            startDate,
-            endDate
-          )
-        )
-        .slice(0, requiredGamesPerCycle);
+      const games = this.getCycleGamesFromSchedule(
+        schedule,
+        requiredGamesPerCycle
+      );
 
       const rows =
         asset.assetType === 'skater'
           ? await this.loadSkaterGameRows(
               asset,
               games,
+              schedule,
               season,
               scoringRules
             )
           : await this.loadGoalieUnitGameRows(
               asset,
               games,
+              schedule,
               scoringRules
             );
 
@@ -404,6 +428,7 @@ export class CycleAssetDetail implements OnDestroy {
   private async loadSkaterGameRows(
     asset: DraftableAsset,
     games: NhlTeamSeasonGame[],
+    fullSchedule: NhlTeamSeasonGame[],
     season: string,
     scoringRules: ScoringRules
   ): Promise<CycleAssetGameDetail[]> {
@@ -426,16 +451,21 @@ export class CycleAssetDetail implements OnDestroy {
 
     const rows: CycleAssetGameDetail[] = [];
 
-    for (const game of games) {
+    for (let gameIndex = 0; gameIndex < games.length; gameIndex += 1) {
+      const game = games[gameIndex];
       const final = this.isFinalGame(game);
-      const gameLog = gameLogByGameId.get(game.id);
+      const teamGameNumber = this.getTeamGameNumber(fullSchedule, game);
+      const cycleGameNumber = gameIndex + 1;
 
       if (!final) {
         rows.push(
           this.createBaseGameRow(
             asset,
             game,
+            teamGameNumber,
+            cycleGameNumber,
             'Scheduled',
+            false,
             false,
             false,
             null,
@@ -449,6 +479,8 @@ export class CycleAssetDetail implements OnDestroy {
       const finalGameData =
         await this.loadFinalGameData(game.id);
 
+      const gameLog = gameLogByGameId.get(game.id);
+
       const skaterLine = finalGameData
         ? findSkaterBoxscoreLine(
             finalGameData.boxscore,
@@ -461,12 +493,23 @@ export class CycleAssetDetail implements OnDestroy {
           this.createBaseGameRow(
             asset,
             game,
-            'Did Not Play',
+            teamGameNumber,
+            cycleGameNumber,
+            'Did Not Play — 0 pts counted',
+            true,
             true,
             false,
-            null,
-            [],
-            []
+            0,
+            [
+              { label: 'Counted', value: 'Yes' },
+              { label: 'Appeared', value: 'No' }
+            ],
+            [
+              {
+                label: 'Did not play / injured / scratched',
+                points: 0
+              }
+            ]
           )
         );
         continue;
@@ -538,7 +581,10 @@ export class CycleAssetDetail implements OnDestroy {
         this.createBaseGameRow(
           asset,
           game,
+          teamGameNumber,
+          cycleGameNumber,
           'Played',
+          true,
           true,
           true,
           breakdown.total,
@@ -552,7 +598,7 @@ export class CycleAssetDetail implements OnDestroy {
             { label: '+/-', value: stats.plusMinus.toString() },
             { label: 'TOI', value: stats.timeOnIceMinutes.toFixed(1) }
           ],
-          breakdown.lines
+          this.mapBreakdownLines(breakdown.lines)
         )
       );
     }
@@ -563,6 +609,7 @@ export class CycleAssetDetail implements OnDestroy {
   private async loadGoalieUnitGameRows(
     asset: DraftableAsset,
     games: NhlTeamSeasonGame[],
+    fullSchedule: NhlTeamSeasonGame[],
     scoringRules: ScoringRules
   ): Promise<CycleAssetGameDetail[]> {
     if (asset.assetType === 'skater') {
@@ -571,15 +618,21 @@ export class CycleAssetDetail implements OnDestroy {
 
     const rows: CycleAssetGameDetail[] = [];
 
-    for (const game of games) {
+    for (let gameIndex = 0; gameIndex < games.length; gameIndex += 1) {
+      const game = games[gameIndex];
       const final = this.isFinalGame(game);
+      const teamGameNumber = this.getTeamGameNumber(fullSchedule, game);
+      const cycleGameNumber = gameIndex + 1;
 
       if (!final) {
         rows.push(
           this.createBaseGameRow(
             asset,
             game,
+            teamGameNumber,
+            cycleGameNumber,
             'Scheduled',
+            false,
             false,
             false,
             null,
@@ -598,12 +651,23 @@ export class CycleAssetDetail implements OnDestroy {
           this.createBaseGameRow(
             asset,
             game,
-            'Final Data Unavailable',
+            teamGameNumber,
+            cycleGameNumber,
+            'Final Data Unavailable — 0 pts counted',
+            true,
             true,
             false,
-            null,
-            [],
-            []
+            0,
+            [
+              { label: 'Counted', value: 'Yes' },
+              { label: 'Data', value: 'Unavailable' }
+            ],
+            [
+              {
+                label: 'Final goalie data unavailable',
+                points: 0
+              }
+            ]
           )
         );
         continue;
@@ -620,12 +684,23 @@ export class CycleAssetDetail implements OnDestroy {
           this.createBaseGameRow(
             asset,
             game,
-            'No Goalie Data',
+            teamGameNumber,
+            cycleGameNumber,
+            'No Goalie Data — 0 pts counted',
+            true,
             true,
             false,
-            null,
-            [],
-            []
+            0,
+            [
+              { label: 'Counted', value: 'Yes' },
+              { label: 'Goalie Data', value: 'No' }
+            ],
+            [
+              {
+                label: 'No goalie data found',
+                points: 0
+              }
+            ]
           )
         );
         continue;
@@ -653,7 +728,10 @@ export class CycleAssetDetail implements OnDestroy {
         this.createBaseGameRow(
           asset,
           game,
+          teamGameNumber,
+          cycleGameNumber,
           goalieResult.won ? 'Win' : 'Loss',
+          true,
           true,
           true,
           breakdown.total,
@@ -663,7 +741,7 @@ export class CycleAssetDetail implements OnDestroy {
             { label: 'SV%', value: `${(savePercentage * 100).toFixed(1)}%` },
             { label: 'SO', value: goalieResult.shutout ? 'Yes' : 'No' }
           ],
-          breakdown.lines
+          this.mapBreakdownLines(breakdown.lines)
         )
       );
     }
@@ -671,12 +749,55 @@ export class CycleAssetDetail implements OnDestroy {
     return rows;
   }
 
+  private async loadRegularSeasonSchedule(
+    teamAbbreviation: string,
+    season: string
+  ): Promise<NhlTeamSeasonGame[]> {
+    const schedule = await getNhlTeamSeasonSchedule(
+      teamAbbreviation,
+      season
+    );
+
+    return schedule
+      .filter((game) =>
+        typeof game.gameType !== 'number' || game.gameType === 2
+      )
+      .sort((first, second) => {
+        const dateCompare = first.gameDate.localeCompare(second.gameDate);
+
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+
+        return first.id - second.id;
+      });
+  }
+
+  private getCycleGamesFromSchedule(
+    schedule: NhlTeamSeasonGame[],
+    requiredGamesPerCycle: number
+  ): NhlTeamSeasonGame[] {
+    const startIndex =
+      Math.max(0, (this.cycleNumber - 1) * requiredGamesPerCycle);
+
+    const endIndex =
+      this.cycleNumber * requiredGamesPerCycle;
+
+    return schedule.slice(startIndex, endIndex);
+  }
+
+  private getTeamGameNumber(
+    schedule: NhlTeamSeasonGame[],
+    game: NhlTeamSeasonGame
+  ): number {
+    return schedule.findIndex(
+      (candidate) => candidate.id === game.id
+    ) + 1;
+  }
+
   private async loadFinalGameData(
     gameId: number
-  ): Promise<{
-    boxscore: NhlGameBoxscoreResponse;
-    playByPlay: NhlGamePlayByPlayResponse;
-  } | null> {
+  ): Promise<FinalGameData | null> {
     try {
       const [boxscore, playByPlay] = await Promise.all([
         getGameBoxscore(gameId),
@@ -700,27 +821,42 @@ export class CycleAssetDetail implements OnDestroy {
   private createBaseGameRow(
     asset: DraftableAsset,
     game: NhlTeamSeasonGame,
+    teamGameNumber: number,
+    cycleGameNumber: number,
     statusLabel: string,
     final: boolean,
-    played: boolean,
+    counted: boolean,
+    appeared: boolean,
     fantasyPoints: number | null,
     statChips: DetailStatChip[],
-    breakdownLines: PointBreakdownLine[]
+    breakdownLines: DetailBreakdownLine[]
   ): CycleAssetGameDetail {
     return {
       gameId: game.id,
       gameDate: game.gameDate,
+      teamGameNumber,
+      cycleGameNumber,
       opponentAbbreviation:
         this.getOpponentAbbreviation(asset, game),
       scoreLabel:
         this.getGameScoreLabel(game),
       statusLabel,
       final,
-      played,
+      counted,
+      appeared,
       fantasyPoints,
       statChips,
       breakdownLines
     };
+  }
+
+  private mapBreakdownLines(
+    lines: Array<{ label: string; points: number }>
+  ): DetailBreakdownLine[] {
+    return lines.map((line) => ({
+      label: line.label,
+      points: line.points
+    }));
   }
 
   private getOpponentAbbreviation(
@@ -759,32 +895,21 @@ export class CycleAssetDetail implements OnDestroy {
     );
   }
 
-  private getCycleWindowStartDate(): Date | null {
-    const cycle = this.cycle();
-
-    return this.getDateFromUnknown(cycle?.startedAt);
+  private getRequiredGamesPerCycle(): number {
+    return (
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle
+    );
   }
 
-  private getCycleWindowEndDate(): Date | null {
-    const startDate = this.getCycleWindowStartDate();
-
-    if (!startDate) {
-      return null;
+  private getSeasonReferenceDate(): Date {
+    if (TEST_CYCLE_START_DATE) {
+      return TEST_CYCLE_START_DATE;
     }
 
-    return this.getCycleWindowEndDateFromStart(startDate);
-  }
+    const cycleDate = this.getDateFromUnknown(this.cycle()?.startedAt);
 
-  private getCycleWindowEndDateFromStart(
-    startDate: Date
-  ): Date {
-    const endDate = new Date(startDate);
-
-    endDate.setDate(
-      endDate.getDate() + CYCLE_PROJECTION_WINDOW_DAYS
-    );
-
-    return endDate;
+    return cycleDate ?? new Date();
   }
 
   private getDateFromUnknown(value: unknown): Date | null {
@@ -834,27 +959,6 @@ export class CycleAssetDetail implements OnDestroy {
         : year - 1;
 
     return `${seasonStartYear}${seasonStartYear + 1}`;
-  }
-
-  private isGameInCycleWindow(
-    gameDate: string,
-    startDate: Date,
-    endDate: Date
-  ): boolean {
-    const startKey = this.getDateKey(startDate);
-    const endKey = this.getDateKey(endDate);
-
-    return gameDate >= startKey && gameDate <= endKey;
-  }
-
-  private getDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month =
-      `${date.getMonth() + 1}`.padStart(2, '0');
-    const day =
-      `${date.getDate()}`.padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
   }
 
   private getMinutesFromToi(toi: string | undefined): number {

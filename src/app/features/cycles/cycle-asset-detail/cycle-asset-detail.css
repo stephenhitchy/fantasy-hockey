@@ -70,7 +70,8 @@
 
 .empty-card p,
 .asset-detail-header p,
-.empty-copy {
+.empty-copy,
+.section-heading p {
   color: #a7b7c8;
 }
 
@@ -179,6 +180,12 @@
   margin-bottom: 14px;
 }
 
+.section-heading p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .game-list {
   display: grid;
   gap: 12px;
@@ -196,6 +203,13 @@
 
 .played-game {
   border-color: rgba(152, 245, 189, 0.25);
+}
+
+.counted-dnp-game {
+  border-color: rgba(255, 213, 138, 0.32);
+  background:
+    linear-gradient(180deg, rgba(255, 213, 138, 0.08), rgba(255, 255, 255, 0.02)),
+    #101827;
 }
 
 .missed-game {
@@ -236,6 +250,7 @@
   font-size: 12px;
   font-style: normal;
   font-weight: 900;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -342,6 +357,11 @@
   .summary-score-card {
     width: 100%;
     box-sizing: border-box;
+  }
+
+  .game-main em {
+    text-align: left;
+    white-space: normal;
   }
 }
 
