@@ -1,3 +1,5 @@
+import { NHLPlayer } from '../player/player.models';
+
 export type DraftStatus =
   | 'setup'
   | 'scheduled'
@@ -14,6 +16,31 @@ export interface DraftRosterRequirements {
   G: number;
 }
 
+export interface DraftProjection {
+  projectedSeasonPoints?: number | null;
+  projectedCyclePoints?: number | null;
+}
+
+export interface DraftableSkaterAsset extends DraftProjection {
+  assetType: 'skater';
+  assetKey: string;
+  position: 'LW' | 'C' | 'RW' | 'D';
+  player: NHLPlayer;
+}
+
+export interface DraftableGoalieUnitAsset extends DraftProjection {
+  assetType: 'team-goalie-unit';
+  assetKey: string;
+  position: 'G';
+  teamName: string;
+  teamAbbreviation: string;
+  teamLogoUrl?: string;
+}
+
+export type DraftableAsset =
+  | DraftableSkaterAsset
+  | DraftableGoalieUnitAsset;
+
 export interface FantasyDraft {
   schemaVersion: number;
   status: DraftStatus;
@@ -21,6 +48,9 @@ export interface FantasyDraft {
   totalRounds: number;
   rosterRequirements: DraftRosterRequirements;
   roundOneOrder: string[];
+
+  nextOverallPick: number;
+  draftedAssetKeys: string[];
 
   scheduledStartAt: unknown | null;
 
@@ -34,4 +64,9 @@ export interface DraftPickPreview {
   round: number;
   pickInRound: number;
   ownerId: string;
+}
+
+export interface DraftPick extends DraftPickPreview {
+  asset: DraftableAsset;
+  madeAt?: unknown;
 }

@@ -201,7 +201,11 @@ export async function getRegularSeasonTeamGames(
         typeof game.homeTeam.score === 'number' &&
         typeof game.awayTeam.score === 'number';
 
-      return game.gameState === 'OFF' || game.gameState === 'FINAL' || hasFinalScores;
+      return (
+        game.gameState === 'OFF' ||
+        game.gameState === 'FINAL' ||
+        hasFinalScores
+      );
     })
     .sort((a, b) => b.gameDate.localeCompare(a.gameDate));
 }
@@ -357,4 +361,291 @@ export function getTeamGoalieUnitResult(
       shotsAgainst: goalie.shotsAgainst
     }))
   };
+}
+
+/* Draft player pool */
+
+export interface NhlDraftClub {
+  abbreviation: string;
+  name: string;
+}
+
+export interface NhlDraftSkater {
+  id: number;
+  fullName: string;
+  position: 'LW' | 'C' | 'RW' | 'D';
+  nhlTeamAbbreviation: string;
+  teamLogoUrl: string;
+  headshotUrl?: string;
+}
+
+interface NhlCurrentRosterPlayer {
+  id?: number;
+  playerId?: number;
+  firstName?: {
+    default?: string;
+  };
+  lastName?: {
+    default?: string;
+  };
+  fullName?: {
+    default?: string;
+  };
+  positionCode?: string;
+  currentTeamAbbrev?: string;
+  headshot?: string;
+}
+
+interface NhlCurrentRosterResponse {
+  forwards?: NhlCurrentRosterPlayer[];
+  defensemen?: NhlCurrentRosterPlayer[];
+}
+
+const NHL_ROSTER_BATCH_SIZE = 1;
+const NHL_ROSTER_DELAY_MS = 350;
+
+export const NHL_DRAFT_CLUBS: NhlDraftClub[] = [
+  { abbreviation: 'ANA', name: 'Anaheim Ducks' },
+  { abbreviation: 'BOS', name: 'Boston Bruins' },
+  { abbreviation: 'BUF', name: 'Buffalo Sabres' },
+  { abbreviation: 'CGY', name: 'Calgary Flames' },
+  { abbreviation: 'CAR', name: 'Carolina Hurricanes' },
+  { abbreviation: 'CHI', name: 'Chicago Blackhawks' },
+  { abbreviation: 'COL', name: 'Colorado Avalanche' },
+  { abbreviation: 'CBJ', name: 'Columbus Blue Jackets' },
+  { abbreviation: 'DAL', name: 'Dallas Stars' },
+  { abbreviation: 'DET', name: 'Detroit Red Wings' },
+  { abbreviation: 'EDM', name: 'Edmonton Oilers' },
+  { abbreviation: 'FLA', name: 'Florida Panthers' },
+  { abbreviation: 'LAK', name: 'Los Angeles Kings' },
+  { abbreviation: 'MIN', name: 'Minnesota Wild' },
+  { abbreviation: 'MTL', name: 'Montreal Canadiens' },
+  { abbreviation: 'NSH', name: 'Nashville Predators' },
+  { abbreviation: 'NJD', name: 'New Jersey Devils' },
+  { abbreviation: 'NYI', name: 'New York Islanders' },
+  { abbreviation: 'NYR', name: 'New York Rangers' },
+  { abbreviation: 'OTT', name: 'Ottawa Senators' },
+  { abbreviation: 'PHI', name: 'Philadelphia Flyers' },
+  { abbreviation: 'PIT', name: 'Pittsburgh Penguins' },
+  { abbreviation: 'SJS', name: 'San Jose Sharks' },
+  { abbreviation: 'SEA', name: 'Seattle Kraken' },
+  { abbreviation: 'STL', name: 'St. Louis Blues' },
+  { abbreviation: 'TBL', name: 'Tampa Bay Lightning' },
+  { abbreviation: 'TOR', name: 'Toronto Maple Leafs' },
+  { abbreviation: 'UTA', name: 'Utah Mammoth' },
+  { abbreviation: 'VAN', name: 'Vancouver Canucks' },
+  { abbreviation: 'VGK', name: 'Vegas Golden Knights' },
+  { abbreviation: 'WSH', name: 'Washington Capitals' },
+  { abbreviation: 'WPG', name: 'Winnipeg Jets' }
+];
+
+function getDraftPosition(
+  positionCode?: string
+): NhlDraftSkater['position'] | null {
+  switch (positionCode?.toUpperCase()) {
+    case 'L':
+    case 'LW':
+      return 'LW';
+
+    case 'C':
+      return 'C';
+
+    case 'R':
+    case 'RW':
+      return 'RW';
+
+    case 'D':
+      return 'D';
+
+    default:
+      return null;
+  }
+}
+
+function getDraftTeamLogo(
+  teamAbbreviation: string
+): string {
+  return `https://assets.nhle.com/logos/nhl/svg/${teamAbbreviation}_light.svg`;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : 'Unknown NHL roster request error.';
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function getCurrentDraftRosterSeason(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  const seasonStartYear = month >= 7
+    ? year
+    : year - 1;
+
+  return `${seasonStartYear}${seasonStartYear + 1}`;
+}
+
+async function getDraftClubRoster(
+  club: NhlDraftClub
+): Promise<{
+  club: NhlDraftClub;
+  roster: NhlCurrentRosterResponse;
+}> {
+  const season = getCurrentDraftRosterSeason();
+
+  const response = await fetch(
+    `${NHL_API_BASE_URL}/roster/${club.abbreviation.toLowerCase()}/${season}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `${club.abbreviation} roster request failed with ${response.status} ${response.statusText}.`
+    );
+  }
+
+  return {
+    club,
+    roster: (await response.json()) as NhlCurrentRosterResponse
+  };
+}
+
+function addRosterSkaters(
+  skaters: Map<number, NhlDraftSkater>,
+  club: NhlDraftClub,
+  roster: NhlCurrentRosterResponse
+): void {
+  const rosterPlayers = [
+    ...(roster.forwards ?? []),
+    ...(roster.defensemen ?? [])
+  ];
+
+  for (const player of rosterPlayers) {
+    const playerId = player.id ?? player.playerId;
+    const position = getDraftPosition(player.positionCode);
+
+    if (!playerId || !position) {
+      continue;
+    }
+
+    const fullName =
+      [
+        player.firstName?.default,
+        player.lastName?.default
+      ]
+        .filter(Boolean)
+        .join(' ') ||
+      player.fullName?.default ||
+      'Unknown Player';
+
+    const teamAbbreviation =
+      player.currentTeamAbbrev ?? club.abbreviation;
+
+    skaters.set(playerId, {
+      id: playerId,
+      fullName,
+      position,
+      nhlTeamAbbreviation: teamAbbreviation,
+      teamLogoUrl: getDraftTeamLogo(teamAbbreviation),
+      headshotUrl: player.headshot
+    });
+  }
+}
+
+export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
+  const skaters = new Map<number, NhlDraftSkater>();
+  const retryClubs: NhlDraftClub[] = [];
+  const failedClubs = new Map<string, string>();
+
+  for (
+    let index = 0;
+    index < NHL_DRAFT_CLUBS.length;
+    index += NHL_ROSTER_BATCH_SIZE
+  ) {
+    const batch = NHL_DRAFT_CLUBS.slice(
+      index,
+      index + NHL_ROSTER_BATCH_SIZE
+    );
+
+    const results = await Promise.allSettled(
+      batch.map((club) => getDraftClubRoster(club))
+    );
+
+    results.forEach((result, resultIndex) => {
+      const club = batch[resultIndex];
+
+      if (result.status === 'fulfilled') {
+        addRosterSkaters(
+          skaters,
+          result.value.club,
+          result.value.roster
+        );
+        return;
+      }
+
+      retryClubs.push(club);
+      failedClubs.set(
+        club.abbreviation,
+        getErrorMessage(result.reason)
+      );
+    });
+
+    if (
+      index + NHL_ROSTER_BATCH_SIZE <
+      NHL_DRAFT_CLUBS.length
+    ) {
+      await wait(NHL_ROSTER_DELAY_MS);
+    }
+  }
+
+  for (const club of retryClubs) {
+    await wait(NHL_ROSTER_DELAY_MS);
+
+    try {
+      const result = await getDraftClubRoster(club);
+
+      addRosterSkaters(
+        skaters,
+        result.club,
+        result.roster
+      );
+
+      failedClubs.delete(club.abbreviation);
+    } catch (error: unknown) {
+      failedClubs.set(
+        club.abbreviation,
+        getErrorMessage(error)
+      );
+    }
+  }
+
+  if (failedClubs.size > 0) {
+    const clubErrors = [...failedClubs.entries()]
+      .slice(0, 4)
+      .map(
+        ([abbreviation, message]) =>
+          `${abbreviation}: ${message}`
+      )
+      .join(' | ');
+
+    throw new Error(
+      `Unable to load all NHL rosters. Please try again. ${clubErrors}`
+    );
+  }
+
+  if (skaters.size === 0) {
+    throw new Error(
+      'The NHL roster service responded, but no draftable skaters were found.'
+    );
+  }
+
+  return [...skaters.values()].sort((first, second) =>
+    first.fullName.localeCompare(second.fullName)
+  );
 }

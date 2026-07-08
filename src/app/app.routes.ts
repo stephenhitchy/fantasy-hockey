@@ -10,6 +10,7 @@ import { AccountSettings } from './features/account/account-settings/account-set
 import { ScoringTest } from './features/scoring-test/scoring-test';
 import { PlayerDetail } from './features/players/player-detail/player-detail';
 import { DraftSetup } from './features/draft/draft-setup/draft-setup';
+import { DraftRoom } from './features/draft/draft-room/draft-room';
 import { MainLayout } from './layouts/main-layout/main-layout';
 
 export const routes: Routes = [
@@ -52,6 +53,10 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/draft/setup',
         component: DraftSetup
+      },
+      {
+        path: 'leagues/:leagueId/draft',
+        component: DraftRoom
       },
       {
         path: 'leagues/:leagueId',

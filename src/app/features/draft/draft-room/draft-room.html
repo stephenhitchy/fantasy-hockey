@@ -1,0 +1,348 @@
+@if (loading()) {
+  <p>Loading draft room...</p>
+} @else if (!league()) {
+  <p>{{ errorMessage() || 'Draft room not found.' }}</p>
+} @else {
+  <section class="draft-room-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="draft-room-header">
+      <div>
+        <span class="eyebrow">Live League Draft</span>
+        <h1>{{ league()?.name }}</h1>
+        <p>{{ draftProgressText() }}</p>
+      </div>
+
+      <div
+        class="draft-state-badge"
+        [class.state-live]="draft()?.status === 'live'"
+        [class.state-scheduled]="draft()?.status === 'scheduled'"
+        [class.state-complete]="draft()?.status === 'complete'"
+      >
+        {{
+          draft()?.status === 'live'
+            ? 'Draft Live'
+            : draft()?.status === 'complete'
+              ? 'Draft Complete'
+              : 'Draft Scheduled'
+        }}
+      </div>
+    </header>
+
+    @if (errorMessage()) {
+      <p class="message error-message">
+        {{ errorMessage() }}
+      </p>
+    }
+
+    @if (successMessage()) {
+      <p class="message success-message">
+        {{ successMessage() }}
+      </p>
+    }
+
+    @if (!draft()) {
+      <section class="waiting-card">
+        <h2>Draft Setup Needed</h2>
+        <p>
+          The commissioner must save a draft order and start time before the draft can open.
+        </p>
+      </section>
+    } @else if (draft()?.status === 'setup') {
+      <section class="waiting-card">
+        <h2>Draft Not Scheduled</h2>
+        <p>
+          The commissioner has not selected a draft start time yet.
+        </p>
+      </section>
+    } @else if (
+      draft()?.status === 'scheduled' &&
+      !startTimeReached()
+    ) {
+      <section class="waiting-card scheduled-card">
+        <span class="eyebrow">Draft Scheduled</span>
+        <h2>{{ formatDraftStart() }}</h2>
+        <p>{{ getCountdownText() }}</p>
+        <span>
+          The draft board will open automatically when the scheduled time arrives.
+        </span>
+      </section>
+    } @else if (draft()?.status === 'complete') {
+      <section class="waiting-card complete-card">
+        <span class="eyebrow">Draft Complete</span>
+        <h2>All picks are in.</h2>
+        <p>
+          Every team has completed its 14 active roster selections.
+        </p>
+      </section>
+    } @else {
+      <section class="draft-layout">
+        <main class="player-pool-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Available Assets</span>
+              <h2>Player Pool</h2>
+              <p>{{ availableAssetCount() }} players and goalie units available</p>
+            </div>
+
+            @if (isMyTurn()) {
+              <span class="your-turn-badge">Your Turn</span>
+            } @else {
+              <span class="waiting-turn-badge">Waiting for Pick</span>
+            }
+          </div>
+
+          <div class="pool-controls">
+  <input
+    type="search"
+    placeholder="Search player or NHL team..."
+    [ngModel]="searchTerm()"
+    (ngModelChange)="setSearchTerm($event)"
+  />
+
+  <select
+    [ngModel]="positionFilter()"
+    (ngModelChange)="setPositionFilter($event)"
+  >
+    <option value="ALL">All Positions</option>
+    <option value="LW">Left Wing</option>
+    <option value="C">Center</option>
+    <option value="RW">Right Wing</option>
+    <option value="D">Defense</option>
+    <option value="G">Goalie Units</option>
+  </select>
+
+  <select
+    [ngModel]="sortMode()"
+    (ngModelChange)="setSortMode($event)"
+  >
+    <option value="PROJECTED_CYCLE">Sort: Projected Cycle</option>
+    <option value="PROJECTED_SEASON">Sort: Projected Season</option>
+    <option value="NAME">Sort: Name</option>
+    <option value="POSITION">Sort: Position</option>
+    <option value="TEAM">Sort: NHL Team</option>
+  </select>
+</div>
+
+          @if (playerPoolLoading()) {
+            <p class="pool-loading">Loading NHL player pool...</p>
+          } @else if (playerPoolError()) {
+            <div class="pool-error-block">
+                <p class="pool-error">{{ playerPoolError() }}</p>
+
+                <button
+                type="button"
+                class="retry-pool-button"
+                (click)="loadPlayerPool()"
+                >
+                Try Loading Player Pool Again
+                </button>
+            </div>
+            }@else if (availableAssets().length === 0) {
+            <p class="pool-loading">
+              No available assets match that search.
+            </p>
+          } @else {
+            <div class="asset-list">
+              @for (asset of availableAssets(); track asset.assetKey) {
+                <article class="draft-asset-card">
+                  @if (getAssetLogoUrl(asset); as logoUrl) {
+                    <img
+                      class="asset-logo"
+                      [src]="logoUrl"
+                      [alt]="getAssetTeamLabel(asset) + ' logo'"
+                    />
+                  } @else {
+                    <span class="asset-logo-fallback">
+                      {{ getAssetTeamLabel(asset) }}
+                    </span>
+                  }
+
+                  <div class="asset-copy">
+  <strong>{{ getAssetName(asset) }}</strong>
+  <span>
+    {{ asset.position }}
+    ·
+    {{ getAssetTeamLabel(asset) }}
+  </span>
+
+  <div class="asset-projection-strip">
+    <small>
+      Season:
+      {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
+    </small>
+
+    <small>
+      Cycle:
+      {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
+    </small>
+  </div>
+</div>
+
+                  <button
+                    type="button"
+                    (click)="selectAsset(asset)"
+                    [disabled]="
+                      !canDraftAsset(asset) ||
+                      makingPickAssetKey() !== null
+                    "
+                  >
+                    {{ getDraftButtonLabel(asset) }}
+                  </button>
+                </article>
+              }
+            </div>
+          }
+        </main>
+
+        <aside class="draft-sidebar">
+          <section class="turn-card">
+            <span class="eyebrow">Current Pick</span>
+
+            @if (currentPick(); as pick) {
+              <h2>Pick #{{ pick.overallPick }}</h2>
+              <p>Round {{ pick.round }} · Pick {{ pick.pickInRound }}</p>
+
+              <strong class="current-team-name">
+                {{ getTeamName(pick.ownerId) }}
+              </strong>
+
+              @if (isMyTurn()) {
+                <span class="your-turn-message">
+                  You are on the clock.
+                </span>
+              } @else {
+                <span class="waiting-message">
+                  {{ getTeamName(pick.ownerId) }} is on the clock.
+                </span>
+              }
+            } @else {
+              <h2>Updating Draft...</h2>
+              <p>Waiting for the next pick.</p>
+            }
+          </section>
+
+          <section class="sidebar-card roster-card">
+  <span class="eyebrow">Your Roster</span>
+  <h2>Drafted Players</h2>
+
+  <div class="drafted-roster-list">
+    @for (position of rosterPositions; track position) {
+      <section class="drafted-position-group">
+        <div class="drafted-position-header">
+          <strong>{{ position }}</strong>
+          <span>
+            {{ getMyPositionCount(position) }}
+            /
+            {{ getPositionRequirement(position) }}
+          </span>
+        </div>
+
+        @for (
+          pick of getMyPicksByPosition(position);
+          track pick.overallPick
+        ) {
+          <article class="drafted-player-row">
+  @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+    <img
+      class="drafted-player-logo"
+      [src]="logoUrl"
+      [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+    />
+  } @else {
+    <span class="drafted-player-logo-fallback">
+      {{ getAssetTeamLabel(pick.asset) }}
+    </span>
+  }
+
+  <div class="drafted-player-main">
+    <div>
+      <strong>{{ getAssetName(pick.asset) }}</strong>
+      <span>
+        {{ getAssetTeamLabel(pick.asset) }}
+        · Pick #{{ pick.overallPick }}
+      </span>
+    </div>
+
+    <div class="drafted-player-projections">
+      <small>
+        Season:
+        {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
+      </small>
+
+      <small>
+        Cycle:
+        {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
+      </small>
+    </div>
+  </div>
+</article>
+        }
+
+        @for (
+          emptySlot of getEmptySlotsForPosition(position);
+          track $index
+        ) {
+          <div class="empty-roster-slot">
+            Open {{ position }} slot
+          </div>
+        }
+      </section>
+    }
+  </div>
+</section>
+
+          <section class="sidebar-card">
+            <span class="eyebrow">Up Next</span>
+            <h2>Upcoming Picks</h2>
+
+            <div class="upcoming-list">
+              @for (pick of upcomingPicks(); track pick.overallPick) {
+                <div
+                  class="upcoming-row"
+                  [class.current-upcoming]="pick.overallPick === currentPick()?.overallPick"
+                >
+                  <span>#{{ pick.overallPick }}</span>
+                  <strong>{{ getTeamName(pick.ownerId) }}</strong>
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="sidebar-card">
+            <span class="eyebrow">Recent Activity</span>
+            <h2>Recent Picks</h2>
+
+            @if (recentPicks().length === 0) {
+              <p class="empty-sidebar-copy">
+                No picks have been made yet.
+              </p>
+            } @else {
+              <div class="recent-picks-list">
+                @for (pick of recentPicks(); track pick.overallPick) {
+                  <div class="recent-pick-row">
+                    <span>#{{ pick.overallPick }}</span>
+
+                    <div>
+                      <strong>{{ getAssetName(pick.asset) }}</strong>
+                      <small>
+                        {{ getTeamName(pick.ownerId) }}
+                        ·
+                        {{ pick.asset.position }}
+                      </small>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </section>
+        </aside>
+      </section>
+    }
+  </section>
+}

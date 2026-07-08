@@ -15,6 +15,7 @@ import {
 } from '../../../core/draft/draft.models';
 
 import {
+  activateScheduledDraftIfReady,
   getScheduledStartDate,
   isDraftStartTimeReached,
   listenToFantasyDraft
@@ -56,14 +57,19 @@ export class LeagueDetail implements OnDestroy {
   isCommissioner = signal(false);
   copyMessage = signal('');
   errorMessage = signal('');
+  showDraftStartedModal = signal(false);
 
   readonly now = signal(Date.now());
 
+  private stopDraftListener: (() => void) | null = null;
+  private activationInProgress = false;
+  private redirectTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasEnteredDraftRoom = false;
+
   private readonly countdownTimer = setInterval(() => {
     this.now.set(Date.now());
+    void this.handleScheduledDraft();
   }, 1000);
-
-  private stopDraftListener: (() => void) | null = null;
 
   readonly scheduledStartDate = computed(() =>
     getScheduledStartDate(this.draft())
@@ -98,7 +104,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.startTimeReached()) {
-      return 'Start Time Reached';
+      return 'Opening Draft';
     }
 
     return 'Draft Scheduled';
@@ -121,7 +127,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.startTimeReached()) {
-      return 'The scheduled draft start time has arrived.';
+      return 'Starting the live draft now.';
     }
 
     return 'The draft will become available at the scheduled time below.';
@@ -147,7 +153,7 @@ export class LeagueDetail implements OnDestroy {
       startDate.getTime() - this.now();
 
     if (millisecondsRemaining <= 0) {
-      return 'Draft start time reached.';
+      return 'Opening live draft...';
     }
 
     const totalSeconds = Math.floor(
@@ -179,6 +185,11 @@ export class LeagueDetail implements OnDestroy {
 
   ngOnDestroy(): void {
     clearInterval(this.countdownTimer);
+
+    if (this.redirectTimer) {
+      clearTimeout(this.redirectTimer);
+    }
+
     this.stopDraftListener?.();
   }
 
@@ -216,6 +227,7 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (draft) => {
           this.draft.set(draft);
+          void this.handleScheduledDraft();
         }
       );
     } catch (error: unknown) {
@@ -227,6 +239,25 @@ export class LeagueDetail implements OnDestroy {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  async enterDraftRoom(): Promise<void> {
+    if (this.hasEnteredDraftRoom) {
+      return;
+    }
+
+    this.hasEnteredDraftRoom = true;
+
+    if (this.redirectTimer) {
+      clearTimeout(this.redirectTimer);
+      this.redirectTimer = null;
+    }
+
+    await this.router.navigate([
+      '/leagues',
+      this.leagueId,
+      'draft'
+    ]);
   }
 
   formatDraftStart(): string {
@@ -256,5 +287,54 @@ export class LeagueDetail implements OnDestroy {
     setTimeout(() => {
       this.copyMessage.set('');
     }, 2000);
+  }
+
+  private async handleScheduledDraft(): Promise<void> {
+    const draft = this.draft();
+
+    if (!draft || this.hasEnteredDraftRoom) {
+      return;
+    }
+
+    if (
+      draft.status === 'scheduled' &&
+      isDraftStartTimeReached(draft) &&
+      !this.activationInProgress
+    ) {
+      this.activationInProgress = true;
+
+      try {
+        const activatedDraft =
+          await activateScheduledDraftIfReady(
+            this.leagueId
+          );
+
+        if (activatedDraft?.status === 'live') {
+          this.draft.set(activatedDraft);
+        }
+      } finally {
+        this.activationInProgress = false;
+      }
+    }
+
+    if (this.draft()?.status === 'live') {
+      this.openDraftStartedModal();
+    }
+  }
+
+  private openDraftStartedModal(): void {
+    if (this.hasEnteredDraftRoom) {
+      return;
+    }
+
+    this.showDraftStartedModal.set(true);
+
+    if (this.redirectTimer) {
+      return;
+    }
+
+    this.redirectTimer = setTimeout(() => {
+      void this.enterDraftRoom();
+    }, 2500);
   }
 }

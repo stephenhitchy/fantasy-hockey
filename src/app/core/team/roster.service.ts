@@ -46,7 +46,9 @@ export function createEmptyFantasyRoster(): FantasyRoster {
   };
 }
 
-function normalizeRoster(data: Partial<FantasyRoster>): FantasyRoster {
+export function normalizeFantasyRoster(
+  data: Partial<FantasyRoster>
+): FantasyRoster {
   const fallbackRoster = createEmptyFantasyRoster();
 
   return {
@@ -62,7 +64,10 @@ function normalizeRoster(data: Partial<FantasyRoster>): FantasyRoster {
   };
 }
 
-function getRosterRef(leagueId: string, ownerId: string) {
+export function getFantasyRosterRef(
+  leagueId: string,
+  ownerId: string
+) {
   return doc(
     db,
     'leagues',
@@ -78,13 +83,15 @@ export async function getOrCreateFantasyRoster(
   leagueId: string,
   ownerId: string
 ): Promise<FantasyRoster> {
-  const rosterRef = getRosterRef(leagueId, ownerId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
 
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(rosterRef);
 
     if (snapshot.exists()) {
-      return normalizeRoster(snapshot.data() as Partial<FantasyRoster>);
+      return normalizeFantasyRoster(
+        snapshot.data() as Partial<FantasyRoster>
+      );
     }
 
     const roster = createEmptyFantasyRoster();
@@ -106,7 +113,7 @@ export async function saveFantasyRoster(
   ownerId: string,
   roster: FantasyRoster
 ): Promise<void> {
-  const rosterRef = getRosterRef(leagueId, ownerId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
 
   await setDoc(
     rosterRef,
