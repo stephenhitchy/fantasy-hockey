@@ -1,0 +1,352 @@
+@if (loading()) {
+  <p class="page-loading">Loading Projection Lab...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="projection-lab-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="projection-header">
+      <div>
+        <span class="eyebrow">Projection Lab V2</span>
+        <h1>Fantasy Value Balancer</h1>
+        <p>
+          {{ league()?.name }}
+          ·
+          Compare rating, raw projection, and value above replacement.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="refresh-button"
+        (click)="loadPlayerPool()"
+        [disabled]="playerPoolLoading()"
+      >
+        {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Projections' }}
+      </button>
+    </header>
+
+    @if (playerPoolError()) {
+      <section class="error-card">
+        {{ playerPoolError() }}
+      </section>
+    }
+
+    <section class="rating-explainer-card">
+      <article>
+        <strong>Skater Rating</strong>
+        <span>
+          Top forward is set to 100. Forwards and defensemen share this scale.
+        </span>
+      </article>
+
+      <article>
+        <strong>Goalie Rating</strong>
+        <span>
+          Top goalie unit is set to 100. Use Draft Value to compare goalies to other positions.
+        </span>
+      </article>
+
+      <article>
+        <strong>Value Rating</strong>
+        <span>
+          Rating minus replacement rating. This shows how much better a player is than a normal starter.
+        </span>
+      </article>
+    </section>
+
+    <section class="lab-control-card">
+      <div class="control-field search-field">
+        <label for="projection-search">Search</label>
+        <input
+          id="projection-search"
+          type="text"
+          placeholder="Search player, goalie unit, or NHL team"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="setSearchTerm($event)"
+        />
+      </div>
+
+      <div class="control-field">
+        <label for="position-filter">Position</label>
+        <select
+          id="position-filter"
+          [ngModel]="positionFilter()"
+          (ngModelChange)="setPositionFilter($event)"
+        >
+          <option value="ALL">All</option>
+          <option value="LW">LW</option>
+          <option value="C">C</option>
+          <option value="RW">RW</option>
+          <option value="D">D</option>
+          <option value="G">Goalie Units</option>
+        </select>
+      </div>
+
+      <div class="control-field">
+        <label for="sort-mode">Sort</label>
+        <select
+          id="sort-mode"
+          [ngModel]="sortMode()"
+          (ngModelChange)="setSortMode($event)"
+        >
+          <option value="DRAFT_VALUE">Draft Value</option>
+          <option value="VALUE_RATING">Value Rating</option>
+          <option value="RATING">Rating</option>
+          <option value="PROJECTED_CYCLE">Cycle Projection</option>
+          <option value="PROJECTED_SEASON">Season Projection</option>
+          <option value="POSITION_RANK">Position Rank</option>
+          <option value="NAME">Name</option>
+          <option value="TEAM">NHL Team</option>
+        </select>
+      </div>
+
+      <div class="control-field">
+        <label for="team-count">Teams</label>
+        <input
+          id="team-count"
+          type="number"
+          min="2"
+          max="32"
+          [ngModel]="teamCountForReplacement()"
+          (ngModelChange)="setTeamCountOverride($event)"
+        />
+      </div>
+
+      <div class="control-field">
+        <label for="cycle-games">Projected Games</label>
+        <input
+          id="cycle-games"
+          type="number"
+          min="1"
+          max="10"
+          step="0.5"
+          [ngModel]="projectedGamesPerCycle()"
+          (ngModelChange)="setProjectedGamesPerCycle($event)"
+        />
+      </div>
+
+      <button
+        type="button"
+        class="reset-button"
+        (click)="clearOverrides()"
+      >
+        Reset
+      </button>
+    </section>
+
+    <section class="summary-grid">
+      <article>
+        <span>Players / Units</span>
+        <strong>{{ playerPool().length }}</strong>
+      </article>
+
+      <article>
+        <span>League Teams</span>
+        <strong>{{ teamCountForReplacement() }}</strong>
+      </article>
+
+      <article>
+        <span>Starter Slots</span>
+        <strong>{{ totalStarterSlots() }}</strong>
+      </article>
+
+      <article>
+        <span>Cycle Games</span>
+        <strong>{{ projectedGamesPerCycle() }}</strong>
+      </article>
+
+      @if (topOverallValue(); as topRow) {
+        <article class="wide-summary-card">
+          <span>Top Draft Value</span>
+          <strong>
+            {{ topRow.name }}
+            ·
+            {{ getSignedDisplayNumber(topRow.draftValue) }}
+            pts
+            ·
+            {{ getSignedRatingDisplay(topRow.valueRating) }}
+            rating
+          </strong>
+        </article>
+      }
+    </section>
+
+    <section class="balance-card">
+      <div>
+        <span class="eyebrow">Balance Notes</span>
+        <h2>Scoring Check</h2>
+      </div>
+
+      <div class="balance-note-list">
+        @for (note of balanceNotes(); track note) {
+          <p>{{ note }}</p>
+        }
+      </div>
+    </section>
+
+    <section class="position-summary-section">
+      <div class="section-heading">
+        <span class="eyebrow">Position Replacement</span>
+        <h2>Starter Pool by Position</h2>
+      </div>
+
+      <div class="position-summary-grid">
+        @for (summary of positionSummaries(); track summary.position) {
+          <article class="position-summary-card">
+            <div class="position-summary-heading">
+              <strong>{{ summary.position }}</strong>
+              <span>{{ summary.label }}</span>
+            </div>
+
+            <div class="position-summary-stats">
+              <div>
+                <span>Starter Rating</span>
+                <strong>
+                  {{ getRatingDisplay(summary.starterAverageRating) }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Replacement Rtng</span>
+                <strong>
+                  {{ getRatingDisplay(summary.replacementRating) }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Starter Avg</span>
+                <strong>
+                  {{ getDisplayNumber(summary.starterAverage) }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Replacement</span>
+                <strong>
+                  {{ getDisplayNumber(summary.replacementProjection) }}
+                </strong>
+              </div>
+            </div>
+
+            <footer>
+              <span>
+                Top: {{ summary.topPlayerName }}
+              </span>
+              <strong>
+                {{ getRatingDisplay(summary.topPlayerRating) }}
+              </strong>
+            </footer>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="projection-table-card">
+      <div class="table-heading">
+        <div>
+          <span class="eyebrow">Projection Board</span>
+          <h2>Value Above Replacement</h2>
+        </div>
+
+        <p>
+          Showing {{ visibleRows().length }} assets.
+        </p>
+      </div>
+
+      <div class="projection-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Value Rank</th>
+              <th>Asset</th>
+              <th>Pos</th>
+              <th>NHL</th>
+              <th>Rating</th>
+              <th>Cycle</th>
+              <th>Replacement</th>
+              <th>Value Rating</th>
+              <th>Draft Value</th>
+              <th>Season</th>
+              <th>PPG</th>
+              <th>Tier</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (row of visibleRows(); track row.asset.assetKey) {
+              <tr [class]="getRowClass(row)">
+                <td>#{{ row.overallValueRank }}</td>
+
+                <td>
+                  <div class="asset-cell">
+                    @if (row.logoUrl) {
+                      <img
+                        [src]="row.logoUrl"
+                        [alt]="row.teamAbbreviation + ' logo'"
+                      />
+                    }
+
+                    <div>
+                      <strong>{{ row.name }}</strong>
+                      <span>
+                        {{ getPositionLabel(row.position) }}
+                        Rank #{{ row.positionRank }}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                <td>{{ row.position }}</td>
+                <td>{{ row.teamAbbreviation }}</td>
+
+                <td>
+                  <span class="rating-pill">
+                    {{ getRatingDisplay(row.rating) }}
+                  </span>
+                  <small class="rating-basis">
+                    {{ getRatingBasisLabel(row) }}
+                  </small>
+                </td>
+
+                <td>{{ getDisplayNumber(row.projectedCycle) }}</td>
+
+                <td>
+                  <span>
+                    {{ getDisplayNumber(row.replacementProjection) }}
+                  </span>
+                  <small class="rating-basis">
+                    Rtng {{ getRatingDisplay(row.replacementRating) }}
+                  </small>
+                </td>
+
+                <td class="value-rating-cell">
+                  {{ getSignedRatingDisplay(row.valueRating) }}
+                </td>
+
+                <td class="draft-value-cell">
+                  {{ getSignedDisplayNumber(row.draftValue) }}
+                </td>
+
+                <td>{{ getDisplayNumber(row.projectedSeason) }}</td>
+                <td>{{ getDisplayNumber(row.projectedPpg) }}</td>
+
+                <td>
+                  <span class="tier-pill">
+                    {{ row.tier }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+}

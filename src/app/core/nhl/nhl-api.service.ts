@@ -210,6 +210,32 @@ export async function getRegularSeasonTeamGames(
     .sort((a, b) => b.gameDate.localeCompare(a.gameDate));
 }
 
+export async function getNhlTeamSeasonSchedule(
+  teamAbbreviation: string,
+  season: string
+): Promise<NhlTeamSeasonGame[]> {
+  const response = await fetch(
+    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `NHL season schedule request failed: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data =
+    (await response.json()) as NhlTeamSeasonScheduleResponse;
+
+  const games = Array.isArray(data.games) ? data.games : [];
+
+  return games
+    .filter((game) => game.gameType === 2)
+    .sort((first, second) =>
+      first.gameDate.localeCompare(second.gameDate)
+    );
+}
+
 export async function getGameBoxscore(
   gameId: number
 ): Promise<NhlGameBoxscoreResponse> {
@@ -649,3 +675,75 @@ export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
     first.fullName.localeCompare(second.fullName)
   );
 }
+
+const NHL_STATS_API_BASE_URL = '/stats/rest/en';
+
+export type NhlStatsRecord = Record<string, unknown>;
+
+interface NhlStatsApiResponse {
+  data?: NhlStatsRecord[];
+}
+
+async function getNhlStatsRestData(
+  path: string,
+  params: Record<string, string>
+): Promise<NhlStatsRecord[]> {
+  const query = new URLSearchParams(params);
+
+  const response = await fetch(
+    `${NHL_STATS_API_BASE_URL}${path}?${query.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `NHL stats request failed for ${path}: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as NhlStatsApiResponse;
+
+  return Array.isArray(data.data) ? data.data : [];
+}
+
+export async function getSkaterSeasonSummaryStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/skater/summary', {
+    isAggregate: 'false',
+    isGame: 'false',
+    start: '0',
+    limit: '-1',
+    sort: 'points',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+
+export async function getSkaterSeasonRealtimeStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/skater/realtime', {
+    isAggregate: 'false',
+    isGame: 'false',
+    start: '0',
+    limit: '-1',
+    sort: 'hits',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+
+export async function getGoalieSeasonSummaryStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/goalie/summary', {
+    isAggregate: 'false',
+    isGame: 'false',
+    start: '0',
+    limit: '-1',
+    sort: 'wins',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+

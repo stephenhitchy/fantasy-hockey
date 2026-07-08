@@ -1,0 +1,190 @@
+@if (loading()) {
+  <p class="page-loading">Loading schedule preview...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="schedule-preview-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="schedule-preview-header">
+      <div>
+        <span class="eyebrow">Fantasy Season</span>
+        <h1>Schedule Preview</h1>
+        <p>{{ league()?.name }}</p>
+      </div>
+
+      <a
+        class="open-cycle-link"
+        [routerLink]="['/leagues', leagueId, 'cycles', 1]"
+      >
+        Open Cycle 1
+      </a>
+    </header>
+
+    <section class="schedule-summary-grid">
+      <article>
+        <span>Teams</span>
+        <strong>{{ teams().length }}</strong>
+      </article>
+
+      <article>
+        <span>Cycles Before Repeats</span>
+        <strong>{{ cyclesBeforeRepeat() }}</strong>
+      </article>
+
+      <article>
+        <span>Matchups Per Cycle</span>
+        <strong>{{ matchupsPerCycle() }}</strong>
+      </article>
+
+      <article>
+        <span>Bye Weeks</span>
+        <strong>{{ hasByeWeeks() ? 'Yes' : 'No' }}</strong>
+      </article>
+    </section>
+
+    <section class="schedule-note-card">
+      <strong>Round-robin schedule</strong>
+      <p>
+        These matchups should not repeat until the full rotation is complete.
+        After {{ cyclesBeforeRepeat() }} cycles, the schedule starts rotating through the same opponents again.
+      </p>
+    </section>
+
+    @if (schedulePreview().length === 0) {
+      <section class="empty-schedule-card">
+        <h2>No schedule available yet.</h2>
+        <p>
+          At least two teams are required to preview the season schedule.
+        </p>
+      </section>
+    } @else {
+      <section class="schedule-cycle-grid">
+        @for (cycle of schedulePreview(); track cycle.cycleNumber) {
+          <article
+            class="schedule-cycle-card"
+            [class.cycle-card-complete]="isCycleComplete(cycle.cycleNumber)"
+            [class.cycle-card-active]="isCycleActive(cycle.cycleNumber)"
+          >
+            <header>
+              <div>
+                <span class="eyebrow">Preview</span>
+                <h2>{{ getCycleLabel(cycle.cycleNumber) }}</h2>
+              </div>
+
+              <div class="cycle-card-actions">
+                <span
+                  class="cycle-preview-status"
+                  [class.cycle-preview-active]="isCycleActive(cycle.cycleNumber)"
+                  [class.cycle-preview-complete]="isCycleComplete(cycle.cycleNumber)"
+                >
+                  {{ getCycleStatusLabel(cycle.cycleNumber) }}
+                </span>
+
+                <a
+                  [routerLink]="['/leagues', leagueId, 'cycles', cycle.cycleNumber]"
+                >
+                  Open
+                </a>
+              </div>
+            </header>
+
+            <div class="schedule-matchup-list">
+              @for (matchup of cycle.matchups; track matchup.id) {
+                <section
+                  class="schedule-matchup-card"
+                  [class.bye-matchup-card]="isByeMatchup(matchup)"
+                >
+                  <div class="schedule-matchup-label">
+                    {{ matchup.id }}
+                  </div>
+
+                  <div class="schedule-team-row">
+                    <div
+                      class="schedule-team-pill"
+                      [class.preview-winner-team]="isPreviewWinner(cycle.cycleNumber, matchup, matchup.teamAOwnerId)"
+                      [class.preview-loser-team]="isPreviewLoser(cycle.cycleNumber, matchup, matchup.teamAOwnerId)"
+                    >
+                      <div class="schedule-team-title-line">
+                        <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+
+                        @if (getPreviewResultLabel(cycle.cycleNumber, matchup, matchup.teamAOwnerId)) {
+                          <em
+                            [class.preview-result-winner]="isPreviewWinner(cycle.cycleNumber, matchup, matchup.teamAOwnerId)"
+                            [class.preview-result-loser]="isPreviewLoser(cycle.cycleNumber, matchup, matchup.teamAOwnerId)"
+                          >
+                            {{ getPreviewResultLabel(cycle.cycleNumber, matchup, matchup.teamAOwnerId) }}
+                          </em>
+                        }
+                      </div>
+
+                      <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+
+                      <div class="preview-score-grid">
+                        <div>
+                          <small>Projection</small>
+                          <b>{{ getScoreDisplay(getTeamProjectedScore(matchup.teamAOwnerId)) }}</b>
+                        </div>
+
+                        <div>
+                          <small>Actual</small>
+                          <b>{{ getScoreDisplay(getTeamActualScore(cycle.cycleNumber, matchup, matchup.teamAOwnerId)) }}</b>
+                        </div>
+                      </div>
+                    </div>
+
+                    @if (matchup.teamBOwnerId) {
+                      <div class="schedule-vs">vs</div>
+
+                      <div
+                        class="schedule-team-pill"
+                        [class.preview-winner-team]="isPreviewWinner(cycle.cycleNumber, matchup, matchup.teamBOwnerId)"
+                        [class.preview-loser-team]="isPreviewLoser(cycle.cycleNumber, matchup, matchup.teamBOwnerId)"
+                      >
+                        <div class="schedule-team-title-line">
+                          <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+
+                          @if (getPreviewResultLabel(cycle.cycleNumber, matchup, matchup.teamBOwnerId)) {
+                            <em
+                              [class.preview-result-winner]="isPreviewWinner(cycle.cycleNumber, matchup, matchup.teamBOwnerId)"
+                              [class.preview-result-loser]="isPreviewLoser(cycle.cycleNumber, matchup, matchup.teamBOwnerId)"
+                            >
+                              {{ getPreviewResultLabel(cycle.cycleNumber, matchup, matchup.teamBOwnerId) }}
+                            </em>
+                          }
+                        </div>
+
+                        <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+
+                        <div class="preview-score-grid">
+                          <div>
+                            <small>Projection</small>
+                            <b>{{ getScoreDisplay(getTeamProjectedScore(matchup.teamBOwnerId)) }}</b>
+                          </div>
+
+                          <div>
+                            <small>Actual</small>
+                            <b>{{ getScoreDisplay(getTeamActualScore(cycle.cycleNumber, matchup, matchup.teamBOwnerId)) }}</b>
+                          </div>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="schedule-vs bye-label">bye</div>
+                    }
+                  </div>
+
+                  <p>{{ getMatchupLabel(matchup) }}</p>
+                </section>
+              }
+            </div>
+          </article>
+        }
+      </section>
+    }
+  </section>
+}

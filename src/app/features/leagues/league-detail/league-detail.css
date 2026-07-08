@@ -335,9 +335,10 @@
 }
 
 @media (max-width: 720px) {
-  .league-header,
-  .invite-card,
-  .draft-status-heading {
+    .league-header,
+    .invite-card,
+    .draft-status-heading,
+    .cycle-status-heading {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -349,4 +350,128 @@
   .copy-message {
     text-align: left;
   }
+}
+
+.cycle-status-card {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #d9e2eb;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
+}
+
+.cycle-status-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cycle-status-heading h2 {
+  margin: 0;
+  color: #1b2d45;
+  font-size: 20px;
+}
+
+.cycle-status-badge {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #edf1f5;
+  color: #5f7082;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.start-cycle-button {
+  margin-top: 15px;
+  padding: 10px 13px;
+  border: 0;
+  border-radius: 8px;
+  background: #17263d;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.start-cycle-button:hover:not(:disabled) {
+  background: #294563;
+}
+
+.start-cycle-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cycle-waiting-copy,
+.cycle-action-message {
+  margin: 12px 0 0;
+  color: #63758a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cycle-action-message {
+  color: #26713a;
+}
+
+.matchup-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.matchup-card {
+  padding: 14px;
+  border: 1px solid #dce5ee;
+  border-radius: 10px;
+  background: #f8fbfd;
+}
+
+.matchup-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.matchup-team-row strong {
+  color: #1d3048;
+  font-size: 14px;
+}
+
+.matchup-team-row span {
+  color: #17263d;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.matchup-vs {
+  margin: 8px 0;
+  color: #8191a4;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.view-cycle-link {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: #17263d;
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.view-cycle-link:hover {
+  background: #294563;
 }

@@ -111,18 +111,18 @@ export const defaultScoringRules: ScoringRules = {
   defenseToiFloor: 0.18,
   defenseToiCeiling: 0.36,
 
-  goalieSave: 0.35,
-  goalieWin: 6,
-  goalieShutout: 10,
+goalieSave: 0.32,
+goalieWin: 5,
+goalieShutout: 8,
 
-  goalieSavePercentageTiers: [
-    { minSavePercentage: 0.945, points: 28 },
-    { minSavePercentage: 0.935, points: 24 },
-    { minSavePercentage: 0.925, points: 21 },
-    { minSavePercentage: 0.915, points: 18 },
-    { minSavePercentage: 0.9, points: 14 },
-    { minSavePercentage: 0.88, points: 9 },
-    { minSavePercentage: 0.85, points: 5 },
-    { minSavePercentage: 0, points: 0 }
-  ]
+goalieSavePercentageTiers: [
+  { minSavePercentage: 0.945, points: 24 },
+  { minSavePercentage: 0.935, points: 21 },
+  { minSavePercentage: 0.925, points: 18 },
+  { minSavePercentage: 0.915, points: 15 },
+  { minSavePercentage: 0.9, points: 11 },
+  { minSavePercentage: 0.88, points: 7 },
+  { minSavePercentage: 0.85, points: 3 },
+  { minSavePercentage: 0, points: 0 }
+]
 };

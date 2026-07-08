@@ -118,15 +118,17 @@
   </select>
 
   <select
-    [ngModel]="sortMode()"
-    (ngModelChange)="setSortMode($event)"
-  >
-    <option value="PROJECTED_CYCLE">Sort: Projected Cycle</option>
-    <option value="PROJECTED_SEASON">Sort: Projected Season</option>
-    <option value="NAME">Sort: Name</option>
-    <option value="POSITION">Sort: Position</option>
-    <option value="TEAM">Sort: NHL Team</option>
-  </select>
+  [ngModel]="sortMode()"
+  (ngModelChange)="setSortMode($event)"
+>
+<option value="DRAFT_VALUE">Sort: Value Rank</option>
+<option value="RATING">Sort: Rating</option>
+<option value="PROJECTED_CYCLE">Sort: Projected Cycle</option>
+<option value="PROJECTED_SEASON">Sort: Expected Season</option>
+<option value="NAME">Sort: Name</option>
+<option value="POSITION">Sort: Position</option>
+<option value="TEAM">Sort: NHL Team</option>
+</select>
 </div>
 
           @if (playerPoolLoading()) {
@@ -171,17 +173,26 @@
     {{ getAssetTeamLabel(asset) }}
   </span>
 
-  <div class="asset-projection-strip">
-    <small>
-      Season:
-      {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
-    </small>
+<div class="asset-projection-strip">
+  <small class="rank-pill">
+    Rank {{ getAssetValueRankDisplay(asset) }}
+  </small>
 
-    <small>
-      Cycle:
-      {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
-    </small>
-  </div>
+  <small>
+    Rating:
+    {{ getAssetRatingDisplay(asset) }}
+  </small>
+
+  <small>
+    Cycle:
+    {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
+  </small>
+
+  <small>
+    Season:
+    {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
+  </small>
+</div>
 </div>
 
                   <button
@@ -270,16 +281,25 @@
     </div>
 
     <div class="drafted-player-projections">
-      <small>
-        Season:
-        {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
-      </small>
+  <small class="rank-pill">
+    Rank {{ getAssetValueRankDisplay(pick.asset) }}
+  </small>
 
-      <small>
-        Cycle:
-        {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
-      </small>
-    </div>
+  <small>
+    Rating:
+    {{ getAssetRatingDisplay(pick.asset) }}
+  </small>
+
+  <small>
+    Cycle:
+    {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
+  </small>
+
+  <small>
+    Season:
+    {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
+  </small>
+</div>
   </div>
 </article>
         }

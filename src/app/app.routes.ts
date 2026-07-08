@@ -12,6 +12,10 @@ import { PlayerDetail } from './features/players/player-detail/player-detail';
 import { DraftSetup } from './features/draft/draft-setup/draft-setup';
 import { DraftRoom } from './features/draft/draft-room/draft-room';
 import { MainLayout } from './layouts/main-layout/main-layout';
+import { CycleOne } from './features/cycles/cycle-one/cycle-one';
+import { ProjectionLab } from './features/projections/projection-lab/projection-lab';
+import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-asset-detail';
+import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
 
 export const routes: Routes = [
   {
@@ -57,6 +61,22 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/draft',
         component: DraftRoom
+      },
+      {
+        path: 'leagues/:leagueId/projections',
+        component: ProjectionLab
+      },
+      {
+        path: 'leagues/:leagueId/cycles/schedule-preview',
+        component: CycleSchedulePreview
+      },
+      {
+        path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',
+        component: CycleAssetDetail
+      },
+      {
+        path: 'leagues/:leagueId/cycles/:cycleNumber',
+        component: CycleOne
       },
       {
         path: 'leagues/:leagueId',

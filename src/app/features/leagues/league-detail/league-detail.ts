@@ -11,6 +11,17 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../../../core/firebase';
 
 import {
+  FantasyCycle,
+  FantasyMatchup
+} from '../../../core/cycle/cycle.models';
+
+import {
+  listenToCycleOne,
+  listenToCycleOneMatchups,
+  startCycleOne
+} from '../../../core/cycle/cycle.service';
+
+import {
   FantasyDraft
 } from '../../../core/draft/draft.models';
 
@@ -52,6 +63,8 @@ export class LeagueDetail implements OnDestroy {
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
   draft = signal<FantasyDraft | null>(null);
+  cycle = signal<FantasyCycle | null>(null);
+  matchups = signal<FantasyMatchup[]>([]);
 
   loading = signal(true);
   isCommissioner = signal(false);
@@ -59,9 +72,15 @@ export class LeagueDetail implements OnDestroy {
   errorMessage = signal('');
   showDraftStartedModal = signal(false);
 
+  cycleActionMessage = signal('');
+  cycleActionInProgress = signal(false);
+
   readonly now = signal(Date.now());
 
   private stopDraftListener: (() => void) | null = null;
+  private stopCycleListener: (() => void) | null = null;
+  private stopMatchupsListener: (() => void) | null = null;
+
   private activationInProgress = false;
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
@@ -191,6 +210,8 @@ export class LeagueDetail implements OnDestroy {
     }
 
     this.stopDraftListener?.();
+    this.stopCycleListener?.();
+    this.stopMatchupsListener?.();
   }
 
   async loadLeague(): Promise<void> {
@@ -222,12 +243,28 @@ export class LeagueDetail implements OnDestroy {
       );
 
       this.stopDraftListener?.();
+      this.stopCycleListener?.();
+      this.stopMatchupsListener?.();
 
       this.stopDraftListener = listenToFantasyDraft(
         leagueId,
         (draft) => {
           this.draft.set(draft);
           void this.handleScheduledDraft();
+        }
+      );
+
+      this.stopCycleListener = listenToCycleOne(
+        leagueId,
+        (cycle) => {
+          this.cycle.set(cycle);
+        }
+      );
+
+      this.stopMatchupsListener = listenToCycleOneMatchups(
+        leagueId,
+        (matchups) => {
+          this.matchups.set(matchups);
         }
       );
     } catch (error: unknown) {
@@ -287,6 +324,55 @@ export class LeagueDetail implements OnDestroy {
     setTimeout(() => {
       this.copyMessage.set('');
     }, 2000);
+  }
+
+  getTeamName(ownerId: string | null): string {
+    if (!ownerId) {
+      return 'Bye';
+    }
+
+    return this.teams().find(
+      (team) => team.ownerId === ownerId
+    )?.teamName ?? 'Unknown Team';
+  }
+
+  canStartCycleOne(): boolean {
+    return (
+      this.isCommissioner() &&
+      this.draft()?.status === 'complete' &&
+      this.cycle() === null &&
+      this.teams().length >= 2
+    );
+  }
+
+  async startFirstCycle(): Promise<void> {
+    this.errorMessage.set('');
+    this.cycleActionMessage.set('');
+
+    if (!this.canStartCycleOne()) {
+      return;
+    }
+
+    this.cycleActionInProgress.set(true);
+
+    try {
+      await startCycleOne(
+        this.leagueId,
+        this.teams()
+      );
+
+      this.cycleActionMessage.set(
+        'Cycle 1 has been started.'
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to start Cycle 1.'
+      );
+    } finally {
+      this.cycleActionInProgress.set(false);
+    }
   }
 
   private async handleScheduledDraft(): Promise<void> {

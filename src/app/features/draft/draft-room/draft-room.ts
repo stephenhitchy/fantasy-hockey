@@ -58,6 +58,8 @@ function waitForAuthUser(): Promise<User | null> {
 type DraftFilter = 'ALL' | DraftPosition;
 
 type PlayerPoolSort =
+  | 'DRAFT_VALUE'
+  | 'RATING'
   | 'PROJECTED_CYCLE'
   | 'PROJECTED_SEASON'
   | 'NAME'
@@ -90,7 +92,7 @@ export class DraftRoom implements OnDestroy {
 
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
-  sortMode = signal<PlayerPoolSort>('PROJECTED_CYCLE');
+  sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
   now = signal(Date.now());
 
   readonly rosterPositions: DraftPosition[] = [
@@ -101,17 +103,98 @@ export class DraftRoom implements OnDestroy {
     'G'
   ];
   setSortMode(value: string): void {
-  const validSorts: PlayerPoolSort[] = [
+    const validSorts: PlayerPoolSort[] = [
+    'DRAFT_VALUE',
+    'RATING',
     'PROJECTED_CYCLE',
     'PROJECTED_SEASON',
     'NAME',
     'POSITION',
     'TEAM'
-  ];
+    ];
 
   if (validSorts.includes(value as PlayerPoolSort)) {
     this.sortMode.set(value as PlayerPoolSort);
   }
+}
+
+private compareDraftValueThenProjection(
+  first: DraftableAsset,
+  second: DraftableAsset
+): number {
+  const firstValue = this.getAssetDraftValue(first);
+  const secondValue = this.getAssetDraftValue(second);
+
+  const firstHasValue = typeof firstValue === 'number';
+  const secondHasValue = typeof secondValue === 'number';
+
+  if (firstHasValue && secondHasValue) {
+    const valueComparison = secondValue - firstValue;
+
+    if (valueComparison !== 0) {
+      return valueComparison;
+    }
+  }
+
+  if (firstHasValue && !secondHasValue) {
+    return -1;
+  }
+
+  if (!firstHasValue && secondHasValue) {
+    return 1;
+  }
+
+  const firstProjectedCycle =
+    this.getAssetProjectedCycle(first) ?? -1;
+
+  const secondProjectedCycle =
+    this.getAssetProjectedCycle(second) ?? -1;
+
+  if (secondProjectedCycle !== firstProjectedCycle) {
+    return secondProjectedCycle - firstProjectedCycle;
+  }
+
+  return this.getAssetName(first).localeCompare(
+    this.getAssetName(second)
+  );
+}
+
+getAssetValueRank(asset: DraftableAsset): number | null {
+  return this.assetValueRankByKey()[asset.assetKey] ?? null;
+}
+
+getAssetValueRankDisplay(asset: DraftableAsset): string {
+  const rank = this.getAssetValueRank(asset);
+
+  return typeof rank === 'number'
+    ? `#${rank}`
+    : '—';
+}
+
+getAssetRating(asset: DraftableAsset): number | null {
+  const projectedCycle =
+    this.getAssetProjectedCycle(asset);
+
+  if (typeof projectedCycle !== 'number') {
+    return null;
+  }
+
+  const denominator =
+    asset.position === 'G'
+      ? this.topGoalieCycleProjection()
+      : this.topSkaterCycleProjection();
+
+  return Math.round(
+    projectedCycle / denominator * 100
+  );
+}
+
+getAssetRatingDisplay(asset: DraftableAsset): string {
+  const rating = this.getAssetRating(asset);
+
+  return typeof rating === 'number'
+    ? rating.toString()
+    : '—';
 }
 
 getMyPicksByPosition(
@@ -152,22 +235,81 @@ getProjectionDisplay(
 getAssetProjectedSeason(
   asset: DraftableAsset
 ): number | null {
-  return asset.projectedSeasonPoints ?? null;
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.projectedSeasonPoints ??
+    poolAsset?.projectedSeasonPoints ??
+    null
+  );
 }
 
 getAssetProjectedCycle(
   asset: DraftableAsset
 ): number | null {
-  return asset.projectedCyclePoints ?? null;
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.projectedCyclePoints ??
+    poolAsset?.projectedCyclePoints ??
+    null
+  );
+}
+
+getAssetDraftValue(
+  asset: DraftableAsset
+): number | null {
+  const projectedCycle =
+    this.getAssetProjectedCycle(asset);
+
+  const replacementCycle =
+    this.replacementCycleValueByPosition()[asset.position];
+
+  if (
+    typeof projectedCycle !== 'number' ||
+    typeof replacementCycle !== 'number'
+  ) {
+    return null;
+  }
+
+  return Number(
+    (projectedCycle - replacementCycle).toFixed(1)
+  );
 }
 
 private compareDraftAssets(
   first: DraftableAsset,
   second: DraftableAsset
 ): number {
-  const sortMode = this.sortMode();
+const sortMode = this.sortMode();
 
-  if (sortMode === 'PROJECTED_CYCLE') {
+if (sortMode === 'DRAFT_VALUE') {
+  return this.compareDraftValueThenProjection(
+    first,
+    second
+  );
+}
+
+if (sortMode === 'RATING') {
+  const firstRating = this.getAssetRating(first) ?? -1;
+  const secondRating = this.getAssetRating(second) ?? -1;
+
+  if (secondRating !== firstRating) {
+    return secondRating - firstRating;
+  }
+
+  return this.getAssetName(first).localeCompare(
+    this.getAssetName(second)
+  );
+}
+
+if (sortMode === 'PROJECTED_CYCLE') {
     return this.compareProjectionThenName(
       first,
       second,
@@ -313,6 +455,93 @@ private getPositionSortValue(
       (asset) => !draftedAssetKeys.has(asset.assetKey)
     ).length;
   });
+
+  readonly replacementCycleValueByPosition = computed(() => {
+  const draft = this.draft();
+
+  const replacementValues: Record<DraftPosition, number | null> = {
+    LW: null,
+    C: null,
+    RW: null,
+    D: null,
+    G: null
+  };
+
+  if (!draft) {
+    return replacementValues;
+  }
+
+  const teamCount = Math.max(
+    this.teams().length,
+    draft.roundOneOrder.length,
+    1
+  );
+
+  for (const position of this.rosterPositions) {
+    const requiredSlotsAtPosition =
+      draft.rosterRequirements[position] ?? 0;
+
+    const replacementRank = Math.max(
+      1,
+      teamCount * requiredSlotsAtPosition
+    );
+
+    const projectedCycles = this.playerPool()
+      .filter((asset) => asset.position === position)
+      .map((asset) => asset.projectedCyclePoints)
+      .filter(
+        (value): value is number =>
+          typeof value === 'number'
+      )
+      .sort((first, second) => second - first);
+
+    replacementValues[position] =
+      projectedCycles[
+        Math.min(
+          replacementRank - 1,
+          projectedCycles.length - 1
+        )
+      ] ?? null;
+  }
+
+  return replacementValues;
+});
+
+readonly topSkaterCycleProjection = computed(() => {
+  const topProjection = Math.max(
+    1,
+    ...this.playerPool()
+      .filter((asset) => asset.position !== 'G')
+      .map((asset) => asset.projectedCyclePoints ?? 0)
+  );
+
+  return topProjection;
+});
+
+readonly topGoalieCycleProjection = computed(() => {
+  const topProjection = Math.max(
+    1,
+    ...this.playerPool()
+      .filter((asset) => asset.position === 'G')
+      .map((asset) => asset.projectedCyclePoints ?? 0)
+  );
+
+  return topProjection;
+});
+
+readonly assetValueRankByKey = computed(() => {
+  const ranks: Record<string, number> = {};
+
+  [...this.playerPool()]
+    .sort((first, second) =>
+      this.compareDraftValueThenProjection(first, second)
+    )
+    .forEach((asset, index) => {
+      ranks[asset.assetKey] = index + 1;
+    });
+
+  return ranks;
+});
 
 readonly availableAssets = computed(() => {
   const draftedAssetKeys = new Set(

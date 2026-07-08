@@ -1,0 +1,983 @@
+@if (loading()) {
+  <p class="page-loading">Loading {{ getCycleLabel() }}...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="cycle-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="cycle-header">
+      <div>
+        <span class="eyebrow">Fantasy Season</span>
+        <h1>{{ getCycleLabel() }} Matchups</h1>
+        <p>{{ league()?.name }}</p>
+      </div>
+
+      <div class="cycle-header-actions">
+        <a
+          class="schedule-preview-header-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+        >
+          Schedule Preview
+        </a>
+
+        <span
+          class="cycle-status-badge"
+          [class.status-live]="cycle()?.status === 'active'"
+          [class.status-complete]="cycle()?.status === 'complete'"
+        >
+          {{
+            cycle()?.status === 'complete'
+              ? 'Complete'
+              : cycle()?.status === 'active'
+                ? 'Active'
+                : 'Not Started'
+          }}
+        </span>
+      </div>
+    </header>
+
+<section class="projection-window-card">
+  <div>
+    <strong>Schedule-Adjusted Projection</strong>
+    <span>{{ getProjectionWindowLabel() }}</span>
+  </div>
+
+  <small
+    [class.schedule-warning]="scheduleProjectionError() || !scheduleHasGamesInWindow()"
+  >
+    {{ getScheduleProjectionStatusText() }}
+  </small>
+
+  <small
+    [class.schedule-warning]="scoringError()"
+  >
+    {{ getCurrentScoringStatusText() }}
+  </small>
+
+  <small
+    [class.schedule-warning]="
+      cycle()?.status !== 'complete' &&
+      cycleScoring() &&
+      !areAllMatchupsReadyToComplete()
+    "
+    [class.cycle-ready-message]="
+      cycle()?.status !== 'complete' &&
+      areAllMatchupsReadyToComplete()
+    "
+  >
+    {{ getCycleCompletionReadinessText() }}
+  </small>
+
+  @if (autoFlowMessage()) {
+    <small class="cycle-complete-success">
+      {{ autoFlowMessage() }}
+    </small>
+  }
+
+  @if (autoFlowError()) {
+    <small class="schedule-warning">
+      {{ autoFlowError() }}
+    </small>
+  }
+
+  <div class="score-sync-actions">
+    <button
+      type="button"
+      class="score-sync-button"
+      (click)="syncCurrentScoresToFirestore()"
+      [disabled]="
+        syncingScores() ||
+        scoringLoading() ||
+        !cycleScoring() ||
+        cycle()?.status === 'complete'
+      "
+    >
+      {{
+        syncingScores()
+          ? 'Syncing Scores...'
+          : 'Sync Current Scores'
+      }}
+    </button>
+
+    @if (syncScoreMessage()) {
+      <small class="score-sync-success">
+        {{ syncScoreMessage() }}
+      </small>
+    }
+
+    @if (syncScoreError()) {
+      <small class="schedule-warning">
+        {{ syncScoreError() }}
+      </small>
+    }
+  </div>
+
+  <div class="cycle-complete-actions">
+  <button
+    type="button"
+    class="complete-cycle-button"
+    (click)="completeCurrentCycleFromCurrentScores()"
+    [disabled]="
+      completingCycle() ||
+      scoringLoading() ||
+      !cycleScoring() ||
+      !areAllMatchupsReadyToComplete() ||
+      cycle()?.status === 'complete'
+    "
+  >
+    {{
+      completingCycle()
+        ? 'Completing Cycle...'
+        : cycle()?.status === 'complete'
+          ? 'Cycle Complete'
+          : 'Complete ' + getCycleLabel()
+    }}
+  </button>
+
+  @if (completeCycleMessage()) {
+    <small class="cycle-complete-success">
+      {{ completeCycleMessage() }}
+    </small>
+  }
+
+  @if (completeCycleError()) {
+    <small class="schedule-warning">
+      {{ completeCycleError() }}
+    </small>
+  }
+</div>
+
+  @if (cycle()?.status === 'complete') {
+    <div class="next-cycle-actions">
+      <button
+        type="button"
+        class="start-next-cycle-button"
+        (click)="startNextCycleFromCurrentCycle()"
+        [disabled]="startingNextCycle()"
+      >
+        {{
+          startingNextCycle()
+            ? 'Starting Next Cycle...'
+            : 'Start ' + getNextCycleLabel()
+        }}
+      </button>
+
+      @if (startNextCycleMessage()) {
+        <small class="cycle-complete-success">
+          {{ startNextCycleMessage() }}
+        </small>
+      }
+
+      @if (startNextCycleError()) {
+        <small class="schedule-warning">
+          {{ startNextCycleError() }}
+        </small>
+      }
+    </div>
+  }
+</section>
+
+    @if (!cycle()) {
+      <section class="empty-cycle-card">
+        <h2>{{ getCycleLabel() }} has not started yet.</h2>
+        <p>
+          Once the commissioner starts {{ getCycleLabel() }}, every matchup will appear here.
+        </p>
+      </section>
+    } @else {
+      @if (myMatchup(); as matchup) {
+        <section class="my-matchup-card">
+          <span class="eyebrow">Your Matchup</span>
+
+          <div class="matchup-scoreboard">
+            <article
+  [class.scoreboard-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+  [class.scoreboard-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+>
+              <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+
+              @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
+                <span
+                  class="scoreboard-result-badge"
+                  [class.scoreboard-result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+                  [class.scoreboard-result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+                >
+                  {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
+                </span>
+              }
+
+              <div class="score-pair">
+                <div>
+                  <span>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</span>
+                  <small>Current</small>
+                </div>
+
+                <div>
+                  <span>
+                    {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}
+                  </span>
+                  <small>Projected</small>
+                </div>
+              </div>
+            </article>
+
+            <div class="scoreboard-vs">vs</div>
+
+            <article
+  [class.scoreboard-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+  [class.scoreboard-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+>
+              <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+
+              @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
+                <span
+                  class="scoreboard-result-badge"
+                  [class.scoreboard-result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+                  [class.scoreboard-result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+                >
+                  {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
+                </span>
+              }
+
+              <div class="score-pair">
+                <div>
+                  <span>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</span>
+                  <small>Current</small>
+                </div>
+
+                <div>
+                  <span>
+                    {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}
+                  </span>
+                  <small>Projected</small>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <p class="projection-note">
+            {{ getProjectedWinnerLabel(matchup) }}
+          </p>
+
+          <p
+            class="projection-note matchup-readiness-line"
+            [class.readiness-line-ready]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+            [class.readiness-line-waiting]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+          >
+            {{ getMatchupReadinessLabel(matchup) }}
+          </p>
+        </section>
+      }
+
+      <section class="matchups-section">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">League Matchups</span>
+            <h2>All {{ getCycleLabel() }} Matchups</h2>
+          </div>
+
+          <div class="matchup-view-selector">
+            <button
+              type="button"
+              [class.active-view]="matchupView() === 'teamA'"
+              (click)="setMatchupView('teamA')"
+            >
+              Team A
+            </button>
+
+            <button
+              type="button"
+              [class.active-view]="matchupView() === 'both'"
+              (click)="setMatchupView('both')"
+            >
+              Both
+            </button>
+
+            <button
+              type="button"
+              [class.active-view]="matchupView() === 'teamB'"
+              (click)="setMatchupView('teamB')"
+            >
+              Team B
+            </button>
+          </div>
+        </div>
+
+        <div class="matchup-grid">
+          @for (matchup of matchups(); track matchup.id) {
+            <article
+              class="matchup-detail-card"
+              [class.my-matchup-outline]="isMyMatchup(matchup)"
+              [class.matchup-ready-outline]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+              [class.matchup-waiting-outline]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+            >
+              <div class="matchup-card-heading">
+                <strong>
+                  {{ matchup.id }}
+                </strong>
+                
+
+                @if (isMyMatchup(matchup)) {
+                  <span>Your Matchup</span>
+                }
+
+                <span
+                  class="matchup-readiness-badge"
+                  [class.readiness-complete]="isMatchupComplete(matchup)"
+                  [class.readiness-ready]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+                  [class.readiness-waiting]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
+                >
+                  {{ getMatchupReadinessLabel(matchup) }}
+                </span>
+              </div>
+
+              <div [class]="getTeamsComparisonClass()">
+                @if (shouldShowTeamA()) {
+                <section
+  class="team-matchup-panel"
+  [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+  [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+>
+                  <div class="team-summary-row">
+                    <div>
+                      <h3>
+  {{ getTeamName(matchup.teamAOwnerId) }}
+
+  @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
+    <span
+      class="result-badge"
+      [class.result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+      [class.result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+    >
+      {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
+    </span>
+  }
+</h3>
+                      <p>{{ getTeamRecord(matchup.teamAOwnerId) }}</p>
+                    </div>
+
+                    <div class="team-score-pair">
+                      <div>
+                        <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
+                        <span>Current</span>
+                      </div>
+
+                      <div>
+                        <strong>
+                          {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}
+                        </strong>
+                        <span>Projected</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="fantasy-roster-board">
+                    <div class="forward-row">
+                      @for (position of forwardPositions; track position) {
+                        <section class="fantasy-position-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+                    </div>
+
+                    <div class="defense-goalie-row">
+                      @for (position of defensePositions; track position) {
+                        <section class="fantasy-position-group defense-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots defense-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+
+                      @for (position of goaliePositions; track position) {
+                        <section class="fantasy-position-group goalie-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card goalie-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+                    </div>
+                  </div>
+                </section>
+                }
+
+                @if (shouldShowMatchupDivider()) {
+                  <div class="comparison-vs">vs</div>
+                }
+
+                @if (shouldShowTeamB()) {
+                <section
+  class="team-matchup-panel"
+  [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+  [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+>
+                  <div class="team-summary-row">
+                    <div>
+                      <h3>
+  {{ getTeamName(matchup.teamBOwnerId) }}
+
+  @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
+    <span
+      class="result-badge"
+      [class.result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+      [class.result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+    >
+      {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
+    </span>
+  }
+</h3>
+                      <p>{{ getTeamRecord(matchup.teamBOwnerId) }}</p>
+                    </div>
+
+                    <div class="team-score-pair">
+                      <div>
+                        <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
+                        <span>Current</span>
+                      </div>
+
+                      <div>
+                        <strong>
+                          {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}
+                        </strong>
+                        <span>Projected</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="fantasy-roster-board">
+                    <div class="forward-row">
+                      @for (position of forwardPositions; track position) {
+                        <section class="fantasy-position-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+                    </div>
+
+                    <div class="defense-goalie-row">
+                      @for (position of defensePositions; track position) {
+                        <section class="fantasy-position-group defense-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots defense-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+
+                      @for (position of goaliePositions; track position) {
+                        <section class="fantasy-position-group goalie-group">
+                          <div class="fantasy-position-header">
+                            {{ getPositionLabel(position) }}
+                          </div>
+
+                          <div class="fantasy-position-slots">
+                            @for (
+                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                              track pick.overallPick
+                            ) {
+                              <article
+  class="fantasy-player-card goalie-card"
+  role="link"
+  tabindex="0"
+  (click)="openAssetDetail(pick.asset)"
+  (keydown.enter)="openAssetDetail(pick.asset)"
+>
+                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                  />
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                  <span>
+                                    {{ getAssetTeamLabel(pick.asset) }}
+                                    · {{ pick.asset.position }}
+                                  </span>
+
+                                  <em>
+                                    Games:
+                                    {{ getAssetGamesPlayed(pick.asset) }}
+                                    played /
+                                    {{ getAssetGamesLeft(pick.asset) }}
+                                    left
+                                  </em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
+                                    </strong>
+                                    <span>Cur</span>
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
+                                    </strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              </article>
+                            }
+                          </div>
+
+                          <footer class="position-total-row">
+                            <span>{{ position }} Total</span>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Cur</small>
+                            </div>
+
+                            <div>
+                              <strong>
+                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
+                              </strong>
+                              <small>Proj</small>
+                            </div>
+
+                            <em>
+                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                              /
+                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                              GP/Left
+                            </em>
+                          </footer>
+                        </section>
+                      }
+                    </div>
+                  </div>
+                </section>
+                }
+              </div>
+
+              <p class="matchup-projection-note">
+                {{ getProjectedWinnerLabel(matchup) }}
+              </p>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  </section>
+}

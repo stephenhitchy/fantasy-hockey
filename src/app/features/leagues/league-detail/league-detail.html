@@ -105,6 +105,95 @@
       }
     </section>
 
+    
+
+    <section class="cycle-status-card">
+  <div class="cycle-status-heading">
+    <div>
+      <span class="draft-section-eyebrow">Fantasy Season</span>
+      <h2>Cycle 1</h2>
+    </div>
+
+    @if (cycle()) {
+      <span class="cycle-status-badge status-live">
+        Active
+      </span>
+    } @else if (draft()?.status === 'complete') {
+      <span class="cycle-status-badge status-ready">
+        Ready
+      </span>
+    } @else {
+      <span class="cycle-status-badge">
+        Locked
+      </span>
+    }
+  </div>
+
+  @if (cycle()) {
+    <p class="draft-status-description">
+      Cycle 1 is active. Matchups are ready for scoring.
+    </p>
+
+    <a
+  class="view-cycle-link"
+  [routerLink]="['/leagues', leagueId, 'cycles', 1]"
+>
+  View Full Matchups
+</a>
+
+    <div class="matchup-list">
+      @for (matchup of matchups(); track matchup.id) {
+        <article class="matchup-card">
+          <div class="matchup-team-row">
+            <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+            <span>{{ matchup.teamAScore.toFixed(1) }}</span>
+          </div>
+
+          <div class="matchup-vs">vs</div>
+
+          <div class="matchup-team-row">
+            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+            <span>{{ matchup.teamBScore.toFixed(1) }}</span>
+          </div>
+        </article>
+      }
+    </div>
+  } @else if (draft()?.status === 'complete') {
+    <p class="draft-status-description">
+      The draft is complete. The commissioner can now start the first fantasy cycle.
+    </p>
+
+    @if (isCommissioner()) {
+      <button
+        type="button"
+        class="start-cycle-button"
+        (click)="startFirstCycle()"
+        [disabled]="!canStartCycleOne() || cycleActionInProgress()"
+      >
+        {{
+          cycleActionInProgress()
+            ? 'Starting Cycle...'
+            : 'Start Cycle 1'
+        }}
+      </button>
+    } @else {
+      <p class="cycle-waiting-copy">
+        Waiting for the commissioner to start Cycle 1.
+      </p>
+    }
+  } @else {
+    <p class="draft-status-description">
+      Finish the draft before starting the fantasy season.
+    </p>
+  }
+
+  @if (cycleActionMessage()) {
+    <p class="cycle-action-message">
+      {{ cycleActionMessage() }}
+    </p>
+  }
+</section>
+
     <section class="invite-card">
       <div>
         <h2>Invite Code</h2>

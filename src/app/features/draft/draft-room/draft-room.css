@@ -480,6 +480,12 @@
   font-weight: 800;
 }
 
+.asset-projection-strip .rank-pill,
+.drafted-player-projections .rank-pill {
+  color: #203956;
+  font-weight: 900;
+}
+
 .roster-card {
   max-height: 720px;
   overflow-y: auto;
