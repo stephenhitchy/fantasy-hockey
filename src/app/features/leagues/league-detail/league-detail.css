@@ -1,7 +1,24 @@
-.league-page {
+:host {
+  display: block;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(72, 121, 171, 0.25), transparent 34rem),
+    linear-gradient(135deg, #07111f 0%, #0d1728 50%, #101a2b 100%);
+  color: #edf4ff;
+}
+
+.page-loading {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 28px 20px 48px;
+  padding: 36px 20px;
+  color: #b5c5d9;
+  font-weight: 800;
+}
+
+.league-page {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 28px 20px 52px;
 }
 
 .league-header {
@@ -12,79 +29,107 @@
   margin-bottom: 24px;
 }
 
-.eyebrow {
+.eyebrow,
+.draft-section-eyebrow {
   display: block;
   margin-bottom: 6px;
-  color: #66798e;
+  color: #9db1ca;
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 900;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .league-header h1 {
   margin: 0;
-  color: #17263d;
-  font-size: 30px;
+  color: #f8fbff;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1;
 }
 
 .league-header p {
-  margin: 7px 0 0;
-  color: #63758a;
+  margin: 10px 0 0;
+  color: #b5c5d9;
 }
 
-.league-actions {
+.league-actions,
+.cycle-link-row {
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
 }
 
 .primary-action,
-.secondary-action {
+.secondary-action,
+.view-cycle-link,
+.standings-link {
   padding: 10px 13px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.primary-action {
-  background: #17263d;
-  color: white;
+.primary-action,
+.view-cycle-link {
+  border: 1px solid #7fb2ee;
+  background: #dbeafe;
+  color: #081326;
 }
 
-.primary-action:hover {
-  background: #294563;
+.primary-action:hover,
+.view-cycle-link:hover {
+  transform: translateY(-1px);
+  background: #ffffff;
 }
 
-.secondary-action {
-  border: 1px solid #bdcad8;
-  background: white;
-  color: #294563;
+.secondary-action,
+.secondary-cycle-link,
+.standings-link {
+  border: 1px solid #33455d;
+  background: rgba(15, 28, 47, 0.88);
+  color: #dceafe;
 }
 
-.secondary-action:hover {
-  border-color: #728ca7;
-  background: #f5f8fb;
+.secondary-action:hover,
+.secondary-cycle-link:hover,
+.standings-link:hover {
+  transform: translateY(-1px);
+  border-color: #6f8fb5;
+  background: rgba(25, 42, 66, 0.95);
+}
+
+.error-card,
+.league-info-card,
+.draft-status-card,
+.quick-actions-card,
+.cycle-status-card,
+.invite-card,
+.team-card,
+.matchup-card {
+  border: 1px solid #2c3e56;
+  background: rgba(12, 22, 38, 0.88);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+}
+
+.error-card {
+  margin-bottom: 18px;
+  padding: 16px;
+  border-color: #9d4d5d;
+  border-radius: 14px;
+  color: #ffb4c2;
 }
 
 .league-info-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-.league-info-card,
-.invite-card,
-.team-card {
-  border: 1px solid #d9e2eb;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
-}
-
 .league-info-card {
-  padding: 16px;
+  padding: 17px;
+  border-radius: 15px;
 }
 
 .league-info-card span,
@@ -93,83 +138,87 @@
 }
 
 .league-info-card span {
-  color: #6d7f93;
-  font-size: 12px;
-  font-weight: 700;
+  color: #9db1ca;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .league-info-card strong {
-  margin-top: 7px;
-  color: #1d3048;
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 18px;
 }
 
-.draft-status-card {
+.draft-status-card,
+.quick-actions-card,
+.cycle-status-card,
+.invite-card {
   margin-top: 18px;
-  padding: 20px;
-  border: 1px solid #d9e2eb;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
+  padding: 22px;
+  border-radius: 16px;
 }
 
-.draft-status-heading {
+.draft-status-heading,
+.cycle-status-heading,
+.section-heading,
+.team-card-heading,
+.matchup-card header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.draft-section-eyebrow {
-  display: block;
-  margin-bottom: 5px;
-  color: #6a7d92;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.draft-status-heading h2 {
+.draft-status-heading h2,
+.quick-actions-card h2,
+.cycle-status-heading h2,
+.invite-card h2,
+.teams-section h2 {
   margin: 0;
-  color: #1b2d45;
-  font-size: 20px;
+  color: #f8fbff;
+  font-size: 21px;
 }
 
-.draft-status-badge {
+.draft-status-badge,
+.cycle-status-badge,
+.matchup-card header span {
   padding: 7px 10px;
   border-radius: 999px;
-  background: #edf1f5;
-  color: #5f7082;
+  background: #233247;
+  color: #c4d3e6;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   white-space: nowrap;
 }
 
 .status-scheduled {
-  background: #e8f2ff;
-  color: #295987;
+  background: #183556;
+  color: #a9d3ff;
 }
 
 .status-ready {
-  background: #fff3d7;
-  color: #80580e;
+  background: #493b18;
+  color: #ffe0a3;
 }
 
 .status-live {
-  background: #e4f8e9;
-  color: #20663a;
+  background: #103c2a;
+  color: #9ff0bd;
 }
 
 .status-complete {
-  background: #eeeeff;
-  color: #4c4f8a;
+  background: #243958;
+  color: #a9d3ff;
 }
 
-.draft-status-description {
+.draft-status-description,
+.quick-actions-card p {
   margin: 12px 0 0;
-  color: #63758a;
+  color: #b5c5d9;
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .draft-time-display {
@@ -178,18 +227,18 @@
   gap: 5px;
   margin-top: 15px;
   padding: 13px 14px;
-  border: 1px solid #dce5ee;
-  border-radius: 9px;
-  background: #f7fafc;
+  border: 1px solid #2f435e;
+  border-radius: 12px;
+  background: rgba(19, 32, 52, 0.84);
 }
 
 .draft-time-display strong {
-  color: #1d3048;
+  color: #ffffff;
   font-size: 15px;
 }
 
 .draft-time-display span {
-  color: #66798d;
+  color: #b5c5d9;
   font-size: 13px;
 }
 
@@ -197,52 +246,161 @@
   border-style: dashed;
 }
 
+.quick-actions-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.8fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hub-action {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 84px;
+  padding: 15px;
+  border: 1px solid #31445e;
+  border-radius: 14px;
+  background: rgba(16, 30, 50, 0.9);
+  color: #eaf2ff;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.hub-action:hover {
+  transform: translateY(-2px);
+  border-color: #78a6d8;
+  background: rgba(25, 44, 70, 0.98);
+}
+
+.hub-action strong {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.hub-action span {
+  color: #9fb3ca;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.start-cycle-button,
+.invite-card button {
+  margin-top: 15px;
+  padding: 10px 13px;
+  border: 1px solid #7fb2ee;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #081326;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.start-cycle-button:hover:not(:disabled),
+.invite-card button:hover {
+  background: #ffffff;
+}
+
+.start-cycle-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cycle-waiting-copy,
+.cycle-action-message {
+  margin: 12px 0 0;
+  color: #b5c5d9;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cycle-action-message {
+  color: #98f5bd;
+}
+
+.matchup-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.matchup-card {
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.matchup-complete-card {
+  border-color: #345d4e;
+}
+
+.matchup-card header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.matchup-card header strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.matchup-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.matchup-team-row strong {
+  color: #eaf2ff;
+  font-size: 14px;
+}
+
+.matchup-team-row span {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.matchup-vs {
+  margin: 8px 0;
+  color: #8fa5bd;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .invite-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-top: 18px;
-  padding: 20px;
-}
-
-.invite-card h2,
-.teams-section h2 {
-  margin: 0;
-  color: #1b2d45;
-  font-size: 20px;
 }
 
 .invite-code {
   display: block;
   margin-top: 8px;
-  color: #294563;
-  font-size: 22px;
-  letter-spacing: 0.08em;
-}
-
-.invite-card button {
-  padding: 10px 13px;
-  border: 0;
-  border-radius: 8px;
-  background: #17263d;
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.invite-card button:hover {
-  background: #294563;
+  color: #bfdbfe;
+  font-size: 24px;
+  letter-spacing: 0.09em;
 }
 
 .copy-message {
   display: block;
   margin-top: 8px;
-  color: #26713a;
+  color: #98f5bd;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   text-align: right;
 }
 
@@ -250,27 +408,75 @@
   margin-top: 26px;
 }
 
+.section-heading {
+  align-items: center;
+  margin-bottom: 13px;
+}
+
 .teams-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 12px;
-  margin-top: 12px;
 }
 
 .team-card {
   padding: 16px;
+  border-radius: 15px;
 }
 
 .team-card h3 {
   margin: 0;
-  color: #1d3048;
-  font-size: 16px;
+  color: #ffffff;
+  font-size: 17px;
 }
 
-.team-card p {
-  margin: 8px 0 0;
-  color: #697b90;
+.team-card-heading span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #233247;
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.team-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.team-stat-grid div {
+  padding: 10px;
+  border-radius: 11px;
+  background: rgba(22, 36, 58, 0.8);
+}
+
+.team-stat-grid span,
+.team-stat-grid strong {
+  display: block;
+}
+
+.team-stat-grid span {
+  color: #9db1ca;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-stat-grid strong {
+  margin-top: 5px;
+  color: #ffffff;
   font-size: 13px;
+}
+
+.positive-diff {
+  color: #83f5b2 !important;
+}
+
+.negative-diff {
+  color: #ff9ca7 !important;
 }
 
 .draft-live-overlay {
@@ -280,16 +486,16 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(13, 25, 42, 0.68);
+  background: rgba(4, 12, 24, 0.78);
 }
 
 .draft-live-modal {
   width: min(100%, 430px);
   padding: 30px;
-  border: 1px solid #b9d1ea;
-  border-radius: 16px;
-  background: white;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  border: 1px solid #5e83ad;
+  border-radius: 18px;
+  background: #101b2d;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.48);
   text-align: center;
 }
 
@@ -301,177 +507,66 @@
 
 .draft-live-eyebrow {
   display: block;
-  color: #3c698f;
+  color: #9db1ca;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .draft-live-modal h2 {
   margin: 8px 0 0;
-  color: #17263d;
+  color: #ffffff;
   font-size: 25px;
 }
 
 .draft-live-modal p {
   margin: 10px 0 20px;
-  color: #66798e;
+  color: #b5c5d9;
 }
 
 .draft-live-modal button {
   padding: 11px 16px;
-  border: 0;
-  border-radius: 8px;
-  background: #17263d;
-  color: white;
+  border: 1px solid #7fb2ee;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #081326;
   cursor: pointer;
   font: inherit;
-  font-weight: 800;
+  font-weight: 900;
 }
 
-.draft-live-modal button:hover {
-  background: #294563;
+@media (max-width: 980px) {
+  .league-info-grid,
+  .quick-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-actions-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
-    .league-header,
-    .invite-card,
-    .draft-status-heading,
-    .cycle-status-heading {
+  .league-header,
+  .invite-card,
+  .draft-status-heading,
+  .cycle-status-heading,
+  .section-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .league-info-grid {
+  .league-info-grid,
+  .quick-actions-grid {
     grid-template-columns: 1fr;
+  }
+
+  .team-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .copy-message {
     text-align: left;
   }
-}
-
-.cycle-status-card {
-  margin-top: 18px;
-  padding: 20px;
-  border: 1px solid #d9e2eb;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
-}
-
-.cycle-status-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.cycle-status-heading h2 {
-  margin: 0;
-  color: #1b2d45;
-  font-size: 20px;
-}
-
-.cycle-status-badge {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: #edf1f5;
-  color: #5f7082;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.start-cycle-button {
-  margin-top: 15px;
-  padding: 10px 13px;
-  border: 0;
-  border-radius: 8px;
-  background: #17263d;
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.start-cycle-button:hover:not(:disabled) {
-  background: #294563;
-}
-
-.start-cycle-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.cycle-waiting-copy,
-.cycle-action-message {
-  margin: 12px 0 0;
-  color: #63758a;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.cycle-action-message {
-  color: #26713a;
-}
-
-.matchup-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 12px;
-  margin-top: 15px;
-}
-
-.matchup-card {
-  padding: 14px;
-  border: 1px solid #dce5ee;
-  border-radius: 10px;
-  background: #f8fbfd;
-}
-
-.matchup-team-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.matchup-team-row strong {
-  color: #1d3048;
-  font-size: 14px;
-}
-
-.matchup-team-row span {
-  color: #17263d;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.matchup-vs {
-  margin: 8px 0;
-  color: #8191a4;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.view-cycle-link {
-  display: inline-block;
-  margin-top: 14px;
-  padding: 10px 13px;
-  border-radius: 8px;
-  background: #17263d;
-  color: white;
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.view-cycle-link:hover {
-  background: #294563;
 }

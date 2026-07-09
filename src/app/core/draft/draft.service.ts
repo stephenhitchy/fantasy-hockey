@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -20,7 +21,8 @@ import {
 
 import {
   FantasyRoster,
-  RosterAsset
+  RosterAsset,
+  RosterStatus
 } from '../team/roster.models';
 
 import {
@@ -34,6 +36,67 @@ import {
 } from './draft.models';
 
 const DRAFT_DOCUMENT_ID = 'current';
+
+
+export type FantasyTransactionType =
+  | 'add-drop'
+  | 'add-open-slot'
+  | 'move-to-ir'
+  | 'activate-from-ir';
+
+export interface FantasyTransaction {
+  id: string;
+  type: FantasyTransactionType;
+  ownerId: string;
+  addedAsset?: DraftableAsset | null;
+  droppedAsset?: RosterAsset | null;
+  movedAsset?: RosterAsset | null;
+  activatedAsset?: RosterAsset | null;
+  dropSlotId?: string | null;
+  targetSlotId?: string | null;
+  activeSlotId?: string | null;
+  irSlotId?: string | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+  createdAt?: unknown;
+}
+
+export interface AddDropRosterAssetInput {
+  leagueId: string;
+  ownerId: string;
+  dropSlotId: string;
+  addAsset: DraftableAsset;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+  leagueOwnerIds?: string[];
+}
+
+export interface AddOpenRosterAssetInput {
+  leagueId: string;
+  ownerId: string;
+  targetSlotId: string;
+  addAsset: DraftableAsset;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+  leagueOwnerIds?: string[];
+}
+
+export interface MoveRosterAssetToIrInput {
+  leagueId: string;
+  ownerId: string;
+  activeSlotId: string;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+}
+
+export interface ActivateIrRosterAssetInput {
+  leagueId: string;
+  ownerId: string;
+  irSlotId: string;
+  activeSlotId?: string | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+}
 
 export const DEFAULT_DRAFT_ROSTER_REQUIREMENTS: DraftRosterRequirements = {
   LW: 3,
@@ -68,6 +131,17 @@ function getDraftPicksRef(leagueId: string) {
     'draft',
     DRAFT_DOCUMENT_ID,
     'picks'
+  );
+}
+
+
+
+function getTransactionsRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'transactions'
   );
 }
 
@@ -184,6 +258,30 @@ export function listenToDraftPicks(
       snapshot.docs.map(
         (pickDoc) => pickDoc.data() as DraftPick
       )
+    );
+  });
+}
+
+
+export function listenToOwnerTransactions(
+  leagueId: string,
+  ownerId: string,
+  callback: (transactions: FantasyTransaction[]) => void
+): () => void {
+  const transactionsQuery = query(
+    getTransactionsRef(leagueId),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  );
+
+  return onSnapshot(transactionsQuery, (snapshot) => {
+    callback(
+      snapshot.docs
+        .map((transactionDoc) => ({
+          id: transactionDoc.id,
+          ...(transactionDoc.data() as Omit<FantasyTransaction, 'id'>)
+        }))
+        .filter((transaction) => transaction.ownerId === ownerId)
     );
   });
 }
@@ -375,7 +473,8 @@ export function buildSnakePickPreview(
 }
 
 function createRosterAsset(
-  asset: DraftableAsset
+  asset: DraftableAsset,
+  rosterStatus: RosterStatus = 'active'
 ): RosterAsset {
   const cycleScore = {
     cycleNumber: 1,
@@ -386,21 +485,69 @@ function createRosterAsset(
   if (asset.assetType === 'skater') {
     return {
       assetType: 'skater',
+      assetKey: asset.assetKey,
       position: asset.position,
       player: asset.player,
+      projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+      projectedCyclePoints: asset.projectedCyclePoints ?? null,
+      reliabilityRating: asset.reliabilityRating ?? null,
+      volatilityPenalty: asset.volatilityPenalty ?? null,
+      floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+      floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null,
+      rosterStatus,
       cycleScore
     };
   }
 
   return {
     assetType: 'team-goalie-unit',
+    assetKey: asset.assetKey,
     position: 'G',
     teamName: asset.teamName,
     teamAbbreviation: asset.teamAbbreviation,
     teamLogoUrl: asset.teamLogoUrl,
+    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+    projectedCyclePoints: asset.projectedCyclePoints ?? null,
+    reliabilityRating: asset.reliabilityRating ?? null,
+    volatilityPenalty: asset.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null,
+    rosterStatus,
     cycleScore
   };
 }
+
+function getRosterAssetKey(asset: RosterAsset | null): string {
+  if (!asset) {
+    return '';
+  }
+
+  if (asset.assetKey) {
+    return asset.assetKey;
+  }
+
+  if (asset.assetType === 'skater') {
+    const player = asset.player as {
+      id?: number | string;
+      playerId?: number | string;
+      nhlPlayerId?: number | string;
+    };
+
+    const playerId =
+      player.id ??
+      player.playerId ??
+      player.nhlPlayerId;
+
+    return playerId
+      ? `skater-${playerId}`
+      : '';
+  }
+
+  return asset.teamAbbreviation
+    ? `goalie-unit-${asset.teamAbbreviation}`
+    : '';
+}
+
 
 function getPositionRequirement(
   draft: FantasyDraft,
@@ -560,4 +707,513 @@ export async function makeDraftPick(
 
     return pick;
   });
+}
+
+
+
+function assertDraftComplete(draft: FantasyDraft): void {
+  if (draft.status !== 'complete') {
+    throw new Error(
+      'Roster moves are available after the draft is complete.'
+    );
+  }
+}
+
+function isAssetOnRoster(
+  roster: FantasyRoster,
+  assetKey: string
+): boolean {
+  return [
+    ...roster.activeSlots.map((slot) => slot.asset),
+    ...roster.irSlots.map((slot) => slot.asset)
+  ].some((asset) => getRosterAssetKey(asset) === assetKey);
+}
+
+function isAssetOnAnyRoster(
+  rosterSnapshots: Array<{ exists: () => boolean; data: () => unknown }>,
+  assetKey: string
+): boolean {
+  return rosterSnapshots.some((snapshot) => {
+    if (!snapshot.exists()) {
+      return false;
+    }
+
+    const roster = normalizeFantasyRoster(
+      snapshot.data() as Partial<FantasyRoster>
+    );
+
+    return isAssetOnRoster(roster, assetKey);
+  });
+}
+
+export async function addDropRosterAsset({
+  leagueId,
+  ownerId,
+  dropSlotId,
+  addAsset,
+  effectiveCycleNumber = null,
+  effectiveLabel = null,
+  leagueOwnerIds = []
+}: AddDropRosterAssetInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+
+  const rosterRef = getFantasyRosterRef(
+    leagueId,
+    ownerId
+  );
+
+  const transactionRef = doc(
+    getTransactionsRef(leagueId)
+  );
+
+  const otherRosterRefs = leagueOwnerIds
+    .filter((leagueOwnerId) => leagueOwnerId !== ownerId)
+    .map((leagueOwnerId) => getFantasyRosterRef(
+      leagueId,
+      leagueOwnerId
+    ));
+
+  await runTransaction(db, async (transaction) => {
+    const [
+      draftSnapshot,
+      rosterSnapshot,
+      ...otherRosterSnapshots
+    ] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(rosterRef),
+      ...otherRosterRefs.map((otherRosterRef) => transaction.get(otherRosterRef))
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    const slotIndex = roster.activeSlots.findIndex(
+      (slot) => slot.slotId === dropSlotId
+    );
+
+    if (slotIndex === -1) {
+      throw new Error(
+        'The selected roster slot was not found.'
+      );
+    }
+
+    const selectedSlot = roster.activeSlots[slotIndex];
+    const dropAsset = selectedSlot.asset;
+
+    if (!dropAsset) {
+      throw new Error(
+        'The selected roster slot is already empty.'
+      );
+    }
+
+    if (selectedSlot.position !== addAsset.position) {
+      throw new Error(
+        `This first version only supports same-position moves. Drop ${addAsset.position} to add ${addAsset.position}.`
+      );
+    }
+
+    const dropAssetKey = getRosterAssetKey(dropAsset);
+
+    if (dropAssetKey === addAsset.assetKey) {
+      throw new Error(
+        'You already have that player on your roster.'
+      );
+    }
+
+    const alreadyOnUserRoster = roster.activeSlots.some((slot) =>
+      getRosterAssetKey(slot.asset) === addAsset.assetKey
+    );
+
+    if (alreadyOnUserRoster) {
+      throw new Error(
+        'That player or goalie unit is already on your roster.'
+      );
+    }
+
+    const alreadyOnAnotherRoster = isAssetOnAnyRoster(
+      otherRosterSnapshots,
+      addAsset.assetKey
+    );
+
+    if (alreadyOnAnotherRoster) {
+      throw new Error(
+        'That player or goalie unit is already on another roster.'
+      );
+    }
+
+    roster.activeSlots[slotIndex] = {
+      ...selectedSlot,
+      asset: createRosterAsset(addAsset, 'new')
+    };
+
+    transaction.set(
+      rosterRef,
+      {
+        schemaVersion: roster.schemaVersion,
+        activeSlots: roster.activeSlots,
+        irSlots: roster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'add-drop',
+      ownerId,
+      addedAsset: addAsset,
+      droppedAsset: dropAsset,
+      dropSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+
+export async function addFreeAgentToOpenRosterSlot({
+  leagueId,
+  ownerId,
+  targetSlotId,
+  addAsset,
+  effectiveCycleNumber = null,
+  effectiveLabel = null,
+  leagueOwnerIds = []
+}: AddOpenRosterAssetInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  const otherRosterRefs = leagueOwnerIds
+    .filter((leagueOwnerId) => leagueOwnerId !== ownerId)
+    .map((leagueOwnerId) => getFantasyRosterRef(
+      leagueId,
+      leagueOwnerId
+    ));
+
+  await runTransaction(db, async (transaction) => {
+    const [
+      draftSnapshot,
+      rosterSnapshot,
+      ...otherRosterSnapshots
+    ] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(rosterRef),
+      ...otherRosterRefs.map((otherRosterRef) => transaction.get(otherRosterRef))
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    const slotIndex = roster.activeSlots.findIndex(
+      (slot) => slot.slotId === targetSlotId
+    );
+
+    if (slotIndex === -1) {
+      throw new Error('The selected roster slot was not found.');
+    }
+
+    const selectedSlot = roster.activeSlots[slotIndex];
+
+    if (selectedSlot.asset) {
+      throw new Error(
+        'That roster slot is already filled. Choose a filled same-position player to drop, or choose an open slot.'
+      );
+    }
+
+    if (selectedSlot.position !== addAsset.position) {
+      throw new Error(
+        `This player must be added to an open ${addAsset.position} slot.`
+      );
+    }
+
+    if (isAssetOnRoster(roster, addAsset.assetKey)) {
+      throw new Error(
+        'That player or goalie unit is already on your roster.'
+      );
+    }
+
+    const alreadyOnAnotherRoster = isAssetOnAnyRoster(
+      otherRosterSnapshots,
+      addAsset.assetKey
+    );
+
+    if (alreadyOnAnotherRoster) {
+      throw new Error(
+        'That player or goalie unit is already on another roster.'
+      );
+    }
+
+    roster.activeSlots[slotIndex] = {
+      ...selectedSlot,
+      asset: createRosterAsset(addAsset, 'new')
+    };
+
+    transaction.set(
+      rosterRef,
+      {
+        schemaVersion: roster.schemaVersion,
+        activeSlots: roster.activeSlots,
+        irSlots: roster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'add-open-slot',
+      ownerId,
+      addedAsset: addAsset,
+      droppedAsset: null,
+      targetSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+export async function moveRosterAssetToIr({
+  leagueId,
+  ownerId,
+  activeSlotId,
+  effectiveCycleNumber = null,
+  effectiveLabel = null
+}: MoveRosterAssetToIrInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, rosterSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(rosterRef)
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    const activeSlotIndex = roster.activeSlots.findIndex(
+      (slot) => slot.slotId === activeSlotId
+    );
+
+    if (activeSlotIndex === -1) {
+      throw new Error('The selected active roster slot was not found.');
+    }
+
+    const activeSlot = roster.activeSlots[activeSlotIndex];
+    const asset = activeSlot.asset;
+
+    if (!asset) {
+      throw new Error('That roster slot is already empty.');
+    }
+
+    if (asset.assetType !== 'skater') {
+      throw new Error('Only skaters can be moved to IR.');
+    }
+
+    const openIrSlotIndex = roster.irSlots.findIndex(
+      (slot) => slot.asset === null
+    );
+
+    if (openIrSlotIndex === -1) {
+      throw new Error('All IR slots are already filled.');
+    }
+
+    const openIrSlot = roster.irSlots[openIrSlotIndex];
+    const irAsset = {
+      ...asset,
+      rosterStatus: 'injured' as RosterStatus
+    };
+
+    roster.activeSlots[activeSlotIndex] = {
+      ...activeSlot,
+      asset: null
+    };
+
+    roster.irSlots[openIrSlotIndex] = {
+      ...openIrSlot,
+      asset: irAsset
+    };
+
+    transaction.set(
+      rosterRef,
+      {
+        schemaVersion: roster.schemaVersion,
+        activeSlots: roster.activeSlots,
+        irSlots: roster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'move-to-ir',
+      ownerId,
+      movedAsset: asset,
+      activeSlotId,
+      irSlotId: openIrSlot.slotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+export async function activateIrRosterAsset({
+  leagueId,
+  ownerId,
+  irSlotId,
+  activeSlotId = null,
+  effectiveCycleNumber = null,
+  effectiveLabel = null
+}: ActivateIrRosterAssetInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, rosterSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(rosterRef)
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    const irSlotIndex = roster.irSlots.findIndex(
+      (slot) => slot.slotId === irSlotId
+    );
+
+    if (irSlotIndex === -1) {
+      throw new Error('The selected IR slot was not found.');
+    }
+
+    const irSlot = roster.irSlots[irSlotIndex];
+    const asset = irSlot.asset;
+
+    if (!asset) {
+      throw new Error('That IR slot is already empty.');
+    }
+
+    const activeSlotIndex = activeSlotId
+      ? roster.activeSlots.findIndex((slot) => slot.slotId === activeSlotId)
+      : roster.activeSlots.findIndex(
+          (slot) => slot.position === asset.position && slot.asset === null
+        );
+
+    if (activeSlotIndex === -1) {
+      throw new Error(
+        `No open ${asset.position} slot was found. Drop or move a player before activating this player from IR.`
+      );
+    }
+
+    const activeSlot = roster.activeSlots[activeSlotIndex];
+
+    if (activeSlot.position !== asset.position) {
+      throw new Error(
+        `This player must be activated into an open ${asset.position} slot.`
+      );
+    }
+
+    if (activeSlot.asset) {
+      throw new Error('The selected active roster slot is already filled.');
+    }
+
+    const activatedAsset = {
+      ...asset,
+      rosterStatus: 'moved' as RosterStatus
+    };
+
+    roster.activeSlots[activeSlotIndex] = {
+      ...activeSlot,
+      asset: activatedAsset
+    };
+
+    roster.irSlots[irSlotIndex] = {
+      ...irSlot,
+      asset: null
+    };
+
+    transaction.set(
+      rosterRef,
+      {
+        schemaVersion: roster.schemaVersion,
+        activeSlots: roster.activeSlots,
+        irSlots: roster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'activate-from-ir',
+      ownerId,
+      activatedAsset: asset,
+      activeSlotId: activeSlot.slotId,
+      irSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+// Backward-compatible wrapper name. It now preserves draft history and only
+// updates the current roster plus transaction log. New code should call
+// addDropRosterAsset with a dropSlotId.
+export async function addDropDraftAsset(input: AddDropRosterAssetInput): Promise<void> {
+  return addDropRosterAsset(input);
 }

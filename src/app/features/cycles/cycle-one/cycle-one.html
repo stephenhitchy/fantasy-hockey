@@ -12,10 +12,29 @@
     </a>
 
     <header class="cycle-header">
-      <div>
+      <div class="cycle-header-main">
         <span class="eyebrow">Fantasy Season</span>
-        <h1>{{ getDetailedMatchupHeading() }}</h1>
-        <p>{{ league()?.name }}</p>
+
+        <div class="cycle-title-row">
+          <div>
+            <h1>{{ getDetailedMatchupHeading() }}</h1>
+            <p>{{ league()?.name }}</p>
+          </div>
+
+          <label class="cycle-picker-control">
+            <span>Cycle Matchup</span>
+            <select
+              [value]="cycleNumber"
+              (change)="navigateToCycle($any($event.target).value)"
+            >
+              @for (availableCycleNumber of getAvailableCycleNumbers(); track availableCycleNumber) {
+                <option [value]="availableCycleNumber">
+                  Cycle {{ availableCycleNumber }}
+                </option>
+              }
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="cycle-header-actions">
@@ -31,6 +50,13 @@
           [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber, 'matchups']"
         >
           Matchup Overview
+        </a>
+
+        <a
+          class="schedule-preview-header-link"
+          [routerLink]="['/leagues', leagueId, 'standings']"
+        >
+          League Standings
         </a>
 
         <span
@@ -49,24 +75,6 @@
       </div>
     </header>
 
-<section class="projection-window-card">
-  <div>
-    <strong>Schedule-Adjusted Projection</strong>
-    <span>{{ getProjectionWindowLabel() }}</span>
-  </div>
-
-  <small
-    [class.schedule-warning]="scheduleProjectionError() || !scheduleHasGamesInWindow()"
-  >
-    {{ getScheduleProjectionStatusText() }}
-  </small>
-
-  <small
-    [class.schedule-warning]="scoringError()"
-  >
-    {{ getCurrentScoringStatusText() }}
-  </small>
-</section>
 
 <section
   class="auto-status-card"
@@ -97,10 +105,11 @@
   </small>
 </section>
 
+@if (isCommissioner()) {
 <details class="dev-controls-card">
   <summary>
     <span>Dev Controls</span>
-    <small>Manual fallback tools for testing</small>
+    <small>Commissioner fallback tools for testing</small>
   </summary>
 
   <div class="dev-controls-body">
@@ -201,6 +210,7 @@
     }
   </div>
 </details>
+}
 
     @if (!cycle()) {
       <section class="empty-cycle-card">
@@ -211,36 +221,65 @@
       </section>
     } @else {
       <section class="matchups-section">
-        <div class="section-heading">
+        <div class="section-heading matchup-section-heading">
           <div>
             <span class="eyebrow">Detailed Matchup View</span>
             <h2>{{ getDetailedMatchupHeading() }}</h2>
           </div>
 
-          <div class="matchup-view-selector">
-            <button
-              type="button"
-              [class.active-view]="matchupView() === 'teamA'"
-              (click)="setMatchupView('teamA')"
-            >
-              Team A
-            </button>
+          <div class="matchup-heading-controls">
+            @if (matchups().length > 1) {
+              <div class="matchup-arrow-nav" aria-label="Cycle matchup navigation">
+                <button
+                  type="button"
+                  (click)="openPreviousMatchup()"
+                  [disabled]="!getPreviousMatchup()"
+                  [title]="getMatchupNavigationTitle(getPreviousMatchup())"
+                >
+                  ←
+                </button>
 
-            <button
-              type="button"
-              [class.active-view]="matchupView() === 'both'"
-              (click)="setMatchupView('both')"
-            >
-              Both
-            </button>
+                <span>
+                  {{ getCurrentDisplayedMatchup()?.id || 'Matchup' }}
+                  <small>{{ getCurrentDisplayedMatchupIndex() + 1 }} / {{ matchups().length }}</small>
+                </span>
 
-            <button
-              type="button"
-              [class.active-view]="matchupView() === 'teamB'"
-              (click)="setMatchupView('teamB')"
-            >
-              Team B
-            </button>
+                <button
+                  type="button"
+                  (click)="openNextMatchup()"
+                  [disabled]="!getNextMatchup()"
+                  [title]="getMatchupNavigationTitle(getNextMatchup())"
+                >
+                  →
+                </button>
+              </div>
+            }
+
+            <div class="matchup-view-selector">
+              <button
+                type="button"
+                [class.active-view]="matchupView() === 'teamA'"
+                (click)="setMatchupView('teamA')"
+              >
+                Team A
+              </button>
+
+              <button
+                type="button"
+                [class.active-view]="matchupView() === 'both'"
+                (click)="setMatchupView('both')"
+              >
+                Both
+              </button>
+
+              <button
+                type="button"
+                [class.active-view]="matchupView() === 'teamB'"
+                (click)="setMatchupView('teamB')"
+              >
+                Team B
+              </button>
+            </div>
           </div>
         </div>
 
@@ -922,6 +961,223 @@
               <p class="matchup-projection-note">
                 {{ getProjectedWinnerLabel(matchup) }}
               </p>
+
+              @if (isMatchupComplete(matchup)) {
+                <section class="matchup-breakdown-card">
+                  <div class="breakdown-heading">
+                    <div>
+                      <span class="eyebrow">Balance Audit</span>
+                      <h3>Why this matchup finished this way</h3>
+                    </div>
+
+                    <p>{{ getMatchupBreakdownSummary(matchup) }}</p>
+                  </div>
+
+                  @if (!cycleScoring()) {
+                    <p class="breakdown-loading-message">
+                      Player-level breakdown is loading. Team totals are saved, but position and player details appear once scoring data finishes loading.
+                    </p>
+                  } @else {
+                    <div class="breakdown-team-grid">
+                      <article class="breakdown-team-card">
+                        <div class="breakdown-team-title">
+                          <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                          <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                        </div>
+
+                        <div class="breakdown-total-grid">
+                          <div>
+                            <small>Actual</small>
+                            <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
+                          </div>
+
+                          <div>
+                            <small>Projected</small>
+                            <strong>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</strong>
+                          </div>
+
+                          <div>
+                            <small>Over / Under</small>
+                            <strong
+                              class="delta-value"
+                              [class.delta-positive]="isMeaningfulPositiveProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
+                              [class.delta-negative]="isMeaningfulNegativeProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
+                              [class.delta-neutral]="isNeutralProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
+                            >
+                              {{ getSignedProjectionDisplay(getMatchupTeamProjectionDelta(matchup, matchup.teamAOwnerId)) }}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div class="position-breakdown-list">
+                          @for (row of getPositionBreakdownRows(matchup.teamAOwnerId); track row.position) {
+                            <div class="position-breakdown-row">
+                              <span>{{ row.label }}</span>
+
+                              <div>
+                                <strong>{{ getProjectionDisplay(row.actual) }}</strong>
+                                <small>actual</small>
+                              </div>
+
+                              <div>
+                                <strong>{{ getProjectionDisplay(row.projected) }}</strong>
+                                <small>proj</small>
+                              </div>
+
+                              <div>
+                                <strong
+                                  class="delta-value"
+                                  [class.delta-positive]="isMeaningfulPositiveProjectionDelta(row.actual, row.projected)"
+                                  [class.delta-negative]="isMeaningfulNegativeProjectionDelta(row.actual, row.projected)"
+                                  [class.delta-neutral]="isNeutralProjectionDelta(row.actual, row.projected)"
+                                >
+                                  {{ getSignedProjectionDisplay(row.delta) }}
+                                </strong>
+                                <small>+/-</small>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      </article>
+
+                      @if (matchup.teamBOwnerId) {
+                        <article class="breakdown-team-card">
+                          <div class="breakdown-team-title">
+                            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                            <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                          </div>
+
+                          <div class="breakdown-total-grid">
+                            <div>
+                              <small>Actual</small>
+                              <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
+                            </div>
+
+                            <div>
+                              <small>Projected</small>
+                              <strong>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</strong>
+                            </div>
+
+                            <div>
+                              <small>Over / Under</small>
+                              <strong
+                                class="delta-value"
+                                [class.delta-positive]="isMeaningfulPositiveProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
+                                [class.delta-negative]="isMeaningfulNegativeProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
+                                [class.delta-neutral]="isNeutralProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
+                              >
+                                {{ getSignedProjectionDisplay(getMatchupTeamProjectionDelta(matchup, matchup.teamBOwnerId)) }}
+                              </strong>
+                            </div>
+                          </div>
+
+                          <div class="position-breakdown-list">
+                            @for (row of getPositionBreakdownRows(matchup.teamBOwnerId); track row.position) {
+                              <div class="position-breakdown-row">
+                                <span>{{ row.label }}</span>
+
+                                <div>
+                                  <strong>{{ getProjectionDisplay(row.actual) }}</strong>
+                                  <small>actual</small>
+                                </div>
+
+                                <div>
+                                  <strong>{{ getProjectionDisplay(row.projected) }}</strong>
+                                  <small>proj</small>
+                                </div>
+
+                                <div>
+                                  <strong
+                                    class="delta-value"
+                                    [class.delta-positive]="isMeaningfulPositiveProjectionDelta(row.actual, row.projected)"
+                                    [class.delta-negative]="isMeaningfulNegativeProjectionDelta(row.actual, row.projected)"
+                                  [class.delta-neutral]="isNeutralProjectionDelta(row.actual, row.projected)"
+                                  >
+                                    {{ getSignedProjectionDisplay(row.delta) }}
+                                  </strong>
+                                  <small>+/-</small>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        </article>
+                      }
+                    </div>
+
+                    <div class="impact-grid">
+                      <article class="impact-card">
+                        <h4>Top Contributors</h4>
+
+                        @for (row of getTopContributors(matchup); track row.ownerId + row.asset.assetKey) {
+                          <div class="impact-row">
+                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                              <img
+                                [src]="logoUrl"
+                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                              />
+                            }
+
+                            <div>
+                              <strong>{{ getAssetName(row.asset) }}</strong>
+                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                            </div>
+
+                            <em>{{ getProjectionDisplay(row.actual) }}</em>
+                          </div>
+                        }
+                      </article>
+
+                      <article class="impact-card">
+                        <h4>Biggest Overperformers</h4>
+
+                        @for (row of getTopOverPerformers(matchup); track row.ownerId + row.asset.assetKey) {
+                          <div class="impact-row">
+                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                              <img
+                                [src]="logoUrl"
+                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                              />
+                            }
+
+                            <div>
+                              <strong>{{ getAssetName(row.asset) }}</strong>
+                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                            </div>
+
+                            <em class="delta-positive">{{ getSignedProjectionDisplay(row.delta) }}</em>
+                          </div>
+                        } @empty {
+                          <p class="empty-impact-message">No players beat projection.</p>
+                        }
+                      </article>
+
+                      <article class="impact-card">
+                        <h4>Biggest Underperformers</h4>
+
+                        @for (row of getTopUnderPerformers(matchup); track row.ownerId + row.asset.assetKey) {
+                          <div class="impact-row">
+                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                              <img
+                                [src]="logoUrl"
+                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                              />
+                            }
+
+                            <div>
+                              <strong>{{ getAssetName(row.asset) }}</strong>
+                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                            </div>
+
+                            <em class="delta-negative">{{ getSignedProjectionDisplay(row.delta) }}</em>
+                          </div>
+                        } @empty {
+                          <p class="empty-impact-message">No players finished below projection.</p>
+                        }
+                      </article>
+                    </div>
+                  }
+                </section>
+              }
             </article>
           }
           </div>

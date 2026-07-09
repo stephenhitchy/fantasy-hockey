@@ -1,11 +1,15 @@
 import {
   collection,
   doc,
+  getDoc,
+  getDocs,
   increment,
+  limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
+  Transaction,
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore';
@@ -22,8 +26,19 @@ import {
 } from '../team/team.service';
 
 import {
+  DraftableAsset,
+  DraftPick,
   FantasyDraft
 } from '../draft/draft.models';
+
+import {
+  FantasyRoster,
+  RosterAsset
+} from '../team/roster.models';
+
+import {
+  normalizeFantasyRoster
+} from '../team/roster.service';
 
 const FIRST_CYCLE_NUMBER = 1;
 
@@ -70,6 +85,21 @@ function getDraftRef(leagueId: string) {
   );
 }
 
+function getDraftPicksRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'draft',
+    'current',
+    'picks'
+  );
+}
+
+function getDraftPickDocumentId(overallPick: number): string {
+  return overallPick.toString().padStart(3, '0');
+}
+
 function getTeamRef(
   leagueId: string,
   ownerId: string
@@ -80,6 +110,31 @@ function getTeamRef(
     leagueId,
     'teams',
     ownerId
+  );
+}
+
+
+function getTeamRosterRef(
+  leagueId: string,
+  ownerId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'teams',
+    ownerId,
+    'roster',
+    'current'
+  );
+}
+
+function getCyclesRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'cycles'
   );
 }
 
@@ -110,6 +165,36 @@ function getCycleMatchupRef(
     getCycleDocumentId(cycleNumber),
     'matchups',
     matchupId
+  );
+}
+
+function getCycleRosterPicksRef(
+  leagueId: string,
+  cycleNumber: number
+) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'cycles',
+    getCycleDocumentId(cycleNumber),
+    'rosterPicks'
+  );
+}
+
+function getCycleRosterPickRef(
+  leagueId: string,
+  cycleNumber: number,
+  overallPick: number
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'cycles',
+    getCycleDocumentId(cycleNumber),
+    'rosterPicks',
+    getDraftPickDocumentId(overallPick)
   );
 }
 
@@ -152,6 +237,183 @@ function normalizeMatchup(
     createdAt: data.createdAt,
     updatedAt: data.updatedAt
   };
+}
+
+
+function getRosterAssetKey(asset: RosterAsset | null): string {
+  if (!asset) {
+    return '';
+  }
+
+  if (asset.assetKey) {
+    return asset.assetKey;
+  }
+
+  if (asset.assetType === 'skater') {
+    const player = asset.player as {
+      id?: number | string;
+      playerId?: number | string;
+      nhlPlayerId?: number | string;
+    };
+
+    const playerId =
+      player.id ??
+      player.playerId ??
+      player.nhlPlayerId;
+
+    return playerId
+      ? `skater-${playerId}`
+      : '';
+  }
+
+  return asset.teamAbbreviation
+    ? `goalie-unit-${asset.teamAbbreviation}`
+    : '';
+}
+
+function createDraftableAssetFromRosterAsset(
+  rosterAsset: RosterAsset,
+  fallbackAsset: DraftableAsset | null
+): DraftableAsset {
+  if (fallbackAsset) {
+    return fallbackAsset;
+  }
+
+  const projectedFields = {
+    projectedSeasonPoints: rosterAsset.projectedSeasonPoints ?? null,
+    projectedCyclePoints: rosterAsset.projectedCyclePoints ?? null,
+    reliabilityRating: rosterAsset.reliabilityRating ?? null,
+    volatilityPenalty: rosterAsset.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: rosterAsset.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: rosterAsset.floorAdjustedDraftValue ?? null
+  };
+
+  if (rosterAsset.assetType === 'skater') {
+    return {
+      assetType: 'skater',
+      assetKey: getRosterAssetKey(rosterAsset),
+      position: rosterAsset.position,
+      player: rosterAsset.player,
+      ...projectedFields
+    };
+  }
+
+  return {
+    assetType: 'team-goalie-unit',
+    assetKey: getRosterAssetKey(rosterAsset),
+    position: 'G',
+    teamName: rosterAsset.teamName,
+    teamAbbreviation: rosterAsset.teamAbbreviation,
+    teamLogoUrl: rosterAsset.teamLogoUrl,
+    ...projectedFields
+  };
+}
+
+async function buildCurrentRosterSnapshotPicks(
+  leagueId: string,
+  teams: FantasyTeam[],
+  draftPicks: DraftPick[]
+): Promise<DraftPick[]> {
+  const draftPickByOwnerAndAssetKey = new Map<string, DraftPick>();
+
+  for (const pick of draftPicks) {
+    draftPickByOwnerAndAssetKey.set(
+      `${pick.ownerId}::${pick.asset.assetKey}`,
+      pick
+    );
+  }
+
+  const rosterSnapshots = await Promise.all(
+    teams.map(async (team) => {
+      const rosterSnapshot = await getDoc(
+        getTeamRosterRef(leagueId, team.ownerId)
+      );
+
+      const roster: FantasyRoster | null = rosterSnapshot.exists()
+        ? normalizeFantasyRoster(
+            rosterSnapshot.data() as Partial<FantasyRoster>
+          )
+        : null;
+
+      return {
+        ownerId: team.ownerId,
+        roster
+      };
+    })
+  );
+
+  const snapshotPicks: DraftPick[] = [];
+  let syntheticOverallPick = 100000;
+
+  for (const rosterSnapshot of rosterSnapshots) {
+    const activeSlots = rosterSnapshot.roster?.activeSlots ?? [];
+
+    for (const slot of activeSlots) {
+      if (!slot.asset) {
+        continue;
+      }
+
+      const assetKey = getRosterAssetKey(slot.asset);
+
+      if (!assetKey) {
+        continue;
+      }
+
+      const matchingDraftPick = draftPickByOwnerAndAssetKey.get(
+        `${rosterSnapshot.ownerId}::${assetKey}`
+      ) ?? null;
+
+      const overallPick =
+        matchingDraftPick?.overallPick ??
+        syntheticOverallPick;
+
+      if (!matchingDraftPick) {
+        syntheticOverallPick += 1;
+      }
+
+      snapshotPicks.push({
+        overallPick,
+        round: matchingDraftPick?.round ?? 0,
+        pickInRound: matchingDraftPick?.pickInRound ?? slot.slotNumber,
+        ownerId: rosterSnapshot.ownerId,
+        asset: createDraftableAssetFromRosterAsset(
+          slot.asset,
+          matchingDraftPick?.asset ?? null
+        )
+      });
+    }
+  }
+
+  return snapshotPicks.sort((first, second) => {
+    if (first.ownerId !== second.ownerId) {
+      return first.ownerId.localeCompare(second.ownerId);
+    }
+
+    return first.overallPick - second.overallPick;
+  });
+}
+
+function writeCycleRosterPickSnapshots(
+  transaction: Transaction,
+  leagueId: string,
+  cycleNumber: number,
+  draftPicks: DraftPick[]
+): void {
+  for (const pick of draftPicks) {
+    transaction.set(
+      getCycleRosterPickRef(
+        leagueId,
+        cycleNumber,
+        pick.overallPick
+      ),
+      {
+        ...pick,
+        snapshotCycleNumber: cycleNumber,
+        snapshotSource: 'active-roster',
+        snapshottedAt: serverTimestamp()
+      }
+    );
+  }
 }
 
 function roundScore(value: number): number {
@@ -302,7 +564,6 @@ function createCyclePairings(
   return pairings;
 }
 
-
 export function getRoundRobinCycleCount(teamCount: number): number {
   if (teamCount < 2) {
     return 0;
@@ -362,6 +623,59 @@ export function listenToCycle(
   });
 }
 
+
+export function listenToLeagueCycles(
+  leagueId: string,
+  callback: (cycles: FantasyCycle[]) => void
+): () => void {
+  const cyclesQuery = query(
+    getCyclesRef(leagueId),
+    orderBy('cycleNumber', 'asc')
+  );
+
+  return onSnapshot(cyclesQuery, (snapshot) => {
+    callback(
+      snapshot.docs.map((cycleDoc) => {
+        const data = cycleDoc.data() as Partial<FantasyCycle>;
+
+        return normalizeCycle(
+          data,
+          data.cycleNumber ?? FIRST_CYCLE_NUMBER
+        );
+      })
+    );
+  });
+}
+
+export function listenToLatestCycle(
+  leagueId: string,
+  callback: (cycle: FantasyCycle | null) => void
+): () => void {
+  const latestCycleQuery = query(
+    getCyclesRef(leagueId),
+    orderBy('cycleNumber', 'desc'),
+    limit(1)
+  );
+
+  return onSnapshot(latestCycleQuery, (snapshot) => {
+    const latestCycleDoc = snapshot.docs[0];
+
+    if (!latestCycleDoc) {
+      callback(null);
+      return;
+    }
+
+    const data = latestCycleDoc.data() as Partial<FantasyCycle>;
+
+    callback(
+      normalizeCycle(
+        data,
+        data.cycleNumber ?? FIRST_CYCLE_NUMBER
+      )
+    );
+  });
+}
+
 export function listenToCycleMatchups(
   leagueId: string,
   cycleNumber: number,
@@ -383,6 +697,25 @@ export function listenToCycleMatchups(
   });
 }
 
+export function listenToCycleRosterPicks(
+  leagueId: string,
+  cycleNumber: number,
+  callback: (picks: DraftPick[]) => void
+): () => void {
+  const rosterPicksQuery = query(
+    getCycleRosterPicksRef(leagueId, cycleNumber),
+    orderBy('overallPick', 'asc')
+  );
+
+  return onSnapshot(rosterPicksQuery, (snapshot) => {
+    callback(
+      snapshot.docs.map(
+        (pickDoc) => pickDoc.data() as DraftPick
+      )
+    );
+  });
+}
+
 export async function startCycle(
   leagueId: string,
   teams: FantasyTeam[],
@@ -396,13 +729,30 @@ export async function startCycle(
 
   const cycleRef = getCycleRef(leagueId, cycleNumber);
   const draftRef = getDraftRef(leagueId);
+  const draftPicksQuery = query(
+    getDraftPicksRef(leagueId),
+    orderBy('overallPick', 'asc')
+  );
+
+  const draftPicksSnapshot = await getDocs(draftPicksQuery);
+  const draftPicks = draftPicksSnapshot.docs.map(
+    (pickDoc) => pickDoc.data() as DraftPick
+  );
+
+  const rosterSnapshotPicks = await buildCurrentRosterSnapshotPicks(
+    leagueId,
+    teams,
+    draftPicks
+  );
 
   return runTransaction(db, async (transaction) => {
-    const [cycleSnapshot, draftSnapshot] =
-      await Promise.all([
-        transaction.get(cycleRef),
-        transaction.get(draftRef)
-      ]);
+    const [
+      cycleSnapshot,
+      draftSnapshot
+    ] = await Promise.all([
+      transaction.get(cycleRef),
+      transaction.get(draftRef)
+    ]);
 
     if (cycleSnapshot.exists()) {
       throw new Error(`Cycle ${cycleNumber} has already been started.`);
@@ -420,6 +770,12 @@ export async function startCycle(
     if (draft.status !== 'complete') {
       throw new Error(
         'The draft must be completed before starting a cycle.'
+      );
+    }
+
+    if (rosterSnapshotPicks.length === 0) {
+      throw new Error(
+        'No active roster assets were found to snapshot for this cycle.'
       );
     }
 
@@ -451,6 +807,13 @@ export async function startCycle(
         }
       );
     });
+
+    writeCycleRosterPickSnapshots(
+      transaction,
+      leagueId,
+      cycleNumber,
+      rosterSnapshotPicks
+    );
 
     const cycle: FantasyCycle = {
       id: getCycleDocumentId(cycleNumber),
@@ -486,6 +849,21 @@ export async function startNextCycle(
   const currentCycleRef = getCycleRef(leagueId, currentCycleNumber);
   const nextCycleRef = getCycleRef(leagueId, nextCycleNumber);
   const draftRef = getDraftRef(leagueId);
+  const draftPicksQuery = query(
+    getDraftPicksRef(leagueId),
+    orderBy('overallPick', 'asc')
+  );
+
+  const draftPicksSnapshot = await getDocs(draftPicksQuery);
+  const draftPicks = draftPicksSnapshot.docs.map(
+    (pickDoc) => pickDoc.data() as DraftPick
+  );
+
+  const rosterSnapshotPicks = await buildCurrentRosterSnapshotPicks(
+    leagueId,
+    teams,
+    draftPicks
+  );
 
   return runTransaction(db, async (transaction) => {
     const [
@@ -532,6 +910,12 @@ export async function startNextCycle(
       );
     }
 
+    if (rosterSnapshotPicks.length === 0) {
+      throw new Error(
+        'No active roster assets were found to snapshot for the next cycle.'
+      );
+    }
+
     const orderedOwnerIds =
       getOrderedOwnerIds(teams, draft);
 
@@ -560,6 +944,13 @@ export async function startNextCycle(
         }
       );
     });
+
+    writeCycleRosterPickSnapshots(
+      transaction,
+      leagueId,
+      nextCycleNumber,
+      rosterSnapshotPicks
+    );
 
     const cycle: FantasyCycle = {
       id: getCycleDocumentId(nextCycleNumber),
@@ -660,6 +1051,8 @@ export async function completeCycle(
         wins: number;
         losses: number;
         ties: number;
+        pointsFor: number;
+        pointsAgainst: number;
       }
     > = {};
 
@@ -667,7 +1060,9 @@ export async function completeCycle(
       recordDeltas[ownerId] ??= {
         wins: 0,
         losses: 0,
-        ties: 0
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0
       };
     }
 
@@ -684,6 +1079,16 @@ export async function completeCycle(
     function addTie(ownerId: string): void {
       ensureRecordDelta(ownerId);
       recordDeltas[ownerId].ties += 1;
+    }
+
+    function addPoints(
+      ownerId: string,
+      pointsFor: number,
+      pointsAgainst: number
+    ): void {
+      ensureRecordDelta(ownerId);
+      recordDeltas[ownerId].pointsFor += pointsFor;
+      recordDeltas[ownerId].pointsAgainst += pointsAgainst;
     }
 
     for (const matchup of matchups) {
@@ -720,6 +1125,20 @@ export async function completeCycle(
         }
       );
 
+      addPoints(
+        matchup.teamAOwnerId,
+        teamAScore,
+        teamBScore
+      );
+
+      if (matchup.teamBOwnerId) {
+        addPoints(
+          matchup.teamBOwnerId,
+          teamBScore,
+          teamAScore
+        );
+      }
+
       if (!matchup.teamBOwnerId) {
         addWin(matchup.teamAOwnerId);
         continue;
@@ -755,6 +1174,14 @@ export async function completeCycle(
 
       if (delta.ties !== 0) {
         teamUpdate['ties'] = increment(delta.ties);
+      }
+
+      if (delta.pointsFor !== 0) {
+        teamUpdate['pointsFor'] = increment(roundScore(delta.pointsFor));
+      }
+
+      if (delta.pointsAgainst !== 0) {
+        teamUpdate['pointsAgainst'] = increment(roundScore(delta.pointsAgainst));
       }
 
       transaction.update(

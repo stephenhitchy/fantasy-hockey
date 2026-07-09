@@ -32,7 +32,8 @@ import {
 } from '../../../core/cycle/cycle.models';
 
 import {
-  listenToCycle
+  listenToCycle,
+  listenToCycleRosterPicks
 } from '../../../core/cycle/cycle.service';
 
 import {
@@ -125,6 +126,7 @@ export class CycleAssetDetail implements OnDestroy {
   assetKey = '';
   userId = '';
   cycleNumber = 1;
+  returnToUrl = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -141,6 +143,10 @@ export class CycleAssetDetail implements OnDestroy {
 
   private stopCycleListener: (() => void) | null = null;
   private stopPicksListener: (() => void) | null = null;
+  private stopCycleRosterPicksListener: (() => void) | null = null;
+  private liveDraftPicks: DraftPick[] = [];
+  private cycleRosterSnapshotPicks: DraftPick[] = [];
+  private effectivePicksKey: string | null = null;
   private detailLoadKey: string | null = null;
   private detailRequestId = 0;
 
@@ -191,6 +197,101 @@ export class CycleAssetDetail implements OnDestroy {
   ngOnDestroy(): void {
     this.stopCycleListener?.();
     this.stopPicksListener?.();
+    this.stopCycleRosterPicksListener?.();
+  }
+
+  private refreshEffectivePicks(): void {
+    const snapshotPicks = this.cycleRosterSnapshotPicks;
+    const livePicks = this.liveDraftPicks;
+    const effectivePicks = snapshotPicks.length > 0
+      ? snapshotPicks
+      : livePicks;
+
+    const source = snapshotPicks.length > 0
+      ? 'cycle-snapshot'
+      : 'live-draft-picks';
+
+    const nextKey = [
+      source,
+      effectivePicks.map((pick) => `${pick.overallPick}:${pick.asset.assetKey}`).join('|')
+    ].join('::');
+
+    if (this.effectivePicksKey === nextKey) {
+      return;
+    }
+
+    this.effectivePicksKey = nextKey;
+    this.picks.set(effectivePicks);
+    this.picksLoaded.set(true);
+    this.detailLoadKey = null;
+    this.gameRows.set([]);
+
+    void this.loadAssetDetailsIfReady();
+  }
+
+
+  navigateBack(event?: Event): void {
+    event?.preventDefault();
+
+    void this.router.navigateByUrl(
+      this.getBackUrl()
+    );
+  }
+
+  getBackUrl(): string {
+    return this.returnToUrl ||
+      `/leagues/${this.leagueId}/cycles/${this.cycleNumber}`;
+  }
+
+  getBackLinkLabel(): string {
+    if (this.returnToUrl.includes('/team')) {
+      return 'Back to My Team';
+    }
+
+    if (this.returnToUrl.includes('/matchups/')) {
+      return 'Back to Matchup';
+    }
+
+    if (this.returnToUrl.includes('/matchups')) {
+      return 'Back to Matchup Overview';
+    }
+
+    if (this.returnToUrl.includes('/standings')) {
+      return 'Back to League Standings';
+    }
+
+    if (this.returnToUrl.includes('/schedule-preview')) {
+      return 'Back to Schedule Preview';
+    }
+
+    return `Back to Cycle ${this.cycleNumber}`;
+  }
+
+  private getSafeReturnUrl(
+    value: string | null,
+    leagueId: string
+  ): string {
+    if (!value) {
+      return '';
+    }
+
+    let decodedValue = value;
+
+    try {
+      decodedValue = decodeURIComponent(value);
+    } catch {
+      decodedValue = value;
+    }
+
+    if (!decodedValue.startsWith(`/leagues/${leagueId}`)) {
+      return '';
+    }
+
+    if (decodedValue.includes('://')) {
+      return '';
+    }
+
+    return decodedValue;
   }
 
   async loadPage(): Promise<void> {
@@ -202,6 +303,9 @@ export class CycleAssetDetail implements OnDestroy {
 
     const cycleNumberRaw =
       this.route.snapshot.paramMap.get('cycleNumber');
+
+    const returnToRaw =
+      this.route.snapshot.queryParamMap.get('returnTo');
 
     const parsedCycleNumber = Number(cycleNumberRaw ?? 1);
 
@@ -222,6 +326,10 @@ export class CycleAssetDetail implements OnDestroy {
     this.assetKey = assetKey;
     this.userId = user.uid;
     this.cycleNumber = parsedCycleNumber;
+    this.returnToUrl = this.getSafeReturnUrl(
+      returnToRaw,
+      leagueId
+    );
 
     try {
       const [league, teams] = await Promise.all([
@@ -246,12 +354,20 @@ export class CycleAssetDetail implements OnDestroy {
         }
       );
 
+      this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
+        leagueId,
+        this.cycleNumber,
+        (picks) => {
+          this.cycleRosterSnapshotPicks = picks;
+          this.refreshEffectivePicks();
+        }
+      );
+
       this.stopPicksListener = listenToDraftPicks(
         leagueId,
         (picks) => {
-          this.picks.set(picks);
-          this.picksLoaded.set(true);
-          void this.loadAssetDetailsIfReady();
+          this.liveDraftPicks = picks;
+          this.refreshEffectivePicks();
         }
       );
     } catch (error: unknown) {

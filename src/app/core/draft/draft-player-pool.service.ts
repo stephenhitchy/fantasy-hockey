@@ -48,6 +48,14 @@ interface PositionProjectionBaseline {
   highEndSeasonCap: number;
 }
 
+interface ProjectionCalculationResult {
+  projectedSeasonPoints: number | null;
+  projectedCyclePoints: number | null;
+  reliabilityRating: number | null;
+  volatilityPenalty: number | null;
+  floorAdjustedCyclePoints: number | null;
+}
+
 const POSITION_BASELINES: Record<DraftPosition, PositionProjectionBaseline> = {
   LW: {
     conservativeSeasonPoints: 320,
@@ -556,6 +564,58 @@ function getSkaterSampleTrust(gamesPlayed: number): number {
   return 0;
 }
 
+function roundOneDecimal(value: number): number {
+  return Number(value.toFixed(1));
+}
+
+function getDefaultReliabilityRating(position: DraftPosition): number {
+  if (position === 'G') {
+    return 68;
+  }
+
+  return 48;
+}
+
+function buildProjectionResult(
+  projectedSeasonPoints: number,
+  projectedCyclePoints: number,
+  reliabilityRating: number,
+  maxPenaltyRate: number
+): ProjectionCalculationResult {
+  const safeReliabilityRating = clamp(
+    reliabilityRating,
+    0,
+    100
+  );
+
+  const penaltyRate =
+    (100 - safeReliabilityRating) /
+    100 *
+    maxPenaltyRate;
+
+  const volatilityPenalty =
+    projectedCyclePoints * penaltyRate;
+
+  const floorAdjustedCyclePoints =
+    Math.max(
+      0,
+      projectedCyclePoints - volatilityPenalty
+    );
+
+  return {
+    projectedSeasonPoints:
+      roundOneDecimal(projectedSeasonPoints),
+    projectedCyclePoints:
+      roundOneDecimal(projectedCyclePoints),
+    reliabilityRating:
+      roundOneDecimal(safeReliabilityRating),
+    volatilityPenalty:
+      roundOneDecimal(volatilityPenalty),
+    floorAdjustedCyclePoints:
+      roundOneDecimal(floorAdjustedCyclePoints)
+  };
+}
+
 function blendWithBaseline(
   paceProjection: number,
   baselineProjection: number,
@@ -634,31 +694,115 @@ function calculateProjectedToiPoints(
     defaultScoringRules.forwardToiMultiplier;
 }
 
+function calculateSkaterReliabilityRating(
+  position: DraftPosition,
+  stats: Partial<SkaterProjectionStats>,
+  gamesPlayed: number
+): number {
+  if (gamesPlayed <= 0) {
+    return getDefaultReliabilityRating(position);
+  }
+
+  const averageTimeOnIceMinutes =
+    stats.averageTimeOnIceMinutes ?? 0;
+
+  const shotsPerGame =
+    (stats.shotsOnGoal ?? 0) / gamesPlayed;
+
+  const hitsPerGame =
+    (stats.hits ?? 0) / gamesPlayed;
+
+  const blocksPerGame =
+    (stats.blockedShots ?? 0) / gamesPlayed;
+
+  const powerPlayPointsPerGame =
+    (stats.powerPlayPoints ?? 0) / gamesPlayed;
+
+  const plusMinusPerGame =
+    (stats.plusMinus ?? 0) / gamesPlayed;
+
+  const gamesScore =
+    clamp(gamesPlayed / 82, 0, 1) * 42;
+
+  const toiTarget =
+    position === 'D'
+      ? 21
+      : 18;
+
+  const toiScore =
+    clamp(averageTimeOnIceMinutes / toiTarget, 0, 1) * 25;
+
+  const volumeScore =
+    position === 'D'
+      ? clamp(
+          (
+            shotsPerGame +
+            hitsPerGame * 0.25 +
+            blocksPerGame * 0.5
+          ) / 4,
+          0,
+          1
+        ) * 20
+      : clamp(
+          (
+            shotsPerGame +
+            hitsPerGame * 0.15 +
+            blocksPerGame * 0.2
+          ) / 3,
+          0,
+          1
+        ) * 20;
+
+  const specialTeamsRoleScore =
+    clamp(powerPlayPointsPerGame / 0.65, 0, 1) * 5;
+
+  const plusMinusStabilityScore =
+    position === 'D'
+      ? clamp(0.55 + plusMinusPerGame, 0, 1) * 5
+      : clamp(0.5 + plusMinusPerGame * 0.35, 0, 1) * 3;
+
+  const availabilityBonus =
+    gamesPlayed >= 78
+      ? 5
+      : gamesPlayed >= 70
+        ? 3
+        : 0;
+
+  return roundOneDecimal(
+    clamp(
+      gamesScore +
+        toiScore +
+        volumeScore +
+        specialTeamsRoleScore +
+        plusMinusStabilityScore +
+        availabilityBonus,
+      35,
+      98
+    )
+  );
+}
+
 function calculateSkaterProjection(
   position: DraftPosition,
   stats: Partial<SkaterProjectionStats> | undefined
-): {
-  projectedSeasonPoints: number | null;
-  projectedCyclePoints: number | null;
-} {
+): ProjectionCalculationResult {
   const gamesPlayed = stats?.gamesPlayed ?? 0;
 
   if (gamesPlayed <= 0) {
     const conservativeProjection =
       POSITION_BASELINES[position].conservativeSeasonPoints;
 
-    return {
-      projectedSeasonPoints:
-        Number(conservativeProjection.toFixed(1)),
-      projectedCyclePoints:
-        Number(
-          (
-            conservativeProjection /
-            82 *
-            defaultScoringRules.requiredGamesPerCycle
-          ).toFixed(1)
-        )
-    };
+    const conservativeCycleProjection =
+      conservativeProjection /
+      82 *
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return buildProjectionResult(
+      conservativeProjection,
+      conservativeCycleProjection,
+      getDefaultReliabilityRating(position),
+      0.22
+    );
   }
 
   const positionRules =
@@ -669,8 +813,8 @@ function calculateSkaterProjection(
   const goals = stats?.goals ?? 0;
   const assists = stats?.assists ?? 0;
 
-  const estimatedPrimaryAssists = assists * 0.65;
-  const estimatedSecondaryAssists = assists * 0.35;
+  const estimatedPrimaryAssists = assists * 0.4;
+  const estimatedSecondaryAssists = assists * 0.6;
 
   const rawSeasonFantasyPoints =
     estimateDiminishingSeasonTotal(
@@ -725,12 +869,19 @@ function calculateSkaterProjection(
     projectedSeasonPoints / 82 *
     defaultScoringRules.requiredGamesPerCycle;
 
-  return {
-    projectedSeasonPoints:
-      Number(projectedSeasonPoints.toFixed(1)),
-    projectedCyclePoints:
-      Number(projectedCyclePoints.toFixed(1))
-  };
+  const reliabilityRating =
+    calculateSkaterReliabilityRating(
+      position,
+      stats ?? {},
+      gamesPlayed
+    );
+
+  return buildProjectionResult(
+    projectedSeasonPoints,
+    projectedCyclePoints,
+    reliabilityRating,
+    0.22
+  );
 }
 
 function getGoalieSavePercentageTierPoints(
@@ -744,28 +895,76 @@ function getGoalieSavePercentageTierPoints(
   return matchingTier?.points ?? 0;
 }
 
+function calculateGoalieUnitReliabilityRating(
+  stats: Partial<GoalieProjectionStats> | undefined
+): number {
+  if (!stats) {
+    return getDefaultReliabilityRating('G');
+  }
+
+  const gamesPlayed = stats.gamesPlayed ?? 82;
+  const saves = stats.saves ?? 0;
+  const shotsAgainst = stats.shotsAgainst ?? 0;
+  const wins = stats.wins ?? 0;
+  const shutouts = stats.shutouts ?? 0;
+
+  const savePercentage =
+    shotsAgainst > 0
+      ? saves / shotsAgainst
+      : 0;
+
+  const shotsAgainstPerGame =
+    gamesPlayed > 0
+      ? shotsAgainst / gamesPlayed
+      : 0;
+
+  const gamesScore =
+    clamp(gamesPlayed / 82, 0, 1) * 25;
+
+  const workloadScore =
+    clamp(shotsAgainstPerGame / 31, 0, 1) * 25;
+
+  const savePercentageScore =
+    clamp((savePercentage - 0.86) / 0.08, 0, 1) * 25;
+
+  const winsScore =
+    clamp(wins / 55, 0, 1) * 15;
+
+  const shutoutScore =
+    clamp(shutouts / 10, 0, 1) * 5;
+
+  return roundOneDecimal(
+    clamp(
+      5 +
+        gamesScore +
+        workloadScore +
+        savePercentageScore +
+        winsScore +
+        shutoutScore,
+      50,
+      98
+    )
+  );
+}
+
 function calculateGoalieUnitProjection(
   stats: Partial<GoalieProjectionStats> | undefined
-): {
-  projectedSeasonPoints: number | null;
-  projectedCyclePoints: number | null;
-} {
+): ProjectionCalculationResult {
   if (!stats) {
     const conservativeProjection =
       POSITION_BASELINES.G.conservativeSeasonPoints;
 
-    return {
-      projectedSeasonPoints:
-        Number(conservativeProjection.toFixed(1)),
-      projectedCyclePoints:
-        Number(
-          (
-            conservativeProjection /
-            82 *
-            defaultScoringRules.requiredGamesPerCycle
-          ).toFixed(1)
-        )
-    };
+    const conservativeCycleProjection =
+      conservativeProjection /
+      82 *
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return buildProjectionResult(
+      conservativeProjection,
+      conservativeCycleProjection,
+      getDefaultReliabilityRating('G'),
+      0.18
+    );
   }
 
   const gamesPlayed = stats.gamesPlayed ?? 82;
@@ -792,12 +991,15 @@ function calculateGoalieUnitProjection(
     projectedSeasonPoints / 82 *
     defaultScoringRules.requiredGamesPerCycle;
 
-  return {
-    projectedSeasonPoints:
-      Number(projectedSeasonPoints.toFixed(1)),
-    projectedCyclePoints:
-      Number(projectedCyclePoints.toFixed(1))
-  };
+  const reliabilityRating =
+    calculateGoalieUnitReliabilityRating(stats);
+
+  return buildProjectionResult(
+    projectedSeasonPoints,
+    projectedCyclePoints,
+    reliabilityRating,
+    0.18
+  );
 }
 
 function getAssetName(asset: DraftableAsset): string {
@@ -840,6 +1042,12 @@ export async function loadDraftPlayerPool(
           projection.projectedSeasonPoints,
         projectedCyclePoints:
           projection.projectedCyclePoints,
+        reliabilityRating:
+          projection.reliabilityRating,
+        volatilityPenalty:
+          projection.volatilityPenalty,
+        floorAdjustedCyclePoints:
+          projection.floorAdjustedCyclePoints,
         player: {
           id: skater.id,
           fullName: skater.fullName,
@@ -868,7 +1076,13 @@ export async function loadDraftPlayerPool(
         projectedSeasonPoints:
           projection.projectedSeasonPoints,
         projectedCyclePoints:
-          projection.projectedCyclePoints
+          projection.projectedCyclePoints,
+        reliabilityRating:
+          projection.reliabilityRating,
+        volatilityPenalty:
+          projection.volatilityPenalty,
+        floorAdjustedCyclePoints:
+          projection.floorAdjustedCyclePoints
       };
     });
 

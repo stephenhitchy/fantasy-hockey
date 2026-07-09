@@ -8,9 +8,10 @@
   <section class="asset-detail-page">
     <a
       class="back-link"
-      [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
+      [href]="getBackUrl()"
+      (click)="navigateBack($event)"
     >
-      ← Back to Cycle {{ cycleNumber }}
+      ← {{ getBackLinkLabel() }}
     </a>
 
     @if (!cycle()) {

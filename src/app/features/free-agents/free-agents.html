@@ -1,0 +1,249 @@
+@if (loading()) {
+  <p class="page-loading">Loading free agents...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="free-agents-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId, 'team']"
+    >
+      ← Back to My Team
+    </a>
+
+    <header class="free-agent-hero">
+      <div>
+        <span class="eyebrow">Roster Moves</span>
+        <h1>Add / Drop Player</h1>
+        <p>
+          Pick a free agent, then choose an open same-position slot or drop one player from the same position.
+          Current cycle rosters are already locked, so new moves begin scoring with the next cycle snapshot.
+        </p>
+      </div>
+
+      <div
+        class="status-card"
+        [class.status-open]="draft()?.status === 'complete'"
+        [class.status-closed]="draft()?.status !== 'complete'"
+      >
+        <span>Free Agency</span>
+        <strong>{{ getDraftStatusText() }}</strong>
+      </div>
+    </header>
+
+    <section class="message-card success-card">
+      Roster moves now preserve draft history. IR can open active roster spots, and free agents can fill those open same-position slots. Current cycle snapshots stay locked; scoring changes begin with {{ getEffectiveCycleText() }}.
+    </section>
+
+    @if (successMessage()) {
+      <section class="message-card success-card">
+        {{ successMessage() }}
+      </section>
+    }
+
+    @if (errorMessage()) {
+      <section class="message-card error-card">
+        {{ errorMessage() }}
+      </section>
+    }
+
+    <section class="move-builder-card">
+      <div>
+        <span class="eyebrow">Current Move</span>
+        <h2>{{ getMoveSummary() }}</h2>
+      </div>
+
+      <button
+        type="button"
+        class="confirm-move-button"
+        (click)="confirmAddDrop()"
+        [disabled]="!canConfirmMove() || moving()"
+      >
+        {{ moving() ? 'Saving Move...' : 'Confirm Add / Drop' }}
+      </button>
+    </section>
+
+    <section class="free-agent-layout">
+      <section class="free-agent-list-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Available Players</span>
+            <h2>Free Agent Pool</h2>
+          </div>
+
+          <button
+            type="button"
+            class="refresh-button"
+            (click)="loadPlayerPool()"
+            [disabled]="playerPoolLoading()"
+          >
+            {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Pool' }}
+          </button>
+        </div>
+
+        <div class="filter-row">
+          <label>
+            Search
+            <input
+              [ngModel]="searchTerm()"
+              (ngModelChange)="setSearchTerm($event)"
+              placeholder="Search name or team"
+            />
+          </label>
+
+          <label>
+            Position
+            <select
+              [ngModel]="positionFilter()"
+              (ngModelChange)="setPositionFilter($event)"
+            >
+              @for (position of positionFilters; track position) {
+                <option [value]="position">
+                  {{ position === 'ALL' ? 'All Positions' : position }}
+                </option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="pool-count-row">
+          <strong>{{ availableAssets().length }}</strong>
+          <span>available assets found</span>
+        </div>
+
+        @if (playerPoolLoading()) {
+          <div class="empty-card">
+            Loading NHL player pool...
+          </div>
+        } @else if (availableAssets().length === 0) {
+          <div class="empty-card">
+            No free agents match your filters.
+          </div>
+        } @else {
+          <div class="asset-list">
+            @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
+              <article
+                class="asset-row"
+                [class.selected-asset-row]="isSelectedAddAsset(asset)"
+              >
+                @if (getAssetLogoUrl(asset); as logoUrl) {
+                  <img
+                    [src]="logoUrl"
+                    [alt]="getAssetTeamLabel(asset) + ' logo'"
+                  />
+                }
+
+                <div class="asset-main">
+                  <strong>{{ getAssetName(asset) }}</strong>
+                  <span>
+                    {{ getAssetTeamLabel(asset) }}
+                    ·
+                    {{ asset.position }}
+                  </span>
+                </div>
+
+                <div class="asset-projection">
+                  <strong>{{ getDisplayNumber(asset.projectedCyclePoints) }}</strong>
+                  <span>Cycle Proj</span>
+                </div>
+
+                <button
+                  type="button"
+                  (click)="selectAddAsset(asset)"
+                  [disabled]="draft()?.status !== 'complete'"
+                >
+                  {{ isSelectedAddAsset(asset) ? 'Selected' : 'Add' }}
+                </button>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <aside class="drop-panel-card">
+        <div class="section-heading stacked-heading">
+          <div>
+            <span class="eyebrow">Roster Spot</span>
+            <h2>Open Slot or Same-Position Drop</h2>
+          </div>
+
+          <p>
+            Use an open slot created by IR when available, or drop a same-position player. Already-created cycle snapshots keep their original players.
+          </p>
+        </div>
+
+        @if (!selectedAddAsset()) {
+          <div class="empty-card">
+            Select a free agent first.
+          </div>
+        } @else if (dropCandidates().length === 0) {
+          <div class="empty-card">
+            No open {{ selectedAddAsset()?.position }} slot or matching roster player was found.
+          </div>
+        } @else {
+          <div class="drop-list">
+            @for (candidate of dropCandidates(); track candidate.slotId) {
+              <article
+                class="drop-row"
+                [class.selected-drop-row]="isSelectedDropCandidate(candidate)"
+                [class.open-slot-row]="candidate.moveType === 'open-slot'"
+              >
+                @if (candidate.asset) {
+                  @if (getRosterAssetLogoUrl(candidate.asset); as logoUrl) {
+                    <img
+                      [src]="logoUrl"
+                      [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'"
+                    />
+                  }
+                } @else {
+                  <span class="open-slot-icon">+</span>
+                }
+
+                <div>
+                  <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
+                  <span>{{ getRosterSpotCandidateDescription(candidate) }}</span>
+                </div>
+
+                <button
+                  type="button"
+                  (click)="selectDropCandidate(candidate)"
+                >
+                  @if (candidate.moveType === 'open-slot') {
+                    {{ isSelectedDropCandidate(candidate) ? 'Filling' : 'Fill Slot' }}
+                  } @else {
+                    {{ isSelectedDropCandidate(candidate) ? 'Dropping' : 'Drop' }}
+                  }
+                </button>
+              </article>
+            }
+          </div>
+        }
+
+        @if (selectedAddAsset(); as addAsset) {
+          <section class="selected-summary-card">
+            <span class="eyebrow">Adding</span>
+            <strong>{{ getAssetName(addAsset) }}</strong>
+            <p>
+              {{ getAssetTeamLabel(addAsset) }}
+              ·
+              {{ addAsset.position }}
+              ·
+              {{ getDisplayNumber(addAsset.projectedCyclePoints) }} cycle projection
+            </p>
+            <p>{{ getEffectiveCycleText() }}</p>
+          </section>
+        }
+
+        @if (selectedDropCandidate(); as dropCandidate) {
+          <section class="selected-summary-card drop-summary">
+            <span class="eyebrow">
+              {{ dropCandidate.moveType === 'open-slot' ? 'Filling' : 'Dropping' }}
+            </span>
+            <strong>{{ getRosterSpotCandidateName(dropCandidate) }}</strong>
+            <p>{{ getRosterSpotCandidateDescription(dropCandidate) }}</p>
+          </section>
+        }
+      </aside>
+    </section>
+  </section>
+}

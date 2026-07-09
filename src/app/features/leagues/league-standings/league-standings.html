@@ -1,0 +1,174 @@
+@if (loading()) {
+  <p class="page-loading">Loading league standings...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="standings-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="standings-header">
+      <div>
+        <span class="eyebrow">League Hub</span>
+        <h1>{{ league()?.name }} Standings</h1>
+        <p>{{ getLeagueStatusText() }}</p>
+      </div>
+
+      <button
+        type="button"
+        class="refresh-button"
+        (click)="refreshStandings()"
+        [disabled]="refreshing()"
+      >
+        {{ refreshing() ? 'Refreshing...' : 'Refresh' }}
+      </button>
+    </header>
+
+    @if (errorMessage()) {
+      <p class="status-card error-card">{{ errorMessage() }}</p>
+    }
+
+    <section class="league-actions-card">
+      <a
+        [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
+      >
+        Current Cycle
+      </a>
+
+      <a
+        [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+      >
+        Matchup Overview
+      </a>
+
+      <a
+        [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+      >
+        Schedule Preview
+      </a>
+
+      <a
+        [routerLink]="['/leagues', leagueId, 'projections']"
+      >
+        Projections
+      </a>
+
+      <a
+        [routerLink]="['/leagues', leagueId, 'draft']"
+      >
+        Draft Room
+      </a>
+    </section>
+
+    <section class="league-summary-grid">
+      <article>
+        <span>Teams</span>
+        <strong>{{ teams().length }}</strong>
+      </article>
+
+      <article>
+        <span>Current Cycle</span>
+        <strong>Cycle {{ currentCycleNumber() }}</strong>
+      </article>
+
+      <article>
+        <span>Completed Matchups</span>
+        <strong>{{ completedMatchups().length }}</strong>
+      </article>
+
+      <article>
+        <span>Cycles Created</span>
+        <strong>{{ cycles().length }}</strong>
+      </article>
+    </section>
+
+    <section class="standings-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Standings</span>
+          <h2>League Table</h2>
+        </div>
+      </div>
+
+      @if (standingsRows().length === 0) {
+        <p class="empty-copy">No teams were found for this league.</p>
+      } @else {
+        <div class="standings-table-wrap">
+          <table class="standings-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Team</th>
+                <th>Record</th>
+                <th>Win %</th>
+                <th>PF</th>
+                <th>PA</th>
+                <th>Diff</th>
+                <th>Active Matchup</th>
+                <th>Last Result</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              @for (row of standingsRows(); track row.ownerId) {
+                <tr [class.first-place-row]="row.rank === 1">
+                  <td>
+                    <strong class="rank-pill">#{{ row.rank }}</strong>
+                  </td>
+
+                  <td>
+                    <div class="team-cell">
+                      <strong>{{ row.teamName }}</strong>
+                      @if (row.ownerId === userId) {
+                        <span>Your Team</span>
+                      }
+                    </div>
+                  </td>
+
+                  <td>{{ getRecordLabel(row) }}</td>
+                  <td>{{ getWinPercentageLabel(row) }}</td>
+                  <td>{{ getPointDisplay(row.pointsFor) }}</td>
+                  <td>{{ getPointDisplay(row.pointsAgainst) }}</td>
+                  <td
+                    [class.positive-diff]="row.pointDifferential > 0"
+                    [class.negative-diff]="row.pointDifferential < 0"
+                  >
+                    {{ getPointDifferentialDisplay(row.pointDifferential) }}
+                  </td>
+
+                  <td>
+                    @if (getActiveMatchupLink(row); as matchupLink) {
+                      <a
+                        class="matchup-link"
+                        [routerLink]="matchupLink"
+                      >
+                        {{ getActiveMatchupOpponentLabel(row.ownerId) }}
+                        @if (getActiveMatchupScoreLabel(row.ownerId)) {
+                          <span>{{ getActiveMatchupScoreLabel(row.ownerId) }}</span>
+                        }
+                      </a>
+                    } @else {
+                      <span class="muted-copy">
+                        {{ getActiveMatchupOpponentLabel(row.ownerId) }}
+                      </span>
+                    }
+                  </td>
+
+                  <td>
+                    <span class="last-result-pill">
+                      {{ getLastResultLabel(row.ownerId) }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </section>
+}

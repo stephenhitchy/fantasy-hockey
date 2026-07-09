@@ -1,5 +1,6 @@
 import {
   doc,
+  onSnapshot,
   runTransaction,
   serverTimestamp,
   setDoc
@@ -106,6 +107,28 @@ export async function getOrCreateFantasyRoster(
 
     return roster;
   });
+}
+
+export function listenToFantasyRoster(
+  leagueId: string,
+  ownerId: string,
+  callback: (roster: FantasyRoster | null) => void
+): () => void {
+  return onSnapshot(
+    getFantasyRosterRef(leagueId, ownerId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
+
+      callback(
+        normalizeFantasyRoster(
+          snapshot.data() as Partial<FantasyRoster>
+        )
+      );
+    }
+  );
 }
 
 export async function saveFantasyRoster(

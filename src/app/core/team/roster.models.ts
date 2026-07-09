@@ -8,14 +8,38 @@ export interface RosterCycleScore {
   fantasyPoints: number;
 }
 
-export interface SkaterRosterAsset {
+export type RosterStatus =
+  | 'active'
+  | 'injured'
+  | 'benched'
+  | 'new'
+  | 'moved';
+
+export interface BaseRosterAsset {
+  /**
+   * Stored going forward so roster moves can match assets without guessing.
+   * Older rosters may not have this, so service helpers still fall back to
+   * skater-{player.id} or goalie-unit-{teamAbbreviation}.
+   */
+  assetKey?: string;
+  rosterStatus?: RosterStatus;
+
+  projectedSeasonPoints?: number | null;
+  projectedCyclePoints?: number | null;
+  reliabilityRating?: number | null;
+  volatilityPenalty?: number | null;
+  floorAdjustedCyclePoints?: number | null;
+  floorAdjustedDraftValue?: number | null;
+}
+
+export interface SkaterRosterAsset extends BaseRosterAsset {
   assetType: 'skater';
   position: 'LW' | 'C' | 'RW' | 'D';
   player: NHLPlayer;
   cycleScore: RosterCycleScore;
 }
 
-export interface TeamGoalieUnitAsset {
+export interface TeamGoalieUnitAsset extends BaseRosterAsset {
   assetType: 'team-goalie-unit';
   position: 'G';
   teamName: string;

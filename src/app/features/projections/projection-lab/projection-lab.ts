@@ -33,7 +33,9 @@ type ProjectionPositionFilter = 'ALL' | DraftPosition;
 
 type ProjectionSortMode =
   | 'DRAFT_VALUE'
+  | 'FLOOR_DRAFT_VALUE'
   | 'VALUE_RATING'
+  | 'RELIABILITY'
   | 'RATING'
   | 'PROJECTED_CYCLE'
   | 'PROJECTED_SEASON'
@@ -52,6 +54,12 @@ interface ProjectionRow {
   projectedCycle: number;
   replacementProjection: number;
   draftValue: number;
+  reliabilityRating: number;
+  volatilityPenalty: number;
+  floorAdjustedCycle: number;
+  floorAdjustedDraftValue: number;
+  floorValueRating: number;
+  riskLabel: string;
   rating: number;
   replacementRating: number;
   valueRating: number;
@@ -104,7 +112,7 @@ export class ProjectionLab {
 
   searchTerm = signal('');
   positionFilter = signal<ProjectionPositionFilter>('ALL');
-  sortMode = signal<ProjectionSortMode>('DRAFT_VALUE');
+  sortMode = signal<ProjectionSortMode>('FLOOR_DRAFT_VALUE');
 
   teamCountOverride = signal<number | null>(null);
   projectedGamesPerCycle = signal(6);
@@ -166,6 +174,15 @@ export class ProjectionLab {
 
     return [...rows].sort((first, second) => {
       switch (sortMode) {
+        case 'FLOOR_DRAFT_VALUE':
+          return second.floorAdjustedDraftValue - first.floorAdjustedDraftValue;
+
+        case 'RELIABILITY':
+          return (
+            second.reliabilityRating - first.reliabilityRating ||
+            second.floorAdjustedDraftValue - first.floorAdjustedDraftValue
+          );
+
         case 'VALUE_RATING':
           return second.valueRating - first.valueRating;
 
@@ -396,7 +413,9 @@ export class ProjectionLab {
   setSortMode(value: string): void {
     const validSorts: ProjectionSortMode[] = [
       'DRAFT_VALUE',
+      'FLOOR_DRAFT_VALUE',
       'VALUE_RATING',
+      'RELIABILITY',
       'RATING',
       'PROJECTED_CYCLE',
       'PROJECTED_SEASON',
@@ -534,19 +553,19 @@ export class ProjectionLab {
   }
 
   getRowClass(row: ProjectionRow): string {
-  if (row.valueRating >= 30) {
+  if (row.floorValueRating >= 30) {
     return 'league-winner-value';
   }
 
-  if (row.valueRating >= 22) {
+  if (row.floorValueRating >= 22) {
     return 'elite-value';
   }
 
-  if (row.valueRating >= 15) {
+  if (row.floorValueRating >= 15) {
     return 'strong-value';
   }
 
-  if (row.valueRating < -8) {
+  if (row.floorValueRating < -8) {
     return 'low-value';
   }
 
@@ -564,6 +583,28 @@ export class ProjectionLab {
       const projectedCycle =
         projectedPpg * this.projectedGamesPerCycle();
 
+      const sourceCycleProjection =
+        asset.projectedCyclePoints ?? projectedCycle;
+
+      const floorAdjustedSourceCycle =
+        typeof asset.floorAdjustedCyclePoints === 'number'
+          ? asset.floorAdjustedCyclePoints
+          : sourceCycleProjection;
+
+      const floorAdjustmentRatio =
+        sourceCycleProjection > 0
+          ? floorAdjustedSourceCycle / sourceCycleProjection
+          : 1;
+
+      const reliabilityRating =
+        this.getAssetReliabilityRating(asset);
+
+      const floorAdjustedCycle =
+        projectedCycle * floorAdjustmentRatio;
+
+      const volatilityPenalty =
+        Math.max(0, projectedCycle - floorAdjustedCycle);
+
       return {
         asset,
         name: this.getAssetName(asset),
@@ -572,7 +613,11 @@ export class ProjectionLab {
         logoUrl: this.getAssetLogoUrl(asset),
         projectedSeason,
         projectedPpg,
-        projectedCycle
+        projectedCycle,
+        reliabilityRating,
+        volatilityPenalty,
+        floorAdjustedCycle,
+        riskLabel: this.getRiskLabel(reliabilityRating)
       };
     });
 
@@ -615,6 +660,9 @@ export class ProjectionLab {
       const replacementProjection =
         positionRows[replacementIndex]?.projectedCycle ?? 0;
 
+      const floorReplacementProjection =
+        positionRows[replacementIndex]?.floorAdjustedCycle ?? 0;
+
       const ratingDenominator =
         position === 'G'
           ? topGoalieCycle
@@ -623,9 +671,15 @@ export class ProjectionLab {
       const replacementRating =
         replacementProjection / ratingDenominator * 100;
 
+      const floorReplacementRating =
+        floorReplacementProjection / ratingDenominator * 100;
+
       positionRows.forEach((row, index) => {
         const draftValue =
           row.projectedCycle - replacementProjection;
+
+        const floorAdjustedDraftValue =
+          row.floorAdjustedCycle - floorReplacementProjection;
 
         const rating =
           row.projectedCycle / ratingDenominator * 100;
@@ -633,23 +687,33 @@ export class ProjectionLab {
         const valueRating =
           rating - replacementRating;
 
+        const floorValueRating =
+          row.floorAdjustedCycle / ratingDenominator * 100 -
+          floorReplacementRating;
+
         rows.push({
           ...row,
           replacementProjection,
           draftValue,
+          reliabilityRating: row.reliabilityRating,
+          volatilityPenalty: row.volatilityPenalty,
+          floorAdjustedCycle: row.floorAdjustedCycle,
+          floorAdjustedDraftValue,
+          floorValueRating,
+          riskLabel: row.riskLabel,
           rating,
           replacementRating,
           valueRating,
           positionRank: index + 1,
           overallValueRank: 0,
-          tier: this.getTierLabel(valueRating)
+          tier: this.getTierLabel(floorValueRating)
         });
       });
     }
 
     const rankedByValue = [...rows].sort(
       (first, second) =>
-        second.draftValue - first.draftValue
+        second.floorAdjustedDraftValue - first.floorAdjustedDraftValue
     );
 
     const rankByAssetKey = new Map<string, number>();
@@ -666,6 +730,11 @@ export class ProjectionLab {
         projectedCycle: this.round(row.projectedCycle),
         replacementProjection: this.round(row.replacementProjection),
         draftValue: this.round(row.draftValue),
+        reliabilityRating: this.round(row.reliabilityRating),
+        volatilityPenalty: this.round(row.volatilityPenalty),
+        floorAdjustedCycle: this.round(row.floorAdjustedCycle),
+        floorAdjustedDraftValue: this.round(row.floorAdjustedDraftValue),
+        floorValueRating: this.round(row.floorValueRating),
         rating: this.round(row.rating),
         replacementRating: this.round(row.replacementRating),
         valueRating: this.round(row.valueRating),
@@ -676,6 +745,40 @@ export class ProjectionLab {
         (first, second) =>
           first.overallValueRank - second.overallValueRank
       );
+  }
+
+  getRiskLabel(value: number | null | undefined): string {
+    if (typeof value !== 'number') {
+      return 'Unknown';
+    }
+
+    if (value >= 85) {
+      return 'Very Safe';
+    }
+
+    if (value >= 75) {
+      return 'Safe';
+    }
+
+    if (value >= 65) {
+      return 'Normal';
+    }
+
+    if (value >= 55) {
+      return 'Volatile';
+    }
+
+    return 'Risky';
+  }
+
+  private getAssetReliabilityRating(asset: DraftableAsset): number {
+    if (typeof asset.reliabilityRating === 'number') {
+      return asset.reliabilityRating;
+    }
+
+    return asset.position === 'G'
+      ? 68
+      : 60;
   }
 
   private getProjectedSeason(asset: DraftableAsset): number {

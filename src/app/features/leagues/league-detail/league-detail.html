@@ -1,7 +1,7 @@
 @if (loading()) {
-  <p>Loading league...</p>
+  <p class="page-loading">Loading league...</p>
 } @else if (!league()) {
-  <p>{{ errorMessage() || 'League not found.' }}</p>
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="league-page">
     <header class="league-header">
@@ -29,7 +29,7 @@
           >
             Enter Live Draft
           </a>
-        } @else {
+        } @else if (draft()?.status !== 'complete') {
           <a
             class="secondary-action"
             [routerLink]="['/leagues', leagueId, 'draft']"
@@ -38,7 +38,7 @@
           </a>
         }
 
-        @if (isCommissioner()) {
+        @if (isCommissioner() && draft()?.status !== 'complete') {
           <a
             class="primary-action"
             [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
@@ -49,6 +49,12 @@
       </div>
     </header>
 
+    @if (errorMessage()) {
+      <section class="error-card">
+        {{ errorMessage() }}
+      </section>
+    }
+
     <section class="league-info-grid">
       <article class="league-info-card">
         <span>Format</span>
@@ -56,9 +62,14 @@
       </article>
 
       <article class="league-info-card">
+        <span>Current Cycle</span>
+        <strong>{{ currentCycleLabel() }}</strong>
+      </article>
+
+      <article class="league-info-card">
         <span>Games Per Cycle</span>
         <strong>
-          {{ league()?.scoringRules?.requiredGamesPerCycle }}
+          {{ league()?.scoringRules?.requiredGamesPerCycle ?? 6 }}
         </strong>
       </article>
 
@@ -68,165 +79,270 @@
       </article>
     </section>
 
-    <section class="draft-status-card">
-      <div class="draft-status-heading">
-        <div>
-          <span class="draft-section-eyebrow">League Draft</span>
-          <h2>Draft Status</h2>
+    @if (shouldShowDraftStatus()) {
+      <section class="draft-status-card">
+        <div class="draft-status-heading">
+          <div>
+            <span class="draft-section-eyebrow">League Draft</span>
+            <h2>Draft Status</h2>
+          </div>
+
+          <span
+            class="draft-status-badge"
+            [class.status-scheduled]="draft()?.status === 'scheduled' && !startTimeReached()"
+            [class.status-ready]="startTimeReached()"
+            [class.status-live]="draft()?.status === 'live'"
+            [class.status-complete]="draft()?.status === 'complete'"
+          >
+            {{ draftStatusLabel() }}
+          </span>
         </div>
 
-        <span
-          class="draft-status-badge"
-          [class.status-scheduled]="draft()?.status === 'scheduled' && !startTimeReached()"
-          [class.status-ready]="startTimeReached()"
-          [class.status-live]="draft()?.status === 'live'"
-          [class.status-complete]="draft()?.status === 'complete'"
+        <p class="draft-status-description">
+          {{ draftStatusDescription() }}
+        </p>
+
+        @if (scheduledStartDate()) {
+          <div class="draft-time-display">
+            <strong>{{ formatDraftStart() }}</strong>
+            <span>{{ countdownText() }}</span>
+          </div>
+        } @else {
+          <div class="draft-time-display empty-draft-time">
+            <strong>No date selected yet</strong>
+            <span>
+              Check back once the commissioner schedules the draft.
+            </span>
+          </div>
+        }
+      </section>
+    }
+
+    <section class="quick-actions-card">
+      <div>
+        <span class="draft-section-eyebrow">League Hub</span>
+        <h2>Quick Actions</h2>
+        <p>
+          Jump to the main league pages from one place.
+        </p>
+      </div>
+
+      <div class="quick-actions-grid">
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
         >
-          {{ draftStatusLabel() }}
-        </span>
-      </div>
+          <strong>View Current Matchup</strong>
+          <span>Your detailed current-cycle matchup.</span>
+        </a>
 
-      <p class="draft-status-description">
-        {{ draftStatusDescription() }}
-      </p>
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+        >
+          <strong>Current Cycle Matchups</strong>
+          <span>All matchups for {{ currentCycleLabel() }}.</span>
+        </a>
 
-      @if (scheduledStartDate()) {
-        <div class="draft-time-display">
-          <strong>{{ formatDraftStart() }}</strong>
-          <span>{{ countdownText() }}</span>
-        </div>
-      } @else {
-        <div class="draft-time-display empty-draft-time">
-          <strong>No date selected yet</strong>
-          <span>
-            Check back once the commissioner schedules the draft.
-          </span>
-        </div>
-      }
-    </section>
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+        >
+          <strong>Full Schedule View</strong>
+          <span>Round-robin schedule and matchup history.</span>
+        </a>
 
-    
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'standings']"
+        >
+          <strong>League Standings</strong>
+          <span>Records, points for, points against, and results.</span>
+        </a>
 
-    <section class="cycle-status-card">
-  <div class="cycle-status-heading">
-    <div>
-      <span class="draft-section-eyebrow">Fantasy Season</span>
-      <h2>Cycle 1</h2>
-    </div>
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'projections']"
+        >
+          <strong>Projection Lab</strong>
+          <span>Ratings, draft value, and reliability checks.</span>
+        </a>
 
-    @if (cycle()) {
-      <span class="cycle-status-badge status-live">
-        Active
-      </span>
-    } @else if (draft()?.status === 'complete') {
-      <span class="cycle-status-badge status-ready">
-        Ready
-      </span>
-    } @else {
-      <span class="cycle-status-badge">
-        Locked
-      </span>
-    }
-  </div>
-
-  @if (cycle()) {
-    <p class="draft-status-description">
-      Cycle 1 is active. Matchups are ready for scoring.
-    </p>
-
-    <a
-  class="view-cycle-link"
-  [routerLink]="['/leagues', leagueId, 'cycles', 1]"
->
-  View Full Matchups
-</a>
-
-    <div class="matchup-list">
-      @for (matchup of matchups(); track matchup.id) {
-        <article class="matchup-card">
-          <div class="matchup-team-row">
-            <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
-            <span>{{ matchup.teamAScore.toFixed(1) }}</span>
-          </div>
-
-          <div class="matchup-vs">vs</div>
-
-          <div class="matchup-team-row">
-            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
-            <span>{{ matchup.teamBScore.toFixed(1) }}</span>
-          </div>
-        </article>
-      }
-    </div>
-  } @else if (draft()?.status === 'complete') {
-    <p class="draft-status-description">
-      The draft is complete. The commissioner can now start the first fantasy cycle.
-    </p>
-
-    @if (isCommissioner()) {
-      <button
-        type="button"
-        class="start-cycle-button"
-        (click)="startFirstCycle()"
-        [disabled]="!canStartCycleOne() || cycleActionInProgress()"
-      >
-        {{
-          cycleActionInProgress()
-            ? 'Starting Cycle...'
-            : 'Start Cycle 1'
-        }}
-      </button>
-    } @else {
-      <p class="cycle-waiting-copy">
-        Waiting for the commissioner to start Cycle 1.
-      </p>
-    }
-  } @else {
-    <p class="draft-status-description">
-      Finish the draft before starting the fantasy season.
-    </p>
-  }
-
-  @if (cycleActionMessage()) {
-    <p class="cycle-action-message">
-      {{ cycleActionMessage() }}
-    </p>
-  }
-</section>
-
-    <section class="invite-card">
-      <div>
-        <h2>Invite Code</h2>
-        <strong class="invite-code">
-          {{ league()?.inviteCode }}
-        </strong>
-      </div>
-
-      <div>
-        <button (click)="copyInviteCode()">
-          Copy Invite Code
-        </button>
-
-        @if (copyMessage()) {
-          <span class="copy-message">
-            {{ copyMessage() }}
-          </span>
+        @if (draft()?.status !== 'complete') {
+          <a
+            class="hub-action"
+            [routerLink]="['/leagues', leagueId, 'draft']"
+          >
+            <strong>Draft Room</strong>
+            <span>Enter or review the league draft.</span>
+          </a>
         }
       </div>
     </section>
 
+    <section class="cycle-status-card">
+      <div class="cycle-status-heading">
+        <div>
+          <span class="draft-section-eyebrow">Fantasy Season</span>
+          <h2>{{ currentCycleLabel() }}</h2>
+        </div>
+
+        <span
+          class="cycle-status-badge"
+          [class.status-live]="cycle()?.status === 'active'"
+          [class.status-complete]="cycle()?.status === 'complete'"
+          [class.status-ready]="!cycle() && draft()?.status === 'complete'"
+        >
+          {{ getCurrentCycleStatusLabel() }}
+        </span>
+      </div>
+
+      <p class="draft-status-description">
+        {{ getCurrentCycleDescription() }}
+      </p>
+
+      @if (cycle()) {
+        <div class="cycle-link-row">
+          <a
+            class="view-cycle-link"
+            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
+          >
+            View Current Matchup
+          </a>
+
+          <a
+            class="view-cycle-link secondary-cycle-link"
+            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+          >
+            View All Matchups
+          </a>
+        </div>
+
+        <div class="matchup-list">
+          @for (matchup of matchups(); track matchup.id) {
+            <article
+              class="matchup-card"
+              [class.matchup-complete-card]="matchup.status === 'complete'"
+            >
+              <header>
+                <strong>{{ matchup.id }}</strong>
+                <span>{{ getMatchupResultLabel(matchup) }}</span>
+              </header>
+
+              <div class="matchup-team-row">
+                <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                <span>{{ getDisplayNumber(matchup.teamAScore) }}</span>
+              </div>
+
+              <div class="matchup-vs">vs</div>
+
+              <div class="matchup-team-row">
+                <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                <span>{{ getDisplayNumber(matchup.teamBScore) }}</span>
+              </div>
+            </article>
+          }
+        </div>
+      } @else if (draft()?.status === 'complete') {
+        @if (isCommissioner()) {
+          <button
+            type="button"
+            class="start-cycle-button"
+            (click)="startFirstCycle()"
+            [disabled]="!canStartCycleOne() || cycleActionInProgress()"
+          >
+            {{
+              cycleActionInProgress()
+                ? 'Starting Cycle...'
+                : 'Start Cycle 1'
+            }}
+          </button>
+        } @else {
+          <p class="cycle-waiting-copy">
+            Waiting for the commissioner to start Cycle 1.
+          </p>
+        }
+      }
+
+      @if (cycleActionMessage()) {
+        <p class="cycle-action-message">
+          {{ cycleActionMessage() }}
+        </p>
+      }
+    </section>
+
+    @if (shouldShowInviteCode()) {
+      <section class="invite-card">
+        <div>
+          <h2>Invite Code</h2>
+          <strong class="invite-code">
+            {{ league()?.inviteCode }}
+          </strong>
+        </div>
+
+        <div>
+          <button (click)="copyInviteCode()">
+            Copy Invite Code
+          </button>
+
+          @if (copyMessage()) {
+            <span class="copy-message">
+              {{ copyMessage() }}
+            </span>
+          }
+        </div>
+      </section>
+    }
+
     <section class="teams-section">
-      <h2>Teams</h2>
+      <div class="section-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Teams</span>
+          <h2>Teams</h2>
+        </div>
+
+        <a
+          class="standings-link"
+          [routerLink]="['/leagues', leagueId, 'standings']"
+        >
+          Full Standings
+        </a>
+      </div>
 
       <div class="teams-grid">
-        @for (team of teams(); track team.id) {
+        @for (team of sortedTeams(); track team.id) {
           <article class="team-card">
-            <h3>{{ team.teamName }}</h3>
-            <p>
-              Record:
-              {{ team.wins }}-{{ team.losses }}-{{ team.ties }}
-            </p>
-            <p>Points For: {{ team.pointsFor }}</p>
+            <div class="team-card-heading">
+              <h3>{{ team.teamName }}</h3>
+              <span>{{ getWinPercentage(team) }}</span>
+            </div>
+
+            <div class="team-stat-grid">
+              <div>
+                <span>Record</span>
+                <strong>{{ getTeamRecord(team) }}</strong>
+              </div>
+
+              <div>
+                <span>PF</span>
+                <strong>{{ getDisplayNumber(team.pointsFor) }}</strong>
+              </div>
+
+              <div>
+                <span>PA</span>
+                <strong>{{ getDisplayNumber(team.pointsAgainst) }}</strong>
+              </div>
+
+              <div>
+                <span>Diff</span>
+                <strong
+                  [class.positive-diff]="getPointDifferential(team) > 0"
+                  [class.negative-diff]="getPointDifferential(team) < 0"
+                >
+                  {{ getSignedDisplayNumber(getPointDifferential(team)) }}
+                </strong>
+              </div>
+            </div>
           </article>
         }
       </div>

@@ -121,7 +121,8 @@
   [ngModel]="sortMode()"
   (ngModelChange)="setSortMode($event)"
 >
-<option value="DRAFT_VALUE">Sort: Value Rank</option>
+<option value="DRAFT_VALUE">Sort: Balanced Value Rank</option>
+<option value="RELIABILITY">Sort: Reliability</option>
 <option value="RATING">Sort: Rating</option>
 <option value="PROJECTED_CYCLE">Sort: Projected Cycle</option>
 <option value="PROJECTED_SEASON">Sort: Expected Season</option>
@@ -181,6 +182,10 @@
   <small>
     Rating:
     {{ getAssetRatingDisplay(asset) }}
+  </small>
+
+  <small>
+    {{ getAssetRiskLabel(asset) }}
   </small>
 
   <small>
@@ -288,6 +293,10 @@
   <small>
     Rating:
     {{ getAssetRatingDisplay(pick.asset) }}
+  </small>
+
+  <small>
+    {{ getAssetRiskLabel(pick.asset) }}
   </small>
 
   <small>

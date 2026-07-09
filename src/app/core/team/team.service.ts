@@ -3,6 +3,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc
@@ -24,6 +27,7 @@ export interface FantasyTeam {
   waiverPriority: number;
   draftPosition: number | null;
   createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 export async function createFantasyTeam(
@@ -46,7 +50,8 @@ export async function createFantasyTeam(
       pointsAgainst: 0,
       waiverPriority: 1,
       draftPosition: null,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     });
   }
 
@@ -75,7 +80,8 @@ export async function updateTeamName(
   const teamRef = doc(db, 'leagues', leagueId, 'teams', ownerId);
 
   await updateDoc(teamRef, {
-    teamName
+    teamName,
+    updatedAt: serverTimestamp()
   });
 }
 
@@ -86,4 +92,22 @@ export async function getLeagueTeams(
   const snapshot = await getDocs(teamsRef);
 
   return snapshot.docs.map((teamDoc) => teamDoc.data() as FantasyTeam);
+}
+
+export function listenToLeagueTeams(
+  leagueId: string,
+  callback: (teams: FantasyTeam[]) => void
+): () => void {
+  const teamsQuery = query(
+    collection(db, 'leagues', leagueId, 'teams'),
+    orderBy('teamName', 'asc')
+  );
+
+  return onSnapshot(teamsQuery, (snapshot) => {
+    callback(
+      snapshot.docs.map((teamDoc) =>
+        teamDoc.data() as FantasyTeam
+      )
+    );
+  });
 }

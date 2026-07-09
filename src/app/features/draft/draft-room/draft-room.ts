@@ -59,6 +59,7 @@ type DraftFilter = 'ALL' | DraftPosition;
 
 type PlayerPoolSort =
   | 'DRAFT_VALUE'
+  | 'RELIABILITY'
   | 'RATING'
   | 'PROJECTED_CYCLE'
   | 'PROJECTED_SEASON'
@@ -105,6 +106,7 @@ export class DraftRoom implements OnDestroy {
   setSortMode(value: string): void {
     const validSorts: PlayerPoolSort[] = [
     'DRAFT_VALUE',
+    'RELIABILITY',
     'RATING',
     'PROJECTED_CYCLE',
     'PROJECTED_SEASON',
@@ -262,11 +264,73 @@ getAssetProjectedCycle(
   );
 }
 
+getAssetFloorAdjustedCycle(
+  asset: DraftableAsset
+): number | null {
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.floorAdjustedCyclePoints ??
+    poolAsset?.floorAdjustedCyclePoints ??
+    this.getAssetProjectedCycle(asset)
+  );
+}
+
+getAssetReliabilityRating(asset: DraftableAsset): number | null {
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.reliabilityRating ??
+    poolAsset?.reliabilityRating ??
+    null
+  );
+}
+
+getAssetReliabilityDisplay(asset: DraftableAsset): string {
+  const rating = this.getAssetReliabilityRating(asset);
+
+  return typeof rating === 'number'
+    ? Math.round(rating).toString()
+    : '—';
+}
+
+getAssetRiskLabel(asset: DraftableAsset): string {
+  const rating = this.getAssetReliabilityRating(asset);
+
+  if (typeof rating !== 'number') {
+    return 'Risk: —';
+  }
+
+  if (rating >= 85) {
+    return 'Risk: Very Safe';
+  }
+
+  if (rating >= 75) {
+    return 'Risk: Safe';
+  }
+
+  if (rating >= 65) {
+    return 'Risk: Normal';
+  }
+
+  if (rating >= 55) {
+    return 'Risk: Volatile';
+  }
+
+  return 'Risk: Risky';
+}
+
 getAssetDraftValue(
   asset: DraftableAsset
 ): number | null {
   const projectedCycle =
-    this.getAssetProjectedCycle(asset);
+    this.getAssetFloorAdjustedCycle(asset);
 
   const replacementCycle =
     this.replacementCycleValueByPosition()[asset.position];
@@ -290,6 +354,23 @@ private compareDraftAssets(
 const sortMode = this.sortMode();
 
 if (sortMode === 'DRAFT_VALUE') {
+  return this.compareDraftValueThenProjection(
+    first,
+    second
+  );
+}
+
+if (sortMode === 'RELIABILITY') {
+  const firstReliability =
+    this.getAssetReliabilityRating(first) ?? -1;
+
+  const secondReliability =
+    this.getAssetReliabilityRating(second) ?? -1;
+
+  if (secondReliability !== firstReliability) {
+    return secondReliability - firstReliability;
+  }
+
   return this.compareDraftValueThenProjection(
     first,
     second
@@ -488,7 +569,10 @@ private getPositionSortValue(
 
     const projectedCycles = this.playerPool()
       .filter((asset) => asset.position === position)
-      .map((asset) => asset.projectedCyclePoints)
+      .map((asset) =>
+        asset.floorAdjustedCyclePoints ??
+        asset.projectedCyclePoints
+      )
       .filter(
         (value): value is number =>
           typeof value === 'number'

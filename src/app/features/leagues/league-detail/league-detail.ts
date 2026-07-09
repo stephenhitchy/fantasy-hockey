@@ -16,8 +16,8 @@ import {
 } from '../../../core/cycle/cycle.models';
 
 import {
-  listenToCycleOne,
-  listenToCycleOneMatchups,
+  listenToCycleMatchups,
+  listenToLatestCycle,
   startCycleOne
 } from '../../../core/cycle/cycle.service';
 
@@ -39,7 +39,7 @@ import {
 
 import {
   FantasyTeam,
-  getLeagueTeams
+  listenToLeagueTeams
 } from '../../../core/team/team.service';
 
 function waitForAuthUser(): Promise<User | null> {
@@ -78,6 +78,7 @@ export class LeagueDetail implements OnDestroy {
   readonly now = signal(Date.now());
 
   private stopDraftListener: (() => void) | null = null;
+  private stopTeamListener: (() => void) | null = null;
   private stopCycleListener: (() => void) | null = null;
   private stopMatchupsListener: (() => void) | null = null;
 
@@ -89,6 +90,34 @@ export class LeagueDetail implements OnDestroy {
     this.now.set(Date.now());
     void this.handleScheduledDraft();
   }, 1000);
+
+  readonly sortedTeams = computed(() =>
+    [...this.teams()].sort((first, second) => {
+      const firstWinPercentage = this.getWinPercentageValue(first);
+      const secondWinPercentage = this.getWinPercentageValue(second);
+
+      if (secondWinPercentage !== firstWinPercentage) {
+        return secondWinPercentage - firstWinPercentage;
+      }
+
+      const firstDiff = (first.pointsFor ?? 0) - (first.pointsAgainst ?? 0);
+      const secondDiff = (second.pointsFor ?? 0) - (second.pointsAgainst ?? 0);
+
+      if (secondDiff !== firstDiff) {
+        return secondDiff - firstDiff;
+      }
+
+      return first.teamName.localeCompare(second.teamName);
+    })
+  );
+
+  readonly currentCycleNumber = computed(() =>
+    this.cycle()?.cycleNumber ?? 1
+  );
+
+  readonly currentCycleLabel = computed(() =>
+    `Cycle ${this.currentCycleNumber()}`
+  );
 
   readonly scheduledStartDate = computed(() =>
     getScheduledStartDate(this.draft())
@@ -105,6 +134,14 @@ export class LeagueDetail implements OnDestroy {
       )
     );
   });
+
+  readonly shouldShowDraftStatus = computed(() =>
+    this.draft()?.status !== 'complete'
+  );
+
+  readonly shouldShowInviteCode = computed(() =>
+    this.draft()?.status !== 'complete'
+  );
 
   readonly draftStatusLabel = computed(() => {
     const draft = this.draft();
@@ -210,6 +247,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     this.stopDraftListener?.();
+    this.stopTeamListener?.();
     this.stopCycleListener?.();
     this.stopMatchupsListener?.();
   }
@@ -226,10 +264,7 @@ export class LeagueDetail implements OnDestroy {
     this.leagueId = leagueId;
 
     try {
-      const [league, teams] = await Promise.all([
-        getLeagueById(leagueId),
-        getLeagueTeams(leagueId)
-      ]);
+      const league = await getLeagueById(leagueId);
 
       if (!league) {
         this.errorMessage.set('League not found.');
@@ -237,12 +272,12 @@ export class LeagueDetail implements OnDestroy {
       }
 
       this.league.set(league);
-      this.teams.set(teams);
       this.isCommissioner.set(
         league.commissionerId === user.uid
       );
 
       this.stopDraftListener?.();
+      this.stopTeamListener?.();
       this.stopCycleListener?.();
       this.stopMatchupsListener?.();
 
@@ -254,17 +289,18 @@ export class LeagueDetail implements OnDestroy {
         }
       );
 
-      this.stopCycleListener = listenToCycleOne(
+      this.stopTeamListener = listenToLeagueTeams(
         leagueId,
-        (cycle) => {
-          this.cycle.set(cycle);
+        (teams) => {
+          this.teams.set(teams);
         }
       );
 
-      this.stopMatchupsListener = listenToCycleOneMatchups(
+      this.stopCycleListener = listenToLatestCycle(
         leagueId,
-        (matchups) => {
-          this.matchups.set(matchups);
+        (cycle) => {
+          this.cycle.set(cycle);
+          this.listenToCurrentCycleMatchups(cycle);
         }
       );
     } catch (error: unknown) {
@@ -336,6 +372,109 @@ export class LeagueDetail implements OnDestroy {
     )?.teamName ?? 'Unknown Team';
   }
 
+  getTeamRecord(team: FantasyTeam | null | undefined): string {
+    if (!team) {
+      return '0-0-0';
+    }
+
+    return `${team.wins ?? 0}-${team.losses ?? 0}-${team.ties ?? 0}`;
+  }
+
+  getWinPercentage(team: FantasyTeam): string {
+    return this.getWinPercentageValue(team)
+      .toFixed(3)
+      .replace(/^0/, '');
+  }
+
+  getPointDifferential(team: FantasyTeam): number {
+    return Number(
+      ((team.pointsFor ?? 0) - (team.pointsAgainst ?? 0)).toFixed(1)
+    );
+  }
+
+  getSignedDisplayNumber(value: number): string {
+    const rounded = value.toFixed(1);
+
+    return value > 0
+      ? `+${rounded}`
+      : rounded;
+  }
+
+  getDisplayNumber(value: number | null | undefined): string {
+    if (typeof value !== 'number') {
+      return '0.0';
+    }
+
+    return value.toFixed(1);
+  }
+
+  getCurrentCycleStatusLabel(): string {
+    const cycle = this.cycle();
+
+    if (cycle?.status === 'complete') {
+      return 'Complete';
+    }
+
+    if (cycle?.status === 'active') {
+      return 'Active';
+    }
+
+    if (this.draft()?.status === 'complete') {
+      return 'Ready';
+    }
+
+    return 'Locked';
+  }
+
+  getCurrentCycleDescription(): string {
+    const cycle = this.cycle();
+
+    if (cycle?.status === 'complete') {
+      return `${this.currentCycleLabel()} is complete. The next cycle will open automatically when the league flow continues.`;
+    }
+
+    if (cycle?.status === 'active') {
+      return `${this.currentCycleLabel()} is active. Matchups are ready for scoring.`;
+    }
+
+    if (this.draft()?.status === 'complete') {
+      return 'The draft is complete. The commissioner can now start the first fantasy cycle.';
+    }
+
+    return 'Finish the draft before starting the fantasy season.';
+  }
+
+  getMatchupScore(
+    matchup: FantasyMatchup,
+    ownerId: string | null
+  ): number {
+    if (!ownerId) {
+      return 0;
+    }
+
+    if (ownerId === matchup.teamAOwnerId) {
+      return matchup.teamAScore;
+    }
+
+    if (ownerId === matchup.teamBOwnerId) {
+      return matchup.teamBScore;
+    }
+
+    return 0;
+  }
+
+  getMatchupResultLabel(matchup: FantasyMatchup): string {
+    if (matchup.status !== 'complete') {
+      return 'Live';
+    }
+
+    if (!matchup.winnerOwnerId) {
+      return 'Tie';
+    }
+
+    return `${this.getTeamName(matchup.winnerOwnerId)} won`;
+  }
+
   canStartCycleOne(): boolean {
     return (
       this.isCommissioner() &&
@@ -373,6 +512,39 @@ export class LeagueDetail implements OnDestroy {
     } finally {
       this.cycleActionInProgress.set(false);
     }
+  }
+
+  private listenToCurrentCycleMatchups(
+    cycle: FantasyCycle | null
+  ): void {
+    this.stopMatchupsListener?.();
+    this.stopMatchupsListener = null;
+
+    if (!cycle) {
+      this.matchups.set([]);
+      return;
+    }
+
+    this.stopMatchupsListener = listenToCycleMatchups(
+      this.leagueId,
+      cycle.cycleNumber,
+      (matchups) => {
+        this.matchups.set(matchups);
+      }
+    );
+  }
+
+  private getWinPercentageValue(team: FantasyTeam): number {
+    const wins = team.wins ?? 0;
+    const losses = team.losses ?? 0;
+    const ties = team.ties ?? 0;
+    const gamesPlayed = wins + losses + ties;
+
+    if (gamesPlayed <= 0) {
+      return 0;
+    }
+
+    return (wins + ties * 0.5) / gamesPlayed;
   }
 
   private async handleScheduledDraft(): Promise<void> {

@@ -59,6 +59,13 @@
           Rating minus replacement rating. This shows how much better a player is than a normal starter.
         </span>
       </article>
+
+      <article>
+        <strong>Reliability</strong>
+        <span>
+          Estimates how safe the projection is. Balanced Value uses this to slightly penalize risky assets.
+        </span>
+      </article>
     </section>
 
     <section class="lab-control-card">
@@ -96,8 +103,10 @@
           [ngModel]="sortMode()"
           (ngModelChange)="setSortMode($event)"
         >
-          <option value="DRAFT_VALUE">Draft Value</option>
+          <option value="FLOOR_DRAFT_VALUE">Balanced Draft Value</option>
+          <option value="DRAFT_VALUE">Raw Draft Value</option>
           <option value="VALUE_RATING">Value Rating</option>
+          <option value="RELIABILITY">Reliability</option>
           <option value="RATING">Rating</option>
           <option value="PROJECTED_CYCLE">Cycle Projection</option>
           <option value="PROJECTED_SEASON">Season Projection</option>
@@ -164,15 +173,15 @@
 
       @if (topOverallValue(); as topRow) {
         <article class="wide-summary-card">
-          <span>Top Draft Value</span>
+          <span>Top Balanced Draft Value</span>
           <strong>
             {{ topRow.name }}
             ·
-            {{ getSignedDisplayNumber(topRow.draftValue) }}
+            {{ getSignedDisplayNumber(topRow.floorAdjustedDraftValue) }}
             pts
             ·
-            {{ getSignedRatingDisplay(topRow.valueRating) }}
-            rating
+            {{ topRow.riskLabel }}
+            risk
           </strong>
         </article>
       }
@@ -270,9 +279,12 @@
               <th>NHL</th>
               <th>Rating</th>
               <th>Cycle</th>
+              <th>Floor Cycle</th>
+              <th>Reliability</th>
               <th>Replacement</th>
               <th>Value Rating</th>
-              <th>Draft Value</th>
+              <th>Balanced Value</th>
+              <th>Raw Value</th>
               <th>Season</th>
               <th>PPG</th>
               <th>Tier</th>
@@ -318,6 +330,22 @@
                 <td>{{ getDisplayNumber(row.projectedCycle) }}</td>
 
                 <td>
+                  {{ getDisplayNumber(row.floorAdjustedCycle) }}
+                  <small class="rating-basis">
+                    -{{ getDisplayNumber(row.volatilityPenalty) }}
+                  </small>
+                </td>
+
+                <td>
+                  <span class="rating-pill">
+                    {{ getRatingDisplay(row.reliabilityRating) }}
+                  </span>
+                  <small class="rating-basis">
+                    {{ row.riskLabel }}
+                  </small>
+                </td>
+
+                <td>
                   <span>
                     {{ getDisplayNumber(row.replacementProjection) }}
                   </span>
@@ -331,6 +359,10 @@
                 </td>
 
                 <td class="draft-value-cell">
+                  {{ getSignedDisplayNumber(row.floorAdjustedDraftValue) }}
+                </td>
+
+                <td>
                   {{ getSignedDisplayNumber(row.draftValue) }}
                 </td>
 

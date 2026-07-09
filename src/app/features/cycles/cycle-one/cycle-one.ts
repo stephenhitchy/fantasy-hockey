@@ -30,6 +30,8 @@ import {
   completeCycle,
   listenToCycle,
   listenToCycleMatchups,
+  listenToCycleRosterPicks,
+  listenToLeagueCycles,
   startNextCycle,
   updateCycleMatchupScores
 } from '../../../core/cycle/cycle.service';
@@ -69,7 +71,36 @@ const NHL_SCHEDULE_BATCH_SIZE = 4;
 const TEST_CYCLE_START_DATE: Date | null =
   new Date('2026-01-10T12:00:00');
 
+const VISIBLE_PROJECTION_MULTIPLIERS: Record<DraftPosition, number> = {
+  LW: 0.9,
+  C: 0.9,
+  RW: 0.9,
+  D: 0.88,
+  G: 0.85
+};
+
+const PROJECTION_NEUTRAL_PERCENT = 0.1;
+const PROJECTION_NEUTRAL_POINTS = 10;
+
 type MatchupViewMode = 'teamA' | 'both' | 'teamB';
+
+interface MatchupPositionBreakdownRow {
+  position: DraftPosition;
+  label: string;
+  actual: number;
+  projected: number | null;
+  delta: number | null;
+}
+
+interface MatchupAssetPerformanceRow {
+  asset: DraftableAsset;
+  ownerId: string;
+  teamName: string;
+  actual: number;
+  projected: number | null;
+  delta: number | null;
+  position: DraftPosition;
+}
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -94,6 +125,7 @@ export class CycleOne implements OnDestroy {
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
+  allCycles = signal<FantasyCycle[]>([]);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
   picks = signal<DraftPick[]>([]);
@@ -124,6 +156,11 @@ export class CycleOne implements OnDestroy {
 
   autoFlowMessage = signal('');
   autoFlowError = signal('');
+
+
+  isCommissioner(): boolean {
+    return this.league()?.commissionerId === this.userId;
+  }
 
   getAutoLeagueStatusTitle(): string {
     const cycle = this.cycle();
@@ -641,16 +678,58 @@ export class CycleOne implements OnDestroy {
     'G'
   ];
 
+
+  readonly breakdownPositions: DraftPosition[] = [
+    'LW',
+    'C',
+    'RW',
+    'D',
+    'G'
+  ];
+
   private routeSubscription: Subscription | null = null;
   private pageLoadRequestId = 0;
+  private stopCyclesListener: (() => void) | null = null;
   private stopCycleListener: (() => void) | null = null;
   private stopMatchupsListener: (() => void) | null = null;
   private stopPicksListener: (() => void) | null = null;
+  private stopCycleRosterPicksListener: (() => void) | null = null;
+  private liveDraftPicks: DraftPick[] = [];
+  private cycleRosterSnapshotPicks: DraftPick[] = [];
+  private effectivePicksKey: string | null = null;
   private scheduleLoadStartedForCycleId: string | null = null;
   private scoringLoadKey: string | null = null;
   private scoringRequestId = 0;
   private autoCompleteAttemptKey: string | null = null;
   private autoStartNextCycleAttemptKey: string | null = null;
+
+  private refreshEffectivePicks(): void {
+    const snapshotPicks = this.cycleRosterSnapshotPicks;
+    const livePicks = this.liveDraftPicks;
+    const effectivePicks = snapshotPicks.length > 0
+      ? snapshotPicks
+      : livePicks;
+
+    const source = snapshotPicks.length > 0
+      ? 'cycle-snapshot'
+      : 'live-draft-picks';
+
+    const nextKey = [
+      source,
+      effectivePicks.map((pick) => `${pick.overallPick}:${pick.asset.assetKey}`).join('|')
+    ].join('::');
+
+    if (this.effectivePicksKey === nextKey) {
+      return;
+    }
+
+    this.effectivePicksKey = nextKey;
+    this.picks.set(effectivePicks);
+    this.scoringLoadKey = null;
+    this.cycleScoring.set(null);
+
+    void this.loadCurrentCycleScoringIfReady();
+  }
 
   private async loadCurrentCycleScoringIfReady(): Promise<void> {
   const cycle = this.cycle();
@@ -1025,22 +1104,30 @@ export class CycleOne implements OnDestroy {
   }
 
   private stopLiveListeners(): void {
+    this.stopCyclesListener?.();
     this.stopCycleListener?.();
     this.stopMatchupsListener?.();
     this.stopPicksListener?.();
+    this.stopCycleRosterPicksListener?.();
 
+    this.stopCyclesListener = null;
     this.stopCycleListener = null;
     this.stopMatchupsListener = null;
     this.stopPicksListener = null;
+    this.stopCycleRosterPicksListener = null;
   }
 
   private resetPageStateForNewRoute(): void {
     this.stopLiveListeners();
 
     this.matchupId = null;
+    this.liveDraftPicks = [];
+    this.cycleRosterSnapshotPicks = [];
+    this.effectivePicksKey = null;
 
     this.league.set(null);
     this.teams.set([]);
+    this.allCycles.set([]);
     this.cycle.set(null);
     this.matchups.set([]);
     this.picks.set([]);
@@ -1121,6 +1208,13 @@ export class CycleOne implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
 
+      this.stopCyclesListener = listenToLeagueCycles(
+        leagueId,
+        (cycles) => {
+          this.allCycles.set(cycles);
+        }
+      );
+
       this.stopCycleListener = listenToCycle(
         leagueId,
         cycleNumber,
@@ -1141,11 +1235,20 @@ export class CycleOne implements OnDestroy {
         }
       );
 
+      this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
+        leagueId,
+        cycleNumber,
+        (picks) => {
+          this.cycleRosterSnapshotPicks = picks;
+          this.refreshEffectivePicks();
+        }
+      );
+
       this.stopPicksListener = listenToDraftPicks(
         leagueId,
         (picks) => {
-          this.picks.set(picks);
-          void this.loadCurrentCycleScoringIfReady();
+          this.liveDraftPicks = picks;
+          this.refreshEffectivePicks();
         }
       );
 
@@ -1161,6 +1264,130 @@ export class CycleOne implements OnDestroy {
         this.loading.set(false);
       }
     }
+  }
+
+
+  getAvailableCycleNumbers(): number[] {
+    const cycleNumbers = new Set<number>();
+
+    for (const cycle of this.allCycles()) {
+      if (
+        typeof cycle.cycleNumber === 'number' &&
+        Number.isInteger(cycle.cycleNumber) &&
+        cycle.cycleNumber > 0
+      ) {
+        cycleNumbers.add(cycle.cycleNumber);
+      }
+    }
+
+    cycleNumbers.add(this.cycleNumber);
+
+    return [...cycleNumbers].sort((first, second) => first - second);
+  }
+
+  navigateToCycle(value: string | number): void {
+    const targetCycleNumber = Number(value);
+
+    if (
+      !Number.isInteger(targetCycleNumber) ||
+      targetCycleNumber < 1 ||
+      targetCycleNumber === this.cycleNumber
+    ) {
+      return;
+    }
+
+    const route = this.matchupId
+      ? [
+          '/leagues',
+          this.leagueId,
+          'cycles',
+          targetCycleNumber,
+          'matchups',
+          this.matchupId
+        ]
+      : [
+          '/leagues',
+          this.leagueId,
+          'cycles',
+          targetCycleNumber
+        ];
+
+    void this.router.navigate(route);
+  }
+
+  getCurrentDisplayedMatchup(): FantasyMatchup | null {
+    return this.getDisplayedMatchups()[0] ?? null;
+  }
+
+  getCurrentDisplayedMatchupIndex(): number {
+    const currentMatchup = this.getCurrentDisplayedMatchup();
+
+    if (!currentMatchup) {
+      return -1;
+    }
+
+    return this.matchups().findIndex(
+      (matchup) => matchup.id === currentMatchup.id
+    );
+  }
+
+  getPreviousMatchup(): FantasyMatchup | null {
+    const matchups = this.matchups();
+    const currentIndex = this.getCurrentDisplayedMatchupIndex();
+
+    if (matchups.length <= 1 || currentIndex === -1) {
+      return null;
+    }
+
+    const previousIndex =
+      (currentIndex - 1 + matchups.length) % matchups.length;
+
+    return matchups[previousIndex] ?? null;
+  }
+
+  getNextMatchup(): FantasyMatchup | null {
+    const matchups = this.matchups();
+    const currentIndex = this.getCurrentDisplayedMatchupIndex();
+
+    if (matchups.length <= 1 || currentIndex === -1) {
+      return null;
+    }
+
+    const nextIndex =
+      (currentIndex + 1) % matchups.length;
+
+    return matchups[nextIndex] ?? null;
+  }
+
+  getMatchupNavigationTitle(matchup: FantasyMatchup | null): string {
+    if (!matchup) {
+      return 'No matchup';
+    }
+
+    return `${this.getTeamName(matchup.teamAOwnerId)} vs ${this.getTeamName(matchup.teamBOwnerId)}`;
+  }
+
+  openMatchup(matchup: FantasyMatchup | null): void {
+    if (!matchup) {
+      return;
+    }
+
+    void this.router.navigate([
+      '/leagues',
+      this.leagueId,
+      'cycles',
+      this.cycleNumber,
+      'matchups',
+      matchup.id
+    ]);
+  }
+
+  openPreviousMatchup(): void {
+    this.openMatchup(this.getPreviousMatchup());
+  }
+
+  openNextMatchup(): void {
+    this.openMatchup(this.getNextMatchup());
   }
 
   getCycleLabel(): string {
@@ -1370,6 +1597,279 @@ export class CycleOne implements OnDestroy {
     return value.toFixed(1);
   }
 
+
+  getSignedProjectionDisplay(value: number | null | undefined): string {
+    if (typeof value !== 'number') {
+      return '—';
+    }
+
+    if (value > 0) {
+      return `+${value.toFixed(1)}`;
+    }
+
+    return value.toFixed(1);
+  }
+
+  isPositiveDelta(value: number | null | undefined): boolean {
+    return typeof value === 'number' && value > 0;
+  }
+
+  isNegativeDelta(value: number | null | undefined): boolean {
+    return typeof value === 'number' && value < 0;
+  }
+
+  isMeaningfulPositiveProjectionDelta(
+    actual: number | null | undefined,
+    projected: number | null | undefined
+  ): boolean {
+    const delta = this.getProjectionDelta(actual, projected);
+    const neutralThreshold = this.getProjectionNeutralThreshold(projected);
+
+    return (
+      typeof delta === 'number' &&
+      typeof neutralThreshold === 'number' &&
+      delta >= neutralThreshold
+    );
+  }
+
+  isMeaningfulNegativeProjectionDelta(
+    actual: number | null | undefined,
+    projected: number | null | undefined
+  ): boolean {
+    const delta = this.getProjectionDelta(actual, projected);
+    const neutralThreshold = this.getProjectionNeutralThreshold(projected);
+
+    return (
+      typeof delta === 'number' &&
+      typeof neutralThreshold === 'number' &&
+      delta <= -neutralThreshold
+    );
+  }
+
+  isNeutralProjectionDelta(
+    actual: number | null | undefined,
+    projected: number | null | undefined
+  ): boolean {
+    const delta = this.getProjectionDelta(actual, projected);
+    const neutralThreshold = this.getProjectionNeutralThreshold(projected);
+
+    return (
+      typeof delta === 'number' &&
+      typeof neutralThreshold === 'number' &&
+      Math.abs(delta) < neutralThreshold
+    );
+  }
+
+  private getProjectionDelta(
+    actual: number | null | undefined,
+    projected: number | null | undefined
+  ): number | null {
+    if (
+      typeof actual !== 'number' ||
+      typeof projected !== 'number'
+    ) {
+      return null;
+    }
+
+    return Number((actual - projected).toFixed(1));
+  }
+
+  private getProjectionNeutralThreshold(
+    projected: number | null | undefined
+  ): number | null {
+    if (typeof projected !== 'number') {
+      return null;
+    }
+
+    return Math.max(
+      PROJECTION_NEUTRAL_POINTS,
+      Math.abs(projected) * PROJECTION_NEUTRAL_PERCENT
+    );
+  }
+
+  getMatchupTeamProjectionDelta(
+    matchup: FantasyMatchup,
+    ownerId: string | null
+  ): number | null {
+    if (!ownerId) {
+      return null;
+    }
+
+    const actual = this.getMatchupTeamCurrentScore(matchup, ownerId);
+    const projected = this.getProjectedCycleForTeam(ownerId);
+
+    if (typeof projected !== 'number') {
+      return null;
+    }
+
+    return Number((actual - projected).toFixed(1));
+  }
+
+  getPositionProjectionDelta(
+    ownerId: string | null,
+    position: DraftPosition
+  ): number | null {
+    if (!ownerId) {
+      return null;
+    }
+
+    const actual = this.getPositionCurrentTotal(ownerId, position);
+    const projected = this.getPositionProjectedTotal(ownerId, position);
+
+    if (typeof projected !== 'number') {
+      return null;
+    }
+
+    return Number((actual - projected).toFixed(1));
+  }
+
+  getPositionBreakdownRows(
+    ownerId: string | null
+  ): MatchupPositionBreakdownRow[] {
+    if (!ownerId) {
+      return [];
+    }
+
+    return this.breakdownPositions.map((position) => {
+      const actual = this.getPositionCurrentTotal(ownerId, position);
+      const projected = this.getPositionProjectedTotal(ownerId, position);
+      const delta = typeof projected === 'number'
+        ? Number((actual - projected).toFixed(1))
+        : null;
+
+      return {
+        position,
+        label: position,
+        actual,
+        projected,
+        delta
+      };
+    });
+  }
+
+  getMatchupAssetPerformanceRows(
+    matchup: FantasyMatchup
+  ): MatchupAssetPerformanceRow[] {
+    const ownerIds = [
+      matchup.teamAOwnerId,
+      matchup.teamBOwnerId
+    ].filter((ownerId): ownerId is string => Boolean(ownerId));
+
+    return ownerIds.flatMap((ownerId) =>
+      this.getTeamPicks(ownerId).map((pick) => {
+        const actual = this.getAssetCurrentCycleScore(pick.asset);
+        const projected = this.getBestCycleProjection(pick.asset);
+        const delta = typeof projected === 'number'
+          ? Number((actual - projected).toFixed(1))
+          : null;
+
+        return {
+          asset: pick.asset,
+          ownerId,
+          teamName: this.getTeamName(ownerId),
+          actual,
+          projected,
+          delta,
+          position: pick.asset.position
+        };
+      })
+    );
+  }
+
+  getTopContributors(
+    matchup: FantasyMatchup,
+    limit: number = 5
+  ): MatchupAssetPerformanceRow[] {
+    return [...this.getMatchupAssetPerformanceRows(matchup)]
+      .sort((first, second) => {
+        if (second.actual !== first.actual) {
+          return second.actual - first.actual;
+        }
+
+        return this.getAssetName(first.asset).localeCompare(
+          this.getAssetName(second.asset)
+        );
+      })
+      .slice(0, limit);
+  }
+
+  getTopOverPerformers(
+    matchup: FantasyMatchup,
+    limit: number = 5
+  ): MatchupAssetPerformanceRow[] {
+    return [...this.getMatchupAssetPerformanceRows(matchup)]
+      .filter((row) =>
+        this.isMeaningfulPositiveProjectionDelta(row.actual, row.projected)
+      )
+      .sort((first, second) => {
+        const secondDelta = second.delta ?? 0;
+        const firstDelta = first.delta ?? 0;
+
+        if (secondDelta !== firstDelta) {
+          return secondDelta - firstDelta;
+        }
+
+        return second.actual - first.actual;
+      })
+      .slice(0, limit);
+  }
+
+  getTopUnderPerformers(
+    matchup: FantasyMatchup,
+    limit: number = 5
+  ): MatchupAssetPerformanceRow[] {
+    return [...this.getMatchupAssetPerformanceRows(matchup)]
+      .filter((row) =>
+        this.isMeaningfulNegativeProjectionDelta(row.actual, row.projected)
+      )
+      .sort((first, second) => {
+        const secondDelta = second.delta ?? 0;
+        const firstDelta = first.delta ?? 0;
+
+        if (firstDelta !== secondDelta) {
+          return firstDelta - secondDelta;
+        }
+
+        return first.actual - second.actual;
+      })
+      .slice(0, limit);
+  }
+
+  getMatchupBreakdownSummary(matchup: FantasyMatchup): string {
+    if (!matchup.teamBOwnerId) {
+      return `${this.getTeamName(matchup.teamAOwnerId)} had a bye this cycle.`;
+    }
+
+    const teamADelta = this.getMatchupTeamProjectionDelta(
+      matchup,
+      matchup.teamAOwnerId
+    );
+
+    const teamBDelta = this.getMatchupTeamProjectionDelta(
+      matchup,
+      matchup.teamBOwnerId
+    );
+
+    if (
+      typeof teamADelta !== 'number' ||
+      typeof teamBDelta !== 'number'
+    ) {
+      return 'Projection comparison will appear once projected totals are available.';
+    }
+
+    const swing = Number((teamADelta - teamBDelta).toFixed(1));
+
+    if (swing === 0) {
+      return 'Both teams performed the same amount above or below their projections.';
+    }
+
+    const betterOwnerId = swing > 0
+      ? matchup.teamAOwnerId
+      : matchup.teamBOwnerId;
+
+    return `${this.getTeamName(betterOwnerId)} had a ${Math.abs(swing).toFixed(1)} point projection swing in this matchup.`;
+  }
+
   getAssetName(asset: DraftableAsset): string {
     return asset.assetType === 'skater'
       ? asset.player.fullName
@@ -1417,8 +1917,8 @@ export class CycleOne implements OnDestroy {
     );
 
     return (
-      asset.projectedSeasonPoints ??
       poolAsset?.projectedSeasonPoints ??
+      asset.projectedSeasonPoints ??
       null
     );
   }
@@ -1430,8 +1930,8 @@ export class CycleOne implements OnDestroy {
     );
 
     return (
-      asset.projectedCyclePoints ??
       poolAsset?.projectedCyclePoints ??
+      asset.projectedCyclePoints ??
       null
     );
   }
@@ -1460,10 +1960,25 @@ export class CycleOne implements OnDestroy {
   }
 
   getBestCycleProjection(asset: DraftableAsset): number | null {
-    return (
+    const rawProjection =
       this.getAssetScheduleAdjustedCycle(asset) ??
-      this.getAssetProjectedCycle(asset)
-    );
+      this.getAssetProjectedCycle(asset);
+
+    return this.getVisibleCycleProjection(asset, rawProjection);
+  }
+
+  private getVisibleCycleProjection(
+    asset: DraftableAsset,
+    rawProjection: number | null
+  ): number | null {
+    if (typeof rawProjection !== 'number') {
+      return null;
+    }
+
+    const multiplier =
+      VISIBLE_PROJECTION_MULTIPLIERS[asset.position] ?? 0.9;
+
+    return Number((rawProjection * multiplier).toFixed(1));
   }
 
  getAssetScoreSummary(
@@ -1678,7 +2193,7 @@ export class CycleOne implements OnDestroy {
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
       this.playerPool.set(
-        await loadDraftPlayerPool()
+        await loadDraftPlayerPool(true)
       );
     } catch (error: unknown) {
       console.warn(
@@ -1881,14 +2396,21 @@ export class CycleOne implements OnDestroy {
   }
 
   async openAssetDetail(asset: DraftableAsset): Promise<void> {
-    await this.router.navigate([
-      '/leagues',
-      this.leagueId,
-      'cycles',
-      this.cycleNumber,
-      'assets',
-      asset.assetKey
-    ]);
+    await this.router.navigate(
+      [
+        '/leagues',
+        this.leagueId,
+        'cycles',
+        this.cycleNumber,
+        'assets',
+        asset.assetKey
+      ],
+      {
+        queryParams: {
+          returnTo: this.router.url
+        }
+      }
+    );
   }
 
   private getPositionSortValue(position: DraftPosition): number {

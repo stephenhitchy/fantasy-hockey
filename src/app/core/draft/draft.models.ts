@@ -19,6 +19,30 @@ export interface DraftRosterRequirements {
 export interface DraftProjection {
   projectedSeasonPoints?: number | null;
   projectedCyclePoints?: number | null;
+
+  /**
+   * 0-100 estimate of how trustworthy the projection is.
+   * Higher = safer / more repeatable.
+   */
+  reliabilityRating?: number | null;
+
+  /**
+   * Estimated cycle-point deduction caused by volatility/risk.
+   * This does not change real scoring; it only improves draft/projection value.
+   */
+  volatilityPenalty?: number | null;
+
+  /**
+   * Projected cycle points after applying reliability/risk.
+   * This is used for safer draft value ranking.
+   */
+  floorAdjustedCyclePoints?: number | null;
+
+  /**
+   * Optional value above replacement after reliability/risk is applied.
+   * Most screens calculate this dynamically because replacement depends on league size.
+   */
+  floorAdjustedDraftValue?: number | null;
 }
 
 export interface DraftableSkaterAsset extends DraftProjection {

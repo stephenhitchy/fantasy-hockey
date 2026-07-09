@@ -1,28 +1,655 @@
 @if (loading()) {
-  <p>Loading team...</p>
+  <p class="page-loading">Loading team...</p>
 } @else if (!team()) {
-  <p>{{ errorMessage() || 'Team not found.' }}</p>
+  <p class="page-loading">{{ errorMessage() || 'Team not found.' }}</p>
 } @else {
-  <h1>My Team</h1>
+  <section class="team-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
 
-  <h2>{{ team()?.teamName }}</h2>
+    <header class="team-hero-card">
+      <div>
+        <span class="eyebrow">My Team</span>
+        <h1>{{ team()?.teamName }}</h1>
+        <p>{{ league()?.name }}</p>
+      </div>
 
-  <label>
-    Team Name
-    <input [(ngModel)]="teamName" />
-  </label>
+      <div class="team-record-chip">
+        <span>Record</span>
+        <strong>{{ getTeamRecord(team()) }}</strong>
+      </div>
+    </header>
 
-  <button (click)="saveTeamName()" [disabled]="saving()">
-    {{ saving() ? 'Saving...' : 'Save Team Name' }}
-  </button>
+    <section class="team-stat-grid">
+      <article>
+        <span>Win %</span>
+        <strong>{{ getWinPercentage(team()) }}</strong>
+      </article>
 
-  @if (successMessage()) {
-    <p>{{ successMessage() }}</p>
-  }
+      <article>
+        <span>Points For</span>
+        <strong>{{ getDisplayNumber(team()?.pointsFor) }}</strong>
+      </article>
 
-  @if (errorMessage()) {
-    <p>{{ errorMessage() }}</p>
-  }
+      <article>
+        <span>Points Against</span>
+        <strong>{{ getDisplayNumber(team()?.pointsAgainst) }}</strong>
+      </article>
 
-  <app-roster-board [roster]="roster()"></app-roster-board>
+      <article>
+        <span>Differential</span>
+        <strong
+          [class.positive-number]="teamPointDifferential() > 0"
+          [class.negative-number]="teamPointDifferential() < 0"
+        >
+          {{ getSignedDisplayNumber(teamPointDifferential()) }}
+        </strong>
+      </article>
+
+      <article>
+        <span>Roster</span>
+        <strong>{{ rosterFilledCount() }} / {{ rosterTotalCount() }}</strong>
+      </article>
+    </section>
+
+    <section class="quick-actions-card">
+      <div>
+        <span class="eyebrow">Quick Actions</span>
+        <h2>Team Navigation</h2>
+      </div>
+
+      <div class="quick-actions-list">
+        <a
+          class="secondary-action"
+          [routerLink]="['/leagues', leagueId]"
+        >
+          League Home
+        </a>
+
+        <a
+          class="primary-action"
+          [routerLink]="['/leagues', leagueId, 'free-agents']"
+        >
+          Add / Drop Player
+        </a>
+
+        @if (latestCycle()) {
+          @if (currentMatchup(); as matchup) {
+            <a
+              class="primary-action"
+              [routerLink]="['/leagues', leagueId, 'cycles', latestCycle()?.cycleNumber, 'matchups', matchup.id]"
+            >
+              View Current Matchup
+            </a>
+          }
+
+          <a
+            class="secondary-action"
+            [routerLink]="['/leagues', leagueId, 'cycles', latestCycle()?.cycleNumber, 'matchups']"
+          >
+            Current Cycle Matchups
+          </a>
+        }
+
+        <a
+          class="secondary-action"
+          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+        >
+          Full Schedule View
+        </a>
+
+        <a
+          class="secondary-action"
+          [routerLink]="['/leagues', leagueId, 'standings']"
+        >
+          League Standings
+        </a>
+
+        <a
+          class="secondary-action"
+          [routerLink]="['/leagues', leagueId, 'projections']"
+        >
+          Projection Lab
+        </a>
+      </div>
+    </section>
+
+    <section class="current-matchup-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Current Matchup</span>
+          <h2>{{ getCycleLabel() }}</h2>
+        </div>
+
+        @if (latestCycle()) {
+          <span
+            class="status-pill"
+            [class.status-complete]="latestCycle()?.status === 'complete'"
+            [class.status-active]="latestCycle()?.status === 'active'"
+          >
+            {{ latestCycle()?.status === 'complete' ? 'Complete' : 'Active' }}
+          </span>
+        }
+      </div>
+
+      <p>{{ getCurrentMatchupStatusText() }}</p>
+
+      @if (currentMatchup(); as matchup) {
+        <div class="scoreboard-row">
+          <article
+            class="score-team-card"
+            [class.my-team-score-card]="true"
+          >
+            <span>Your Team</span>
+            <strong>{{ team()?.teamName }}</strong>
+            <em>{{ getDisplayNumber(getMatchupScore(matchup, userId)) }}</em>
+          </article>
+
+          <div class="score-vs">vs</div>
+
+          <article class="score-team-card">
+            <span>Opponent</span>
+            <strong>{{ getTeamName(currentOpponentOwnerId()) }}</strong>
+            <em>{{ getDisplayNumber(getMatchupScore(matchup, currentOpponentOwnerId())) }}</em>
+          </article>
+        </div>
+      } @else {
+        <div class="empty-state-card">
+          No active matchup found for your team yet.
+        </div>
+      }
+    </section>
+
+    <section class="current-matchup-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Roster Moves</span>
+          <h2>Recent Transactions</h2>
+        </div>
+      </div>
+
+      @if (transactions().length === 0) {
+        <div class="empty-state-card">
+          No roster moves have been made yet.
+        </div>
+      } @else {
+        <div class="scoreboard-row">
+          @for (transaction of transactions().slice(0, 5); track transaction.id) {
+            <article class="score-team-card transaction-card">
+              <span>{{ getTransactionDateLabel(transaction.createdAt) }}</span>
+              <strong>{{ getTransactionTitle(transaction) }}</strong>
+              <em>{{ getTransactionDetail(transaction) }}</em>
+              <small>{{ getTransactionEffectiveLabel(transaction) }}</small>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="team-name-card">
+      <div>
+        <span class="eyebrow">Team Settings</span>
+        <h2>Team Name</h2>
+        <p>Update how your team appears across the league.</p>
+      </div>
+
+      <div class="team-name-form">
+        <label for="team-name">Team Name</label>
+        <div>
+          <input
+            id="team-name"
+            [(ngModel)]="teamName"
+            placeholder="Enter team name"
+          />
+
+          <button
+            type="button"
+            (click)="saveTeamName()"
+            [disabled]="saving()"
+          >
+            {{ saving() ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+
+        @if (successMessage()) {
+          <small class="success-message">{{ successMessage() }}</small>
+        }
+
+        @if (errorMessage()) {
+          <small class="error-message">{{ errorMessage() }}</small>
+        }
+      </div>
+    </section>
+
+    <section class="roster-section">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Active Roster</span>
+          <h2>Roster Board</h2>
+        </div>
+
+        <p>{{ rosterFilledCount() }} of {{ rosterTotalCount() }} active spots filled · IR {{ irFilledCount() }} / {{ irTotalCount() }}</p>
+      </div>
+
+      @if (rosterMoveMessage()) {
+        <div class="roster-scoring-note success-note">
+          {{ rosterMoveMessage() }}
+        </div>
+      }
+
+      @if (rosterMoveError()) {
+        <div class="roster-scoring-note warning-note">
+          {{ rosterMoveError() }}
+        </div>
+      }
+
+      @if (scoringLoading()) {
+        <div class="roster-scoring-note">
+          Loading current cycle player stats...
+        </div>
+      }
+
+      @if (scoringError()) {
+        <div class="roster-scoring-note warning-note">
+          {{ scoringError() }}
+        </div>
+      }
+
+      @if (!roster()) {
+        <div class="empty-state-card">
+          Your roster is still loading.
+        </div>
+      } @else {
+        <div class="active-roster-board">
+          <div class="forward-row">
+            @for (group of rosterPositions.slice(0, 3); track group.position) {
+              <section class="fantasy-position-group">
+                <div class="fantasy-position-header">
+                  {{ group.label }}
+                </div>
+
+                <div class="fantasy-position-slots">
+                  @for (slot of getPositionSlots(group.position); track slot.slotId) {
+                    <article
+                      class="fantasy-player-card"
+                      [class.empty-slot-card]="!slot.asset"
+                      [class.clickable-player-card]="slot.asset"
+                      [attr.role]="slot.asset ? 'link' : null"
+                      [attr.tabindex]="slot.asset ? 0 : null"
+                      [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
+                      (click)="slot.asset && openRosterAssetDetail(slot.asset)"
+                      (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
+                    >
+                      @if (slot.asset; as asset) {
+                        <div class="player-status-row">
+                          <span
+                            class="roster-status-pill"
+                            [class]="'roster-status-pill ' + getRosterAssetStatusClass(asset)"
+                          >
+                            {{ getRosterAssetStatusLabel(asset) }}
+                          </span>
+                        </div>
+
+                        @if (getRosterAssetLogoUrl(asset); as logoUrl) {
+                          <img
+                            class="fantasy-player-logo"
+                            [src]="logoUrl"
+                            [alt]="getRosterAssetTeamLabel(asset) + ' logo'"
+                          />
+                        } @else {
+                          <span class="fantasy-player-logo logo-fallback">
+                            {{ getRosterAssetTeamLabel(asset) }}
+                          </span>
+                        }
+
+                        <div class="fantasy-player-main">
+                          <strong>{{ getRosterAssetName(asset) }}</strong>
+
+                          <span>
+                            {{ getRosterAssetTeamLabel(asset) }}
+                            ·
+                            {{ group.position }}
+                          </span>
+
+                          <em>
+                            Games:
+                            {{ getRosterAssetGamesPlayed(asset) }}
+                            played /
+                            {{ getRosterAssetGamesLeft(asset) }}
+                            left
+                          </em>
+
+                          @if (getRosterAssetEffectiveText(asset)) {
+                            <em>{{ getRosterAssetEffectiveText(asset) }}</em>
+                          }
+                        </div>
+
+                        <div class="fantasy-player-score-stack">
+                          <div>
+                            <strong>
+                              {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                            </strong>
+                            <span>Cur</span>
+                          </div>
+
+                          <div>
+                            <strong>
+                              {{ getDisplayNumber(getProjectedCycle(asset)) }}
+                            </strong>
+                            <span>Proj</span>
+                          </div>
+                        </div>
+
+                        @if (asset.assetType === 'skater') {
+                          <div class="roster-card-actions">
+                            <button
+                              type="button"
+                              class="mini-roster-action ir-action"
+                              (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                              [disabled]="!canMoveSlotToIr(slot)"
+                            >
+                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                            </button>
+
+                            @if (getMoveToIrDisabledText(slot)) {
+                              <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                            }
+                          </div>
+                        }
+                      } @else {
+                        <div class="empty-slot-copy">
+                          <strong>Open {{ group.position }} Slot</strong>
+                          <span>Waiting for roster move</span>
+                        </div>
+                      }
+                    </article>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+
+          <div class="defense-goalie-row">
+            <section class="fantasy-position-group defense-group">
+              <div class="fantasy-position-header">
+                Defense
+              </div>
+
+              <div class="fantasy-position-slots defense-slots">
+                @for (slot of getPositionSlots('D'); track slot.slotId) {
+                  <article
+                    class="fantasy-player-card"
+                    [class.empty-slot-card]="!slot.asset"
+                    [class.clickable-player-card]="slot.asset"
+                    [attr.role]="slot.asset ? 'link' : null"
+                    [attr.tabindex]="slot.asset ? 0 : null"
+                    [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
+                    (click)="slot.asset && openRosterAssetDetail(slot.asset)"
+                    (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
+                  >
+                    @if (slot.asset; as asset) {
+                      <div class="player-status-row">
+                        <span
+                          class="roster-status-pill"
+                          [class]="'roster-status-pill ' + getRosterAssetStatusClass(asset)"
+                        >
+                          {{ getRosterAssetStatusLabel(asset) }}
+                        </span>
+                      </div>
+
+                      @if (getRosterAssetLogoUrl(asset); as logoUrl) {
+                        <img
+                          class="fantasy-player-logo"
+                          [src]="logoUrl"
+                          [alt]="getRosterAssetTeamLabel(asset) + ' logo'"
+                        />
+                      } @else {
+                        <span class="fantasy-player-logo logo-fallback">
+                          {{ getRosterAssetTeamLabel(asset) }}
+                        </span>
+                      }
+
+                      <div class="fantasy-player-main">
+                        <strong>{{ getRosterAssetName(asset) }}</strong>
+
+                        <span>
+                          {{ getRosterAssetTeamLabel(asset) }}
+                          ·
+                          D
+                        </span>
+
+                        <em>
+                          Games:
+                          {{ getRosterAssetGamesPlayed(asset) }}
+                          played /
+                          {{ getRosterAssetGamesLeft(asset) }}
+                          left
+                        </em>
+
+                        @if (getRosterAssetEffectiveText(asset)) {
+                          <em>{{ getRosterAssetEffectiveText(asset) }}</em>
+                        }
+                      </div>
+
+                      <div class="fantasy-player-score-stack">
+                        <div>
+                          <strong>
+                            {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                          </strong>
+                          <span>Cur</span>
+                        </div>
+
+                        <div>
+                          <strong>
+                            {{ getDisplayNumber(getProjectedCycle(asset)) }}
+                          </strong>
+                          <span>Proj</span>
+                        </div>
+                      </div>
+
+                      @if (asset.assetType === 'skater') {
+                        <div class="roster-card-actions">
+                          <button
+                            type="button"
+                            class="mini-roster-action ir-action"
+                            (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                            [disabled]="!canMoveSlotToIr(slot)"
+                          >
+                            {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                          </button>
+
+                          @if (getMoveToIrDisabledText(slot)) {
+                            <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                          }
+                        </div>
+                      }
+                    } @else {
+                      <div class="empty-slot-copy">
+                        <strong>Open D Slot</strong>
+                        <span>Waiting for roster move</span>
+                      </div>
+                    }
+                  </article>
+                }
+              </div>
+            </section>
+
+            <section class="fantasy-position-group goalie-group">
+              <div class="fantasy-position-header">
+                Goalie Unit
+              </div>
+
+              <div class="fantasy-position-slots">
+                @for (slot of getPositionSlots('G'); track slot.slotId) {
+                  <article
+                    class="fantasy-player-card goalie-card"
+                    [class.empty-slot-card]="!slot.asset"
+                    [class.clickable-player-card]="slot.asset"
+                    [attr.role]="slot.asset ? 'link' : null"
+                    [attr.tabindex]="slot.asset ? 0 : null"
+                    [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
+                    (click)="slot.asset && openRosterAssetDetail(slot.asset)"
+                    (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
+                  >
+                    @if (slot.asset; as asset) {
+                      <div class="player-status-row">
+                        <span
+                          class="roster-status-pill"
+                          [class]="'roster-status-pill ' + getRosterAssetStatusClass(asset)"
+                        >
+                          {{ getRosterAssetStatusLabel(asset) }}
+                        </span>
+                      </div>
+
+                      @if (getRosterAssetLogoUrl(asset); as logoUrl) {
+                        <img
+                          class="fantasy-player-logo"
+                          [src]="logoUrl"
+                          [alt]="getRosterAssetTeamLabel(asset) + ' logo'"
+                        />
+                      } @else {
+                        <span class="fantasy-player-logo logo-fallback">
+                          {{ getRosterAssetTeamLabel(asset) }}
+                        </span>
+                      }
+
+                      <div class="fantasy-player-main">
+                        <strong>{{ getRosterAssetName(asset) }}</strong>
+
+                        <span>
+                          {{ getRosterAssetTeamLabel(asset) }}
+                          ·
+                          G
+                        </span>
+
+                        <em>
+                          Games:
+                          {{ getRosterAssetGamesPlayed(asset) }}
+                          played /
+                          {{ getRosterAssetGamesLeft(asset) }}
+                          left
+                        </em>
+
+                        @if (getRosterAssetEffectiveText(asset)) {
+                          <em>{{ getRosterAssetEffectiveText(asset) }}</em>
+                        }
+                      </div>
+
+                      <div class="fantasy-player-score-stack">
+                        <div>
+                          <strong>
+                            {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                          </strong>
+                          <span>Cur</span>
+                        </div>
+
+                        <div>
+                          <strong>
+                            {{ getDisplayNumber(getProjectedCycle(asset)) }}
+                          </strong>
+                          <span>Proj</span>
+                        </div>
+                      </div>
+
+                      @if (asset.assetType === 'skater') {
+                        <div class="roster-card-actions">
+                          <button
+                            type="button"
+                            class="mini-roster-action ir-action"
+                            (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                            [disabled]="!canMoveSlotToIr(slot)"
+                          >
+                            {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                          </button>
+
+                          @if (getMoveToIrDisabledText(slot)) {
+                            <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                          }
+                        </div>
+                      }
+                    } @else {
+                      <div class="empty-slot-copy">
+                        <strong>Open G Slot</strong>
+                        <span>Waiting for roster move</span>
+                      </div>
+                    }
+                  </article>
+                }
+              </div>
+            </section>
+          </div>
+        </div>
+      }
+    </section>
+
+    <section class="roster-section ir-roster-section">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Injured Reserve</span>
+          <h2>IR Slots</h2>
+        </div>
+
+        <p>{{ irFilledCount() }} of {{ irTotalCount() }} IR spots filled</p>
+      </div>
+
+      @if (!roster()) {
+        <div class="empty-state-card">
+          IR is still loading.
+        </div>
+      } @else {
+        <div class="ir-slot-grid">
+          @for (slot of getIrSlots(); track slot.slotId) {
+            <article
+              class="ir-slot-card"
+              [class.empty-ir-slot-card]="!slot.asset"
+            >
+              @if (slot.asset; as asset) {
+                @if (getRosterAssetLogoUrl(asset); as logoUrl) {
+                  <img
+                    class="fantasy-player-logo"
+                    [src]="logoUrl"
+                    [alt]="getRosterAssetTeamLabel(asset) + ' logo'"
+                  />
+                } @else {
+                  <span class="fantasy-player-logo logo-fallback">
+                    {{ getRosterAssetTeamLabel(asset) }}
+                  </span>
+                }
+
+                <div class="ir-player-main">
+                  <strong>{{ getRosterAssetName(asset) }}</strong>
+                  <span>
+                    {{ getRosterAssetTeamLabel(asset) }}
+                    ·
+                    {{ asset.position }}
+                    ·
+                    {{ slot.slotId }}
+                  </span>
+                  <em>{{ getIrActivationHelp(slot) }}</em>
+                </div>
+
+                <button
+                  type="button"
+                  class="mini-roster-action activate-action"
+                  (click)="activateIrSlot(slot.slotId)"
+                  [disabled]="!canActivateIrSlot(slot)"
+                >
+                  {{ rosterMoveLoading() ? 'Saving...' : 'Activate' }}
+                </button>
+              } @else {
+                <div class="empty-slot-copy">
+                  <strong>{{ slot.slotId }}</strong>
+                  <span>Open IR slot</span>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </section>
 }
