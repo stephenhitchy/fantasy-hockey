@@ -35,6 +35,10 @@ import {
   FantasyDraft
 } from './draft.models';
 
+import type {
+  FantasyTeam
+} from '../team/team.service';
+
 const DRAFT_DOCUMENT_ID = 'current';
 
 
@@ -42,7 +46,10 @@ export type FantasyTransactionType =
   | 'add-drop'
   | 'add-open-slot'
   | 'move-to-ir'
-  | 'activate-from-ir';
+  | 'activate-from-ir'
+  | 'waiver-claim'
+  | 'waiver-award'
+  | 'waiver-cleared';
 
 export interface FantasyTransaction {
   id: string;
@@ -52,6 +59,9 @@ export interface FantasyTransaction {
   droppedAsset?: RosterAsset | null;
   movedAsset?: RosterAsset | null;
   activatedAsset?: RosterAsset | null;
+  waiverId?: string | null;
+  waiverAsset?: DraftableAsset | null;
+  winningOwnerId?: string | null;
   dropSlotId?: string | null;
   targetSlotId?: string | null;
   activeSlotId?: string | null;
@@ -59,6 +69,42 @@ export interface FantasyTransaction {
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
   createdAt?: unknown;
+}
+
+export type FantasyWaiverStatus =
+  | 'active'
+  | 'claimed'
+  | 'cleared';
+
+export type FantasyWaiverClaimMoveType =
+  | 'drop'
+  | 'open-slot';
+
+export interface FantasyWaiverClaim {
+  ownerId: string;
+  moveType: FantasyWaiverClaimMoveType;
+  dropSlotId?: string | null;
+  targetSlotId?: string | null;
+  waiverPriorityAtClaim?: number | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+  claimedAt?: unknown;
+}
+
+export interface FantasyWaiver {
+  id: string;
+  assetKey: string;
+  asset: DraftableAsset;
+  droppedAsset?: RosterAsset | null;
+  droppedByOwnerId: string;
+  status: FantasyWaiverStatus;
+  claims: FantasyWaiverClaim[];
+  awardedToOwnerId?: string | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  processedAt?: unknown;
 }
 
 export interface AddDropRosterAssetInput {
@@ -94,6 +140,26 @@ export interface ActivateIrRosterAssetInput {
   ownerId: string;
   irSlotId: string;
   activeSlotId?: string | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+}
+
+export interface PlaceWaiverClaimInput {
+  leagueId: string;
+  ownerId: string;
+  waiverId: string;
+  moveType: FantasyWaiverClaimMoveType;
+  dropSlotId?: string | null;
+  targetSlotId?: string | null;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+}
+
+export interface ProcessWaiverInput {
+  leagueId: string;
+  commissionerId: string;
+  waiverId: string;
+  leagueTeams: FantasyTeam[];
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
 }
@@ -142,6 +208,49 @@ function getTransactionsRef(leagueId: string) {
     'leagues',
     leagueId,
     'transactions'
+  );
+}
+
+function getLeagueRef(leagueId: string) {
+  return doc(
+    db,
+    'leagues',
+    leagueId
+  );
+}
+
+function getTeamRef(
+  leagueId: string,
+  ownerId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'teams',
+    ownerId
+  );
+}
+
+function getWaiversRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'waivers'
+  );
+}
+
+function getWaiverRef(
+  leagueId: string,
+  waiverId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'waivers',
+    waiverId
   );
 }
 
@@ -282,6 +391,44 @@ export function listenToOwnerTransactions(
           ...(transactionDoc.data() as Omit<FantasyTransaction, 'id'>)
         }))
         .filter((transaction) => transaction.ownerId === ownerId)
+    );
+  });
+}
+
+
+export function listenToLeagueWaivers(
+  leagueId: string,
+  callback: (waivers: FantasyWaiver[]) => void
+): () => void {
+  const waiversQuery = query(
+    getWaiversRef(leagueId),
+    orderBy('createdAt', 'desc'),
+    limit(100)
+  );
+
+  return onSnapshot(waiversQuery, (snapshot) => {
+    callback(
+      snapshot.docs.map((waiverDoc) => {
+        const data = waiverDoc.data() as Partial<FantasyWaiver>;
+
+        return {
+          id: waiverDoc.id,
+          assetKey: data.assetKey ?? waiverDoc.id,
+          asset: data.asset as DraftableAsset,
+          droppedAsset: data.droppedAsset ?? null,
+          droppedByOwnerId: data.droppedByOwnerId ?? '',
+          status: data.status ?? 'active',
+          claims: Array.isArray(data.claims)
+            ? data.claims
+            : [],
+          awardedToOwnerId: data.awardedToOwnerId ?? null,
+          effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+          effectiveLabel: data.effectiveLabel ?? null,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          processedAt: data.processedAt
+        };
+      })
     );
   });
 }
@@ -546,6 +693,76 @@ function getRosterAssetKey(asset: RosterAsset | null): string {
   return asset.teamAbbreviation
     ? `goalie-unit-${asset.teamAbbreviation}`
     : '';
+}
+
+
+function rosterAssetToDraftableAsset(
+  asset: RosterAsset
+): DraftableAsset {
+  const assetKey = getRosterAssetKey(asset);
+
+  if (asset.assetType === 'skater') {
+    return {
+      assetType: 'skater',
+      assetKey,
+      position: asset.position,
+      player: asset.player,
+      projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+      projectedCyclePoints: asset.projectedCyclePoints ?? null,
+      reliabilityRating: asset.reliabilityRating ?? null,
+      volatilityPenalty: asset.volatilityPenalty ?? null,
+      floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+      floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+    };
+  }
+
+  return {
+    assetType: 'team-goalie-unit',
+    assetKey,
+    position: 'G',
+    teamName: asset.teamName,
+    teamAbbreviation: asset.teamAbbreviation,
+    teamLogoUrl: asset.teamLogoUrl,
+    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+    projectedCyclePoints: asset.projectedCyclePoints ?? null,
+    reliabilityRating: asset.reliabilityRating ?? null,
+    volatilityPenalty: asset.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+  };
+}
+
+function buildActiveWaiverPayload(
+  droppedAsset: RosterAsset,
+  droppedByOwnerId: string,
+  effectiveCycleNumber: number | null,
+  effectiveLabel: string | null
+): Omit<FantasyWaiver, 'id'> {
+  const asset = rosterAssetToDraftableAsset(droppedAsset);
+
+  return {
+    assetKey: asset.assetKey,
+    asset,
+    droppedAsset,
+    droppedByOwnerId,
+    status: 'active',
+    claims: [],
+    awardedToOwnerId: null,
+    effectiveCycleNumber,
+    effectiveLabel,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    processedAt: null
+  };
+}
+
+function getTeamWaiverPriority(
+  team: FantasyTeam | undefined,
+  fallback: number
+): number {
+  return typeof team?.waiverPriority === 'number'
+    ? team.waiverPriority
+    : fallback;
 }
 
 
@@ -870,11 +1087,28 @@ export async function addDropRosterAsset({
       { merge: true }
     );
 
+    const waiverRef = getWaiverRef(
+      leagueId,
+      dropAssetKey
+    );
+
+    transaction.set(
+      waiverRef,
+      buildActiveWaiverPayload(
+        dropAsset,
+        ownerId,
+        effectiveCycleNumber,
+        effectiveLabel
+      )
+    );
+
     transaction.set(transactionRef, {
       type: 'add-drop',
       ownerId,
       addedAsset: addAsset,
       droppedAsset: dropAsset,
+      waiverId: dropAssetKey,
+      waiverAsset: rosterAssetToDraftableAsset(dropAsset),
       dropSlotId,
       effectiveCycleNumber,
       effectiveLabel,
@@ -1204,6 +1438,405 @@ export async function activateIrRosterAsset({
       activatedAsset: asset,
       activeSlotId: activeSlot.slotId,
       irSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+
+export async function placeWaiverClaim({
+  leagueId,
+  ownerId,
+  waiverId,
+  moveType,
+  dropSlotId = null,
+  targetSlotId = null,
+  effectiveCycleNumber = null,
+  effectiveLabel = null
+}: PlaceWaiverClaimInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const waiverRef = getWaiverRef(leagueId, waiverId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const teamRef = getTeamRef(leagueId, ownerId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  await runTransaction(db, async (transaction) => {
+    const [
+      draftSnapshot,
+      waiverSnapshot,
+      rosterSnapshot,
+      teamSnapshot
+    ] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(waiverRef),
+      transaction.get(rosterRef),
+      transaction.get(teamRef)
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    if (!waiverSnapshot.exists()) {
+      throw new Error('That waiver player was not found.');
+    }
+
+    const waiver = {
+      id: waiverSnapshot.id,
+      ...(waiverSnapshot.data() as Omit<FantasyWaiver, 'id'>)
+    } as FantasyWaiver;
+
+    if (waiver.status !== 'active') {
+      throw new Error('That player is no longer on waivers.');
+    }
+
+    if (waiver.droppedByOwnerId === ownerId) {
+      throw new Error(
+        'You cannot claim a player you just dropped while he is still on waivers.'
+      );
+    }
+
+    const claimAsset = waiver.asset;
+
+    if (!claimAsset || claimAsset.assetKey !== waiver.assetKey) {
+      throw new Error('The waiver asset is missing or invalid.');
+    }
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    if (isAssetOnRoster(roster, claimAsset.assetKey)) {
+      throw new Error('That player or goalie unit is already on your roster.');
+    }
+
+    const selectedSlotId = moveType === 'open-slot'
+      ? targetSlotId
+      : dropSlotId;
+
+    if (!selectedSlotId) {
+      throw new Error('Choose the roster spot for this waiver claim.');
+    }
+
+    const activeSlot = roster.activeSlots.find(
+      (slot) => slot.slotId === selectedSlotId
+    );
+
+    if (!activeSlot) {
+      throw new Error('The selected roster slot was not found.');
+    }
+
+    if (activeSlot.position !== claimAsset.position) {
+      throw new Error(
+        `This waiver claim needs a ${claimAsset.position} roster spot.`
+      );
+    }
+
+    if (moveType === 'open-slot' && activeSlot.asset) {
+      throw new Error('The selected open slot is no longer open.');
+    }
+
+    if (moveType === 'drop' && !activeSlot.asset) {
+      throw new Error('The selected drop slot is already open.');
+    }
+
+    const team = teamSnapshot.exists()
+      ? teamSnapshot.data() as FantasyTeam
+      : undefined;
+
+    const newClaim: FantasyWaiverClaim = {
+      ownerId,
+      moveType,
+      dropSlotId: moveType === 'drop' ? selectedSlotId : null,
+      targetSlotId: moveType === 'open-slot' ? selectedSlotId : null,
+      waiverPriorityAtClaim: getTeamWaiverPriority(team, 999),
+      effectiveCycleNumber,
+      effectiveLabel,
+      claimedAt: new Date().toISOString()
+    };
+
+    const existingClaims = Array.isArray(waiver.claims)
+      ? waiver.claims
+      : [];
+
+    const nextClaims = [
+      ...existingClaims.filter((claim) => claim.ownerId !== ownerId),
+      newClaim
+    ];
+
+    transaction.set(
+      waiverRef,
+      {
+        ...waiver,
+        claims: nextClaims,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'waiver-claim',
+      ownerId,
+      waiverId,
+      waiverAsset: claimAsset,
+      targetSlotId: newClaim.targetSlotId,
+      dropSlotId: newClaim.dropSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+export async function processWaiver({
+  leagueId,
+  commissionerId,
+  waiverId,
+  leagueTeams,
+  effectiveCycleNumber = null,
+  effectiveLabel = null
+}: ProcessWaiverInput): Promise<void> {
+  const leagueRef = getLeagueRef(leagueId);
+  const draftRef = getDraftRef(leagueId);
+  const waiverRef = getWaiverRef(leagueId, waiverId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  const orderedTeams = [...leagueTeams].sort(
+    (first, second) =>
+      getTeamWaiverPriority(first, 999) - getTeamWaiverPriority(second, 999)
+  );
+
+  await runTransaction(db, async (transaction) => {
+    const [leagueSnapshot, draftSnapshot, waiverSnapshot] = await Promise.all([
+      transaction.get(leagueRef),
+      transaction.get(draftRef),
+      transaction.get(waiverRef)
+    ]);
+
+    if (!leagueSnapshot.exists()) {
+      throw new Error('League not found.');
+    }
+
+    const leagueData = leagueSnapshot.data() as { commissionerId?: string };
+
+    if (leagueData.commissionerId !== commissionerId) {
+      throw new Error('Only the commissioner can process waivers.');
+    }
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    if (!waiverSnapshot.exists()) {
+      throw new Error('That waiver player was not found.');
+    }
+
+    const waiver = {
+      id: waiverSnapshot.id,
+      ...(waiverSnapshot.data() as Omit<FantasyWaiver, 'id'>)
+    } as FantasyWaiver;
+
+    if (waiver.status !== 'active') {
+      throw new Error('That waiver has already been processed.');
+    }
+
+    const activeClaims = Array.isArray(waiver.claims)
+      ? waiver.claims
+      : [];
+
+    if (activeClaims.length === 0) {
+      transaction.set(
+        waiverRef,
+        {
+          status: 'cleared',
+          processedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      transaction.set(transactionRef, {
+        type: 'waiver-cleared',
+        ownerId: commissionerId,
+        waiverId,
+        waiverAsset: waiver.asset,
+        effectiveCycleNumber,
+        effectiveLabel,
+        createdAt: serverTimestamp()
+      });
+
+      return;
+    }
+
+    const teamByOwnerId = new Map(
+      orderedTeams.map((team, index) => [
+        team.ownerId,
+        {
+          team,
+          fallbackPriority: index + 1
+        }
+      ])
+    );
+
+    const winningClaim = [...activeClaims].sort((first, second) => {
+      const firstTeam = teamByOwnerId.get(first.ownerId);
+      const secondTeam = teamByOwnerId.get(second.ownerId);
+
+      return getTeamWaiverPriority(firstTeam?.team, firstTeam?.fallbackPriority ?? 999) -
+        getTeamWaiverPriority(secondTeam?.team, secondTeam?.fallbackPriority ?? 999);
+    })[0];
+
+    if (!winningClaim) {
+      throw new Error('Unable to determine a winning waiver claim.');
+    }
+
+    const winnerRosterRef = getFantasyRosterRef(
+      leagueId,
+      winningClaim.ownerId
+    );
+
+    const winnerRosterSnapshot = await transaction.get(winnerRosterRef);
+
+    const winnerRoster: FantasyRoster = winnerRosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          winnerRosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    const slotId = winningClaim.moveType === 'open-slot'
+      ? winningClaim.targetSlotId
+      : winningClaim.dropSlotId;
+
+    if (!slotId) {
+      throw new Error('The winning claim does not have a roster slot selected.');
+    }
+
+    const activeSlotIndex = winnerRoster.activeSlots.findIndex(
+      (slot) => slot.slotId === slotId
+    );
+
+    if (activeSlotIndex === -1) {
+      throw new Error('The winning claim roster slot was not found.');
+    }
+
+    const selectedSlot = winnerRoster.activeSlots[activeSlotIndex];
+
+    if (selectedSlot.position !== waiver.asset.position) {
+      throw new Error(
+        `The winning claim needs an open ${waiver.asset.position} roster spot.`
+      );
+    }
+
+    if (winningClaim.moveType === 'open-slot' && selectedSlot.asset) {
+      throw new Error(
+        'The winning claim selected an open slot that is no longer open.'
+      );
+    }
+
+    if (winningClaim.moveType === 'drop' && !selectedSlot.asset) {
+      throw new Error(
+        'The winning claim selected a drop slot that is now empty.'
+      );
+    }
+
+    const droppedByWinningTeam = selectedSlot.asset ?? null;
+
+    winnerRoster.activeSlots[activeSlotIndex] = {
+      ...selectedSlot,
+      asset: createRosterAsset(waiver.asset, 'new')
+    };
+
+    transaction.set(
+      winnerRosterRef,
+      {
+        schemaVersion: winnerRoster.schemaVersion,
+        activeSlots: winnerRoster.activeSlots,
+        irSlots: winnerRoster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    if (droppedByWinningTeam) {
+      const droppedAssetKey = getRosterAssetKey(droppedByWinningTeam);
+      const nextWaiverRef = getWaiverRef(leagueId, droppedAssetKey);
+
+      transaction.set(
+        nextWaiverRef,
+        buildActiveWaiverPayload(
+          droppedByWinningTeam,
+          winningClaim.ownerId,
+          effectiveCycleNumber,
+          effectiveLabel
+        )
+      );
+    }
+
+    const winnerTeamRecord = teamByOwnerId.get(winningClaim.ownerId);
+    const winnerPriority = getTeamWaiverPriority(
+      winnerTeamRecord?.team,
+      winnerTeamRecord?.fallbackPriority ?? orderedTeams.length
+    );
+
+    const maxPriority = Math.max(1, orderedTeams.length);
+
+    for (const [index, team] of orderedTeams.entries()) {
+      const currentPriority = getTeamWaiverPriority(team, index + 1);
+      let nextPriority = currentPriority;
+
+      if (team.ownerId === winningClaim.ownerId) {
+        nextPriority = maxPriority;
+      } else if (currentPriority > winnerPriority) {
+        nextPriority = Math.max(1, currentPriority - 1);
+      }
+
+      transaction.set(
+        getTeamRef(leagueId, team.ownerId),
+        {
+          waiverPriority: nextPriority,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    transaction.set(
+      waiverRef,
+      {
+        status: 'claimed',
+        awardedToOwnerId: winningClaim.ownerId,
+        processedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(transactionRef, {
+      type: 'waiver-award',
+      ownerId: winningClaim.ownerId,
+      winningOwnerId: winningClaim.ownerId,
+      waiverId,
+      waiverAsset: waiver.asset,
+      addedAsset: waiver.asset,
+      droppedAsset: droppedByWinningTeam,
+      targetSlotId: winningClaim.targetSlotId ?? null,
+      dropSlotId: winningClaim.dropSlotId ?? null,
       effectiveCycleNumber,
       effectiveLabel,
       createdAt: serverTimestamp()

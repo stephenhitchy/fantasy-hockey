@@ -16,8 +16,7 @@
         <span class="eyebrow">Roster Moves</span>
         <h1>Add / Drop Player</h1>
         <p>
-          Pick a free agent, then choose an open same-position slot or drop one player from the same position.
-          Current cycle rosters are already locked, so new moves begin scoring with the next cycle snapshot.
+          Pick a free agent for an instant add, or claim a player from waivers. Dropped players now go to waivers first, and commissioner processing decides who wins claims.
         </p>
       </div>
 
@@ -26,13 +25,13 @@
         [class.status-open]="draft()?.status === 'complete'"
         [class.status-closed]="draft()?.status !== 'complete'"
       >
-        <span>Free Agency</span>
+        <span>Free Agency / Waivers</span>
         <strong>{{ getDraftStatusText() }}</strong>
       </div>
     </header>
 
     <section class="message-card success-card">
-      Roster moves now preserve draft history. IR can open active roster spots, and free agents can fill those open same-position slots. Current cycle snapshots stay locked; scoring changes begin with {{ getEffectiveCycleText() }}.
+      Free agents can still be added immediately. Dropped players are placed on waivers, claims are submitted by teams, and the commissioner can manually process the waiver queue. Current cycle snapshots stay locked; scoring changes begin with {{ getEffectiveCycleText() }}.
     </section>
 
     @if (successMessage()) {
@@ -59,7 +58,7 @@
         (click)="confirmAddDrop()"
         [disabled]="!canConfirmMove() || moving()"
       >
-        {{ moving() ? 'Saving Move...' : 'Confirm Add / Drop' }}
+        {{ getConfirmButtonLabel() }}
       </button>
     </section>
 
@@ -108,8 +107,81 @@
 
         <div class="pool-count-row">
           <strong>{{ availableAssets().length }}</strong>
-          <span>available assets found</span>
+          <span>normal free agents found</span>
+
+          <strong>{{ availableWaivers().length }}</strong>
+          <span>waiver players match filters</span>
         </div>
+
+        @if (availableWaivers().length > 0) {
+          <section class="waiver-queue-card">
+            <div class="section-heading stacked-heading">
+              <div>
+                <span class="eyebrow">Waiver Queue</span>
+                <h2>Players on Waivers</h2>
+              </div>
+
+              <p>
+                Claims do not change your roster until the commissioner processes the waiver. Lowest waiver priority number wins, then moves to the bottom.
+              </p>
+            </div>
+
+            <div class="asset-list waiver-list">
+              @for (waiver of availableWaivers(); track waiver.id) {
+                <article
+                  class="asset-row waiver-row"
+                  [class.selected-asset-row]="isSelectedWaiver(waiver)"
+                >
+                  @if (getAssetLogoUrl(waiver.asset); as logoUrl) {
+                    <img
+                      [src]="logoUrl"
+                      [alt]="getAssetTeamLabel(waiver.asset) + ' logo'"
+                    />
+                  }
+
+                  <div class="asset-main">
+                    <strong>{{ getAssetName(waiver.asset) }}</strong>
+                    <span>
+                      {{ getAssetTeamLabel(waiver.asset) }}
+                      ·
+                      {{ waiver.asset.position }}
+                      ·
+                      {{ getWaiverDroppedByLabel(waiver) }}
+                    </span>
+                    <em>{{ getWaiverClaimLabel(waiver) }} · {{ getWaiverPriorityLabel() }}</em>
+                  </div>
+
+                  <div class="asset-projection">
+                    <strong>{{ getDisplayNumber(waiver.asset.projectedCyclePoints) }}</strong>
+                    <span>Cycle Proj</span>
+                  </div>
+
+                  <div class="waiver-action-stack">
+                    <button
+                      type="button"
+                      class="claim-button"
+                      (click)="selectWaiver(waiver)"
+                      [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId"
+                    >
+                      {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : isSelectedWaiver(waiver) ? 'Claim Selected' : 'Claim' }}
+                    </button>
+
+                    @if (isCommissioner()) {
+                      <button
+                        type="button"
+                        class="process-waiver-button"
+                        (click)="processLeagueWaiver(waiver)"
+                        [disabled]="moving()"
+                      >
+                        Process
+                      </button>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        }
 
         @if (playerPoolLoading()) {
           <div class="empty-card">
@@ -117,7 +189,7 @@
           </div>
         } @else if (availableAssets().length === 0) {
           <div class="empty-card">
-            No free agents match your filters.
+            No normal free agents match your filters. Players currently on waivers appear above.
           </div>
         } @else {
           <div class="asset-list">
@@ -152,7 +224,7 @@
                   (click)="selectAddAsset(asset)"
                   [disabled]="draft()?.status !== 'complete'"
                 >
-                  {{ isSelectedAddAsset(asset) ? 'Selected' : 'Add' }}
+                  {{ isSelectedAddAsset(asset) && !selectedWaiver() ? 'Selected' : 'Add' }}
                 </button>
               </article>
             }
@@ -168,13 +240,13 @@
           </div>
 
           <p>
-            Use an open slot created by IR when available, or drop a same-position player. Already-created cycle snapshots keep their original players.
+            For free agents, this saves immediately. For waiver claims, this is the roster move that will happen only if your claim wins.
           </p>
         </div>
 
         @if (!selectedAddAsset()) {
           <div class="empty-card">
-            Select a free agent first.
+            Select a free agent or waiver player first.
           </div>
         } @else if (dropCandidates().length === 0) {
           <div class="empty-card">
@@ -221,7 +293,7 @@
 
         @if (selectedAddAsset(); as addAsset) {
           <section class="selected-summary-card">
-            <span class="eyebrow">Adding</span>
+            <span class="eyebrow">{{ selectedWaiver() ? 'Claiming' : 'Adding' }}</span>
             <strong>{{ getAssetName(addAsset) }}</strong>
             <p>
               {{ getAssetTeamLabel(addAsset) }}
@@ -231,6 +303,9 @@
               {{ getDisplayNumber(addAsset.projectedCyclePoints) }} cycle projection
             </p>
             <p>{{ getEffectiveCycleText() }}</p>
+            @if (selectedWaiver()) {
+              <p>Claim will be pending until commissioner processing.</p>
+            }
           </section>
         }
 

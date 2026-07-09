@@ -54,6 +54,11 @@
         <span>Roster</span>
         <strong>{{ rosterFilledCount() }} / {{ rosterTotalCount() }}</strong>
       </article>
+
+      <article>
+        <span>Waiver Priority</span>
+        <strong>{{ getWaiverPriorityDisplay(team()) }}</strong>
+      </article>
     </section>
 
     <section class="quick-actions-card">

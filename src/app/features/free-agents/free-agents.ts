@@ -20,7 +20,12 @@ import {
 import {
   addDropRosterAsset,
   addFreeAgentToOpenRosterSlot,
-  listenToFantasyDraft
+  FantasyWaiver,
+  FantasyWaiverClaimMoveType,
+  listenToFantasyDraft,
+  listenToLeagueWaivers,
+  placeWaiverClaim,
+  processWaiver
 } from '../../core/draft/draft.service';
 
 import {
@@ -91,6 +96,7 @@ export class FreeAgents implements OnDestroy {
   teams = signal<FantasyTeam[]>([]);
   rosters = signal<Record<string, FantasyRoster | null>>({});
   latestCycle = signal<FantasyCycle | null>(null);
+  waivers = signal<FantasyWaiver[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
 
   loading = signal(true);
@@ -103,6 +109,7 @@ export class FreeAgents implements OnDestroy {
   positionFilter = signal<FreeAgentPositionFilter>('ALL');
 
   selectedAddAssetKey = signal('');
+  selectedWaiverId = signal('');
   selectedDropSlotId = signal('');
 
   readonly positionFilters: FreeAgentPositionFilter[] = [
@@ -117,13 +124,30 @@ export class FreeAgents implements OnDestroy {
   private stopDraftListener: (() => void) | null = null;
   private stopTeamsListener: (() => void) | null = null;
   private stopLatestCycleListener: (() => void) | null = null;
+  private stopWaiversListener: (() => void) | null = null;
   private rosterListeners: Record<string, () => void> = {};
 
   readonly selectedAddAsset = computed(() =>
     this.playerPool().find(
       (asset) => asset.assetKey === this.selectedAddAssetKey()
-    ) ?? null
+    ) ??
+    this.waivers().find(
+      (waiver) => waiver.asset.assetKey === this.selectedAddAssetKey()
+    )?.asset ??
+    null
   );
+
+  readonly selectedWaiver = computed(() => {
+    const waiverId = this.selectedWaiverId();
+
+    if (!waiverId) {
+      return null;
+    }
+
+    return this.waivers().find(
+      (waiver) => waiver.id === waiverId && waiver.status === 'active'
+    ) ?? null;
+  });
 
   readonly myRoster = computed(() =>
     this.rosters()[this.userId] ?? null
@@ -153,13 +177,63 @@ export class FreeAgents implements OnDestroy {
     return assetKeys;
   });
 
+  readonly activeWaiverAssetKeys = computed(() => {
+    const assetKeys = new Set<string>();
+
+    this.waivers()
+      .filter((waiver) => waiver.status === 'active')
+      .forEach((waiver) => assetKeys.add(waiver.assetKey));
+
+    return assetKeys;
+  });
+
+  readonly availableWaivers = computed(() => {
+    const search = this.searchTerm().trim().toLowerCase();
+    const positionFilter = this.positionFilter();
+
+    return this.waivers()
+      .filter((waiver) => waiver.status === 'active')
+      .filter((waiver) =>
+        positionFilter === 'ALL' ||
+        waiver.asset.position === positionFilter
+      )
+      .filter((waiver) => {
+        if (!search) {
+          return true;
+        }
+
+        return [
+          this.getAssetName(waiver.asset),
+          this.getAssetTeamLabel(waiver.asset),
+          waiver.asset.position
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(search);
+      })
+      .sort((first, second) => {
+        const firstClaims = first.claims?.length ?? 0;
+        const secondClaims = second.claims?.length ?? 0;
+
+        if (secondClaims !== firstClaims) {
+          return secondClaims - firstClaims;
+        }
+
+        return this.getAssetName(first.asset).localeCompare(
+          this.getAssetName(second.asset)
+        );
+      });
+  });
+
   readonly availableAssets = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
     const positionFilter = this.positionFilter();
     const rosteredAssetKeys = this.rosteredAssetKeys();
+    const activeWaiverAssetKeys = this.activeWaiverAssetKeys();
 
     return this.playerPool()
       .filter((asset) => !rosteredAssetKeys.has(asset.assetKey))
+      .filter((asset) => !activeWaiverAssetKeys.has(asset.assetKey))
       .filter((asset) =>
         positionFilter === 'ALL' ||
         asset.position === positionFilter
@@ -260,6 +334,7 @@ export class FreeAgents implements OnDestroy {
     this.stopDraftListener?.();
     this.stopTeamsListener?.();
     this.stopLatestCycleListener?.();
+    this.stopWaiversListener?.();
     this.clearRosterListeners();
   }
 
@@ -296,6 +371,13 @@ export class FreeAgents implements OnDestroy {
         leagueId,
         (cycle) => {
           this.latestCycle.set(cycle);
+        }
+      );
+
+      this.stopWaiversListener = listenToLeagueWaivers(
+        leagueId,
+        (waivers) => {
+          this.waivers.set(waivers);
         }
       );
 
@@ -361,10 +443,24 @@ export class FreeAgents implements OnDestroy {
     this.successMessage.set('');
     this.errorMessage.set('');
     this.selectedAddAssetKey.set(asset.assetKey);
+    this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
 
     if (this.positionFilter() === 'ALL') {
       this.positionFilter.set(asset.position);
+    }
+  }
+
+
+  selectWaiver(waiver: FantasyWaiver): void {
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.selectedAddAssetKey.set(waiver.asset.assetKey);
+    this.selectedWaiverId.set(waiver.id);
+    this.selectedDropSlotId.set('');
+
+    if (this.positionFilter() === 'ALL') {
+      this.positionFilter.set(waiver.asset.position);
     }
   }
 
@@ -383,13 +479,14 @@ export class FreeAgents implements OnDestroy {
   async confirmAddDrop(): Promise<void> {
     const addAsset = this.selectedAddAsset();
     const dropCandidate = this.selectedDropCandidate();
+    const waiver = this.selectedWaiver();
 
     this.successMessage.set('');
     this.errorMessage.set('');
 
     if (!addAsset || !dropCandidate) {
       this.errorMessage.set(
-        'Choose a free agent and a same-position roster spot.'
+        'Choose a player and a same-position roster spot.'
       );
       return;
     }
@@ -408,7 +505,24 @@ export class FreeAgents implements OnDestroy {
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const leagueOwnerIds = this.teams().map((team) => team.ownerId);
 
-      if (dropCandidate.moveType === 'open-slot') {
+      if (waiver) {
+        const moveType: FantasyWaiverClaimMoveType = dropCandidate.moveType;
+
+        await placeWaiverClaim({
+          leagueId: this.leagueId,
+          ownerId: this.userId,
+          waiverId: waiver.id,
+          moveType,
+          dropSlotId: moveType === 'drop' ? dropCandidate.slotId : null,
+          targetSlotId: moveType === 'open-slot' ? dropCandidate.slotId : null,
+          effectiveCycleNumber,
+          effectiveLabel
+        });
+
+        this.successMessage.set(
+          `Claim submitted for ${this.getAssetName(addAsset)}. The commissioner can process waivers when ready. If your claim wins, the move should score starting ${effectiveLabel}.`
+        );
+      } else if (dropCandidate.moveType === 'open-slot') {
         await addFreeAgentToOpenRosterSlot({
           leagueId: this.leagueId,
           ownerId: this.userId,
@@ -438,17 +552,54 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(
-          `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}. This move is saved to your current roster and should score starting ${effectiveLabel}.`
+          `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}. The dropped player is now on waivers. This move should score starting ${effectiveLabel}.`
         );
       }
 
       this.selectedAddAssetKey.set('');
+      this.selectedWaiverId.set('');
       this.selectedDropSlotId.set('');
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
           ? error.message
           : 'Unable to complete this roster move.'
+      );
+    } finally {
+      this.moving.set(false);
+    }
+  }
+
+  async processLeagueWaiver(waiver: FantasyWaiver): Promise<void> {
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.moving.set(true);
+
+    try {
+      const effectiveCycleNumber = this.getEffectiveCycleNumber();
+      const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
+
+      await processWaiver({
+        leagueId: this.leagueId,
+        commissionerId: this.userId,
+        waiverId: waiver.id,
+        leagueTeams: this.teams(),
+        effectiveCycleNumber,
+        effectiveLabel
+      });
+
+      const claimCount = waiver.claims?.length ?? 0;
+
+      this.successMessage.set(
+        claimCount > 0
+          ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
+          : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to process that waiver.'
       );
     } finally {
       this.moving.set(false);
@@ -518,7 +669,7 @@ export class FreeAgents implements OnDestroy {
     const status = this.draft()?.status;
 
     if (status === 'complete') {
-      return 'Add/drop is open.';
+      return 'Add/drop and waiver claims are open.';
     }
 
     if (!status) {
@@ -563,24 +714,93 @@ export class FreeAgents implements OnDestroy {
   getMoveSummary(): string {
     const addAsset = this.selectedAddAsset();
     const dropCandidate = this.selectedDropCandidate();
+    const waiver = this.selectedWaiver();
 
     if (!addAsset) {
-      return 'Choose a free agent to start a move.';
+      return 'Choose a free agent or waiver player to start a move.';
     }
 
     if (!dropCandidate) {
-      return `Choose an open ${addAsset.position} slot or one ${addAsset.position} to drop.`;
+      return waiver
+        ? `Choose an open ${addAsset.position} slot or one ${addAsset.position} to drop for your waiver claim.`
+        : `Choose an open ${addAsset.position} slot or one ${addAsset.position} to drop.`;
     }
 
     if (dropCandidate.moveType === 'open-slot') {
-      return `Add ${this.getAssetName(addAsset)} · Fill open ${addAsset.position} slot · ${this.getEffectiveCycleText()}`;
+      return waiver
+        ? `Claim ${this.getAssetName(addAsset)} · Fill open ${addAsset.position} slot · ${this.getEffectiveCycleText()}`
+        : `Add ${this.getAssetName(addAsset)} · Fill open ${addAsset.position} slot · ${this.getEffectiveCycleText()}`;
     }
 
     if (!dropCandidate.asset) {
-      return `Add ${this.getAssetName(addAsset)} · ${this.getEffectiveCycleText()}`;
+      return waiver
+        ? `Claim ${this.getAssetName(addAsset)} · ${this.getEffectiveCycleText()}`
+        : `Add ${this.getAssetName(addAsset)} · ${this.getEffectiveCycleText()}`;
     }
 
-    return `Add ${this.getAssetName(addAsset)} · Drop ${this.getRosterAssetName(dropCandidate.asset)} · ${this.getEffectiveCycleText()}`;
+    return waiver
+      ? `Claim ${this.getAssetName(addAsset)} · Drop ${this.getRosterAssetName(dropCandidate.asset)} if awarded · ${this.getEffectiveCycleText()}`
+      : `Add ${this.getAssetName(addAsset)} · Drop ${this.getRosterAssetName(dropCandidate.asset)} · ${this.getEffectiveCycleText()}`;
+  }
+
+  getConfirmButtonLabel(): string {
+    if (this.moving()) {
+      return this.selectedWaiver()
+        ? 'Submitting Claim...'
+        : 'Saving Move...';
+    }
+
+    return this.selectedWaiver()
+      ? 'Submit Waiver Claim'
+      : 'Confirm Add / Drop';
+  }
+
+  isCommissioner(): boolean {
+    return this.league()?.commissionerId === this.userId;
+  }
+
+  isSelectedWaiver(waiver: FantasyWaiver): boolean {
+    return this.selectedWaiverId() === waiver.id;
+  }
+
+  getWaiverClaimCount(waiver: FantasyWaiver): number {
+    return waiver.claims?.length ?? 0;
+  }
+
+  getWaiverClaimLabel(waiver: FantasyWaiver): string {
+    const claimCount = this.getWaiverClaimCount(waiver);
+
+    if (claimCount === 0) {
+      return 'No claims yet';
+    }
+
+    return claimCount === 1
+      ? '1 claim'
+      : `${claimCount} claims`;
+  }
+
+  getWaiverDroppedByLabel(waiver: FantasyWaiver): string {
+    return `Dropped by ${this.getTeamName(waiver.droppedByOwnerId)}`;
+  }
+
+  getTeamName(ownerId: string | null | undefined): string {
+    if (!ownerId) {
+      return 'Unknown Team';
+    }
+
+    return this.teams().find(
+      (team) => team.ownerId === ownerId
+    )?.teamName ?? 'Unknown Team';
+  }
+
+  getWaiverPriorityLabel(ownerId: string | null | undefined = this.userId): string {
+    const team = this.teams().find(
+      (candidate) => candidate.ownerId === ownerId
+    );
+
+    return typeof team?.waiverPriority === 'number'
+      ? `Waiver Priority #${team.waiverPriority}`
+      : 'Waiver Priority —';
   }
 
   private refreshRosterListeners(teams: FantasyTeam[]): void {

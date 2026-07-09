@@ -1144,6 +1144,12 @@ export class TeamSettings implements OnDestroy {
     return '';
   }
 
+  getWaiverPriorityDisplay(team: FantasyTeam | null): string {
+    return typeof team?.waiverPriority === 'number'
+      ? `#${team.waiverPriority}`
+      : '—';
+  }
+
   getTransactionAssetName(asset: DraftableAsset | RosterAsset | null | undefined): string {
     if (!asset) {
       return 'Unknown Asset';
@@ -1180,6 +1186,15 @@ export class TeamSettings implements OnDestroy {
       case 'activate-from-ir':
         return `Activated ${this.getTransactionAssetName(transaction.activatedAsset)} from IR`;
 
+      case 'waiver-claim':
+        return `Claimed ${this.getTransactionAssetName(transaction.waiverAsset)}`;
+
+      case 'waiver-award':
+        return `Won ${this.getTransactionAssetName(transaction.waiverAsset)} on waivers`;
+
+      case 'waiver-cleared':
+        return `${this.getTransactionAssetName(transaction.waiverAsset)} cleared waivers`;
+
       case 'add-drop':
       default:
         return `Added ${this.getTransactionAssetName(transaction.addedAsset)}`;
@@ -1196,6 +1211,17 @@ export class TeamSettings implements OnDestroy {
 
       case 'activate-from-ir':
         return `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR back to active roster.`;
+
+      case 'waiver-claim':
+        return 'Waiver claim submitted. Your roster only changes if the claim is awarded.';
+
+      case 'waiver-award':
+        return transaction.droppedAsset
+          ? `Awarded by waiver priority. Dropped ${this.getTransactionAssetName(transaction.droppedAsset)}.`
+          : 'Awarded by waiver priority into an open roster slot.';
+
+      case 'waiver-cleared':
+        return 'No claim was awarded, so this player became a normal free agent.';
 
       case 'add-drop':
       default:
