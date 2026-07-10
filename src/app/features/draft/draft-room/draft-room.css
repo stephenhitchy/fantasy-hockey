@@ -218,20 +218,24 @@
 
 .draft-asset-card {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   padding: 10px;
   border: 1px solid #dce5ed;
   border-radius: 9px;
   background: #fbfcfe;
 }
 
+.draft-asset-card.has-team-change-logo {
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+}
+
 .asset-logo,
 .asset-logo-fallback {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 46px;
+  height: 46px;
   place-items: center;
 }
 
@@ -245,6 +249,33 @@
   color: #395877;
   font-size: 8px;
   font-weight: 800;
+}
+
+.asset-logo-fallback-small {
+  width: 40px;
+  height: 40px;
+  font-size: 8px;
+}
+
+.asset-team-change-logo,
+.drafted-team-change-logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.asset-team-change-logo {
+  width: 108px;
+}
+
+.team-change-inline-arrow {
+  flex: 0 0 auto;
+  color: #5f7388;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .asset-copy {
@@ -438,7 +469,16 @@
   }
 
   .draft-asset-card {
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .draft-asset-card.has-team-change-logo {
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+
+  .drafted-player-row.has-team-change-logo {
+    grid-template-columns: 82px minmax(0, 1fr);
   }
 
   .draft-asset-card button {
@@ -524,20 +564,24 @@
 
 .drafted-player-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 13px;
   padding: 10px;
   border: 1px solid #dce5ed;
   border-radius: 9px;
   background: #fbfcfe;
 }
 
+.drafted-player-row.has-team-change-logo {
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
 .drafted-player-logo,
 .drafted-player-logo-fallback {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   place-items: center;
 }
 
@@ -551,6 +595,16 @@
   color: #395877;
   font-size: 8px;
   font-weight: 800;
+}
+
+.drafted-player-logo-fallback-small {
+  width: 32px;
+  height: 32px;
+  font-size: 7px;
+}
+
+.drafted-team-change-logo {
+  width: 84px;
 }
 
 .drafted-player-main {
@@ -602,5 +656,65 @@
 @media (max-width: 620px) {
   .pool-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+.asset-draft-news-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.injury-news-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid #ef9d9d;
+  background: #fff0f0;
+  color: #982626;
+}
+
+.injury-questionable-start-season,
+.injury-day-to-day {
+  border-color: #e7c26b;
+  background: #fff8df;
+  color: #755200;
+}
+
+.injury-long-term,
+.injury-out-start-season {
+  border-color: #e79090;
+  background: #ffecec;
+  color: #8e2222;
+}
+
+.draft-news-note {
+  color: #5c7087;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.drafted-news-row {
+  margin-top: 0;
+}
+
+@media (max-width: 620px) {
+  .asset-draft-news-row {
+    grid-column: 1 / -1;
+  }
+
+  .injury-news-chip,
+  .draft-news-note {
+    white-space: normal;
   }
 }

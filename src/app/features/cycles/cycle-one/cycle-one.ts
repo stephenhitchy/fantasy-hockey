@@ -815,6 +815,12 @@ export class CycleOne implements OnDestroy {
 
 
   private async evaluateAutoCompleteCycleIfReady(): Promise<void> {
+    // Cycle completion and creation update shared league records.
+    // Only the commissioner should run this browser-side automatic flow.
+    if (!this.isCommissioner()) {
+      return;
+    }
+
     const cycle = this.cycle();
     const scoring = this.cycleScoring();
     const matchups = this.matchups();

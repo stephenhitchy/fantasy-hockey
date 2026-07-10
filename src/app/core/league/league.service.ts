@@ -7,11 +7,22 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  where
+  where,
+  writeBatch
 } from 'firebase/firestore';
-import { createFantasyTeam, getLeagueTeams } from '../team/team.service';
+
 import { auth, db } from '../firebase';
-import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
+import {
+  defaultScoringRules,
+  ScoringRules
+} from '../scoring/scoring-rules';
+import {
+  getLeagueTeams
+} from '../team/team.service';
+import {
+  createEmptyFantasyRoster,
+  getFantasyRosterRef
+} from '../team/roster.service';
 
 export interface League {
   id: string;
@@ -22,6 +33,15 @@ export interface League {
   matchupFormat: string;
   scoringRules: ScoringRules;
   createdAt?: unknown;
+}
+
+export interface LeagueInvite {
+  inviteCode: string;
+  leagueId: string;
+  createdBy: string;
+  active: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 export interface LeagueSummary {
@@ -51,44 +71,267 @@ export interface LeagueSummary {
   };
 }
 
-function createInviteCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+const INVITE_CODE_LENGTH = 6;
+const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MAX_INVITE_CODE_ATTEMPTS = 20;
+
+function normalizeInviteCode(inviteCode: string): string {
+  return inviteCode.trim().toUpperCase();
 }
 
-export async function createLeague(name: string, maxTeams: number, username: string): Promise<string> {
-  
-  
+function normalizeUsername(username: string): string {
+  const trimmedUsername = username.trim();
+
+  return trimmedUsername || 'Unknown User';
+}
+
+function createInviteCodeCandidate(): string {
+  const values = new Uint32Array(INVITE_CODE_LENGTH);
+
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(values);
+  } else {
+    for (let index = 0; index < values.length; index += 1) {
+      values[index] = Math.floor(Math.random() * 0xffffffff);
+    }
+  }
+
+  return Array.from(values, (value) =>
+    INVITE_CODE_ALPHABET[value % INVITE_CODE_ALPHABET.length]
+  ).join('');
+}
+
+function getLeagueInviteRef(inviteCode: string) {
+  return doc(
+    db,
+    'leagueInvites',
+    normalizeInviteCode(inviteCode)
+  );
+}
+
+function getLeagueRef(leagueId: string) {
+  return doc(db, 'leagues', leagueId);
+}
+
+function getLeagueMemberRef(
+  leagueId: string,
+  userId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'members',
+    userId
+  );
+}
+
+function getLeagueTeamRef(
+  leagueId: string,
+  ownerId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'teams',
+    ownerId
+  );
+}
+
+function getNewTeamDocument(ownerId: string) {
+  return {
+    id: ownerId,
+    ownerId,
+    teamName: 'Unnamed Team',
+    logo: '',
+    wins: 0,
+    losses: 0,
+    ties: 0,
+    pointsFor: 0,
+    pointsAgainst: 0,
+    waiverPriority: 1,
+    draftPosition: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+}
+
+function getNewRosterDocument() {
+  const roster = createEmptyFantasyRoster();
+
+  return {
+    schemaVersion: roster.schemaVersion,
+    activeSlots: roster.activeSlots,
+    irSlots: roster.irSlots,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+}
+
+async function createUniqueInviteCode(): Promise<string> {
+  for (
+    let attempt = 0;
+    attempt < MAX_INVITE_CODE_ATTEMPTS;
+    attempt += 1
+  ) {
+    const inviteCode = createInviteCodeCandidate();
+    const inviteSnapshot = await getDoc(
+      getLeagueInviteRef(inviteCode)
+    );
+
+    if (!inviteSnapshot.exists()) {
+      return inviteCode;
+    }
+  }
+
+  throw new Error(
+    'Unable to generate a unique league invite code. Please try again.'
+  );
+}
+
+async function createLeagueInviteDocument(
+  league: League
+): Promise<void> {
+  const inviteCode = normalizeInviteCode(league.inviteCode);
+
+  if (!inviteCode) {
+    throw new Error('This league does not have a valid invite code.');
+  }
+
+  const inviteRef = getLeagueInviteRef(inviteCode);
+  const inviteSnapshot = await getDoc(inviteRef);
+
+  if (inviteSnapshot.exists()) {
+    const existingInvite = inviteSnapshot.data() as Partial<LeagueInvite>;
+
+    if (
+      existingInvite.leagueId &&
+      existingInvite.leagueId !== league.id
+    ) {
+      throw new Error(
+        'This invite code is already assigned to another league.'
+      );
+    }
+
+    return;
+  }
+
+  await setDoc(inviteRef, {
+    inviteCode,
+    leagueId: league.id,
+    createdBy: league.commissionerId,
+    active: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  } satisfies LeagueInvite);
+}
+
+async function ensureCommissionerInviteDocuments(
+  leagues: League[],
+  userId: string
+): Promise<void> {
+  const commissionerLeagues = leagues.filter(
+    (league) => league.commissionerId === userId
+  );
+
+  await Promise.all(
+    commissionerLeagues.map((league) =>
+      createLeagueInviteDocument(league)
+    )
+  );
+}
+
+function getLeagueIdFromMembershipPath(
+  membershipPath: string
+): string | null {
+  const pathParts = membershipPath.split('/');
+  const leaguesIndex = pathParts.lastIndexOf('leagues');
+
+  if (
+    leaguesIndex < 0 ||
+    pathParts.length <= leaguesIndex + 1
+  ) {
+    return null;
+  }
+
+  return pathParts[leaguesIndex + 1] || null;
+}
+
+export async function createLeague(
+  name: string,
+  maxTeams: number,
+  username: string
+): Promise<string> {
   const user = auth.currentUser;
 
   if (!user) {
     throw new Error('You must be logged in to create a league.');
   }
 
-  const leagueRef = doc(collection(db, 'leagues'));
-  const inviteCode = createInviteCode();
+  const trimmedName = name.trim();
 
-  await setDoc(leagueRef, {
+  if (!trimmedName) {
+    throw new Error('Please enter a league name.');
+  }
+
+  if (
+    !Number.isInteger(maxTeams) ||
+    maxTeams < 2 ||
+    maxTeams > 12
+  ) {
+    throw new Error('League size must be between 2 and 12 teams.');
+  }
+
+  const leagueRef = doc(collection(db, 'leagues'));
+  const inviteCode = await createUniqueInviteCode();
+  const inviteRef = getLeagueInviteRef(inviteCode);
+  const memberRef = getLeagueMemberRef(leagueRef.id, user.uid);
+  const teamRef = getLeagueTeamRef(leagueRef.id, user.uid);
+  const rosterRef = getFantasyRosterRef(leagueRef.id, user.uid);
+  const normalizedUsername = normalizeUsername(username);
+
+  const league: League = {
     id: leagueRef.id,
-    name,
+    name: trimmedName,
     commissionerId: user.uid,
     inviteCode,
     maxTeams,
     matchupFormat: 'cycle_matchup',
-    scoringRules: defaultScoringRules,
+    scoringRules: defaultScoringRules
+  };
+
+  const batch = writeBatch(db);
+
+  batch.set(leagueRef, {
+    ...league,
     createdAt: serverTimestamp()
-});
+  });
 
- await setDoc(doc(db, 'leagues', leagueRef.id, 'members', user.uid), {
-  uid: user.uid,
-  username,
-  role: 'commissioner',
-  joinedAt: serverTimestamp()
-});
+  batch.set(inviteRef, {
+    inviteCode,
+    leagueId: leagueRef.id,
+    createdBy: user.uid,
+    active: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  } satisfies LeagueInvite);
 
-await createFantasyTeam(leagueRef.id, user.uid);
+  batch.set(memberRef, {
+    uid: user.uid,
+    leagueId: leagueRef.id,
+    username: normalizedUsername,
+    role: 'commissioner',
+    inviteCodeUsed: null,
+    joinedAt: serverTimestamp()
+  });
 
-return leagueRef.id;
+  batch.set(teamRef, getNewTeamDocument(user.uid));
+  batch.set(rosterRef, getNewRosterDocument());
 
+  await batch.commit();
+
+  return leagueRef.id;
 }
 
 export async function getMyLeagues(): Promise<League[]> {
@@ -98,37 +341,63 @@ export async function getMyLeagues(): Promise<League[]> {
     return [];
   }
 
-  const leaguesRef = collection(db, 'leagues');
-  const leagueSnapshot = await getDocs(leaguesRef);
+  const membershipsQuery = query(
+    collectionGroup(db, 'members'),
+    where('uid', '==', user.uid)
+  );
 
-  const leagues: League[] = [];
+  const membershipSnapshot = await getDocs(membershipsQuery);
+  const leagueIds = Array.from(
+    new Set(
+      membershipSnapshot.docs
+        .map((membershipDocument) =>
+          getLeagueIdFromMembershipPath(
+            membershipDocument.ref.path
+          )
+        )
+        .filter((leagueId): leagueId is string => Boolean(leagueId))
+    )
+  );
 
-  for (const leagueDoc of leagueSnapshot.docs) {
-    const memberRef = doc(db, 'leagues', leagueDoc.id, 'members', user.uid);
-    const memberSnap = await getDoc(memberRef);
+  const leagueSnapshots = await Promise.all(
+    leagueIds.map((leagueId) =>
+      getDoc(getLeagueRef(leagueId))
+    )
+  );
 
-    if (memberSnap.exists()) {
-      leagues.push(leagueDoc.data() as League);
-    }
-  }
+  const leagues = leagueSnapshots
+    .filter((leagueSnapshot) => leagueSnapshot.exists())
+    .map((leagueSnapshot) => leagueSnapshot.data() as League)
+    .sort((first, second) =>
+      first.name.localeCompare(second.name)
+    );
+
+  await ensureCommissionerInviteDocuments(leagues, user.uid);
 
   return leagues;
 }
 
-export async function getLeagueById(leagueId: string): Promise<League | null> {
-  const leagueRef = doc(db, 'leagues', leagueId);
-  const leagueSnap = await getDoc(leagueRef);
+export async function getLeagueById(
+  leagueId: string
+): Promise<League | null> {
+  const leagueSnapshot = await getDoc(getLeagueRef(leagueId));
 
-  if (!leagueSnap.exists()) {
+  if (!leagueSnapshot.exists()) {
     return null;
   }
 
-  return leagueSnap.data() as League;
+  const league = leagueSnapshot.data() as League;
+  const user = auth.currentUser;
+
+  if (user?.uid === league.commissionerId) {
+    await createLeagueInviteDocument(league);
+  }
+
+  return league;
 }
 
 export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
   const user = auth.currentUser;
-  
 
   if (!user) {
     return [];
@@ -139,7 +408,9 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
 
   for (const league of leagues) {
     const teams = await getLeagueTeams(league.id);
-    const myTeam = teams.find(team => team.ownerId === user.uid);
+    const myTeam = teams.find(
+      (team) => team.ownerId === user.uid
+    );
 
     summaries.push({
       leagueId: league.id,
@@ -148,9 +419,7 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
       myTeamName: myTeam?.teamName ?? 'Unnamed Team',
       teamCount: teams.length,
       maxTeams: league.maxTeams,
-
       isCommissioner: league.commissionerId === user.uid,
-
       topOffensivePlayer: {
         name: 'TBD',
         teamLogo: '🏒',
@@ -182,29 +451,100 @@ export async function joinLeagueByInviteCode(
     throw new Error('You must be logged in to join a league.');
   }
 
-  const leaguesRef = collection(db, 'leagues');
-  const q = query(
-    leaguesRef,
-    where('inviteCode', '==', inviteCode.trim().toUpperCase())
-  );
+  const normalizedInviteCode = normalizeInviteCode(inviteCode);
 
-  const snapshot = await getDocs(q);
+  if (!normalizedInviteCode) {
+    throw new Error('Please enter a league invite code.');
+  }
 
-  if (snapshot.empty) {
+  const inviteRef = getLeagueInviteRef(normalizedInviteCode);
+  const inviteSnapshot = await getDoc(inviteRef);
+
+  if (!inviteSnapshot.exists()) {
     throw new Error('No league found with that invite code.');
   }
 
-  const leagueDoc = snapshot.docs[0];
-  const leagueId = leagueDoc.id;
+  const invite = inviteSnapshot.data() as LeagueInvite;
 
-  await setDoc(doc(db, 'leagues', leagueId, 'members', user.uid), {
+  if (
+    !invite.active ||
+    !invite.leagueId ||
+    invite.inviteCode !== normalizedInviteCode
+  ) {
+    throw new Error('This league invite is no longer active.');
+  }
+
+  const leagueId = invite.leagueId;
+  const leagueRef = getLeagueRef(leagueId);
+  const memberRef = getLeagueMemberRef(leagueId, user.uid);
+  const teamRef = getLeagueTeamRef(leagueId, user.uid);
+  const rosterRef = getFantasyRosterRef(leagueId, user.uid);
+  const normalizedUsername = normalizeUsername(username);
+
+  // A user may always check their own membership document. If it exists,
+  // they already belong to the league and can safely read the league-owned
+  // documents needed to repair any legacy partial setup.
+  const existingMemberSnapshot = await getDoc(memberRef);
+
+  if (existingMemberSnapshot.exists()) {
+    const [
+      leagueSnapshot,
+      existingTeamSnapshot,
+      existingRosterSnapshot
+    ] = await Promise.all([
+      getDoc(leagueRef),
+      getDoc(teamRef),
+      getDoc(rosterRef)
+    ]);
+
+    if (!leagueSnapshot.exists()) {
+      throw new Error('This league no longer exists.');
+    }
+
+    const league = leagueSnapshot.data() as League;
+
+    if (league.inviteCode !== normalizedInviteCode) {
+      throw new Error('This invite code does not match the league.');
+    }
+
+    const repairBatch = writeBatch(db);
+    let repairNeeded = false;
+
+    if (!existingTeamSnapshot.exists()) {
+      repairBatch.set(teamRef, getNewTeamDocument(user.uid));
+      repairNeeded = true;
+    }
+
+    if (!existingRosterSnapshot.exists()) {
+      repairBatch.set(rosterRef, getNewRosterDocument());
+      repairNeeded = true;
+    }
+
+    if (repairNeeded) {
+      await repairBatch.commit();
+    }
+
+    return leagueId;
+  }
+
+  // New joins are atomic: membership, team, and roster are created together.
+  // The security rules validate the invite and confirm the league exists.
+  // If any write is rejected, none of these documents are created.
+  const joinBatch = writeBatch(db);
+
+  joinBatch.set(memberRef, {
     uid: user.uid,
-    username,
+    leagueId,
+    username: normalizedUsername,
     role: 'member',
+    inviteCodeUsed: normalizedInviteCode,
     joinedAt: serverTimestamp()
   });
 
-  await createFantasyTeam(leagueId, user.uid);
+  joinBatch.set(teamRef, getNewTeamDocument(user.uid));
+  joinBatch.set(rosterRef, getNewRosterDocument());
+
+  await joinBatch.commit();
 
   return leagueId;
 }

@@ -153,8 +153,42 @@
           } @else {
             <div class="asset-list">
               @for (asset of availableAssets(); track asset.assetKey) {
-                <article class="draft-asset-card">
-                  @if (getAssetLogoUrl(asset); as logoUrl) {
+                <article
+                  class="draft-asset-card"
+                  [class.has-team-change-logo]="hasOffseasonTeamChange(asset)"
+                >
+                  @if (hasOffseasonTeamChange(asset)) {
+                    <div
+                      class="asset-team-change-logo"
+                      [attr.aria-label]="getPreviousTeamAbbreviation(asset) + ' to ' + getNewsNewTeamAbbreviation(asset)"
+                    >
+                      @if (getPreviousTeamLogoUrl(asset); as previousLogoUrl) {
+                        <img
+                          class="asset-logo"
+                          [src]="previousLogoUrl"
+                          [alt]="getPreviousTeamAbbreviation(asset) + ' logo'"
+                        />
+                      } @else {
+                        <span class="asset-logo-fallback asset-logo-fallback-small">
+                          {{ getPreviousTeamAbbreviation(asset) }}
+                        </span>
+                      }
+
+                      <span class="team-change-inline-arrow" aria-hidden="true">→</span>
+
+                      @if (getNewTeamLogoUrl(asset); as newLogoUrl) {
+                        <img
+                          class="asset-logo"
+                          [src]="newLogoUrl"
+                          [alt]="getNewsNewTeamAbbreviation(asset) + ' logo'"
+                        />
+                      } @else {
+                        <span class="asset-logo-fallback asset-logo-fallback-small">
+                          {{ getNewsNewTeamAbbreviation(asset) }}
+                        </span>
+                      }
+                    </div>
+                  } @else if (getAssetLogoUrl(asset); as logoUrl) {
                     <img
                       class="asset-logo"
                       [src]="logoUrl"
@@ -198,6 +232,25 @@
     {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
   </small>
 </div>
+
+@if (hasDraftNews(asset)) {
+  <div
+    class="asset-draft-news-row"
+    [attr.title]="getDraftNewsTooltip(asset)"
+  >
+    @if (getInjuryLabel(asset); as injuryLabel) {
+      <span
+        [class]="'injury-news-chip ' + getInjuryClass(asset)"
+      >
+        ✚ {{ injuryLabel }}
+      </span>
+    }
+
+    @if (getDraftNewsNote(asset); as note) {
+      <small class="draft-news-note">{{ note }}</small>
+    }
+  </div>
+}
 </div>
 
                   <button
@@ -263,8 +316,42 @@
           pick of getMyPicksByPosition(position);
           track pick.overallPick
         ) {
-          <article class="drafted-player-row">
-  @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+          <article
+            class="drafted-player-row"
+            [class.has-team-change-logo]="hasOffseasonTeamChange(pick.asset)"
+          >
+  @if (hasOffseasonTeamChange(pick.asset)) {
+    <div
+      class="drafted-team-change-logo"
+      [attr.aria-label]="getPreviousTeamAbbreviation(pick.asset) + ' to ' + getNewsNewTeamAbbreviation(pick.asset)"
+    >
+      @if (getPreviousTeamLogoUrl(pick.asset); as previousLogoUrl) {
+        <img
+          class="drafted-player-logo"
+          [src]="previousLogoUrl"
+          [alt]="getPreviousTeamAbbreviation(pick.asset) + ' logo'"
+        />
+      } @else {
+        <span class="drafted-player-logo-fallback drafted-player-logo-fallback-small">
+          {{ getPreviousTeamAbbreviation(pick.asset) }}
+        </span>
+      }
+
+      <span class="team-change-inline-arrow" aria-hidden="true">→</span>
+
+      @if (getNewTeamLogoUrl(pick.asset); as newLogoUrl) {
+        <img
+          class="drafted-player-logo"
+          [src]="newLogoUrl"
+          [alt]="getNewsNewTeamAbbreviation(pick.asset) + ' logo'"
+        />
+      } @else {
+        <span class="drafted-player-logo-fallback drafted-player-logo-fallback-small">
+          {{ getNewsNewTeamAbbreviation(pick.asset) }}
+        </span>
+      }
+    </div>
+  } @else if (getAssetLogoUrl(pick.asset); as logoUrl) {
     <img
       class="drafted-player-logo"
       [src]="logoUrl"
@@ -309,6 +396,25 @@
     {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
   </small>
 </div>
+
+@if (hasDraftNews(pick.asset)) {
+  <div
+    class="asset-draft-news-row drafted-news-row"
+    [attr.title]="getDraftNewsTooltip(pick.asset)"
+  >
+    @if (getInjuryLabel(pick.asset); as injuryLabel) {
+      <span
+        [class]="'injury-news-chip ' + getInjuryClass(pick.asset)"
+      >
+        ✚ {{ injuryLabel }}
+      </span>
+    }
+
+    @if (getDraftNewsNote(pick.asset); as note) {
+      <small class="draft-news-note">{{ note }}</small>
+    }
+  </div>
+}
   </div>
 </article>
         }

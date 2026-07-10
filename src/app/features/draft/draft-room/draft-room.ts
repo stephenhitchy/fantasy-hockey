@@ -36,6 +36,13 @@ import {
 } from '../../../core/draft/draft-player-pool.service';
 
 import {
+  DraftPlayerNewsOverride,
+  getDraftNewsOverrideForAsset,
+  getDraftNewsTeamLogoUrl
+} from '../../../core/draft/draft-news-overrides';
+
+
+import {
   getLeagueById,
   League
 } from '../../../core/league/league.service';
@@ -838,6 +845,126 @@ readonly availableAssets = computed(() => {
     return asset.assetType === 'skater'
       ? asset.player.teamLogoUrl
       : asset.teamLogoUrl;
+  }
+
+  getDraftNews(
+    asset: DraftableAsset
+  ): DraftPlayerNewsOverride | null {
+    return getDraftNewsOverrideForAsset(asset);
+  }
+
+  hasDraftNews(asset: DraftableAsset): boolean {
+    const news = this.getDraftNews(asset);
+
+    return Boolean(
+      news?.previousTeamAbbreviation ||
+        news?.newTeamAbbreviation ||
+        news?.injuryStatus ||
+        news?.note
+    );
+  }
+
+  hasOffseasonTeamChange(asset: DraftableAsset): boolean {
+    const news = this.getDraftNews(asset);
+
+    return Boolean(
+      news?.previousTeamAbbreviation &&
+        this.getNewsNewTeamAbbreviation(asset)
+    );
+  }
+
+  getPreviousTeamAbbreviation(
+    asset: DraftableAsset
+  ): string {
+    return this.getDraftNews(asset)?.previousTeamAbbreviation ?? '';
+  }
+
+  getNewsNewTeamAbbreviation(
+    asset: DraftableAsset
+  ): string {
+    return (
+      this.getDraftNews(asset)?.newTeamAbbreviation ??
+      this.getAssetTeamLabel(asset)
+    );
+  }
+
+  getPreviousTeamLogoUrl(asset: DraftableAsset): string | undefined {
+    const abbreviation = this.getPreviousTeamAbbreviation(asset);
+
+    return abbreviation
+      ? getDraftNewsTeamLogoUrl(abbreviation)
+      : undefined;
+  }
+
+  getNewTeamLogoUrl(asset: DraftableAsset): string | undefined {
+    const abbreviation = this.getNewsNewTeamAbbreviation(asset);
+
+    return abbreviation
+      ? getDraftNewsTeamLogoUrl(abbreviation)
+      : undefined;
+  }
+
+  getInjuryLabel(asset: DraftableAsset): string {
+    const injuryStatus = this.getDraftNews(asset)?.injuryStatus;
+
+    switch (injuryStatus) {
+      case 'out-start-season':
+        return 'Out Start';
+
+      case 'questionable-start-season':
+        return 'Questionable';
+
+      case 'day-to-day':
+        return 'Day-to-Day';
+
+      case 'long-term':
+        return 'Long-Term IR';
+
+      default:
+        return '';
+    }
+  }
+
+  getInjuryClass(asset: DraftableAsset): string {
+    const injuryStatus = this.getDraftNews(asset)?.injuryStatus;
+
+    if (!injuryStatus) {
+      return '';
+    }
+
+    return `injury-${injuryStatus}`;
+  }
+
+  getDraftNewsNote(asset: DraftableAsset): string {
+    return this.getDraftNews(asset)?.note ?? '';
+  }
+
+  getDraftNewsTooltip(asset: DraftableAsset): string {
+    const news = this.getDraftNews(asset);
+
+    if (!news) {
+      return '';
+    }
+
+    const details: string[] = [];
+
+    if (this.hasOffseasonTeamChange(asset)) {
+      details.push(
+        `${this.getPreviousTeamAbbreviation(asset)} → ${this.getNewsNewTeamAbbreviation(asset)}`
+      );
+    }
+
+    const injuryLabel = this.getInjuryLabel(asset);
+
+    if (injuryLabel) {
+      details.push(injuryLabel);
+    }
+
+    if (news.note) {
+      details.push(news.note);
+    }
+
+    return details.join(' · ');
   }
 
   getPositionRequirement(

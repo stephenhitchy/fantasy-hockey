@@ -1,0 +1,443 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserId() {
+      return request.auth.uid;
+    }
+
+    function leaguePath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId);
+    }
+
+    function memberPath(leagueId, userId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(userId);
+    }
+
+    function invitePath(inviteCode) {
+      return /databases/$(database)/documents/leagueInvites/$(inviteCode);
+    }
+
+    function draftPath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
+    }
+
+    function isLeagueMember(leagueId) {
+      return signedIn() &&
+        exists(memberPath(leagueId, currentUserId()));
+    }
+
+    function isLeagueMemberAfter(leagueId) {
+      return signedIn() &&
+        existsAfter(memberPath(leagueId, currentUserId()));
+    }
+
+    function isLeagueCommissioner(leagueId) {
+      return signedIn() &&
+        exists(leaguePath(leagueId)) &&
+        get(leaguePath(leagueId)).data.commissionerId == currentUserId();
+    }
+
+    function isLeagueCommissionerAfter(leagueId) {
+      return signedIn() &&
+        existsAfter(leaguePath(leagueId)) &&
+        getAfter(leaguePath(leagueId)).data.commissionerId == currentUserId();
+    }
+
+    function validUsername(username) {
+      return username is string &&
+        username.size() >= 1 &&
+        username.size() <= 40;
+    }
+
+    function validLeagueName(name) {
+      return name is string &&
+        name.size() >= 1 &&
+        name.size() <= 80;
+    }
+
+    function validTeamName(name) {
+      return name is string &&
+        name.size() >= 1 &&
+        name.size() <= 60;
+    }
+
+    function validLeagueCreate(leagueId) {
+      return request.resource.data.id == leagueId &&
+        request.resource.data.commissionerId == currentUserId() &&
+        validLeagueName(request.resource.data.name) &&
+        request.resource.data.inviteCode is string &&
+        request.resource.data.inviteCode.size() == 6 &&
+        request.resource.data.maxTeams is int &&
+        request.resource.data.maxTeams >= 2 &&
+        request.resource.data.maxTeams <= 12 &&
+        request.resource.data.matchupFormat == 'cycle_matchup' &&
+        request.resource.data.scoringRules is map;
+    }
+
+    function validInviteCreate(inviteCode) {
+      return request.resource.data.inviteCode == inviteCode &&
+        request.resource.data.leagueId is string &&
+        request.resource.data.createdBy == currentUserId() &&
+        request.resource.data.active == true &&
+        isLeagueCommissionerAfter(request.resource.data.leagueId);
+    }
+
+    function validMemberCreate(leagueId, memberId) {
+      let data = request.resource.data;
+
+      return signedIn() &&
+        memberId == currentUserId() &&
+        data.uid == currentUserId() &&
+        data.leagueId == leagueId &&
+        validUsername(data.username) &&
+        (
+          (
+            data.role == 'commissioner' &&
+            data.inviteCodeUsed == null &&
+            isLeagueCommissionerAfter(leagueId)
+          ) ||
+          (
+            data.role == 'member' &&
+            data.inviteCodeUsed is string &&
+            data.inviteCodeUsed.size() == 6 &&
+            exists(leaguePath(leagueId)) &&
+            exists(invitePath(data.inviteCodeUsed)) &&
+            get(invitePath(data.inviteCodeUsed)).data.active == true &&
+            get(invitePath(data.inviteCodeUsed)).data.inviteCode ==
+              data.inviteCodeUsed &&
+            get(invitePath(data.inviteCodeUsed)).data.leagueId == leagueId
+          )
+        );
+    }
+
+    function validTeamCreate(teamId) {
+      let data = request.resource.data;
+
+      return teamId == currentUserId() &&
+        data.id == currentUserId() &&
+        data.ownerId == currentUserId() &&
+        validTeamName(data.teamName) &&
+        data.logo is string &&
+        data.wins == 0 &&
+        data.losses == 0 &&
+        data.ties == 0 &&
+        data.pointsFor == 0 &&
+        data.pointsAgainst == 0 &&
+        data.waiverPriority == 1 &&
+        data.draftPosition == null;
+    }
+
+    function validOwnerTeamUpdate() {
+      return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['teamName', 'logo', 'updatedAt']) &&
+        validTeamName(request.resource.data.teamName) &&
+        request.resource.data.logo is string;
+    }
+
+    function validRosterDocument(rosterId) {
+      let data = request.resource.data;
+
+      return rosterId == 'current' &&
+        data.schemaVersion == 1 &&
+        data.activeSlots is list &&
+        data.activeSlots.size() == 14 &&
+        data.irSlots is list &&
+        data.irSlots.size() == 4;
+    }
+
+    function validMemberDraftUpdate(leagueId) {
+      let changedKeys = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+
+      let activationOnly =
+        resource.data.status == 'scheduled' &&
+        resource.data.scheduledStartAt is timestamp &&
+        request.time >= resource.data.scheduledStartAt &&
+        request.resource.data.status == 'live' &&
+        changedKeys.hasOnly(['status', 'startedAt', 'updatedAt']);
+
+      let draftWasReady =
+        resource.data.status == 'live' ||
+        (
+          resource.data.status == 'scheduled' &&
+          resource.data.scheduledStartAt is timestamp &&
+          request.time >= resource.data.scheduledStartAt
+        );
+
+      let pickProgress =
+        draftWasReady &&
+        changedKeys.hasOnly([
+          'status',
+          'nextOverallPick',
+          'draftedAssetKeys',
+          'startedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.nextOverallPick ==
+          resource.data.nextOverallPick + 1 &&
+        request.resource.data.draftedAssetKeys is list &&
+        resource.data.draftedAssetKeys is list &&
+        request.resource.data.draftedAssetKeys.size() ==
+          resource.data.draftedAssetKeys.size() + 1 &&
+        request.resource.data.draftedAssetKeys.hasAll(
+          resource.data.draftedAssetKeys
+        ) &&
+        (
+          request.resource.data.status == 'live' ||
+          request.resource.data.status == 'complete'
+        );
+
+      return isLeagueMember(leagueId) &&
+        (activationOnly || pickProgress);
+    }
+
+    function validDraftPickCreate(leagueId) {
+      let draft = get(draftPath(leagueId)).data;
+      let data = request.resource.data;
+
+      return isLeagueMember(leagueId) &&
+        data.ownerId == currentUserId() &&
+        data.overallPick is int &&
+        data.overallPick == draft.nextOverallPick &&
+        data.round is int &&
+        data.pickInRound is int &&
+        data.asset is map &&
+        data.asset.assetKey is string &&
+        !draft.draftedAssetKeys.hasAny([data.asset.assetKey]);
+    }
+
+    function validOwnerTransactionCreate() {
+      let data = request.resource.data;
+
+      return data.ownerId == currentUserId() &&
+        data.type in [
+          'add-drop',
+          'add-open-slot',
+          'move-to-ir',
+          'activate-from-ir',
+          'waiver-claim'
+        ];
+    }
+
+    function validOwnerWaiverCreate() {
+      let data = request.resource.data;
+
+      return data.droppedByOwnerId == currentUserId() &&
+        data.status == 'active' &&
+        data.claims is list &&
+        data.claims.size() == 0 &&
+        data.assetKey is string &&
+        data.asset is map;
+    }
+
+    function validOwnerWaiverClaimUpdate() {
+      let changedKeys = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+      let nextClaims = request.resource.data.claims;
+      let previousClaims = resource.data.claims;
+
+      return resource.data.status == 'active' &&
+        request.resource.data.status == 'active' &&
+        changedKeys.hasOnly(['claims', 'updatedAt']) &&
+        nextClaims is list &&
+        previousClaims is list &&
+        nextClaims.size() >= 1 &&
+        nextClaims.size() >= previousClaims.size() &&
+        nextClaims.size() <= previousClaims.size() + 1 &&
+        nextClaims[nextClaims.size() - 1].ownerId == currentUserId();
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() &&
+        userId == currentUserId() &&
+        request.resource.data.uid == currentUserId() &&
+        request.resource.data.email == request.auth.token.email &&
+        validUsername(request.resource.data.username);
+
+      allow get: if signedIn() && userId == currentUserId();
+      allow list: if false;
+
+      allow update: if signedIn() &&
+        userId == currentUserId() &&
+        request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['username']) &&
+        validUsername(request.resource.data.username);
+
+      allow delete: if false;
+    }
+
+    match /leagueInvites/{inviteCode} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn() &&
+        validInviteCreate(inviteCode);
+
+      allow update: if isLeagueCommissioner(resource.data.leagueId) &&
+        request.resource.data.leagueId == resource.data.leagueId &&
+        request.resource.data.inviteCode == resource.data.inviteCode &&
+        request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isLeagueCommissioner(resource.data.leagueId);
+    }
+
+    match /leagues/{leagueId} {
+      allow create: if signedIn() &&
+        validLeagueCreate(leagueId);
+
+      allow get: if isLeagueMember(leagueId);
+      allow list: if false;
+
+      allow update, delete: if isLeagueCommissioner(leagueId);
+
+      match /members/{memberId} {
+        allow get: if signedIn() &&
+          (
+            memberId == currentUserId() ||
+            isLeagueMember(leagueId)
+          );
+
+        allow list: if false;
+
+        allow create: if validMemberCreate(leagueId, memberId);
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            signedIn() &&
+            memberId == currentUserId() &&
+            request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['username']) &&
+            validUsername(request.resource.data.username)
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /teams/{teamId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueMemberAfter(leagueId) &&
+          validTeamCreate(teamId);
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            signedIn() &&
+            teamId == currentUserId() &&
+            validOwnerTeamUpdate()
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+
+        match /roster/{rosterId} {
+          allow read: if isLeagueMember(leagueId);
+
+          allow create, update: if
+            (
+              isLeagueCommissioner(leagueId) ||
+              (
+                signedIn() &&
+                teamId == currentUserId() &&
+                isLeagueMemberAfter(leagueId)
+              )
+            ) &&
+            validRosterDocument(rosterId);
+
+          allow delete: if false;
+        }
+      }
+
+      match /draft/{draftId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if draftId == 'current' &&
+          isLeagueCommissioner(leagueId);
+
+        allow update: if draftId == 'current' &&
+          (
+            isLeagueCommissioner(leagueId) ||
+            validMemberDraftUpdate(leagueId)
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+
+        match /picks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+
+          allow create: if draftId == 'current' &&
+            validDraftPickCreate(leagueId);
+
+          allow update, delete: if isLeagueCommissioner(leagueId);
+        }
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            validOwnerTransactionCreate()
+          );
+
+        allow update, delete: if false;
+      }
+
+      match /waivers/{waiverId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            validOwnerWaiverCreate()
+          );
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            validOwnerWaiverClaimUpdate()
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /cycles/{cycleId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+
+        match /matchups/{matchupId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+        match /rosterPicks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+      }
+    }
+
+    // Required for getMyLeagues(), which performs:
+    // collectionGroup('members').where('uid', '==', request.auth.uid)
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() &&
+        resource.data.uid == currentUserId();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
