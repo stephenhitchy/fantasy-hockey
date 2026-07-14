@@ -169,8 +169,13 @@ export class CycleOne implements OnDestroy {
       return `${this.getCycleLabel()} Not Started`;
     }
 
-    if (this.autoFlowError() || this.completeCycleError() || this.startNextCycleError()) {
-      return 'Auto Flow Needs Attention';
+    if (
+      this.autoFlowError() ||
+      this.completeCycleError() ||
+      this.startNextCycleError() ||
+      this.scoringError()
+    ) {
+      return 'Score Update Needs Attention';
     }
 
     if (this.completingCycle()) {
@@ -214,7 +219,8 @@ export class CycleOne implements OnDestroy {
     const activeError =
       this.autoFlowError() ||
       this.completeCycleError() ||
-      this.startNextCycleError();
+      this.startNextCycleError() ||
+      this.scoringError();
 
     if (activeError) {
       return activeError;
@@ -265,7 +271,12 @@ export class CycleOne implements OnDestroy {
   getAutoLeagueStatusClass(): string {
     const cycle = this.cycle();
 
-    if (this.autoFlowError() || this.completeCycleError() || this.startNextCycleError()) {
+    if (
+      this.autoFlowError() ||
+      this.completeCycleError() ||
+      this.startNextCycleError() ||
+      this.scoringError()
+    ) {
       return 'auto-status-error';
     }
 
@@ -286,6 +297,23 @@ export class CycleOne implements OnDestroy {
     }
 
     return 'auto-status-active';
+  }
+
+
+  shouldShowCompactAutoStatus(): boolean {
+    return Boolean(
+      this.autoFlowError() ||
+      this.completeCycleError() ||
+      this.startNextCycleError() ||
+      this.scoringError() ||
+      this.scoringLoading() ||
+      this.completingCycle() ||
+      this.startingNextCycle() ||
+      (
+        this.cycleScoring() &&
+        !this.hasCurrentCycleScheduledGames()
+      )
+    );
   }
 
 

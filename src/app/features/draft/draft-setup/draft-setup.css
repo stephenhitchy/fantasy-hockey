@@ -75,7 +75,7 @@
 
 .draft-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -439,7 +439,8 @@
   font-weight: 800;
 }
 
-.schedule-input-group input {
+.schedule-input-group input,
+.schedule-input-group select {
   width: 100%;
   padding: 10px 11px;
   border: 1px solid #bdcad8;
@@ -449,7 +450,8 @@
   font: inherit;
 }
 
-.schedule-input-group input:focus {
+.schedule-input-group input:focus,
+.schedule-input-group select:focus {
   outline: 2px solid #9cb7d2;
   outline-offset: 1px;
 }
@@ -491,5 +493,31 @@
 
   .schedule-input-group {
     max-width: none;
+  }
+}
+
+.pick-clock-input-group {
+  margin-top: 16px;
+}
+
+.pick-clock-input-group select {
+  min-height: 42px;
+}
+
+@media (max-width: 1000px) {
+  .draft-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .draft-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .draft-summary {
+    grid-template-columns: 1fr;
   }
 }

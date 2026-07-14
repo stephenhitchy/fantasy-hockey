@@ -29,7 +29,9 @@
             ? 'Draft Live'
             : draft()?.status === 'complete'
               ? 'Draft Complete'
-              : 'Draft Scheduled'
+              : startTimeReached()
+                ? 'Updating Injuries'
+                : 'Draft Scheduled'
         }}
       </div>
     </header>
@@ -43,6 +45,12 @@
     @if (successMessage()) {
       <p class="message success-message">
         {{ successMessage() }}
+      </p>
+    }
+
+    @if (autoPickMessage()) {
+      <p class="message auto-pick-message">
+        {{ autoPickMessage() }}
       </p>
     }
 
@@ -72,6 +80,16 @@
           The draft board will open automatically when the scheduled time arrives.
         </span>
       </section>
+    } @else if (
+      draft()?.status === 'scheduled' &&
+      startTimeReached()
+    ) {
+      <section class="waiting-card injury-sync-waiting-card">
+        <span class="eyebrow">Pre-Draft Safety Check</span>
+        <h2>{{ getDraftInjurySyncStatusLabel() }}</h2>
+        <p>{{ getDraftInjurySyncDescription() }}</p>
+        <span>{{ getDraftInjurySyncTimeLabel() }}</span>
+      </section>
     } @else if (draft()?.status === 'complete') {
       <section class="waiting-card complete-card">
         <span class="eyebrow">Draft Complete</span>
@@ -81,6 +99,61 @@
         </p>
       </section>
     } @else {
+      <section
+        class="draft-injury-sync-banner"
+        [class.sync-success]="injurySyncState()?.status === 'success'"
+        [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
+      >
+        <div>
+          <span class="eyebrow">Shared Injury Report</span>
+          <strong>{{ getDraftInjurySyncStatusLabel() }}</strong>
+        </div>
+
+        <p>{{ getDraftInjurySyncDescription() }}</p>
+        <small>{{ getDraftInjurySyncTimeLabel() }}</small>
+      </section>
+
+      <section
+        class="draft-clock-bar"
+        [class.clock-urgent]="draftClockIsUrgent()"
+        [class.clock-paused]="draft()?.clockStatus === 'paused'"
+        [class.clock-auto]="currentOwnerAutoDraftEnabled()"
+      >
+        <div class="draft-clock-team">
+          <span>On the Clock</span>
+          <strong>{{ getCurrentPickTeamName() }}</strong>
+        </div>
+
+        <div class="draft-clock-time">
+          <span>{{ getCurrentPickNumberLabel() }}</span>
+          <strong>{{ draftClockDisplay() }}</strong>
+          <small>{{ getDraftClockStatusLabel() }}</small>
+        </div>
+
+        <div class="draft-clock-controls">
+          @if (isCommissioner()) {
+            <button
+              type="button"
+              class="clock-control-button"
+              (click)="toggleDraftClockPause()"
+              [disabled]="clockActionInProgress() || draft()?.status !== 'live'"
+            >
+              {{
+                clockActionInProgress()
+                  ? 'Updating...'
+                  : draft()?.clockStatus === 'paused'
+                    ? 'Resume Clock'
+                    : 'Pause Clock'
+              }}
+            </button>
+          } @else {
+            <span>
+              {{ draft()?.pickSeconds ?? 60 }} seconds per pick
+            </span>
+          }
+        </div>
+      </section>
+
       <section class="draft-layout">
         <main class="player-pool-panel">
           <div class="panel-heading">
@@ -208,6 +281,27 @@
     {{ getAssetTeamLabel(asset) }}
   </span>
 
+@if (shouldShowPlayerAvailabilityBadge(asset)) {
+  <div
+    class="player-availability-row"
+    [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
+  >
+    <span
+      [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+    >
+      ✚ {{ getPlayerAvailabilityLabel(asset) }}
+    </span>
+
+    @if (isPlayerAvailabilityIrEligible(asset)) {
+      <small class="ir-eligible-copy">IR eligible</small>
+    }
+
+    @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
+      <small class="player-availability-note">{{ availabilityNote }}</small>
+    }
+  </div>
+}
+
 <div class="asset-projection-strip">
   <small class="rank-pill">
     Rank {{ getAssetValueRankDisplay(asset) }}
@@ -238,14 +332,6 @@
     class="asset-draft-news-row"
     [attr.title]="getDraftNewsTooltip(asset)"
   >
-    @if (getInjuryLabel(asset); as injuryLabel) {
-      <span
-        [class]="'injury-news-chip ' + getInjuryClass(asset)"
-      >
-        ✚ {{ injuryLabel }}
-      </span>
-    }
-
     @if (getDraftNewsNote(asset); as note) {
       <small class="draft-news-note">{{ note }}</small>
     }
@@ -253,16 +339,29 @@
 }
 </div>
 
-                  <button
-                    type="button"
-                    (click)="selectAsset(asset)"
-                    [disabled]="
-                      !canDraftAsset(asset) ||
-                      makingPickAssetKey() !== null
-                    "
-                  >
-                    {{ getDraftButtonLabel(asset) }}
-                  </button>
+                  <div class="asset-actions">
+                    <button
+                      type="button"
+                      class="queue-button"
+                      [class.queued]="isAssetQueued(asset)"
+                      (click)="toggleAssetInQueue(asset)"
+                      [disabled]="queueSaving() || draft()?.status === 'complete'"
+                    >
+                      {{ isAssetQueued(asset) ? 'Queued' : '+ Queue' }}
+                    </button>
+
+                    <button
+                      type="button"
+                      class="draft-button"
+                      (click)="selectAsset(asset)"
+                      [disabled]="
+                        !canDraftAsset(asset) ||
+                        makingPickAssetKey() !== null
+                      "
+                    >
+                      {{ getDraftButtonLabel(asset) }}
+                    </button>
+                  </div>
                 </article>
               }
             </div>
@@ -293,6 +392,111 @@
             } @else {
               <h2>Updating Draft...</h2>
               <p>Waiting for the next pick.</p>
+            }
+
+            <div
+              class="turn-clock-summary"
+              [class.turn-clock-urgent]="draftClockIsUrgent()"
+            >
+              <span>Time Remaining</span>
+              <strong>{{ draftClockDisplay() }}</strong>
+            </div>
+
+            @if (isCommissioner() && currentPick()) {
+              <button
+                type="button"
+                class="commissioner-auto-button"
+                [class.auto-enabled]="currentOwnerAutoDraftEnabled()"
+                (click)="toggleCurrentOwnerAutoDraft()"
+                [disabled]="queueSaving()"
+              >
+                {{
+                  currentOwnerAutoDraftEnabled()
+                    ? 'Disable Auto-Draft for This Team'
+                    : 'Enable Auto-Draft for This Team'
+                }}
+              </button>
+            }
+          </section>
+
+          <section class="sidebar-card queue-card">
+            <div class="queue-card-heading">
+              <div>
+                <span class="eyebrow">Your Draft List</span>
+                <h2>My Queue</h2>
+              </div>
+
+              <button
+                type="button"
+                class="auto-draft-toggle"
+                [class.enabled]="myQueue().autoDraftEnabled"
+                (click)="toggleMyAutoDraft()"
+                [disabled]="queueSaving()"
+              >
+                {{
+                  myQueue().autoDraftEnabled
+                    ? 'Auto-Draft On'
+                    : 'Auto-Draft Off'
+                }}
+              </button>
+            </div>
+
+            <p class="queue-help">
+              Other managers cannot see this list. The commissioner can access it
+              only to process automatic picks. Auto-draft stays enabled for future
+              turns until you switch it off. It uses the first eligible queued
+              asset, then the best balanced-value asset available.
+            </p>
+
+            @if (queueAssets().length === 0) {
+              <p class="empty-sidebar-copy">
+                Add players from the pool to build your queue.
+              </p>
+            } @else {
+              <div class="queue-list">
+                @for (asset of queueAssets(); track asset.assetKey; let index = $index) {
+                  <article class="queue-row">
+                    <span class="queue-rank">{{ index + 1 }}</span>
+
+                    <div class="queue-copy">
+                      <strong>{{ getAssetName(asset) }}</strong>
+                      <small>
+                        {{ asset.position }} · {{ getAssetTeamLabel(asset) }}
+                      </small>
+                    </div>
+
+                    <div class="queue-row-actions">
+                      <button
+                        type="button"
+                        aria-label="Move queued asset up"
+                        (click)="moveQueueAsset(asset.assetKey, -1)"
+                        [disabled]="index === 0 || queueSaving()"
+                      >
+                        ↑
+                      </button>
+
+                      <button
+                        type="button"
+                        aria-label="Move queued asset down"
+                        (click)="moveQueueAsset(asset.assetKey, 1)"
+                        [disabled]="index === queueAssets().length - 1 || queueSaving()"
+                      >
+                        ↓
+                      </button>
+
+                      <button
+                        type="button"
+                        class="remove-queue-button"
+                        aria-label="Remove queued asset"
+                        (click)="removeAssetFromQueue(asset.assetKey)"
+                        [disabled]="queueSaving()"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
             }
           </section>
 
@@ -372,6 +576,27 @@
       </span>
     </div>
 
+    @if (shouldShowPlayerAvailabilityBadge(pick.asset)) {
+      <div
+        class="player-availability-row drafted-availability-row"
+        [attr.title]="getPlayerAvailabilityNote(pick.asset) || getPlayerAvailabilityLabel(pick.asset)"
+      >
+        <span
+          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(pick.asset)"
+        >
+          ✚ {{ getPlayerAvailabilityLabel(pick.asset) }}
+        </span>
+
+        @if (isPlayerAvailabilityIrEligible(pick.asset)) {
+          <small class="ir-eligible-copy">IR eligible</small>
+        }
+
+        @if (getPlayerAvailabilityNote(pick.asset); as availabilityNote) {
+          <small class="player-availability-note">{{ availabilityNote }}</small>
+        }
+      </div>
+    }
+
     <div class="drafted-player-projections">
   <small class="rank-pill">
     Rank {{ getAssetValueRankDisplay(pick.asset) }}
@@ -402,14 +627,6 @@
     class="asset-draft-news-row drafted-news-row"
     [attr.title]="getDraftNewsTooltip(pick.asset)"
   >
-    @if (getInjuryLabel(pick.asset); as injuryLabel) {
-      <span
-        [class]="'injury-news-chip ' + getInjuryClass(pick.asset)"
-      >
-        ✚ {{ injuryLabel }}
-      </span>
-    }
-
     @if (getDraftNewsNote(pick.asset); as note) {
       <small class="draft-news-note">{{ note }}</small>
     }
@@ -468,7 +685,7 @@
                       <small>
                         {{ getTeamName(pick.ownerId) }}
                         ·
-                        {{ pick.asset.position }}
+                        {{ pick.asset.position }}{{ getPickSelectionLabel(pick) }}
                       </small>
                     </div>
                   </div>

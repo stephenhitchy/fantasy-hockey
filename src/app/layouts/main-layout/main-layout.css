@@ -1,3 +1,52 @@
+:host {
+  display: block;
+  min-width: 0;
+  min-height: 100dvh;
+  background: #07111f;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 3000;
+  top: 8px;
+  left: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #07111f;
+  font-weight: 900;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .main-content {
+  min-width: 0;
+  min-height: calc(100dvh - 68px);
   padding: 24px;
+  overflow-x: clip;
+}
+
+.main-content:focus {
+  outline: none;
+}
+
+@media (max-width: 980px) {
+  .main-content {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 780px) {
+  .main-content {
+    min-height: 100dvh;
+    padding:
+      12px
+      10px
+      calc(88px + env(safe-area-inset-bottom));
+  }
 }

@@ -40,10 +40,12 @@ import {
 
 import {
   activateIrRosterAsset,
+  dropRosterAssetToWaivers,
   FantasyTransaction,
   listenToDraftPicks,
   listenToOwnerTransactions,
-  moveRosterAssetToIr
+  moveRosterAssetToIr,
+  type RosterDropSource
 } from '../../../core/draft/draft.service';
 
 import {
@@ -75,6 +77,19 @@ import {
 } from '../../../core/player/player.models';
 
 import {
+  PlayerAvailability
+} from '../../../core/player/player-availability.models';
+
+import {
+  getPlayerAvailabilityForPlayer,
+  getPlayerAvailabilityStatusClass,
+  getPlayerIrIneligibleReason,
+  isPlayerIrEligible,
+  shouldDisplayPlayerAvailability,
+  startPlayerAvailabilityListenerForLeague
+} from '../../../core/player/player-availability.service';
+
+import {
   getOrCreateFantasyRoster,
   listenToFantasyRoster
 } from '../../../core/team/roster.service';
@@ -91,6 +106,13 @@ function waitForAuthUser(): Promise<User | null> {
 interface RosterPositionGroup {
   position: DraftPosition;
   label: string;
+}
+
+interface PendingRosterDrop {
+  sourceRosterArea: RosterDropSource;
+  slotId: string;
+  slotLabel: string;
+  asset: RosterAsset;
 }
 
 const TEST_CYCLE_START_DATE: Date | null =
@@ -123,11 +145,16 @@ export class TeamSettings implements OnDestroy {
   saving = signal(false);
   errorMessage = signal('');
   successMessage = signal('');
+  liveDataWarnings = signal<string[]>([]);
   scoringLoading = signal(false);
   scoringError = signal('');
   rosterMoveLoading = signal(false);
   rosterMoveMessage = signal('');
   rosterMoveError = signal('');
+  irActivationSlotId = signal('');
+  irActivationTargetSlotId = signal('');
+  rosterDropSource = signal<RosterDropSource | null>(null);
+  rosterDropSlotId = signal('');
 
   readonly rosterPositions: RosterPositionGroup[] = [
     { position: 'LW', label: 'Left Wing' },
@@ -235,6 +262,8 @@ export class TeamSettings implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
+    this.errorMessage.set('');
+    this.liveDataWarnings.set([]);
 
     try {
       const [league, team] = await Promise.all([
@@ -256,6 +285,8 @@ export class TeamSettings implements OnDestroy {
       this.team.set(team);
       this.teamName = team.teamName;
 
+      startPlayerAvailabilityListenerForLeague(leagueId);
+
       await getOrCreateFantasyRoster(
         leagueId,
         user.uid
@@ -274,6 +305,28 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
+  private recordLiveDataWarning(
+    label: string,
+    error: Error
+  ): void {
+    const message = `${label}: ${error.message}`;
+
+    this.liveDataWarnings.update((warnings) => [
+      ...warnings.filter(
+        (warning) => !warning.startsWith(`${label}:`)
+      ),
+      message
+    ]);
+  }
+
+  private clearLiveDataWarning(label: string): void {
+    this.liveDataWarnings.update((warnings) =>
+      warnings.filter(
+        (warning) => !warning.startsWith(`${label}:`)
+      )
+    );
+  }
+
   private startLiveListeners(
     leagueId: string,
     userId: string
@@ -290,13 +343,18 @@ export class TeamSettings implements OnDestroy {
       leagueId,
       userId,
       (roster) => {
+        this.clearLiveDataWarning('Roster');
         this.roster.set(roster);
+      },
+      (error) => {
+        this.recordLiveDataWarning('Roster', error);
       }
     );
 
     this.stopTeamListener = listenToLeagueTeams(
       leagueId,
       (teams) => {
+        this.clearLiveDataWarning('League teams');
         this.teams.set(teams);
 
         const currentTeam = teams.find(
@@ -306,14 +364,21 @@ export class TeamSettings implements OnDestroy {
         if (currentTeam) {
           this.team.set(currentTeam);
         }
+      },
+      (error) => {
+        this.recordLiveDataWarning('League teams', error);
       }
     );
 
     this.stopPicksListener = listenToDraftPicks(
       leagueId,
       (picks) => {
+        this.clearLiveDataWarning('Draft picks');
         this.picks.set(picks);
         void this.loadCurrentCycleScoringIfReady();
+      },
+      (error) => {
+        this.recordLiveDataWarning('Draft picks', error);
       }
     );
 
@@ -321,13 +386,18 @@ export class TeamSettings implements OnDestroy {
       leagueId,
       userId,
       (transactions) => {
+        this.clearLiveDataWarning('Transactions');
         this.transactions.set(transactions);
+      },
+      (error) => {
+        this.recordLiveDataWarning('Transactions', error);
       }
     );
 
     this.stopLatestCycleListener = listenToLatestCycle(
       leagueId,
       (cycle) => {
+        this.clearLiveDataWarning('Current cycle');
         this.latestCycle.set(cycle);
         this.latestMatchups.set([]);
         this.cycleRosterPicks.set([]);
@@ -347,9 +417,13 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (picks) => {
+            this.clearLiveDataWarning('Cycle roster');
             this.cycleRosterPicks.set(picks);
             this.scoringLoadKey = null;
             void this.loadCurrentCycleScoringIfReady();
+          },
+          (error) => {
+            this.recordLiveDataWarning('Cycle roster', error);
           }
         );
 
@@ -357,9 +431,16 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (matchups) => {
+            this.clearLiveDataWarning('Current matchup');
             this.latestMatchups.set(matchups);
+          },
+          (error) => {
+            this.recordLiveDataWarning('Current matchup', error);
           }
         );
+      },
+      (error) => {
+        this.recordLiveDataWarning('Current cycle', error);
       }
     );
   }
@@ -499,10 +580,73 @@ export class TeamSettings implements OnDestroy {
     return `Cycle ${this.getRosterMoveEffectiveCycleNumber()}`;
   }
 
+  getPlayerAvailability(
+    asset: RosterAsset
+  ): PlayerAvailability | null {
+    if (asset.assetType !== 'skater') {
+      return null;
+    }
+
+    return getPlayerAvailabilityForPlayer(asset.player);
+  }
+
+  shouldShowPlayerAvailabilityBadge(
+    asset: RosterAsset
+  ): boolean {
+    const availability = this.getPlayerAvailability(asset);
+
+    return availability
+      ? shouldDisplayPlayerAvailability(availability)
+      : false;
+  }
+
+  getPlayerAvailabilityLabel(asset: RosterAsset): string {
+    return this.getPlayerAvailability(asset)?.shortLabel ?? '';
+  }
+
+  getPlayerAvailabilityClass(asset: RosterAsset): string {
+    const availability = this.getPlayerAvailability(asset);
+
+    return availability
+      ? getPlayerAvailabilityStatusClass(availability.status)
+      : '';
+  }
+
+  getPlayerAvailabilityNote(asset: RosterAsset): string {
+    return this.getPlayerAvailability(asset)?.note ?? '';
+  }
+
+  isPlayerIrEligible(asset: RosterAsset): boolean {
+    const availability = this.getPlayerAvailability(asset);
+
+    return availability
+      ? isPlayerIrEligible(availability.status)
+      : false;
+  }
+
+  isIrAssetNoLongerEligible(asset: SkaterRosterAsset): boolean {
+    return !this.isPlayerIrEligible(asset);
+  }
+
+  getIrEligibilityStatusText(asset: SkaterRosterAsset): string {
+    const availability = this.getPlayerAvailability(asset);
+
+    if (!availability) {
+      return '';
+    }
+
+    if (availability.irEligible) {
+      return `${availability.label} · IR eligible`;
+    }
+
+    return `${availability.label} · Activation recommended when a roster slot is available`;
+  }
+
   canMoveSlotToIr(slot: ActiveRosterSlot): boolean {
     return Boolean(
       slot.asset &&
       slot.asset.assetType === 'skater' &&
+      this.isPlayerIrEligible(slot.asset) &&
       this.getOpenIrSlotCount() > 0 &&
       !this.rosterMoveLoading()
     );
@@ -517,6 +661,12 @@ export class TeamSettings implements OnDestroy {
       return 'Goalie units cannot be moved to IR.';
     }
 
+    const availability = this.getPlayerAvailability(slot.asset);
+
+    if (availability && !availability.irEligible) {
+      return getPlayerIrIneligibleReason(availability);
+    }
+
     if (this.getOpenIrSlotCount() <= 0) {
       return 'No IR slots open.';
     }
@@ -527,7 +677,7 @@ export class TeamSettings implements OnDestroy {
   canActivateIrSlot(slot: IrRosterSlot): boolean {
     return Boolean(
       slot.asset &&
-      this.getOpenActiveSlotForIrAsset(slot.asset) &&
+      this.getActiveSlotsForIrAsset(slot.asset).length > 0 &&
       !this.rosterMoveLoading()
     );
   }
@@ -537,13 +687,270 @@ export class TeamSettings implements OnDestroy {
       return 'Open IR slot';
     }
 
-    const openSlot = this.getOpenActiveSlotForIrAsset(slot.asset);
+    const activeSlots = this.getActiveSlotsForIrAsset(slot.asset);
+    const openSlot = activeSlots.find((activeSlot) => activeSlot.asset === null);
+    const availability = this.getPlayerAvailability(slot.asset);
 
-    if (!openSlot) {
-      return `Needs an open ${slot.asset.position} slot to activate.`;
+    if (activeSlots.length === 0) {
+      return `No ${slot.asset.position} roster slots were found.`;
     }
 
-    return `Can activate into ${slot.asset.position} Slot ${openSlot.slotNumber}.`;
+    if (openSlot) {
+      return availability && !availability.irEligible
+        ? `${availability.label}. Choose the open ${slot.asset.position} slot to activate.`
+        : `Open ${slot.asset.position} Slot ${openSlot.slotNumber} is available.`;
+    }
+
+    return availability && !availability.irEligible
+      ? `${availability.label}. Choose a ${slot.asset.position} player to replace.`
+      : `Choose a ${slot.asset.position} player to replace. The replaced player goes to waivers.`;
+  }
+
+  getPendingIrActivationSlot(): IrRosterSlot | null {
+    const irSlotId = this.irActivationSlotId();
+
+    if (!irSlotId) {
+      return null;
+    }
+
+    return this.getIrSlots().find(
+      (slot) => slot.slotId === irSlotId
+    ) ?? null;
+  }
+
+  getIrActivationTargetSlots(): ActiveRosterSlot[] {
+    const irSlot = this.getPendingIrActivationSlot();
+
+    if (!irSlot?.asset) {
+      return [];
+    }
+
+    return this.getActiveSlotsForIrAsset(irSlot.asset);
+  }
+
+  beginIrActivation(irSlotId: string): void {
+    this.rosterMoveMessage.set('');
+    this.rosterMoveError.set('');
+    this.rosterDropSource.set(null);
+    this.rosterDropSlotId.set('');
+
+    const irSlot = this.getIrSlots().find(
+      (slot) => slot.slotId === irSlotId
+    );
+
+    if (!irSlot?.asset) {
+      this.rosterMoveError.set('That IR slot is empty.');
+      return;
+    }
+
+    const targetSlots = this.getActiveSlotsForIrAsset(irSlot.asset);
+
+    if (targetSlots.length === 0) {
+      this.rosterMoveError.set(
+        `No ${irSlot.asset.position} roster slots were found.`
+      );
+      return;
+    }
+
+    const openSlot = targetSlots.find((slot) => slot.asset === null);
+
+    this.irActivationSlotId.set(irSlotId);
+    this.irActivationTargetSlotId.set(
+      openSlot?.slotId ?? targetSlots[0].slotId
+    );
+  }
+
+  cancelIrActivation(): void {
+    if (this.rosterMoveLoading()) {
+      return;
+    }
+
+    this.irActivationSlotId.set('');
+    this.irActivationTargetSlotId.set('');
+  }
+
+  selectIrActivationTarget(slotId: string): void {
+    this.irActivationTargetSlotId.set(slotId);
+  }
+
+  isIrActivationTargetSelected(slotId: string): boolean {
+    return this.irActivationTargetSlotId() === slotId;
+  }
+
+  canConfirmIrActivation(): boolean {
+    const irSlot = this.getPendingIrActivationSlot();
+    const targetSlotId = this.irActivationTargetSlotId();
+
+    if (!irSlot?.asset || !targetSlotId || this.rosterMoveLoading()) {
+      return false;
+    }
+
+    return this.getActiveSlotsForIrAsset(irSlot.asset).some(
+      (slot) => slot.slotId === targetSlotId
+    );
+  }
+
+  getIrActivationTargetHeading(slot: ActiveRosterSlot): string {
+    if (!slot.asset) {
+      return `Open ${slot.position} Slot ${slot.slotNumber}`;
+    }
+
+    return this.getRosterAssetName(slot.asset);
+  }
+
+  getIrActivationTargetDetail(slot: ActiveRosterSlot): string {
+    if (!slot.asset) {
+      return 'Activate into this open roster slot. No player will be dropped.';
+    }
+
+    return `${this.getRosterAssetTeamLabel(slot.asset)} · ${slot.position} Slot ${slot.slotNumber} · Will be placed on waivers`;
+  }
+
+  getPendingRosterDrop(): PendingRosterDrop | null {
+    const sourceRosterArea = this.rosterDropSource();
+    const slotId = this.rosterDropSlotId();
+    const roster = this.roster();
+
+    if (!sourceRosterArea || !slotId || !roster) {
+      return null;
+    }
+
+    if (sourceRosterArea === 'active') {
+      const slot = roster.activeSlots.find(
+        (candidate) => candidate.slotId === slotId
+      );
+
+      if (!slot?.asset) {
+        return null;
+      }
+
+      return {
+        sourceRosterArea,
+        slotId,
+        slotLabel: `${slot.position} Slot ${slot.slotNumber}`,
+        asset: slot.asset
+      };
+    }
+
+    const slot = roster.irSlots.find(
+      (candidate) => candidate.slotId === slotId
+    );
+
+    if (!slot?.asset) {
+      return null;
+    }
+
+    return {
+      sourceRosterArea,
+      slotId,
+      slotLabel: `IR Slot ${slot.slotNumber}`,
+      asset: slot.asset
+    };
+  }
+
+  beginRosterDrop(
+    sourceRosterArea: RosterDropSource,
+    slotId: string
+  ): void {
+    this.rosterMoveMessage.set('');
+    this.rosterMoveError.set('');
+
+    const roster = this.roster();
+    const hasAsset = sourceRosterArea === 'active'
+      ? roster?.activeSlots.some(
+          (slot) => slot.slotId === slotId && slot.asset !== null
+        )
+      : roster?.irSlots.some(
+          (slot) => slot.slotId === slotId && slot.asset !== null
+        );
+
+    if (!hasAsset) {
+      this.rosterMoveError.set(
+        sourceRosterArea === 'active'
+          ? 'That active roster slot is already empty.'
+          : 'That IR slot is already empty.'
+      );
+      return;
+    }
+
+    this.irActivationSlotId.set('');
+    this.irActivationTargetSlotId.set('');
+    this.rosterDropSource.set(sourceRosterArea);
+    this.rosterDropSlotId.set(slotId);
+  }
+
+  cancelRosterDrop(): void {
+    if (this.rosterMoveLoading()) {
+      return;
+    }
+
+    this.rosterDropSource.set(null);
+    this.rosterDropSlotId.set('');
+  }
+
+  canConfirmRosterDrop(): boolean {
+    return Boolean(
+      this.getPendingRosterDrop() &&
+      !this.rosterMoveLoading()
+    );
+  }
+
+  getRosterDropSourceLabel(
+    sourceRosterArea: RosterDropSource
+  ): string {
+    return sourceRosterArea === 'ir'
+      ? 'injured reserve'
+      : 'active roster';
+  }
+
+  async confirmRosterDrop(): Promise<void> {
+    this.rosterMoveMessage.set('');
+    this.rosterMoveError.set('');
+
+    const pendingDrop = this.getPendingRosterDrop();
+
+    if (!pendingDrop) {
+      this.rosterMoveError.set(
+        'That player or goalie unit is no longer in the selected roster slot.'
+      );
+      this.cancelRosterDrop();
+      return;
+    }
+
+    this.rosterMoveLoading.set(true);
+
+    try {
+      const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
+      const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
+      const assetName = this.getRosterAssetName(pendingDrop.asset);
+      const sourceLabel = this.getRosterDropSourceLabel(
+        pendingDrop.sourceRosterArea
+      );
+
+      await dropRosterAssetToWaivers({
+        leagueId: this.leagueId,
+        ownerId: this.userId,
+        sourceRosterArea: pendingDrop.sourceRosterArea,
+        slotId: pendingDrop.slotId,
+        effectiveCycleNumber,
+        effectiveLabel
+      });
+
+      this.rosterMoveMessage.set(
+        `${assetName} was dropped from your ${sourceLabel} and placed on waivers. The current cycle stays locked, and the open roster spot applies starting ${effectiveLabel}.`
+      );
+
+      this.rosterDropSource.set(null);
+      this.rosterDropSlotId.set('');
+    } catch (error: unknown) {
+      this.rosterMoveError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to drop this player or goalie unit.'
+      );
+    } finally {
+      this.rosterMoveLoading.set(false);
+    }
   }
 
   async moveActiveSlotToIr(slotId: string): Promise<void> {
@@ -573,6 +980,8 @@ export class TeamSettings implements OnDestroy {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const playerName = this.getRosterAssetName(slot.asset);
+      const availabilityLabel =
+        this.getPlayerAvailability(slot.asset)?.label ?? 'IR eligible';
 
       await moveRosterAssetToIr({
         leagueId: this.leagueId,
@@ -583,7 +992,7 @@ export class TeamSettings implements OnDestroy {
       });
 
       this.rosterMoveMessage.set(
-        `${playerName} moved to IR. The current cycle stays locked, and your active roster change applies starting ${effectiveLabel}.`
+        `${playerName} moved to IR with a ${availabilityLabel} designation. The current cycle stays locked, and your active roster change applies starting ${effectiveLabel}.`
       );
     } catch (error: unknown) {
       this.rosterMoveError.set(
@@ -596,25 +1005,26 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  async activateIrSlot(irSlotId: string): Promise<void> {
+  async confirmIrActivation(): Promise<void> {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
 
-    const roster = this.roster();
-    const irSlot = roster?.irSlots.find(
-      (candidate) => candidate.slotId === irSlotId
-    );
+    const irSlot = this.getPendingIrActivationSlot();
+    const targetSlotId = this.irActivationTargetSlotId();
 
     if (!irSlot?.asset) {
       this.rosterMoveError.set('That IR slot is empty.');
+      this.cancelIrActivation();
       return;
     }
 
-    const openActiveSlot = this.getOpenActiveSlotForIrAsset(irSlot.asset);
+    const targetSlot = this.getActiveSlotsForIrAsset(irSlot.asset).find(
+      (slot) => slot.slotId === targetSlotId
+    );
 
-    if (!openActiveSlot) {
+    if (!targetSlot) {
       this.rosterMoveError.set(
-        `Open a ${irSlot.asset.position} slot before activating ${this.getRosterAssetName(irSlot.asset)} from IR.`
+        `Choose a valid ${irSlot.asset.position} roster slot.`
       );
       return;
     }
@@ -625,19 +1035,27 @@ export class TeamSettings implements OnDestroy {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const playerName = this.getRosterAssetName(irSlot.asset);
+      const replacedPlayerName = targetSlot.asset
+        ? this.getRosterAssetName(targetSlot.asset)
+        : '';
 
       await activateIrRosterAsset({
         leagueId: this.leagueId,
         ownerId: this.userId,
-        irSlotId,
-        activeSlotId: openActiveSlot.slotId,
+        irSlotId: irSlot.slotId,
+        activeSlotId: targetSlot.slotId,
         effectiveCycleNumber,
         effectiveLabel
       });
 
       this.rosterMoveMessage.set(
-        `${playerName} activated from IR into ${openActiveSlot.position} Slot ${openActiveSlot.slotNumber}. This starts scoring with ${effectiveLabel}.`
+        replacedPlayerName
+          ? `${playerName} activated from IR into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} was placed on waivers. The current cycle stays locked, and this roster change starts ${effectiveLabel}.`
+          : `${playerName} activated from IR into ${targetSlot.position} Slot ${targetSlot.slotNumber}. This starts scoring with ${effectiveLabel}.`
       );
+
+      this.irActivationSlotId.set('');
+      this.irActivationTargetSlotId.set('');
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error
@@ -1186,6 +1604,9 @@ export class TeamSettings implements OnDestroy {
       case 'activate-from-ir':
         return `Activated ${this.getTransactionAssetName(transaction.activatedAsset)} from IR`;
 
+      case 'drop-to-waivers':
+        return `Dropped ${this.getTransactionAssetName(transaction.droppedAsset)}`;
+
       case 'waiver-claim':
         return `Claimed ${this.getTransactionAssetName(transaction.waiverAsset)}`;
 
@@ -1210,7 +1631,16 @@ export class TeamSettings implements OnDestroy {
         return `${this.getTransactionAssetName(transaction.movedAsset)} moved from active roster to IR.`;
 
       case 'activate-from-ir':
-        return `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR back to active roster.`;
+        return transaction.droppedAsset
+          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR to the active roster. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR back to active roster.`;
+
+      case 'drop-to-waivers':
+        return `${this.getTransactionAssetName(transaction.droppedAsset)} was released from the ${
+          transaction.sourceRosterArea === 'ir'
+            ? 'IR'
+            : 'active roster'
+        } and placed on waivers.`;
 
       case 'waiver-claim':
         return 'Waiver claim submitted. Your roster only changes if the claim is awarded.';
@@ -1294,12 +1724,12 @@ export class TeamSettings implements OnDestroy {
 
 
 
-  private getOpenActiveSlotForIrAsset(
+  private getActiveSlotsForIrAsset(
     asset: SkaterRosterAsset
-  ): ActiveRosterSlot | null {
-    return this.roster()?.activeSlots.find(
-      (slot) => slot.position === asset.position && slot.asset === null
-    ) ?? null;
+  ): ActiveRosterSlot[] {
+    return this.roster()?.activeSlots.filter(
+      (slot) => slot.position === asset.position
+    ) ?? [];
   }
 
   private getProjectionWindowStartDate(): Date | null {

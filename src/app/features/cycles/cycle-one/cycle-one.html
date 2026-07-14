@@ -4,6 +4,40 @@
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="cycle-page">
+    @if (getCurrentDisplayedMatchup(); as mobileMatchup) {
+      <section
+        class="mobile-matchup-scorebar"
+        aria-label="Current matchup score"
+        aria-live="polite"
+      >
+        <article class="mobile-score-team mobile-score-team-a">
+          <span>{{ getTeamName(mobileMatchup.teamAOwnerId) }}</span>
+          <strong>
+            {{ getProjectionDisplay(getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)) }}
+          </strong>
+          <small>
+            Proj. {{ getProjectionDisplay(getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
+          </small>
+        </article>
+
+        <div class="mobile-score-center">
+          <span>{{ getCycleLabel() }}</span>
+          <strong>VS</strong>
+          <small>{{ getMatchupReadinessLabel(mobileMatchup) }}</small>
+        </div>
+
+        <article class="mobile-score-team mobile-score-team-b">
+          <span>{{ getTeamName(mobileMatchup.teamBOwnerId) }}</span>
+          <strong>
+            {{ getProjectionDisplay(getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)) }}
+          </strong>
+          <small>
+            Proj. {{ getProjectionDisplay(getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
+          </small>
+        </article>
+      </section>
+    }
+
     <a
       class="back-link"
       [routerLink]="['/leagues', leagueId]"
@@ -76,34 +110,23 @@
     </header>
 
 
-<section
-  class="auto-status-card"
-  [class.auto-status-error]="getAutoLeagueStatusClass() === 'auto-status-error'"
-  [class.auto-status-working]="getAutoLeagueStatusClass() === 'auto-status-working'"
-  [class.auto-status-complete]="getAutoLeagueStatusClass() === 'auto-status-complete'"
-  [class.auto-status-ready]="getAutoLeagueStatusClass() === 'auto-status-ready'"
-  [class.auto-status-active]="getAutoLeagueStatusClass() === 'auto-status-active'"
->
-  <div>
-    <span class="eyebrow">Auto League Flow</span>
-    <strong>{{ getAutoLeagueStatusTitle() }}</strong>
-    <p>{{ getAutoLeagueStatusText() }}</p>
-  </div>
-
-  <small
-    [class.schedule-warning]="
-      cycle()?.status !== 'complete' &&
-      cycleScoring() &&
-      !areAllMatchupsReadyToComplete()
-    "
-    [class.cycle-ready-message]="
-      cycle()?.status !== 'complete' &&
-      areAllMatchupsReadyToComplete()
-    "
+@if (shouldShowCompactAutoStatus()) {
+  <section
+    class="compact-auto-status"
+    [class.compact-status-error]="getAutoLeagueStatusClass() === 'auto-status-error'"
+    [class.compact-status-working]="getAutoLeagueStatusClass() === 'auto-status-working' || scoringLoading()"
+    role="status"
+    aria-live="polite"
   >
-    {{ getCycleCompletionReadinessText() }}
-  </small>
-</section>
+    <span class="compact-status-indicator" aria-hidden="true"></span>
+
+    <div>
+      <strong>{{ getAutoLeagueStatusTitle() }}</strong>
+      <p>{{ getAutoLeagueStatusText() }}</p>
+    </div>
+  </section>
+}
+
 
 @if (isCommissioner()) {
 <details class="dev-controls-card">

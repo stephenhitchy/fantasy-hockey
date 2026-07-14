@@ -1,62 +1,125 @@
 @if (loading()) {
-  <p>Loading...</p>
+  <section class="dashboard-state" aria-live="polite">
+    <span class="state-icon" aria-hidden="true">🏒</span>
+    <strong>Loading your leagues...</strong>
+  </section>
 } @else {
   <section class="dashboard">
     <header class="dashboard-header">
-      <h1>Welcome back, {{ profile()?.username || profile()?.email }}!</h1>
-      <p>Manage your fantasy hockey leagues and teams.</p>
+      <div>
+        <span class="eyebrow">Manager Home</span>
+        <h1>Welcome back, {{ displayName() }}</h1>
+        <p>Pick a league and get straight to the action.</p>
+      </div>
+
+      <div class="quick-actions" aria-label="League actions">
+        <a
+          class="primary-action"
+          routerLink="/leagues/create"
+        >
+          <span aria-hidden="true">＋</span>
+          Create League
+        </a>
+
+        <a
+          class="secondary-action"
+          routerLink="/leagues/join"
+        >
+          <span aria-hidden="true">⇥</span>
+          Join League
+        </a>
+      </div>
     </header>
 
-    <section class="quick-actions">
-      <button routerLink="/leagues/create">Create League</button>
-      <button routerLink="/leagues/join">Join League</button>
-      <button routerLink="/account/settings">Account Settings</button>
-    </section>
+    @if (errorMessage()) {
+      <section class="error-card" role="alert">
+        <strong>Dashboard unavailable</strong>
+        <span>{{ errorMessage() }}</span>
 
-    <section>
-      <h2>My Leagues</h2>
+        <button
+          type="button"
+          (click)="loadDashboard()"
+        >
+          Try Again
+        </button>
+      </section>
+    }
+
+    <section class="leagues-section">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Your Competition</span>
+          <h2>My Leagues</h2>
+        </div>
+
+        <span class="league-count">
+          {{ leagueSummaries().length }}
+        </span>
+      </div>
 
       @if (leagueSummaries().length === 0) {
-        <p>No leagues yet.</p>
+        <article class="empty-state">
+          <span class="empty-icon" aria-hidden="true">🏟️</span>
+          <h3>Your locker room is empty</h3>
+          <p>Create a league or join one with an invite code.</p>
+
+          <div class="empty-actions">
+            <a routerLink="/leagues/create">Create League</a>
+            <a routerLink="/leagues/join">Join League</a>
+          </div>
+        </article>
       } @else {
         <div class="league-grid">
           @for (league of leagueSummaries(); track league.leagueId) {
             <article class="league-card">
-              <div class="league-card-header">
-                <h3>🏆 {{ league.leagueName }}</h3>
+              <div class="league-card-top">
+                <div class="league-identity">
+                  <span class="league-icon" aria-hidden="true">🏆</span>
+
+                  <div>
+                    <h3>{{ league.leagueName }}</h3>
+                    <p>{{ league.myTeamName }}</p>
+                  </div>
+                </div>
 
                 @if (league.isCommissioner) {
-                  <span class="badge">Commissioner</span>
+                  <span class="commissioner-badge">
+                    Commissioner
+                  </span>
                 }
               </div>
 
-              <p class="team-name">🏒 {{ league.myTeamName }}</p>
+              <div class="league-summary-row">
+                <div>
+                  <span>Teams</span>
+                  <strong>
+                    {{ league.teamCount }} / {{ league.maxTeams }}
+                  </strong>
+                </div>
 
-              <div class="league-meta">
-                <p><strong>Teams:</strong> {{ league.teamCount }} / {{ league.maxTeams }}</p>
-                <p><strong>Invite:</strong> {{ league.inviteCode }}</p>
+                <div>
+                  <span>Your Club</span>
+                  <strong>{{ league.myTeamName }}</strong>
+                </div>
               </div>
 
-              <section class="top-players">
-                <h4>Top Players This Cycle</h4>
-
-                <p>{{ league.topOffensivePlayer?.teamLogo }} Offense: {{ league.topOffensivePlayer?.name }} — {{ league.topOffensivePlayer?.points }} pts</p>
-                <p>{{ league.topDefensivePlayer?.teamLogo }} Defense: {{ league.topDefensivePlayer?.name }} — {{ league.topDefensivePlayer?.points }} pts</p>
-                <p>{{ league.topGoalie?.teamLogo }} Goalie: {{ league.topGoalie?.name }} — {{ league.topGoalie?.points }} pts</p>
-              </section>
-
               <div class="league-actions">
-                <button [routerLink]="['/leagues', league.leagueId]">
-                    Open League
-                </button>
-
-                <button
-                    class="secondary-button"
-                    [routerLink]="['/leagues', league.leagueId, 'team']"
+                <a
+                  class="open-league"
+                  [routerLink]="['/leagues', league.leagueId]"
                 >
-                    My Team
-                </button>
-                </div>
+                  Open League
+                  <span aria-hidden="true">→</span>
+                </a>
+
+                <a
+                  class="team-shortcut"
+                  [routerLink]="['/leagues', league.leagueId, 'team']"
+                  aria-label="Open my team"
+                >
+                  👕
+                </a>
+              </div>
             </article>
           }
         </div>

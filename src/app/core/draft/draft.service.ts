@@ -26,11 +26,24 @@ import {
 } from '../team/roster.models';
 
 import {
+  getPlayerAvailabilityForPlayer,
+  getPlayerIrIneligibleReason,
+  isPlayerIrEligible
+} from '../player/player-availability.service';
+
+import {
+  PlayerAvailabilityStatus
+} from '../player/player-availability.models';
+
+import {
+  DraftAutoPickReason,
   DraftableAsset,
   DraftPick,
   DraftPickPreview,
   DraftPosition,
+  DraftQueue,
   DraftRosterRequirements,
+  DraftSelectionType,
   DraftStatus,
   FantasyDraft
 } from './draft.models';
@@ -41,12 +54,41 @@ import type {
 
 const DRAFT_DOCUMENT_ID = 'current';
 
+export const DEFAULT_DRAFT_PICK_SECONDS = 60;
+export const DRAFT_PICK_SECONDS_OPTIONS = [
+  30,
+  45,
+  60,
+  90,
+  120
+] as const;
+
+const MAX_DRAFT_QUEUE_SIZE = 100;
+
+function reportDraftListenerError(
+  error: unknown,
+  fallbackMessage: string,
+  onError?: (error: Error) => void
+): void {
+  const normalizedError = error instanceof Error
+    ? error
+    : new Error(fallbackMessage);
+
+  if (onError) {
+    onError(normalizedError);
+    return;
+  }
+
+  console.error(fallbackMessage, error);
+}
+
 
 export type FantasyTransactionType =
   | 'add-drop'
   | 'add-open-slot'
   | 'move-to-ir'
   | 'activate-from-ir'
+  | 'drop-to-waivers'
   | 'waiver-claim'
   | 'waiver-award'
   | 'waiver-cleared';
@@ -66,6 +108,9 @@ export interface FantasyTransaction {
   targetSlotId?: string | null;
   activeSlotId?: string | null;
   irSlotId?: string | null;
+  availabilityStatus?: PlayerAvailabilityStatus | null;
+  availabilityLabel?: string | null;
+  sourceRosterArea?: RosterDropSource | null;
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
   createdAt?: unknown;
@@ -144,6 +189,19 @@ export interface ActivateIrRosterAssetInput {
   effectiveLabel?: string | null;
 }
 
+export type RosterDropSource =
+  | 'active'
+  | 'ir';
+
+export interface DropRosterAssetToWaiversInput {
+  leagueId: string;
+  ownerId: string;
+  sourceRosterArea: RosterDropSource;
+  slotId: string;
+  effectiveCycleNumber?: number | null;
+  effectiveLabel?: string | null;
+}
+
 export interface PlaceWaiverClaimInput {
   leagueId: string;
   ownerId: string;
@@ -202,6 +260,32 @@ function getDraftPicksRef(leagueId: string) {
 
 
 
+function getDraftQueuesRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'draft',
+    DRAFT_DOCUMENT_ID,
+    'queues'
+  );
+}
+
+function getDraftQueueRef(
+  leagueId: string,
+  ownerId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'draft',
+    DRAFT_DOCUMENT_ID,
+    'queues',
+    ownerId
+  );
+}
+
 function getTransactionsRef(leagueId: string) {
   return collection(
     db,
@@ -254,6 +338,12 @@ function getWaiverRef(
   );
 }
 
+export function getDraftPickDocumentId(
+  overallPick: number
+): string {
+  return overallPick.toString().padStart(3, '0');
+}
+
 function getDraftPickRef(
   leagueId: string,
   overallPick: number
@@ -265,20 +355,53 @@ function getDraftPickRef(
     'draft',
     DRAFT_DOCUMENT_ID,
     'picks',
-    overallPick.toString().padStart(3, '0')
+    getDraftPickDocumentId(overallPick)
   );
+}
+
+function normalizePickSeconds(value: unknown): number {
+  if (
+    typeof value === 'number' &&
+    DRAFT_PICK_SECONDS_OPTIONS.includes(
+      value as (typeof DRAFT_PICK_SECONDS_OPTIONS)[number]
+    )
+  ) {
+    return value;
+  }
+
+  return DEFAULT_DRAFT_PICK_SECONDS;
+}
+
+function normalizeDraftQueue(
+  ownerId: string,
+  data: Partial<DraftQueue> | undefined
+): DraftQueue {
+  return {
+    ownerId,
+    assetKeys: Array.isArray(data?.assetKeys)
+      ? data.assetKeys.filter(
+          (assetKey): assetKey is string =>
+            typeof assetKey === 'string'
+        )
+      : [],
+    autoDraftEnabled: data?.autoDraftEnabled === true,
+    updatedAt: data?.updatedAt
+  };
 }
 
 function normalizeDraft(
   data: Partial<FantasyDraft>
 ): FantasyDraft {
   const scheduledStartAt = data.scheduledStartAt ?? null;
+  const status =
+    data.status ??
+    (scheduledStartAt ? 'scheduled' : 'setup');
+
+  const pickSeconds = normalizePickSeconds(data.pickSeconds);
 
   return {
-    schemaVersion: data.schemaVersion ?? 1,
-    status:
-      data.status ??
-      (scheduledStartAt ? 'scheduled' : 'setup'),
+    schemaVersion: data.schemaVersion ?? 2,
+    status,
     format: 'snake',
     totalRounds:
       data.totalRounds ?? DEFAULT_DRAFT_TOTAL_ROUNDS,
@@ -297,6 +420,38 @@ function normalizeDraft(
       ? data.draftedAssetKeys
       : [],
     scheduledStartAt,
+    pickSeconds,
+    clockStatus:
+      data.clockStatus ??
+      (status === 'complete'
+        ? 'complete'
+        : status === 'live'
+          ? 'running'
+          : 'stopped'),
+    pickStartedAt: data.pickStartedAt ?? null,
+    currentPickSeconds:
+      typeof data.currentPickSeconds === 'number'
+        ? Math.max(
+            1,
+            Math.min(
+              pickSeconds,
+              Math.ceil(data.currentPickSeconds)
+            )
+          )
+        : pickSeconds,
+    pausedRemainingSeconds:
+      typeof data.pausedRemainingSeconds === 'number'
+        ? Math.max(
+            0,
+            Math.min(
+              pickSeconds,
+              Math.ceil(data.pausedRemainingSeconds)
+            )
+          )
+        : null,
+    clockUpdatedBy: data.clockUpdatedBy ?? null,
+    clockUpdatedAt: data.clockUpdatedAt,
+    lastPickId: data.lastPickId ?? null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
     startedAt: data.startedAt
@@ -307,7 +462,7 @@ export function createDefaultFantasyDraft(
   roundOneOrder: string[]
 ): FantasyDraft {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'setup',
     format: 'snake',
     totalRounds: DEFAULT_DRAFT_TOTAL_ROUNDS,
@@ -317,7 +472,14 @@ export function createDefaultFantasyDraft(
     roundOneOrder,
     nextOverallPick: 1,
     draftedAssetKeys: [],
-    scheduledStartAt: null
+    scheduledStartAt: null,
+    pickSeconds: DEFAULT_DRAFT_PICK_SECONDS,
+    clockStatus: 'stopped',
+    pickStartedAt: null,
+    currentPickSeconds: DEFAULT_DRAFT_PICK_SECONDS,
+    pausedRemainingSeconds: null,
+    clockUpdatedBy: null,
+    lastPickId: null
   };
 }
 
@@ -337,45 +499,161 @@ export async function getFantasyDraft(
 
 export function listenToFantasyDraft(
   leagueId: string,
-  callback: (draft: FantasyDraft | null) => void
+  callback: (draft: FantasyDraft | null) => void,
+  onError?: (error: Error) => void
 ): () => void {
-  return onSnapshot(getDraftRef(leagueId), (snapshot) => {
-    if (!snapshot.exists()) {
-      callback(null);
-      return;
-    }
+  return onSnapshot(
+    getDraftRef(leagueId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
 
-    callback(
-      normalizeDraft(
-        snapshot.data() as Partial<FantasyDraft>
-      )
-    );
-  });
+      callback(
+        normalizeDraft(
+          snapshot.data() as Partial<FantasyDraft>
+        )
+      );
+    },
+    (error) => {
+      reportDraftListenerError(
+        error,
+        'Unable to load the league draft.',
+        onError
+      );
+    }
+  );
 }
 
 export function listenToDraftPicks(
   leagueId: string,
-  callback: (picks: DraftPick[]) => void
+  callback: (picks: DraftPick[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const picksQuery = query(
     getDraftPicksRef(leagueId),
     orderBy('overallPick', 'asc')
   );
 
-  return onSnapshot(picksQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map(
-        (pickDoc) => pickDoc.data() as DraftPick
-      )
-    );
-  });
+  return onSnapshot(
+    picksQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map(
+          (pickDoc) => pickDoc.data() as DraftPick
+        )
+      );
+    },
+    (error) => {
+      reportDraftListenerError(
+        error,
+        'Unable to load draft picks.',
+        onError
+      );
+    }
+  );
+}
+
+
+export function listenToDraftQueue(
+  leagueId: string,
+  ownerId: string,
+  callback: (queue: DraftQueue) => void
+): () => void {
+  return onSnapshot(
+    getDraftQueueRef(leagueId, ownerId),
+    (snapshot) => {
+      callback(
+        normalizeDraftQueue(
+          ownerId,
+          snapshot.exists()
+            ? snapshot.data() as Partial<DraftQueue>
+            : undefined
+        )
+      );
+    }
+  );
+}
+
+export function listenToDraftQueues(
+  leagueId: string,
+  callback: (queues: DraftQueue[]) => void
+): () => void {
+  return onSnapshot(
+    getDraftQueuesRef(leagueId),
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((queueDocument) =>
+          normalizeDraftQueue(
+            queueDocument.id,
+            queueDocument.data() as Partial<DraftQueue>
+          )
+        )
+      );
+    }
+  );
+}
+
+export async function saveDraftQueue(
+  leagueId: string,
+  ownerId: string,
+  assetKeys: string[],
+  autoDraftEnabled: boolean
+): Promise<void> {
+  const normalizedAssetKeys = [
+    ...new Set(
+      assetKeys
+        .filter((assetKey) => typeof assetKey === 'string')
+        .map((assetKey) => assetKey.trim())
+        .filter(Boolean)
+    )
+  ].slice(0, MAX_DRAFT_QUEUE_SIZE);
+
+  await setDoc(
+    getDraftQueueRef(leagueId, ownerId),
+    {
+      ownerId,
+      assetKeys: normalizedAssetKeys,
+      autoDraftEnabled,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
+
+export async function setDraftAutoDraftEnabled(
+  leagueId: string,
+  ownerId: string,
+  autoDraftEnabled: boolean
+): Promise<void> {
+  const queueReference = getDraftQueueRef(
+    leagueId,
+    ownerId
+  );
+
+  const snapshot = await getDoc(queueReference);
+  const queue = normalizeDraftQueue(
+    ownerId,
+    snapshot.exists()
+      ? snapshot.data() as Partial<DraftQueue>
+      : undefined
+  );
+
+  await saveDraftQueue(
+    leagueId,
+    ownerId,
+    queue.assetKeys,
+    autoDraftEnabled
+  );
 }
 
 
 export function listenToOwnerTransactions(
   leagueId: string,
   ownerId: string,
-  callback: (transactions: FantasyTransaction[]) => void
+  callback: (transactions: FantasyTransaction[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const transactionsQuery = query(
     getTransactionsRef(leagueId),
@@ -383,22 +661,33 @@ export function listenToOwnerTransactions(
     limit(50)
   );
 
-  return onSnapshot(transactionsQuery, (snapshot) => {
-    callback(
-      snapshot.docs
-        .map((transactionDoc) => ({
-          id: transactionDoc.id,
-          ...(transactionDoc.data() as Omit<FantasyTransaction, 'id'>)
-        }))
-        .filter((transaction) => transaction.ownerId === ownerId)
-    );
-  });
+  return onSnapshot(
+    transactionsQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs
+          .map((transactionDoc) => ({
+            id: transactionDoc.id,
+            ...(transactionDoc.data() as Omit<FantasyTransaction, 'id'>)
+          }))
+          .filter((transaction) => transaction.ownerId === ownerId)
+      );
+    },
+    (error) => {
+      reportDraftListenerError(
+        error,
+        'Unable to load roster transactions.',
+        onError
+      );
+    }
+  );
 }
 
 
 export function listenToLeagueWaivers(
   leagueId: string,
-  callback: (waivers: FantasyWaiver[]) => void
+  callback: (waivers: FantasyWaiver[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const waiversQuery = query(
     getWaiversRef(leagueId),
@@ -406,41 +695,55 @@ export function listenToLeagueWaivers(
     limit(100)
   );
 
-  return onSnapshot(waiversQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map((waiverDoc) => {
-        const data = waiverDoc.data() as Partial<FantasyWaiver>;
+  return onSnapshot(
+    waiversQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((waiverDoc) => {
+          const data = waiverDoc.data() as Partial<FantasyWaiver>;
 
-        return {
-          id: waiverDoc.id,
-          assetKey: data.assetKey ?? waiverDoc.id,
-          asset: data.asset as DraftableAsset,
-          droppedAsset: data.droppedAsset ?? null,
-          droppedByOwnerId: data.droppedByOwnerId ?? '',
-          status: data.status ?? 'active',
-          claims: Array.isArray(data.claims)
-            ? data.claims
-            : [],
-          awardedToOwnerId: data.awardedToOwnerId ?? null,
-          effectiveCycleNumber: data.effectiveCycleNumber ?? null,
-          effectiveLabel: data.effectiveLabel ?? null,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-          processedAt: data.processedAt
-        };
-      })
-    );
-  });
+          return {
+            id: waiverDoc.id,
+            assetKey: data.assetKey ?? waiverDoc.id,
+            asset: data.asset as DraftableAsset,
+            droppedAsset: data.droppedAsset ?? null,
+            droppedByOwnerId: data.droppedByOwnerId ?? '',
+            status: data.status ?? 'active',
+            claims: Array.isArray(data.claims)
+              ? data.claims
+              : [],
+            awardedToOwnerId: data.awardedToOwnerId ?? null,
+            effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+            effectiveLabel: data.effectiveLabel ?? null,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            processedAt: data.processedAt
+          };
+        })
+      );
+    },
+    (error) => {
+      reportDraftListenerError(
+        error,
+        'Unable to load league waivers.',
+        onError
+      );
+    }
+  );
 }
 
 export async function saveFantasyDraft(
   leagueId: string,
   draft: FantasyDraft
 ): Promise<void> {
+  const pickSeconds = normalizePickSeconds(
+    draft.pickSeconds
+  );
+
   await setDoc(
     getDraftRef(leagueId),
     {
-      schemaVersion: draft.schemaVersion,
+      schemaVersion: 2,
       status: draft.status,
       format: draft.format,
       totalRounds: draft.totalRounds,
@@ -449,6 +752,27 @@ export async function saveFantasyDraft(
       nextOverallPick: draft.nextOverallPick,
       draftedAssetKeys: draft.draftedAssetKeys,
       scheduledStartAt: draft.scheduledStartAt ?? null,
+      pickSeconds,
+      clockStatus:
+        draft.status === 'complete'
+          ? 'complete'
+          : draft.status === 'live'
+            ? draft.clockStatus
+            : 'stopped',
+      pickStartedAt:
+        draft.status === 'live'
+          ? draft.pickStartedAt ?? null
+          : null,
+      currentPickSeconds:
+        draft.status === 'live'
+          ? draft.currentPickSeconds ?? pickSeconds
+          : pickSeconds,
+      pausedRemainingSeconds:
+        draft.status === 'live'
+          ? draft.pausedRemainingSeconds ?? null
+          : null,
+      clockUpdatedBy: draft.clockUpdatedBy ?? null,
+      lastPickId: draft.lastPickId ?? null,
       updatedAt: serverTimestamp()
     },
     { merge: true }
@@ -493,6 +817,96 @@ export function getScheduledStartDate(
   return null;
 }
 
+export function getDraftPickStartedDate(
+  draft: FantasyDraft | null
+): Date | null {
+  const value = draft?.pickStartedAt;
+
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value
+  ) {
+    const timestampLike = value as {
+      toDate?: () => Date;
+    };
+
+    if (typeof timestampLike.toDate === 'function') {
+      return timestampLike.toDate();
+    }
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsedDate = new Date(value);
+
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+
+  return null;
+}
+
+export function getDraftClockRemainingSeconds(
+  draft: FantasyDraft | null,
+  now: Date = new Date()
+): number {
+  if (!draft || draft.status !== 'live') {
+    return 0;
+  }
+
+  if (draft.clockStatus === 'paused') {
+    return Math.max(
+      0,
+      Math.ceil(draft.pausedRemainingSeconds ?? 0)
+    );
+  }
+
+  if (draft.clockStatus !== 'running') {
+    return 0;
+  }
+
+  const startedAt = getDraftPickStartedDate(draft);
+
+  if (!startedAt) {
+    return draft.currentPickSeconds ?? draft.pickSeconds;
+  }
+
+  const durationSeconds =
+    draft.currentPickSeconds ?? draft.pickSeconds;
+
+  return Math.max(
+    0,
+    Math.ceil(
+      (
+        startedAt.getTime() +
+        durationSeconds * 1000 -
+        now.getTime()
+      ) / 1000
+    )
+  );
+}
+
+export function isDraftClockExpired(
+  draft: FantasyDraft | null,
+  now: Date = new Date()
+): boolean {
+  return Boolean(
+    draft?.status === 'live' &&
+    draft.clockStatus === 'running' &&
+    getDraftClockRemainingSeconds(draft, now) <= 0
+  );
+}
+
+
 export function isDraftStartTimeReached(
   draft: FantasyDraft | null,
   now: Date = new Date()
@@ -506,7 +920,8 @@ export function isDraftStartTimeReached(
 }
 
 export async function activateScheduledDraftIfReady(
-  leagueId: string
+  leagueId: string,
+  activatedByUserId?: string
 ): Promise<FantasyDraft | null> {
   const draftRef = getDraftRef(leagueId);
 
@@ -530,14 +945,141 @@ export async function activateScheduledDraftIfReady(
 
     transaction.update(draftRef, {
       status: 'live',
+      clockStatus: 'running',
+      pickStartedAt: serverTimestamp(),
+      currentPickSeconds: draft.pickSeconds,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: activatedByUserId ?? null,
+      clockUpdatedAt: serverTimestamp(),
       startedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
 
     return {
       ...draft,
-      status: 'live'
+      status: 'live',
+      clockStatus: 'running',
+      pickStartedAt: new Date(),
+      currentPickSeconds: draft.pickSeconds,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: activatedByUserId ?? null
     };
+  });
+}
+
+export async function pauseDraftClock(
+  leagueId: string,
+  commissionerId: string
+): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const leagueRef = getLeagueRef(leagueId);
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, leagueSnapshot] =
+      await Promise.all([
+        transaction.get(draftRef),
+        transaction.get(leagueRef)
+      ]);
+
+    if (!draftSnapshot.exists() || !leagueSnapshot.exists()) {
+      throw new Error('Draft or league setup was not found.');
+    }
+
+    const leagueData = leagueSnapshot.data() as {
+      commissionerId?: string;
+    };
+
+    if (leagueData.commissionerId !== commissionerId) {
+      throw new Error(
+        'Only the commissioner can pause the draft clock.'
+      );
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    if (
+      draft.status !== 'live' ||
+      draft.clockStatus !== 'running'
+    ) {
+      return;
+    }
+
+    const remainingSeconds = Math.max(
+      1,
+      getDraftClockRemainingSeconds(draft)
+    );
+
+    transaction.update(draftRef, {
+      clockStatus: 'paused',
+      pickStartedAt: null,
+      currentPickSeconds: remainingSeconds,
+      pausedRemainingSeconds: remainingSeconds,
+      clockUpdatedBy: commissionerId,
+      clockUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  });
+}
+
+export async function resumeDraftClock(
+  leagueId: string,
+  commissionerId: string
+): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const leagueRef = getLeagueRef(leagueId);
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, leagueSnapshot] =
+      await Promise.all([
+        transaction.get(draftRef),
+        transaction.get(leagueRef)
+      ]);
+
+    if (!draftSnapshot.exists() || !leagueSnapshot.exists()) {
+      throw new Error('Draft or league setup was not found.');
+    }
+
+    const leagueData = leagueSnapshot.data() as {
+      commissionerId?: string;
+    };
+
+    if (leagueData.commissionerId !== commissionerId) {
+      throw new Error(
+        'Only the commissioner can resume the draft clock.'
+      );
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    if (
+      draft.status !== 'live' ||
+      draft.clockStatus !== 'paused'
+    ) {
+      return;
+    }
+
+    const remainingSeconds = Math.max(
+      1,
+      Math.min(
+        draft.pickSeconds,
+        draft.pausedRemainingSeconds ??
+          draft.pickSeconds
+      )
+    );
+
+    transaction.update(draftRef, {
+      clockStatus: 'running',
+      pickStartedAt: serverTimestamp(),
+      currentPickSeconds: remainingSeconds,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: commissionerId,
+      clockUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
   });
 }
 
@@ -773,37 +1315,56 @@ function getPositionRequirement(
   return draft.rosterRequirements[position];
 }
 
-export async function makeDraftPick(
-  leagueId: string,
-  selectingUserId: string,
-  asset: DraftableAsset
-): Promise<DraftPick> {
+interface MakeDraftPickInternalInput {
+  leagueId: string;
+  actorUserId: string;
+  ownerId: string;
+  asset: DraftableAsset;
+  selectionType: DraftSelectionType;
+  autoPickReason?: DraftAutoPickReason | null;
+}
+
+async function makeDraftPickInternal({
+  leagueId,
+  actorUserId,
+  ownerId,
+  asset,
+  selectionType,
+  autoPickReason = null
+}: MakeDraftPickInternalInput): Promise<DraftPick> {
   const draftRef = getDraftRef(leagueId);
+  const leagueRef = getLeagueRef(leagueId);
 
   return runTransaction(db, async (transaction) => {
-    const draftSnapshot = await transaction.get(draftRef);
+    const [draftSnapshot, leagueSnapshot] =
+      await Promise.all([
+        transaction.get(draftRef),
+        transaction.get(leagueRef)
+      ]);
 
     if (!draftSnapshot.exists()) {
       throw new Error('Draft setup was not found.');
+    }
+
+    if (!leagueSnapshot.exists()) {
+      throw new Error('League setup was not found.');
     }
 
     const draft = normalizeDraft(
       draftSnapshot.data() as Partial<FantasyDraft>
     );
 
-    const scheduleReached = isDraftStartTimeReached(draft);
-    const isScheduledDraftReady =
-      draft.status === 'scheduled' && scheduleReached;
+    if (draft.status !== 'live') {
+      throw new Error(
+        'The draft is waiting for the commissioner to refresh the injury report and open it.'
+      );
+    }
 
-    const draftIsLive =
-      draft.status === 'live' || isScheduledDraftReady;
-
-    if (!draftIsLive) {
-      throw new Error('The draft is not live yet.');
+    if (draft.clockStatus === 'paused') {
+      throw new Error('The draft clock is currently paused.');
     }
 
     if (
-      draft.status === 'complete' ||
       draft.nextOverallPick > getDraftTotalPickCount(draft)
     ) {
       throw new Error('This draft is already complete.');
@@ -818,8 +1379,51 @@ export async function makeDraftPick(
       throw new Error('Unable to determine the current draft pick.');
     }
 
-    if (currentPick.ownerId !== selectingUserId) {
-      throw new Error('It is not your turn to draft.');
+    if (currentPick.ownerId !== ownerId) {
+      throw new Error('That manager is no longer on the clock.');
+    }
+
+    const leagueData = leagueSnapshot.data() as {
+      commissionerId?: string;
+    };
+
+    const isAutomaticSelection =
+      selectionType !== 'manual';
+
+    if (!isAutomaticSelection && actorUserId !== ownerId) {
+      throw new Error(
+        'Managers can only make their own manual draft picks.'
+      );
+    }
+
+    const queueRef = getDraftQueueRef(
+      leagueId,
+      ownerId
+    );
+
+    const queueSnapshot = await transaction.get(queueRef);
+    const queue = normalizeDraftQueue(
+      ownerId,
+      queueSnapshot.exists()
+        ? queueSnapshot.data() as Partial<DraftQueue>
+        : undefined
+    );
+
+    if (isAutomaticSelection) {
+      if (leagueData.commissionerId !== actorUserId) {
+        throw new Error(
+          'Only the commissioner can process automatic draft picks.'
+        );
+      }
+
+      if (
+        !queue.autoDraftEnabled &&
+        !isDraftClockExpired(draft)
+      ) {
+        throw new Error(
+          'The manager is not on auto-draft and the pick timer has not expired.'
+        );
+      }
     }
 
     if (draft.draftedAssetKeys.includes(asset.assetKey)) {
@@ -828,7 +1432,7 @@ export async function makeDraftPick(
 
     const rosterRef = getFantasyRosterRef(
       leagueId,
-      selectingUserId
+      ownerId
     );
 
     const rosterSnapshot = await transaction.get(rosterRef);
@@ -852,7 +1456,7 @@ export async function makeDraftPick(
       );
 
       throw new Error(
-        `Your ${asset.position} limit of ${limit} has already been reached.`
+        `The ${asset.position} limit of ${limit} has already been reached for that team.`
       );
     }
 
@@ -865,13 +1469,20 @@ export async function makeDraftPick(
       overallPick: currentPick.overallPick,
       round: currentPick.round,
       pickInRound: currentPick.pickInRound,
-      ownerId: selectingUserId,
-      asset
+      ownerId,
+      asset,
+      selectionType,
+      selectedByUserId: actorUserId,
+      autoPickReason
     };
 
     const nextOverallPick = currentPick.overallPick + 1;
     const draftComplete =
       nextOverallPick > getDraftTotalPickCount(draft);
+
+    const pickId = getDraftPickDocumentId(
+      currentPick.overallPick
+    );
 
     const pickRef = getDraftPickRef(
       leagueId,
@@ -903,26 +1514,81 @@ export async function makeDraftPick(
       });
     }
 
-    const draftPayload = {
+    transaction.update(draftRef, {
       status: draftComplete ? 'complete' : 'live',
       nextOverallPick,
       draftedAssetKeys: [
         ...draft.draftedAssetKeys,
         asset.assetKey
       ],
+      clockStatus: draftComplete
+        ? 'complete'
+        : 'running',
+      pickStartedAt: draftComplete
+        ? null
+        : serverTimestamp(),
+      currentPickSeconds: draft.pickSeconds,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: actorUserId,
+      clockUpdatedAt: serverTimestamp(),
+      lastPickId: pickId,
       updatedAt: serverTimestamp()
-    };
+    });
 
-    if (isScheduledDraftReady) {
-      transaction.update(draftRef, {
-        ...draftPayload,
-        startedAt: serverTimestamp()
-      });
-    } else {
-      transaction.update(draftRef, draftPayload);
+    if (
+      queueSnapshot.exists() &&
+      queue.assetKeys.includes(asset.assetKey)
+    ) {
+      transaction.set(
+        queueRef,
+        {
+          ownerId,
+          assetKeys: queue.assetKeys.filter(
+            (assetKey) => assetKey !== asset.assetKey
+          ),
+          autoDraftEnabled: queue.autoDraftEnabled,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
     }
 
     return pick;
+  });
+}
+
+export async function makeDraftPick(
+  leagueId: string,
+  selectingUserId: string,
+  asset: DraftableAsset
+): Promise<DraftPick> {
+  return makeDraftPickInternal({
+    leagueId,
+    actorUserId: selectingUserId,
+    ownerId: selectingUserId,
+    asset,
+    selectionType: 'manual'
+  });
+}
+
+export async function makeAutomaticDraftPick(
+  leagueId: string,
+  commissionerId: string,
+  ownerId: string,
+  asset: DraftableAsset,
+  selectionType: Extract<
+    DraftSelectionType,
+    'queue' | 'automatic'
+  >,
+  autoPickReason: DraftAutoPickReason
+): Promise<DraftPick> {
+  return makeDraftPickInternal({
+    leagueId,
+    actorUserId: commissionerId,
+    ownerId,
+    asset,
+    selectionType,
+    autoPickReason
   });
 }
 
@@ -1285,6 +1951,15 @@ export async function moveRosterAssetToIr({
       throw new Error('Only skaters can be moved to IR.');
     }
 
+    const availability = getPlayerAvailabilityForPlayer(asset.player);
+
+    if (!isPlayerIrEligible(availability.status)) {
+      throw new Error(
+        getPlayerIrIneligibleReason(availability) ||
+        `${availability.label} players are not IR eligible.`
+      );
+    }
+
     const openIrSlotIndex = roster.irSlots.findIndex(
       (slot) => slot.asset === null
     );
@@ -1326,6 +2001,8 @@ export async function moveRosterAssetToIr({
       movedAsset: asset,
       activeSlotId,
       irSlotId: openIrSlot.slotId,
+      availabilityStatus: availability.status,
+      availabilityLabel: availability.label,
       effectiveCycleNumber,
       effectiveLabel,
       createdAt: serverTimestamp()
@@ -1390,7 +2067,7 @@ export async function activateIrRosterAsset({
 
     if (activeSlotIndex === -1) {
       throw new Error(
-        `No open ${asset.position} slot was found. Drop or move a player before activating this player from IR.`
+        `Choose a ${asset.position} roster slot before activating this player from IR.`
       );
     }
 
@@ -1398,13 +2075,11 @@ export async function activateIrRosterAsset({
 
     if (activeSlot.position !== asset.position) {
       throw new Error(
-        `This player must be activated into an open ${asset.position} slot.`
+        `This player must be activated into a ${asset.position} roster slot.`
       );
     }
 
-    if (activeSlot.asset) {
-      throw new Error('The selected active roster slot is already filled.');
-    }
+    const droppedAsset = activeSlot.asset;
 
     const activatedAsset = {
       ...asset,
@@ -1432,11 +2107,174 @@ export async function activateIrRosterAsset({
       { merge: true }
     );
 
+    let waiverId: string | null = null;
+    let waiverAsset: DraftableAsset | null = null;
+
+    if (droppedAsset) {
+      waiverId = getRosterAssetKey(droppedAsset);
+
+      if (!waiverId) {
+        throw new Error(
+          'The replaced player could not be identified for waivers.'
+        );
+      }
+
+      waiverAsset = rosterAssetToDraftableAsset(droppedAsset);
+
+      transaction.set(
+        getWaiverRef(leagueId, waiverId),
+        buildActiveWaiverPayload(
+          droppedAsset,
+          ownerId,
+          effectiveCycleNumber,
+          effectiveLabel
+        )
+      );
+    }
+
     transaction.set(transactionRef, {
       type: 'activate-from-ir',
       ownerId,
       activatedAsset: asset,
+      droppedAsset,
+      waiverId,
+      waiverAsset,
       activeSlotId: activeSlot.slotId,
+      irSlotId,
+      effectiveCycleNumber,
+      effectiveLabel,
+      createdAt: serverTimestamp()
+    });
+  });
+}
+
+
+export async function dropRosterAssetToWaivers({
+  leagueId,
+  ownerId,
+  sourceRosterArea,
+  slotId,
+  effectiveCycleNumber = null,
+  effectiveLabel = null
+}: DropRosterAssetToWaiversInput): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const transactionRef = doc(getTransactionsRef(leagueId));
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, rosterSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(rosterRef)
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    assertDraftComplete(draft);
+
+    const roster: FantasyRoster = rosterSnapshot.exists()
+      ? normalizeFantasyRoster(
+          rosterSnapshot.data() as Partial<FantasyRoster>
+        )
+      : createEmptyFantasyRoster();
+
+    let droppedAsset: RosterAsset | null = null;
+    let activeSlotId: string | null = null;
+    let irSlotId: string | null = null;
+
+    if (sourceRosterArea === 'active') {
+      const activeSlotIndex = roster.activeSlots.findIndex(
+        (slot) => slot.slotId === slotId
+      );
+
+      if (activeSlotIndex === -1) {
+        throw new Error('The selected active roster slot was not found.');
+      }
+
+      const activeSlot = roster.activeSlots[activeSlotIndex];
+
+      if (!activeSlot.asset) {
+        throw new Error('That active roster slot is already empty.');
+      }
+
+      droppedAsset = activeSlot.asset;
+      activeSlotId = activeSlot.slotId;
+
+      roster.activeSlots[activeSlotIndex] = {
+        ...activeSlot,
+        asset: null
+      };
+    } else if (sourceRosterArea === 'ir') {
+      const irSlotIndex = roster.irSlots.findIndex(
+        (slot) => slot.slotId === slotId
+      );
+
+      if (irSlotIndex === -1) {
+        throw new Error('The selected IR slot was not found.');
+      }
+
+      const irSlot = roster.irSlots[irSlotIndex];
+
+      if (!irSlot.asset) {
+        throw new Error('That IR slot is already empty.');
+      }
+
+      droppedAsset = irSlot.asset;
+      irSlotId = irSlot.slotId;
+
+      roster.irSlots[irSlotIndex] = {
+        ...irSlot,
+        asset: null
+      };
+    } else {
+      throw new Error('Choose whether to drop from the active roster or IR.');
+    }
+
+    const waiverId = getRosterAssetKey(droppedAsset);
+
+    if (!waiverId) {
+      throw new Error(
+        'The selected player or goalie unit could not be identified for waivers.'
+      );
+    }
+
+    const waiverAsset = rosterAssetToDraftableAsset(droppedAsset);
+
+    transaction.set(
+      rosterRef,
+      {
+        schemaVersion: roster.schemaVersion,
+        activeSlots: roster.activeSlots,
+        irSlots: roster.irSlots,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      getWaiverRef(leagueId, waiverId),
+      buildActiveWaiverPayload(
+        droppedAsset,
+        ownerId,
+        effectiveCycleNumber,
+        effectiveLabel
+      )
+    );
+
+    transaction.set(transactionRef, {
+      type: 'drop-to-waivers',
+      ownerId,
+      droppedAsset,
+      waiverId,
+      waiverAsset,
+      sourceRosterArea,
+      dropSlotId: slotId,
+      activeSlotId,
       irSlotId,
       effectiveCycleNumber,
       effectiveLabel,

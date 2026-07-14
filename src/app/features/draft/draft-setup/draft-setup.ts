@@ -14,8 +14,10 @@ import { auth } from '../../../core/firebase';
 import {
   buildSnakePickPreview,
   createDefaultFantasyDraft,
+  DEFAULT_DRAFT_PICK_SECONDS,
   DEFAULT_DRAFT_ROSTER_REQUIREMENTS,
   DEFAULT_DRAFT_TOTAL_ROUNDS,
+  DRAFT_PICK_SECONDS_OPTIONS,
   getFantasyDraft,
   getScheduledStartDate,
   isDraftStartTimeReached,
@@ -71,6 +73,9 @@ export class DraftSetup implements OnDestroy {
   successMessage = signal('');
 
   draftStartInput = '';
+  pickSecondsInput = DEFAULT_DRAFT_PICK_SECONDS;
+  readonly pickSecondsOptions = DRAFT_PICK_SECONDS_OPTIONS;
+
   readonly minimumStartInput = this.toDateTimeLocalValue(
     new Date()
   );
@@ -239,6 +244,10 @@ export class DraftSetup implements OnDestroy {
       this.draftStartInput = this.toDateTimeLocalValue(
         getScheduledStartDate(existingDraft)
       );
+
+      this.pickSecondsInput =
+        existingDraft?.pickSeconds ??
+        DEFAULT_DRAFT_PICK_SECONDS;
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
@@ -400,7 +409,7 @@ export class DraftSetup implements OnDestroy {
 
       const draftToSave: FantasyDraft = {
         ...(existingDraft ?? createDefaultFantasyDraft(order)),
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: scheduledStartDate
           ? 'scheduled'
           : 'setup',
@@ -410,7 +419,14 @@ export class DraftSetup implements OnDestroy {
           ...DEFAULT_DRAFT_ROSTER_REQUIREMENTS
         },
         roundOneOrder: [...order],
-        scheduledStartAt: scheduledStartDate
+        scheduledStartAt: scheduledStartDate,
+        pickSeconds: this.pickSecondsInput,
+        clockStatus: 'stopped',
+        pickStartedAt: null,
+        currentPickSeconds: this.pickSecondsInput,
+        pausedRemainingSeconds: null,
+        clockUpdatedBy: null,
+        lastPickId: existingDraft?.lastPickId ?? null
       };
 
       await saveFantasyDraft(

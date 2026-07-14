@@ -18,6 +18,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/leagues/$(leagueId)/members/$(userId);
     }
 
+    function teamPath(leagueId, ownerId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/teams/$(ownerId);
+    }
+
     function invitePath(inviteCode) {
       return /databases/$(database)/documents/leagueInvites/$(inviteCode);
     }
@@ -26,14 +30,35 @@ service cloud.firestore {
       return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
     }
 
+    function draftPickPath(leagueId, pickId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/picks/$(pickId);
+    }
+
+    function draftQueuePath(leagueId, ownerId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/queues/$(ownerId);
+    }
+
+    function hasExistingOwnedTeam(leagueId) {
+      return signedIn() &&
+        exists(teamPath(leagueId, currentUserId())) &&
+        get(teamPath(leagueId, currentUserId())).data.ownerId ==
+          currentUserId();
+    }
+
     function isLeagueMember(leagueId) {
       return signedIn() &&
-        exists(memberPath(leagueId, currentUserId()));
+        (
+          exists(memberPath(leagueId, currentUserId())) ||
+          hasExistingOwnedTeam(leagueId)
+        );
     }
 
     function isLeagueMemberAfter(leagueId) {
       return signedIn() &&
-        existsAfter(memberPath(leagueId, currentUserId()));
+        (
+          existsAfter(memberPath(leagueId, currentUserId())) ||
+          hasExistingOwnedTeam(leagueId)
+        );
     }
 
     function isLeagueCommissioner(leagueId) {
@@ -152,33 +177,90 @@ service cloud.firestore {
         data.irSlots.size() == 4;
     }
 
+    function validDraftPickSequence(draft, data) {
+      let teamCount = draft.roundOneOrder.size();
+
+      return teamCount > 0 &&
+        data.round is int &&
+        data.round >= 1 &&
+        data.pickInRound is int &&
+        data.pickInRound >= 1 &&
+        data.pickInRound <= teamCount &&
+        data.overallPick ==
+          ((data.round - 1) * teamCount) +
+          data.pickInRound;
+    }
+
+    function expectedDraftPickOwner(draft, data) {
+      let teamCount = draft.roundOneOrder.size();
+
+      return data.round % 2 == 1
+        ? draft.roundOneOrder[data.pickInRound - 1]
+        : draft.roundOneOrder[teamCount - data.pickInRound];
+    }
+
+    function validNextPickClock(data) {
+      return data.status == 'complete'
+        ? (
+            data.clockStatus == 'complete' &&
+            data.pickStartedAt == null
+          )
+        : (
+            data.status == 'live' &&
+            data.clockStatus == 'running' &&
+            data.pickStartedAt == request.time &&
+            data.currentPickSeconds ==
+              data.pickSeconds
+          );
+    }
+
+    function validManualDraftPickAfter(
+      leagueId,
+      pickId,
+      draft
+    ) {
+      let pick = getAfter(
+        draftPickPath(leagueId, pickId)
+      ).data;
+
+      return pick.overallPick == draft.nextOverallPick &&
+        pick.ownerId == currentUserId() &&
+        pick.selectedByUserId == currentUserId() &&
+        pick.selectionType == 'manual' &&
+        pick.asset is map &&
+        pick.asset.assetKey is string &&
+        !draft.draftedAssetKeys.hasAny([
+          pick.asset.assetKey
+        ]) &&
+        request.resource.data.draftedAssetKeys.hasAny([
+          pick.asset.assetKey
+        ]) &&
+        validDraftPickSequence(draft, pick) &&
+        expectedDraftPickOwner(draft, pick) ==
+          currentUserId();
+    }
+
     function validMemberDraftUpdate(leagueId) {
       let changedKeys = request.resource.data
         .diff(resource.data)
         .affectedKeys();
 
-      let activationOnly =
-        resource.data.status == 'scheduled' &&
-        resource.data.scheduledStartAt is timestamp &&
-        request.time >= resource.data.scheduledStartAt &&
-        request.resource.data.status == 'live' &&
-        changedKeys.hasOnly(['status', 'startedAt', 'updatedAt']);
-
-      let draftWasReady =
-        resource.data.status == 'live' ||
-        (
-          resource.data.status == 'scheduled' &&
-          resource.data.scheduledStartAt is timestamp &&
-          request.time >= resource.data.scheduledStartAt
-        );
+      let pickId = request.resource.data.lastPickId;
 
       let pickProgress =
-        draftWasReady &&
+        resource.data.status == 'live' &&
+        resource.data.clockStatus == 'running' &&
         changedKeys.hasOnly([
           'status',
           'nextOverallPick',
           'draftedAssetKeys',
-          'startedAt',
+          'clockStatus',
+          'pickStartedAt',
+          'currentPickSeconds',
+          'pausedRemainingSeconds',
+          'clockUpdatedBy',
+          'clockUpdatedAt',
+          'lastPickId',
           'updatedAt'
         ]) &&
         request.resource.data.nextOverallPick ==
@@ -190,28 +272,174 @@ service cloud.firestore {
         request.resource.data.draftedAssetKeys.hasAll(
           resource.data.draftedAssetKeys
         ) &&
-        (
-          request.resource.data.status == 'live' ||
-          request.resource.data.status == 'complete'
+        request.resource.data.pausedRemainingSeconds == null &&
+        request.resource.data.clockUpdatedBy ==
+          currentUserId() &&
+        request.resource.data.clockUpdatedAt ==
+          request.time &&
+        request.resource.data.updatedAt ==
+          request.time &&
+        validNextPickClock(request.resource.data) &&
+        pickId is string &&
+        existsAfter(draftPickPath(leagueId, pickId)) &&
+        validManualDraftPickAfter(
+          leagueId,
+          pickId,
+          resource.data
         );
 
       return isLeagueMember(leagueId) &&
-        (activationOnly || pickProgress);
+        pickProgress;
     }
 
-    function validDraftPickCreate(leagueId) {
+    function validDraftProgressForCreatedPick(
+      leagueId,
+      pickId,
+      draft,
+      data
+    ) {
+      let nextDraft = getAfter(draftPath(leagueId)).data;
+
+      return nextDraft.nextOverallPick ==
+          draft.nextOverallPick + 1 &&
+        nextDraft.draftedAssetKeys is list &&
+        draft.draftedAssetKeys is list &&
+        nextDraft.draftedAssetKeys.size() ==
+          draft.draftedAssetKeys.size() + 1 &&
+        nextDraft.draftedAssetKeys.hasAll(
+          draft.draftedAssetKeys
+        ) &&
+        nextDraft.draftedAssetKeys.hasAny([
+          data.asset.assetKey
+        ]) &&
+        nextDraft.pausedRemainingSeconds == null &&
+        nextDraft.clockUpdatedBy == currentUserId() &&
+        nextDraft.clockUpdatedAt == request.time &&
+        nextDraft.updatedAt == request.time &&
+        nextDraft.lastPickId == pickId &&
+        validNextPickClock(nextDraft);
+    }
+
+    function validDraftPickCreate(leagueId, pickId) {
       let draft = get(draftPath(leagueId)).data;
       let data = request.resource.data;
 
-      return isLeagueMember(leagueId) &&
-        data.ownerId == currentUserId() &&
+      let validCommonPick =
+        isLeagueMember(leagueId) &&
+        draft.status == 'live' &&
+        draft.clockStatus == 'running' &&
+        data.ownerId is string &&
         data.overallPick is int &&
         data.overallPick == draft.nextOverallPick &&
-        data.round is int &&
-        data.pickInRound is int &&
+        validDraftPickSequence(draft, data) &&
+        data.ownerId == expectedDraftPickOwner(draft, data) &&
         data.asset is map &&
         data.asset.assetKey is string &&
-        !draft.draftedAssetKeys.hasAny([data.asset.assetKey]);
+        !draft.draftedAssetKeys.hasAny([
+          data.asset.assetKey
+        ]) &&
+        data.selectionType in [
+          'manual',
+          'queue',
+          'automatic'
+        ] &&
+        data.selectedByUserId == currentUserId() &&
+        data.madeAt == request.time;
+
+      let validManualPick =
+        data.selectionType == 'manual' &&
+        data.ownerId == currentUserId() &&
+        data.autoPickReason == null &&
+        draft.pickStartedAt is timestamp &&
+        draft.currentPickSeconds is int &&
+        request.time <
+          draft.pickStartedAt +
+          duration.value(
+            draft.currentPickSeconds,
+            's'
+          );
+
+      let ownerQueueExists =
+        exists(draftQueuePath(leagueId, data.ownerId));
+
+      let managerAutoDraftEnabled =
+        ownerQueueExists &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.autoDraftEnabled == true;
+
+      let queueContainsAsset =
+        ownerQueueExists &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.assetKeys is list &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.assetKeys.hasAny([
+          data.asset.assetKey
+        ]);
+
+      let timerExpired =
+        draft.pickStartedAt is timestamp &&
+        draft.currentPickSeconds is int &&
+        request.time >=
+          draft.pickStartedAt +
+          duration.value(
+            draft.currentPickSeconds,
+            's'
+          );
+
+      let validAutomaticPick =
+        isLeagueCommissioner(leagueId) &&
+        data.selectionType in [
+          'queue',
+          'automatic'
+        ] &&
+        (
+          data.selectionType == 'automatic' ||
+          queueContainsAsset
+        ) &&
+        (
+          (
+            data.autoPickReason == 'manager-auto-mode' &&
+            managerAutoDraftEnabled
+          ) ||
+          (
+            data.autoPickReason == 'timer-expired' &&
+            timerExpired
+          )
+        );
+
+      return validCommonPick &&
+        validDraftProgressForCreatedPick(
+          leagueId,
+          pickId,
+          draft,
+          data
+        ) &&
+        (
+          validManualPick ||
+          validAutomaticPick
+        );
+    }
+
+    function validDraftQueueWrite(leagueId, ownerId) {
+      let data = request.resource.data;
+
+      return get(draftPath(leagueId)).data.status != 'complete' &&
+        data.keys().hasOnly([
+          'ownerId',
+          'assetKeys',
+          'autoDraftEnabled',
+          'updatedAt'
+        ]) &&
+        data.ownerId == ownerId &&
+        data.assetKeys is list &&
+        data.assetKeys.size() <= 100 &&
+        data.assetKeys.toSet().size() ==
+          data.assetKeys.size() &&
+        data.autoDraftEnabled is bool &&
+        data.updatedAt == request.time;
     }
 
     function validOwnerTransactionCreate() {
@@ -223,19 +451,33 @@ service cloud.firestore {
           'add-open-slot',
           'move-to-ir',
           'activate-from-ir',
+          'drop-to-waivers',
           'waiver-claim'
         ];
     }
 
-    function validOwnerWaiverCreate() {
+    function validOwnerWaiverCreate(waiverId) {
       let data = request.resource.data;
 
       return data.droppedByOwnerId == currentUserId() &&
         data.status == 'active' &&
         data.claims is list &&
         data.claims.size() == 0 &&
-        data.assetKey is string &&
-        data.asset is map;
+        data.assetKey == waiverId &&
+        data.asset is map &&
+        data.asset.assetKey == waiverId;
+    }
+
+    function validOwnerWaiverReset(waiverId) {
+      let data = request.resource.data;
+
+      return data.droppedByOwnerId == currentUserId() &&
+        data.status == 'active' &&
+        data.claims is list &&
+        data.claims.size() == 0 &&
+        data.assetKey == waiverId &&
+        data.asset is map &&
+        data.asset.assetKey == waiverId;
     }
 
     function validOwnerWaiverClaimUpdate() {
@@ -254,6 +496,186 @@ service cloud.firestore {
         nextClaims.size() >= previousClaims.size() &&
         nextClaims.size() <= previousClaims.size() + 1 &&
         nextClaims[nextClaims.size() - 1].ownerId == currentUserId();
+    }
+
+
+    function validPlayerAvailabilityStatus(status) {
+      return status in [
+        'active',
+        'day-to-day',
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve',
+        'suspended',
+        'personal-leave',
+        'unknown'
+      ];
+    }
+
+    function playerAvailabilityIrEligible(status) {
+      return status in [
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve'
+      ];
+    }
+
+    function validPlayerAvailabilityBase(leagueId) {
+      let data = request.resource.data;
+
+      return data.keys().hasAll([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.playerId is int &&
+        data.playerId >= 1 &&
+        data.playerName is string &&
+        data.playerName.size() >= 1 &&
+        data.playerName.size() <= 100 &&
+        validPlayerAvailabilityStatus(data.status) &&
+        data.note is string &&
+        data.note.size() <= 500 &&
+        data.irEligible == playerAvailabilityIrEligible(data.status) &&
+        data.updatedAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.leagueId == leagueId;
+    }
+
+    function validCommissionerAvailabilityWrite(leagueId) {
+      let data = request.resource.data;
+
+      return validPlayerAvailabilityBase(leagueId) &&
+        data.keys().hasOnly([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.source == 'commissioner';
+    }
+
+    function validEspnAvailabilityWrite(leagueId) {
+      let data = request.resource.data;
+
+      return validPlayerAvailabilityBase(leagueId) &&
+        data.keys().hasOnly([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId',
+          'externalSource',
+          'externalStatus',
+          'externalReturnDate',
+          'externalInjuryDate',
+          'externalTeamName',
+          'syncedAt'
+        ]) &&
+        data.keys().hasAll([
+          'externalSource',
+          'externalStatus',
+          'externalReturnDate',
+          'externalInjuryDate',
+          'externalTeamName',
+          'syncedAt'
+        ]) &&
+        data.source == 'espn' &&
+        data.externalSource == 'ESPN' &&
+        data.externalStatus is string &&
+        data.externalStatus.size() <= 100 &&
+        data.externalReturnDate is string &&
+        data.externalReturnDate.size() <= 100 &&
+        data.externalInjuryDate is string &&
+        data.externalInjuryDate.size() <= 100 &&
+        data.externalTeamName is string &&
+        data.externalTeamName.size() <= 100 &&
+        data.syncedAt == request.time;
+    }
+
+    function validPlayerAvailabilityWrite(leagueId) {
+      return validCommissionerAvailabilityWrite(leagueId) ||
+        validEspnAvailabilityWrite(leagueId);
+    }
+
+    function validPlayerAvailabilitySyncWrite() {
+      let data = request.resource.data;
+
+      let commonFieldsValid =
+        data.keys().hasOnly([
+          'source',
+          'status',
+          'lastAttemptAt',
+          'lastSuccessfulSyncAt',
+          'updatedBy',
+          'fetchedCount',
+          'matchedCount',
+          'unmatchedCount',
+          'syncedRecordCount',
+          'clearedRecordCount',
+          'preservedManualOverrideCount',
+          'skippedGoalieCount',
+          'message'
+        ]) &&
+        data.keys().hasAll([
+          'source',
+          'status',
+          'lastAttemptAt',
+          'updatedBy',
+          'fetchedCount',
+          'matchedCount',
+          'unmatchedCount',
+          'syncedRecordCount',
+          'clearedRecordCount',
+          'preservedManualOverrideCount',
+          'skippedGoalieCount',
+          'message'
+        ]) &&
+        data.source == 'ESPN' &&
+        data.status in ['running', 'success', 'error'] &&
+        data.lastAttemptAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.fetchedCount is int && data.fetchedCount >= 0 &&
+        data.matchedCount is int && data.matchedCount >= 0 &&
+        data.unmatchedCount is int && data.unmatchedCount >= 0 &&
+        data.syncedRecordCount is int && data.syncedRecordCount >= 0 &&
+        data.clearedRecordCount is int && data.clearedRecordCount >= 0 &&
+        data.preservedManualOverrideCount is int &&
+        data.preservedManualOverrideCount >= 0 &&
+        data.skippedGoalieCount is int && data.skippedGoalieCount >= 0 &&
+        data.message is string &&
+        data.message.size() <= 500;
+
+      let optionalLastSuccessValid =
+        !data.keys().hasAny(['lastSuccessfulSyncAt']) ||
+        data.lastSuccessfulSyncAt is timestamp;
+
+      let successStateValid =
+        data.status == 'success' &&
+        data.keys().hasAll(['lastSuccessfulSyncAt']) &&
+        data.lastSuccessfulSyncAt == request.time;
+
+      let nonSuccessStateValid =
+        data.status in ['running', 'error'] &&
+        optionalLastSuccessValid;
+
+      return commonFieldsValid &&
+        (successStateValid || nonSuccessStateValid);
     }
 
     match /users/{userId} {
@@ -377,9 +799,33 @@ service cloud.firestore {
           allow read: if isLeagueMember(leagueId);
 
           allow create: if draftId == 'current' &&
-            validDraftPickCreate(leagueId);
+            validDraftPickCreate(leagueId, pickId);
 
           allow update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+        match /queues/{ownerId} {
+          allow read: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            );
+
+          allow create, update: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            ) &&
+            validDraftQueueWrite(leagueId, ownerId);
+
+          allow delete: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            );
         }
       }
 
@@ -401,14 +847,37 @@ service cloud.firestore {
         allow create: if isLeagueCommissioner(leagueId) ||
           (
             isLeagueMember(leagueId) &&
-            validOwnerWaiverCreate()
+            validOwnerWaiverCreate(waiverId)
           );
 
         allow update: if isLeagueCommissioner(leagueId) ||
           (
             isLeagueMember(leagueId) &&
-            validOwnerWaiverClaimUpdate()
+            (
+              validOwnerWaiverClaimUpdate() ||
+              validOwnerWaiverReset(waiverId)
+            )
           );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+
+      match /playerAvailability/{playerId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create, update: if isLeagueCommissioner(leagueId) &&
+          validPlayerAvailabilityWrite(leagueId);
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /playerAvailabilitySync/{syncId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create, update: if syncId == 'current' &&
+          isLeagueCommissioner(leagueId) &&
+          validPlayerAvailabilitySyncWrite();
 
         allow delete: if isLeagueCommissioner(leagueId);
       }

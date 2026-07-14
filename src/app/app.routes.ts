@@ -19,6 +19,7 @@ import { ProjectionLab } from './features/projections/projection-lab/projection-
 import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-asset-detail';
 import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
 import { CycleMatchupOverview } from './features/cycles/matchup-overview/cycle-matchup-overview';
+import { PlayerAvailabilityManager } from './features/player-availability/player-availability-manager/player-availability-manager';
 
 export const routes: Routes = [
   {
@@ -72,6 +73,10 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/projections',
         component: ProjectionLab
+      },
+      {
+        path: 'leagues/:leagueId/player-availability',
+        component: PlayerAvailabilityManager
       },
       {
         path: 'leagues/:leagueId/standings',

@@ -570,3 +570,405 @@
     text-align: left;
   }
 }
+
+/* Draft-start injury synchronization */
+.draft-injury-sync-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #31445e;
+  border-radius: 12px;
+  background: rgba(16, 30, 50, 0.82);
+}
+
+.draft-injury-sync-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draft-injury-sync-card strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.draft-injury-sync-card p,
+.draft-injury-sync-card small {
+  margin: 0;
+}
+
+.draft-injury-sync-card p {
+  color: #b5c5d9;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.draft-injury-sync-card small {
+  color: #91a6bf;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.draft-injury-sync-card.sync-running {
+  border-color: #7fb2ee;
+  background: rgba(24, 53, 86, 0.55);
+}
+
+.draft-injury-sync-card.sync-success {
+  border-color: #345d4e;
+  background: rgba(16, 60, 42, 0.34);
+}
+
+.draft-injury-sync-card.sync-warning {
+  border-color: #9d704d;
+  background: rgba(73, 59, 24, 0.34);
+}
+
+@media (max-width: 720px) {
+  .draft-injury-sync-card > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+/* Mobile Foundation V1 */
+.quick-actions-card {
+  display: block;
+}
+
+.quick-actions-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.quick-actions-heading p {
+  max-width: 380px;
+  margin: 0;
+  text-align: right;
+}
+
+.primary-actions-grid {
+  margin-top: 18px;
+}
+
+.hub-action {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 11px;
+  min-height: 90px;
+  align-items: center;
+}
+
+.hub-action-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #3b5575;
+  border-radius: 12px;
+  background: #19304e;
+  font-size: 20px;
+}
+
+.hub-action-copy {
+  display: block;
+  min-width: 0;
+}
+
+.hub-action-copy strong,
+.hub-action-copy > span {
+  display: block;
+}
+
+.hub-action-copy > span {
+  margin-top: 5px;
+}
+
+.hub-action-highlight {
+  border-color: #6f9ed1;
+  background: rgba(28, 55, 88, 0.98);
+}
+
+.league-tools {
+  margin-top: 14px;
+  border: 1px solid #2f435e;
+  border-radius: 14px;
+  background: rgba(13, 26, 44, 0.76);
+  overflow: hidden;
+}
+
+.league-tools summary {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 15px;
+  color: #dceafe;
+  cursor: pointer;
+  list-style: none;
+}
+
+.league-tools summary::-webkit-details-marker {
+  display: none;
+}
+
+.league-tools summary strong,
+.league-tools summary small {
+  display: block;
+}
+
+.league-tools summary strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.league-tools summary small {
+  margin-top: 3px;
+  color: #91a6bf;
+  font-size: 11px;
+}
+
+.summary-chevron {
+  color: #9fb3ca;
+  font-size: 20px;
+  transition: transform 0.15s ease;
+}
+
+.league-tools[open] .summary-chevron {
+  transform: rotate(180deg);
+}
+
+.league-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 0 12px 12px;
+}
+
+.tool-link {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid #2b405a;
+  border-radius: 12px;
+  background: rgba(17, 35, 58, 0.86);
+  color: #eaf2ff;
+  text-decoration: none;
+}
+
+.tool-link > span:first-child {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: #1a3150;
+}
+
+.tool-link strong,
+.tool-link small {
+  display: block;
+}
+
+.tool-link strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.tool-link small {
+  margin-top: 3px;
+  color: #91a6bf;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.primary-action,
+.secondary-action,
+.view-cycle-link,
+.standings-link,
+.start-cycle-button,
+.invite-card button,
+.draft-live-modal button {
+  min-height: 44px;
+}
+
+@media (max-width: 980px) {
+  .quick-actions-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .quick-actions-heading p {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (max-width: 720px) {
+  :host {
+    min-height: auto;
+  }
+
+  .league-page {
+    padding: 12px 2px 30px;
+  }
+
+  .league-header {
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .league-header h1 {
+    font-size: clamp(27px, 9vw, 38px);
+  }
+
+  .league-header p {
+    font-size: 13px;
+  }
+
+  .league-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .league-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .league-actions a:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .league-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .league-info-card {
+    min-width: 0;
+    padding: 13px;
+  }
+
+  .league-info-card strong {
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .draft-status-card,
+  .quick-actions-card,
+  .cycle-status-card,
+  .invite-card {
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 15px;
+  }
+
+  .draft-status-heading,
+  .cycle-status-heading,
+  .section-heading {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .draft-status-badge,
+  .cycle-status-badge {
+    align-self: flex-start;
+  }
+
+  .primary-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .hub-action {
+    display: flex;
+    min-height: 112px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .hub-action-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .hub-action-copy > span {
+    font-size: 11px;
+  }
+
+  .league-tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .matchup-list {
+    grid-template-columns: 1fr;
+  }
+
+  .teams-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-card {
+    align-items: stretch;
+  }
+
+  .invite-card > div:last-child,
+  .invite-card button {
+    width: 100%;
+  }
+
+  .invite-card button {
+    margin-top: 0;
+  }
+
+  .copy-message {
+    text-align: center;
+  }
+
+  .draft-live-modal {
+    padding: 24px 18px;
+    border-radius: 17px;
+  }
+}
+
+@media (max-width: 430px) {
+  .league-info-card span {
+    font-size: 9px;
+  }
+
+  .league-info-card strong {
+    font-size: 14px;
+  }
+
+  .hub-action-copy > span {
+    display: none;
+  }
+
+  .hub-action {
+    min-height: 92px;
+  }
+
+  .team-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

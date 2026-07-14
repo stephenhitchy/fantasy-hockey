@@ -1,0 +1,323 @@
+@if (loading()) {
+  <p class="page-loading">Loading player availability...</p>
+} @else if (!league()) {
+  <section class="page-loading">
+    <p>{{ errorMessage() || 'This page is not available.' }}</p>
+    <a [routerLink]="['/dashboard']">Return to Dashboard</a>
+  </section>
+} @else {
+  <section class="availability-page">
+    <a
+      class="back-link"
+      [routerLink]="['/leagues', leagueId]"
+    >
+      ← Back to League
+    </a>
+
+    <header class="availability-hero">
+      <div>
+        <span class="eyebrow">Commissioner Tool</span>
+        <h1>Player Availability</h1>
+        <p>
+          ESPN injury data refreshes automatically while this page is open.
+          Commissioner overrides always take priority and update My Team, IR eligibility,
+          Draft Room, Free Agents, and Waivers without rebuilding the app.
+        </p>
+      </div>
+
+      <div class="record-count-grid">
+        <div class="managed-count-card">
+          <span>Total Records</span>
+          <strong>{{ managedRecordCount() }}</strong>
+        </div>
+
+        <div class="managed-count-card synced-count-card">
+          <span>ESPN Synced</span>
+          <strong>{{ syncedRecordCount() }}</strong>
+        </div>
+
+        <div class="managed-count-card manual-count-card">
+          <span>Manual</span>
+          <strong>{{ manualRecordCount() }}</strong>
+        </div>
+      </div>
+    </header>
+
+    <section class="policy-card">
+      <strong>IR policy</strong>
+      <span>
+        Out, Injured Reserve, and Long-Term IR are eligible. Active, Day-to-Day,
+        Suspended, Personal Leave, and Unknown are not eligible.
+      </span>
+    </section>
+
+    <section class="sync-card">
+      <div class="sync-card-copy">
+        <span class="eyebrow">Automatic Injury Sync</span>
+        <h2>ESPN NHL Injury Feed</h2>
+        <p>
+          Last successful sync: <strong>{{ getLastSyncLabel() }}</strong>.
+          The page checks for fresh data when opened and every 30 minutes while it remains open.
+        </p>
+
+        @if (syncState(); as state) {
+          <div class="sync-stat-row">
+            <span>{{ state.fetchedCount }} feed entries</span>
+            <span>{{ state.matchedCount }} matched skaters</span>
+            <span>{{ state.preservedManualOverrideCount }} manual overrides preserved</span>
+          </div>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="sync-button"
+        (click)="syncEspnInjuries(true)"
+        [disabled]="syncing() || playerPoolLoading()"
+      >
+        {{ syncing() ? 'Syncing Injuries...' : 'Sync ESPN Now' }}
+      </button>
+    </section>
+
+    @if (syncMessage()) {
+      <section class="message-card sync-success-card">
+        {{ syncMessage() }}
+      </section>
+    }
+
+    @if (syncErrorMessage()) {
+      <section class="message-card error-card">
+        <strong>Automatic sync did not complete.</strong>
+        <span>{{ syncErrorMessage() }}</span>
+        <small>Existing ESPN records and all commissioner overrides remain unchanged.</small>
+      </section>
+    }
+
+    @if (lastSyncResult()?.unmatchedPlayerNames?.length) {
+      <details class="unmatched-card">
+        <summary>
+          {{ lastSyncResult()?.unmatchedPlayerNames?.length }} ESPN names could not be matched
+        </summary>
+
+        <div class="unmatched-name-list">
+          @for (name of lastSyncResult()?.unmatchedPlayerNames ?? []; track name) {
+            <span>{{ name }}</span>
+          }
+        </div>
+      </details>
+    }
+
+    @if (successMessage()) {
+      <section class="message-card success-card">
+        {{ successMessage() }}
+      </section>
+    }
+
+    @if (errorMessage()) {
+      <section class="message-card error-card">
+        {{ errorMessage() }}
+      </section>
+    }
+
+    <section class="manager-layout">
+      <section class="player-browser-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">NHL Player Pool</span>
+            <h2>Select a Player</h2>
+          </div>
+
+          <button
+            type="button"
+            class="refresh-button"
+            (click)="loadPlayers()"
+            [disabled]="playerPoolLoading()"
+          >
+            {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Players' }}
+          </button>
+        </div>
+
+        <label class="search-field">
+          Search by player, team, or position
+          <input
+            type="search"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="setSearchTerm($event)"
+            placeholder="Search NHL players..."
+          />
+        </label>
+
+        @if (playerPoolLoading()) {
+          <div class="empty-state">Loading NHL players...</div>
+        } @else if (filteredPlayers().length === 0) {
+          <div class="empty-state">No players match that search.</div>
+        } @else {
+          <div class="player-list">
+            @for (player of filteredPlayers(); track player.id) {
+              <article
+                class="player-row"
+                [class.selected-player-row]="isPlayerSelected(player)"
+              >
+                @if (getPlayerLogoUrl(player); as logoUrl) {
+                  <img
+                    [src]="logoUrl"
+                    [alt]="player.nhlTeamAbbreviation + ' logo'"
+                  />
+                } @else {
+                  <span class="logo-fallback">
+                    {{ player.nhlTeamAbbreviation }}
+                  </span>
+                }
+
+                <div class="player-copy">
+                  <strong>{{ player.fullName }}</strong>
+                  <span>
+                    {{ player.nhlTeamAbbreviation }} · {{ player.position }}
+                  </span>
+
+                  <small>{{ getPlayerUpdatedLabel(player) }}</small>
+                </div>
+
+                <div class="player-status-stack">
+                  <span
+                    [class]="'availability-pill ' + getPlayerStatusClass(player)"
+                  >
+                    {{ getPlayerStatusLabel(player) }}
+                  </span>
+
+                  <small
+                    [class]="'record-source-label ' + getPlayerRecordSourceClass(player)"
+                  >
+                    {{ getPlayerRecordSourceLabel(player) }}
+                  </small>
+                </div>
+
+                <button
+                  type="button"
+                  class="manage-player-button"
+                  (click)="selectPlayer(player)"
+                >
+                  {{ isPlayerSelected(player) ? 'Selected' : 'Manage' }}
+                </button>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <aside class="editor-card">
+        @if (selectedPlayer(); as player) {
+          <span class="eyebrow">Selected Player</span>
+
+          <div class="selected-player-heading">
+            @if (getPlayerLogoUrl(player); as logoUrl) {
+              <img
+                [src]="logoUrl"
+                [alt]="player.nhlTeamAbbreviation + ' logo'"
+              />
+            } @else {
+              <span class="selected-logo-fallback">
+                {{ player.nhlTeamAbbreviation }}
+              </span>
+            }
+
+            <div>
+              <h2>{{ player.fullName }}</h2>
+              <p>{{ player.nhlTeamAbbreviation }} · {{ player.position }}</p>
+            </div>
+          </div>
+
+          <section class="record-source-card">
+            <span>Current source</span>
+            <strong>{{ getSelectedRecordSourceLabel() }}</strong>
+
+            @if (getSelectedExternalStatus()) {
+              <small>
+                ESPN status: {{ getSelectedExternalStatus() }}
+                @if (getSelectedReturnDate()) {
+                  · Return: {{ getSelectedReturnDate() }}
+                }
+              </small>
+            }
+          </section>
+
+          <label class="editor-field">
+            Availability status
+            <select
+              [ngModel]="selectedStatus()"
+              (ngModelChange)="selectedStatus.set($event)"
+            >
+              @for (option of statusOptions; track option.value) {
+                <option [value]="option.value">
+                  {{ option.label }}
+                </option>
+              }
+            </select>
+          </label>
+
+          <section class="status-preview-card">
+            <span
+              [class]="'availability-pill availability-preview ' + getSelectedStatusClass()"
+            >
+              {{ getSelectedStatusLabel() }}
+            </span>
+
+            <strong>
+              {{ selectedStatusIrEligible() ? 'IR Eligible' : 'Not IR Eligible' }}
+            </strong>
+
+            <p>{{ getSelectedStatusDescription() }}</p>
+          </section>
+
+          <label class="editor-field">
+            Commissioner note
+            <textarea
+              [ngModel]="selectedNote()"
+              (ngModelChange)="selectedNote.set($event)"
+              maxlength="500"
+              rows="5"
+              placeholder="Example: Team confirmed the player will remain out this week."
+            ></textarea>
+          </label>
+
+          <small class="character-count">
+            {{ selectedNote().length }} / 500
+          </small>
+
+          <div class="editor-actions">
+            <button
+              type="button"
+              class="save-button"
+              (click)="saveSelectedPlayer()"
+              [disabled]="saving()"
+            >
+              {{ saving() ? 'Saving...' : 'Save Commissioner Override' }}
+            </button>
+
+            <button
+              type="button"
+              class="clear-button"
+              (click)="clearSelectedDatabaseRecord()"
+              [disabled]="saving() || !isPlayerManaged(player)"
+            >
+              {{ isPlayerManualOverride(player) ? 'Return to Automatic' : 'Clear ESPN Record' }}
+            </button>
+          </div>
+
+          <p class="fallback-note">
+            Saving creates a manual commissioner override that automatic sync will not replace.
+            Returning to automatic removes that override; ESPN can restore the player during the next sync.
+          </p>
+        } @else {
+          <div class="editor-empty-state">
+            <span class="editor-empty-icon">🏥</span>
+            <h2>Choose a player</h2>
+            <p>
+              Select an NHL skater to review the synced status or create a commissioner override.
+            </p>
+          </div>
+        }
+      </aside>
+    </section>
+  </section>
+}

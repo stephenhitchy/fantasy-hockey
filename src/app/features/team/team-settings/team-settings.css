@@ -331,6 +331,34 @@
   cursor: not-allowed;
 }
 
+.live-data-warning-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 15px 16px;
+  border: 1px solid rgba(255, 186, 105, 0.4);
+  border-radius: 14px;
+  background: rgba(91, 58, 22, 0.34);
+  color: #ffe2b8;
+}
+
+.live-data-warning-card strong {
+  display: block;
+  color: #fff3df;
+  font-size: 14px;
+}
+
+.live-data-warning-card ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #ffd6a1;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 .success-message,
 .error-message {
   display: block;
@@ -669,8 +697,12 @@
   position: absolute;
   top: 7px;
   left: 8px;
-  right: auto;
+  right: 8px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .roster-status-pill {
@@ -833,6 +865,14 @@
   margin-top: 6px;
 }
 
+.roster-card-action-buttons,
+.ir-slot-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .roster-card-actions small {
   color: #ffd98a;
   font-size: 10px;
@@ -871,6 +911,21 @@
 
 .activate-action:hover:not(:disabled) {
   background: white;
+}
+
+.drop-action {
+  border: 1px solid rgba(255, 157, 165, 0.42);
+  background: rgba(142, 68, 79, 0.42);
+  color: #ffd7db;
+}
+
+.drop-action:hover:not(:disabled) {
+  background: #ffb4bc;
+  color: #271014;
+}
+
+.ir-slot-actions {
+  justify-content: flex-end;
 }
 
 .success-note {
@@ -956,3 +1011,498 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Player availability and IR eligibility V1 */
+.availability-policy-note {
+  margin: -2px 0 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 217, 138, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 217, 138, 0.07);
+  color: #d8e4f0;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.availability-policy-note strong {
+  color: #ffd98a;
+}
+
+.player-availability-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 3px 7px;
+  border: 1px solid rgba(198, 213, 228, 0.2);
+  border-radius: 999px;
+  background: rgba(155, 182, 212, 0.16);
+  color: #dce9f7;
+  font-size: 9px;
+  font-weight: 1000;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.availability-day-to-day {
+  border-color: rgba(255, 217, 138, 0.42);
+  background: rgba(169, 112, 45, 0.38);
+  color: #ffe4a9;
+}
+
+.availability-out,
+.availability-injured-reserve,
+.availability-long-term-injured-reserve {
+  border-color: rgba(255, 157, 165, 0.4);
+  background: rgba(142, 68, 79, 0.5);
+  color: #ffd8dc;
+}
+
+.availability-suspended,
+.availability-personal-leave {
+  border-color: rgba(195, 169, 255, 0.38);
+  background: rgba(102, 76, 157, 0.42);
+  color: #e5d8ff;
+}
+
+.availability-unknown {
+  border-color: rgba(178, 193, 211, 0.28);
+  background: rgba(83, 99, 119, 0.38);
+  color: #d2dce7;
+}
+
+.availability-active {
+  border-color: rgba(125, 240, 172, 0.3);
+  background: rgba(50, 130, 82, 0.34);
+  color: #caffdc;
+}
+
+.player-availability-note {
+  color: #ffd98a !important;
+  line-height: 1.3;
+}
+
+.ir-player-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ir-player-heading strong {
+  min-width: 0;
+}
+
+.ir-activation-warning {
+  color: #ffb4bc !important;
+}
+
+.ir-availability-note {
+  display: block;
+  margin-top: 4px;
+  color: #c9d6e3;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+@media (max-width: 620px) {
+  .ir-player-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+/* IR activation replacement flow */
+.ir-activation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(2, 8, 18, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.ir-activation-dialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid rgba(155, 182, 212, 0.34);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 25rem),
+    #101a2a;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}
+
+.ir-activation-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.ir-activation-dialog-header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.ir-activation-dialog-header p {
+  max-width: 590px;
+  margin: 8px 0 0;
+  color: #aebed0;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.ir-activation-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(155, 182, 212, 0.24);
+  border-radius: 50%;
+  background: rgba(29, 46, 70, 0.74);
+  color: #d7e8fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ir-activation-close:hover:not(:disabled) {
+  background: rgba(47, 68, 98, 0.95);
+  color: white;
+}
+
+.ir-activation-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ir-activation-player-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border: 1px solid rgba(152, 245, 189, 0.24);
+  border-radius: 13px;
+  background: rgba(50, 130, 82, 0.14);
+}
+
+.ir-activation-player-logo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.ir-activation-player-summary strong,
+.ir-activation-player-summary span {
+  display: block;
+}
+
+.ir-activation-player-summary strong {
+  color: white;
+  font-size: 15px;
+}
+
+.ir-activation-player-summary span {
+  margin-top: 4px;
+  color: #b9c9da;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.ir-activation-target-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 17px;
+}
+
+.ir-activation-target {
+  display: grid;
+  grid-template-columns: 18px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 13px;
+  border: 1px solid rgba(155, 182, 212, 0.2);
+  border-radius: 12px;
+  background: rgba(8, 17, 31, 0.62);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.ir-activation-target:hover {
+  border-color: rgba(183, 217, 255, 0.5);
+  background: rgba(22, 38, 60, 0.86);
+  transform: translateY(-1px);
+}
+
+.selected-ir-activation-target {
+  border-color: rgba(152, 245, 189, 0.72);
+  background: rgba(50, 130, 82, 0.2);
+  box-shadow: 0 0 0 2px rgba(152, 245, 189, 0.08);
+}
+
+.open-ir-activation-target {
+  border-style: dashed;
+}
+
+.ir-activation-target input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ir-activation-radio-mark {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(184, 207, 231, 0.66);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.selected-ir-activation-target .ir-activation-radio-mark {
+  border: 4px solid #98f5bd;
+  background: #102016;
+}
+
+.ir-activation-target-logo,
+.ir-activation-open-slot-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.ir-activation-target-logo {
+  object-fit: contain;
+}
+
+.ir-activation-open-slot-icon {
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(152, 245, 189, 0.6);
+  border-radius: 50%;
+  color: #98f5bd;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.ir-activation-target-copy {
+  min-width: 0;
+}
+
+.ir-activation-target-copy strong,
+.ir-activation-target-copy small {
+  display: block;
+}
+
+.ir-activation-target-copy strong {
+  overflow: hidden;
+  color: white;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ir-activation-target-copy small {
+  margin-top: 4px;
+  color: #aebed0;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.ir-waiver-warning,
+.ir-open-slot-label {
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 1000;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ir-waiver-warning {
+  background: rgba(255, 217, 138, 0.18);
+  color: #ffd98a;
+}
+
+.ir-open-slot-label {
+  background: rgba(152, 245, 189, 0.16);
+  color: #98f5bd;
+}
+
+.ir-activation-cycle-note {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(29, 46, 70, 0.6);
+  color: #b8c9db;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.ir-activation-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ir-activation-cancel,
+.ir-activation-confirm {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ir-activation-cancel {
+  border: 1px solid rgba(155, 182, 212, 0.3);
+  background: rgba(29, 46, 70, 0.72);
+  color: #d7e8fb;
+}
+
+.ir-activation-confirm {
+  border: 1px solid rgba(152, 245, 189, 0.46);
+  background: #98f5bd;
+  color: #102016;
+}
+
+.ir-activation-cancel:hover:not(:disabled),
+.ir-activation-confirm:hover:not(:disabled) {
+  background: white;
+  color: #091323;
+}
+
+.ir-activation-cancel:disabled,
+.ir-activation-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 620px) {
+  .ir-activation-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .ir-activation-dialog {
+    width: 100%;
+    max-height: 92vh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .ir-activation-target {
+    grid-template-columns: 18px 30px minmax(0, 1fr);
+  }
+
+  .ir-waiver-warning,
+  .ir-open-slot-label {
+    grid-column: 3;
+    justify-self: start;
+  }
+
+  .ir-activation-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Standalone drop player confirmation */
+.roster-drop-backdrop {
+  z-index: 1100;
+  background: rgba(2, 8, 18, 0.82);
+}
+
+.roster-drop-dialog {
+  border-color: rgba(255, 157, 165, 0.42);
+  background:
+    radial-gradient(circle at top left, rgba(142, 68, 79, 0.2), transparent 24rem),
+    #101a2a;
+}
+
+.roster-drop-close {
+  border-color: rgba(255, 157, 165, 0.28);
+  background: rgba(90, 40, 49, 0.58);
+  color: #ffd7db;
+}
+
+.roster-drop-close:hover:not(:disabled) {
+  background: rgba(142, 68, 79, 0.78);
+  color: white;
+}
+
+.roster-drop-player-summary {
+  border-color: rgba(255, 157, 165, 0.24);
+  background: rgba(142, 68, 79, 0.12);
+}
+
+.roster-drop-warning {
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 157, 165, 0.34);
+  border-radius: 12px;
+  background: rgba(142, 68, 79, 0.18);
+}
+
+.roster-drop-warning strong,
+.roster-drop-warning span {
+  display: block;
+}
+
+.roster-drop-warning strong {
+  color: #ffd7db;
+  font-size: 13px;
+}
+
+.roster-drop-warning span {
+  margin-top: 5px;
+  color: #e3bec2;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.roster-drop-confirm {
+  border-color: rgba(255, 157, 165, 0.5);
+  background: #ffb4bc;
+  color: #271014;
+}
+
+@media (max-width: 620px) {
+  .roster-card-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ir-slot-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+

@@ -15,13 +15,6 @@
       </div>
 
       <div class="league-actions">
-        <a
-          class="secondary-action"
-          [routerLink]="['/leagues', leagueId, 'team']"
-        >
-          My Team
-        </a>
-
         @if (draft()?.status === 'live') {
           <a
             class="primary-action"
@@ -40,7 +33,7 @@
 
         @if (isCommissioner() && draft()?.status !== 'complete') {
           <a
-            class="primary-action"
+            class="secondary-action commissioner-action"
             [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
           >
             Draft Setup
@@ -115,69 +108,153 @@
             </span>
           </div>
         }
+
+        <div
+          class="draft-injury-sync-card"
+          [class.sync-running]="draftInjurySyncInProgress() || injurySyncState()?.status === 'running'"
+          [class.sync-success]="injurySyncState()?.status === 'success'"
+          [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
+        >
+          <div>
+            <span class="draft-section-eyebrow">Shared Injury Report</span>
+            <strong>{{ getDraftInjurySyncStatusLabel() }}</strong>
+          </div>
+
+          <p>{{ getDraftInjurySyncDescription() }}</p>
+          <small>{{ getDraftInjurySyncTimeLabel() }}</small>
+        </div>
       </section>
     }
 
     <section class="quick-actions-card">
-      <div>
-        <span class="draft-section-eyebrow">League Hub</span>
-        <h2>Quick Actions</h2>
+      <div class="quick-actions-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Hub</span>
+          <h2>Where do you want to go?</h2>
+        </div>
+
         <p>
-          Jump to the main league pages from one place.
+          The most common league actions are kept up front.
         </p>
       </div>
 
-      <div class="quick-actions-grid">
+      <div class="quick-actions-grid primary-actions-grid">
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'team']"
+        >
+          <span class="hub-action-icon" aria-hidden="true">👕</span>
+          <span class="hub-action-copy">
+            <strong>My Team</strong>
+            <span>Roster, IR, waivers, and moves.</span>
+          </span>
+        </a>
+
         <a
           class="hub-action"
           [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
         >
-          <strong>View Current Matchup</strong>
-          <span>Your detailed current-cycle matchup.</span>
+          <span class="hub-action-icon" aria-hidden="true">⚔️</span>
+          <span class="hub-action-copy">
+            <strong>My Matchup</strong>
+            <span>Open your current cycle matchup.</span>
+          </span>
         </a>
 
         <a
           class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+          [routerLink]="['/leagues', leagueId, 'free-agents']"
         >
-          <strong>Current Cycle Matchups</strong>
-          <span>All matchups for {{ currentCycleLabel() }}.</span>
-        </a>
-
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
-        >
-          <strong>Full Schedule View</strong>
-          <span>Round-robin schedule and matchup history.</span>
+          <span class="hub-action-icon" aria-hidden="true">🔎</span>
+          <span class="hub-action-copy">
+            <strong>Players</strong>
+            <span>Browse free agents and availability.</span>
+          </span>
         </a>
 
         <a
           class="hub-action"
           [routerLink]="['/leagues', leagueId, 'standings']"
         >
-          <strong>League Standings</strong>
-          <span>Records, points for, points against, and results.</span>
-        </a>
-
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'projections']"
-        >
-          <strong>Projection Lab</strong>
-          <span>Ratings, draft value, and reliability checks.</span>
+          <span class="hub-action-icon" aria-hidden="true">🏆</span>
+          <span class="hub-action-copy">
+            <strong>Standings</strong>
+            <span>Records, points, and league rank.</span>
+          </span>
         </a>
 
         @if (draft()?.status !== 'complete') {
           <a
-            class="hub-action"
+            class="hub-action hub-action-highlight"
             [routerLink]="['/leagues', leagueId, 'draft']"
           >
-            <strong>Draft Room</strong>
-            <span>Enter or review the league draft.</span>
+            <span class="hub-action-icon" aria-hidden="true">🧢</span>
+            <span class="hub-action-copy">
+              <strong>Draft Room</strong>
+              <span>Enter or review the league draft.</span>
+            </span>
           </a>
         }
       </div>
+
+      <details class="league-tools">
+        <summary>
+          <span>
+            <strong>More league tools</strong>
+            <small>Schedule, projections, and league management</small>
+          </span>
+
+          <span class="summary-chevron" aria-hidden="true">⌄</span>
+        </summary>
+
+        <div class="league-tools-grid">
+          <a
+            class="tool-link"
+            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+          >
+            <span aria-hidden="true">🗂</span>
+            <span>
+              <strong>All Matchups</strong>
+              <small>Every matchup in this cycle</small>
+            </span>
+          </a>
+
+          <a
+            class="tool-link"
+            [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+          >
+            <span aria-hidden="true">🗓</span>
+            <span>
+              <strong>Full Schedule</strong>
+              <small>Round-robin schedule and history</small>
+            </span>
+          </a>
+
+          <a
+            class="tool-link"
+            [routerLink]="['/leagues', leagueId, 'projections']"
+          >
+            <span aria-hidden="true">📈</span>
+            <span>
+              <strong>Projection Lab</strong>
+              <small>Ratings and reliability checks</small>
+            </span>
+          </a>
+
+          @if (isCommissioner()) {
+            <a
+              class="tool-link"
+              [routerLink]="['/leagues', leagueId, 'player-availability']"
+            >
+              <span aria-hidden="true">🩹</span>
+              <span>
+                <strong>Player Availability</strong>
+                <small>Injury statuses and IR eligibility</small>
+              </span>
+            </a>
+          }
+        </div>
+      </details>
     </section>
 
     <section class="cycle-status-card">

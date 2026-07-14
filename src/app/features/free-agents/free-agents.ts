@@ -33,6 +33,16 @@ import {
 } from '../../core/draft/draft-player-pool.service';
 
 import {
+  PlayerAvailability
+} from '../../core/player/player-availability.models';
+
+import {
+  getPlayerAvailabilityForPlayer,
+  getPlayerAvailabilityStatusClass,
+  shouldDisplayPlayerAvailability
+} from '../../core/player/player-availability.service';
+
+import {
   FantasyCycle
 } from '../../core/cycle/cycle.models';
 
@@ -622,6 +632,46 @@ export class FreeAgents implements OnDestroy {
     return asset.assetType === 'skater'
       ? asset.player.teamLogoUrl
       : asset.teamLogoUrl;
+  }
+
+  getPlayerAvailability(
+    asset: DraftableAsset
+  ): PlayerAvailability | null {
+    if (asset.assetType !== 'skater') {
+      return null;
+    }
+
+    return getPlayerAvailabilityForPlayer(asset.player);
+  }
+
+  shouldShowPlayerAvailabilityBadge(
+    asset: DraftableAsset
+  ): boolean {
+    const availability = this.getPlayerAvailability(asset);
+
+    return availability
+      ? shouldDisplayPlayerAvailability(availability)
+      : false;
+  }
+
+  getPlayerAvailabilityLabel(asset: DraftableAsset): string {
+    return this.getPlayerAvailability(asset)?.shortLabel ?? '';
+  }
+
+  getPlayerAvailabilityClass(asset: DraftableAsset): string {
+    const availability = this.getPlayerAvailability(asset);
+
+    return availability
+      ? getPlayerAvailabilityStatusClass(availability.status)
+      : '';
+  }
+
+  getPlayerAvailabilityNote(asset: DraftableAsset): string {
+    return this.getPlayerAvailability(asset)?.note ?? '';
+  }
+
+  isPlayerAvailabilityIrEligible(asset: DraftableAsset): boolean {
+    return this.getPlayerAvailability(asset)?.irEligible ?? false;
   }
 
   getRosterAssetName(asset: RosterAsset): string {

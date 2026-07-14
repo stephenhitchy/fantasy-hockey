@@ -667,36 +667,6 @@
   margin-top: 6px;
 }
 
-.injury-news-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 4px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 950;
-  line-height: 1;
-  white-space: nowrap;
-  border: 1px solid #ef9d9d;
-  background: #fff0f0;
-  color: #982626;
-}
-
-.injury-questionable-start-season,
-.injury-day-to-day {
-  border-color: #e7c26b;
-  background: #fff8df;
-  color: #755200;
-}
-
-.injury-long-term,
-.injury-out-start-season {
-  border-color: #e79090;
-  background: #ffecec;
-  color: #8e2222;
-}
-
 .draft-news-note {
   color: #5c7087;
   font-size: 11px;
@@ -713,8 +683,540 @@
     grid-column: 1 / -1;
   }
 
-  .injury-news-chip,
+  .player-availability-pill,
+  .player-availability-note,
   .draft-news-note {
     white-space: normal;
+  }
+}
+
+/* Shared player availability visibility */
+.player-availability-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.player-availability-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 23px;
+  padding: 4px 8px;
+  border: 1px solid #bcc9d6;
+  border-radius: 999px;
+  background: #edf2f7;
+  color: #445a70;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.availability-day-to-day {
+  border-color: #dfbf67;
+  background: #fff7d8;
+  color: #735300;
+}
+
+.availability-out,
+.availability-injured-reserve,
+.availability-long-term-injured-reserve {
+  border-color: #df8d8d;
+  background: #ffeaea;
+  color: #8d2424;
+}
+
+.availability-suspended,
+.availability-personal-leave {
+  border-color: #c9a86b;
+  background: #fff2dc;
+  color: #765019;
+}
+
+.availability-unknown {
+  border-color: #aebdcb;
+  background: #eef2f6;
+  color: #52677b;
+}
+
+.availability-active {
+  border-color: #92c5a0;
+  background: #e9f8ed;
+  color: #23633a;
+}
+
+.ir-eligible-copy {
+  color: #8d2424;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.player-availability-note {
+  color: #5c7087;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.drafted-availability-row {
+  margin-top: 0;
+}
+
+@media (max-width: 620px) {
+  .player-availability-row {
+    grid-column: 1 / -1;
+  }
+
+  .player-availability-pill,
+  .player-availability-note {
+    white-space: normal;
+  }
+}
+
+/* Draft-start shared injury synchronization */
+.injury-sync-waiting-card {
+  border-color: #9fb9d3;
+  background:
+    radial-gradient(circle at top left, rgba(74, 125, 184, 0.12), transparent 40%),
+    #f5f9ff;
+}
+
+.injury-sync-waiting-card > span:last-child {
+  color: #496782;
+  font-weight: 800;
+}
+
+.draft-injury-sync-banner {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #b8c9da;
+  border-radius: 12px;
+  background: #f5f8fb;
+  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
+}
+
+.draft-injury-sync-banner > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draft-injury-sync-banner .eyebrow {
+  margin: 0;
+}
+
+.draft-injury-sync-banner strong {
+  color: #203956;
+  font-size: 14px;
+}
+
+.draft-injury-sync-banner p,
+.draft-injury-sync-banner small {
+  margin: 0;
+}
+
+.draft-injury-sync-banner p {
+  color: #5f7388;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.draft-injury-sync-banner small {
+  color: #718399;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.draft-injury-sync-banner.sync-success {
+  border-color: #9bc9a7;
+  background: #eef9f0;
+}
+
+.draft-injury-sync-banner.sync-warning {
+  border-color: #d9b777;
+  background: #fff8e8;
+}
+
+@media (max-width: 620px) {
+  .draft-injury-sync-banner > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+/* Draft clock, queue, and auto-draft */
+.auto-pick-message {
+  border: 1px solid #9fb9d3;
+  background: #eef6ff;
+  color: #264e75;
+}
+
+.draft-clock-bar {
+  position: sticky;
+  z-index: 40;
+  top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid #b8c9da;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 26px rgba(22, 36, 58, 0.13);
+  backdrop-filter: blur(12px);
+}
+
+.draft-clock-team,
+.draft-clock-time,
+.draft-clock-controls {
+  min-width: 0;
+}
+
+.draft-clock-team span,
+.draft-clock-time span,
+.draft-clock-time small {
+  display: block;
+  color: #6a7d91;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.draft-clock-team strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #172a42;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-clock-time {
+  text-align: center;
+}
+
+.draft-clock-time strong {
+  display: block;
+  margin: 2px 0;
+  color: #12243a;
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.draft-clock-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.draft-clock-controls > span {
+  color: #61758b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clock-control-button,
+.commissioner-auto-button,
+.auto-draft-toggle,
+.queue-button,
+.draft-button,
+.queue-row-actions button {
+  min-height: 38px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.clock-control-button,
+.commissioner-auto-button,
+.auto-draft-toggle,
+.queue-button,
+.queue-row-actions button {
+  border: 1px solid #bdcad8;
+  background: white;
+  color: #2d4a69;
+}
+
+.clock-control-button:hover:not(:disabled),
+.commissioner-auto-button:hover:not(:disabled),
+.auto-draft-toggle:hover:not(:disabled),
+.queue-button:hover:not(:disabled),
+.queue-row-actions button:hover:not(:disabled) {
+  border-color: #7898b8;
+  background: #f1f6fb;
+}
+
+.draft-clock-bar.clock-urgent {
+  border-color: #dc7a7a;
+  background: rgba(255, 241, 241, 0.97);
+  box-shadow: 0 10px 28px rgba(151, 39, 39, 0.18);
+}
+
+.draft-clock-bar.clock-urgent .draft-clock-time strong {
+  color: #a62626;
+}
+
+.draft-clock-bar.clock-paused {
+  border-color: #d8b76e;
+  background: rgba(255, 248, 230, 0.97);
+}
+
+.draft-clock-bar.clock-auto {
+  border-color: #91c3a0;
+}
+
+.asset-actions {
+  display: grid;
+  gap: 7px;
+  min-width: 90px;
+}
+
+.queue-button.queued {
+  border-color: #7aa78a;
+  background: #e7f6ec;
+  color: #22643b;
+}
+
+.draft-button {
+  border: 0;
+  background: #16243a;
+  color: white;
+}
+
+.draft-button:hover:not(:disabled) {
+  background: #29496f;
+}
+
+.draft-button:disabled,
+.queue-button:disabled,
+.clock-control-button:disabled,
+.commissioner-auto-button:disabled,
+.auto-draft-toggle:disabled,
+.queue-row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.turn-clock-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 15px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #edf3f8;
+}
+
+.turn-clock-summary span {
+  color: #64778c;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.turn-clock-summary strong {
+  color: #1a304c;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-clock-summary.turn-clock-urgent {
+  background: #fff0f0;
+}
+
+.turn-clock-summary.turn-clock-urgent strong {
+  color: #a22626;
+}
+
+.commissioner-auto-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 10px;
+}
+
+.commissioner-auto-button.auto-enabled,
+.auto-draft-toggle.enabled {
+  border-color: #78a98a;
+  background: #e6f6eb;
+  color: #21653a;
+}
+
+.queue-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.queue-card-heading .eyebrow {
+  margin-bottom: 4px;
+}
+
+.auto-draft-toggle {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+}
+
+.queue-help {
+  margin: 10px 0 12px;
+  color: #65778c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.queue-list {
+  display: grid;
+  gap: 7px;
+}
+
+.queue-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #dce5ed;
+  border-radius: 9px;
+  background: #fbfcfe;
+}
+
+.queue-rank {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  background: #e9f0f7;
+  color: #395877;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.queue-copy {
+  min-width: 0;
+}
+
+.queue-copy strong,
+.queue-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-copy strong {
+  color: #1d3048;
+  font-size: 12px;
+}
+
+.queue-copy small {
+  margin-top: 2px;
+  color: #728399;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.queue-row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.queue-row-actions button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.queue-row-actions .remove-queue-button {
+  color: #9a2e2e;
+}
+
+@media (max-width: 760px) {
+  .draft-clock-bar {
+    top: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .draft-clock-time {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .draft-clock-time strong {
+    font-size: 31px;
+  }
+
+  .draft-clock-controls {
+    justify-content: flex-start;
+  }
+
+  .draft-clock-controls > span {
+    display: none;
+  }
+
+  .clock-control-button {
+    min-height: 34px;
+    padding: 6px 9px;
+  }
+
+  .draft-asset-card,
+  .draft-asset-card.has-team-change-logo {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .draft-asset-card.has-team-change-logo {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+
+  .asset-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1.2fr;
+    min-width: 0;
+  }
+
+  .queue-card-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auto-draft-toggle {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .draft-clock-team strong {
+    font-size: 13px;
+  }
+
+  .draft-clock-time strong {
+    font-size: 27px;
+  }
+
+  .queue-row {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .queue-row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }

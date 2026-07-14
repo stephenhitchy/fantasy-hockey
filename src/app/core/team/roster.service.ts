@@ -112,7 +112,8 @@ export async function getOrCreateFantasyRoster(
 export function listenToFantasyRoster(
   leagueId: string,
   ownerId: string,
-  callback: (roster: FantasyRoster | null) => void
+  callback: (roster: FantasyRoster | null) => void,
+  onError?: (error: Error) => void
 ): () => void {
   return onSnapshot(
     getFantasyRosterRef(leagueId, ownerId),
@@ -126,6 +127,21 @@ export function listenToFantasyRoster(
         normalizeFantasyRoster(
           snapshot.data() as Partial<FantasyRoster>
         )
+      );
+    },
+    (error) => {
+      const normalizedError = error instanceof Error
+        ? error
+        : new Error('Unable to load the fantasy roster.');
+
+      if (onError) {
+        onError(normalizedError);
+        return;
+      }
+
+      console.error(
+        'Unable to listen to the fantasy roster.',
+        error
       );
     }
   );

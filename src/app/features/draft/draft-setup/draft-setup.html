@@ -44,6 +44,11 @@
         <span>Goalie Rule</span>
         <strong>1 Team Unit</strong>
       </div>
+
+      <div class="summary-card">
+        <span>Pick Clock</span>
+        <strong>{{ pickSecondsInput }} Seconds</strong>
+      </div>
     </section>
 
     <section class="requirements-card">
@@ -106,6 +111,27 @@
       <p class="schedule-help">
         The date and time use your local timezone when saved. Every manager will see
         the same draft start moment in their own local timezone.
+      </p>
+
+      <label class="schedule-input-group pick-clock-input-group">
+        <span>Time allowed per pick</span>
+
+        <select
+          [(ngModel)]="pickSecondsInput"
+          [disabled]="isDraftLocked()"
+        >
+          @for (seconds of pickSecondsOptions; track seconds) {
+            <option [ngValue]="seconds">
+              {{ seconds }} seconds
+            </option>
+          }
+        </select>
+      </label>
+
+      <p class="schedule-help">
+        The clock resets after every successful pick. When time expires,
+        the commissioner browser selects the highest eligible queued player,
+        then falls back to the best balanced-value asset available.
       </p>
 
       <button
@@ -218,7 +244,7 @@
         {{
           saving()
             ? 'Saving Draft Setup...'
-            : 'Save Draft Order and Start Time'
+            : 'Save Draft Settings'
         }}
       </button>
     </section>

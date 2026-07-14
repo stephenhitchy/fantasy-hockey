@@ -96,18 +96,37 @@ export async function getLeagueTeams(
 
 export function listenToLeagueTeams(
   leagueId: string,
-  callback: (teams: FantasyTeam[]) => void
+  callback: (teams: FantasyTeam[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const teamsQuery = query(
     collection(db, 'leagues', leagueId, 'teams'),
     orderBy('teamName', 'asc')
   );
 
-  return onSnapshot(teamsQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map((teamDoc) =>
-        teamDoc.data() as FantasyTeam
-      )
-    );
-  });
+  return onSnapshot(
+    teamsQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((teamDoc) =>
+          teamDoc.data() as FantasyTeam
+        )
+      );
+    },
+    (error) => {
+      const normalizedError = error instanceof Error
+        ? error
+        : new Error('Unable to load league teams.');
+
+      if (onError) {
+        onError(normalizedError);
+        return;
+      }
+
+      console.error(
+        'Unable to listen to league teams.',
+        error
+      );
+    }
+  );
 }

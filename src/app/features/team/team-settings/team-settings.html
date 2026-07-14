@@ -24,6 +24,21 @@
       </div>
     </header>
 
+    @if (liveDataWarnings().length > 0) {
+      <section class="live-data-warning-card" role="alert">
+        <div>
+          <span class="eyebrow">Live Data Warning</span>
+          <strong>Some team information could not be refreshed.</strong>
+        </div>
+
+        <ul>
+          @for (warning of liveDataWarnings(); track warning) {
+            <li>{{ warning }}</li>
+          }
+        </ul>
+      </section>
+    }
+
     <section class="team-stat-grid">
       <article>
         <span>Win %</span>
@@ -240,6 +255,12 @@
         <p>{{ rosterFilledCount() }} of {{ rosterTotalCount() }} active spots filled · IR {{ irFilledCount() }} / {{ irTotalCount() }}</p>
       </div>
 
+      <div class="availability-policy-note">
+        <strong>IR eligibility:</strong>
+        Only players listed as Out, Injured Reserve, or Long-Term IR can be moved to an IR slot.
+        Day-to-Day, suspended, active, and unverified players remain on the active roster.
+      </div>
+
       @if (rosterMoveMessage()) {
         <div class="roster-scoring-note success-note">
           {{ rosterMoveMessage() }}
@@ -297,6 +318,15 @@
                           >
                             {{ getRosterAssetStatusLabel(asset) }}
                           </span>
+
+                          @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                            <span
+                              [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                              [attr.title]="getPlayerAvailabilityNote(asset) || null"
+                            >
+                              {{ getPlayerAvailabilityLabel(asset) }}
+                            </span>
+                          }
                         </div>
 
                         @if (getRosterAssetLogoUrl(asset); as logoUrl) {
@@ -319,6 +349,12 @@
                             ·
                             {{ group.position }}
                           </span>
+
+                          @if (getPlayerAvailabilityNote(asset)) {
+                            <em class="player-availability-note">
+                              {{ getPlayerAvailabilityNote(asset) }}
+                            </em>
+                          }
 
                           <em>
                             Games:
@@ -349,22 +385,36 @@
                           </div>
                         </div>
 
-                        @if (asset.assetType === 'skater') {
-                          <div class="roster-card-actions">
+                        <div class="roster-card-actions">
+                          <div class="roster-card-action-buttons">
+                            @if (asset.assetType === 'skater') {
+                              <button
+                                type="button"
+                                class="mini-roster-action ir-action"
+                                (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                                [disabled]="!canMoveSlotToIr(slot)"
+                              >
+                                {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                              </button>
+                            }
+
                             <button
                               type="button"
-                              class="mini-roster-action ir-action"
-                              (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
-                              [disabled]="!canMoveSlotToIr(slot)"
+                              class="mini-roster-action drop-action"
+                              (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
+                              [disabled]="rosterMoveLoading()"
                             >
-                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                              Drop
                             </button>
-
-                            @if (getMoveToIrDisabledText(slot)) {
-                              <small>{{ getMoveToIrDisabledText(slot) }}</small>
-                            }
                           </div>
-                        }
+
+                          @if (
+                            asset.assetType === 'skater' &&
+                            getMoveToIrDisabledText(slot)
+                          ) {
+                            <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                          }
+                        </div>
                       } @else {
                         <div class="empty-slot-copy">
                           <strong>Open {{ group.position }} Slot</strong>
@@ -404,6 +454,15 @@
                         >
                           {{ getRosterAssetStatusLabel(asset) }}
                         </span>
+
+                        @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                          <span
+                            [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                            [attr.title]="getPlayerAvailabilityNote(asset) || null"
+                          >
+                            {{ getPlayerAvailabilityLabel(asset) }}
+                          </span>
+                        }
                       </div>
 
                       @if (getRosterAssetLogoUrl(asset); as logoUrl) {
@@ -426,6 +485,12 @@
                           ·
                           D
                         </span>
+
+                        @if (getPlayerAvailabilityNote(asset)) {
+                          <em class="player-availability-note">
+                            {{ getPlayerAvailabilityNote(asset) }}
+                          </em>
+                        }
 
                         <em>
                           Games:
@@ -456,22 +521,36 @@
                         </div>
                       </div>
 
-                      @if (asset.assetType === 'skater') {
-                        <div class="roster-card-actions">
+                      <div class="roster-card-actions">
+                        <div class="roster-card-action-buttons">
+                          @if (asset.assetType === 'skater') {
+                            <button
+                              type="button"
+                              class="mini-roster-action ir-action"
+                              (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                              [disabled]="!canMoveSlotToIr(slot)"
+                            >
+                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                            </button>
+                          }
+
                           <button
                             type="button"
-                            class="mini-roster-action ir-action"
-                            (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
-                            [disabled]="!canMoveSlotToIr(slot)"
+                            class="mini-roster-action drop-action"
+                            (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
+                            [disabled]="rosterMoveLoading()"
                           >
-                            {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                            Drop
                           </button>
-
-                          @if (getMoveToIrDisabledText(slot)) {
-                            <small>{{ getMoveToIrDisabledText(slot) }}</small>
-                          }
                         </div>
-                      }
+
+                        @if (
+                          asset.assetType === 'skater' &&
+                          getMoveToIrDisabledText(slot)
+                        ) {
+                          <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                        }
+                      </div>
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open D Slot</strong>
@@ -508,6 +587,15 @@
                         >
                           {{ getRosterAssetStatusLabel(asset) }}
                         </span>
+
+                        @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                          <span
+                            [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                            [attr.title]="getPlayerAvailabilityNote(asset) || null"
+                          >
+                            {{ getPlayerAvailabilityLabel(asset) }}
+                          </span>
+                        }
                       </div>
 
                       @if (getRosterAssetLogoUrl(asset); as logoUrl) {
@@ -530,6 +618,12 @@
                           ·
                           G
                         </span>
+
+                        @if (getPlayerAvailabilityNote(asset)) {
+                          <em class="player-availability-note">
+                            {{ getPlayerAvailabilityNote(asset) }}
+                          </em>
+                        }
 
                         <em>
                           Games:
@@ -560,22 +654,36 @@
                         </div>
                       </div>
 
-                      @if (asset.assetType === 'skater') {
-                        <div class="roster-card-actions">
+                      <div class="roster-card-actions">
+                        <div class="roster-card-action-buttons">
+                          @if (asset.assetType === 'skater') {
+                            <button
+                              type="button"
+                              class="mini-roster-action ir-action"
+                              (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
+                              [disabled]="!canMoveSlotToIr(slot)"
+                            >
+                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                            </button>
+                          }
+
                           <button
                             type="button"
-                            class="mini-roster-action ir-action"
-                            (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
-                            [disabled]="!canMoveSlotToIr(slot)"
+                            class="mini-roster-action drop-action"
+                            (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
+                            [disabled]="rosterMoveLoading()"
                           >
-                            {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                            Drop
                           </button>
-
-                          @if (getMoveToIrDisabledText(slot)) {
-                            <small>{{ getMoveToIrDisabledText(slot) }}</small>
-                          }
                         </div>
-                      }
+
+                        @if (
+                          asset.assetType === 'skater' &&
+                          getMoveToIrDisabledText(slot)
+                        ) {
+                          <small>{{ getMoveToIrDisabledText(slot) }}</small>
+                        }
+                      </div>
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open G Slot</strong>
@@ -626,7 +734,17 @@
                 }
 
                 <div class="ir-player-main">
-                  <strong>{{ getRosterAssetName(asset) }}</strong>
+                  <div class="ir-player-heading">
+                    <strong>{{ getRosterAssetName(asset) }}</strong>
+
+                    <span
+                      [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                      [attr.title]="getPlayerAvailabilityNote(asset) || null"
+                    >
+                      {{ getPlayerAvailabilityLabel(asset) }}
+                    </span>
+                  </div>
+
                   <span>
                     {{ getRosterAssetTeamLabel(asset) }}
                     ·
@@ -634,17 +752,39 @@
                     ·
                     {{ slot.slotId }}
                   </span>
-                  <em>{{ getIrActivationHelp(slot) }}</em>
+
+                  <em
+                    [class.ir-activation-warning]="isIrAssetNoLongerEligible(asset)"
+                  >
+                    {{ getIrActivationHelp(slot) }}
+                  </em>
+
+                  @if (getPlayerAvailabilityNote(asset)) {
+                    <small class="ir-availability-note">
+                      {{ getPlayerAvailabilityNote(asset) }}
+                    </small>
+                  }
                 </div>
 
-                <button
-                  type="button"
-                  class="mini-roster-action activate-action"
-                  (click)="activateIrSlot(slot.slotId)"
-                  [disabled]="!canActivateIrSlot(slot)"
-                >
-                  {{ rosterMoveLoading() ? 'Saving...' : 'Activate' }}
-                </button>
+                <div class="ir-slot-actions">
+                  <button
+                    type="button"
+                    class="mini-roster-action activate-action"
+                    (click)="beginIrActivation(slot.slotId)"
+                    [disabled]="!canActivateIrSlot(slot)"
+                  >
+                    {{ rosterMoveLoading() ? 'Saving...' : 'Activate' }}
+                  </button>
+
+                  <button
+                    type="button"
+                    class="mini-roster-action drop-action"
+                    (click)="beginRosterDrop('ir', slot.slotId)"
+                    [disabled]="rosterMoveLoading()"
+                  >
+                    Drop
+                  </button>
+                </div>
               } @else {
                 <div class="empty-slot-copy">
                   <strong>{{ slot.slotId }}</strong>
@@ -656,5 +796,235 @@
         </div>
       }
     </section>
+
+    @if (getPendingIrActivationSlot(); as activationIrSlot) {
+      @if (activationIrSlot.asset; as activationAsset) {
+        <div
+          class="ir-activation-backdrop"
+          role="presentation"
+          (click)="cancelIrActivation()"
+        >
+          <section
+            class="ir-activation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ir-activation-title"
+            (click)="$event.stopPropagation()"
+          >
+            <header class="ir-activation-dialog-header">
+              <div>
+                <span class="eyebrow">Activate From IR</span>
+                <h2 id="ir-activation-title">
+                  Where should {{ getRosterAssetName(activationAsset) }} go?
+                </h2>
+                <p>
+                  Choose any {{ activationAsset.position }} roster slot. If that slot is occupied, the current player will be placed on waivers.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="ir-activation-close"
+                aria-label="Close activation window"
+                (click)="cancelIrActivation()"
+                [disabled]="rosterMoveLoading()"
+              >
+                ×
+              </button>
+            </header>
+
+            <div class="ir-activation-player-summary">
+              @if (getRosterAssetLogoUrl(activationAsset); as logoUrl) {
+                <img
+                  class="ir-activation-player-logo"
+                  [src]="logoUrl"
+                  [alt]="getRosterAssetTeamLabel(activationAsset) + ' logo'"
+                />
+              } @else {
+                <span class="ir-activation-player-logo logo-fallback">
+                  {{ getRosterAssetTeamLabel(activationAsset) }}
+                </span>
+              }
+
+              <div>
+                <strong>{{ getRosterAssetName(activationAsset) }}</strong>
+                <span>
+                  {{ getRosterAssetTeamLabel(activationAsset) }}
+                  · {{ activationAsset.position }}
+                  · {{ getPlayerAvailabilityLabel(activationAsset) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="ir-activation-target-list">
+              @for (targetSlot of getIrActivationTargetSlots(); track targetSlot.slotId) {
+                <label
+                  class="ir-activation-target"
+                  [class.selected-ir-activation-target]="isIrActivationTargetSelected(targetSlot.slotId)"
+                  [class.open-ir-activation-target]="!targetSlot.asset"
+                >
+                  <input
+                    type="radio"
+                    name="ir-activation-target"
+                    [value]="targetSlot.slotId"
+                    [checked]="isIrActivationTargetSelected(targetSlot.slotId)"
+                    (change)="selectIrActivationTarget(targetSlot.slotId)"
+                  />
+
+                  <span class="ir-activation-radio-mark"></span>
+
+                  @if (targetSlot.asset; as targetAsset) {
+                    @if (getRosterAssetLogoUrl(targetAsset); as targetLogoUrl) {
+                      <img
+                        class="ir-activation-target-logo"
+                        [src]="targetLogoUrl"
+                        [alt]="getRosterAssetTeamLabel(targetAsset) + ' logo'"
+                      />
+                    } @else {
+                      <span class="ir-activation-target-logo logo-fallback">
+                        {{ getRosterAssetTeamLabel(targetAsset) }}
+                      </span>
+                    }
+                  } @else {
+                    <span class="ir-activation-open-slot-icon">+</span>
+                  }
+
+                  <span class="ir-activation-target-copy">
+                    <strong>{{ getIrActivationTargetHeading(targetSlot) }}</strong>
+                    <small>{{ getIrActivationTargetDetail(targetSlot) }}</small>
+                  </span>
+
+                  @if (targetSlot.asset) {
+                    <span class="ir-waiver-warning">Waivers</span>
+                  } @else {
+                    <span class="ir-open-slot-label">Open Slot</span>
+                  }
+                </label>
+              }
+            </div>
+
+            <div class="ir-activation-cycle-note">
+              The current cycle roster remains locked. This activation takes effect starting {{ getRosterMoveEffectiveLabel() }}.
+            </div>
+
+            <footer class="ir-activation-dialog-actions">
+              <button
+                type="button"
+                class="ir-activation-cancel"
+                (click)="cancelIrActivation()"
+                [disabled]="rosterMoveLoading()"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                class="ir-activation-confirm"
+                (click)="confirmIrActivation()"
+                [disabled]="!canConfirmIrActivation()"
+              >
+                {{ rosterMoveLoading() ? 'Activating...' : 'Confirm Activation' }}
+              </button>
+            </footer>
+          </section>
+        </div>
+      }
+    }
+    @if (getPendingRosterDrop(); as pendingDrop) {
+      <div
+        class="ir-activation-backdrop roster-drop-backdrop"
+        role="presentation"
+        (click)="cancelRosterDrop()"
+      >
+        <section
+          class="ir-activation-dialog roster-drop-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="roster-drop-title"
+          (click)="$event.stopPropagation()"
+        >
+          <header class="ir-activation-dialog-header">
+            <div>
+              <span class="eyebrow">Release Player</span>
+              <h2 id="roster-drop-title">
+                Drop {{ getRosterAssetName(pendingDrop.asset) }}?
+              </h2>
+              <p>
+                This removes the asset from your
+                {{ getRosterDropSourceLabel(pendingDrop.sourceRosterArea) }}
+                and sends it to waivers.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="ir-activation-close roster-drop-close"
+              aria-label="Close drop confirmation"
+              (click)="cancelRosterDrop()"
+              [disabled]="rosterMoveLoading()"
+            >
+              ×
+            </button>
+          </header>
+
+          <div class="ir-activation-player-summary roster-drop-player-summary">
+            @if (getRosterAssetLogoUrl(pendingDrop.asset); as dropLogoUrl) {
+              <img
+                class="ir-activation-player-logo"
+                [src]="dropLogoUrl"
+                [alt]="getRosterAssetTeamLabel(pendingDrop.asset) + ' logo'"
+              />
+            } @else {
+              <span class="roster-drop-player-logo logo-fallback">
+                {{ getRosterAssetTeamLabel(pendingDrop.asset) }}
+              </span>
+            }
+
+            <div>
+              <strong>{{ getRosterAssetName(pendingDrop.asset) }}</strong>
+              <span>
+                {{ getRosterAssetTeamLabel(pendingDrop.asset) }}
+                · {{ pendingDrop.asset.position }}
+                · {{ pendingDrop.slotLabel }}
+              </span>
+            </div>
+          </div>
+
+          <div class="roster-drop-warning">
+            <strong>This action opens the roster slot.</strong>
+            <span>
+              Other managers can submit a claim while this asset is on waivers.
+              You cannot reclaim an asset you just dropped until it clears waivers.
+            </span>
+          </div>
+
+          <div class="ir-activation-cycle-note">
+            Your current cycle lineup and scoring remain locked. The open roster
+            spot takes effect starting {{ getRosterMoveEffectiveLabel() }}.
+          </div>
+
+          <footer class="ir-activation-dialog-actions">
+            <button
+              type="button"
+              class="ir-activation-cancel"
+              (click)="cancelRosterDrop()"
+              [disabled]="rosterMoveLoading()"
+            >
+              Keep Player
+            </button>
+
+            <button
+              type="button"
+              class="ir-activation-confirm roster-drop-confirm"
+              (click)="confirmRosterDrop()"
+              [disabled]="!canConfirmRosterDrop()"
+            >
+              {{ rosterMoveLoading() ? 'Dropping...' : 'Drop to Waivers' }}
+            </button>
+          </footer>
+        </section>
+      </div>
+    }
+
   </section>
 }

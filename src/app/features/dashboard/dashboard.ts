@@ -1,11 +1,30 @@
-import { Component, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import {
+  Component,
+  computed,
+  signal
+} from '@angular/core';
+
+import {
+  Router,
+  RouterLink
+} from '@angular/router';
+
+import {
+  onAuthStateChanged,
+  User
+} from 'firebase/auth';
+
 import { auth } from '../../core/firebase';
-import { logoutUser } from '../../core/auth/auth.service';
-import { getUserProfile, UserProfile } from '../../core/user/user.service';
-import { RouterLink } from '@angular/router';
-import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
-import { onAuthStateChanged, User } from 'firebase/auth';
+
+import {
+  getMyLeagueSummaries,
+  LeagueSummary
+} from '../../core/league/league.service';
+
+import {
+  getUserProfile,
+  UserProfile
+} from '../../core/user/user.service';
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -22,34 +41,60 @@ function waitForAuthUser(): Promise<User | null> {
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css'
 })
-
 export class Dashboard {
-  leagueSummaries = signal<LeagueSummary[]>([]);
-  profile = signal<UserProfile | null>(null);
-  loading = signal(true);
+  readonly leagueSummaries = signal<LeagueSummary[]>([]);
+  readonly profile = signal<UserProfile | null>(null);
+  readonly loading = signal(true);
+  readonly errorMessage = signal('');
+
+  readonly displayName = computed(() => {
+    const profile = this.profile();
+    const username = profile?.username?.trim();
+
+    if (username) {
+      return username;
+    }
+
+    const email = profile?.email?.trim();
+
+    if (email) {
+      return email.split('@')[0];
+    }
+
+    return 'Manager';
+  });
 
   constructor(private router: Router) {
-    this.loadProfile();
+    void this.loadDashboard();
   }
 
-  async loadProfile() {
-  const user = await waitForAuthUser();
+  async loadDashboard(): Promise<void> {
+    this.loading.set(true);
+    this.errorMessage.set('');
 
-  if (!user) {
-    await this.router.navigate(['/']);
-    return;
-  }
+    const user = await waitForAuthUser();
 
-  const profile = await getUserProfile(user.uid);
-  const leagueSummaries = await getMyLeagueSummaries();
+    if (!user) {
+      await this.router.navigate(['/']);
+      return;
+    }
 
-  this.profile.set(profile);
-  this.leagueSummaries.set(leagueSummaries);
-  this.loading.set(false);
-}
+    try {
+      const [profile, leagueSummaries] = await Promise.all([
+        getUserProfile(user.uid),
+        getMyLeagueSummaries()
+      ]);
 
-  async logout() {
-    await logoutUser();
-    await this.router.navigate(['/']);
+      this.profile.set(profile);
+      this.leagueSummaries.set(leagueSummaries);
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load your fantasy hockey dashboard.'
+      );
+    } finally {
+      this.loading.set(false);
+    }
   }
 }

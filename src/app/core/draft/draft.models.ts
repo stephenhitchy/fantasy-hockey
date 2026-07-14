@@ -8,6 +8,21 @@ export type DraftStatus =
 
 export type DraftPosition = 'LW' | 'C' | 'RW' | 'D' | 'G';
 
+export type DraftClockStatus =
+  | 'stopped'
+  | 'running'
+  | 'paused'
+  | 'complete';
+
+export type DraftSelectionType =
+  | 'manual'
+  | 'queue'
+  | 'automatic';
+
+export type DraftAutoPickReason =
+  | 'timer-expired'
+  | 'manager-auto-mode';
+
 export interface DraftRosterRequirements {
   LW: number;
   C: number;
@@ -78,6 +93,19 @@ export interface FantasyDraft {
 
   scheduledStartAt: unknown | null;
 
+  /**
+   * Draft clock configuration and shared state.
+   * pickStartedAt is written with a Firestore server timestamp.
+   */
+  pickSeconds: number;
+  clockStatus: DraftClockStatus;
+  pickStartedAt: unknown | null;
+  currentPickSeconds: number;
+  pausedRemainingSeconds: number | null;
+  clockUpdatedBy?: string | null;
+  clockUpdatedAt?: unknown;
+  lastPickId?: string | null;
+
   createdAt?: unknown;
   updatedAt?: unknown;
   startedAt?: unknown;
@@ -92,5 +120,15 @@ export interface DraftPickPreview {
 
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
+  selectionType?: DraftSelectionType;
+  selectedByUserId?: string;
+  autoPickReason?: DraftAutoPickReason | null;
   madeAt?: unknown;
+}
+
+export interface DraftQueue {
+  ownerId: string;
+  assetKeys: string[];
+  autoDraftEnabled: boolean;
+  updatedAt?: unknown;
 }

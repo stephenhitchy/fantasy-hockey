@@ -148,6 +148,28 @@
                       ·
                       {{ getWaiverDroppedByLabel(waiver) }}
                     </span>
+
+                    @if (shouldShowPlayerAvailabilityBadge(waiver.asset)) {
+                      <div
+                        class="player-availability-row"
+                        [attr.title]="getPlayerAvailabilityNote(waiver.asset) || getPlayerAvailabilityLabel(waiver.asset)"
+                      >
+                        <span
+                          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)"
+                        >
+                          ✚ {{ getPlayerAvailabilityLabel(waiver.asset) }}
+                        </span>
+
+                        @if (isPlayerAvailabilityIrEligible(waiver.asset)) {
+                          <small class="ir-eligible-copy">IR eligible</small>
+                        }
+
+                        @if (getPlayerAvailabilityNote(waiver.asset); as availabilityNote) {
+                          <small class="player-availability-note">{{ availabilityNote }}</small>
+                        }
+                      </div>
+                    }
+
                     <em>{{ getWaiverClaimLabel(waiver) }} · {{ getWaiverPriorityLabel() }}</em>
                   </div>
 
@@ -212,6 +234,27 @@
                     ·
                     {{ asset.position }}
                   </span>
+
+                  @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                    <div
+                      class="player-availability-row"
+                      [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
+                    >
+                      <span
+                        [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                      >
+                        ✚ {{ getPlayerAvailabilityLabel(asset) }}
+                      </span>
+
+                      @if (isPlayerAvailabilityIrEligible(asset)) {
+                        <small class="ir-eligible-copy">IR eligible</small>
+                      }
+
+                      @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
+                        <small class="player-availability-note">{{ availabilityNote }}</small>
+                      }
+                    </div>
+                  }
                 </div>
 
                 <div class="asset-projection">

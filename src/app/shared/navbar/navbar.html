@@ -1,11 +1,285 @@
-<nav class="navbar">
-  <a routerLink="/dashboard" class="brand">🏒 Fantasy Hockey</a>
+<header class="site-header">
+  <nav
+    class="desktop-navbar"
+    aria-label="Main navigation"
+  >
+    <a
+      routerLink="/dashboard"
+      class="brand"
+      aria-label="Fantasy Hockey dashboard"
+    >
+      <span class="brand-mark" aria-hidden="true">🏒</span>
+      <span>Fantasy Hockey</span>
+    </a>
 
-  <div class="nav-links">
-    <a routerLink="/dashboard">Dashboard</a>
-    <a routerLink="/leagues/create">Create League</a>
-    <a routerLink="/leagues/join">Join League</a>
-    <a routerLink="/account/settings">Account</a>
-    <button (click)="logout()">Logout</button>
+    <div class="desktop-links">
+      <a
+        routerLink="/dashboard"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+      >
+        Dashboard
+      </a>
+
+      @if (leagueId(); as activeLeagueId) {
+        <a
+          [routerLink]="['/leagues', activeLeagueId]"
+          [class.active]="isLeagueHomeActive()"
+        >
+          Current League
+        </a>
+      }
+
+      <a
+        routerLink="/leagues/create"
+        routerLinkActive="active"
+      >
+        Create
+      </a>
+
+      <a
+        routerLink="/leagues/join"
+        routerLinkActive="active"
+      >
+        Join
+      </a>
+
+      <a
+        routerLink="/account/settings"
+        routerLinkActive="active"
+      >
+        Account
+      </a>
+
+      <button
+        type="button"
+        class="logout-button"
+        (click)="logout()"
+      >
+        Logout
+      </button>
+    </div>
+  </nav>
+
+  <div class="mobile-topbar">
+    <a
+      routerLink="/dashboard"
+      class="mobile-brand"
+      aria-label="Fantasy Hockey dashboard"
+    >
+      <span aria-hidden="true">🏒</span>
+      <strong>Fantasy Hockey</strong>
+    </a>
+
+    <button
+      type="button"
+      class="mobile-menu-button"
+      aria-label="Open more navigation options"
+      [attr.aria-expanded]="moreOpen()"
+      (click)="toggleMore()"
+    >
+      <span aria-hidden="true">•••</span>
+    </button>
   </div>
+</header>
+
+<nav
+  class="mobile-bottom-nav"
+  aria-label="Mobile navigation"
+>
+  <a
+    routerLink="/dashboard"
+    [class.active]="isExactRoute('/dashboard')"
+  >
+    <span class="nav-icon" aria-hidden="true">⌂</span>
+    <span>Home</span>
+  </a>
+
+  @if (leagueId(); as activeLeagueId) {
+    <a
+      [routerLink]="['/leagues', activeLeagueId]"
+      [class.active]="isLeagueHomeActive()"
+    >
+      <span class="nav-icon" aria-hidden="true">🏠</span>
+      <span>League</span>
+    </a>
+
+    <a
+      [routerLink]="['/leagues', activeLeagueId, 'team']"
+      [class.active]="isLeagueSectionActive('team')"
+    >
+      <span class="nav-icon" aria-hidden="true">👕</span>
+      <span>Team</span>
+    </a>
+
+    <a
+      [routerLink]="['/leagues', activeLeagueId, 'free-agents']"
+      [class.active]="isLeagueSectionActive('free-agents')"
+    >
+      <span class="nav-icon" aria-hidden="true">🔎</span>
+      <span>Players</span>
+    </a>
+  } @else {
+    <a
+      routerLink="/leagues/create"
+      [class.active]="isExactRoute('/leagues/create')"
+    >
+      <span class="nav-icon" aria-hidden="true">＋</span>
+      <span>Create</span>
+    </a>
+
+    <a
+      routerLink="/leagues/join"
+      [class.active]="isExactRoute('/leagues/join')"
+    >
+      <span class="nav-icon" aria-hidden="true">⇥</span>
+      <span>Join</span>
+    </a>
+
+    <a
+      routerLink="/account/settings"
+      [class.active]="isExactRoute('/account/settings')"
+    >
+      <span class="nav-icon" aria-hidden="true">⚙</span>
+      <span>Account</span>
+    </a>
+  }
+
+  <button
+    type="button"
+    [class.active]="moreOpen()"
+    [attr.aria-expanded]="moreOpen()"
+    aria-controls="mobile-more-menu"
+    (click)="toggleMore()"
+  >
+    <span class="nav-icon" aria-hidden="true">•••</span>
+    <span>More</span>
+  </button>
 </nav>
+
+@if (moreOpen()) {
+  <div
+    class="mobile-menu-backdrop"
+    role="presentation"
+    (click)="closeMore()"
+  >
+    <section
+      id="mobile-more-menu"
+      class="mobile-menu-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="More navigation"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="mobile-menu-header">
+        <div>
+          <span>Navigation</span>
+          <strong>More options</strong>
+        </div>
+
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          (click)="closeMore()"
+        >
+          ×
+        </button>
+      </header>
+
+      @if (leagueId(); as activeLeagueId) {
+        <div class="mobile-menu-group">
+          <span class="menu-label">Current league</span>
+
+          <a
+            [routerLink]="['/leagues', activeLeagueId, 'draft']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">🧢</span>
+            <span>
+              <strong>Draft Room</strong>
+              <small>Draft status and live picks</small>
+            </span>
+          </a>
+
+          <a
+            [routerLink]="['/leagues', activeLeagueId, 'standings']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">🏆</span>
+            <span>
+              <strong>Standings</strong>
+              <small>Records and league ranking</small>
+            </span>
+          </a>
+
+          <a
+            [routerLink]="['/leagues', activeLeagueId, 'cycles', 'schedule-preview']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">🗓</span>
+            <span>
+              <strong>Schedule</strong>
+              <small>Cycle matchups and history</small>
+            </span>
+          </a>
+
+          <a
+            [routerLink]="['/leagues', activeLeagueId, 'projections']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">📈</span>
+            <span>
+              <strong>Projection Lab</strong>
+              <small>Ratings and draft values</small>
+            </span>
+          </a>
+        </div>
+      }
+
+      <div class="mobile-menu-group">
+        <span class="menu-label">Account</span>
+
+        <a
+          routerLink="/leagues/create"
+          (click)="closeMore()"
+        >
+          <span aria-hidden="true">＋</span>
+          <span>
+            <strong>Create League</strong>
+            <small>Start a new competition</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/leagues/join"
+          (click)="closeMore()"
+        >
+          <span aria-hidden="true">⇥</span>
+          <span>
+            <strong>Join League</strong>
+            <small>Enter an invite code</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/account/settings"
+          (click)="closeMore()"
+        >
+          <span aria-hidden="true">⚙</span>
+          <span>
+            <strong>Account Settings</strong>
+            <small>Profile and preferences</small>
+          </span>
+        </a>
+      </div>
+
+      <button
+        type="button"
+        class="mobile-logout-button"
+        (click)="logout()"
+      >
+        Log out
+      </button>
+    </section>
+  </div>
+}

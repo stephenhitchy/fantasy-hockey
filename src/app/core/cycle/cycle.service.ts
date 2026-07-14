@@ -42,6 +42,24 @@ import {
 
 const FIRST_CYCLE_NUMBER = 1;
 
+
+function reportCycleListenerError(
+  error: unknown,
+  fallbackMessage: string,
+  onError?: (error: Error) => void
+): void {
+  const normalizedError = error instanceof Error
+    ? error
+    : new Error(fallbackMessage);
+
+  if (onError) {
+    onError(normalizedError);
+    return;
+  }
+
+  console.error(fallbackMessage, error);
+}
+
 interface CyclePairing {
   teamAOwnerId: string;
   teamBOwnerId: string | null;
@@ -606,50 +624,73 @@ export function buildCycleSchedulePreview(
 export function listenToCycle(
   leagueId: string,
   cycleNumber: number,
-  callback: (cycle: FantasyCycle | null) => void
+  callback: (cycle: FantasyCycle | null) => void,
+  onError?: (error: Error) => void
 ): () => void {
-  return onSnapshot(getCycleRef(leagueId, cycleNumber), (snapshot) => {
-    if (!snapshot.exists()) {
-      callback(null);
-      return;
-    }
+  return onSnapshot(
+    getCycleRef(leagueId, cycleNumber),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
 
-    callback(
-      normalizeCycle(
-        snapshot.data() as Partial<FantasyCycle>,
-        cycleNumber
-      )
-    );
-  });
+      callback(
+        normalizeCycle(
+          snapshot.data() as Partial<FantasyCycle>,
+          cycleNumber
+        )
+      );
+    },
+    (error) => {
+      reportCycleListenerError(
+        error,
+        `Unable to load Cycle ${cycleNumber}.`,
+        onError
+      );
+    }
+  );
 }
 
 
 export function listenToLeagueCycles(
   leagueId: string,
-  callback: (cycles: FantasyCycle[]) => void
+  callback: (cycles: FantasyCycle[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const cyclesQuery = query(
     getCyclesRef(leagueId),
     orderBy('cycleNumber', 'asc')
   );
 
-  return onSnapshot(cyclesQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map((cycleDoc) => {
-        const data = cycleDoc.data() as Partial<FantasyCycle>;
+  return onSnapshot(
+    cyclesQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((cycleDoc) => {
+          const data = cycleDoc.data() as Partial<FantasyCycle>;
 
-        return normalizeCycle(
-          data,
-          data.cycleNumber ?? FIRST_CYCLE_NUMBER
-        );
-      })
-    );
-  });
+          return normalizeCycle(
+            data,
+            data.cycleNumber ?? FIRST_CYCLE_NUMBER
+          );
+        })
+      );
+    },
+    (error) => {
+      reportCycleListenerError(
+        error,
+        'Unable to load league cycles.',
+        onError
+      );
+    }
+  );
 }
 
 export function listenToLatestCycle(
   leagueId: string,
-  callback: (cycle: FantasyCycle | null) => void
+  callback: (cycle: FantasyCycle | null) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const latestCycleQuery = query(
     getCyclesRef(leagueId),
@@ -657,63 +698,95 @@ export function listenToLatestCycle(
     limit(1)
   );
 
-  return onSnapshot(latestCycleQuery, (snapshot) => {
-    const latestCycleDoc = snapshot.docs[0];
+  return onSnapshot(
+    latestCycleQuery,
+    (snapshot) => {
+      const latestCycleDoc = snapshot.docs[0];
 
-    if (!latestCycleDoc) {
-      callback(null);
-      return;
+      if (!latestCycleDoc) {
+        callback(null);
+        return;
+      }
+
+      const data = latestCycleDoc.data() as Partial<FantasyCycle>;
+
+      callback(
+        normalizeCycle(
+          data,
+          data.cycleNumber ?? FIRST_CYCLE_NUMBER
+        )
+      );
+    },
+    (error) => {
+      reportCycleListenerError(
+        error,
+        'Unable to load the latest cycle.',
+        onError
+      );
     }
-
-    const data = latestCycleDoc.data() as Partial<FantasyCycle>;
-
-    callback(
-      normalizeCycle(
-        data,
-        data.cycleNumber ?? FIRST_CYCLE_NUMBER
-      )
-    );
-  });
+  );
 }
 
 export function listenToCycleMatchups(
   leagueId: string,
   cycleNumber: number,
-  callback: (matchups: FantasyMatchup[]) => void
+  callback: (matchups: FantasyMatchup[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const matchupsQuery = query(
     getCycleMatchupsRef(leagueId, cycleNumber),
     orderBy('id', 'asc')
   );
 
-  return onSnapshot(matchupsQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map((matchupDoc) =>
-        normalizeMatchup(
-          matchupDoc.data() as Partial<FantasyMatchup>
+  return onSnapshot(
+    matchupsQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((matchupDoc) =>
+          normalizeMatchup(
+            matchupDoc.data() as Partial<FantasyMatchup>
+          )
         )
-      )
-    );
-  });
+      );
+    },
+    (error) => {
+      reportCycleListenerError(
+        error,
+        `Unable to load Cycle ${cycleNumber} matchups.`,
+        onError
+      );
+    }
+  );
 }
 
 export function listenToCycleRosterPicks(
   leagueId: string,
   cycleNumber: number,
-  callback: (picks: DraftPick[]) => void
+  callback: (picks: DraftPick[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
   const rosterPicksQuery = query(
     getCycleRosterPicksRef(leagueId, cycleNumber),
     orderBy('overallPick', 'asc')
   );
 
-  return onSnapshot(rosterPicksQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map(
-        (pickDoc) => pickDoc.data() as DraftPick
-      )
-    );
-  });
+  return onSnapshot(
+    rosterPicksQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map(
+          (pickDoc) => pickDoc.data() as DraftPick
+        )
+      );
+    },
+    (error) => {
+      reportCycleListenerError(
+        error,
+        `Unable to load Cycle ${cycleNumber} roster snapshots.`,
+        onError
+      );
+    }
+  );
 }
 
 export async function startCycle(
