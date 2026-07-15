@@ -32,12 +32,20 @@
         >
           Detailed View
         </a>
+
+
+        <a
+          class="overview-header-link"
+          [routerLink]="['/leagues', leagueId, 'playoffs']"
+        >
+          Playoff Bracket
+        </a>
       </div>
     </header>
 
     <section class="overview-status-card">
       <div>
-        <span class="eyebrow">Cycle Status</span>
+        <span class="eyebrow">Matchup Period Status</span>
         <strong>{{ getCycleStatusLabel() }}</strong>
         <p>{{ getOverviewStatusText() }}</p>
       </div>

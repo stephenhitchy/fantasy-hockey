@@ -17,6 +17,12 @@ export type PlayerAvailabilityDatabaseSource =
   | 'commissioner'
   | 'espn';
 
+
+export type PlayerAvailabilitySyncTrigger =
+  | 'daily-visit'
+  | 'draft-start'
+  | 'commissioner-browser';
+
 export interface PlayerAvailabilityOverride {
   /** Prefer playerId whenever it is available. */
   playerId?: number;
@@ -64,6 +70,12 @@ export interface PlayerAvailability {
   note: string;
   updatedAt: string;
   source: PlayerAvailabilitySource;
+
+  /** Optional external timing details used by cycle projections. */
+  externalReturnDate?: string;
+  externalInjuryDate?: string;
+  externalStatus?: string;
+  syncedAt?: string;
 }
 
 export interface PlayerAvailabilitySyncState {
@@ -80,6 +92,39 @@ export interface PlayerAvailabilitySyncState {
   preservedManualOverrideCount: number;
   skippedGoalieCount: number;
   message: string;
+
+  /** Identifies what requested the most recent shared refresh. */
+  trigger?: PlayerAvailabilitySyncTrigger;
+
+  /** UTC calendar day currently being processed by the backend daily refresh. */
+  dailyKey?: string;
+
+  /** Most recent UTC calendar day successfully completed by the backend. */
+  lastDailySyncKey?: string;
+
+  /** ISO timestamp for the most recent successful backend daily refresh. */
+  lastDailySuccessfulSyncAt?: string;
+}
+
+export type DailyPlayerAvailabilityRefreshStatus =
+  | 'success'
+  | 'already-current'
+  | 'in-progress'
+  | 'cooldown';
+
+export interface DailyPlayerAvailabilityRefreshResult {
+  status: DailyPlayerAvailabilityRefreshStatus;
+  skipped: boolean;
+  dailyKey: string;
+  message: string;
+  completedAt: string;
+  fetchedCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  syncedRecordCount: number;
+  clearedRecordCount: number;
+  preservedManualOverrideCount: number;
+  skippedGoalieCount: number;
 }
 
 export interface PlayerAvailabilitySyncResult {

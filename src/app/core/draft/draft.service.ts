@@ -41,6 +41,7 @@ import {
   DraftPick,
   DraftPickPreview,
   DraftPosition,
+  DraftProjection,
   DraftQueue,
   DraftRosterRequirements,
   DraftSelectionType,
@@ -245,6 +246,44 @@ function getDraftRef(leagueId: string) {
     'draft',
     DRAFT_DOCUMENT_ID
   );
+}
+
+function getSharedProjectionPointerRef(leagueId: string) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'projectionSnapshots',
+    'current'
+  );
+}
+
+function assertReadySharedProjectionSnapshot(
+  snapshot: { exists: () => boolean; data: () => unknown }
+): void {
+  if (!snapshot.exists()) {
+    throw new Error(
+      'Shared projections are not ready. The commissioner must build them before the draft clock can start.'
+    );
+  }
+
+  const data = snapshot.data() as {
+    status?: unknown;
+    activeSnapshotId?: unknown;
+    assetCount?: unknown;
+  };
+
+  if (
+    data.status !== 'ready' ||
+    typeof data.activeSnapshotId !== 'string' ||
+    data.activeSnapshotId.trim() === '' ||
+    typeof data.assetCount !== 'number' ||
+    data.assetCount <= 0
+  ) {
+    throw new Error(
+      'Shared projections are incomplete. The commissioner must rebuild them before the draft clock can start.'
+    );
+  }
 }
 
 function getDraftPicksRef(leagueId: string) {
@@ -926,7 +965,10 @@ export async function activateScheduledDraftIfReady(
   const draftRef = getDraftRef(leagueId);
 
   return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(draftRef);
+    const [snapshot, projectionSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(getSharedProjectionPointerRef(leagueId))
+    ]);
 
     if (!snapshot.exists()) {
       return null;
@@ -943,10 +985,12 @@ export async function activateScheduledDraftIfReady(
       return draft;
     }
 
+    assertReadySharedProjectionSnapshot(projectionSnapshot);
+
     transaction.update(draftRef, {
       status: 'live',
-      clockStatus: 'running',
-      pickStartedAt: serverTimestamp(),
+      clockStatus: 'stopped',
+      pickStartedAt: null,
       currentPickSeconds: draft.pickSeconds,
       pausedRemainingSeconds: null,
       clockUpdatedBy: activatedByUserId ?? null,
@@ -958,14 +1002,78 @@ export async function activateScheduledDraftIfReady(
     return {
       ...draft,
       status: 'live',
-      clockStatus: 'running',
-      pickStartedAt: new Date(),
+      clockStatus: 'stopped',
+      pickStartedAt: null,
       currentPickSeconds: draft.pickSeconds,
       pausedRemainingSeconds: null,
       clockUpdatedBy: activatedByUserId ?? null
     };
   });
 }
+
+export async function startDraftClock(
+  leagueId: string,
+  ownerId: string
+): Promise<void> {
+  const draftRef = getDraftRef(leagueId);
+
+  await runTransaction(db, async (transaction) => {
+    const [draftSnapshot, projectionSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(getSharedProjectionPointerRef(leagueId))
+    ]);
+
+    if (!draftSnapshot.exists()) {
+      throw new Error('Draft setup was not found.');
+    }
+
+    const draft = normalizeDraft(
+      draftSnapshot.data() as Partial<FantasyDraft>
+    );
+
+    if (draft.status !== 'live') {
+      throw new Error('The live draft has not opened yet.');
+    }
+
+    assertReadySharedProjectionSnapshot(projectionSnapshot);
+
+    if (draft.clockStatus === 'running') {
+      return;
+    }
+
+    if (draft.clockStatus === 'paused') {
+      throw new Error(
+        'The commissioner has paused the draft clock.'
+      );
+    }
+
+    if (draft.clockStatus !== 'stopped') {
+      throw new Error('The draft clock cannot be started right now.');
+    }
+
+    const currentPick = getDraftPickAtOverall(
+      draft,
+      draft.nextOverallPick
+    );
+
+    if (!currentPick || currentPick.ownerId !== ownerId) {
+      throw new Error(
+        'Only the manager currently making the first pick can start the draft clock.'
+      );
+    }
+
+    transaction.update(draftRef, {
+      clockStatus: 'running',
+      pickStartedAt: serverTimestamp(),
+      currentPickSeconds: draft.pickSeconds,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: ownerId,
+      clockUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  });
+}
+
 
 export async function pauseDraftClock(
   leagueId: string,
@@ -1161,6 +1269,64 @@ export function buildSnakePickPreview(
   );
 }
 
+function getStoredProjectionFields(
+  asset: DraftableAsset | RosterAsset
+): DraftProjection {
+  return {
+    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+    projectedCyclePoints: asset.projectedCyclePoints ?? null,
+    seasonBaselineCyclePoints: asset.seasonBaselineCyclePoints ?? null,
+    recentFormAdjustment: asset.recentFormAdjustment ?? null,
+    roleAdjustment: asset.roleAdjustment ?? null,
+    projectionDataSeason: asset.projectionDataSeason ?? null,
+    projectionDataSource: (asset.projectionDataSource ?? null) as DraftProjection['projectionDataSource'],
+    projectionGamesPlayed: asset.projectionGamesPlayed ?? null,
+    recentFormSampleSize: asset.recentFormSampleSize ?? null,
+    seasonFantasyPointsPerGame: asset.seasonFantasyPointsPerGame ?? null,
+    recentThreeGameFantasyPointsPerGame:
+      asset.recentThreeGameFantasyPointsPerGame ?? null,
+    recentFiveGameFantasyPointsPerGame:
+      asset.recentFiveGameFantasyPointsPerGame ?? null,
+    recentTenGameFantasyPointsPerGame:
+      asset.recentTenGameFantasyPointsPerGame ?? null,
+    seasonAverageTimeOnIceMinutes:
+      asset.seasonAverageTimeOnIceMinutes ?? null,
+    recentAverageTimeOnIceMinutes:
+      asset.recentAverageTimeOnIceMinutes ?? null,
+    actualRecentAppearances: asset.actualRecentAppearances ?? null,
+    missedRecentTeamGames: asset.missedRecentTeamGames ?? null,
+    weightedRecentAppearances: asset.weightedRecentAppearances ?? null,
+    fullWeightRecentGames: asset.fullWeightRecentGames ?? null,
+    partialWeightRecentGames: asset.partialWeightRecentGames ?? null,
+    healthyProjectedCyclePoints:
+      asset.healthyProjectedCyclePoints ?? null,
+    scheduledGamesInProjectionCycle:
+      asset.scheduledGamesInProjectionCycle ?? null,
+    expectedGamesAvailable: asset.expectedGamesAvailable ?? null,
+    availabilityAdjustment: asset.availabilityAdjustment ?? null,
+    availabilityAdjustedCyclePoints:
+      asset.availabilityAdjustedCyclePoints ?? null,
+    availabilityStatus: (asset.availabilityStatus ?? null) as DraftProjection['availabilityStatus'],
+    availabilityLabel: asset.availabilityLabel ?? null,
+    availabilityReturnDate: asset.availabilityReturnDate ?? null,
+    availabilityNote: asset.availabilityNote ?? null,
+    availabilityAsOf: asset.availabilityAsOf ?? null,
+    targetProjectionCycleNumber:
+      asset.targetProjectionCycleNumber ?? null,
+    sharedProjectionSnapshotId:
+      asset.sharedProjectionSnapshotId ?? null,
+    projectionGeneratedAt: asset.projectionGeneratedAt ?? null,
+    balancedDraftValue: asset.balancedDraftValue ?? null,
+    balancedRank: asset.balancedRank ?? null,
+    positionRank: asset.positionRank ?? null,
+    reliabilityRating: asset.reliabilityRating ?? null,
+    volatilityPenalty: asset.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+  };
+}
+
+
 function createRosterAsset(
   asset: DraftableAsset,
   rosterStatus: RosterStatus = 'active'
@@ -1177,12 +1343,7 @@ function createRosterAsset(
       assetKey: asset.assetKey,
       position: asset.position,
       player: asset.player,
-      projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
-      projectedCyclePoints: asset.projectedCyclePoints ?? null,
-      reliabilityRating: asset.reliabilityRating ?? null,
-      volatilityPenalty: asset.volatilityPenalty ?? null,
-      floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
-      floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null,
+      ...getStoredProjectionFields(asset),
       rosterStatus,
       cycleScore
     };
@@ -1195,12 +1356,7 @@ function createRosterAsset(
     teamName: asset.teamName,
     teamAbbreviation: asset.teamAbbreviation,
     teamLogoUrl: asset.teamLogoUrl,
-    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
-    projectedCyclePoints: asset.projectedCyclePoints ?? null,
-    reliabilityRating: asset.reliabilityRating ?? null,
-    volatilityPenalty: asset.volatilityPenalty ?? null,
-    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
-    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null,
+    ...getStoredProjectionFields(asset),
     rosterStatus,
     cycleScore
   };
@@ -1249,12 +1405,7 @@ function rosterAssetToDraftableAsset(
       assetKey,
       position: asset.position,
       player: asset.player,
-      projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
-      projectedCyclePoints: asset.projectedCyclePoints ?? null,
-      reliabilityRating: asset.reliabilityRating ?? null,
-      volatilityPenalty: asset.volatilityPenalty ?? null,
-      floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
-      floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+      ...getStoredProjectionFields(asset)
     };
   }
 
@@ -1265,12 +1416,7 @@ function rosterAssetToDraftableAsset(
     teamName: asset.teamName,
     teamAbbreviation: asset.teamAbbreviation,
     teamLogoUrl: asset.teamLogoUrl,
-    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
-    projectedCyclePoints: asset.projectedCyclePoints ?? null,
-    reliabilityRating: asset.reliabilityRating ?? null,
-    volatilityPenalty: asset.volatilityPenalty ?? null,
-    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
-    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+    ...getStoredProjectionFields(asset)
   };
 }
 
@@ -1360,8 +1506,18 @@ async function makeDraftPickInternal({
       );
     }
 
+    if (draft.clockStatus === 'stopped') {
+      throw new Error(
+        'The first manager must start the draft clock before making a pick.'
+      );
+    }
+
     if (draft.clockStatus === 'paused') {
       throw new Error('The draft clock is currently paused.');
+    }
+
+    if (draft.clockStatus !== 'running') {
+      throw new Error('The draft clock is not running.');
     }
 
     if (

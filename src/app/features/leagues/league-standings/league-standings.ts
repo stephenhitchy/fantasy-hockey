@@ -28,6 +28,22 @@ import {
 } from '../../../core/league/league.service';
 
 import {
+  buildFantasyStandings
+} from '../../../core/league/standings.util';
+
+import {
+  getStandardPlayoffTeamCount
+} from '../../../core/playoffs/playoff-format';
+
+import {
+  FantasyPlayoffs
+} from '../../../core/playoffs/playoff.models';
+
+import {
+  getFantasyPlayoffs
+} from '../../../core/playoffs/playoff.service';
+
+import {
   FantasyTeam,
   getLeagueTeams
 } from '../../../core/team/team.service';
@@ -36,17 +52,22 @@ interface StandingCycleSummary {
   id: string;
   cycleNumber: number;
   status: string;
+  phase: 'regular_season' | 'playoffs';
+  playoffRoundLabel: string | null;
 }
 
 interface StandingMatchupSummary {
   id: string;
   cycleNumber: number;
+  phase: 'regular_season' | 'playoffs';
+  playoffRoundLabel: string | null;
   teamAOwnerId: string;
   teamBOwnerId: string | null;
   teamAScore: number;
   teamBScore: number;
   winnerOwnerId: string | null;
   status: string;
+  tieBrokenByHigherSeed: boolean;
 }
 
 interface StandingRow {
@@ -109,6 +130,7 @@ export class LeagueStandings {
   teams = signal<FantasyTeam[]>([]);
   cycles = signal<StandingCycleSummary[]>([]);
   matchups = signal<StandingMatchupSummary[]>([]);
+  playoffs = signal<FantasyPlayoffs | null>(null);
 
   loading = signal(true);
   refreshing = signal(false);
@@ -117,6 +139,12 @@ export class LeagueStandings {
   readonly completedMatchups = computed(() =>
     this.matchups().filter((matchup) =>
       matchup.status === 'complete'
+    )
+  );
+
+  readonly completedRegularSeasonMatchups = computed(() =>
+    this.completedMatchups().filter((matchup) =>
+      matchup.phase === 'regular_season' && matchup.teamBOwnerId
     )
   );
 
@@ -142,80 +170,17 @@ export class LeagueStandings {
     1
   );
 
-  readonly standingsRows = computed<StandingRow[]>(() => {
-    const completedMatchups = this.completedMatchups();
+  readonly playoffTeamCount = computed(() =>
+    this.playoffs()?.playoffTeamCount ??
+    getStandardPlayoffTeamCount(this.teams().length)
+  );
 
-    const rows = this.teams().map((team) => {
-      const wins = getNumber((team as Partial<FantasyTeam> & { wins?: number }).wins);
-      const losses = getNumber((team as Partial<FantasyTeam> & { losses?: number }).losses);
-      const ties = getNumber((team as Partial<FantasyTeam> & { ties?: number }).ties);
-      const gamesPlayed = wins + losses + ties;
-
-      let pointsFor = 0;
-      let pointsAgainst = 0;
-
-      for (const matchup of completedMatchups) {
-        if (matchup.teamAOwnerId === team.ownerId) {
-          pointsFor += matchup.teamAScore;
-          pointsAgainst += matchup.teamBScore;
-        }
-
-        if (matchup.teamBOwnerId === team.ownerId) {
-          pointsFor += matchup.teamBScore;
-          pointsAgainst += matchup.teamAScore;
-        }
-      }
-
-      const roundedPointsFor = Number(pointsFor.toFixed(1));
-      const roundedPointsAgainst = Number(pointsAgainst.toFixed(1));
-      const pointDifferential = Number(
-        (roundedPointsFor - roundedPointsAgainst).toFixed(1)
-      );
-
-      const winPercentage = gamesPlayed > 0
-        ? Number(((wins + ties * 0.5) / gamesPlayed).toFixed(3))
-        : 0;
-
-      return {
-        rank: 0,
-        ownerId: team.ownerId,
-        teamName: team.teamName,
-        wins,
-        losses,
-        ties,
-        gamesPlayed,
-        winPercentage,
-        pointsFor: roundedPointsFor,
-        pointsAgainst: roundedPointsAgainst,
-        pointDifferential
-      };
-    });
-
-    return rows
-      .sort((first, second) => {
-        if (second.winPercentage !== first.winPercentage) {
-          return second.winPercentage - first.winPercentage;
-        }
-
-        if (second.wins !== first.wins) {
-          return second.wins - first.wins;
-        }
-
-        if (second.pointDifferential !== first.pointDifferential) {
-          return second.pointDifferential - first.pointDifferential;
-        }
-
-        if (second.pointsFor !== first.pointsFor) {
-          return second.pointsFor - first.pointsFor;
-        }
-
-        return first.teamName.localeCompare(second.teamName);
-      })
-      .map((row, index) => ({
-        ...row,
-        rank: index + 1
-      }));
-  });
+  readonly standingsRows = computed<StandingRow[]>(() =>
+    buildFantasyStandings(this.teams()).map((row, index) => ({
+      ...row,
+      rank: index + 1
+    }))
+  );
 
   constructor(
     private route: ActivatedRoute,
@@ -266,6 +231,14 @@ export class LeagueStandings {
     }
   }
 
+  isPlayoffQualifier(row: StandingRow): boolean {
+    return row.rank <= this.playoffTeamCount();
+  }
+
+  isPlayoffCutLine(row: StandingRow): boolean {
+    return row.rank === this.playoffTeamCount();
+  }
+
   getRecordLabel(row: StandingRow): string {
     return `${row.wins}-${row.losses}-${row.ties}`;
   }
@@ -300,21 +273,42 @@ export class LeagueStandings {
     )?.teamName ?? 'Unknown Team';
   }
 
+  getCurrentPeriodLabel(): string {
+    const activeCycle = this.activeCycle();
+    const latestCycle = this.latestCycle();
+    const cycle = activeCycle ?? latestCycle;
+
+    if (!cycle) {
+      return 'Cycle 1';
+    }
+
+    return cycle.phase === 'playoffs'
+      ? cycle.playoffRoundLabel ?? `Playoff Cycle ${cycle.cycleNumber}`
+      : `Cycle ${cycle.cycleNumber}`;
+  }
+
   getLeagueStatusText(): string {
     const activeCycle = this.activeCycle();
 
     if (activeCycle) {
-      return `Cycle ${activeCycle.cycleNumber} is currently active.`;
+      return `${this.getCurrentPeriodLabel()} is currently active.`;
+    }
+
+    if (this.playoffs()?.status === 'complete') {
+      const champion = this.getTeamName(
+        this.playoffs()?.championOwnerId ?? null
+      );
+      return `The fantasy season is complete. ${champion} won the league championship.`;
     }
 
     const latestCycle = this.latestCycle();
 
     if (latestCycle?.status === 'complete') {
-      return `Cycle ${latestCycle.cycleNumber} is complete. The league is waiting for the next playable cycle.`;
+      return `${this.getCurrentPeriodLabel()} is complete. The league is waiting for the next matchup period.`;
     }
 
     if (latestCycle) {
-      return `Latest cycle: Cycle ${latestCycle.cycleNumber}.`;
+      return `Latest matchup period: ${this.getCurrentPeriodLabel()}.`;
     }
 
     return 'No cycles have started yet.';
@@ -389,8 +383,11 @@ export class LeagueStandings {
   getLastResultLabel(ownerId: string): string {
     const lastMatchup = [...this.completedMatchups()]
       .filter((matchup) =>
-        matchup.teamAOwnerId === ownerId ||
-        matchup.teamBOwnerId === ownerId
+        matchup.teamBOwnerId &&
+        (
+          matchup.teamAOwnerId === ownerId ||
+          matchup.teamBOwnerId === ownerId
+        )
       )
       .sort((first, second) =>
         second.cycleNumber - first.cycleNumber
@@ -400,23 +397,30 @@ export class LeagueStandings {
       return 'No completed matchups';
     }
 
-    if (!lastMatchup.teamBOwnerId) {
-      return `Cycle ${lastMatchup.cycleNumber}: Bye win`;
+    const periodLabel = lastMatchup.phase === 'playoffs'
+      ? lastMatchup.playoffRoundLabel ?? `Playoffs`
+      : `Cycle ${lastMatchup.cycleNumber}`;
+
+    if (lastMatchup.tieBrokenByHigherSeed) {
+      return lastMatchup.winnerOwnerId === ownerId
+        ? `${periodLabel}: Advanced on seed`
+        : `${periodLabel}: Eliminated on seed`;
     }
 
     if (!lastMatchup.winnerOwnerId) {
-      return `Cycle ${lastMatchup.cycleNumber}: Tie`;
+      return `${periodLabel}: Tie`;
     }
 
     return lastMatchup.winnerOwnerId === ownerId
-      ? `Cycle ${lastMatchup.cycleNumber}: Win`
-      : `Cycle ${lastMatchup.cycleNumber}: Loss`;
+      ? `${periodLabel}: Win`
+      : `${periodLabel}: Loss`;
   }
 
   private async loadLeagueData(): Promise<void> {
-    const [league, teams] = await Promise.all([
+    const [league, teams, playoffs] = await Promise.all([
       getLeagueById(this.leagueId),
-      getLeagueTeams(this.leagueId)
+      getLeagueTeams(this.leagueId),
+      getFantasyPlayoffs(this.leagueId)
     ]);
 
     if (!league) {
@@ -425,6 +429,7 @@ export class LeagueStandings {
 
     this.league.set(league);
     this.teams.set(teams);
+    this.playoffs.set(playoffs);
 
     await this.loadCycleAndMatchupData();
   }
@@ -445,8 +450,14 @@ export class LeagueStandings {
         return {
           id: cycleDoc.id,
           cycleNumber,
-          status: getString(data['status'], 'active')
-        };
+          status: getString(data['status'], 'active'),
+          phase: data['phase'] === 'playoffs'
+            ? 'playoffs'
+            : 'regular_season',
+          playoffRoundLabel: getNullableString(
+            data['playoffRoundLabel']
+          )
+        } satisfies StandingCycleSummary;
       })
       .filter((cycle) => cycle.cycleNumber > 0)
       .sort((first, second) =>
@@ -475,12 +486,18 @@ export class LeagueStandings {
               data['cycleNumber'],
               cycle.cycleNumber
             ),
+            phase: data['phase'] === 'playoffs'
+              ? 'playoffs'
+              : cycle.phase,
+            playoffRoundLabel: cycle.playoffRoundLabel,
             teamAOwnerId: getString(data['teamAOwnerId']),
             teamBOwnerId: getNullableString(data['teamBOwnerId']),
             teamAScore: getNumber(data['teamAScore']),
             teamBScore: getNumber(data['teamBScore']),
             winnerOwnerId: getNullableString(data['winnerOwnerId']),
-            status: getString(data['status'], cycle.status)
+            status: getString(data['status'], cycle.status),
+            tieBrokenByHigherSeed:
+              data['tieBrokenByHigherSeed'] === true
           } satisfies StandingMatchupSummary;
         });
       })

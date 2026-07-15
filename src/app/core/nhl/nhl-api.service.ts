@@ -733,6 +733,35 @@ export async function getSkaterSeasonRealtimeStats(
   });
 }
 
+
+export async function getSkaterGameSummaryStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/skater/summary', {
+    isAggregate: 'false',
+    isGame: 'true',
+    start: '0',
+    limit: '-1',
+    sort: 'gameId',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+
+export async function getSkaterGameRealtimeStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/skater/realtime', {
+    isAggregate: 'false',
+    isGame: 'true',
+    start: '0',
+    limit: '-1',
+    sort: 'gameId',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+
 export async function getGoalieSeasonSummaryStats(
   season: string
 ): Promise<NhlStatsRecord[]> {
@@ -742,6 +771,21 @@ export async function getGoalieSeasonSummaryStats(
     start: '0',
     limit: '-1',
     sort: 'wins',
+    dir: 'desc',
+    cayenneExp: `seasonId=${season} and gameTypeId=2`
+  });
+}
+
+
+export async function getGoalieGameSummaryStats(
+  season: string
+): Promise<NhlStatsRecord[]> {
+  return getNhlStatsRestData('/goalie/summary', {
+    isAggregate: 'false',
+    isGame: 'true',
+    start: '0',
+    limit: '-1',
+    sort: 'gameId',
     dir: 'desc',
     cayenneExp: `seasonId=${season} and gameTypeId=2`
   });

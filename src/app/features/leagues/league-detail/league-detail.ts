@@ -38,6 +38,15 @@ import {
 } from '../../../core/draft/draft-player-pool.service';
 
 import {
+  generateSharedProjectionSnapshot,
+  isSharedProjectionSnapshotFreshForDraft,
+  loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotMetadata,
+  PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
+  SharedProjectionGenerationReason
+} from '../../../core/projection/projection-snapshot.service';
+
+import {
   listenToPlayerAvailabilitySyncState,
   syncPlayerAvailabilityFromEspn
 } from '../../../core/player/player-availability-sync.service';
@@ -93,6 +102,12 @@ export class LeagueDetail implements OnDestroy {
   draftInjurySyncInProgress = signal(false);
   draftInjurySyncMessage = signal('');
   draftInjurySyncWarning = signal('');
+  preDraftPreparationInProgress = signal(false);
+  preDraftPreparationReady = signal(false);
+
+  dailyInjuryRefreshInProgress = signal(false);
+  dailyInjuryRefreshMessage = signal('');
+  dailyInjuryRefreshError = signal('');
 
   cycleActionMessage = signal('');
   cycleActionInProgress = signal(false);
@@ -106,11 +121,13 @@ export class LeagueDetail implements OnDestroy {
   private stopInjurySyncListener: (() => void) | null = null;
 
   private activationInProgress = false;
+  private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
 
   private readonly countdownTimer = setInterval(() => {
     this.now.set(Date.now());
+    void this.maybeWarmPreDraftProjections();
     void this.handleScheduledDraft();
   }, 1000);
 
@@ -138,9 +155,16 @@ export class LeagueDetail implements OnDestroy {
     this.cycle()?.cycleNumber ?? 1
   );
 
-  readonly currentCycleLabel = computed(() =>
-    `Cycle ${this.currentCycleNumber()}`
-  );
+  readonly currentCycleLabel = computed(() => {
+    const cycle = this.cycle();
+
+    if (cycle?.phase === 'playoffs') {
+      return cycle.playoffRoundLabel ??
+        `Playoff Cycle ${this.currentCycleNumber()}`;
+    }
+
+    return `Cycle ${this.currentCycleNumber()}`;
+  });
 
   readonly scheduledStartDate = computed(() =>
     getScheduledStartDate(this.draft())
@@ -322,6 +346,10 @@ export class LeagueDetail implements OnDestroy {
           }
         );
 
+      if (this.isCommissioner()) {
+        void this.requestTodayInjuryRefresh();
+      }
+
       this.stopDraftListener?.();
       this.stopTeamListener?.();
       this.stopCycleListener?.();
@@ -331,6 +359,7 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (draft) => {
           this.draft.set(draft);
+          void this.maybeWarmPreDraftProjections();
           void this.handleScheduledDraft();
         }
       );
@@ -339,6 +368,7 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (teams) => {
           this.teams.set(teams);
+          void this.maybeWarmPreDraftProjections();
         }
       );
 
@@ -357,6 +387,136 @@ export class LeagueDetail implements OnDestroy {
       );
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  getDailyInjuryStatusLabel(): string {
+    const state = this.injurySyncState();
+
+    if (
+      this.dailyInjuryRefreshInProgress() ||
+      state?.status === 'running'
+    ) {
+      return 'Updating Today’s Report';
+    }
+
+    if (this.dailyInjuryRefreshError()) {
+      return 'Using Last Saved Report';
+    }
+
+    if (
+      state?.lastDailySyncKey &&
+      state.lastDailySyncKey === this.getUtcDailyKey()
+    ) {
+      return 'Updated Today';
+    }
+
+    if (state?.lastSuccessfulSyncAt) {
+      return 'Last Saved Report';
+    }
+
+    return 'Waiting for First Update';
+  }
+
+  getDailyInjuryStatusDescription(): string {
+    if (this.dailyInjuryRefreshInProgress()) {
+      return 'The commissioner browser is checking ESPN for today’s injury changes.';
+    }
+
+    if (this.dailyInjuryRefreshError()) {
+      return this.dailyInjuryRefreshError();
+    }
+
+    if (this.dailyInjuryRefreshMessage()) {
+      return this.dailyInjuryRefreshMessage();
+    }
+
+    const state = this.injurySyncState();
+
+    if (state?.status === 'running') {
+      return 'Today’s shared injury refresh is already running.';
+    }
+
+    if (state?.status === 'error') {
+      return state.message ||
+        'Today’s refresh failed. The most recent saved injury report is still being used.';
+    }
+
+    if (state?.lastSuccessfulSyncAt) {
+      return 'The shared injury report is available to every manager in this league.';
+    }
+
+    return this.isCommissioner()
+      ? 'Opening League Home once per UTC day refreshes the shared report from this browser.'
+      : 'The shared report refreshes when the commissioner opens League Home each UTC day.';
+  }
+
+  getDailyInjuryStatusTimeLabel(): string {
+    const value =
+      this.injurySyncState()?.lastDailySuccessfulSyncAt ||
+      this.injurySyncState()?.lastSuccessfulSyncAt;
+
+    if (!value) {
+      return 'No successful injury update yet';
+    }
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Successful injury update recorded';
+    }
+
+    return `Last updated: ${parsed.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    })}`;
+  }
+
+  getUtcDailyKey(date: Date = new Date()): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  async requestTodayInjuryRefresh(): Promise<void> {
+    if (
+      !this.leagueId ||
+      !this.isCommissioner() ||
+      this.dailyInjuryRefreshInProgress()
+    ) {
+      return;
+    }
+
+    this.dailyInjuryRefreshInProgress.set(true);
+    this.dailyInjuryRefreshError.set('');
+    this.dailyInjuryRefreshMessage.set(
+      'Checking whether this league already has today’s injury report.'
+    );
+
+    try {
+      const assets = await loadDraftPlayerPool(true);
+      const players = this.getSkatersForInjurySync(assets);
+
+      const result = await syncPlayerAvailabilityFromEspn({
+        leagueId: this.leagueId,
+        players,
+        force: false,
+        minimumIntervalMinutes: 1440,
+        trigger: 'daily-visit'
+      });
+
+      this.dailyInjuryRefreshMessage.set(
+        result.skipped
+          ? result.message
+          : `Today’s injury report is ready. ${result.matchedCount} injured skaters were matched.`
+      );
+    } catch (error: unknown) {
+      this.dailyInjuryRefreshMessage.set('');
+      this.dailyInjuryRefreshError.set(
+        error instanceof Error
+          ? `Today’s refresh could not run: ${error.message} The last saved report remains available.`
+          : 'Today’s injury refresh could not run. The last saved report remains available.'
+      );
+    } finally {
+      this.dailyInjuryRefreshInProgress.set(false);
     }
   }
 
@@ -399,7 +559,7 @@ export class LeagueDetail implements OnDestroy {
       return state.message || 'The last refresh failed, so the most recent saved report will remain available.';
     }
 
-    return 'The commissioner will pull the latest ESPN injury report when the scheduled draft time arrives.';
+    return `The commissioner browser begins preparing injuries and shared rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
   }
 
   getDraftInjurySyncTimeLabel(): string {
@@ -434,39 +594,185 @@ export class LeagueDetail implements OnDestroy {
       .map((asset) => asset.player);
   }
 
-  private async refreshDraftInjuriesBeforeOpening(): Promise<void> {
-    this.draftInjurySyncInProgress.set(true);
-    this.draftInjurySyncMessage.set(
-      'Refreshing the shared ESPN injury report before the draft opens.'
+  private getProjectionTeamCount(): number {
+    return Math.max(
+      this.league()?.maxTeams ?? this.teams().length,
+      2
     );
+  }
+
+  private getRequiredGamesPerCycle(): number {
+    return (
+      this.league()?.scoringRules
+        ?.requiredGamesPerCycle ?? 6
+    );
+  }
+
+  private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {
+    const metadata =
+      await loadSharedProjectionSnapshotMetadata(
+        this.leagueId
+      );
+
+    const isFresh =
+      isSharedProjectionSnapshotFreshForDraft(
+        metadata,
+        {
+          teamCount: this.getProjectionTeamCount(),
+          requiredGamesPerCycle:
+            this.getRequiredGamesPerCycle(),
+          now: new Date(this.now())
+        }
+      );
+
+    if (!isFresh) {
+      return false;
+    }
+
+    const snapshot = await loadSharedProjectionSnapshot(
+      this.leagueId
+    );
+
+    if (!snapshot || snapshot.assets.length === 0) {
+      return false;
+    }
+
+    this.preDraftPreparationReady.set(true);
+    this.draftInjurySyncMessage.set(
+      'Shared season draft rankings, next-cycle projections, and injury data are ready.'
+    );
+
+    return true;
+  }
+
+  private async prepareDraftData(
+    generationReason: SharedProjectionGenerationReason
+  ): Promise<void> {
+    if (this.preDraftPreparationInProgress()) {
+      return;
+    }
+
+    this.preDraftPreparationInProgress.set(true);
+    this.preDraftPreparationReady.set(false);
+    this.draftInjurySyncInProgress.set(true);
     this.draftInjurySyncWarning.set('');
+    this.draftInjurySyncMessage.set(
+      'Refreshing injuries and preparing one shared draft ranking before the scheduled start.'
+    );
 
     try {
-      const assets = await loadDraftPlayerPool(true);
-      const players = this.getSkatersForInjurySync(assets);
+      let assets: DraftableAsset[] = [];
 
-      const result = await syncPlayerAvailabilityFromEspn({
-        leagueId: this.leagueId,
-        players,
-        force: true,
-        minimumIntervalMinutes: 1
-      });
+      const existingSnapshot =
+        await loadSharedProjectionSnapshot(
+          this.leagueId
+        );
 
+      assets = existingSnapshot?.assets ?? [];
+
+      if (assets.length === 0) {
+        assets = await loadDraftPlayerPool(true);
+      }
+
+      try {
+        const result = await syncPlayerAvailabilityFromEspn({
+          leagueId: this.leagueId,
+          players: this.getSkatersForInjurySync(assets),
+          force: true,
+          minimumIntervalMinutes: 1,
+          trigger: 'draft-start'
+        });
+
+        this.draftInjurySyncMessage.set(
+          result.skipped
+            ? result.message
+            : `Injury report ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`
+        );
+      } catch (error: unknown) {
+        const detail = error instanceof Error
+          ? error.message
+          : 'Unable to refresh ESPN injury data.';
+
+        this.draftInjurySyncWarning.set(
+          `The live injury refresh failed: ${detail} The newest saved report will be used for projections.`
+        );
+      }
+
+      const snapshot =
+        await generateSharedProjectionSnapshot({
+          leagueId: this.leagueId,
+          teamCount: this.getProjectionTeamCount(),
+          requiredGamesPerCycle:
+            this.getRequiredGamesPerCycle(),
+          generationReason
+        });
+
+      this.preDraftPreparationReady.set(true);
       this.draftInjurySyncMessage.set(
-        result.skipped
-          ? result.message
-          : `Injury report ready. ${result.matchedCount} injured skaters matched and shared with the league.`
-      );
-    } catch (error: unknown) {
-      const detail = error instanceof Error
-        ? error.message
-        : 'Unable to refresh ESPN injury data.';
-
-      this.draftInjurySyncWarning.set(
-        `The live refresh failed: ${detail} The draft will use the most recent saved injury report instead.`
+        `Draft data ready: ${snapshot.metadata.assetCount} shared assets are prepared for every manager.`
       );
     } finally {
       this.draftInjurySyncInProgress.set(false);
+      this.preDraftPreparationInProgress.set(false);
+    }
+  }
+
+  private async maybeWarmPreDraftProjections(): Promise<void> {
+    const draft = this.draft();
+    const startDate = this.scheduledStartDate();
+
+    if (
+      !draft ||
+      draft.status !== 'scheduled' ||
+      !startDate ||
+      !this.isCommissioner() ||
+      this.preDraftPreparationInProgress() ||
+      this.activationInProgress
+    ) {
+      return;
+    }
+
+    const millisecondsRemaining =
+      startDate.getTime() - this.now();
+
+    if (
+      millisecondsRemaining <= 0 ||
+      millisecondsRemaining >
+        PRE_DRAFT_PROJECTION_WARMUP_MINUTES *
+          60 *
+          1000
+    ) {
+      return;
+    }
+
+    if (await this.loadFreshDraftSnapshotIfAvailable()) {
+      return;
+    }
+
+    const attemptKey = [
+      startDate.getTime(),
+      this.getProjectionTeamCount(),
+      this.getRequiredGamesPerCycle()
+    ].join(':');
+
+    if (
+      this.preDraftPreparationAttemptKey === attemptKey
+    ) {
+      return;
+    }
+
+    this.preDraftPreparationAttemptKey = attemptKey;
+
+    try {
+      await this.prepareDraftData('pre-draft');
+    } catch (error: unknown) {
+      const detail = error instanceof Error
+        ? error.message
+        : 'Unable to prepare shared projections.';
+
+      this.draftInjurySyncWarning.set(
+        `Pre-draft preparation failed: ${detail} The app will retry at the scheduled start.`
+      );
     }
   }
 
@@ -586,7 +892,9 @@ export class LeagueDetail implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.status === 'complete') {
-      return `${this.currentCycleLabel()} is complete. The next cycle will open automatically when the league flow continues.`;
+      return cycle.phase === 'playoffs'
+        ? `${this.currentCycleLabel()} is complete. Open the playoff bracket to see the updated path and final placements.`
+        : `${this.currentCycleLabel()} is complete. The next matchup period will open automatically when the league flow continues.`;
     }
 
     if (cycle?.status === 'active') {
@@ -626,6 +934,10 @@ export class LeagueDetail implements OnDestroy {
 
     if (!matchup.winnerOwnerId) {
       return 'Tie';
+    }
+
+    if (matchup.tieBrokenByHigherSeed) {
+      return `${this.getTeamName(matchup.winnerOwnerId)} advanced on seed`;
     }
 
     return `${this.getTeamName(matchup.winnerOwnerId)} won`;
@@ -736,11 +1048,19 @@ export class LeagueDetail implements OnDestroy {
     this.activationInProgress = true;
 
     try {
-      await this.refreshDraftInjuriesBeforeOpening();
+      const snapshotReady =
+        await this.loadFreshDraftSnapshotIfAvailable();
+
+      if (!snapshotReady) {
+        await this.prepareDraftData(
+          'draft-start-fallback'
+        );
+      }
 
       const activatedDraft =
         await activateScheduledDraftIfReady(
-          this.leagueId
+          this.leagueId,
+          auth.currentUser?.uid
         );
 
       if (activatedDraft?.status === 'live') {

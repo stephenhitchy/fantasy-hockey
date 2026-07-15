@@ -93,6 +93,13 @@
           League Standings
         </a>
 
+        <a
+          class="schedule-preview-header-link"
+          [routerLink]="['/leagues', leagueId, 'playoffs']"
+        >
+          Playoff Bracket
+        </a>
+
         <span
           class="cycle-status-badge"
           [class.status-live]="cycle()?.status === 'active'"
@@ -203,20 +210,60 @@
       }
     </div>
 
+    @if (
+      projectionAccuracySaving() ||
+      projectionAccuracyMessage() ||
+      projectionAccuracyError()
+    ) {
+      <div
+        class="projection-accuracy-save-status"
+        [class.projection-accuracy-save-error]="!!projectionAccuracyError()"
+        role="status"
+        aria-live="polite"
+      >
+        <strong>
+          {{
+            projectionAccuracySaving()
+              ? 'Saving Projection Accuracy...'
+              : projectionAccuracyError()
+                ? 'Projection Accuracy Needs Attention'
+                : 'Projection Accuracy Saved'
+          }}
+        </strong>
+
+        <small>
+          {{
+            projectionAccuracyError() ||
+            projectionAccuracyMessage() ||
+            'Comparing the frozen cycle projections with final results.'
+          }}
+        </small>
+      </div>
+    }
+
     @if (cycle()?.status === 'complete') {
       <div class="next-cycle-actions">
-        <button
-          type="button"
-          class="start-next-cycle-button"
-          (click)="startNextCycleFromCurrentCycle()"
-          [disabled]="startingNextCycle()"
-        >
-          {{
-            startingNextCycle()
-              ? 'Starting Next Cycle...'
-              : 'Start/Open ' + getNextCycleLabel()
-          }}
-        </button>
+        @if (isFinalPlayoffRound()) {
+          <a
+            class="start-next-cycle-button"
+            [routerLink]="['/leagues', leagueId, 'playoffs']"
+          >
+            View Final Playoff Bracket
+          </a>
+        } @else {
+          <button
+            type="button"
+            class="start-next-cycle-button"
+            (click)="startNextCycleFromCurrentCycle()"
+            [disabled]="startingNextCycle()"
+          >
+            {{
+              startingNextCycle()
+                ? 'Starting Next Matchup Period...'
+                : 'Start/Open ' + getNextCycleLabel()
+            }}
+          </button>
+        }
 
         @if (startNextCycleMessage()) {
           <small class="cycle-complete-success">

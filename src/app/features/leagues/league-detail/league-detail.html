@@ -48,6 +48,37 @@
       </section>
     }
 
+    <section
+      class="daily-injury-status"
+      [class.daily-status-running]="dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'"
+      [class.daily-status-success]="injurySyncState()?.lastDailySyncKey === getUtcDailyKey()"
+      [class.daily-status-warning]="dailyInjuryRefreshError() || injurySyncState()?.status === 'error'"
+      aria-live="polite"
+    >
+      <span class="daily-injury-icon" aria-hidden="true">🩹</span>
+
+      <div class="daily-injury-copy">
+        <span class="draft-section-eyebrow">Daily Injury Report</span>
+        <strong>{{ getDailyInjuryStatusLabel() }}</strong>
+        <p>{{ getDailyInjuryStatusDescription() }}</p>
+      </div>
+
+      <div class="daily-injury-meta">
+        <small>{{ getDailyInjuryStatusTimeLabel() }}</small>
+
+        @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
+          <button
+            type="button"
+            class="daily-injury-refresh-button"
+            (click)="requestTodayInjuryRefresh()"
+            [disabled]="dailyInjuryRefreshInProgress()"
+          >
+            {{ dailyInjuryRefreshInProgress() ? 'Refreshing…' : 'Refresh Today' }}
+          </button>
+        }
+      </div>
+    </section>
+
     <section class="league-info-grid">
       <article class="league-info-card">
         <span>Format</span>
@@ -183,6 +214,17 @@
           </span>
         </a>
 
+        <a
+          class="hub-action"
+          [routerLink]="['/leagues', leagueId, 'playoffs']"
+        >
+          <span class="hub-action-icon" aria-hidden="true">🥅</span>
+          <span class="hub-action-copy">
+            <strong>Playoffs</strong>
+            <span>Projected seeds, bracket, and final placements.</span>
+          </span>
+        </a>
+
         @if (draft()?.status !== 'complete') {
           <a
             class="hub-action hub-action-highlight"
@@ -227,6 +269,17 @@
             <span>
               <strong>Full Schedule</strong>
               <small>Round-robin schedule and history</small>
+            </span>
+          </a>
+
+          <a
+            class="tool-link"
+            [routerLink]="['/leagues', leagueId, 'playoffs']"
+          >
+            <span aria-hidden="true">🏆</span>
+            <span>
+              <strong>Playoff Bracket</strong>
+              <small>Seeds, rounds, consolation, and placements</small>
             </span>
           </a>
 

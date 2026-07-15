@@ -976,6 +976,22 @@
   background: rgba(255, 248, 230, 0.97);
 }
 
+.draft-clock-bar.clock-stopped {
+  border-color: #7fa4cc;
+  background: rgba(239, 247, 255, 0.98);
+}
+
+.clock-start-button {
+  border-color: #527eaa;
+  background: #173452;
+  color: #ffffff;
+}
+
+.clock-start-button:hover:not(:disabled) {
+  border-color: #173452;
+  background: #254f78;
+}
+
 .draft-clock-bar.clock-auto {
   border-color: #91c3a0;
 }
@@ -1219,4 +1235,109 @@
     grid-column: 1 / -1;
     justify-content: flex-end;
   }
+}
+
+
+.recent-form-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.recent-form-pill.form-positive {
+  background: #e7f8ed;
+  color: #20703d;
+}
+
+.recent-form-pill.form-negative {
+  background: #fff0f1;
+  color: #a63b49;
+}
+
+.recent-form-pill.form-neutral {
+  background: #eef2f6;
+  color: #66798e;
+}
+
+.availability-projection-pill {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #fff4d8;
+  color: #75520e !important;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+
+/* Shared projection recovery */
+.pool-error-block {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.repair-pool-button,
+.retry-pool-button {
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.repair-pool-button {
+  border: 1px solid #294f79;
+  background: #183554;
+  color: #ffffff;
+}
+
+.retry-pool-button {
+  border: 1px solid #9db4cc;
+  background: #ffffff;
+  color: #29435f;
+}
+
+.repair-pool-button:disabled,
+.retry-pool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pre-draft-preparation-row {
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid #c8d8e8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pre-draft-preparation-row strong {
+  color: #213a57;
+  font-size: 14px;
+}
+
+.pre-draft-preparation-row span {
+  margin: 0;
+  color: #5f748a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.preparation-running-card {
+  border-color: #e5c77f;
+  background: #fffaf0;
+}
+
+.preparation-ready-card {
+  border-color: #9fd2ae;
+  background: #f2fff5;
 }

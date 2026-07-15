@@ -1,0 +1,34 @@
+FANTASY HOCKEY — PLAYOFF BRACKET UI V2 INSTALL
+
+IMPORTANT
+- This package is a UI/UX update for the previously installed
+  "fantasy-hockey-standard-playoffs-v1-ready-to-install" package.
+- Do not use this by itself on the original pre-playoff project.
+- No dependency changes are required.
+- No Firestore rules changes are included in this update.
+
+REPLACE THESE FILES IN YOUR PROJECT
+1) src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
+2) src/app/features/playoffs/playoff-bracket/playoff-bracket.html
+3) src/app/features/playoffs/playoff-bracket/playoff-bracket.css
+
+PROJECT ROOT
+/Users/StephenH/Documents/Programming/fantasy-hockey
+
+INSTALL STEPS
+1) Make sure your prior Standard Playoffs V1 package is already installed.
+2) Open this ZIP.
+3) Copy the included src/app/features/playoffs/playoff-bracket/ folder into your project.
+4) Allow the three files above to replace the existing files.
+5) Start the app normally and open a league playoff page.
+6) Confirm the playoff page now shows:
+   - separate Championship Qualifiers and Placement Field seed sections
+   - clearer seed status text such as Finished 3rd place or Advanced to the Championship Game
+   - one unified postseason bracket read from left to right
+   - winner and loser destination labels on each matchup card
+
+NO OTHER ACTIONS REQUIRED
+- No npm install
+- No Firebase deploy
+- No Firestore index updates
+- No Cloud Functions deploy

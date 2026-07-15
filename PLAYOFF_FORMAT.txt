@@ -1,0 +1,57 @@
+STANDARD PLAYOFF BLUEPRINT
+
+CORE BEHAVIOR
+
+- Standings lock into playoff seeds when the postseason begins.
+- One complete six-game fantasy cycle equals one playoff round.
+- The bracket is fixed after seeding; it does not reseed between rounds.
+- A tied playoff matchup advances the higher seed.
+- Regular-season wins, losses, ties, Points For, and Points Against freeze once
+  the playoffs begin.
+- Teams outside the championship field continue in consolation/classification
+  games so every league team receives a final placement.
+- Existing roster, IR, waiver, injury, projection, and cycle-scoring systems
+  remain active and unchanged.
+
+FORMAT BY LEAGUE SIZE
+
+2-3 teams
+- 2 championship qualifiers
+- 12 regular-season cycles
+- 1 playoff cycle: League Championship
+
+4-7 teams
+- 4 championship qualifiers
+- 11 regular-season cycles
+- 2 playoff cycles: Semifinals and League Championship
+- Seeds 1 vs 4 and 2 vs 3
+
+8-12 teams
+- 6 championship qualifiers
+- 10 regular-season cycles
+- 3 playoff cycles: Opening Round, Semifinals, League Championship
+- Seeds 1 and 2 receive first-round byes
+- Opening Round: 3 vs 6 and 4 vs 5
+- Semifinals: Seed 1 faces the 4/5 winner; Seed 2 faces the 3/6 winner
+
+SEEDING ORDER
+
+1. Win percentage, with a tie counting as half a win
+2. Points For
+3. Point differential
+4. Total wins
+5. Team name and owner ID as stable final fallbacks
+
+SEASON LENGTH
+
+The app reserves exactly 13 complete fantasy matchup periods, representing the
+first 78 scheduled NHL games for each NHL team. The number of regular-season
+cycles automatically shortens to make room for the appropriate playoff format.
+
+FIRESTORE STORAGE
+
+/leagues/{leagueId}/playoffs/current
+
+The document stores frozen seeds, bracket matchups, round state, scores,
+winners, tie-break flags, champion, runner-up, third place, and all final
+placements.

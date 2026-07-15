@@ -1,0 +1,337 @@
+@if (loading()) {
+  <p class="page-loading">Loading playoff bracket...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="playoff-page">
+    <a class="back-link" [routerLink]="['/leagues', leagueId]">
+      ← Back to League
+    </a>
+
+    <header class="playoff-hero">
+      <div>
+        <span class="eyebrow">Fantasy Postseason</span>
+        <h1>{{ league()?.name }} Playoffs</h1>
+        <p>
+          One complete six-game cycle per round. The regular-season standings
+          lock after Cycle {{ regularSeasonCycleCount() }}, and tied playoff
+          matchups advance the higher seed.
+        </p>
+      </div>
+
+      <div class="hero-stat">
+        <span>Status</span>
+        <strong>
+          @if (isPlayoffsComplete()) {
+            Season Complete
+          } @else if (isPlayoffsStarted()) {
+            {{ getRoundLabel(playoffs()?.currentRoundNumber ?? 1) }}
+          } @else {
+            Projected Field
+          }
+        </strong>
+      </div>
+    </header>
+
+    @if (errorMessage()) {
+      <p class="status-card error-card">{{ errorMessage() }}</p>
+    }
+
+    <section class="format-grid">
+      <article>
+        <span>Regular Season</span>
+        <strong>{{ regularSeasonCycleCount() }} cycles</strong>
+      </article>
+      <article>
+        <span>Championship Field</span>
+        <strong>{{ playoffTeamCount() }} teams</strong>
+      </article>
+      <article>
+        <span>Playoff Length</span>
+        <strong>{{ playoffRoundCount() }} rounds</strong>
+      </article>
+      <article>
+        <span>Format</span>
+        <strong>Fixed bracket</strong>
+      </article>
+    </section>
+
+    @if (isPlayoffsComplete()) {
+      <section class="champion-card">
+        <span class="champion-icon" aria-hidden="true">🏆</span>
+        <div>
+          <span class="eyebrow">League Champion</span>
+          <h2>{{ getChampionName() }}</h2>
+          <p>The final six-game championship cycle is complete.</p>
+        </div>
+      </section>
+    }
+
+    @if (!isPlayoffsStarted()) {
+      <section class="preview-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Standard App Blueprint</span>
+            <h2>Projected Playoff Format</h2>
+          </div>
+        </div>
+
+        <p>
+          {{ getFormatSummary() }} Seeding is based on win percentage, then
+          Points For, point differential, wins, and team name. The field shown
+          below remains live until the final regular-season cycle is completed.
+        </p>
+
+        <div class="seed-subsection">
+          <div class="seed-subheading">
+            <div>
+              <h3>Projected Championship Qualifiers</h3>
+              <p>These teams would enter the championship side of the bracket.</p>
+            </div>
+          </div>
+
+          <div class="seed-grid">
+            @for (seed of championshipSeeds(); track seed.ownerId) {
+              <article class="seed-card qualifier-card">
+                <span class="seed-number">#{{ seed.seed }}</span>
+                <div>
+                  <strong>{{ seed.teamName }}</strong>
+                  <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
+                  <small>Would open in the championship bracket.</small>
+                </div>
+                <span class="seed-badge">Championship Qualifier</span>
+              </article>
+            }
+          </div>
+        </div>
+
+        @if (hasConsolationBracket()) {
+          <div class="seed-subsection consolation-preview">
+            <div class="seed-subheading">
+              <div>
+                <h3>Projected Placement Field</h3>
+                <p>
+                  These teams would begin in placement or consolation games.
+                </p>
+              </div>
+            </div>
+
+            <div class="seed-grid">
+              @for (seed of consolationSeeds(); track seed.ownerId) {
+                <article class="seed-card placement-seed-card">
+                  <span class="seed-number">#{{ seed.seed }}</span>
+                  <div>
+                    <strong>{{ seed.teamName }}</strong>
+                    <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
+                    <small>Would open in the placement bracket.</small>
+                  </div>
+                  <span class="seed-badge consolation-badge">Placement Seed</span>
+                </article>
+              }
+            </div>
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="seed-section">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Locked Standings</span>
+            <h2>Locked Playoff Seeds</h2>
+          </div>
+          <a [routerLink]="['/leagues', leagueId, 'standings']">
+            View Regular-Season Standings
+          </a>
+        </div>
+
+        <p class="section-copy">
+          These seeds show where each team started the postseason. Teams can
+          move into the championship game, 3rd-place game, 5th-place game, or
+          consolation placements as results come in.
+        </p>
+
+        <div class="seed-subsection">
+          <div class="seed-subheading">
+            <div>
+              <h3>{{ getSeedGroupTitle(true) }}</h3>
+              <p>These teams began on the title side of the bracket.</p>
+            </div>
+          </div>
+
+          <div class="seed-grid compact-seeds">
+            @for (seed of championshipSeeds(); track seed.ownerId) {
+              <article class="seed-card qualifier-card">
+                <span class="seed-number">#{{ seed.seed }}</span>
+                <div>
+                  <strong>{{ seed.teamName }}</strong>
+                  <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
+                  <small>{{ getSeedProgressLabel(seed.ownerId, seed.seed) }}</small>
+                </div>
+                <span class="seed-badge">{{ getSeedBadgeLabel(seed.seed) }}</span>
+              </article>
+            }
+          </div>
+        </div>
+
+        @if (hasConsolationBracket()) {
+          <div class="seed-subsection placement-subsection">
+            <div class="seed-subheading">
+              <div>
+                <h3>{{ getSeedGroupTitle(false) }}</h3>
+                <p>These teams began in the placement or consolation side.</p>
+              </div>
+            </div>
+
+            <div class="seed-grid compact-seeds">
+              @for (seed of consolationSeeds(); track seed.ownerId) {
+                <article class="seed-card placement-seed-card">
+                  <span class="seed-number">#{{ seed.seed }}</span>
+                  <div>
+                    <strong>{{ seed.teamName }}</strong>
+                    <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
+                    <small>{{ getSeedProgressLabel(seed.ownerId, seed.seed) }}</small>
+                  </div>
+                  <span class="seed-badge consolation-badge">{{ getSeedBadgeLabel(seed.seed) }}</span>
+                </article>
+              }
+            </div>
+          </div>
+        }
+      </section>
+
+      <section class="bracket-section unified-bracket-section">
+        <div class="section-heading dark-heading">
+          <div>
+            <span class="eyebrow">Postseason Bracket</span>
+            <h2>Follow the Bracket</h2>
+          </div>
+        </div>
+
+        <p class="section-copy bracket-copy">
+          Styled like a traditional sports bracket. Read each round from left to
+          right, and use the winner and loser destination lines on each matchup
+          to see exactly where every team goes next.
+        </p>
+
+        <div class="bracket-board">
+          <div class="bracket-scroll">
+            <div class="round-grid">
+              @for (roundNumber of roundNumbers(); track roundNumber) {
+                <section
+                  class="round-column"
+                  [class.final-round]="roundNumber === playoffRoundCount()"
+                >
+                  <header class="round-header">
+                    <span>Cycle {{ getRoundCycleNumber(roundNumber) }}</span>
+                    <h3>{{ getRoundLabel(roundNumber) }}</h3>
+                  </header>
+
+                  <div class="round-matchups">
+                    @for (
+                      matchup of getDisplayRoundMatchups(roundNumber);
+                      track matchup.id
+                    ) {
+                      <article
+                        class="bracket-matchup"
+                        [class.matchup-active]="matchup.status === 'active'"
+                        [class.matchup-complete]="matchup.status === 'complete'"
+                        [class.placement-matchup]="matchup.bracketType === 'consolation' || matchup.winnerPlace === 3"
+                      >
+                        <div class="matchup-path-row">
+                          <span
+                            class="path-badge"
+                            [class.placement-path-badge]="matchup.bracketType === 'consolation' || matchup.winnerPlace === 3"
+                          >
+                            {{ getMatchupPathLabel(matchup) }}
+                          </span>
+                          <span class="status-pill">{{ getMatchupStatusLabel(matchup) }}</span>
+                        </div>
+
+                        <div class="matchup-title-row">
+                          <strong>{{ getMatchupLabel(matchup) }}</strong>
+                        </div>
+
+                        <div
+                          class="bracket-team"
+                          [class.winner-team]="isWinner(matchup, matchup.teamAOwnerId)"
+                        >
+                          <span class="mini-seed">
+                            {{ matchup.teamASeed ? '#' + matchup.teamASeed : '—' }}
+                          </span>
+                          <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                          <span class="score">{{ getScoreLabel(matchup.teamAScore) }}</span>
+                        </div>
+
+                        <div
+                          class="bracket-team"
+                          [class.winner-team]="isWinner(matchup, matchup.teamBOwnerId)"
+                        >
+                          <span class="mini-seed">
+                            {{ matchup.teamBSeed ? '#' + matchup.teamBSeed : '—' }}
+                          </span>
+                          <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                          <span class="score">{{ getScoreLabel(matchup.teamBScore) }}</span>
+                        </div>
+
+                        <div class="matchup-flow">
+                          <div class="flow-row">
+                            <span class="flow-label">Winner</span>
+                            <span class="flow-arrow">→</span>
+                            <span class="flow-value">{{ getAdvanceLabel(matchup, 'winner') }}</span>
+                          </div>
+                          <div class="flow-row">
+                            <span class="flow-label">Loser</span>
+                            <span class="flow-arrow">→</span>
+                            <span class="flow-value">{{ getAdvanceLabel(matchup, 'loser') }}</span>
+                          </div>
+                        </div>
+
+                        @if (getMatchupLink(matchup); as matchupLink) {
+                          <a class="matchup-link" [routerLink]="matchupLink">
+                            Open Matchup
+                          </a>
+                        }
+                      </article>
+                    } @empty {
+                      <p class="empty-round">No matchup in this round.</p>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      @if (placements().length > 0) {
+        <section class="placements-card">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Final Order</span>
+              <h2>League Placements</h2>
+            </div>
+          </div>
+
+          <div class="placements-list">
+            @for (placement of placements(); track placement.place) {
+              <article [class.podium-place]="placement.place <= 3">
+                <span class="place-number">{{ placement.place }}</span>
+                <div>
+                  <strong>{{ placement.teamName }}</strong>
+                  <span>Regular-season seed #{{ placement.seed }}</span>
+                </div>
+                @if (placement.place === 1) {
+                  <span class="placement-icon" aria-label="Champion">🏆</span>
+                } @else if (placement.place === 2) {
+                  <span class="placement-icon" aria-label="Runner-up">🥈</span>
+                } @else if (placement.place === 3) {
+                  <span class="placement-icon" aria-label="Third place">🥉</span>
+                }
+              </article>
+            }
+          </div>
+        </section>
+      }
+    }
+  </section>
+}

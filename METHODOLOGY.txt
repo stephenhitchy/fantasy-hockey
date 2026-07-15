@@ -1,0 +1,122 @@
+SPLIT DRAFT & CYCLE PROJECTIONS V1 — METHODOLOGY
+
+1. TWO DIFFERENT QUESTIONS
+
+Season Draft Projection asks:
+"How valuable should this player be over a full season?"
+
+Next Cycle Projection asks:
+"How many fantasy points should this player produce in the upcoming six-team-
+game cycle, given form, role, schedule position, and availability?"
+
+The Draft Room and Auto-Draft use Season Draft Rank. Free Agents defaults to
+Next Cycle Rank.
+
+2. STABLE SEASON DRAFT OUTLOOK
+
+During the offseason, the historical baseline is:
+
+- 70% most recently completed season
+- 20% second-most-recent completed season
+- 10% conservative positional baseline
+
+Once the current season begins, current-season performance gradually receives
+up to 65% weight as the sample approaches 82 games. The remaining weight stays
+distributed across the historical 70/20/10 foundation.
+
+The completed season pace is still capped by sample size and positional bounds,
+so a small or incomplete sample cannot produce an extreme projection.
+
+Draft-only trend adjustments:
+
+- Last 20 appearances only
+- Maximum recent-trend movement: plus or minus 3%
+- Maximum recent role/TOI movement: plus or minus 3%
+- Last 3 and Last 5 are display-only
+
+The draft reliability penalty is deliberately smaller than the next-cycle
+penalty so a short volatile stretch does not erase established season value.
+
+3. SHARED SEASON DRAFT SCORE
+
+For every position, replacement level uses the league's configured maxTeams,
+not merely the number of managers who happen to have joined at refresh time.
+
+Season Draft Score is:
+
+- 75% stable talent score
+- 25% positional scarcity/value score
+
+Skaters share one talent scale. Team goalie units have their own raw scoring
+scale and receive a modest comparison adjustment so their larger team-unit
+point totals do not automatically occupy every top overall slot.
+
+Deterministic tie-breakers use projection, reliability, name, and asset key.
+Every manager therefore receives the same order.
+
+4. NEXT-CYCLE PROJECTION
+
+The next-cycle baseline primarily follows current-season scoring pace once
+current games exist. It regresses toward the previous season until the current
+sample becomes trustworthy.
+
+Recent form uses:
+
+- Last 10 appearances: 65%
+- Last 20 appearances: 35%
+
+Maximum next-cycle form movement:
+
+- plus or minus 6% when current-season data exists
+- plus or minus 4% when only prior-season form is available
+
+Recent role/TOI movement is capped at plus or minus 4%.
+
+5. MISSED GAMES AND SHORT INJURY APPEARANCES
+
+A true zero-point appearance counts as a zero.
+
+A final NHL team game in which the skater did not appear is tracked as a missed
+team game and is excluded from recent performance averages. It does not become
+a fake zero-point game.
+
+A game with unusually low TOI compared with the player's normal workload
+receives partial weight. This limits the damage from a game in which the player
+left early because of injury.
+
+6. UPCOMING AVAILABILITY
+
+Healthy Cycle is the player's expected production if available for every game.
+
+Expected Games uses the shared injury status, upcoming NHL team game dates, and
+an external return date when available.
+
+Next Cycle is:
+
+Healthy per-game expectation × expected games available
+
+Active players normally receive the full scheduled game count. Day-to-Day,
+Out, IR, LTIR, Suspended, Personal Leave, and Unknown statuses adjust expected
+appearances and reliability without permanently lowering the healthy skill
+baseline.
+
+7. SNAPSHOT TIMING
+
+A Version 2 snapshot contains both Season Draft Rank and Next Cycle Rank.
+
+- Draft Setup creates an initial snapshot when a scheduled draft is saved.
+- The commissioner browser refreshes the injury report and final snapshot 20
+  minutes before the scheduled start.
+- The final snapshot remains draft-fresh for 45 minutes.
+- The pointer is published only after every asset document has been saved.
+- Live draft clients reload the frozen pointer instead of calculating locally.
+
+8. INTENDED DIFFERENCES FROM PUBLIC RANKINGS
+
+The app does not hardcode a public top-40 list. Its custom scoring includes
+hits, blocks, time on ice, diminishing goals and assists, and team goalie units.
+Some differences are expected.
+
+The stable board should nevertheless keep established elite season-long players
+near the top and prevent a five- or ten-game hot/cold streak from moving a
+player by a dozen or more overall spots without stronger evidence.

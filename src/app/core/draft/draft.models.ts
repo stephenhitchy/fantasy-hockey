@@ -23,6 +23,23 @@ export type DraftAutoPickReason =
   | 'timer-expired'
   | 'manager-auto-mode';
 
+export type ProjectionDataSource =
+  | 'current-season-form'
+  | 'current-season-baseline'
+  | 'previous-season-form'
+  | 'previous-season-baseline'
+  | 'conservative-baseline';
+
+export type SharedProjectionAvailabilityStatus =
+  | 'active'
+  | 'day-to-day'
+  | 'out'
+  | 'injured-reserve'
+  | 'long-term-injured-reserve'
+  | 'suspended'
+  | 'personal-leave'
+  | 'unknown';
+
 export interface DraftRosterRequirements {
   LW: number;
   C: number;
@@ -34,6 +51,95 @@ export interface DraftRosterRequirements {
 export interface DraftProjection {
   projectedSeasonPoints?: number | null;
   projectedCyclePoints?: number | null;
+
+  /** Projection before short-term form and role adjustments. */
+  seasonBaselineCyclePoints?: number | null;
+
+  /** Capped cycle-point adjustment from the latest 10 and 20 appearances. */
+  recentFormAdjustment?: number | null;
+
+  /** Capped cycle-point adjustment from recent ice-time / role movement. */
+  roleAdjustment?: number | null;
+
+  projectionDataSeason?: string | null;
+  projectionDataSource?: ProjectionDataSource | null;
+  projectionGamesPlayed?: number | null;
+  recentFormSampleSize?: number | null;
+
+  seasonFantasyPointsPerGame?: number | null;
+  recentThreeGameFantasyPointsPerGame?: number | null;
+  recentFiveGameFantasyPointsPerGame?: number | null;
+  recentTenGameFantasyPointsPerGame?: number | null;
+  recentTwentyGameFantasyPointsPerGame?: number | null;
+
+  /**
+   * Stable season-long draft outlook. Short-term form is deliberately capped
+   * so a hot or cold week cannot dominate the initial draft board.
+   */
+  draftProjectedSeasonPoints?: number | null;
+  draftProjectedCyclePoints?: number | null;
+  draftRecentTrendAdjustment?: number | null;
+  draftRoleAdjustment?: number | null;
+  draftReliabilityRating?: number | null;
+  draftVolatilityPenalty?: number | null;
+  draftFloorAdjustedCyclePoints?: number | null;
+
+  /** Shared ranking fields used by the Draft Room and auto-draft. */
+  draftValueAboveReplacement?: number | null;
+  draftScore?: number | null;
+  draftRank?: number | null;
+  draftPositionRank?: number | null;
+
+  /** Shared ranking fields for regular-season next-cycle decisions. */
+  cycleValueAboveReplacement?: number | null;
+  cycleScore?: number | null;
+  cycleRank?: number | null;
+  cyclePositionRank?: number | null;
+
+  seasonAverageTimeOnIceMinutes?: number | null;
+  recentAverageTimeOnIceMinutes?: number | null;
+
+  /** Number of recent game records where the skater actually appeared. */
+  actualRecentAppearances?: number | null;
+
+  /** Recent final NHL team games where the skater did not appear. */
+  missedRecentTeamGames?: number | null;
+
+  /** Appearance-equivalent sample after short injury games receive partial weight. */
+  weightedRecentAppearances?: number | null;
+
+  fullWeightRecentGames?: number | null;
+  partialWeightRecentGames?: number | null;
+
+  /** Healthy six-game value before expected absences are applied. */
+  healthyProjectedCyclePoints?: number | null;
+
+  /** Number of games in the target NHL-team cycle schedule. */
+  scheduledGamesInProjectionCycle?: number | null;
+
+  /** Expected appearances after injury / availability information is applied. */
+  expectedGamesAvailable?: number | null;
+
+  availabilityAdjustment?: number | null;
+  availabilityAdjustedCyclePoints?: number | null;
+  availabilityStatus?: SharedProjectionAvailabilityStatus | null;
+  availabilityLabel?: string | null;
+  availabilityReturnDate?: string | null;
+  availabilityNote?: string | null;
+  availabilityAsOf?: string | null;
+  targetProjectionCycleNumber?: number | null;
+
+  /** Shared snapshot and deterministic ranking fields. */
+  sharedProjectionSnapshotId?: string | null;
+  projectionGeneratedAt?: string | null;
+
+  /**
+   * Backward-compatible aliases. New code should prefer draftScore,
+   * draftRank, and draftPositionRank.
+   */
+  balancedDraftValue?: number | null;
+  balancedRank?: number | null;
+  positionRank?: number | null;
 
   /**
    * 0-100 estimate of how trustworthy the projection is.

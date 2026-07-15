@@ -1,0 +1,33 @@
+PLAYOFF BRACKET UI V2 CHANGELOG
+
+WHAT CHANGED
+1) Locked seed display is clearer.
+   - The page now separates teams into:
+     • Championship Qualifiers
+     • Placement Field
+   - Seed badges now say Championship Seed or Placement Seed instead of simply Championship / Consolation.
+   - Each seed card now includes a progress line such as:
+     • Entered the championship bracket.
+     • Advanced to the League Championship.
+     • Dropped to the 3rd Place Game.
+     • Finished 5th place.
+
+2) The postseason bracket is now unified.
+   - Instead of splitting the page into a championship section and a separate consolation section,
+     the bracket is shown round-by-round in one left-to-right view.
+   - This makes it easier to see where teams move next.
+
+3) Every matchup card now shows its bracket path.
+   - Example path badges:
+     • Title path
+     • Third-place path
+     • Placement path
+
+4) Every matchup card now shows advancement destinations.
+   - Winner -> next matchup or final placement
+   - Loser -> next matchup or final placement
+
+WHY THIS SHOULD HELP
+- It removes the impression that every top seed is "in the championship" all the way through.
+- It makes it easier to understand how semifinal losers move into 3rd-place or 5th-place games.
+- It keeps the familiar fantasy-app style while still fitting your six-game cycle system.

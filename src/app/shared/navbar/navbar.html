@@ -213,6 +213,17 @@
           </a>
 
           <a
+            [routerLink]="['/leagues', activeLeagueId, 'playoffs']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">🥅</span>
+            <span>
+              <strong>Playoffs</strong>
+              <small>Seeds, bracket, and placements</small>
+            </span>
+          </a>
+
+          <a
             [routerLink]="['/leagues', activeLeagueId, 'cycles', 'schedule-preview']"
             (click)="closeMore()"
           >

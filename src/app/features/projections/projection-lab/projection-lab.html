@@ -13,22 +13,28 @@
 
     <header class="projection-header">
       <div>
-        <span class="eyebrow">Projection Lab V2</span>
+        <span class="eyebrow">Projection Lab V6</span>
         <h1>Fantasy Value Balancer</h1>
         <p>
           {{ league()?.name }}
           ·
-          Compare rating, raw projection, and value above replacement.
+          Compare a stable season-long draft board with a separate injury-adjusted next-cycle outlook.
         </p>
       </div>
 
       <button
         type="button"
         class="refresh-button"
-        (click)="loadPlayerPool()"
+        (click)="refreshSharedProjections()"
         [disabled]="playerPoolLoading()"
       >
-        {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Projections' }}
+        {{
+          playerPoolLoading()
+            ? 'Building Shared Snapshot...'
+            : isCommissioner()
+              ? 'Refresh Shared Projections'
+              : 'Reload Shared Projections'
+        }}
       </button>
     </header>
 
@@ -37,6 +43,169 @@
         {{ playerPoolError() }}
       </section>
     }
+
+    <section class="shared-snapshot-card">
+      <div>
+        <span class="eyebrow">Shared League Snapshot</span>
+        <strong>{{ getSnapshotCycleLabel() }}</strong>
+        <p>
+          Every manager, Draft Room, Free Agents page, and auto-draft uses this exact saved ranking.
+        </p>
+      </div>
+
+      <div class="shared-snapshot-meta">
+        <span>{{ snapshotMetadata()?.assetCount ?? 0 }} assets</span>
+        <strong>{{ getSnapshotGeneratedLabel() }}</strong>
+      </div>
+    </section>
+
+    <section class="projection-accuracy-card">
+      <div class="projection-accuracy-heading">
+        <div>
+          <span class="eyebrow">Projection Accuracy Tracking</span>
+          <h2>How close are the cycle projections?</h2>
+          <p>
+            Completed cycles compare the exact matchup-page projection with the final fantasy score. Positive bias means the model under-projected; negative bias means it over-projected.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          class="accuracy-reload-button"
+          (click)="loadAccuracyHistory()"
+          [disabled]="accuracyLoading()"
+        >
+          {{ accuracyLoading() ? 'Loading...' : 'Reload Accuracy' }}
+        </button>
+      </div>
+
+      @if (accuracyError()) {
+        <div class="accuracy-state accuracy-state-error">
+          {{ accuracyError() }}
+        </div>
+      } @else if (accuracyLoading()) {
+        <div class="accuracy-state">
+          Loading completed-cycle projection results...
+        </div>
+      } @else if (accuracySummary(); as accuracy) {
+        @if (accuracy.assetCount > 0) {
+          <div class="accuracy-summary-grid">
+            <article>
+              <span>Mean Absolute Error</span>
+              <strong>{{ accuracy.meanAbsoluteError.toFixed(1) }}</strong>
+              <small>Average miss in fantasy points</small>
+            </article>
+
+            <article
+              [class]="getAccuracyBiasClass(accuracy.meanSignedError)"
+            >
+              <span>Projection Bias</span>
+              <strong>
+                {{ getAccuracyBiasLabel(accuracy.meanSignedError) }}
+              </strong>
+              <small>Actual minus projected</small>
+            </article>
+
+            <article>
+              <span>Within 10 Points</span>
+              <strong>{{ accuracy.within10Percent.toFixed(1) }}%</strong>
+              <small>{{ accuracy.within10Count }} of {{ accuracy.assetCount }}</small>
+            </article>
+
+            <article>
+              <span>Tracked Sample</span>
+              <strong>{{ accuracy.assetCount }}</strong>
+              <small>{{ accuracyCycleRows().length }} completed cycles</small>
+            </article>
+          </div>
+
+          <div class="accuracy-breakdown-layout">
+            <section class="accuracy-breakdown-panel">
+              <div class="accuracy-panel-heading">
+                <strong>Accuracy by Position</strong>
+                <span>MAE · bias · within 10</span>
+              </div>
+
+              <div class="accuracy-row-list">
+                @for (group of accuracyPositionRows(); track group.key) {
+                  <article class="accuracy-breakdown-row">
+                    <strong>{{ group.label }}</strong>
+                    <span>{{ group.meanAbsoluteError.toFixed(1) }} MAE</span>
+                    <span
+                      [class]="getAccuracyBiasClass(group.meanSignedError)"
+                    >
+                      {{ getAccuracyGroupBiasLabel(group) }}
+                    </span>
+                    <span>{{ group.within10Percent.toFixed(0) }}% within 10</span>
+                  </article>
+                }
+              </div>
+            </section>
+
+            <section class="accuracy-breakdown-panel">
+              <div class="accuracy-panel-heading">
+                <strong>Accuracy by Projection Version</strong>
+                <span>Separates calibration generations</span>
+              </div>
+
+              <div class="accuracy-row-list">
+                @for (group of accuracyVersionRows(); track group.key) {
+                  <article class="accuracy-breakdown-row accuracy-version-row">
+                    <strong>{{ group.label }}</strong>
+                    <span>{{ group.assetCount }} assets</span>
+                    <span>{{ group.meanAbsoluteError.toFixed(1) }} MAE</span>
+                    <span>{{ group.within10Percent.toFixed(0) }}% within 10</span>
+                  </article>
+                }
+              </div>
+            </section>
+          </div>
+
+          <section class="accuracy-cycle-panel">
+            <div class="accuracy-panel-heading">
+              <strong>Recent Completed Cycles</strong>
+              <span>Up to 30 cycles are retained in this view</span>
+            </div>
+
+            <div class="accuracy-cycle-table" role="table">
+              <div class="accuracy-cycle-row accuracy-cycle-header" role="row">
+                <span>Cycle</span>
+                <span>Version</span>
+                <span>Assets</span>
+                <span>MAE</span>
+                <span>Bias</span>
+                <span>Within 10</span>
+                <span>Saved</span>
+              </div>
+
+              @for (cycleHistory of accuracyCycleRows(); track cycleHistory.summary.cycleId) {
+                <div class="accuracy-cycle-row" role="row">
+                  <strong>Cycle {{ cycleHistory.summary.cycleNumber }}</strong>
+                  <span>{{ getAccuracyCycleVersionLabel(cycleHistory.summary) }}</span>
+                  <span>{{ cycleHistory.summary.gradedAssetCount }}</span>
+                  <span>{{ cycleHistory.summary.meanAbsoluteError.toFixed(1) }}</span>
+                  <span
+                    [class]="getAccuracyBiasClass(cycleHistory.summary.meanSignedError)"
+                  >
+                    {{ getAccuracyBiasLabel(cycleHistory.summary.meanSignedError) }}
+                  </span>
+                  <span>{{ cycleHistory.summary.within10Percent.toFixed(0) }}%</span>
+                  <span>{{ getAccuracyCycleDateLabel(cycleHistory.summary) }}</span>
+                </div>
+              }
+            </div>
+          </section>
+        } @else {
+          <div class="accuracy-state">
+            No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a cycle.
+          </div>
+        }
+      } @else {
+        <div class="accuracy-state">
+          No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a cycle.
+        </div>
+      }
+    </section>
 
     <section class="rating-explainer-card">
       <article>
@@ -56,7 +225,7 @@
       <article>
         <strong>Value Rating</strong>
         <span>
-          Rating minus replacement rating. This shows how much better a player is than a normal starter.
+          The season draft score blends 75% stable talent with 25% positional value. It is the default Draft Room and auto-draft order.
         </span>
       </article>
 
@@ -64,6 +233,27 @@
         <strong>Reliability</strong>
         <span>
           Estimates how safe the projection is. Balanced Value uses this to slightly penalize risky assets.
+        </span>
+      </article>
+
+      <article>
+        <strong>Recent Form</strong>
+        <span>
+          Uses the latest 10 and 20 appearances for next-cycle form. The 3- and 5-game windows are display-only and do not drive the draft ranking.
+        </span>
+      </article>
+
+      <article>
+        <strong>Short Injury Games</strong>
+        <span>
+          A very short appearance receives partial weight, so leaving injured after a few shifts does not look like a full poor performance.
+        </span>
+      </article>
+
+      <article>
+        <strong>Availability</strong>
+        <span>
+          Healthy skill remains separate from expected Cycle points. Injury status and return timing reduce only the games the player is expected to play.
         </span>
       </article>
     </section>
@@ -103,13 +293,16 @@
           [ngModel]="sortMode()"
           (ngModelChange)="setSortMode($event)"
         >
-          <option value="FLOOR_DRAFT_VALUE">Balanced Draft Value</option>
-          <option value="DRAFT_VALUE">Raw Draft Value</option>
+          <option value="DRAFT_RANK">Season Draft Rank</option>
+          <option value="CYCLE_RANK">Next Cycle Rank</option>
+          <option value="FLOOR_DRAFT_VALUE">Draft Score</option>
+          <option value="DRAFT_VALUE">Draft Value Above Replacement</option>
           <option value="VALUE_RATING">Value Rating</option>
           <option value="RELIABILITY">Reliability</option>
+          <option value="RECENT_FORM">Recent Form Adjustment</option>
           <option value="RATING">Rating</option>
-          <option value="PROJECTED_CYCLE">Cycle Projection</option>
-          <option value="PROJECTED_SEASON">Season Projection</option>
+          <option value="PROJECTED_CYCLE">Next Cycle Projection</option>
+          <option value="PROJECTED_SEASON">Season Outlook</option>
           <option value="POSITION_RANK">Position Rank</option>
           <option value="NAME">Name</option>
           <option value="TEAM">NHL Team</option>
@@ -117,7 +310,7 @@
       </div>
 
       <div class="control-field">
-        <label for="team-count">Teams</label>
+        <label for="team-count">League Max Teams</label>
         <input
           id="team-count"
           type="number"
@@ -173,12 +366,12 @@
 
       @if (topOverallValue(); as topRow) {
         <article class="wide-summary-card">
-          <span>Top Balanced Draft Value</span>
+          <span>Top Season Draft Score</span>
           <strong>
             {{ topRow.name }}
             ·
             {{ getSignedDisplayNumber(topRow.floorAdjustedDraftValue) }}
-            pts
+            score
             ·
             {{ topRow.riskLabel }}
             risk
@@ -261,7 +454,7 @@
       <div class="table-heading">
         <div>
           <span class="eyebrow">Projection Board</span>
-          <h2>Value Above Replacement</h2>
+          <h2>Season Draft Board & Next-Cycle Outlook</h2>
         </div>
 
         <p>
@@ -273,19 +466,28 @@
         <table>
           <thead>
             <tr>
-              <th>Value Rank</th>
+              <th>Draft Rank</th>
+              <th>Cycle Rank</th>
               <th>Asset</th>
               <th>Pos</th>
               <th>NHL</th>
-              <th>Rating</th>
-              <th>Cycle</th>
+              <th>Draft Rating</th>
+              <th>Draft 6-Game</th>
+              <th>Next Cycle</th>
+              <th>Healthy Cycle</th>
+              <th>Availability</th>
+              <th>Recent Appearances</th>
+              <th>Baseline</th>
+              <th>Recent Form</th>
+              <th>Role</th>
+              <th>10 / 20 Game PPG</th>
               <th>Floor Cycle</th>
               <th>Reliability</th>
               <th>Replacement</th>
               <th>Value Rating</th>
-              <th>Balanced Value</th>
-              <th>Raw Value</th>
-              <th>Season</th>
+              <th>Draft Score</th>
+              <th>Draft VORP</th>
+              <th>Season Outlook</th>
               <th>PPG</th>
               <th>Tier</th>
             </tr>
@@ -295,6 +497,7 @@
             @for (row of visibleRows(); track row.asset.assetKey) {
               <tr [class]="getRowClass(row)">
                 <td>#{{ row.overallValueRank }}</td>
+                <td>#{{ row.cycleRank }}</td>
 
                 <td>
                   <div class="asset-cell">
@@ -311,6 +514,12 @@
                         {{ getPositionLabel(row.position) }}
                         Rank #{{ row.positionRank }}
                       </span>
+                      <small class="projection-source">
+                        {{ row.projectionSourceLabel }}
+                        @if (row.projectionGamesPlayed) {
+                          · {{ row.projectionGamesPlayed }} GP
+                        }
+                      </small>
                     </div>
                   </div>
                 </td>
@@ -327,7 +536,59 @@
                   </small>
                 </td>
 
+                <td>{{ getDisplayNumber(row.draftProjectedCycle) }}</td>
                 <td>{{ getDisplayNumber(row.projectedCycle) }}</td>
+
+                <td>
+                  {{ getDisplayNumber(row.healthyProjectedCycle) }}
+                  <small class="rating-basis">
+                    {{ getSignedDisplayNumber(row.availabilityAdjustment) }} availability
+                  </small>
+                </td>
+
+                <td>
+                  <strong class="availability-copy">
+                    {{ row.expectedGamesAvailable.toFixed(1) }} /
+                    {{ row.scheduledGamesInProjectionCycle }} games
+                  </strong>
+                  <small class="rating-basis">
+                    {{ getAvailabilityDescription(row) }}
+                  </small>
+                </td>
+
+                <td>
+                  {{ row.actualRecentAppearances }} played
+                  <small class="rating-basis">
+                    {{ row.missedRecentTeamGames }} missed ·
+                    {{ row.partialWeightRecentGames }} partial
+                  </small>
+                </td>
+
+                <td>
+                  {{ getDisplayNumber(row.seasonBaselineCycle) }}
+                </td>
+
+                <td>
+                  <span
+                    [class]="'form-adjustment ' + getRecentFormClass(row.recentFormAdjustment)"
+                  >
+                    {{ getSignedDisplayNumber(row.recentFormAdjustment) }}
+                  </span>
+                </td>
+
+                <td>
+                  <span
+                    [class]="'form-adjustment ' + getRecentFormClass(row.roleAdjustment)"
+                  >
+                    {{ getSignedDisplayNumber(row.roleAdjustment) }}
+                  </span>
+                </td>
+
+                <td>
+                  <small class="recent-window-copy">
+                    {{ getRecentWindowLabel(row) }}
+                  </small>
+                </td>
 
                 <td>
                   {{ getDisplayNumber(row.floorAdjustedCycle) }}

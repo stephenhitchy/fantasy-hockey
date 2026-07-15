@@ -29,8 +29,8 @@ import {
 } from '../../core/draft/draft.service';
 
 import {
-  loadDraftPlayerPool
-} from '../../core/draft/draft-player-pool.service';
+  loadSharedProjectionSnapshot
+} from '../../core/projection/projection-snapshot.service';
 
 import {
   PlayerAvailability
@@ -263,6 +263,13 @@ export class FreeAgents implements OnDestroy {
           .includes(search);
       })
       .sort((first, second) => {
+        const firstRank = first.cycleRank ?? 9999;
+        const secondRank = second.cycleRank ?? 9999;
+
+        if (firstRank !== secondRank) {
+          return firstRank - secondRank;
+        }
+
         const firstProjection = first.projectedCyclePoints ?? -1;
         const secondProjection = second.projectedCyclePoints ?? -1;
 
@@ -416,14 +423,23 @@ export class FreeAgents implements OnDestroy {
     this.errorMessage.set('');
 
     try {
-      this.playerPool.set(
-        await loadDraftPlayerPool(true)
+      const snapshot = await loadSharedProjectionSnapshot(
+        this.leagueId
       );
+
+      if (!snapshot) {
+        this.playerPool.set([]);
+        throw new Error(
+          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.'
+        );
+      }
+
+      this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
           ? error.message
-          : 'Unable to load the free agent pool.'
+          : 'Unable to load the shared free agent pool.'
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -616,6 +632,24 @@ export class FreeAgents implements OnDestroy {
     }
   }
 
+  getAssetExpectedGamesDisplay(asset: DraftableAsset): string {
+    const expected = asset.expectedGamesAvailable;
+    const scheduled = asset.scheduledGamesInProjectionCycle;
+
+    if (
+      typeof expected !== 'number' ||
+      typeof scheduled !== 'number'
+    ) {
+      return '';
+    }
+
+    return `${expected.toFixed(1)}/${scheduled} games`;
+  }
+
+  getAssetAvailabilityLabel(asset: DraftableAsset): string {
+    return asset.availabilityLabel ?? 'Active';
+  }
+
   getAssetName(asset: DraftableAsset): string {
     return asset.assetType === 'skater'
       ? asset.player.fullName
@@ -713,6 +747,79 @@ export class FreeAgents implements OnDestroy {
     }
 
     return value.toFixed(1);
+  }
+
+
+  getProjectionAsset(
+    asset: DraftableAsset
+  ): DraftableAsset {
+    return this.playerPool().find(
+      (poolAsset) =>
+        poolAsset.assetKey === asset.assetKey
+    ) ?? asset;
+  }
+
+  getRecentFormAdjustment(
+    asset: DraftableAsset
+  ): number | null {
+    const projectionAsset =
+      this.getProjectionAsset(asset);
+
+    return projectionAsset.recentFormAdjustment ?? null;
+  }
+
+  getRecentFormLabel(asset: DraftableAsset): string {
+    const adjustment =
+      this.getRecentFormAdjustment(asset);
+
+    if (typeof adjustment !== 'number') {
+      return 'Form —';
+    }
+
+    const prefix = adjustment > 0 ? '+' : '';
+
+    return `Form ${prefix}${adjustment.toFixed(1)}`;
+  }
+
+  getRecentFormClass(asset: DraftableAsset): string {
+    const adjustment =
+      this.getRecentFormAdjustment(asset);
+
+    if (
+      typeof adjustment !== 'number' ||
+      Math.abs(adjustment) < 0.05
+    ) {
+      return 'form-neutral';
+    }
+
+    return adjustment > 0
+      ? 'form-positive'
+      : 'form-negative';
+  }
+
+  getProjectedCyclePoints(
+    asset: DraftableAsset
+  ): number | null {
+    return (
+      this.getProjectionAsset(asset)
+        .projectedCyclePoints ??
+      null
+    );
+  }
+
+  getCycleRank(asset: DraftableAsset): number | null {
+    return (
+      this.getProjectionAsset(asset).cycleRank ??
+      null
+    );
+  }
+
+  getDraftRank(asset: DraftableAsset): number | null {
+    return (
+      this.getProjectionAsset(asset).draftRank ??
+      this.getProjectionAsset(asset).balancedRank ??
+      null
+    );
   }
 
   getDraftStatusText(): string {

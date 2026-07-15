@@ -18,12 +18,21 @@
         <p>{{ league()?.name }}</p>
       </div>
 
-      <a
-        class="open-cycle-link"
-        [routerLink]="['/leagues', leagueId, 'cycles', 1]"
-      >
-        Open Cycle 1
-      </a>
+      <div class="cycle-card-actions">
+        <a
+          class="open-cycle-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', 1]"
+        >
+          Open Cycle 1
+        </a>
+
+        <a
+          class="open-cycle-link"
+          [routerLink]="['/leagues', leagueId, 'playoffs']"
+        >
+          Playoff Bracket
+        </a>
+      </div>
     </header>
 
     <section class="schedule-team-selector-card">
@@ -55,8 +64,8 @@
       </article>
 
       <article>
-        <span>Cycles Before Repeats</span>
-        <strong>{{ cyclesBeforeRepeat() }}</strong>
+        <span>Regular-Season Cycles</span>
+        <strong>{{ regularSeasonCycleCount() }}</strong>
       </article>
 
       <article>
@@ -73,8 +82,9 @@
     <section class="schedule-note-card">
       <strong>Team schedule view</strong>
       <p>
-        This page shows one team's schedule across the season. Completed cycles show actual scores and results.
-        Future cycles show the planned opponent and roster projection.
+        This page shows the complete regular-season schedule. Completed cycles show actual scores and results,
+        while future cycles show the planned opponent and roster projection. After Cycle {{ regularSeasonCycleCount() }},
+        the standings lock and the seeded playoff bracket begins.
       </p>
     </section>
 

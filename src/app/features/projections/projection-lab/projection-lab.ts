@@ -16,8 +16,17 @@ import {
 } from '../../../core/draft/draft.models';
 
 import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
+  generateSharedProjectionSnapshot,
+  loadSharedProjectionSnapshot,
+  SharedProjectionSnapshotMetadata
+} from '../../../core/projection/projection-snapshot.service';
+
+import {
+  loadProjectionAccuracyHistory,
+  ProjectionAccuracyCycleSummary,
+  ProjectionAccuracyHistory,
+  ProjectionAccuracyMetricGroup
+} from '../../../core/projection/projection-accuracy.service';
 
 import {
   getLeagueById,
@@ -32,10 +41,13 @@ import {
 type ProjectionPositionFilter = 'ALL' | DraftPosition;
 
 type ProjectionSortMode =
+  | 'DRAFT_RANK'
+  | 'CYCLE_RANK'
   | 'DRAFT_VALUE'
   | 'FLOOR_DRAFT_VALUE'
   | 'VALUE_RATING'
   | 'RELIABILITY'
+  | 'RECENT_FORM'
   | 'RATING'
   | 'PROJECTED_CYCLE'
   | 'PROJECTED_SEASON'
@@ -51,12 +63,35 @@ interface ProjectionRow {
   logoUrl?: string;
   projectedSeason: number;
   projectedPpg: number;
+  draftProjectedCycle: number;
+  draftFloorAdjustedCycle: number;
+  draftScore: number;
+  draftValueAboveReplacement: number;
   projectedCycle: number;
+  cycleRank: number;
   replacementProjection: number;
   draftValue: number;
   reliabilityRating: number;
   volatilityPenalty: number;
   floorAdjustedCycle: number;
+  seasonBaselineCycle: number;
+  recentFormAdjustment: number;
+  roleAdjustment: number;
+  recentThreeGamePpg: number | null;
+  recentFiveGamePpg: number | null;
+  recentTenGamePpg: number | null;
+  recentTwentyGamePpg: number | null;
+  projectionGamesPlayed: number | null;
+  projectionSourceLabel: string;
+  healthyProjectedCycle: number;
+  expectedGamesAvailable: number;
+  scheduledGamesInProjectionCycle: number;
+  availabilityAdjustment: number;
+  availabilityLabel: string;
+  availabilityReturnDate: string | null;
+  actualRecentAppearances: number;
+  missedRecentTeamGames: number;
+  partialWeightRecentGames: number;
   floorAdjustedDraftValue: number;
   floorValueRating: number;
   riskLabel: string;
@@ -104,15 +139,22 @@ export class ProjectionLab {
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
+  snapshotMetadata = signal<
+    SharedProjectionSnapshotMetadata | null
+  >(null);
+  accuracyHistory = signal<ProjectionAccuracyHistory | null>(null);
+  isCommissioner = signal(false);
 
   loading = signal(true);
   playerPoolLoading = signal(false);
+  accuracyLoading = signal(false);
   errorMessage = signal('');
   playerPoolError = signal('');
+  accuracyError = signal('');
 
   searchTerm = signal('');
   positionFilter = signal<ProjectionPositionFilter>('ALL');
-  sortMode = signal<ProjectionSortMode>('FLOOR_DRAFT_VALUE');
+  sortMode = signal<ProjectionSortMode>('DRAFT_RANK');
 
   teamCountOverride = signal<number | null>(null);
   projectedGamesPerCycle = signal(6);
@@ -135,7 +177,11 @@ export class ProjectionLab {
 
   readonly teamCountForReplacement = computed(() =>
     this.teamCountOverride() ??
-    Math.max(this.teams().length, 2)
+    Math.max(
+      this.league()?.maxTeams ??
+        this.teams().length,
+      2
+    )
   );
 
   readonly totalStarterSlots = computed(() =>
@@ -144,6 +190,22 @@ export class ProjectionLab {
         total + this.getStarterCount(position),
       0
     )
+  );
+
+  readonly accuracySummary = computed(() =>
+    this.accuracyHistory()?.summary ?? null
+  );
+
+  readonly accuracyPositionRows = computed(() =>
+    this.accuracyHistory()?.byPosition ?? []
+  );
+
+  readonly accuracyVersionRows = computed(() =>
+    this.accuracyHistory()?.byVersion ?? []
+  );
+
+  readonly accuracyCycleRows = computed(() =>
+    this.accuracyHistory()?.cycles ?? []
   );
 
   readonly projectionRows = computed(() =>
@@ -174,6 +236,12 @@ export class ProjectionLab {
 
     return [...rows].sort((first, second) => {
       switch (sortMode) {
+        case 'DRAFT_RANK':
+          return first.overallValueRank - second.overallValueRank;
+
+        case 'CYCLE_RANK':
+          return first.cycleRank - second.cycleRank;
+
         case 'FLOOR_DRAFT_VALUE':
           return second.floorAdjustedDraftValue - first.floorAdjustedDraftValue;
 
@@ -181,6 +249,14 @@ export class ProjectionLab {
           return (
             second.reliabilityRating - first.reliabilityRating ||
             second.floorAdjustedDraftValue - first.floorAdjustedDraftValue
+          );
+
+        case 'RECENT_FORM':
+          return (
+            second.recentFormAdjustment -
+              first.recentFormAdjustment ||
+            second.floorAdjustedDraftValue -
+              first.floorAdjustedDraftValue
           );
 
         case 'VALUE_RATING':
@@ -229,7 +305,8 @@ export class ProjectionLab {
         .filter((row) => row.position === position)
         .sort(
           (first, second) =>
-            second.projectedCycle - first.projectedCycle
+            second.draftProjectedCycle -
+              first.draftProjectedCycle
         );
 
       const starterSlots = this.getStarterCount(position);
@@ -248,17 +325,17 @@ export class ProjectionLab {
         replacementRating:
           positionRows[0]?.replacementRating ?? 0,
         starterAverage: this.average(
-          starters.map((row) => row.projectedCycle)
+          starters.map((row) => row.draftProjectedCycle)
         ),
         starterAverageRating: this.average(
           starters.map((row) => row.rating)
         ),
         topAverage: this.average(
-          topGroup.map((row) => row.projectedCycle)
+          topGroup.map((row) => row.draftProjectedCycle)
         ),
         topPlayerName: positionRows[0]?.name ?? '—',
         topPlayerProjection:
-          positionRows[0]?.projectedCycle ?? 0,
+          positionRows[0]?.draftProjectedCycle ?? 0,
         topPlayerRating:
           positionRows[0]?.rating ?? 0,
         availableAssets: positionRows.length
@@ -355,12 +432,18 @@ export class ProjectionLab {
 
       this.league.set(league);
       this.teams.set(teams);
+      this.isCommissioner.set(
+        league.commissionerId === user.uid
+      );
 
       this.projectedGamesPerCycle.set(
         league.scoringRules?.requiredGamesPerCycle ?? 6
       );
 
-      await this.loadPlayerPool();
+      await Promise.all([
+        this.loadPlayerPool(),
+        this.loadAccuracyHistory()
+      ]);
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
@@ -372,23 +455,191 @@ export class ProjectionLab {
     }
   }
 
+  async loadAccuracyHistory(): Promise<void> {
+    this.accuracyLoading.set(true);
+    this.accuracyError.set('');
+
+    try {
+      this.accuracyHistory.set(
+        await loadProjectionAccuracyHistory(this.leagueId)
+      );
+    } catch (error: unknown) {
+      this.accuracyError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load projection accuracy history.'
+      );
+    } finally {
+      this.accuracyLoading.set(false);
+    }
+  }
+
+  getAccuracyBiasLabel(value: number): string {
+    if (Math.abs(value) < 0.05) {
+      return 'Nearly unbiased';
+    }
+
+    if (value > 0) {
+      return `Under by ${value.toFixed(1)}`;
+    }
+
+    return `Over by ${Math.abs(value).toFixed(1)}`;
+  }
+
+  getAccuracyBiasClass(value: number): string {
+    if (Math.abs(value) < 2) {
+      return 'accuracy-bias-neutral';
+    }
+
+    return value > 0
+      ? 'accuracy-bias-under'
+      : 'accuracy-bias-over';
+  }
+
+  getAccuracyCycleVersionLabel(
+    summary: ProjectionAccuracyCycleSummary
+  ): string {
+    if (summary.projectionVersions.length === 0) {
+      return 'Version unknown';
+    }
+
+    return summary.projectionVersions
+      .map((version) => `V${version}`)
+      .join(', ');
+  }
+
+  getAccuracyCycleDateLabel(
+    summary: ProjectionAccuracyCycleSummary
+  ): string {
+    const value = summary.generatedAt;
+
+    if (!value) {
+      return 'Saved';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return 'Saved';
+    }
+
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }
+
+  getAccuracyGroupBiasLabel(
+    group: ProjectionAccuracyMetricGroup
+  ): string {
+    return this.getAccuracyBiasLabel(group.meanSignedError);
+  }
+
   async loadPlayerPool(): Promise<void> {
     this.playerPoolLoading.set(true);
     this.playerPoolError.set('');
 
     try {
-      this.playerPool.set(
-        await loadDraftPlayerPool(true)
+      const snapshot = await loadSharedProjectionSnapshot(
+        this.leagueId
       );
+
+      if (!snapshot) {
+        if (this.isCommissioner()) {
+          await this.refreshSharedProjections();
+          return;
+        }
+
+        throw new Error(
+          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.'
+        );
+      }
+
+      this.snapshotMetadata.set(snapshot.metadata);
+      this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.playerPoolError.set(
         error instanceof Error
           ? error.message
-          : 'Unable to load projections.'
+          : 'Unable to load shared projections.'
       );
     } finally {
       this.playerPoolLoading.set(false);
     }
+  }
+
+  async refreshSharedProjections(): Promise<void> {
+    if (!this.isCommissioner()) {
+      await this.loadPlayerPool();
+      return;
+    }
+
+    this.playerPoolLoading.set(true);
+    this.playerPoolError.set('');
+
+    try {
+      const snapshot =
+        await generateSharedProjectionSnapshot({
+          leagueId: this.leagueId,
+          teamCount: Math.max(
+            this.league()?.maxTeams ??
+              this.teams().length,
+            2
+          ),
+          requiredGamesPerCycle:
+            this.league()?.scoringRules
+              ?.requiredGamesPerCycle ?? 6,
+          generationReason: 'manual'
+        });
+
+      this.snapshotMetadata.set(snapshot.metadata);
+      this.playerPool.set(snapshot.assets);
+    } catch (error: unknown) {
+      this.playerPoolError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to refresh shared projections.'
+      );
+    } finally {
+      this.playerPoolLoading.set(false);
+    }
+  }
+
+  getSnapshotGeneratedLabel(): string {
+    const generatedAt = this.snapshotMetadata()?.generatedAt;
+
+    if (!generatedAt) {
+      return 'No shared snapshot yet';
+    }
+
+    const parsed = new Date(generatedAt);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Shared snapshot saved';
+    }
+
+    return parsed.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+  }
+
+  getSnapshotCycleLabel(): string {
+    const cycleNumber =
+      this.snapshotMetadata()?.targetCycleNumber;
+
+    return cycleNumber
+      ? `Cycle ${cycleNumber}`
+      : 'Upcoming cycle';
+  }
+
+  getAvailabilityDescription(row: ProjectionRow): string {
+    const games = `${row.expectedGamesAvailable.toFixed(1)} / ${row.scheduledGamesInProjectionCycle}`;
+
+    return row.availabilityReturnDate
+      ? `${row.availabilityLabel} · ${games} expected · return ${row.availabilityReturnDate}`
+      : `${row.availabilityLabel} · ${games} expected`;
   }
 
   setSearchTerm(value: string): void {
@@ -412,10 +663,13 @@ export class ProjectionLab {
 
   setSortMode(value: string): void {
     const validSorts: ProjectionSortMode[] = [
+      'DRAFT_RANK',
+      'CYCLE_RANK',
       'DRAFT_VALUE',
       'FLOOR_DRAFT_VALUE',
       'VALUE_RATING',
       'RELIABILITY',
+      'RECENT_FORM',
       'RATING',
       'PROJECTED_CYCLE',
       'PROJECTED_SEASON',
@@ -513,6 +767,55 @@ export class ProjectionLab {
       : 'Skater scale';
   }
 
+
+  getRecentFormClass(value: number): string {
+    if (value > 0.05) {
+      return 'form-positive';
+    }
+
+    if (value < -0.05) {
+      return 'form-negative';
+    }
+
+    return 'form-neutral';
+  }
+
+  getRecentWindowLabel(row: ProjectionRow): string {
+    const values = [
+      row.recentTenGamePpg != null
+        ? `10G ${row.recentTenGamePpg.toFixed(1)}`
+        : '',
+      row.recentTwentyGamePpg != null
+        ? `20G ${row.recentTwentyGamePpg.toFixed(1)}`
+        : ''
+    ].filter(Boolean);
+
+    return values.length > 0
+      ? values.join(' · ')
+      : 'No recent sample';
+  }
+
+  getProjectionSourceLabel(asset: DraftableAsset): string {
+    const season = asset.projectionDataSeason;
+
+    switch (asset.projectionDataSource) {
+      case 'current-season-form':
+        return `Current-season form${season ? ` · ${season}` : ''}`;
+
+      case 'current-season-baseline':
+        return `Current-season baseline${season ? ` · ${season}` : ''}`;
+
+      case 'previous-season-form':
+        return `Previous-season form${season ? ` · ${season}` : ''}`;
+
+      case 'previous-season-baseline':
+        return `Previous-season baseline${season ? ` · ${season}` : ''}`;
+
+      default:
+        return 'Conservative baseline';
+    }
+  }
+
   getDisplayNumber(value: number | null | undefined): string {
     if (typeof value !== 'number') {
       return '—';
@@ -580,11 +883,29 @@ export class ProjectionLab {
           ? projectedSeason / 82
           : 0;
 
-      const projectedCycle =
+      const draftProjectedCycle =
+        asset.draftProjectedCyclePoints ??
         projectedPpg * this.projectedGamesPerCycle();
 
-      const sourceCycleProjection =
-        asset.projectedCyclePoints ?? projectedCycle;
+      const draftFloorAdjustedCycle =
+        asset.draftFloorAdjustedCyclePoints ??
+        draftProjectedCycle;
+
+      const draftScore =
+        asset.draftScore ??
+        asset.balancedDraftValue ??
+        0;
+
+      const draftValueAboveReplacement =
+        asset.draftValueAboveReplacement ??
+        asset.floorAdjustedDraftValue ??
+        0;
+
+      const projectedCycle =
+        asset.projectedCyclePoints ??
+        draftProjectedCycle;
+
+      const sourceCycleProjection = projectedCycle;
 
       const floorAdjustedSourceCycle =
         typeof asset.floorAdjustedCyclePoints === 'number'
@@ -597,6 +918,7 @@ export class ProjectionLab {
           : 1;
 
       const reliabilityRating =
+        asset.draftReliabilityRating ??
         this.getAssetReliabilityRating(asset);
 
       const floorAdjustedCycle =
@@ -613,7 +935,56 @@ export class ProjectionLab {
         logoUrl: this.getAssetLogoUrl(asset),
         projectedSeason,
         projectedPpg,
+        draftProjectedCycle,
+        draftFloorAdjustedCycle,
+        draftScore,
+        draftValueAboveReplacement,
         projectedCycle,
+        cycleRank:
+          asset.cycleRank ?? 9999,
+        seasonBaselineCycle:
+          asset.seasonBaselineCyclePoints ??
+          projectedCycle,
+        recentFormAdjustment:
+          asset.recentFormAdjustment ?? 0,
+        roleAdjustment:
+          asset.roleAdjustment ?? 0,
+        recentThreeGamePpg:
+          asset.recentThreeGameFantasyPointsPerGame ??
+          null,
+        recentFiveGamePpg:
+          asset.recentFiveGameFantasyPointsPerGame ??
+          null,
+        recentTenGamePpg:
+          asset.recentTenGameFantasyPointsPerGame ??
+          null,
+        recentTwentyGamePpg:
+          asset.recentTwentyGameFantasyPointsPerGame ??
+          null,
+        projectionGamesPlayed:
+          asset.projectionGamesPlayed ?? null,
+        projectionSourceLabel:
+          this.getProjectionSourceLabel(asset),
+        healthyProjectedCycle:
+          asset.healthyProjectedCyclePoints ?? projectedCycle,
+        expectedGamesAvailable:
+          asset.expectedGamesAvailable ??
+          this.projectedGamesPerCycle(),
+        scheduledGamesInProjectionCycle:
+          asset.scheduledGamesInProjectionCycle ??
+          this.projectedGamesPerCycle(),
+        availabilityAdjustment:
+          asset.availabilityAdjustment ?? 0,
+        availabilityLabel:
+          asset.availabilityLabel ?? 'Active',
+        availabilityReturnDate:
+          asset.availabilityReturnDate ?? null,
+        actualRecentAppearances:
+          asset.actualRecentAppearances ?? 0,
+        missedRecentTeamGames:
+          asset.missedRecentTeamGames ?? 0,
+        partialWeightRecentGames:
+          asset.partialWeightRecentGames ?? 0,
         reliabilityRating,
         volatilityPenalty,
         floorAdjustedCycle,
@@ -629,14 +1000,14 @@ export class ProjectionLab {
           row.position === 'C' ||
           row.position === 'RW'
         )
-        .map((row) => row.projectedCycle)
+        .map((row) => row.draftProjectedCycle)
     );
 
     const topGoalieCycle = Math.max(
       1,
       ...baseRows
         .filter((row) => row.position === 'G')
-        .map((row) => row.projectedCycle)
+        .map((row) => row.draftProjectedCycle)
     );
 
     const rows: ProjectionRow[] = [];
@@ -646,7 +1017,8 @@ export class ProjectionLab {
         .filter((row) => row.position === position)
         .sort(
           (first, second) =>
-            second.projectedCycle - first.projectedCycle
+            second.draftProjectedCycle -
+              first.draftProjectedCycle
         );
 
       const replacementIndex = Math.max(
@@ -658,10 +1030,10 @@ export class ProjectionLab {
       );
 
       const replacementProjection =
-        positionRows[replacementIndex]?.projectedCycle ?? 0;
+        positionRows[replacementIndex]?.draftProjectedCycle ?? 0;
 
       const floorReplacementProjection =
-        positionRows[replacementIndex]?.floorAdjustedCycle ?? 0;
+        positionRows[replacementIndex]?.draftFloorAdjustedCycle ?? 0;
 
       const ratingDenominator =
         position === 'G'
@@ -676,36 +1048,60 @@ export class ProjectionLab {
 
       positionRows.forEach((row, index) => {
         const draftValue =
-          row.projectedCycle - replacementProjection;
+          row.draftProjectedCycle - replacementProjection;
 
         const floorAdjustedDraftValue =
-          row.floorAdjustedCycle - floorReplacementProjection;
+          row.draftFloorAdjustedCycle -
+            floorReplacementProjection;
 
         const rating =
-          row.projectedCycle / ratingDenominator * 100;
+          row.draftProjectedCycle /
+          ratingDenominator *
+          100;
 
         const valueRating =
           rating - replacementRating;
 
         const floorValueRating =
-          row.floorAdjustedCycle / ratingDenominator * 100 -
+          row.draftFloorAdjustedCycle /
+            ratingDenominator * 100 -
           floorReplacementRating;
 
         rows.push({
           ...row,
           replacementProjection,
-          draftValue,
+          draftValue:
+            row.draftValueAboveReplacement ||
+            draftValue,
           reliabilityRating: row.reliabilityRating,
           volatilityPenalty: row.volatilityPenalty,
           floorAdjustedCycle: row.floorAdjustedCycle,
-          floorAdjustedDraftValue,
+          seasonBaselineCycle: row.seasonBaselineCycle,
+          recentFormAdjustment: row.recentFormAdjustment,
+          roleAdjustment: row.roleAdjustment,
+          recentThreeGamePpg: row.recentThreeGamePpg,
+          recentFiveGamePpg: row.recentFiveGamePpg,
+          recentTenGamePpg: row.recentTenGamePpg,
+          recentTwentyGamePpg:
+            row.recentTwentyGamePpg,
+          projectionGamesPlayed: row.projectionGamesPlayed,
+          projectionSourceLabel: row.projectionSourceLabel,
+          floorAdjustedDraftValue:
+            row.draftScore ||
+            floorAdjustedDraftValue,
           floorValueRating,
           riskLabel: row.riskLabel,
           rating,
           replacementRating,
           valueRating,
-          positionRank: index + 1,
-          overallValueRank: 0,
+          positionRank:
+            row.asset.draftPositionRank ??
+            row.asset.positionRank ??
+            index + 1,
+          overallValueRank:
+            row.asset.draftRank ??
+            row.asset.balancedRank ??
+            0,
           tier: this.getTierLabel(floorValueRating)
         });
       });
@@ -719,7 +1115,12 @@ export class ProjectionLab {
     const rankByAssetKey = new Map<string, number>();
 
     rankedByValue.forEach((row, index) => {
-      rankByAssetKey.set(row.asset.assetKey, index + 1);
+      rankByAssetKey.set(
+        row.asset.assetKey,
+        row.asset.draftRank ??
+          row.asset.balancedRank ??
+          index + 1
+      );
     });
 
     return rows
@@ -727,12 +1128,35 @@ export class ProjectionLab {
         ...row,
         projectedSeason: this.round(row.projectedSeason),
         projectedPpg: this.round(row.projectedPpg),
+        draftProjectedCycle:
+          this.round(row.draftProjectedCycle),
+        draftFloorAdjustedCycle:
+          this.round(row.draftFloorAdjustedCycle),
+        draftScore: this.round(row.draftScore),
+        draftValueAboveReplacement:
+          this.round(row.draftValueAboveReplacement),
         projectedCycle: this.round(row.projectedCycle),
+        cycleRank: row.cycleRank,
         replacementProjection: this.round(row.replacementProjection),
         draftValue: this.round(row.draftValue),
         reliabilityRating: this.round(row.reliabilityRating),
         volatilityPenalty: this.round(row.volatilityPenalty),
         floorAdjustedCycle: this.round(row.floorAdjustedCycle),
+        seasonBaselineCycle: this.round(row.seasonBaselineCycle),
+        recentFormAdjustment: this.round(row.recentFormAdjustment),
+        roleAdjustment: this.round(row.roleAdjustment),
+        recentThreeGamePpg:
+          row.recentThreeGamePpg != null
+            ? this.round(row.recentThreeGamePpg)
+            : null,
+        recentFiveGamePpg:
+          row.recentFiveGamePpg != null
+            ? this.round(row.recentFiveGamePpg)
+            : null,
+        recentTenGamePpg:
+          row.recentTenGamePpg != null
+            ? this.round(row.recentTenGamePpg)
+            : null,
         floorAdjustedDraftValue: this.round(row.floorAdjustedDraftValue),
         floorValueRating: this.round(row.floorValueRating),
         rating: this.round(row.rating),

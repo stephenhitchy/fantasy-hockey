@@ -15,6 +15,10 @@ import {
   defaultScoringRules
 } from '../../../core/scoring/scoring-rules';
 
+import {
+  saveProjectionAccuracyForCycle
+} from '../../../core/projection/projection-accuracy.service';
+
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -54,6 +58,14 @@ import {
   getLeagueById,
   League
 } from '../../../core/league/league.service';
+
+import {
+  STANDARD_FULL_CYCLE_SEASON_COUNT,
+  getPlayoffRoundLabel,
+  getStandardPlayoffRoundCount,
+  getStandardPlayoffTeamCount,
+  getStandardRegularSeasonCycleCount
+} from '../../../core/playoffs/playoff-format';
 
 import {
   getNhlTeamSeasonSchedule,
@@ -157,6 +169,10 @@ export class CycleOne implements OnDestroy {
   autoFlowMessage = signal('');
   autoFlowError = signal('');
 
+  projectionAccuracySaving = signal(false);
+  projectionAccuracyMessage = signal('');
+  projectionAccuracyError = signal('');
+
 
   isCommissioner(): boolean {
     return this.league()?.commissionerId === this.userId;
@@ -227,7 +243,9 @@ export class CycleOne implements OnDestroy {
     }
 
     if (this.completingCycle()) {
-      return 'All roster games are complete. Final scores, winners, and team records are being saved now.';
+      return cycle.phase === 'playoffs'
+        ? 'All roster games are complete. Final scores and the playoff bracket are being saved now.'
+        : 'All roster games are complete. Final scores, winners, and team records are being saved now.';
     }
 
     if (this.startingNextCycle()) {
@@ -239,7 +257,11 @@ export class CycleOne implements OnDestroy {
     }
 
     if (cycle.status === 'complete') {
-      return `${this.getCycleLabel()} has final scores saved. The next cycle will be created or opened automatically when the flow continues.`;
+      if (this.isFinalPlayoffRound()) {
+        return `${this.getCycleLabel()} has final scores saved. The fantasy season is complete.`;
+      }
+
+      return `${this.getCycleLabel()} has final scores saved. ${this.getNextCycleLabel()} will be created or opened automatically when the flow continues.`;
     }
 
     if (this.scoringLoading()) {
@@ -414,8 +436,12 @@ export class CycleOne implements OnDestroy {
       scoring.teamScores
     );
 
+    await this.saveCurrentCycleProjectionAccuracy();
+
     this.completeCycleMessage.set(
-      `${this.getCycleLabel()} was completed and team records were updated.`
+      cycle.phase === 'playoffs'
+        ? `${this.getCycleLabel()} was completed and the playoff bracket advanced.`
+        : `${this.getCycleLabel()} was completed and team records were updated.`
     );
 
     this.teams.set(
@@ -730,6 +756,7 @@ export class CycleOne implements OnDestroy {
   private scoringRequestId = 0;
   private autoCompleteAttemptKey: string | null = null;
   private autoStartNextCycleAttemptKey: string | null = null;
+  private projectionAccuracyAttemptKey: string | null = null;
 
   private refreshEffectivePicks(): void {
     const snapshotPicks = this.cycleRosterSnapshotPicks;
@@ -819,6 +846,13 @@ export class CycleOne implements OnDestroy {
 
     this.cycleScoring.set(result);
 
+    if (
+      this.isCommissioner() &&
+      cycle.status === 'complete'
+    ) {
+      void this.saveCurrentCycleProjectionAccuracy();
+    }
+
     this.teamGameCounts.set({
       ...this.teamGameCounts(),
       ...result.teamGameCounts
@@ -895,8 +929,12 @@ export class CycleOne implements OnDestroy {
         scoring.teamScores
       );
 
+      await this.saveCurrentCycleProjectionAccuracy();
+
       this.autoFlowMessage.set(
-        `${this.getCycleLabel()} was completed automatically and team records were updated.`
+        cycle.phase === 'playoffs'
+          ? `${this.getCycleLabel()} was completed automatically and the playoff bracket advanced.`
+          : `${this.getCycleLabel()} was completed automatically and team records were updated.`
       );
 
       this.teams.set(
@@ -919,6 +957,96 @@ export class CycleOne implements OnDestroy {
       this.autoFlowError.set(message);
     } finally {
       this.completingCycle.set(false);
+    }
+  }
+
+
+  private getDisplayedProjectionByAssetKey(): Record<string, number | null> {
+    const projections: Record<string, number | null> = {};
+
+    for (const pick of this.picks()) {
+      projections[pick.asset.assetKey] =
+        this.getBestCycleProjection(pick.asset);
+    }
+
+    return projections;
+  }
+
+  private getProjectionAccuracyAttemptKey(): string | null {
+    const cycle = this.cycle();
+    const scoring = this.cycleScoring();
+    const picks = this.picks();
+
+    if (!cycle || !scoring || picks.length === 0) {
+      return null;
+    }
+
+    const scoreKey = Object.values(scoring.assetScores)
+      .sort((first, second) =>
+        first.assetKey.localeCompare(second.assetKey)
+      )
+      .map((summary) =>
+        `${summary.assetKey}:${summary.currentScore}:${summary.actualGamesPlayed ?? 0}`
+      )
+      .join('|');
+
+    return [
+      this.leagueId,
+      cycle.id,
+      cycle.cycleNumber,
+      scoreKey
+    ].join('::');
+  }
+
+  private async saveCurrentCycleProjectionAccuracy(): Promise<void> {
+    if (!this.isCommissioner()) {
+      return;
+    }
+
+    const cycle = this.cycle();
+    const scoring = this.cycleScoring();
+    const picks = this.picks();
+    const attemptKey = this.getProjectionAccuracyAttemptKey();
+
+    if (
+      !cycle ||
+      cycle.projectionAccuracyStatus === 'complete' ||
+      !scoring ||
+      picks.length === 0 ||
+      !attemptKey ||
+      this.projectionAccuracySaving() ||
+      this.projectionAccuracyAttemptKey === attemptKey
+    ) {
+      return;
+    }
+
+    this.projectionAccuracyAttemptKey = attemptKey;
+    this.projectionAccuracySaving.set(true);
+    this.projectionAccuracyError.set('');
+
+    try {
+      const result = await saveProjectionAccuracyForCycle({
+        leagueId: this.leagueId,
+        cycleId: cycle.id,
+        cycleNumber: cycle.cycleNumber,
+        picks,
+        scoring,
+        displayedProjectionByAssetKey:
+          this.getDisplayedProjectionByAssetKey()
+      });
+
+      this.projectionAccuracyMessage.set(
+        `Projection accuracy saved for ${result.summary.gradedAssetCount} assets. Average error: ${result.summary.meanAbsoluteError.toFixed(1)} points.`
+      );
+    } catch (error: unknown) {
+      this.projectionAccuracyAttemptKey = null;
+      this.projectionAccuracyError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save projection accuracy for this cycle.'
+      );
+    } finally {
+      this.projectionAccuracySaving.set(false);
     }
   }
 
@@ -984,18 +1112,39 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
+    if (this.isFinalPlayoffRound()) {
+      const message = 'The league championship is complete. Opening the final playoff bracket...';
+      this.startNextCycleMessage.set(message);
+      this.autoFlowMessage.set(message);
+
+      await this.router.navigate([
+        '/leagues',
+        this.leagueId,
+        'playoffs'
+      ]);
+      return;
+    }
+
     if (this.teams().length < 2) {
-      const message = 'At least two teams are required to start the next cycle.';
+      const message = 'At least two teams are required to start the next matchup period.';
       this.startNextCycleError.set(message);
       this.autoFlowError.set(message);
       return;
     }
 
     const nextCycleNumber = this.cycleNumber + 1;
-    const nextCycleHasGames = await this.hasAnyRosterGamesForCycle(nextCycleNumber);
+
+    // Every standard fantasy season uses exactly 13 complete six-game
+    // periods (78 NHL team games). Playoff cycles may contain only a
+    // subset of owners because higher seeds can have byes, so checking
+    // the current cycle's roster snapshots could incorrectly stop the
+    // season before a bye team returns in the following round.
+    const nextCycleHasGames =
+      nextCycleNumber <= STANDARD_FULL_CYCLE_SEASON_COUNT ||
+      await this.hasAnyRosterGamesForCycle(nextCycleNumber);
 
     if (!nextCycleHasGames) {
-      const message = `No NHL team games were found for ${this.getNextCycleLabel()}. The season flow is stopping instead of creating empty cycles.`;
+      const message = `No NHL team games were found for ${this.getNextCycleLabel()}. The season flow is stopping instead of creating an empty matchup period.`;
       this.startNextCycleMessage.set(message);
       this.autoFlowMessage.set(message);
       return;
@@ -1029,11 +1178,26 @@ export class CycleOne implements OnDestroy {
     this.autoFlowMessage.set(preparingMessage);
 
     try {
-      await startNextCycle(
+      const nextCycle = await startNextCycle(
         this.leagueId,
         this.teams(),
         this.cycleNumber
       );
+
+      if (!nextCycle) {
+        const completeMessage =
+          'The fantasy season is complete. Opening the final playoff bracket...';
+
+        this.startNextCycleMessage.set(completeMessage);
+        this.autoFlowMessage.set(completeMessage);
+
+        await this.router.navigate([
+          '/leagues',
+          this.leagueId,
+          'playoffs'
+        ]);
+        return;
+      }
 
       const successMessage =
         source === 'automatic'
@@ -1057,7 +1221,7 @@ export class CycleOne implements OnDestroy {
 
       if (
         errorMessage.includes(
-          `${this.getNextCycleLabel()} has already been started`
+          `Cycle ${nextCycleNumber} has already been started`
         )
       ) {
         const alreadyStartedMessage =
@@ -1187,11 +1351,15 @@ export class CycleOne implements OnDestroy {
     this.startNextCycleError.set('');
     this.autoFlowMessage.set('');
     this.autoFlowError.set('');
+    this.projectionAccuracySaving.set(false);
+    this.projectionAccuracyMessage.set('');
+    this.projectionAccuracyError.set('');
 
     this.scheduleLoadStartedForCycleId = null;
     this.scoringLoadKey = null;
     this.autoCompleteAttemptKey = null;
     this.autoStartNextCycleAttemptKey = null;
+    this.projectionAccuracyAttemptKey = null;
     this.scoringRequestId += 1;
   }
 
@@ -1425,11 +1593,58 @@ export class CycleOne implements OnDestroy {
   }
 
   getCycleLabel(): string {
+    const cycle = this.cycle();
+
+    if (cycle?.phase === 'playoffs') {
+      return cycle.playoffRoundLabel ??
+        `Playoff Cycle ${this.cycleNumber}`;
+    }
+
     return `Cycle ${this.cycleNumber}`;
   }
 
   getNextCycleLabel(): string {
+    const cycle = this.cycle();
+
+    if (cycle?.phase === 'playoffs') {
+      const roundNumber = cycle.playoffRoundNumber ?? 1;
+      const roundCount = cycle.playoffRoundCount ?? roundNumber;
+
+      if (roundNumber >= roundCount) {
+        return 'Season Complete';
+      }
+
+      return getPlayoffRoundLabel(
+        roundNumber + 1,
+        roundCount
+      );
+    }
+
+    const teamCount = this.teams().length;
+    const regularSeasonCycleCount =
+      getStandardRegularSeasonCycleCount(teamCount);
+
+    if (this.cycleNumber >= regularSeasonCycleCount) {
+      const playoffTeamCount =
+        getStandardPlayoffTeamCount(teamCount);
+      const playoffRoundCount =
+        getStandardPlayoffRoundCount(playoffTeamCount);
+
+      return getPlayoffRoundLabel(1, playoffRoundCount);
+    }
+
     return `Cycle ${this.cycleNumber + 1}`;
+  }
+
+  isFinalPlayoffRound(): boolean {
+    const cycle = this.cycle();
+
+    return Boolean(
+      cycle?.phase === 'playoffs' &&
+      cycle.playoffRoundNumber &&
+      cycle.playoffRoundCount &&
+      cycle.playoffRoundNumber >= cycle.playoffRoundCount
+    );
   }
 
   getDetailedMatchupHeading(): string {
@@ -1951,8 +2166,8 @@ export class CycleOne implements OnDestroy {
     );
 
     return (
-      poolAsset?.projectedSeasonPoints ??
       asset.projectedSeasonPoints ??
+      poolAsset?.projectedSeasonPoints ??
       null
     );
   }
@@ -1964,8 +2179,8 @@ export class CycleOne implements OnDestroy {
     );
 
     return (
-      poolAsset?.projectedCyclePoints ??
       asset.projectedCyclePoints ??
+      poolAsset?.projectedCyclePoints ??
       null
     );
   }

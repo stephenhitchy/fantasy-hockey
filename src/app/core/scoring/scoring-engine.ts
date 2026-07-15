@@ -1,4 +1,5 @@
 import {
+  DEFAULT_GOALIE_GAME_MAXIMUM,
   DiminishingReturnValues,
   GoalieSavePercentageTier,
   ScoringRules
@@ -267,6 +268,19 @@ export function calculateGoalieGameBreakdown(
 
   if (stats.shutout) {
     addLine('Shutout', rules.goalieShutout);
+  }
+
+  const goalieGameMaximum =
+    typeof rules.goalieGameMaximum === 'number' &&
+    rules.goalieGameMaximum > 0
+      ? rules.goalieGameMaximum
+      : DEFAULT_GOALIE_GAME_MAXIMUM;
+
+  if (total > goalieGameMaximum) {
+    addLine(
+      `Goalie Game Maximum (${goalieGameMaximum})`,
+      goalieGameMaximum - total
+    );
   }
 
   return {

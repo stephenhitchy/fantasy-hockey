@@ -28,6 +28,7 @@ import {
 import {
   DraftableAsset,
   DraftPick,
+  DraftProjection,
   FantasyDraft
 } from '../draft/draft.models';
 
@@ -39,6 +40,25 @@ import {
 import {
   normalizeFantasyRoster
 } from '../team/roster.service';
+
+import {
+  getPlayoffRoundLabel,
+  getStandardRegularSeasonCycleCount
+} from '../playoffs/playoff-format';
+
+import {
+  applyPlayoffRoundResults,
+  createStandardFantasyPlayoffs,
+  getFantasyPlayoffsRef,
+  getPlayoffRoundMatchups,
+  getPlayoffRoundOwnerIds,
+  normalizeFantasyPlayoffs
+} from '../playoffs/playoff.service';
+
+import {
+  FantasyPlayoffRoundResult,
+  FantasyPlayoffs
+} from '../playoffs/playoff.models';
 
 const FIRST_CYCLE_NUMBER = 1;
 
@@ -224,9 +244,42 @@ function normalizeCycle(
     id: data.id ?? getCycleDocumentId(fallbackCycleNumber),
     cycleNumber: data.cycleNumber ?? fallbackCycleNumber,
     status: data.status ?? 'active',
+    phase:
+      data.phase === 'playoffs'
+        ? 'playoffs'
+        : 'regular_season',
+    playoffRoundNumber:
+      typeof data.playoffRoundNumber === 'number'
+        ? data.playoffRoundNumber
+        : null,
+    playoffRoundCount:
+      typeof data.playoffRoundCount === 'number'
+        ? data.playoffRoundCount
+        : null,
+    playoffRoundLabel:
+      typeof data.playoffRoundLabel === 'string'
+        ? data.playoffRoundLabel
+        : null,
     matchupIds: Array.isArray(data.matchupIds)
       ? data.matchupIds
       : [],
+    projectionAccuracyStatus:
+      data.projectionAccuracyStatus === 'complete'
+        ? 'complete'
+        : 'pending',
+    projectionAccuracyAssetCount:
+      typeof data.projectionAccuracyAssetCount === 'number'
+        ? data.projectionAccuracyAssetCount
+        : 0,
+    projectionAccuracyProjectionVersions:
+      Array.isArray(data.projectionAccuracyProjectionVersions)
+        ? data.projectionAccuracyProjectionVersions.filter(
+            (value): value is number =>
+              typeof value === 'number'
+          )
+        : [],
+    projectionAccuracyUpdatedAt:
+      data.projectionAccuracyUpdatedAt ?? null,
     startedAt: data.startedAt,
     completedAt: data.completedAt ?? null,
     createdAt: data.createdAt,
@@ -240,6 +293,42 @@ function normalizeMatchup(
   return {
     id: data.id ?? '',
     cycleNumber: data.cycleNumber ?? FIRST_CYCLE_NUMBER,
+    phase:
+      data.phase === 'playoffs'
+        ? 'playoffs'
+        : 'regular_season',
+    bracketType:
+      data.bracketType === 'consolation'
+        ? 'consolation'
+        : data.bracketType === 'championship'
+          ? 'championship'
+          : null,
+    playoffRoundNumber:
+      typeof data.playoffRoundNumber === 'number'
+        ? data.playoffRoundNumber
+        : null,
+    playoffMatchupId:
+      typeof data.playoffMatchupId === 'string'
+        ? data.playoffMatchupId
+        : null,
+    teamASeed:
+      typeof data.teamASeed === 'number'
+        ? data.teamASeed
+        : null,
+    teamBSeed:
+      typeof data.teamBSeed === 'number'
+        ? data.teamBSeed
+        : null,
+    winnerPlace:
+      typeof data.winnerPlace === 'number'
+        ? data.winnerPlace
+        : null,
+    loserPlace:
+      typeof data.loserPlace === 'number'
+        ? data.loserPlace
+        : null,
+    tieBrokenByHigherSeed:
+      data.tieBrokenByHigherSeed === true,
     teamAOwnerId: data.teamAOwnerId ?? '',
     teamBOwnerId: data.teamBOwnerId ?? null,
     teamAScore:
@@ -289,6 +378,63 @@ function getRosterAssetKey(asset: RosterAsset | null): string {
     : '';
 }
 
+function getStoredProjectionFields(
+  asset: RosterAsset
+): DraftProjection {
+  return {
+    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
+    projectedCyclePoints: asset.projectedCyclePoints ?? null,
+    seasonBaselineCyclePoints: asset.seasonBaselineCyclePoints ?? null,
+    recentFormAdjustment: asset.recentFormAdjustment ?? null,
+    roleAdjustment: asset.roleAdjustment ?? null,
+    projectionDataSeason: asset.projectionDataSeason ?? null,
+    projectionDataSource: (asset.projectionDataSource ?? null) as DraftProjection['projectionDataSource'],
+    projectionGamesPlayed: asset.projectionGamesPlayed ?? null,
+    recentFormSampleSize: asset.recentFormSampleSize ?? null,
+    seasonFantasyPointsPerGame: asset.seasonFantasyPointsPerGame ?? null,
+    recentThreeGameFantasyPointsPerGame:
+      asset.recentThreeGameFantasyPointsPerGame ?? null,
+    recentFiveGameFantasyPointsPerGame:
+      asset.recentFiveGameFantasyPointsPerGame ?? null,
+    recentTenGameFantasyPointsPerGame:
+      asset.recentTenGameFantasyPointsPerGame ?? null,
+    seasonAverageTimeOnIceMinutes:
+      asset.seasonAverageTimeOnIceMinutes ?? null,
+    recentAverageTimeOnIceMinutes:
+      asset.recentAverageTimeOnIceMinutes ?? null,
+    actualRecentAppearances: asset.actualRecentAppearances ?? null,
+    missedRecentTeamGames: asset.missedRecentTeamGames ?? null,
+    weightedRecentAppearances: asset.weightedRecentAppearances ?? null,
+    fullWeightRecentGames: asset.fullWeightRecentGames ?? null,
+    partialWeightRecentGames: asset.partialWeightRecentGames ?? null,
+    healthyProjectedCyclePoints:
+      asset.healthyProjectedCyclePoints ?? null,
+    scheduledGamesInProjectionCycle:
+      asset.scheduledGamesInProjectionCycle ?? null,
+    expectedGamesAvailable: asset.expectedGamesAvailable ?? null,
+    availabilityAdjustment: asset.availabilityAdjustment ?? null,
+    availabilityAdjustedCyclePoints:
+      asset.availabilityAdjustedCyclePoints ?? null,
+    availabilityStatus: (asset.availabilityStatus ?? null) as DraftProjection['availabilityStatus'],
+    availabilityLabel: asset.availabilityLabel ?? null,
+    availabilityReturnDate: asset.availabilityReturnDate ?? null,
+    availabilityNote: asset.availabilityNote ?? null,
+    availabilityAsOf: asset.availabilityAsOf ?? null,
+    targetProjectionCycleNumber:
+      asset.targetProjectionCycleNumber ?? null,
+    sharedProjectionSnapshotId:
+      asset.sharedProjectionSnapshotId ?? null,
+    projectionGeneratedAt: asset.projectionGeneratedAt ?? null,
+    balancedDraftValue: asset.balancedDraftValue ?? null,
+    balancedRank: asset.balancedRank ?? null,
+    positionRank: asset.positionRank ?? null,
+    reliabilityRating: asset.reliabilityRating ?? null,
+    volatilityPenalty: asset.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+  };
+}
+
 function createDraftableAssetFromRosterAsset(
   rosterAsset: RosterAsset,
   fallbackAsset: DraftableAsset | null
@@ -297,14 +443,8 @@ function createDraftableAssetFromRosterAsset(
     return fallbackAsset;
   }
 
-  const projectedFields = {
-    projectedSeasonPoints: rosterAsset.projectedSeasonPoints ?? null,
-    projectedCyclePoints: rosterAsset.projectedCyclePoints ?? null,
-    reliabilityRating: rosterAsset.reliabilityRating ?? null,
-    volatilityPenalty: rosterAsset.volatilityPenalty ?? null,
-    floorAdjustedCyclePoints: rosterAsset.floorAdjustedCyclePoints ?? null,
-    floorAdjustedDraftValue: rosterAsset.floorAdjustedDraftValue ?? null
-  };
+  const projectedFields =
+    getStoredProjectionFields(rosterAsset);
 
   if (rosterAsset.assetType === 'skater') {
     return {
@@ -330,7 +470,8 @@ function createDraftableAssetFromRosterAsset(
 async function buildCurrentRosterSnapshotPicks(
   leagueId: string,
   teams: FantasyTeam[],
-  draftPicks: DraftPick[]
+  draftPicks: DraftPick[],
+  includedOwnerIds?: Set<string>
 ): Promise<DraftPick[]> {
   const draftPickByOwnerAndAssetKey = new Map<string, DraftPick>();
 
@@ -341,8 +482,12 @@ async function buildCurrentRosterSnapshotPicks(
     );
   }
 
+  const eligibleTeams = includedOwnerIds
+    ? teams.filter((team) => includedOwnerIds.has(team.ownerId))
+    : teams;
+
   const rosterSnapshots = await Promise.all(
-    teams.map(async (team) => {
+    eligibleTeams.map(async (team) => {
       const rosterSnapshot = await getDoc(
         getTeamRosterRef(leagueId, team.ownerId)
       );
@@ -471,7 +616,7 @@ function getMatchupWinnerOwnerId(
   teamBScore: number
 ): string | null {
   if (!teamBOwnerId) {
-    return teamAOwnerId;
+    return null;
   }
 
   if (teamAScore > teamBScore) {
@@ -483,6 +628,52 @@ function getMatchupWinnerOwnerId(
   }
 
   return null;
+}
+
+function getPlayoffWinner(
+  matchup: FantasyMatchup,
+  teamAScore: number,
+  teamBScore: number
+): {
+  winnerOwnerId: string;
+  loserOwnerId: string;
+  tieBrokenByHigherSeed: boolean;
+} {
+  if (!matchup.teamBOwnerId) {
+    throw new Error(
+      `Playoff matchup ${matchup.id} does not have two teams.`
+    );
+  }
+
+  if (teamAScore > teamBScore) {
+    return {
+      winnerOwnerId: matchup.teamAOwnerId,
+      loserOwnerId: matchup.teamBOwnerId,
+      tieBrokenByHigherSeed: false
+    };
+  }
+
+  if (teamBScore > teamAScore) {
+    return {
+      winnerOwnerId: matchup.teamBOwnerId,
+      loserOwnerId: matchup.teamAOwnerId,
+      tieBrokenByHigherSeed: false
+    };
+  }
+
+  const teamASeed = matchup.teamASeed ?? Number.MAX_SAFE_INTEGER;
+  const teamBSeed = matchup.teamBSeed ?? Number.MAX_SAFE_INTEGER;
+  const teamAWinsTie = teamASeed <= teamBSeed;
+
+  return {
+    winnerOwnerId: teamAWinsTie
+      ? matchup.teamAOwnerId
+      : matchup.teamBOwnerId,
+    loserOwnerId: teamAWinsTie
+      ? matchup.teamBOwnerId
+      : matchup.teamAOwnerId,
+    tieBrokenByHigherSeed: true
+  };
 }
 
 function buildInitialRoundRobinLineup(
@@ -604,7 +795,8 @@ export function buildCycleSchedulePreview(
   }
 
   const orderedOwnerIds = getOrderedOwnerIds(teams, draft);
-  const previewCycleCount = cycleCount ?? getRoundRobinCycleCount(orderedOwnerIds.length);
+  const previewCycleCount = cycleCount ??
+    getStandardRegularSeasonCycleCount(orderedOwnerIds.length);
 
   return Array.from({ length: previewCycleCount }, (_, cycleIndex) => {
     const cycleNumber = cycleIndex + 1;
@@ -726,6 +918,31 @@ export function listenToLatestCycle(
     }
   );
 }
+
+export async function getLatestCycle(
+  leagueId: string
+): Promise<FantasyCycle | null> {
+  const latestCycleQuery = query(
+    getCyclesRef(leagueId),
+    orderBy('cycleNumber', 'desc'),
+    limit(1)
+  );
+
+  const snapshot = await getDocs(latestCycleQuery);
+  const latestCycleDoc = snapshot.docs[0];
+
+  if (!latestCycleDoc) {
+    return null;
+  }
+
+  const data = latestCycleDoc.data() as Partial<FantasyCycle>;
+
+  return normalizeCycle(
+    data,
+    data.cycleNumber ?? FIRST_CYCLE_NUMBER
+  );
+}
+
 
 export function listenToCycleMatchups(
   leagueId: string,
@@ -869,6 +1086,15 @@ export async function startCycle(
         {
           id: matchupId,
           cycleNumber,
+          phase: 'regular_season',
+          bracketType: null,
+          playoffRoundNumber: null,
+          playoffMatchupId: null,
+          teamASeed: null,
+          teamBSeed: null,
+          winnerPlace: null,
+          loserPlace: null,
+          tieBrokenByHigherSeed: false,
           teamAOwnerId: pairing.teamAOwnerId,
           teamBOwnerId: pairing.teamBOwnerId,
           teamAScore: 0,
@@ -892,7 +1118,15 @@ export async function startCycle(
       id: getCycleDocumentId(cycleNumber),
       cycleNumber,
       status: 'active',
+      phase: 'regular_season',
+      playoffRoundNumber: null,
+      playoffRoundCount: null,
+      playoffRoundLabel: null,
       matchupIds,
+      projectionAccuracyStatus: 'pending',
+      projectionAccuracyAssetCount: 0,
+      projectionAccuracyProjectionVersions: [],
+      projectionAccuracyUpdatedAt: null,
       completedAt: null
     };
 
@@ -911,7 +1145,7 @@ export async function startNextCycle(
   leagueId: string,
   teams: FantasyTeam[],
   currentCycleNumber: number
-): Promise<FantasyCycle> {
+): Promise<FantasyCycle | null> {
   if (teams.length < 2) {
     throw new Error(
       'At least two teams are required to start the next cycle.'
@@ -922,43 +1156,148 @@ export async function startNextCycle(
   const currentCycleRef = getCycleRef(leagueId, currentCycleNumber);
   const nextCycleRef = getCycleRef(leagueId, nextCycleNumber);
   const draftRef = getDraftRef(leagueId);
+  const playoffsRef = getFantasyPlayoffsRef(leagueId);
+
+  const [
+    currentCyclePreflightSnapshot,
+    playoffsPreflightSnapshot
+  ] = await Promise.all([
+    getDoc(currentCycleRef),
+    getDoc(playoffsRef)
+  ]);
+
+  if (!currentCyclePreflightSnapshot.exists()) {
+    throw new Error(`Cycle ${currentCycleNumber} does not exist.`);
+  }
+
+  const currentCycle = normalizeCycle(
+    currentCyclePreflightSnapshot.data() as Partial<FantasyCycle>,
+    currentCycleNumber
+  );
+
+  if (currentCycle.status !== 'complete') {
+    throw new Error(
+      `${currentCycle.phase === 'playoffs' ? currentCycle.playoffRoundLabel ?? `Cycle ${currentCycleNumber}` : `Cycle ${currentCycleNumber}`} must be completed before starting the next matchup period.`
+    );
+  }
+
+  let playoffState: FantasyPlayoffs | null =
+    playoffsPreflightSnapshot.exists()
+      ? normalizeFantasyPlayoffs(
+          playoffsPreflightSnapshot.data() as Partial<FantasyPlayoffs>
+        )
+      : null;
+  let startingPlayoffs = false;
+  let playoffRoundNumber: number | null = null;
+  let playoffRoundLabel: string | null = null;
+  let playoffMatchups = [] as ReturnType<typeof getPlayoffRoundMatchups>;
+  let includedOwnerIds: Set<string> | undefined;
+
+  if (currentCycle.phase === 'playoffs') {
+    if (!playoffState) {
+      throw new Error(
+        'The playoff bracket is missing. Open the playoff page before trying again.'
+      );
+    }
+
+    if (playoffState.status === 'complete') {
+      return null;
+    }
+
+    playoffRoundNumber = playoffState.currentRoundNumber;
+    playoffRoundLabel = getPlayoffRoundLabel(
+      playoffRoundNumber,
+      playoffState.playoffRoundCount
+    );
+    playoffMatchups = getPlayoffRoundMatchups(
+      playoffState,
+      playoffRoundNumber
+    );
+    includedOwnerIds = new Set(
+      getPlayoffRoundOwnerIds(
+        playoffState,
+        playoffRoundNumber
+      )
+    );
+  } else {
+    const standardRegularSeasonCycleCount =
+      getStandardRegularSeasonCycleCount(teams.length);
+
+    if (currentCycleNumber >= standardRegularSeasonCycleCount) {
+      if (playoffState?.status === 'complete') {
+        return null;
+      }
+
+      if (!playoffState) {
+        playoffState = createStandardFantasyPlayoffs(
+          teams,
+          currentCycleNumber
+        );
+        startingPlayoffs = true;
+      }
+
+      playoffRoundNumber = playoffState.currentRoundNumber;
+      playoffRoundLabel = getPlayoffRoundLabel(
+        playoffRoundNumber,
+        playoffState.playoffRoundCount
+      );
+      playoffMatchups = getPlayoffRoundMatchups(
+        playoffState,
+        playoffRoundNumber
+      );
+      includedOwnerIds = new Set(
+        getPlayoffRoundOwnerIds(
+          playoffState,
+          playoffRoundNumber
+        )
+      );
+    }
+  }
+
+  if (playoffRoundNumber !== null && playoffMatchups.length === 0) {
+    throw new Error(
+      `${playoffRoundLabel ?? 'The next playoff round'} does not have any playable matchups.`
+    );
+  }
+
   const draftPicksQuery = query(
     getDraftPicksRef(leagueId),
     orderBy('overallPick', 'asc')
   );
-
   const draftPicksSnapshot = await getDocs(draftPicksQuery);
   const draftPicks = draftPicksSnapshot.docs.map(
     (pickDoc) => pickDoc.data() as DraftPick
   );
-
   const rosterSnapshotPicks = await buildCurrentRosterSnapshotPicks(
     leagueId,
     teams,
-    draftPicks
+    draftPicks,
+    includedOwnerIds
   );
 
   return runTransaction(db, async (transaction) => {
     const [
       currentCycleSnapshot,
       nextCycleSnapshot,
-      draftSnapshot
+      draftSnapshot,
+      playoffsSnapshot
     ] = await Promise.all([
       transaction.get(currentCycleRef),
       transaction.get(nextCycleRef),
-      transaction.get(draftRef)
+      transaction.get(draftRef),
+      transaction.get(playoffsRef)
     ]);
 
     if (!currentCycleSnapshot.exists()) {
       throw new Error(`Cycle ${currentCycleNumber} does not exist.`);
     }
 
-    const currentCycle = normalizeCycle(
+    const savedCurrentCycle = normalizeCycle(
       currentCycleSnapshot.data() as Partial<FantasyCycle>,
       currentCycleNumber
     );
 
-    if (currentCycle.status !== 'complete') {
+    if (savedCurrentCycle.status !== 'complete') {
       throw new Error(
         `Cycle ${currentCycleNumber} must be completed before starting Cycle ${nextCycleNumber}.`
       );
@@ -974,8 +1313,7 @@ export async function startNextCycle(
       );
     }
 
-    const draft =
-      draftSnapshot.data() as FantasyDraft;
+    const draft = draftSnapshot.data() as FantasyDraft;
 
     if (draft.status !== 'complete') {
       throw new Error(
@@ -989,34 +1327,135 @@ export async function startNextCycle(
       );
     }
 
-    const orderedOwnerIds =
-      getOrderedOwnerIds(teams, draft);
-
-    const pairings =
-      createCyclePairings(orderedOwnerIds, nextCycleNumber);
-
     const matchupIds: string[] = [];
+    const isPlayoffCycle =
+      playoffRoundNumber !== null && playoffState !== null;
 
-    pairings.forEach((pairing, index) => {
-      const matchupId = `matchup-${index + 1}`;
-      matchupIds.push(matchupId);
+    if (isPlayoffCycle) {
+      if (!playoffState || playoffRoundNumber === null) {
+        throw new Error('The playoff bracket is not ready.');
+      }
+      if (startingPlayoffs && playoffsSnapshot.exists()) {
+        throw new Error('The playoff bracket has already been created.');
+      }
+
+      if (!startingPlayoffs) {
+        if (!playoffsSnapshot.exists()) {
+          throw new Error('The playoff bracket no longer exists.');
+        }
+
+        const savedPlayoffs = normalizeFantasyPlayoffs(
+          playoffsSnapshot.data() as Partial<FantasyPlayoffs>
+        );
+
+        if (savedPlayoffs.status === 'complete') {
+          return null;
+        }
+
+        if (savedPlayoffs.currentRoundNumber !== playoffRoundNumber) {
+          throw new Error(
+            'The playoff bracket advanced in another browser. Refresh and try again.'
+          );
+        }
+      }
+
+      for (const playoffMatchup of playoffMatchups) {
+        if (
+          !playoffMatchup.teamAOwnerId ||
+          !playoffMatchup.teamBOwnerId
+        ) {
+          continue;
+        }
+
+        matchupIds.push(playoffMatchup.id);
+
+        transaction.set(
+          getCycleMatchupRef(
+            leagueId,
+            nextCycleNumber,
+            playoffMatchup.id
+          ),
+          {
+            id: playoffMatchup.id,
+            cycleNumber: nextCycleNumber,
+            phase: 'playoffs',
+            bracketType: playoffMatchup.bracketType,
+            playoffRoundNumber,
+            playoffMatchupId: playoffMatchup.id,
+            teamASeed: playoffMatchup.teamASeed,
+            teamBSeed: playoffMatchup.teamBSeed,
+            winnerPlace: playoffMatchup.winnerPlace,
+            loserPlace: playoffMatchup.loserPlace,
+            tieBrokenByHigherSeed: false,
+            teamAOwnerId: playoffMatchup.teamAOwnerId,
+            teamBOwnerId: playoffMatchup.teamBOwnerId,
+            teamAScore: 0,
+            teamBScore: 0,
+            winnerOwnerId: null,
+            status: 'active',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }
+        );
+      }
+
+      playoffState = {
+        ...playoffState,
+        currentCycleNumber: nextCycleNumber
+      };
 
       transaction.set(
-        getCycleMatchupRef(leagueId, nextCycleNumber, matchupId),
+        playoffsRef,
         {
-          id: matchupId,
-          cycleNumber: nextCycleNumber,
-          teamAOwnerId: pairing.teamAOwnerId,
-          teamBOwnerId: pairing.teamBOwnerId,
-          teamAScore: 0,
-          teamBScore: 0,
-          winnerOwnerId: null,
-          status: 'active',
-          createdAt: serverTimestamp(),
+          ...playoffState,
+          ...(startingPlayoffs
+            ? { createdAt: serverTimestamp() }
+            : {}),
           updatedAt: serverTimestamp()
-        }
+        },
+        { merge: true }
       );
-    });
+    } else {
+      const orderedOwnerIds = getOrderedOwnerIds(teams, draft);
+      const pairings = createCyclePairings(
+        orderedOwnerIds,
+        nextCycleNumber
+      );
+
+      pairings.forEach((pairing, index) => {
+        const matchupId = `matchup-${index + 1}`;
+        matchupIds.push(matchupId);
+
+        transaction.set(
+          getCycleMatchupRef(
+            leagueId,
+            nextCycleNumber,
+            matchupId
+          ),
+          {
+            id: matchupId,
+            cycleNumber: nextCycleNumber,
+            phase: 'regular_season',
+            bracketType: null,
+            playoffRoundNumber: null,
+            playoffMatchupId: null,
+            teamASeed: null,
+            teamBSeed: null,
+            winnerPlace: null,
+            loserPlace: null,
+            tieBrokenByHigherSeed: false,
+            teamAOwnerId: pairing.teamAOwnerId,
+            teamBOwnerId: pairing.teamBOwnerId,
+            teamAScore: 0,
+            teamBScore: 0,
+            winnerOwnerId: null,
+            status: 'active',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }
+        );
+      });
+    }
 
     writeCycleRosterPickSnapshots(
       transaction,
@@ -1029,7 +1468,20 @@ export async function startNextCycle(
       id: getCycleDocumentId(nextCycleNumber),
       cycleNumber: nextCycleNumber,
       status: 'active',
+      phase: isPlayoffCycle
+        ? 'playoffs'
+        : 'regular_season',
+      playoffRoundNumber,
+      playoffRoundCount:
+        isPlayoffCycle && playoffState
+          ? playoffState.playoffRoundCount
+          : null,
+      playoffRoundLabel,
       matchupIds,
+      projectionAccuracyStatus: 'pending',
+      projectionAccuracyAssetCount: 0,
+      projectionAccuracyProjectionVersions: [],
+      projectionAccuracyUpdatedAt: null,
       completedAt: null
     };
 
@@ -1096,10 +1548,10 @@ export async function completeCycle(
   }
 
   const cycleRef = getCycleRef(leagueId, cycleNumber);
+  const playoffsRef = getFantasyPlayoffsRef(leagueId);
 
   await runTransaction(db, async (transaction) => {
-    const cycleSnapshot =
-      await transaction.get(cycleRef);
+    const cycleSnapshot = await transaction.get(cycleRef);
 
     if (!cycleSnapshot.exists()) {
       throw new Error(`Cycle ${cycleNumber} has not been started yet.`);
@@ -1116,6 +1568,110 @@ export async function completeCycle(
 
     if (cycle.status !== 'active') {
       throw new Error('Only an active cycle can be completed.');
+    }
+
+    if (cycle.phase === 'playoffs') {
+      const playoffsSnapshot = await transaction.get(playoffsRef);
+
+      if (!playoffsSnapshot.exists()) {
+        throw new Error('The playoff bracket could not be found.');
+      }
+
+      const playoffs = normalizeFantasyPlayoffs(
+        playoffsSnapshot.data() as Partial<FantasyPlayoffs>
+      );
+      const roundNumber = cycle.playoffRoundNumber;
+
+      if (roundNumber === null || roundNumber === undefined) {
+        throw new Error('The playoff round number is missing from this cycle.');
+      }
+
+      if (playoffs.status === 'complete') {
+        throw new Error('The fantasy playoffs have already been completed.');
+      }
+
+      if (playoffs.currentRoundNumber !== roundNumber) {
+        throw new Error(
+          'The playoff bracket has already advanced. Refresh the page and try again.'
+        );
+      }
+
+      const results: FantasyPlayoffRoundResult[] = [];
+
+      for (const matchup of matchups) {
+        if (!matchup.teamBOwnerId) {
+          throw new Error(
+            `Playoff matchup ${matchup.id} does not have two teams.`
+          );
+        }
+
+        const teamAScore = roundScore(
+          teamScores[matchup.teamAOwnerId] ??
+            matchup.teamAScore ??
+            0
+        );
+        const teamBScore = roundScore(
+          teamScores[matchup.teamBOwnerId] ??
+            matchup.teamBScore ??
+            0
+        );
+        const winner = getPlayoffWinner(
+          matchup,
+          teamAScore,
+          teamBScore
+        );
+
+        results.push({
+          matchupId: matchup.playoffMatchupId ?? matchup.id,
+          teamAScore,
+          teamBScore,
+          winnerOwnerId: winner.winnerOwnerId,
+          loserOwnerId: winner.loserOwnerId,
+          tieBrokenByHigherSeed: winner.tieBrokenByHigherSeed
+        });
+
+        transaction.update(
+          getCycleMatchupRef(leagueId, cycleNumber, matchup.id),
+          {
+            teamAScore,
+            teamBScore,
+            winnerOwnerId: winner.winnerOwnerId,
+            tieBrokenByHigherSeed: winner.tieBrokenByHigherSeed,
+            status: 'complete',
+            updatedAt: serverTimestamp()
+          }
+        );
+      }
+
+      const updatedPlayoffs = applyPlayoffRoundResults(
+        playoffs,
+        roundNumber,
+        results
+      );
+
+      transaction.set(
+        playoffsRef,
+        {
+          ...updatedPlayoffs,
+          updatedAt: serverTimestamp(),
+          ...(updatedPlayoffs.status === 'complete'
+            ? { completedAt: serverTimestamp() }
+            : {})
+        },
+        { merge: true }
+      );
+
+      transaction.update(cycleRef, {
+        status: 'complete',
+        projectionAccuracyStatus: 'pending',
+        projectionAccuracyAssetCount: 0,
+        projectionAccuracyProjectionVersions: [],
+        projectionAccuracyUpdatedAt: null,
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      return;
     }
 
     const recordDeltas: Record<
@@ -1170,7 +1726,6 @@ export async function completeCycle(
           matchup.teamAScore ??
           0
       );
-
       const teamBScore = roundScore(
         matchup.teamBOwnerId
           ? teamScores[matchup.teamBOwnerId] ??
@@ -1178,14 +1733,12 @@ export async function completeCycle(
               0
           : 0
       );
-
-      const winnerOwnerId =
-        getMatchupWinnerOwnerId(
-          matchup.teamAOwnerId,
-          matchup.teamBOwnerId,
-          teamAScore,
-          teamBScore
-        );
+      const winnerOwnerId = getMatchupWinnerOwnerId(
+        matchup.teamAOwnerId,
+        matchup.teamBOwnerId,
+        teamAScore,
+        teamBScore
+      );
 
       transaction.update(
         getCycleMatchupRef(leagueId, cycleNumber, matchup.id),
@@ -1198,24 +1751,22 @@ export async function completeCycle(
         }
       );
 
+      // A scheduled bye is neutral: it does not create a win, loss,
+      // tie, Points For, or Points Against.
+      if (!matchup.teamBOwnerId) {
+        continue;
+      }
+
       addPoints(
         matchup.teamAOwnerId,
         teamAScore,
         teamBScore
       );
-
-      if (matchup.teamBOwnerId) {
-        addPoints(
-          matchup.teamBOwnerId,
-          teamBScore,
-          teamAScore
-        );
-      }
-
-      if (!matchup.teamBOwnerId) {
-        addWin(matchup.teamAOwnerId);
-        continue;
-      }
+      addPoints(
+        matchup.teamBOwnerId,
+        teamBScore,
+        teamAScore
+      );
 
       if (teamAScore === teamBScore) {
         addTie(matchup.teamAOwnerId);
@@ -1250,11 +1801,15 @@ export async function completeCycle(
       }
 
       if (delta.pointsFor !== 0) {
-        teamUpdate['pointsFor'] = increment(roundScore(delta.pointsFor));
+        teamUpdate['pointsFor'] = increment(
+          roundScore(delta.pointsFor)
+        );
       }
 
       if (delta.pointsAgainst !== 0) {
-        teamUpdate['pointsAgainst'] = increment(roundScore(delta.pointsAgainst));
+        teamUpdate['pointsAgainst'] = increment(
+          roundScore(delta.pointsAgainst)
+        );
       }
 
       transaction.update(
@@ -1265,6 +1820,10 @@ export async function completeCycle(
 
     transaction.update(cycleRef, {
       status: 'complete',
+      projectionAccuracyStatus: 'pending',
+      projectionAccuracyAssetCount: 0,
+      projectionAccuracyProjectionVersions: [],
+      projectionAccuracyUpdatedAt: null,
       completedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });

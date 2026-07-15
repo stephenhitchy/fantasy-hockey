@@ -306,3 +306,12 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.playoff-qualifier-row {
+  background: rgba(45, 212, 191, 0.035);
+}
+
+.playoff-cut-line td {
+  border-bottom: 2px solid rgba(45, 212, 191, 0.65);
+}

@@ -20,6 +20,7 @@ import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-ass
 import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
 import { CycleMatchupOverview } from './features/cycles/matchup-overview/cycle-matchup-overview';
 import { PlayerAvailabilityManager } from './features/player-availability/player-availability-manager/player-availability-manager';
+import { PlayoffBracket } from './features/playoffs/playoff-bracket/playoff-bracket';
 
 export const routes: Routes = [
   {
@@ -81,6 +82,10 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/standings',
         component: LeagueStandings
+      },
+      {
+        path: 'leagues/:leagueId/playoffs',
+        component: PlayoffBracket
       },
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',

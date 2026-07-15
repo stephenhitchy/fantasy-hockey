@@ -38,12 +38,22 @@ import {
   pauseDraftClock,
   resumeDraftClock,
   saveDraftQueue,
-  setDraftAutoDraftEnabled
+  setDraftAutoDraftEnabled,
+  startDraftClock
 } from '../../../core/draft/draft.service';
 
 import {
   loadDraftPlayerPool
 } from '../../../core/draft/draft-player-pool.service';
+
+import {
+  generateSharedProjectionSnapshot,
+  isSharedProjectionSnapshotFreshForDraft,
+  loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotMetadata,
+  PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
+  SharedProjectionGenerationReason
+} from '../../../core/projection/projection-snapshot.service';
 
 import {
   DraftPlayerNewsOverride,
@@ -126,6 +136,11 @@ export class DraftRoom implements OnDestroy {
   queueSaving = signal(false);
   autoPickInProgress = signal(false);
   clockActionInProgress = signal(false);
+  sharedProjectionRepairInProgress = signal(false);
+  preDraftPreparationInProgress = signal(false);
+  preDraftPreparationReady = signal(false);
+  preDraftPreparationMessage = signal('');
+  preDraftPreparationWarning = signal('');
 
   errorMessage = signal('');
   successMessage = signal('');
@@ -190,10 +205,10 @@ private compareDraftValueThenProjection(
   }
 
   const firstProjectedCycle =
-    this.getAssetProjectedCycle(first) ?? -1;
+    this.getAssetDraftProjectedCycle(first) ?? -1;
 
   const secondProjectedCycle =
-    this.getAssetProjectedCycle(second) ?? -1;
+    this.getAssetDraftProjectedCycle(second) ?? -1;
 
   if (secondProjectedCycle !== firstProjectedCycle) {
     return secondProjectedCycle - firstProjectedCycle;
@@ -205,7 +220,10 @@ private compareDraftValueThenProjection(
 }
 
 getAssetValueRank(asset: DraftableAsset): number | null {
-  return this.assetValueRankByKey()[asset.assetKey] ?? null;
+  return asset.draftRank ??
+    asset.balancedRank ??
+    this.assetValueRankByKey()[asset.assetKey] ??
+    null;
 }
 
 getAssetValueRankDisplay(asset: DraftableAsset): string {
@@ -218,7 +236,7 @@ getAssetValueRankDisplay(asset: DraftableAsset): string {
 
 getAssetRating(asset: DraftableAsset): number | null {
   const projectedCycle =
-    this.getAssetProjectedCycle(asset);
+    this.getAssetDraftProjectedCycle(asset);
 
   if (typeof projectedCycle !== 'number') {
     return null;
@@ -226,8 +244,8 @@ getAssetRating(asset: DraftableAsset): number | null {
 
   const denominator =
     asset.position === 'G'
-      ? this.topGoalieCycleProjection()
-      : this.topSkaterCycleProjection();
+      ? this.topGoalieDraftProjection()
+      : this.topSkaterDraftProjection();
 
   return Math.round(
     projectedCycle / denominator * 100
@@ -267,6 +285,24 @@ getEmptySlotsForPosition(
   );
 }
 
+getAssetExpectedGamesDisplay(asset: DraftableAsset): string {
+  const expected = asset.expectedGamesAvailable;
+  const scheduled = asset.scheduledGamesInProjectionCycle;
+
+  if (
+    typeof expected !== 'number' ||
+    typeof scheduled !== 'number'
+  ) {
+    return '';
+  }
+
+  return `${expected.toFixed(1)}/${scheduled} games`;
+}
+
+getAssetAvailabilityLabel(asset: DraftableAsset): string {
+  return asset.availabilityLabel ?? 'Active';
+}
+
 getProjectionDisplay(
   value: number | null | undefined
 ): string {
@@ -286,9 +322,30 @@ getAssetProjectedSeason(
   );
 
   return (
+    asset.draftProjectedSeasonPoints ??
+    poolAsset?.draftProjectedSeasonPoints ??
     asset.projectedSeasonPoints ??
     poolAsset?.projectedSeasonPoints ??
     null
+  );
+}
+
+getAssetDraftProjectedCycle(
+  asset: DraftableAsset
+): number | null {
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.draftProjectedCyclePoints ??
+    poolAsset?.draftProjectedCyclePoints ??
+    (
+      typeof this.getAssetProjectedSeason(asset) === 'number'
+        ? this.getAssetProjectedSeason(asset)! / 82 * 6
+        : null
+    )
   );
 }
 
@@ -329,6 +386,8 @@ getAssetReliabilityRating(asset: DraftableAsset): number | null {
   );
 
   return (
+    asset.draftReliabilityRating ??
+    poolAsset?.draftReliabilityRating ??
     asset.reliabilityRating ??
     poolAsset?.reliabilityRating ??
     null
@@ -369,25 +428,95 @@ getAssetRiskLabel(asset: DraftableAsset): string {
   return 'Risk: Risky';
 }
 
+
+getAssetRecentFormAdjustment(
+  asset: DraftableAsset
+): number | null {
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  return (
+    asset.recentFormAdjustment ??
+    poolAsset?.recentFormAdjustment ??
+    null
+  );
+}
+
+getAssetRecentFormLabel(asset: DraftableAsset): string {
+  const adjustment =
+    this.getAssetRecentFormAdjustment(asset);
+
+  if (typeof adjustment !== 'number') {
+    return 'Form: —';
+  }
+
+  const prefix = adjustment > 0 ? '+' : '';
+
+  return `Form: ${prefix}${adjustment.toFixed(1)}`;
+}
+
+getAssetRecentFormClass(asset: DraftableAsset): string {
+  const adjustment =
+    this.getAssetRecentFormAdjustment(asset);
+
+  if (
+    typeof adjustment !== 'number' ||
+    Math.abs(adjustment) < 0.05
+  ) {
+    return 'form-neutral';
+  }
+
+  return adjustment > 0
+    ? 'form-positive'
+    : 'form-negative';
+}
+
+getAssetProjectionDataLabel(
+  asset: DraftableAsset
+): string {
+  const poolAsset = this.playerPool().find(
+    (availableAsset) =>
+      availableAsset.assetKey === asset.assetKey
+  );
+
+  const source =
+    asset.projectionDataSource ??
+    poolAsset?.projectionDataSource;
+
+  const gamesPlayed =
+    asset.projectionGamesPlayed ??
+    poolAsset?.projectionGamesPlayed;
+
+  const sourceLabel =
+    source === 'current-season-form'
+      ? 'Current form'
+      : source === 'current-season-baseline'
+        ? 'Current baseline'
+        : source === 'previous-season-form'
+          ? 'Previous form'
+          : source === 'previous-season-baseline'
+            ? 'Previous baseline'
+            : 'Baseline';
+
+  return typeof gamesPlayed === 'number'
+    ? `${sourceLabel} · ${gamesPlayed} GP`
+    : sourceLabel;
+}
+
 getAssetDraftValue(
   asset: DraftableAsset
 ): number | null {
-  const projectedCycle =
-    this.getAssetFloorAdjustedCycle(asset);
-
-  const replacementCycle =
-    this.replacementCycleValueByPosition()[asset.position];
-
-  if (
-    typeof projectedCycle !== 'number' ||
-    typeof replacementCycle !== 'number'
-  ) {
-    return null;
+  if (typeof asset.draftScore === 'number') {
+    return asset.draftScore;
   }
 
-  return Number(
-    (projectedCycle - replacementCycle).toFixed(1)
-  );
+  if (typeof asset.balancedDraftValue === 'number') {
+    return asset.balancedDraftValue;
+  }
+
+  return this.getAssetDraftProjectedCycle(asset);
 }
 
 private compareDraftAssets(
@@ -528,10 +657,13 @@ private getPositionSortValue(
   private stopInjurySyncListener: (() => void) | null = null;
   private stopQueueListener: (() => void) | null = null;
   private activationInProgress = false;
+  private preDraftPreparationAttemptKey = '';
   private lastAutoPickAttemptKey = '';
+  private lastObservedDraftStatus: FantasyDraft['status'] | null = null;
 
   private readonly clockTimer = setInterval(() => {
     this.now.set(Date.now());
+    void this.maybeWarmPreDraftProjections();
     void this.maybeActivateDraft();
     void this.maybeHandleAutomaticPick();
   }, 1000);
@@ -574,7 +706,13 @@ private getPositionSortValue(
   );
 
   readonly draftClockDisplay = computed(() => {
-    const totalSeconds = this.draftClockRemainingSeconds();
+    const draft = this.draft();
+
+    const totalSeconds =
+      draft?.clockStatus === 'stopped'
+        ? draft.currentPickSeconds ?? draft.pickSeconds
+        : this.draftClockRemainingSeconds();
+
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
 
@@ -692,23 +830,31 @@ private getPositionSortValue(
   return replacementValues;
 });
 
-readonly topSkaterCycleProjection = computed(() => {
+readonly topSkaterDraftProjection = computed(() => {
   const topProjection = Math.max(
     1,
     ...this.playerPool()
       .filter((asset) => asset.position !== 'G')
-      .map((asset) => asset.projectedCyclePoints ?? 0)
+      .map((asset) =>
+        asset.draftProjectedCyclePoints ??
+        asset.projectedCyclePoints ??
+        0
+      )
   );
 
   return topProjection;
 });
 
-readonly topGoalieCycleProjection = computed(() => {
+readonly topGoalieDraftProjection = computed(() => {
   const topProjection = Math.max(
     1,
     ...this.playerPool()
       .filter((asset) => asset.position === 'G')
-      .map((asset) => asset.projectedCyclePoints ?? 0)
+      .map((asset) =>
+        asset.draftProjectedCyclePoints ??
+        asset.projectedCyclePoints ??
+        0
+      )
   );
 
   return topProjection;
@@ -864,7 +1010,27 @@ readonly availableAssets = computed(() => {
       this.stopDraftListener = listenToFantasyDraft(
         leagueId,
         (draft) => {
+          const previousStatus =
+            this.lastObservedDraftStatus;
+
+          this.lastObservedDraftStatus =
+            draft?.status ?? null;
+
           this.draft.set(draft);
+
+          if (
+            draft?.status === 'live' &&
+            previousStatus !== null &&
+            previousStatus !== 'live'
+          ) {
+            // The commissioner creates the final frozen snapshot immediately
+            // before activating the draft. Reload once on the scheduled-to-live
+            // transition so managers who entered early do not keep an older
+            // pre-draft snapshot.
+            void this.loadPlayerPool();
+          }
+
+          void this.maybeWarmPreDraftProjections();
           void this.maybeActivateDraft();
         }
       );
@@ -877,6 +1043,7 @@ readonly availableAssets = computed(() => {
       );
 
       await this.loadPlayerPool();
+      await this.maybeWarmPreDraftProjections();
       await this.maybeActivateDraft();
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -894,14 +1061,23 @@ readonly availableAssets = computed(() => {
     this.playerPoolError.set('');
 
     try {
-      this.playerPool.set(
-        await loadDraftPlayerPool()
+      const snapshot = await loadSharedProjectionSnapshot(
+        this.leagueId
       );
+
+      if (!snapshot) {
+        this.playerPool.set([]);
+        throw new Error(
+          'Shared projections are not ready. The commissioner must refresh them before the draft can use rankings or auto-draft.'
+        );
+      }
+
+      this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.playerPoolError.set(
         error instanceof Error
           ? error.message
-          : 'Unable to load the NHL player pool.'
+          : 'Unable to load the shared NHL player pool.'
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -954,7 +1130,7 @@ readonly availableAssets = computed(() => {
     }
 
     return this.isCommissioner()
-      ? 'The latest ESPN injury report will be pulled when the scheduled start time arrives.'
+      ? `The injury report and shared rankings begin preloading ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`
       : 'Waiting for the commissioner to refresh the shared injury report and open the draft.';
   }
 
@@ -977,6 +1153,76 @@ readonly availableAssets = computed(() => {
     })}`;
   }
 
+  private getProjectionTeamCount(): number {
+    return Math.max(
+      this.league()?.maxTeams ??
+        this.teams().length,
+      2
+    );
+  }
+
+  private getRequiredGamesPerCycle(): number {
+    return (
+      this.league()?.scoringRules
+        ?.requiredGamesPerCycle ?? 6
+    );
+  }
+
+  private getMillisecondsUntilDraftStart(): number | null {
+    const startDate = this.draftStartDate();
+
+    if (!startDate) {
+      return null;
+    }
+
+    return startDate.getTime() - this.now();
+  }
+
+  getPreDraftPreparationStatusLabel(): string {
+    if (this.preDraftPreparationInProgress()) {
+      return 'Preparing Draft Data';
+    }
+
+    if (this.preDraftPreparationReady()) {
+      return 'Draft Data Ready';
+    }
+
+    const millisecondsRemaining =
+      this.getMillisecondsUntilDraftStart();
+
+    if (
+      typeof millisecondsRemaining === 'number' &&
+      millisecondsRemaining >
+        PRE_DRAFT_PROJECTION_WARMUP_MINUTES *
+          60 *
+          1000
+    ) {
+      return `Preload begins ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before start`;
+    }
+
+    return this.isCommissioner()
+      ? 'Waiting to prepare draft data'
+      : 'Waiting for commissioner preparation';
+  }
+
+  getPreDraftPreparationDescription(): string {
+    if (this.preDraftPreparationWarning()) {
+      return this.preDraftPreparationWarning();
+    }
+
+    if (this.preDraftPreparationMessage()) {
+      return this.preDraftPreparationMessage();
+    }
+
+    if (this.preDraftPreparationReady()) {
+      return 'The shared season draft rankings, next-cycle projections, and injury report are ready. The draft can open immediately at the scheduled time.';
+    }
+
+    return this.isCommissioner()
+      ? `Keep this Draft Room open. The injury refresh and shared projection build will begin automatically ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`
+      : 'The commissioner browser will prepare one shared ranking before the scheduled start.';
+  }
+
   private getSkatersForInjurySync(
     assets: DraftableAsset[]
   ) {
@@ -990,43 +1236,191 @@ readonly availableAssets = computed(() => {
       .map((asset) => asset.player);
   }
 
-  private async refreshDraftInjuriesBeforeOpening(): Promise<void> {
-    this.draftInjurySyncInProgress.set(true);
-    this.draftInjurySyncMessage.set(
-      'Refreshing the shared ESPN injury report before the draft opens.'
+  private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {
+    const metadata =
+      await loadSharedProjectionSnapshotMetadata(
+        this.leagueId
+      );
+
+    const isFresh =
+      isSharedProjectionSnapshotFreshForDraft(
+        metadata,
+        {
+          teamCount: this.getProjectionTeamCount(),
+          requiredGamesPerCycle:
+            this.getRequiredGamesPerCycle(),
+          now: new Date(this.now())
+        }
+      );
+
+    if (!isFresh) {
+      return false;
+    }
+
+    const snapshot = await loadSharedProjectionSnapshot(
+      this.leagueId
     );
+
+    if (!snapshot || snapshot.assets.length === 0) {
+      return false;
+    }
+
+    this.playerPool.set(snapshot.assets);
+    this.playerPoolError.set('');
+    this.preDraftPreparationReady.set(true);
+    this.preDraftPreparationMessage.set(
+      'Shared draft rankings and injury-adjusted cycle projections are already prepared.'
+    );
+
+    return true;
+  }
+
+  private async prepareDraftData(
+    generationReason: SharedProjectionGenerationReason
+  ): Promise<void> {
+    if (this.preDraftPreparationInProgress()) {
+      return;
+    }
+
+    this.preDraftPreparationInProgress.set(true);
+    this.draftInjurySyncInProgress.set(true);
+    this.preDraftPreparationReady.set(false);
+    this.preDraftPreparationWarning.set('');
     this.draftInjurySyncWarning.set('');
+    this.preDraftPreparationMessage.set(
+      'Refreshing the shared injury report before building the final draft snapshot.'
+    );
+    this.draftInjurySyncMessage.set(
+      'Refreshing the shared ESPN injury report before building projections.'
+    );
 
     try {
       let assets = this.playerPool();
 
       if (assets.length === 0) {
-        assets = await loadDraftPlayerPool(true);
-        this.playerPool.set(assets);
+        const sharedSnapshot =
+          await loadSharedProjectionSnapshot(
+            this.leagueId
+          );
+
+        assets = sharedSnapshot?.assets ??
+          await loadDraftPlayerPool(true);
       }
 
-      const result = await syncPlayerAvailabilityFromEspn({
-        leagueId: this.leagueId,
-        players: this.getSkatersForInjurySync(assets),
-        force: true,
-        minimumIntervalMinutes: 1
-      });
+      try {
+        const result = await syncPlayerAvailabilityFromEspn({
+          leagueId: this.leagueId,
+          players: this.getSkatersForInjurySync(assets),
+          force: true,
+          minimumIntervalMinutes: 1
+        });
 
+        this.draftInjurySyncMessage.set(
+          result.skipped
+            ? result.message
+            : `Injury report ready. ${result.matchedCount} injured skaters matched.`
+        );
+      } catch (error: unknown) {
+        const detail = error instanceof Error
+          ? error.message
+          : 'Unable to refresh ESPN injury data.';
+
+        this.draftInjurySyncWarning.set(
+          `The live injury refresh failed: ${detail} The newest saved report will be used.`
+        );
+      }
+
+      this.preDraftPreparationMessage.set(
+        'Building the shared season draft ranking and next-cycle projection snapshot.'
+      );
+
+      const sharedSnapshot =
+        await generateSharedProjectionSnapshot({
+          leagueId: this.leagueId,
+          teamCount: this.getProjectionTeamCount(),
+          requiredGamesPerCycle:
+            this.getRequiredGamesPerCycle(),
+          generationReason
+        });
+
+      this.playerPool.set(sharedSnapshot.assets);
+      this.playerPoolError.set('');
+      this.preDraftPreparationReady.set(true);
+      this.preDraftPreparationMessage.set(
+        `Draft data ready: ${sharedSnapshot.metadata.assetCount} shared assets are prepared for every manager.`
+      );
       this.draftInjurySyncMessage.set(
-        result.skipped
-          ? result.message
-          : `Injury report ready. ${result.matchedCount} injured skaters matched and shared with the league.`
+        `Shared Cycle ${sharedSnapshot.metadata.targetCycleNumber} projections are ready for every manager.`
       );
     } catch (error: unknown) {
       const detail = error instanceof Error
         ? error.message
-        : 'Unable to refresh ESPN injury data.';
+        : 'Unable to build shared projections.';
 
-      this.draftInjurySyncWarning.set(
-        `The live refresh failed: ${detail} The draft will use the most recent saved injury report instead.`
+      this.preDraftPreparationWarning.set(
+        `Pre-draft preparation failed: ${detail}`
       );
+      this.draftInjurySyncWarning.set(
+        `The draft cannot open because the shared projection snapshot failed: ${detail}`
+      );
+
+      throw error;
     } finally {
       this.draftInjurySyncInProgress.set(false);
+      this.preDraftPreparationInProgress.set(false);
+    }
+  }
+
+  async maybeWarmPreDraftProjections(): Promise<void> {
+    const draft = this.draft();
+    const startDate = this.draftStartDate();
+
+    if (
+      !draft ||
+      draft.status !== 'scheduled' ||
+      !startDate ||
+      !this.isCommissioner() ||
+      this.preDraftPreparationInProgress() ||
+      this.activationInProgress
+    ) {
+      return;
+    }
+
+    const millisecondsRemaining =
+      startDate.getTime() - this.now();
+
+    if (
+      millisecondsRemaining <= 0 ||
+      millisecondsRemaining >
+        PRE_DRAFT_PROJECTION_WARMUP_MINUTES *
+          60 *
+          1000
+    ) {
+      return;
+    }
+
+    if (await this.loadFreshDraftSnapshotIfAvailable()) {
+      return;
+    }
+
+    const attemptKey = [
+      startDate.getTime(),
+      this.getProjectionTeamCount(),
+      this.getRequiredGamesPerCycle()
+    ].join(':');
+
+    if (
+      this.preDraftPreparationAttemptKey === attemptKey
+    ) {
+      return;
+    }
+
+    this.preDraftPreparationAttemptKey = attemptKey;
+
+    try {
+      await this.prepareDraftData('pre-draft');
+    } catch {
+      // The scheduled-start fallback will retry once the start time arrives.
     }
   }
 
@@ -1043,7 +1437,7 @@ readonly availableAssets = computed(() => {
 
     if (!this.isCommissioner()) {
       this.draftInjurySyncMessage.set(
-        'Waiting for the commissioner to refresh the shared injury report and open the draft.'
+        'Waiting for the commissioner to finish the shared pre-draft preparation and open the draft.'
       );
       return;
     }
@@ -1055,7 +1449,14 @@ readonly availableAssets = computed(() => {
     this.activationInProgress = true;
 
     try {
-      await this.refreshDraftInjuriesBeforeOpening();
+      const snapshotReady =
+        await this.loadFreshDraftSnapshotIfAvailable();
+
+      if (!snapshotReady) {
+        await this.prepareDraftData(
+          'draft-start-fallback'
+        );
+      }
 
       const activatedDraft =
         await activateScheduledDraftIfReady(
@@ -1221,6 +1622,106 @@ readonly availableAssets = computed(() => {
     }
   }
 
+  canRepairSharedProjections(): boolean {
+    const draft = this.draft();
+
+    return Boolean(
+      this.isCommissioner() &&
+      draft?.status === 'live' &&
+      draft.nextOverallPick === 1 &&
+      draft.draftedAssetKeys.length === 0 &&
+      this.picks().length === 0 &&
+      !this.sharedProjectionRepairInProgress()
+    );
+  }
+
+  async repairSharedProjectionsForLiveDraft(): Promise<void> {
+    const draft = this.draft();
+
+    if (!draft || !this.canRepairSharedProjections()) {
+      return;
+    }
+
+    this.sharedProjectionRepairInProgress.set(true);
+    this.playerPoolLoading.set(true);
+    this.playerPoolError.set('');
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      if (draft.clockStatus === 'running') {
+        await pauseDraftClock(
+          this.leagueId,
+          this.userId
+        );
+      }
+
+      const snapshot = await generateSharedProjectionSnapshot({
+        leagueId: this.leagueId,
+        teamCount: this.getProjectionTeamCount(),
+        requiredGamesPerCycle:
+          this.getRequiredGamesPerCycle(),
+        generationReason: 'draft-start-fallback'
+      });
+
+      this.playerPool.set(snapshot.assets);
+      this.successMessage.set(
+        draft.clockStatus === 'running'
+          ? 'Shared projections were rebuilt. The clock was paused so the commissioner can confirm the player pool before resuming.'
+          : 'Shared projections were rebuilt. The first manager can start the clock when ready.'
+      );
+    } catch (error: unknown) {
+      this.playerPoolError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to rebuild shared projections.'
+      );
+    } finally {
+      this.playerPoolLoading.set(false);
+      this.sharedProjectionRepairInProgress.set(false);
+    }
+  }
+
+  async startMyDraftClock(): Promise<void> {
+    const draft = this.draft();
+
+    if (
+      !draft ||
+      draft.status !== 'live' ||
+      draft.clockStatus !== 'stopped' ||
+      !this.isMyTurn() ||
+      this.clockActionInProgress() ||
+      this.playerPoolLoading() ||
+      this.playerPool().length === 0 ||
+      Boolean(this.playerPoolError())
+    ) {
+      return;
+    }
+
+    this.clockActionInProgress.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      await startDraftClock(
+        this.leagueId,
+        this.userId
+      );
+
+      this.successMessage.set(
+        'The draft clock has started. You are on the clock.'
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to start the draft clock.'
+      );
+    } finally {
+      this.clockActionInProgress.set(false);
+    }
+  }
+
   async toggleDraftClockPause(): Promise<void> {
     const draft = this.draft();
 
@@ -1280,6 +1781,14 @@ readonly availableAssets = computed(() => {
 
     if (draft?.status === 'complete') {
       return 'Draft Complete';
+    }
+
+    if (draft?.clockStatus === 'stopped') {
+      return this.isMyTurn()
+        ? 'Start Clock When Ready'
+        : `Waiting for ${this.getTeamName(
+            this.currentPick()?.ownerId ?? ''
+          )} to Start`;
     }
 
     if (draft?.clockStatus === 'paused') {
@@ -1720,6 +2229,12 @@ readonly availableAssets = computed(() => {
   ): string {
     if (this.makingPickAssetKey() === asset.assetKey) {
       return 'Drafting...';
+    }
+
+    if (this.draft()?.clockStatus === 'stopped') {
+      return this.isMyTurn()
+        ? 'Start Clock First'
+        : 'Waiting';
     }
 
     if (this.draft()?.clockStatus === 'paused') {

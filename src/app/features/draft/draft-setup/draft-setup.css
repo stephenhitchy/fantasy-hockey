@@ -521,3 +521,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.projection-warning-message {
+  border: 1px solid #e4c88b;
+  background: #fff7e4;
+  color: #76551a;
+}

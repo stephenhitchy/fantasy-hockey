@@ -52,6 +52,12 @@
       </a>
 
       <a
+        [routerLink]="['/leagues', leagueId, 'playoffs']"
+      >
+        Playoff Bracket
+      </a>
+
+      <a
         [routerLink]="['/leagues', leagueId, 'projections']"
       >
         Projections
@@ -71,13 +77,13 @@
       </article>
 
       <article>
-        <span>Current Cycle</span>
-        <strong>Cycle {{ currentCycleNumber() }}</strong>
+        <span>Current Period</span>
+        <strong>{{ getCurrentPeriodLabel() }}</strong>
       </article>
 
       <article>
-        <span>Completed Matchups</span>
-        <strong>{{ completedMatchups().length }}</strong>
+        <span>Regular-Season Matchups</span>
+        <strong>{{ completedRegularSeasonMatchups().length }}</strong>
       </article>
 
       <article>
@@ -115,7 +121,11 @@
 
             <tbody>
               @for (row of standingsRows(); track row.ownerId) {
-                <tr [class.first-place-row]="row.rank === 1">
+                <tr
+                  [class.first-place-row]="row.rank === 1"
+                  [class.playoff-qualifier-row]="isPlayoffQualifier(row)"
+                  [class.playoff-cut-line]="isPlayoffCutLine(row)"
+                >
                   <td>
                     <strong class="rank-pill">#{{ row.rank }}</strong>
                   </td>
@@ -125,6 +135,8 @@
                       <strong>{{ row.teamName }}</strong>
                       @if (row.ownerId === userId) {
                         <span>Your Team</span>
+                      } @else if (isPlayoffQualifier(row)) {
+                        <span>Playoff Position</span>
                       }
                     </div>
                   </td>

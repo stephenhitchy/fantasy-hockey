@@ -1,0 +1,36 @@
+FANTASY HOCKEY — PLAYOFF BRACKET UI V2 MANIFEST
+
+PACKAGE PURPOSE
+Improve playoff page clarity by:
+- separating championship qualifiers from placement-field seeds
+- making seed labels/statuses more understandable
+- replacing the old round-list view with a more bracket-like unified postseason layout
+- showing winner and loser destinations directly on each matchup card
+
+FILES INCLUDED (COMPLETE REPLACEMENTS)
+1) src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
+2) src/app/features/playoffs/playoff-bracket/playoff-bracket.html
+3) src/app/features/playoffs/playoff-bracket/playoff-bracket.css
+4) INSTALL.txt
+5) MANIFEST.txt
+6) VALIDATION.txt
+7) CHANGELOG.txt
+
+FILES REVIEWED BUT LEFT UNCHANGED
+- src/app/core/playoffs/playoff.models.ts
+- src/app/core/playoffs/playoff-format.ts
+- src/app/core/playoffs/playoff.service.ts
+- src/app/features/leagues/league-standings/league-standings.ts
+- src/app/features/leagues/league-detail/league-detail.ts
+- src/app/features/cycles/cycle-one/cycle-one.ts
+- firestore.rules
+
+UNCHANGED BEHAVIOR
+- playoff seeding logic
+- playoff round generation
+- championship / placement bracket behavior
+- higher-seed tie-break advancement
+- cycle scoring and automatic progression
+- projection accuracy tracking
+- draft timer and auto-draft systems
+- injuries, IR, waivers, standings, and mobile navigation

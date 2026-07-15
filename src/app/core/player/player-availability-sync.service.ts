@@ -12,6 +12,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 
+
 import {
   auth,
   db
@@ -25,7 +26,8 @@ import {
   PlayerAvailabilityDatabaseRecord,
   PlayerAvailabilityStatus,
   PlayerAvailabilitySyncResult,
-  PlayerAvailabilitySyncState
+  PlayerAvailabilitySyncState,
+  PlayerAvailabilitySyncTrigger
 } from './player-availability.models';
 
 import {
@@ -38,7 +40,6 @@ const ESPN_NHL_INJURIES_URL =
 const MAX_NOTE_LENGTH = 500;
 const WRITE_BATCH_SIZE = 9;
 const DEFAULT_MINIMUM_SYNC_INTERVAL_MINUTES = 30;
-
 interface EspnInjuryEntry {
   playerName: string;
   position: string;
@@ -496,7 +497,18 @@ function normalizeSyncState(
     skippedGoalieCount: typeof data['skippedGoalieCount'] === 'number'
       ? data['skippedGoalieCount']
       : 0,
-    message: asString(data['message'])
+    message: asString(data['message']),
+    trigger:
+      data['trigger'] === 'daily-visit' ||
+      data['trigger'] === 'draft-start' ||
+      data['trigger'] === 'commissioner-browser'
+        ? data['trigger']
+        : undefined,
+    dailyKey: asString(data['dailyKey']) || undefined,
+    lastDailySyncKey:
+      asString(data['lastDailySyncKey']) || undefined,
+    lastDailySuccessfulSyncAt:
+      toIsoDate(data['lastDailySuccessfulSyncAt']) || undefined
   };
 }
 
@@ -535,6 +547,10 @@ export function listenToPlayerAvailabilitySyncState(
   );
 }
 
+function getUtcDailyKey(date: Date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
 function isSyncStateFresh(
   state: PlayerAvailabilitySyncState | null,
   minimumIntervalMinutes: number
@@ -554,13 +570,18 @@ function isSyncStateFresh(
 
 async function saveSyncRunning(
   leagueId: string,
-  userId: string
+  userId: string,
+  trigger: PlayerAvailabilitySyncTrigger
 ): Promise<void> {
   await setDoc(
     getSyncStateReference(leagueId),
     {
       source: 'ESPN',
       status: 'running',
+      trigger,
+      dailyKey: trigger === 'daily-visit'
+        ? getUtcDailyKey()
+        : null,
       lastAttemptAt: serverTimestamp(),
       updatedBy: userId,
       fetchedCount: 0,
@@ -570,7 +591,9 @@ async function saveSyncRunning(
       clearedRecordCount: 0,
       preservedManualOverrideCount: 0,
       skippedGoalieCount: 0,
-      message: 'Refreshing ESPN injury data before the draft opens.'
+      message: trigger === 'daily-visit'
+        ? 'Refreshing today’s ESPN injury report from the commissioner browser.'
+        : 'Refreshing ESPN injury data before the draft opens.'
     },
     { merge: true }
   );
@@ -579,7 +602,8 @@ async function saveSyncRunning(
 async function saveSyncError(
   leagueId: string,
   userId: string,
-  message: string
+  message: string,
+  trigger: PlayerAvailabilitySyncTrigger
 ): Promise<void> {
   try {
     await setDoc(
@@ -587,6 +611,7 @@ async function saveSyncError(
       {
         source: 'ESPN',
         status: 'error',
+        trigger,
         lastAttemptAt: serverTimestamp(),
         updatedBy: userId,
         fetchedCount: 0,
@@ -610,6 +635,7 @@ export async function syncPlayerAvailabilityFromEspn(input: {
   players: NHLPlayer[];
   force?: boolean;
   minimumIntervalMinutes?: number;
+  trigger?: PlayerAvailabilitySyncTrigger;
 }): Promise<PlayerAvailabilitySyncResult> {
   const user = auth.currentUser;
 
@@ -622,6 +648,8 @@ export async function syncPlayerAvailabilityFromEspn(input: {
     1,
     input.minimumIntervalMinutes ?? DEFAULT_MINIMUM_SYNC_INTERVAL_MINUTES
   );
+  const trigger =
+    input.trigger ?? 'commissioner-browser';
 
   if (!leagueId) {
     throw new Error('A league is required to sync player availability.');
@@ -632,8 +660,17 @@ export async function syncPlayerAvailabilityFromEspn(input: {
   }
 
   const previousState = await getPlayerAvailabilitySyncState(leagueId);
+  const currentDailyKey = getUtcDailyKey();
 
-  if (!input.force && isSyncStateFresh(previousState, minimumIntervalMinutes)) {
+  const dailyVisitAlreadyCurrent =
+    trigger === 'daily-visit' &&
+    previousState?.lastDailySyncKey === currentDailyKey;
+
+  const nonDailySyncStillFresh =
+    trigger !== 'daily-visit' &&
+    isSyncStateFresh(previousState, minimumIntervalMinutes);
+
+  if (!input.force && (dailyVisitAlreadyCurrent || nonDailySyncStillFresh)) {
     return {
       skipped: true,
       fetchedCount: previousState?.fetchedCount ?? 0,
@@ -646,12 +683,14 @@ export async function syncPlayerAvailabilityFromEspn(input: {
       skippedGoalieCount: previousState?.skippedGoalieCount ?? 0,
       unmatchedPlayerNames: [],
       completedAt: previousState?.lastSuccessfulSyncAt ?? '',
-      message: `ESPN injury data was already synced within the last ${minimumIntervalMinutes} minutes.`
+      message: dailyVisitAlreadyCurrent
+        ? 'Today’s shared injury report is already current.'
+        : `ESPN injury data was already synced within the last ${minimumIntervalMinutes} minutes.`
     };
   }
 
   try {
-    await saveSyncRunning(leagueId, user.uid);
+    await saveSyncRunning(leagueId, user.uid, trigger);
 
     const response = await fetch(ESPN_NHL_INJURIES_URL, {
       cache: 'no-store',
@@ -815,6 +854,16 @@ export async function syncPlayerAvailabilityFromEspn(input: {
       {
         source: 'ESPN',
         status: 'success',
+        trigger,
+        dailyKey: trigger === 'daily-visit'
+          ? currentDailyKey
+          : null,
+        lastDailySyncKey: trigger === 'daily-visit'
+          ? currentDailyKey
+          : previousState?.lastDailySyncKey ?? null,
+        lastDailySuccessfulSyncAt: trigger === 'daily-visit'
+          ? serverTimestamp()
+          : previousState?.lastDailySuccessfulSyncAt ?? null,
         lastAttemptAt: serverTimestamp(),
         lastSuccessfulSyncAt: serverTimestamp(),
         updatedBy: user.uid,
@@ -826,7 +875,8 @@ export async function syncPlayerAvailabilityFromEspn(input: {
         preservedManualOverrideCount,
         skippedGoalieCount: matchResult.skippedGoalieCount,
         message: message.slice(0, 500)
-      }
+      },
+      { merge: true }
     );
 
     return {
@@ -847,7 +897,7 @@ export async function syncPlayerAvailabilityFromEspn(input: {
       ? error.message
       : 'Unable to sync NHL injury data.';
 
-    await saveSyncError(leagueId, user.uid, message);
+    await saveSyncError(leagueId, user.uid, message, trigger);
     throw new Error(message);
   }
 }

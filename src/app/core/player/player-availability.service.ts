@@ -7,6 +7,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -359,6 +360,40 @@ export function getPlayerAvailabilityDatabaseRecord(
   return databaseRecordsSignal().get(playerId) ?? null;
 }
 
+export async function getPlayerAvailabilityRecordsForLeague(
+  leagueId: string
+): Promise<ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>> {
+  const normalizedLeagueId = leagueId.trim();
+
+  if (!normalizedLeagueId) {
+    return new Map();
+  }
+
+  const snapshot = await getDocs(
+    collection(
+      db,
+      'leagues',
+      normalizedLeagueId,
+      'playerAvailability'
+    )
+  );
+
+  const records = new Map<number, PlayerAvailabilityDatabaseRecord>();
+
+  snapshot.docs.forEach((snapshotDocument) => {
+    const record = normalizeDatabaseRecord(
+      snapshotDocument.data(),
+      normalizedLeagueId
+    );
+
+    if (record) {
+      records.set(record.playerId, record);
+    }
+  });
+
+  return records;
+}
+
 export function isPlayerAvailabilityManualRecord(
   record: PlayerAvailabilityDatabaseRecord | null
 ): boolean {
@@ -388,7 +423,11 @@ export function getPlayerAvailabilityForPlayer(
       irEligible: databaseRecord.irEligible,
       note: databaseRecord.note,
       updatedAt: databaseRecord.updatedAt,
-      source: 'firestore'
+      source: 'firestore',
+      externalReturnDate: databaseRecord.externalReturnDate,
+      externalInjuryDate: databaseRecord.externalInjuryDate,
+      externalStatus: databaseRecord.externalStatus,
+      syncedAt: databaseRecord.syncedAt
     };
   }
 

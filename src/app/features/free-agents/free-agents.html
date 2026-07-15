@@ -76,7 +76,7 @@
             (click)="loadPlayerPool()"
             [disabled]="playerPoolLoading()"
           >
-            {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Pool' }}
+            {{ playerPoolLoading() ? 'Reloading...' : 'Reload Shared Pool' }}
           </button>
         </div>
 
@@ -174,8 +174,21 @@
                   </div>
 
                   <div class="asset-projection">
-                    <strong>{{ getDisplayNumber(waiver.asset.projectedCyclePoints) }}</strong>
-                    <span>Cycle Proj</span>
+                    <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
+                    <span>Next Cycle</span>
+                    @if (getCycleRank(waiver.asset); as cycleRank) {
+                      <small class="projection-rank-pill">Cycle Rank #{{ cycleRank }}</small>
+                    }
+                    <small
+                      [class]="'recent-form-pill ' + getRecentFormClass(waiver.asset)"
+                    >
+                      Cycle {{ getRecentFormLabel(waiver.asset) }}
+                    </small>
+                    @if (getAssetExpectedGamesDisplay(waiver.asset); as expectedGames) {
+                      <small class="availability-projection-pill">
+                        {{ getAssetAvailabilityLabel(waiver.asset) }} · {{ expectedGames }}
+                      </small>
+                    }
                   </div>
 
                   <div class="waiver-action-stack">
@@ -258,8 +271,21 @@
                 </div>
 
                 <div class="asset-projection">
-                  <strong>{{ getDisplayNumber(asset.projectedCyclePoints) }}</strong>
-                  <span>Cycle Proj</span>
+                  <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
+                  <span>Next Cycle</span>
+                  @if (getCycleRank(asset); as cycleRank) {
+                    <small class="projection-rank-pill">Cycle Rank #{{ cycleRank }}</small>
+                  }
+                  <small
+                    [class]="'recent-form-pill ' + getRecentFormClass(asset)"
+                  >
+                    Cycle {{ getRecentFormLabel(asset) }}
+                  </small>
+                  @if (getAssetExpectedGamesDisplay(asset); as expectedGames) {
+                    <small class="availability-projection-pill">
+                      {{ getAssetAvailabilityLabel(asset) }} · {{ expectedGames }}
+                    </small>
+                  }
                 </div>
 
                 <button
@@ -343,7 +369,8 @@
               ·
               {{ addAsset.position }}
               ·
-              {{ getDisplayNumber(addAsset.projectedCyclePoints) }} cycle projection
+              {{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }} next-cycle projection
+              · {{ getRecentFormLabel(addAsset) }}
             </p>
             <p>{{ getEffectiveCycleText() }}</p>
             @if (selectedWaiver()) {

@@ -13,6 +13,7 @@ import {
 
 import { auth, db } from '../firebase';
 import {
+  CURRENT_SCORING_RULES_VERSION,
   defaultScoringRules,
   ScoringRules
 } from '../scoring/scoring-rules';
@@ -32,6 +33,7 @@ export interface League {
   maxTeams: number;
   matchupFormat: string;
   scoringRules: ScoringRules;
+  scoringRulesVersion?: number;
   createdAt?: unknown;
 }
 
@@ -74,6 +76,89 @@ export interface LeagueSummary {
 const INVITE_CODE_LENGTH = 6;
 const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_INVITE_CODE_ATTEMPTS = 20;
+
+function normalizeLeagueScoringRules(
+  league: Partial<League>
+): League {
+  const storedRules = league.scoringRules;
+
+  const normalizedRules: ScoringRules = {
+    ...defaultScoringRules,
+    ...(storedRules ?? {}),
+    forward: {
+      ...defaultScoringRules.forward,
+      ...(storedRules?.forward ?? {}),
+      goal: {
+        ...defaultScoringRules.forward.goal,
+        ...(storedRules?.forward?.goal ?? {})
+      },
+      primaryAssist: {
+        ...defaultScoringRules.forward.primaryAssist,
+        ...(storedRules?.forward?.primaryAssist ?? {})
+      },
+      secondaryAssist: {
+        ...defaultScoringRules.forward.secondaryAssist,
+        ...(storedRules?.forward?.secondaryAssist ?? {})
+      }
+    },
+    defense: {
+      ...defaultScoringRules.defense,
+      ...(storedRules?.defense ?? {}),
+      goal: {
+        ...defaultScoringRules.defense.goal,
+        ...(storedRules?.defense?.goal ?? {})
+      },
+      primaryAssist: {
+        ...defaultScoringRules.defense.primaryAssist,
+        ...(storedRules?.defense?.primaryAssist ?? {})
+      },
+      secondaryAssist: {
+        ...defaultScoringRules.defense.secondaryAssist,
+        ...(storedRules?.defense?.secondaryAssist ?? {})
+      }
+    }
+  };
+
+  /*
+   * Version 1 leagues stored the former high goalie values directly in the
+   * document. Upgrade only that legacy goalie section in memory while
+   * preserving every skater scoring setting.
+   */
+  if (
+    typeof league.scoringRulesVersion !== 'number' ||
+    league.scoringRulesVersion < CURRENT_SCORING_RULES_VERSION
+  ) {
+    normalizedRules.goalieSave =
+      defaultScoringRules.goalieSave;
+    normalizedRules.goalieWin =
+      defaultScoringRules.goalieWin;
+    normalizedRules.goalieShutout =
+      defaultScoringRules.goalieShutout;
+    normalizedRules.goalieSavePercentageTiers =
+      defaultScoringRules.goalieSavePercentageTiers.map(
+        (tier) => ({ ...tier })
+      );
+    normalizedRules.goalieGameMaximum =
+      defaultScoringRules.goalieGameMaximum;
+  }
+
+  return {
+    id: league.id ?? '',
+    name: league.name ?? '',
+    commissionerId: league.commissionerId ?? '',
+    inviteCode: league.inviteCode ?? '',
+    maxTeams:
+      typeof league.maxTeams === 'number'
+        ? league.maxTeams
+        : 2,
+    matchupFormat:
+      league.matchupFormat ?? 'cycle_matchup',
+    scoringRules: normalizedRules,
+    scoringRulesVersion:
+      CURRENT_SCORING_RULES_VERSION,
+    createdAt: league.createdAt
+  };
+}
 
 function normalizeInviteCode(inviteCode: string): string {
   return inviteCode.trim().toUpperCase();
@@ -298,7 +383,9 @@ export async function createLeague(
     inviteCode,
     maxTeams,
     matchupFormat: 'cycle_matchup',
-    scoringRules: defaultScoringRules
+    scoringRules: defaultScoringRules,
+    scoringRulesVersion:
+      CURRENT_SCORING_RULES_VERSION
   };
 
   const batch = writeBatch(db);
@@ -367,7 +454,11 @@ export async function getMyLeagues(): Promise<League[]> {
 
   const leagues = leagueSnapshots
     .filter((leagueSnapshot) => leagueSnapshot.exists())
-    .map((leagueSnapshot) => leagueSnapshot.data() as League)
+    .map((leagueSnapshot) =>
+      normalizeLeagueScoringRules(
+        leagueSnapshot.data() as Partial<League>
+      )
+    )
     .sort((first, second) =>
       first.name.localeCompare(second.name)
     );
@@ -386,7 +477,9 @@ export async function getLeagueById(
     return null;
   }
 
-  const league = leagueSnapshot.data() as League;
+  const league = normalizeLeagueScoringRules(
+    leagueSnapshot.data() as Partial<League>
+  );
   const user = auth.currentUser;
 
   if (user?.uid === league.commissionerId) {
@@ -501,7 +594,9 @@ export async function joinLeagueByInviteCode(
       throw new Error('This league no longer exists.');
     }
 
-    const league = leagueSnapshot.data() as League;
+    const league = normalizeLeagueScoringRules(
+      leagueSnapshot.data() as Partial<League>
+    );
 
     if (league.inviteCode !== normalizedInviteCode) {
       throw new Error('This invite code does not match the league.');

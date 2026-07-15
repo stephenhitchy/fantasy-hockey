@@ -110,7 +110,9 @@
 
       <p class="schedule-help">
         The date and time use your local timezone when saved. Every manager will see
-        the same draft start moment in their own local timezone.
+        the same draft start moment in their own local timezone. Saving a scheduled
+        draft builds an initial shared ranking, and the commissioner Draft Room
+        refreshes it again shortly before the draft starts.
       </p>
 
       <label class="schedule-input-group pick-clock-input-group">
@@ -163,6 +165,12 @@
     @if (successMessage()) {
       <p class="form-message success-message">
         {{ successMessage() }}
+      </p>
+    }
+
+    @if (projectionPreparationWarning()) {
+      <p class="form-message projection-warning-message">
+        {{ projectionPreparationWarning() }}
       </p>
     }
 
@@ -243,7 +251,7 @@
       >
         {{
           saving()
-            ? 'Saving Draft Setup...'
+            ? 'Saving & Preparing Projections...'
             : 'Save Draft Settings'
         }}
       </button>

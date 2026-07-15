@@ -1797,3 +1797,39 @@
   }
 }
 
+
+/* Projection Accuracy Tracking V1 */
+.projection-accuracy-save-status {
+  display: grid;
+  gap: 4px;
+  min-width: 230px;
+  padding: 11px 12px;
+  border: 1px solid rgba(105, 224, 146, 0.32);
+  border-radius: 10px;
+  background: rgba(105, 224, 146, 0.1);
+}
+
+.projection-accuracy-save-status strong {
+  color: #98f5bd;
+  font-size: 12px;
+}
+
+.projection-accuracy-save-status small {
+  color: #bfd3c7;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.projection-accuracy-save-error {
+  border-color: rgba(255, 137, 137, 0.35);
+  background: rgba(255, 137, 137, 0.1);
+}
+
+.projection-accuracy-save-error strong {
+  color: #ffb4b4;
+}
+
+.projection-accuracy-save-error small {
+  color: #e7bec1;
+}

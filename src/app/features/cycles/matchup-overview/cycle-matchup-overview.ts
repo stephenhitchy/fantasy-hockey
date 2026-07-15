@@ -58,6 +58,10 @@ import {
 } from '../../../core/league/league.service';
 
 import {
+  getStandardRegularSeasonCycleCount
+} from '../../../core/playoffs/playoff-format';
+
+import {
   FantasyTeam,
   getLeagueTeams
 } from '../../../core/team/team.service';
@@ -149,14 +153,20 @@ export class CycleMatchupOverview implements OnDestroy {
       this.teams.set(teams);
       this.playerPool.set(playerPool);
 
-      const preview = buildCycleSchedulePreview(
-        teams,
-        draft,
-        this.cycleNumber
-      );
+      const regularSeasonCycleCount =
+        getStandardRegularSeasonCycleCount(teams.length);
+      const preview = this.cycleNumber <= regularSeasonCycleCount
+        ? buildCycleSchedulePreview(
+            teams,
+            draft,
+            this.cycleNumber
+          )
+        : [];
 
       this.previewMatchups.set(
-        preview.find((cycle) => cycle.cycleNumber === this.cycleNumber)?.matchups ?? []
+        preview.find(
+          (cycle) => cycle.cycleNumber === this.cycleNumber
+        )?.matchups ?? []
       );
 
       this.stopCycleListener = listenToCycle(
@@ -195,6 +205,13 @@ export class CycleMatchupOverview implements OnDestroy {
   }
 
   getCycleLabel(): string {
+    const cycle = this.cycle();
+
+    if (cycle?.phase === 'playoffs') {
+      return cycle.playoffRoundLabel ??
+        `Playoff Cycle ${this.cycleNumber}`;
+    }
+
     return `Cycle ${this.cycleNumber}`;
   }
 
@@ -577,7 +594,7 @@ export class CycleMatchupOverview implements OnDestroy {
     }
 
     if (!matchup.teamBOwnerId) {
-      return matchup.teamAOwnerId;
+      return null;
     }
 
     const teamAScore = this.getTeamActualScore(matchup, matchup.teamAOwnerId) ?? 0;

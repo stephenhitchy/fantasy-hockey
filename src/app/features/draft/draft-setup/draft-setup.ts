@@ -30,6 +30,11 @@ import {
 } from '../../../core/draft/draft.models';
 
 import {
+  generateSharedProjectionSnapshot,
+  PRE_DRAFT_PROJECTION_WARMUP_MINUTES
+} from '../../../core/projection/projection-snapshot.service';
+
+import {
   getLeagueById,
   League
 } from '../../../core/league/league.service';
@@ -71,6 +76,7 @@ export class DraftSetup implements OnDestroy {
   saving = signal(false);
   errorMessage = signal('');
   successMessage = signal('');
+  projectionPreparationWarning = signal('');
 
   draftStartInput = '';
   pickSecondsInput = DEFAULT_DRAFT_PICK_SECONDS;
@@ -362,6 +368,7 @@ export class DraftSetup implements OnDestroy {
   async saveDraftOrder(): Promise<void> {
     this.errorMessage.set('');
     this.successMessage.set('');
+    this.projectionPreparationWarning.set('');
 
     if (this.isDraftLocked()) {
       this.errorMessage.set(
@@ -436,11 +443,45 @@ export class DraftSetup implements OnDestroy {
 
       this.draft.set(draftToSave);
 
-      this.successMessage.set(
-        scheduledStartDate
-          ? 'Draft order and start time saved.'
-          : 'Draft order saved. No start time is scheduled yet.'
-      );
+      if (scheduledStartDate) {
+        this.successMessage.set(
+          'Draft settings saved. Preparing an initial shared ranking now.'
+        );
+
+        try {
+          const snapshot =
+            await generateSharedProjectionSnapshot({
+              leagueId: this.leagueId,
+              teamCount: Math.max(
+                this.league()?.maxTeams ??
+                  this.teams().length,
+                2
+              ),
+              requiredGamesPerCycle:
+                this.league()?.scoringRules
+                  ?.requiredGamesPerCycle ?? 6,
+              generationReason: 'draft-setup'
+            });
+
+          this.successMessage.set(
+            `Draft settings saved and ${snapshot.metadata.assetCount} shared projections prepared. They will refresh again ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the draft when the commissioner has the Draft Room open.`
+          );
+        } catch (projectionError: unknown) {
+          this.successMessage.set(
+            'Draft settings were saved.'
+          );
+
+          this.projectionPreparationWarning.set(
+            projectionError instanceof Error
+              ? `The initial shared projection build did not finish: ${projectionError.message} The Draft Room will retry before the scheduled start.`
+              : 'The initial shared projection build did not finish. The Draft Room will retry before the scheduled start.'
+          );
+        }
+      } else {
+        this.successMessage.set(
+          'Draft order saved. No start time is scheduled yet.'
+        );
+      }
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error

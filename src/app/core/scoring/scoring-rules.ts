@@ -22,6 +22,9 @@ export interface GoalieSavePercentageTier {
   points: number;
 }
 
+export const CURRENT_SCORING_RULES_VERSION = 2;
+export const DEFAULT_GOALIE_GAME_MAXIMUM = 30;
+
 export interface ScoringRules {
   requiredGamesPerCycle: number;
 
@@ -42,6 +45,12 @@ export interface ScoringRules {
   goalieWin: number;
   goalieShutout: number;
   goalieSavePercentageTiers: GoalieSavePercentageTier[];
+
+  /**
+   * Maximum fantasy points a team goalie unit may earn from one NHL game.
+   * With six games per cycle, the default creates a 180-point cycle ceiling.
+   */
+  goalieGameMaximum: number;
 }
 
 export const defaultScoringRules: ScoringRules = {
@@ -111,18 +120,20 @@ export const defaultScoringRules: ScoringRules = {
   defenseToiFloor: 0.18,
   defenseToiCeiling: 0.36,
 
-goalieSave: 0.32,
-goalieWin: 5,
-goalieShutout: 8,
+  goalieSave: 0.3,
+  goalieWin: 4,
+  goalieShutout: 6,
 
-goalieSavePercentageTiers: [
-  { minSavePercentage: 0.945, points: 24 },
-  { minSavePercentage: 0.935, points: 21 },
-  { minSavePercentage: 0.925, points: 18 },
-  { minSavePercentage: 0.915, points: 15 },
-  { minSavePercentage: 0.9, points: 11 },
-  { minSavePercentage: 0.88, points: 7 },
-  { minSavePercentage: 0.85, points: 3 },
-  { minSavePercentage: 0, points: 0 }
-]
+  goalieSavePercentageTiers: [
+    { minSavePercentage: 0.945, points: 15 },
+    { minSavePercentage: 0.935, points: 13 },
+    { minSavePercentage: 0.925, points: 11 },
+    { minSavePercentage: 0.915, points: 9 },
+    { minSavePercentage: 0.9, points: 6 },
+    { minSavePercentage: 0.88, points: 3 },
+    { minSavePercentage: 0.85, points: 1 },
+    { minSavePercentage: 0, points: 0 }
+  ],
+
+  goalieGameMaximum: DEFAULT_GOALIE_GAME_MAXIMUM
 };

@@ -52,11 +52,13 @@ import {
 } from '../../../core/league/league.service';
 
 import {
+  getStandardRegularSeasonCycleCount
+} from '../../../core/playoffs/playoff-format';
+
+import {
   FantasyTeam,
   getLeagueTeams
 } from '../../../core/team/team.service';
-
-const MIN_SCHEDULE_PREVIEW_CYCLES = 10;
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -101,6 +103,10 @@ export class CycleSchedulePreview implements OnDestroy {
 
   readonly hasByeWeeks = computed(() =>
     this.teams().length % 2 === 1
+  );
+
+  readonly regularSeasonCycleCount = computed(() =>
+    getStandardRegularSeasonCycleCount(this.teams().length)
   );
 
   readonly selectedTeamName = computed(() =>
@@ -153,10 +159,8 @@ export class CycleSchedulePreview implements OnDestroy {
 
       this.selectedOwnerId.set(defaultOwnerId);
 
-      const previewCycleCount = Math.max(
-        MIN_SCHEDULE_PREVIEW_CYCLES,
-        getRoundRobinCycleCount(teams.length)
-      );
+      const previewCycleCount =
+        getStandardRegularSeasonCycleCount(teams.length);
 
       const schedulePreview = buildCycleSchedulePreview(
         teams,
@@ -295,6 +299,13 @@ export class CycleSchedulePreview implements OnDestroy {
   }
 
   getCycleLabel(cycleNumber: number): string {
+    const cycle = this.existingCycles()[cycleNumber];
+
+    if (cycle?.phase === 'playoffs') {
+      return cycle.playoffRoundLabel ??
+        `Playoff Cycle ${cycleNumber}`;
+    }
+
     return `Cycle ${cycleNumber}`;
   }
 
@@ -401,7 +412,7 @@ export class CycleSchedulePreview implements OnDestroy {
     }
 
     if (!matchup.teamBOwnerId && ownerId === matchup.teamAOwnerId) {
-      return 'Bye Win';
+      return 'Bye';
     }
 
     const winnerOwnerId = this.getPreviewWinnerOwnerId(
@@ -567,7 +578,7 @@ export class CycleSchedulePreview implements OnDestroy {
     }
 
     if (!existingMatchup.teamBOwnerId) {
-      return existingMatchup.teamAOwnerId;
+      return null;
     }
 
     if (existingMatchup.teamAScore > existingMatchup.teamBScore) {

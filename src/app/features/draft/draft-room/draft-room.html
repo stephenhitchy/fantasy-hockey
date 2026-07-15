@@ -72,22 +72,28 @@
       draft()?.status === 'scheduled' &&
       !startTimeReached()
     ) {
-      <section class="waiting-card scheduled-card">
+      <section
+        class="waiting-card scheduled-card"
+        [class.preparation-ready-card]="preDraftPreparationReady()"
+        [class.preparation-running-card]="preDraftPreparationInProgress()"
+      >
         <span class="eyebrow">Draft Scheduled</span>
         <h2>{{ formatDraftStart() }}</h2>
         <p>{{ getCountdownText() }}</p>
-        <span>
-          The draft board will open automatically when the scheduled time arrives.
-        </span>
+
+        <div class="pre-draft-preparation-row">
+          <strong>{{ getPreDraftPreparationStatusLabel() }}</strong>
+          <span>{{ getPreDraftPreparationDescription() }}</span>
+        </div>
       </section>
     } @else if (
       draft()?.status === 'scheduled' &&
       startTimeReached()
     ) {
       <section class="waiting-card injury-sync-waiting-card">
-        <span class="eyebrow">Pre-Draft Safety Check</span>
-        <h2>{{ getDraftInjurySyncStatusLabel() }}</h2>
-        <p>{{ getDraftInjurySyncDescription() }}</p>
+        <span class="eyebrow">Opening Draft</span>
+        <h2>{{ getPreDraftPreparationStatusLabel() }}</h2>
+        <p>{{ getPreDraftPreparationDescription() }}</p>
         <span>{{ getDraftInjurySyncTimeLabel() }}</span>
       </section>
     } @else if (draft()?.status === 'complete') {
@@ -117,6 +123,7 @@
         class="draft-clock-bar"
         [class.clock-urgent]="draftClockIsUrgent()"
         [class.clock-paused]="draft()?.clockStatus === 'paused'"
+        [class.clock-stopped]="draft()?.clockStatus === 'stopped'"
         [class.clock-auto]="currentOwnerAutoDraftEnabled()"
       >
         <div class="draft-clock-team">
@@ -131,7 +138,31 @@
         </div>
 
         <div class="draft-clock-controls">
-          @if (isCommissioner()) {
+          @if (draft()?.clockStatus === 'stopped') {
+            @if (isMyTurn()) {
+              <button
+                type="button"
+                class="clock-control-button clock-start-button"
+                (click)="startMyDraftClock()"
+                [disabled]="
+                  clockActionInProgress() ||
+                  playerPoolLoading() ||
+                  playerPool().length === 0 ||
+                  !!playerPoolError()
+                "
+              >
+                {{
+                  clockActionInProgress()
+                    ? 'Starting...'
+                    : 'Start Clock'
+                }}
+              </button>
+            } @else {
+              <span>
+                Waiting for the first manager to start the clock
+              </span>
+            }
+          } @else if (isCommissioner()) {
             <button
               type="button"
               class="clock-control-button"
@@ -194,11 +225,11 @@
   [ngModel]="sortMode()"
   (ngModelChange)="setSortMode($event)"
 >
-<option value="DRAFT_VALUE">Sort: Balanced Value Rank</option>
+<option value="DRAFT_VALUE">Sort: Season Draft Rank</option>
 <option value="RELIABILITY">Sort: Reliability</option>
-<option value="RATING">Sort: Rating</option>
-<option value="PROJECTED_CYCLE">Sort: Projected Cycle</option>
-<option value="PROJECTED_SEASON">Sort: Expected Season</option>
+<option value="RATING">Sort: Season Rating</option>
+<option value="PROJECTED_CYCLE">Sort: Next Cycle Projection</option>
+<option value="PROJECTED_SEASON">Sort: Season Outlook</option>
 <option value="NAME">Sort: Name</option>
 <option value="POSITION">Sort: Position</option>
 <option value="TEAM">Sort: NHL Team</option>
@@ -211,12 +242,30 @@
             <div class="pool-error-block">
                 <p class="pool-error">{{ playerPoolError() }}</p>
 
+                @if (canRepairSharedProjections()) {
+                  <button
+                    type="button"
+                    class="repair-pool-button"
+                    (click)="repairSharedProjectionsForLiveDraft()"
+                    [disabled]="sharedProjectionRepairInProgress()"
+                  >
+                    {{
+                      sharedProjectionRepairInProgress()
+                        ? 'Building Shared Projections...'
+                        : draft()?.clockStatus === 'running'
+                          ? 'Pause Clock & Build Shared Projections'
+                          : 'Build Shared Projections'
+                    }}
+                  </button>
+                }
+
                 <button
-                type="button"
-                class="retry-pool-button"
-                (click)="loadPlayerPool()"
+                  type="button"
+                  class="retry-pool-button"
+                  (click)="loadPlayerPool()"
+                  [disabled]="playerPoolLoading()"
                 >
-                Try Loading Player Pool Again
+                  Try Loading Player Pool Again
                 </button>
             </div>
             }@else if (availableAssets().length === 0) {
@@ -316,13 +365,26 @@
     {{ getAssetRiskLabel(asset) }}
   </small>
 
+  <small
+    [class]="'recent-form-pill ' + getAssetRecentFormClass(asset)"
+    [attr.title]="getAssetProjectionDataLabel(asset)"
+  >
+    Cycle {{ getAssetRecentFormLabel(asset) }}
+  </small>
+
+  @if (getAssetExpectedGamesDisplay(asset); as expectedGames) {
+    <small class="availability-projection-pill">
+      {{ getAssetAvailabilityLabel(asset) }} · {{ expectedGames }}
+    </small>
+  }
+
   <small>
-    Cycle:
+    Next Cycle:
     {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
   </small>
 
   <small>
-    Season:
+    Season Outlook:
     {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
   </small>
 </div>
@@ -611,13 +673,26 @@
     {{ getAssetRiskLabel(pick.asset) }}
   </small>
 
+  <small
+    [class]="'recent-form-pill ' + getAssetRecentFormClass(pick.asset)"
+    [attr.title]="getAssetProjectionDataLabel(pick.asset)"
+  >
+    Cycle {{ getAssetRecentFormLabel(pick.asset) }}
+  </small>
+
+  @if (getAssetExpectedGamesDisplay(pick.asset); as expectedGames) {
+    <small class="availability-projection-pill">
+      {{ getAssetAvailabilityLabel(pick.asset) }} · {{ expectedGames }}
+    </small>
+  }
+
   <small>
-    Cycle:
+    Next Cycle:
     {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
   </small>
 
   <small>
-    Season:
+    Season Outlook:
     {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
   </small>
 </div>
