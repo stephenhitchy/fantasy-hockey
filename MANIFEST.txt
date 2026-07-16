@@ -1,36 +1,44 @@
-FANTASY HOCKEY — PLAYOFF BRACKET UI V2 MANIFEST
+FANTASY HOCKEY — BANKED PLAYOFF WINDOWS V1 MANIFEST
 
-PACKAGE PURPOSE
-Improve playoff page clarity by:
-- separating championship qualifiers from placement-field seeds
-- making seed labels/statuses more understandable
-- replacing the old round-list view with a more bracket-like unified postseason layout
-- showing winner and loser destinations directly on each matchup card
+COMPLETE REPLACEMENT FILES
+1. firestore.rules
+2. src/app/app.routes.ts
+3. src/app/core/cycle/asset-cycle-window.service.ts
+4. src/app/core/cycle/cycle-scoring.service.ts
+5. src/app/core/cycle/cycle.models.ts
+6. src/app/core/cycle/cycle.service.ts
+7. src/app/core/draft/draft.models.ts
+8. src/app/core/playoffs/playoff-format.ts
+9. src/app/core/playoffs/playoff.models.ts
+10. src/app/core/playoffs/playoff.service.ts
+11. src/app/features/cycles/cycle-one/cycle-one.ts
+12. src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
+13. src/app/features/playoffs/playoff-bracket/playoff-bracket.html
+14. src/app/features/playoffs/playoff-bracket/playoff-bracket.css
 
-FILES INCLUDED (COMPLETE REPLACEMENTS)
-1) src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
-2) src/app/features/playoffs/playoff-bracket/playoff-bracket.html
-3) src/app/features/playoffs/playoff-bracket/playoff-bracket.css
-4) INSTALL.txt
-5) MANIFEST.txt
-6) VALIDATION.txt
-7) CHANGELOG.txt
+NEW FILES
+15. src/app/core/playoffs/playoff-window-bank.models.ts
+16. src/app/core/playoffs/playoff-window-bank.service.ts
+17. src/app/core/playoffs/playoff-window-simulator.ts
+18. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.ts
+19. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.html
+20. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.css
 
-FILES REVIEWED BUT LEFT UNCHANGED
-- src/app/core/playoffs/playoff.models.ts
-- src/app/core/playoffs/playoff-format.ts
-- src/app/core/playoffs/playoff.service.ts
-- src/app/features/leagues/league-standings/league-standings.ts
-- src/app/features/leagues/league-detail/league-detail.ts
-- src/app/features/cycles/cycle-one/cycle-one.ts
-- firestore.rules
+DOCUMENTATION
+21. INSTALL.txt
+22. MANIFEST.txt
+23. CHANGELOG.txt
+24. ARCHITECTURE.txt
+25. TEST_PLAN.txt
+26. VALIDATION.txt
 
-UNCHANGED BEHAVIOR
-- playoff seeding logic
-- playoff round generation
-- championship / placement bracket behavior
-- higher-seed tie-break advancement
-- cycle scoring and automatic progression
-- projection accuracy tracking
-- draft timer and auto-draft systems
-- injuries, IR, waivers, standings, and mobile navigation
+REVIEWED BUT UNCHANGED
+- draft.service.ts and all timer-aware draft behavior
+- free-agents component and waiver UI
+- roster models/service outside the existing queued-move contract
+- projection generation and Projection Accuracy Tracking
+- global daily injury reporting
+- NHL API request caching and throttling
+- league standings and regular-season matchup history
+- navbar and mobile scorebar
+- Firebase indexes and dependencies

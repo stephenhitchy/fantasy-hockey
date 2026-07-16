@@ -26,6 +26,14 @@ export interface BaseRosterAsset {
 
   projectedSeasonPoints?: number | null;
   projectedCyclePoints?: number | null;
+  frozenCycleProjectionPoints?: number | null;
+  frozenProjectionCycleNumber?: number | null;
+  frozenProjectionSource?:
+    | 'shared-snapshot'
+    | 'roster'
+    | 'draft-pick'
+    | 'legacy'
+    | null;
   seasonBaselineCyclePoints?: number | null;
   recentFormAdjustment?: number | null;
   roleAdjustment?: number | null;
@@ -86,11 +94,36 @@ export type RosterAsset =
   | SkaterRosterAsset
   | TeamGoalieUnitAsset;
 
+
+export type PendingRosterMoveType =
+  | 'add-drop'
+  | 'add-open-slot'
+  | 'waiver-award';
+
+/**
+ * A roster change reserved for the next boundary of one persistent active
+ * roster slot. The current asset remains in place until its active six-game
+ * window finishes. The incoming asset is reserved immediately so another
+ * manager cannot add it while the move is waiting.
+ */
+export interface PendingRosterSlotMove {
+  id: string;
+  moveType: PendingRosterMoveType;
+  incomingAsset: RosterAsset;
+  outgoingAssetKey: string | null;
+  sourceWaiverId: string | null;
+  queuedByOwnerId: string;
+  queuedAt: string;
+  requestedEffectiveCycleNumber: number | null;
+  requestedEffectiveLabel: string | null;
+}
+
 export interface ActiveRosterSlot {
   slotId: string;
   position: ActiveRosterPosition;
   slotNumber: number;
   asset: RosterAsset | null;
+  pendingMove?: PendingRosterSlotMove | null;
 }
 
 export interface IrRosterSlot {

@@ -1,4 +1,5 @@
 import {
+  clearNhlProjectionApiCache,
   getCurrentNhlDraftSkaters,
   getGoalieGameSummaryStats,
   getGoalieSeasonSummaryStats,
@@ -3115,31 +3116,71 @@ export async function loadDraftPlayerPool(
   const previousSeason = getPreviousSeason(currentSeason);
   const secondPreviousSeason = getPreviousSeason(previousSeason);
 
+  if (options.forceRefresh) {
+    clearNhlProjectionApiCache();
+  }
+
   const skaters = await getCurrentNhlDraftSkaters();
 
+  /*
+   * Load projection seasons in controlled waves. The NHL stats service can
+   * throttle several large league-wide requests started at the same instant.
+   * A throttled request used to be swallowed by the individual loaders, which
+   * allowed an entire draft board to collapse to position baselines such as
+   * 340 points for every center.
+   */
   const [
     currentSkaterProjectionStats,
-    previousSkaterProjectionStats,
-    secondPreviousSkaterProjectionStats,
     currentSkaterGameStats,
     currentGoalieProjectionStats,
-    previousGoalieProjectionStats,
-    secondPreviousGoalieProjectionStats,
     currentGoalieGameStats
   ] = await Promise.all([
     loadSkaterProjectionStats(currentSeason),
-    loadSkaterProjectionStats(previousSeason),
-    loadSkaterProjectionStats(secondPreviousSeason),
     loadSkaterGameProjectionStats(currentSeason),
     loadGoalieProjectionStats(currentSeason),
-    loadGoalieProjectionStats(previousSeason),
-    loadGoalieProjectionStats(secondPreviousSeason),
     loadGoalieGameProjectionStats(currentSeason)
+  ]);
+
+  const [
+    previousSkaterProjectionStats,
+    previousGoalieProjectionStats
+  ] = await Promise.all([
+    loadSkaterProjectionStats(previousSeason),
+    loadGoalieProjectionStats(previousSeason)
+  ]);
+
+  const [
+    secondPreviousSkaterProjectionStats,
+    secondPreviousGoalieProjectionStats
+  ] = await Promise.all([
+    loadSkaterProjectionStats(secondPreviousSeason),
+    loadGoalieProjectionStats(secondPreviousSeason)
   ]);
 
   const hasCurrentGameData =
     currentSkaterGameStats.size > 0 ||
     currentGoalieGameStats.size > 0;
+
+  const skatersWithProjectionHistory = skaters.filter(
+    (skater) =>
+      currentSkaterProjectionStats.has(skater.id) ||
+      previousSkaterProjectionStats.has(skater.id) ||
+      secondPreviousSkaterProjectionStats.has(skater.id)
+  ).length;
+
+  const minimumExpectedHistoryCount = Math.max(
+    75,
+    Math.floor(skaters.length * 0.2)
+  );
+
+  if (
+    skaters.length >= 100 &&
+    skatersWithProjectionHistory < minimumExpectedHistoryCount
+  ) {
+    throw new Error(
+      `NHL projection statistics were incomplete (${skatersWithProjectionHistory} of ${skaters.length} current skaters matched historical data). The previous shared projection was preserved. Please retry the projection refresh after the NHL stats service recovers.`
+    );
+  }
 
   const [
     previousSkaterGameStats,

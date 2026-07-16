@@ -22,6 +22,17 @@ import {
 } from './cycle.models';
 
 import {
+  CycleScoringResult
+} from './cycle-scoring.service';
+
+import {
+  getCycleTeamWindowsRef,
+  getFantasyTeamCycleWindowScore,
+  isFantasyTeamCycleWindowsComplete,
+  normalizeFantasyTeamCycleWindows
+} from './asset-cycle-window.service';
+
+import {
   FantasyTeam
 } from '../team/team.service';
 
@@ -34,6 +45,7 @@ import {
 
 import {
   FantasyRoster,
+  PendingRosterSlotMove,
   RosterAsset
 } from '../team/roster.models';
 
@@ -48,6 +60,7 @@ import {
 
 import {
   applyPlayoffRoundResults,
+  assignPlayoffRoundWindows,
   createStandardFantasyPlayoffs,
   getFantasyPlayoffsRef,
   getPlayoffRoundMatchups,
@@ -59,6 +72,22 @@ import {
   FantasyPlayoffRoundResult,
   FantasyPlayoffs
 } from '../playoffs/playoff.models';
+
+import {
+  createInitialPlayoffBankPayloads,
+  getAllPlayoffWindowBanks,
+  getEarliestUnassignedPlayoffWindow,
+  getPlayoffWindowBankRef
+} from '../playoffs/playoff-window-bank.service';
+
+import {
+  FantasyPlayoffWindowBank
+} from '../playoffs/playoff-window-bank.models';
+
+import {
+  createFrozenCycleProjection,
+  getRawCycleProjection
+} from '../projection/cycle-projection.util';
 
 const FIRST_CYCLE_NUMBER = 1;
 
@@ -94,6 +123,14 @@ export interface CycleSchedulePreviewMatchup {
 export interface CycleSchedulePreviewCycle {
   cycleNumber: number;
   matchups: CycleSchedulePreviewMatchup[];
+}
+
+export interface CycleMatchupCompletionResult {
+  newlyCompletedMatchupIds: string[];
+  completedMatchupCount: number;
+  totalMatchupCount: number;
+  pendingMatchupCount: number;
+  cycleCompleted: boolean;
 }
 
 function getCycleDocumentId(cycleNumber: number): string {
@@ -167,6 +204,28 @@ function getTeamRosterRef(
   );
 }
 
+function getWaiverRef(
+  leagueId: string,
+  waiverId: string
+) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'waivers',
+    waiverId
+  );
+}
+
+function getTransactionsRef(leagueId: string) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'transactions'
+  );
+}
+
 function getCyclesRef(leagueId: string) {
   return collection(
     db,
@@ -236,6 +295,68 @@ function getCycleRosterPickRef(
   );
 }
 
+function getCycleRosterSlotPickDocumentId(
+  ownerId: string,
+  rosterSlotId: string
+): string {
+  return `${ownerId}__${rosterSlotId}`
+    .replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+function getCycleRosterSlotPickRef(
+  leagueId: string,
+  cycleNumber: number,
+  ownerId: string,
+  rosterSlotId: string
+) {
+  return doc(
+    getCycleRosterPicksRef(leagueId, cycleNumber),
+    getCycleRosterSlotPickDocumentId(ownerId, rosterSlotId)
+  );
+}
+
+function getRosterSlotIdFromPick(pick: DraftPick): string {
+  return pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
+}
+
+function getCycleWindowId(
+  ownerId: string,
+  rosterSlotId: string,
+  cycleNumber: number
+): string {
+  return `${ownerId}__${rosterSlotId}__cycle-${cycleNumber}`;
+}
+
+function buildExpectedRosterSlotIdsByOwner(
+  picks: DraftPick[]
+): Record<string, string[]> {
+  const slotsByOwnerId: Record<string, string[]> = {};
+
+  for (const pick of picks) {
+    const slotId = getRosterSlotIdFromPick(pick);
+    slotsByOwnerId[pick.ownerId] ??= [];
+
+    if (!slotsByOwnerId[pick.ownerId].includes(slotId)) {
+      slotsByOwnerId[pick.ownerId].push(slotId);
+    }
+  }
+
+  for (const slotIds of Object.values(slotsByOwnerId)) {
+    slotIds.sort();
+  }
+
+  return slotsByOwnerId;
+}
+
+function countExpectedWindows(
+  expectedRosterSlotIdsByOwner: Record<string, string[]>
+): number {
+  return Object.values(expectedRosterSlotIdsByOwner).reduce(
+    (total, slotIds) => total + slotIds.length,
+    0
+  );
+}
+
 function normalizeCycle(
   data: Partial<FantasyCycle>,
   fallbackCycleNumber: number = FIRST_CYCLE_NUMBER
@@ -263,6 +384,67 @@ function normalizeCycle(
     matchupIds: Array.isArray(data.matchupIds)
       ? data.matchupIds
       : [],
+    windowSchemaVersion:
+      typeof data.windowSchemaVersion === 'number'
+        ? data.windowSchemaVersion
+        : 0,
+    expectedRosterSlotIdsByOwner:
+      data.expectedRosterSlotIdsByOwner &&
+      typeof data.expectedRosterSlotIdsByOwner === 'object'
+        ? data.expectedRosterSlotIdsByOwner
+        : {},
+    parentCycleNumber:
+      typeof data.parentCycleNumber === 'number'
+        ? data.parentCycleNumber
+        : null,
+    overlapsPreviousCycle:
+      data.overlapsPreviousCycle === true,
+    bankedPlayoffWindowsEnabled:
+      data.bankedPlayoffWindowsEnabled === true,
+    totalExpectedWindowCount:
+      typeof data.totalExpectedWindowCount === 'number'
+        ? data.totalExpectedWindowCount
+        : 0,
+    activeWindowCount:
+      typeof data.activeWindowCount === 'number'
+        ? data.activeWindowCount
+        : 0,
+    completedWindowCount:
+      typeof data.completedWindowCount === 'number'
+        ? data.completedWindowCount
+        : 0,
+    matchupCompletionSchemaVersion:
+      typeof data.matchupCompletionSchemaVersion === 'number'
+        ? data.matchupCompletionSchemaVersion
+        : 0,
+    totalMatchupCount:
+      typeof data.totalMatchupCount === 'number'
+        ? data.totalMatchupCount
+        : Array.isArray(data.matchupIds)
+          ? data.matchupIds.length
+          : 0,
+    completedMatchupCount:
+      typeof data.completedMatchupCount === 'number'
+        ? data.completedMatchupCount
+        : 0,
+    pendingMatchupCount:
+      typeof data.pendingMatchupCount === 'number'
+        ? data.pendingMatchupCount
+        : Math.max(
+            0,
+            (typeof data.totalMatchupCount === 'number'
+              ? data.totalMatchupCount
+              : Array.isArray(data.matchupIds)
+                ? data.matchupIds.length
+                : 0) -
+            (typeof data.completedMatchupCount === 'number'
+              ? data.completedMatchupCount
+              : 0)
+          ),
+    lastMatchupCompletedAt:
+      data.lastMatchupCompletedAt ?? null,
+    standingsAppliedAt:
+      data.standingsAppliedAt ?? null,
     projectionAccuracyStatus:
       data.projectionAccuracyStatus === 'complete'
         ? 'complete'
@@ -319,6 +501,22 @@ function normalizeMatchup(
       typeof data.teamBSeed === 'number'
         ? data.teamBSeed
         : null,
+    teamAWindowNumber:
+      typeof data.teamAWindowNumber === 'number'
+        ? data.teamAWindowNumber
+        : null,
+    teamBWindowNumber:
+      typeof data.teamBWindowNumber === 'number'
+        ? data.teamBWindowNumber
+        : null,
+    teamAWindowCycleNumber:
+      typeof data.teamAWindowCycleNumber === 'number'
+        ? data.teamAWindowCycleNumber
+        : null,
+    teamBWindowCycleNumber:
+      typeof data.teamBWindowCycleNumber === 'number'
+        ? data.teamBWindowCycleNumber
+        : null,
     winnerPlace:
       typeof data.winnerPlace === 'number'
         ? data.winnerPlace
@@ -341,6 +539,7 @@ function normalizeMatchup(
         : 0,
     winnerOwnerId: data.winnerOwnerId ?? null,
     status: data.status ?? 'active',
+    completedAt: data.completedAt ?? null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt
   };
@@ -379,91 +578,343 @@ function getRosterAssetKey(asset: RosterAsset | null): string {
 }
 
 function getStoredProjectionFields(
-  asset: RosterAsset
+  asset: DraftableAsset | RosterAsset
 ): DraftProjection {
+  const projection = asset as DraftProjection;
+
   return {
-    projectedSeasonPoints: asset.projectedSeasonPoints ?? null,
-    projectedCyclePoints: asset.projectedCyclePoints ?? null,
-    seasonBaselineCyclePoints: asset.seasonBaselineCyclePoints ?? null,
-    recentFormAdjustment: asset.recentFormAdjustment ?? null,
-    roleAdjustment: asset.roleAdjustment ?? null,
-    projectionDataSeason: asset.projectionDataSeason ?? null,
-    projectionDataSource: (asset.projectionDataSource ?? null) as DraftProjection['projectionDataSource'],
-    projectionGamesPlayed: asset.projectionGamesPlayed ?? null,
-    recentFormSampleSize: asset.recentFormSampleSize ?? null,
-    seasonFantasyPointsPerGame: asset.seasonFantasyPointsPerGame ?? null,
+    projectedSeasonPoints:
+      projection.projectedSeasonPoints ?? null,
+    projectedCyclePoints:
+      projection.projectedCyclePoints ?? null,
+    frozenCycleProjectionPoints:
+      projection.frozenCycleProjectionPoints ?? null,
+    frozenProjectionCycleNumber:
+      projection.frozenProjectionCycleNumber ?? null,
+    frozenProjectionSource:
+      projection.frozenProjectionSource ?? null,
+    seasonBaselineCyclePoints:
+      projection.seasonBaselineCyclePoints ?? null,
+    recentFormAdjustment:
+      projection.recentFormAdjustment ?? null,
+    roleAdjustment: projection.roleAdjustment ?? null,
+    projectionDataSeason:
+      projection.projectionDataSeason ?? null,
+    projectionDataSource:
+      projection.projectionDataSource ?? null,
+    projectionGamesPlayed:
+      projection.projectionGamesPlayed ?? null,
+    recentFormSampleSize:
+      projection.recentFormSampleSize ?? null,
+    seasonFantasyPointsPerGame:
+      projection.seasonFantasyPointsPerGame ?? null,
     recentThreeGameFantasyPointsPerGame:
-      asset.recentThreeGameFantasyPointsPerGame ?? null,
+      projection.recentThreeGameFantasyPointsPerGame ?? null,
     recentFiveGameFantasyPointsPerGame:
-      asset.recentFiveGameFantasyPointsPerGame ?? null,
+      projection.recentFiveGameFantasyPointsPerGame ?? null,
     recentTenGameFantasyPointsPerGame:
-      asset.recentTenGameFantasyPointsPerGame ?? null,
+      projection.recentTenGameFantasyPointsPerGame ?? null,
+    recentTwentyGameFantasyPointsPerGame:
+      projection.recentTwentyGameFantasyPointsPerGame ?? null,
+    draftProjectedSeasonPoints:
+      projection.draftProjectedSeasonPoints ?? null,
+    draftProjectedCyclePoints:
+      projection.draftProjectedCyclePoints ?? null,
+    draftRecentTrendAdjustment:
+      projection.draftRecentTrendAdjustment ?? null,
+    draftRoleAdjustment:
+      projection.draftRoleAdjustment ?? null,
+    draftReliabilityRating:
+      projection.draftReliabilityRating ?? null,
+    draftVolatilityPenalty:
+      projection.draftVolatilityPenalty ?? null,
+    draftFloorAdjustedCyclePoints:
+      projection.draftFloorAdjustedCyclePoints ?? null,
+    draftValueAboveReplacement:
+      projection.draftValueAboveReplacement ?? null,
+    draftScore: projection.draftScore ?? null,
+    draftRank: projection.draftRank ?? null,
+    draftPositionRank:
+      projection.draftPositionRank ?? null,
+    cycleValueAboveReplacement:
+      projection.cycleValueAboveReplacement ?? null,
+    cycleScore: projection.cycleScore ?? null,
+    cycleRank: projection.cycleRank ?? null,
+    cyclePositionRank:
+      projection.cyclePositionRank ?? null,
     seasonAverageTimeOnIceMinutes:
-      asset.seasonAverageTimeOnIceMinutes ?? null,
+      projection.seasonAverageTimeOnIceMinutes ?? null,
     recentAverageTimeOnIceMinutes:
-      asset.recentAverageTimeOnIceMinutes ?? null,
-    actualRecentAppearances: asset.actualRecentAppearances ?? null,
-    missedRecentTeamGames: asset.missedRecentTeamGames ?? null,
-    weightedRecentAppearances: asset.weightedRecentAppearances ?? null,
-    fullWeightRecentGames: asset.fullWeightRecentGames ?? null,
-    partialWeightRecentGames: asset.partialWeightRecentGames ?? null,
+      projection.recentAverageTimeOnIceMinutes ?? null,
+    actualRecentAppearances:
+      projection.actualRecentAppearances ?? null,
+    missedRecentTeamGames:
+      projection.missedRecentTeamGames ?? null,
+    weightedRecentAppearances:
+      projection.weightedRecentAppearances ?? null,
+    fullWeightRecentGames:
+      projection.fullWeightRecentGames ?? null,
+    partialWeightRecentGames:
+      projection.partialWeightRecentGames ?? null,
     healthyProjectedCyclePoints:
-      asset.healthyProjectedCyclePoints ?? null,
+      projection.healthyProjectedCyclePoints ?? null,
     scheduledGamesInProjectionCycle:
-      asset.scheduledGamesInProjectionCycle ?? null,
-    expectedGamesAvailable: asset.expectedGamesAvailable ?? null,
-    availabilityAdjustment: asset.availabilityAdjustment ?? null,
+      projection.scheduledGamesInProjectionCycle ?? null,
+    expectedGamesAvailable:
+      projection.expectedGamesAvailable ?? null,
+    availabilityAdjustment:
+      projection.availabilityAdjustment ?? null,
     availabilityAdjustedCyclePoints:
-      asset.availabilityAdjustedCyclePoints ?? null,
-    availabilityStatus: (asset.availabilityStatus ?? null) as DraftProjection['availabilityStatus'],
-    availabilityLabel: asset.availabilityLabel ?? null,
-    availabilityReturnDate: asset.availabilityReturnDate ?? null,
-    availabilityNote: asset.availabilityNote ?? null,
-    availabilityAsOf: asset.availabilityAsOf ?? null,
+      projection.availabilityAdjustedCyclePoints ?? null,
+    availabilityStatus:
+      projection.availabilityStatus ?? null,
+    availabilityLabel:
+      projection.availabilityLabel ?? null,
+    availabilityReturnDate:
+      projection.availabilityReturnDate ?? null,
+    availabilityNote:
+      projection.availabilityNote ?? null,
+    availabilityAsOf:
+      projection.availabilityAsOf ?? null,
     targetProjectionCycleNumber:
-      asset.targetProjectionCycleNumber ?? null,
+      projection.targetProjectionCycleNumber ?? null,
     sharedProjectionSnapshotId:
-      asset.sharedProjectionSnapshotId ?? null,
-    projectionGeneratedAt: asset.projectionGeneratedAt ?? null,
-    balancedDraftValue: asset.balancedDraftValue ?? null,
-    balancedRank: asset.balancedRank ?? null,
-    positionRank: asset.positionRank ?? null,
-    reliabilityRating: asset.reliabilityRating ?? null,
-    volatilityPenalty: asset.volatilityPenalty ?? null,
-    floorAdjustedCyclePoints: asset.floorAdjustedCyclePoints ?? null,
-    floorAdjustedDraftValue: asset.floorAdjustedDraftValue ?? null
+      projection.sharedProjectionSnapshotId ?? null,
+    projectionGeneratedAt:
+      projection.projectionGeneratedAt ?? null,
+    balancedDraftValue:
+      projection.balancedDraftValue ?? null,
+    balancedRank: projection.balancedRank ?? null,
+    positionRank: projection.positionRank ?? null,
+    reliabilityRating:
+      projection.reliabilityRating ?? null,
+    volatilityPenalty:
+      projection.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints:
+      projection.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue:
+      projection.floorAdjustedDraftValue ?? null
   };
 }
 
-function createDraftableAssetFromRosterAsset(
-  rosterAsset: RosterAsset,
-  fallbackAsset: DraftableAsset | null
+function rosterAssetToDraftableAsset(
+  asset: RosterAsset
 ): DraftableAsset {
-  if (fallbackAsset) {
-    return fallbackAsset;
-  }
+  const assetKey = getRosterAssetKey(asset);
 
-  const projectedFields =
-    getStoredProjectionFields(rosterAsset);
-
-  if (rosterAsset.assetType === 'skater') {
+  if (asset.assetType === 'skater') {
     return {
       assetType: 'skater',
-      assetKey: getRosterAssetKey(rosterAsset),
-      position: rosterAsset.position,
-      player: rosterAsset.player,
-      ...projectedFields
+      assetKey,
+      position: asset.position,
+      player: asset.player,
+      ...getStoredProjectionFields(asset)
     };
   }
 
   return {
     assetType: 'team-goalie-unit',
-    assetKey: getRosterAssetKey(rosterAsset),
+    assetKey,
     position: 'G',
-    teamName: rosterAsset.teamName,
-    teamAbbreviation: rosterAsset.teamAbbreviation,
-    teamLogoUrl: rosterAsset.teamLogoUrl,
-    ...projectedFields
+    teamName: asset.teamName,
+    teamAbbreviation: asset.teamAbbreviation,
+    teamLogoUrl: asset.teamLogoUrl,
+    ...getStoredProjectionFields(asset)
+  };
+}
+
+function buildActivatedDropWaiverPayload(
+  droppedAsset: RosterAsset,
+  droppedByOwnerId: string,
+  effectiveCycleNumber: number
+) {
+  const asset = rosterAssetToDraftableAsset(droppedAsset);
+
+  return {
+    assetKey: asset.assetKey,
+    asset,
+    droppedAsset,
+    droppedByOwnerId,
+    status: 'active',
+    claims: [],
+    awardedToOwnerId: null,
+    effectiveCycleNumber,
+    effectiveLabel: `Cycle ${effectiveCycleNumber}`,
+    queuedMoveId: null,
+    rosterSlotId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    processedAt: null
+  };
+}
+
+function getProjectionSnapshotPointerRef(leagueId: string) {
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'projectionSnapshots',
+    'current'
+  );
+}
+
+function getProjectionSnapshotAssetsRef(
+  leagueId: string,
+  snapshotId: string
+) {
+  return collection(
+    db,
+    'leagues',
+    leagueId,
+    'projectionSnapshots',
+    snapshotId,
+    'assets'
+  );
+}
+
+async function loadActiveProjectionAssetsByKey(
+  leagueId: string
+): Promise<Map<string, DraftableAsset>> {
+  try {
+    const pointerSnapshot = await getDoc(
+      getProjectionSnapshotPointerRef(leagueId)
+    );
+
+    if (!pointerSnapshot.exists()) {
+      return new Map();
+    }
+
+    const pointer = pointerSnapshot.data() as {
+      activeSnapshotId?: unknown;
+      status?: unknown;
+    };
+
+    if (
+      pointer.status !== 'ready' ||
+      typeof pointer.activeSnapshotId !== 'string' ||
+      !pointer.activeSnapshotId.trim()
+    ) {
+      return new Map();
+    }
+
+    const projectionAssetsSnapshot = await getDocs(
+      getProjectionSnapshotAssetsRef(
+        leagueId,
+        pointer.activeSnapshotId
+      )
+    );
+
+    const assets = projectionAssetsSnapshot.docs.flatMap(
+      (assetDocument) => {
+        const data = assetDocument.data() as {
+          assets?: unknown;
+          assetKey?: unknown;
+        };
+
+        if (Array.isArray(data.assets)) {
+          return data.assets as DraftableAsset[];
+        }
+
+        return typeof data.assetKey === 'string'
+          ? [data as DraftableAsset]
+          : [];
+      }
+    );
+
+    return new Map(
+      assets.map((asset) => [asset.assetKey, asset] as const)
+    );
+  } catch (error: unknown) {
+    console.warn(
+      'Unable to load the active shared projections while freezing the cycle roster. Stored roster projections will be used instead.',
+      error
+    );
+
+    return new Map();
+  }
+}
+
+function hasUsableCycleProjection(
+  asset: DraftableAsset | RosterAsset | null,
+  cycleNumber?: number
+): boolean {
+  if (!asset || getRawCycleProjection(asset as DraftProjection) === null) {
+    return false;
+  }
+
+  const targetCycleNumber =
+    (asset as DraftProjection).targetProjectionCycleNumber;
+
+  return cycleNumber === undefined ||
+    targetCycleNumber === null ||
+    targetCycleNumber === undefined ||
+    targetCycleNumber === cycleNumber;
+}
+
+function createDraftableAssetFromRosterAsset(
+  rosterAsset: RosterAsset,
+  sharedProjectionAsset: DraftableAsset | null,
+  draftFallbackAsset: DraftableAsset | null,
+  cycleNumber: number
+): DraftableAsset {
+  let projectionAsset: DraftableAsset | RosterAsset = rosterAsset;
+  let frozenProjectionSource: DraftProjection['frozenProjectionSource'] =
+    'roster';
+
+  if (hasUsableCycleProjection(sharedProjectionAsset, cycleNumber)) {
+    projectionAsset = sharedProjectionAsset as DraftableAsset;
+    frozenProjectionSource = 'shared-snapshot';
+  } else if (!hasUsableCycleProjection(rosterAsset, cycleNumber)) {
+    if (draftFallbackAsset) {
+      projectionAsset = draftFallbackAsset;
+      frozenProjectionSource = 'draft-pick';
+    } else if (sharedProjectionAsset) {
+      // A target-cycle mismatch must never silently freeze an availability-
+      // adjusted projection for the wrong six-game window. Use the stable
+      // season projection fields only as a last-resort legacy baseline.
+      projectionAsset = {
+        ...sharedProjectionAsset,
+        projectedCyclePoints:
+          sharedProjectionAsset.draftProjectedCyclePoints ??
+          sharedProjectionAsset.projectedCyclePoints ??
+          null,
+        availabilityAdjustedCyclePoints: null,
+        expectedGamesAvailable: null,
+        scheduledGamesInProjectionCycle: null,
+        targetProjectionCycleNumber: cycleNumber
+      } as DraftableAsset;
+      frozenProjectionSource = 'legacy';
+    }
+  }
+
+  const projectedFields =
+    getStoredProjectionFields(projectionAsset);
+
+  const baseAsset: DraftableAsset =
+    rosterAsset.assetType === 'skater'
+      ? {
+          assetType: 'skater',
+          assetKey: getRosterAssetKey(rosterAsset),
+          position: rosterAsset.position,
+          player: rosterAsset.player,
+          ...projectedFields
+        }
+      : {
+          assetType: 'team-goalie-unit',
+          assetKey: getRosterAssetKey(rosterAsset),
+          position: 'G',
+          teamName: rosterAsset.teamName,
+          teamAbbreviation: rosterAsset.teamAbbreviation,
+          teamLogoUrl: rosterAsset.teamLogoUrl,
+          ...projectedFields
+        };
+
+  return {
+    ...baseAsset,
+    frozenCycleProjectionPoints:
+      createFrozenCycleProjection(baseAsset),
+    frozenProjectionCycleNumber: cycleNumber,
+    frozenProjectionSource
   };
 }
 
@@ -471,6 +922,7 @@ async function buildCurrentRosterSnapshotPicks(
   leagueId: string,
   teams: FantasyTeam[],
   draftPicks: DraftPick[],
+  cycleNumber: number,
   includedOwnerIds?: Set<string>
 ): Promise<DraftPick[]> {
   const draftPickByOwnerAndAssetKey = new Map<string, DraftPick>();
@@ -486,32 +938,34 @@ async function buildCurrentRosterSnapshotPicks(
     ? teams.filter((team) => includedOwnerIds.has(team.ownerId))
     : teams;
 
-  const rosterSnapshots = await Promise.all(
-    eligibleTeams.map(async (team) => {
-      const rosterSnapshot = await getDoc(
-        getTeamRosterRef(leagueId, team.ownerId)
-      );
+  const [rosterSnapshots, projectionAssetsByKey] = await Promise.all([
+    Promise.all(
+      eligibleTeams.map(async (team) => {
+        const rosterSnapshot = await getDoc(
+          getTeamRosterRef(leagueId, team.ownerId)
+        );
 
-      const roster: FantasyRoster | null = rosterSnapshot.exists()
-        ? normalizeFantasyRoster(
-            rosterSnapshot.data() as Partial<FantasyRoster>
-          )
-        : null;
+        const roster: FantasyRoster | null = rosterSnapshot.exists()
+          ? normalizeFantasyRoster(
+              rosterSnapshot.data() as Partial<FantasyRoster>
+            )
+          : null;
 
-      return {
-        ownerId: team.ownerId,
-        roster
-      };
-    })
-  );
+        return {
+          ownerId: team.ownerId,
+          roster
+        };
+      })
+    ),
+    loadActiveProjectionAssetsByKey(leagueId)
+  ]);
 
   const snapshotPicks: DraftPick[] = [];
-  let syntheticOverallPick = 100000;
 
-  for (const rosterSnapshot of rosterSnapshots) {
+  for (const [teamIndex, rosterSnapshot] of rosterSnapshots.entries()) {
     const activeSlots = rosterSnapshot.roster?.activeSlots ?? [];
 
-    for (const slot of activeSlots) {
+    for (const [slotIndex, slot] of activeSlots.entries()) {
       if (!slot.asset) {
         continue;
       }
@@ -525,23 +979,28 @@ async function buildCurrentRosterSnapshotPicks(
       const matchingDraftPick = draftPickByOwnerAndAssetKey.get(
         `${rosterSnapshot.ownerId}::${assetKey}`
       ) ?? null;
-
-      const overallPick =
+      const snapshotOrder =
         matchingDraftPick?.overallPick ??
-        syntheticOverallPick;
-
-      if (!matchingDraftPick) {
-        syntheticOverallPick += 1;
-      }
+        100000 + (teamIndex * 100) + slotIndex + 1;
 
       snapshotPicks.push({
-        overallPick,
+        overallPick: snapshotOrder,
         round: matchingDraftPick?.round ?? 0,
         pickInRound: matchingDraftPick?.pickInRound ?? slot.slotNumber,
         ownerId: rosterSnapshot.ownerId,
+        rosterSlotId: slot.slotId,
+        cycleWindowId: getCycleWindowId(
+          rosterSnapshot.ownerId,
+          slot.slotId,
+          cycleNumber
+        ),
+        snapshotCycleNumber: cycleNumber,
+        snapshotOrder,
         asset: createDraftableAssetFromRosterAsset(
           slot.asset,
-          matchingDraftPick?.asset ?? null
+          projectionAssetsByKey.get(assetKey) ?? null,
+          matchingDraftPick?.asset ?? null,
+          cycleNumber
         )
       });
     }
@@ -552,7 +1011,8 @@ async function buildCurrentRosterSnapshotPicks(
       return first.ownerId.localeCompare(second.ownerId);
     }
 
-    return first.overallPick - second.overallPick;
+    return (first.snapshotOrder ?? first.overallPick) -
+      (second.snapshotOrder ?? second.overallPick);
   });
 }
 
@@ -564,10 +1024,11 @@ function writeCycleRosterPickSnapshots(
 ): void {
   for (const pick of draftPicks) {
     transaction.set(
-      getCycleRosterPickRef(
+      getCycleRosterSlotPickRef(
         leagueId,
         cycleNumber,
-        pick.overallPick
+        pick.ownerId,
+        getRosterSlotIdFromPick(pick)
       ),
       {
         ...pick,
@@ -1032,8 +1493,11 @@ export async function startCycle(
   const rosterSnapshotPicks = await buildCurrentRosterSnapshotPicks(
     leagueId,
     teams,
-    draftPicks
+    draftPicks,
+    cycleNumber
   );
+  const expectedRosterSlotIdsByOwner =
+    buildExpectedRosterSlotIdsByOwner(rosterSnapshotPicks);
 
   return runTransaction(db, async (transaction) => {
     const [
@@ -1101,6 +1565,7 @@ export async function startCycle(
           teamBScore: 0,
           winnerOwnerId: null,
           status: 'active',
+          completedAt: null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }
@@ -1123,6 +1588,21 @@ export async function startCycle(
       playoffRoundCount: null,
       playoffRoundLabel: null,
       matchupIds,
+      windowSchemaVersion: 1,
+      expectedRosterSlotIdsByOwner,
+      parentCycleNumber: null,
+      overlapsPreviousCycle: false,
+      totalExpectedWindowCount: countExpectedWindows(
+        expectedRosterSlotIdsByOwner
+      ),
+      activeWindowCount: rosterSnapshotPicks.length,
+      completedWindowCount: 0,
+      matchupCompletionSchemaVersion: 1,
+      totalMatchupCount: matchupIds.length,
+      completedMatchupCount: 0,
+      pendingMatchupCount: matchupIds.length,
+      lastMatchupCompletedAt: null,
+      standingsAppliedAt: null,
       projectionAccuracyStatus: 'pending',
       projectionAccuracyAssetCount: 0,
       projectionAccuracyProjectionVersions: [],
@@ -1157,51 +1637,107 @@ export async function startNextCycle(
   const nextCycleRef = getCycleRef(leagueId, nextCycleNumber);
   const draftRef = getDraftRef(leagueId);
   const playoffsRef = getFantasyPlayoffsRef(leagueId);
-
   const [
-    currentCyclePreflightSnapshot,
-    playoffsPreflightSnapshot
+    currentCycleSnapshot,
+    nextCycleSnapshot,
+    playoffsSnapshot,
+    draftSnapshot
   ] = await Promise.all([
     getDoc(currentCycleRef),
-    getDoc(playoffsRef)
+    getDoc(nextCycleRef),
+    getDoc(playoffsRef),
+    getDoc(draftRef)
   ]);
 
-  if (!currentCyclePreflightSnapshot.exists()) {
+  if (!currentCycleSnapshot.exists()) {
     throw new Error(`Cycle ${currentCycleNumber} does not exist.`);
   }
 
   const currentCycle = normalizeCycle(
-    currentCyclePreflightSnapshot.data() as Partial<FantasyCycle>,
+    currentCycleSnapshot.data() as Partial<FantasyCycle>,
     currentCycleNumber
   );
 
   if (currentCycle.status !== 'complete') {
     throw new Error(
-      `${currentCycle.phase === 'playoffs' ? currentCycle.playoffRoundLabel ?? `Cycle ${currentCycleNumber}` : `Cycle ${currentCycleNumber}`} must be completed before starting the next matchup period.`
+      `${currentCycle.playoffRoundLabel ?? `Cycle ${currentCycleNumber}`} must be completed before starting the next matchup period.`
     );
   }
 
-  let playoffState: FantasyPlayoffs | null =
-    playoffsPreflightSnapshot.exists()
-      ? normalizeFantasyPlayoffs(
-          playoffsPreflightSnapshot.data() as Partial<FantasyPlayoffs>
-        )
-      : null;
-  let startingPlayoffs = false;
+  if (!draftSnapshot.exists()) {
+    throw new Error(
+      'The draft must be completed before starting the next matchup period.'
+    );
+  }
+
+  const draft = draftSnapshot.data() as FantasyDraft;
+
+  if (draft.status !== 'complete') {
+    throw new Error(
+      'The draft must be completed before starting the next matchup period.'
+    );
+  }
+
+  let playoffState = playoffsSnapshot.exists()
+    ? normalizeFantasyPlayoffs(
+        playoffsSnapshot.data() as Partial<FantasyPlayoffs>
+      )
+    : null;
+  const regularSeasonCycleCount =
+    getStandardRegularSeasonCycleCount(teams.length);
+  const enteringPlayoffs =
+    currentCycle.phase === 'regular_season' &&
+    currentCycleNumber >= regularSeasonCycleCount;
+  const continuingPlayoffs = currentCycle.phase === 'playoffs';
+  const isPlayoffCycle = enteringPlayoffs || continuingPlayoffs;
+
+  if (nextCycleSnapshot.exists()) {
+    return normalizeCycle(
+      nextCycleSnapshot.data() as Partial<FantasyCycle>,
+      nextCycleNumber
+    );
+  }
+
+  const draftPicksSnapshot = await getDocs(query(
+    getDraftPicksRef(leagueId),
+    orderBy('overallPick', 'asc')
+  ));
+  const draftPicks = draftPicksSnapshot.docs.map(
+    (pickDocument) => pickDocument.data() as DraftPick
+  );
+
+  let cyclePicks: DraftPick[] = [];
   let playoffRoundNumber: number | null = null;
   let playoffRoundLabel: string | null = null;
   let playoffMatchups = [] as ReturnType<typeof getPlayoffRoundMatchups>;
-  let includedOwnerIds: Set<string> | undefined;
+  let initialBankPayloads: FantasyPlayoffWindowBank[] = [];
+  let assignedBanks: FantasyPlayoffWindowBank[] = [];
 
-  if (currentCycle.phase === 'playoffs') {
-    if (!playoffState) {
-      throw new Error(
-        'The playoff bracket is missing. Open the playoff page before trying again.'
-      );
+  if (isPlayoffCycle) {
+    if (playoffState?.status === 'complete') {
+      return null;
     }
 
-    if (playoffState.status === 'complete') {
-      return null;
+    if (!playoffState) {
+      playoffState = createStandardFantasyPlayoffs(
+        teams,
+        currentCycleNumber
+      );
+
+      const allPlayoffOwnerIds = new Set(
+        playoffState.seeds.map((seed) => seed.ownerId)
+      );
+      const allPlayoffPicks = await buildCurrentRosterSnapshotPicks(
+        leagueId,
+        teams,
+        draftPicks,
+        playoffState.regularSeasonCycleCount + 1,
+        allPlayoffOwnerIds
+      );
+      initialBankPayloads = createInitialPlayoffBankPayloads(
+        playoffState,
+        allPlayoffPicks
+      );
     }
 
     playoffRoundNumber = playoffState.currentRoundNumber;
@@ -1213,162 +1749,202 @@ export async function startNextCycle(
       playoffState,
       playoffRoundNumber
     );
-    includedOwnerIds = new Set(
-      getPlayoffRoundOwnerIds(
-        playoffState,
-        playoffRoundNumber
-      )
-    );
-  } else {
-    const standardRegularSeasonCycleCount =
-      getStandardRegularSeasonCycleCount(teams.length);
 
-    if (currentCycleNumber >= standardRegularSeasonCycleCount) {
-      if (playoffState?.status === 'complete') {
-        return null;
-      }
-
-      if (!playoffState) {
-        playoffState = createStandardFantasyPlayoffs(
-          teams,
-          currentCycleNumber
-        );
-        startingPlayoffs = true;
-      }
-
-      playoffRoundNumber = playoffState.currentRoundNumber;
-      playoffRoundLabel = getPlayoffRoundLabel(
-        playoffRoundNumber,
-        playoffState.playoffRoundCount
-      );
-      playoffMatchups = getPlayoffRoundMatchups(
-        playoffState,
-        playoffRoundNumber
-      );
-      includedOwnerIds = new Set(
-        getPlayoffRoundOwnerIds(
-          playoffState,
-          playoffRoundNumber
-        )
+    if (playoffMatchups.length === 0) {
+      throw new Error(
+        `${playoffRoundLabel} does not have any playable matchups.`
       );
     }
-  }
 
-  if (playoffRoundNumber !== null && playoffMatchups.length === 0) {
-    throw new Error(
-      `${playoffRoundLabel ?? 'The next playoff round'} does not have any playable matchups.`
+    if (initialBankPayloads.length === 0) {
+      const savedBanks = await getAllPlayoffWindowBanks(
+        leagueId,
+        playoffState
+      );
+
+      if (savedBanks.length === 0 && enteringPlayoffs) {
+        const allPlayoffOwnerIds = new Set(
+          playoffState.seeds.map((seed) => seed.ownerId)
+        );
+        const allPlayoffPicks = await buildCurrentRosterSnapshotPicks(
+          leagueId,
+          teams,
+          draftPicks,
+          playoffState.regularSeasonCycleCount + 1,
+          allPlayoffOwnerIds
+        );
+        initialBankPayloads = createInitialPlayoffBankPayloads(
+          playoffState,
+          allPlayoffPicks
+        );
+      }
+    }
+
+    const banks = initialBankPayloads.length > 0
+      ? initialBankPayloads
+      : await getAllPlayoffWindowBanks(leagueId, playoffState);
+    const assignmentsByOwnerId: Record<string, {
+      ownerId: string;
+      windowNumber: number;
+      sourceCycleNumber: number;
+    }> = {};
+    const roundOwnerIds = getPlayoffRoundOwnerIds(
+      playoffState,
+      playoffRoundNumber
+    );
+
+    for (const ownerId of roundOwnerIds) {
+      const bank = getEarliestUnassignedPlayoffWindow(
+        banks,
+        ownerId
+      );
+
+      if (!bank) {
+        throw new Error(
+          `No banked playoff window is ready for ${ownerId}. Open the current playoff matchup once to refresh banked windows, then try again.`
+        );
+      }
+
+      assignmentsByOwnerId[ownerId] = {
+        ownerId,
+        windowNumber: bank.windowNumber,
+        sourceCycleNumber: bank.sourceCycleNumber
+      };
+      assignedBanks.push(bank);
+    }
+
+    playoffState = assignPlayoffRoundWindows(
+      playoffState,
+      playoffRoundNumber,
+      assignmentsByOwnerId
+    );
+    playoffMatchups = getPlayoffRoundMatchups(
+      playoffState,
+      playoffRoundNumber
+    );
+    cyclePicks = assignedBanks.flatMap((bank) =>
+      bank.picks.map((pick) => ({
+        ...pick,
+        playoffWindowNumber: bank.windowNumber,
+        snapshotCycleNumber: bank.sourceCycleNumber
+      }))
+    );
+  } else {
+    cyclePicks = await buildCurrentRosterSnapshotPicks(
+      leagueId,
+      teams,
+      draftPicks,
+      nextCycleNumber
     );
   }
 
-  const draftPicksQuery = query(
-    getDraftPicksRef(leagueId),
-    orderBy('overallPick', 'asc')
-  );
-  const draftPicksSnapshot = await getDocs(draftPicksQuery);
-  const draftPicks = draftPicksSnapshot.docs.map(
-    (pickDoc) => pickDoc.data() as DraftPick
-  );
-  const rosterSnapshotPicks = await buildCurrentRosterSnapshotPicks(
-    leagueId,
-    teams,
-    draftPicks,
-    includedOwnerIds
-  );
+  if (cyclePicks.length === 0) {
+    throw new Error(
+      'No active roster assets were found for the next matchup period.'
+    );
+  }
+
+  const expectedRosterSlotIdsByOwner =
+    buildExpectedRosterSlotIdsByOwner(cyclePicks);
 
   return runTransaction(db, async (transaction) => {
-    const [
-      currentCycleSnapshot,
-      nextCycleSnapshot,
-      draftSnapshot,
-      playoffsSnapshot
-    ] = await Promise.all([
-      transaction.get(currentCycleRef),
-      transaction.get(nextCycleRef),
-      transaction.get(draftRef),
-      transaction.get(playoffsRef)
-    ]);
+    const [savedCurrent, savedNext, savedPlayoffs, savedDraft] =
+      await Promise.all([
+        transaction.get(currentCycleRef),
+        transaction.get(nextCycleRef),
+        transaction.get(playoffsRef),
+        transaction.get(draftRef)
+      ]);
 
-    if (!currentCycleSnapshot.exists()) {
+    if (!savedCurrent.exists()) {
       throw new Error(`Cycle ${currentCycleNumber} does not exist.`);
     }
 
-    const savedCurrentCycle = normalizeCycle(
-      currentCycleSnapshot.data() as Partial<FantasyCycle>,
+    if (normalizeCycle(
+      savedCurrent.data() as Partial<FantasyCycle>,
       currentCycleNumber
-    );
-
-    if (savedCurrentCycle.status !== 'complete') {
+    ).status !== 'complete') {
       throw new Error(
-        `Cycle ${currentCycleNumber} must be completed before starting Cycle ${nextCycleNumber}.`
+        `Cycle ${currentCycleNumber} must be complete before the next matchup period opens.`
       );
     }
 
-    if (nextCycleSnapshot.exists()) {
-      throw new Error(`Cycle ${nextCycleNumber} has already been started.`);
-    }
-
-    if (!draftSnapshot.exists()) {
-      throw new Error(
-        'The draft must be completed before starting the next cycle.'
+    if (savedNext.exists()) {
+      return normalizeCycle(
+        savedNext.data() as Partial<FantasyCycle>,
+        nextCycleNumber
       );
     }
 
-    const draft = draftSnapshot.data() as FantasyDraft;
-
-    if (draft.status !== 'complete') {
-      throw new Error(
-        'The draft must be completed before starting the next cycle.'
-      );
-    }
-
-    if (rosterSnapshotPicks.length === 0) {
-      throw new Error(
-        'No active roster assets were found to snapshot for the next cycle.'
-      );
+    if (!savedDraft.exists() ||
+      (savedDraft.data() as FantasyDraft).status !== 'complete') {
+      throw new Error('The completed draft is required.');
     }
 
     const matchupIds: string[] = [];
-    const isPlayoffCycle =
-      playoffRoundNumber !== null && playoffState !== null;
 
-    if (isPlayoffCycle) {
-      if (!playoffState || playoffRoundNumber === null) {
-        throw new Error('The playoff bracket is not ready.');
-      }
-      if (startingPlayoffs && playoffsSnapshot.exists()) {
-        throw new Error('The playoff bracket has already been created.');
-      }
-
-      if (!startingPlayoffs) {
-        if (!playoffsSnapshot.exists()) {
-          throw new Error('The playoff bracket no longer exists.');
-        }
-
-        const savedPlayoffs = normalizeFantasyPlayoffs(
-          playoffsSnapshot.data() as Partial<FantasyPlayoffs>
+    if (isPlayoffCycle && playoffState && playoffRoundNumber !== null) {
+      for (const bank of initialBankPayloads) {
+        const assignment = assignedBanks.find((candidate) =>
+          candidate.ownerId === bank.ownerId &&
+          candidate.windowNumber === bank.windowNumber
         );
 
-        if (savedPlayoffs.status === 'complete') {
-          return null;
-        }
+        transaction.set(
+          getPlayoffWindowBankRef(
+            leagueId,
+            bank.ownerId,
+            bank.windowNumber
+          ),
+          assignment
+            ? {
+                ...bank,
+                assignmentStatus: 'assigned',
+                assignedMatchupId:
+                  playoffMatchups.find((matchup) =>
+                    matchup.teamAOwnerId === bank.ownerId ||
+                    matchup.teamBOwnerId === bank.ownerId
+                  )?.id ?? null,
+                assignedRoundNumber: playoffRoundNumber,
+                assignedAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              }
+            : bank
+        );
+      }
 
-        if (savedPlayoffs.currentRoundNumber !== playoffRoundNumber) {
-          throw new Error(
-            'The playoff bracket advanced in another browser. Refresh and try again.'
+      if (initialBankPayloads.length === 0) {
+        for (const bank of assignedBanks) {
+          const assignedMatchup = playoffMatchups.find((matchup) =>
+            matchup.teamAOwnerId === bank.ownerId ||
+            matchup.teamBOwnerId === bank.ownerId
+          );
+
+          transaction.set(
+            getPlayoffWindowBankRef(
+              leagueId,
+              bank.ownerId,
+              bank.windowNumber
+            ),
+            {
+              assignmentStatus: 'assigned',
+              assignedMatchupId: assignedMatchup?.id ?? null,
+              assignedRoundNumber: playoffRoundNumber,
+              assignedAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
           );
         }
       }
 
       for (const playoffMatchup of playoffMatchups) {
-        if (
-          !playoffMatchup.teamAOwnerId ||
-          !playoffMatchup.teamBOwnerId
-        ) {
+        if (!playoffMatchup.teamAOwnerId ||
+          !playoffMatchup.teamBOwnerId) {
           continue;
         }
 
         matchupIds.push(playoffMatchup.id);
-
         transaction.set(
           getCycleMatchupRef(
             leagueId,
@@ -1384,6 +1960,12 @@ export async function startNextCycle(
             playoffMatchupId: playoffMatchup.id,
             teamASeed: playoffMatchup.teamASeed,
             teamBSeed: playoffMatchup.teamBSeed,
+            teamAWindowNumber: playoffMatchup.teamAWindowNumber,
+            teamBWindowNumber: playoffMatchup.teamBWindowNumber,
+            teamAWindowCycleNumber:
+              playoffMatchup.teamAWindowCycleNumber,
+            teamBWindowCycleNumber:
+              playoffMatchup.teamBWindowCycleNumber,
             winnerPlace: playoffMatchup.winnerPlace,
             loserPlace: playoffMatchup.loserPlace,
             tieBrokenByHigherSeed: false,
@@ -1393,34 +1975,485 @@ export async function startNextCycle(
             teamBScore: 0,
             winnerOwnerId: null,
             status: 'active',
+            completedAt: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }
         );
       }
 
-      playoffState = {
-        ...playoffState,
-        currentCycleNumber: nextCycleNumber
-      };
-
       transaction.set(
         playoffsRef,
         {
           ...playoffState,
-          ...(startingPlayoffs
-            ? { createdAt: serverTimestamp() }
-            : {}),
+          formatVersion: 2,
+          currentCycleNumber: nextCycleNumber,
+          ...(savedPlayoffs.exists()
+            ? {}
+            : { createdAt: serverTimestamp() }),
           updatedAt: serverTimestamp()
         },
         { merge: true }
       );
+    } else {
+      const pairings = createCyclePairings(
+        getOrderedOwnerIds(teams, draft),
+        nextCycleNumber
+      );
+
+      pairings.forEach((pairing, index) => {
+        const matchupId = `matchup-${index + 1}`;
+        matchupIds.push(matchupId);
+        transaction.set(
+          getCycleMatchupRef(
+            leagueId,
+            nextCycleNumber,
+            matchupId
+          ),
+          {
+            id: matchupId,
+            cycleNumber: nextCycleNumber,
+            phase: 'regular_season',
+            bracketType: null,
+            playoffRoundNumber: null,
+            playoffMatchupId: null,
+            teamASeed: null,
+            teamBSeed: null,
+            teamAWindowNumber: null,
+            teamBWindowNumber: null,
+            teamAWindowCycleNumber: null,
+            teamBWindowCycleNumber: null,
+            winnerPlace: null,
+            loserPlace: null,
+            tieBrokenByHigherSeed: false,
+            teamAOwnerId: pairing.teamAOwnerId,
+            teamBOwnerId: pairing.teamBOwnerId,
+            teamAScore: 0,
+            teamBScore: 0,
+            winnerOwnerId: null,
+            status: 'active',
+            completedAt: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }
+        );
+      });
+    }
+
+    writeCycleRosterPickSnapshots(
+      transaction,
+      leagueId,
+      nextCycleNumber,
+      cyclePicks
+    );
+
+    const cycle: FantasyCycle = {
+      id: getCycleDocumentId(nextCycleNumber),
+      cycleNumber: nextCycleNumber,
+      status: 'active',
+      phase: isPlayoffCycle ? 'playoffs' : 'regular_season',
+      playoffRoundNumber,
+      playoffRoundCount:
+        isPlayoffCycle && playoffState
+          ? playoffState.playoffRoundCount
+          : null,
+      playoffRoundLabel,
+      matchupIds,
+      windowSchemaVersion: 2,
+      expectedRosterSlotIdsByOwner,
+      parentCycleNumber: currentCycleNumber,
+      overlapsPreviousCycle: isPlayoffCycle,
+      bankedPlayoffWindowsEnabled: isPlayoffCycle,
+      totalExpectedWindowCount: countExpectedWindows(
+        expectedRosterSlotIdsByOwner
+      ),
+      activeWindowCount: cyclePicks.length,
+      completedWindowCount: 0,
+      matchupCompletionSchemaVersion: 1,
+      totalMatchupCount: matchupIds.length,
+      completedMatchupCount: 0,
+      pendingMatchupCount: matchupIds.length,
+      lastMatchupCompletedAt: null,
+      standingsAppliedAt: null,
+      projectionAccuracyStatus: 'pending',
+      projectionAccuracyAssetCount: 0,
+      projectionAccuracyProjectionVersions: [],
+      projectionAccuracyUpdatedAt: null,
+      completedAt: null
+    };
+
+    transaction.set(nextCycleRef, {
+      ...cycle,
+      startedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    return cycle;
+  });
+}
+
+
+function getCompletedWindowPickKeys(
+  picks: DraftPick[],
+  scoring: CycleScoringResult
+): Set<string> {
+  const completed = new Set<string>();
+
+  for (const pick of picks) {
+    const slotId = getRosterSlotIdFromPick(pick);
+    const windowId = pick.cycleWindowId ??
+      getCycleWindowId(pick.ownerId, slotId, pick.snapshotCycleNumber ?? 1);
+    const summary = scoring.windowScores[windowId] ??
+      scoring.assetScores[pick.asset.assetKey];
+
+    if (summary?.status === 'complete') {
+      completed.add(`${pick.ownerId}::${slotId}`);
+      completed.add(`${pick.ownerId}::asset:${pick.asset.assetKey}`);
+    }
+  }
+
+  return completed;
+}
+
+interface PendingSlotActivationPlan {
+  ownerId: string;
+  rosterSlotId: string;
+  pendingMoveId: string;
+  pendingMove: PendingRosterSlotMove;
+  outgoingAsset: RosterAsset | null;
+  incomingAsset: RosterAsset;
+}
+
+async function buildNextWindowSnapshotPicks(
+  leagueId: string,
+  teams: FantasyTeam[],
+  completedWindowKeys: Set<string>,
+  nextCycleNumber: number
+): Promise<{
+  picks: DraftPick[];
+  expectedRosterSlotIdsByOwner: Record<string, string[]>;
+  activationPlansBySlotKey: Record<string, PendingSlotActivationPlan>;
+}> {
+  if (completedWindowKeys.size === 0) {
+    return {
+      picks: [],
+      expectedRosterSlotIdsByOwner: {},
+      activationPlansBySlotKey: {}
+    };
+  }
+
+  const draftPicksQuery = query(
+    getDraftPicksRef(leagueId),
+    orderBy('overallPick', 'asc')
+  );
+  const [draftPicksSnapshot, projectionAssetsByKey, rosterSnapshots] =
+    await Promise.all([
+      getDocs(draftPicksQuery),
+      loadActiveProjectionAssetsByKey(leagueId),
+      Promise.all(
+        teams.map(async (team) => {
+          const snapshot = await getDoc(
+            getTeamRosterRef(leagueId, team.ownerId)
+          );
+
+          return {
+            ownerId: team.ownerId,
+            roster: snapshot.exists()
+              ? normalizeFantasyRoster(
+                  snapshot.data() as Partial<FantasyRoster>
+                )
+              : null
+          };
+        })
+      )
+    ]);
+  const draftPicks = draftPicksSnapshot.docs.map(
+    (snapshot) => snapshot.data() as DraftPick
+  );
+  const draftPickByOwnerAndAssetKey = new Map(
+    draftPicks.map((pick) => [
+      `${pick.ownerId}::${pick.asset.assetKey}`,
+      pick
+    ] as const)
+  );
+  const teamIndexByOwnerId = new Map(
+    teams.map((team, index) => [team.ownerId, index] as const)
+  );
+  const nextPicks: DraftPick[] = [];
+  const expectedRosterSlotIdsByOwner: Record<string, string[]> = {};
+  const activationPlansBySlotKey: Record<string, PendingSlotActivationPlan> = {};
+
+  for (const rosterSnapshot of rosterSnapshots) {
+    const activeSlots = rosterSnapshot.roster?.activeSlots ?? [];
+
+    for (const [slotIndex, slot] of activeSlots.entries()) {
+      const currentAsset = slot.asset;
+      const currentAssetKey = getRosterAssetKey(currentAsset);
+      const completedSlotKey =
+        `${rosterSnapshot.ownerId}::${slot.slotId}`;
+      const completedAssetKey = currentAssetKey
+        ? `${rosterSnapshot.ownerId}::asset:${currentAssetKey}`
+        : '';
+
+      if (
+        !completedWindowKeys.has(completedSlotKey) &&
+        (!completedAssetKey ||
+          !completedWindowKeys.has(completedAssetKey))
+      ) {
+        continue;
+      }
+
+      const nextAsset = slot.pendingMove?.incomingAsset ?? currentAsset;
+
+      if (!nextAsset) {
+        continue;
+      }
+
+      expectedRosterSlotIdsByOwner[rosterSnapshot.ownerId] ??= [];
+      expectedRosterSlotIdsByOwner[rosterSnapshot.ownerId].push(
+        slot.slotId
+      );
+
+      const nextAssetKey = getRosterAssetKey(nextAsset);
+
+      if (!nextAssetKey) {
+        continue;
+      }
+
+      const matchingDraftPick = draftPickByOwnerAndAssetKey.get(
+        `${rosterSnapshot.ownerId}::${nextAssetKey}`
+      ) ?? null;
+      const teamIndex = teamIndexByOwnerId.get(
+        rosterSnapshot.ownerId
+      ) ?? 0;
+      const snapshotOrder = matchingDraftPick?.overallPick ??
+        100000 + (teamIndex * 100) + slotIndex + 1;
+
+      nextPicks.push({
+        overallPick: snapshotOrder,
+        round: matchingDraftPick?.round ?? 0,
+        pickInRound: matchingDraftPick?.pickInRound ?? slot.slotNumber,
+        ownerId: rosterSnapshot.ownerId,
+        rosterSlotId: slot.slotId,
+        cycleWindowId: getCycleWindowId(
+          rosterSnapshot.ownerId,
+          slot.slotId,
+          nextCycleNumber
+        ),
+        snapshotCycleNumber: nextCycleNumber,
+        snapshotOrder,
+        asset: createDraftableAssetFromRosterAsset(
+          nextAsset,
+          projectionAssetsByKey.get(nextAssetKey) ?? null,
+          matchingDraftPick?.asset ?? null,
+          nextCycleNumber
+        )
+      });
+
+      if (slot.pendingMove) {
+        activationPlansBySlotKey[completedSlotKey] = {
+          ownerId: rosterSnapshot.ownerId,
+          rosterSlotId: slot.slotId,
+          pendingMoveId: slot.pendingMove.id,
+          pendingMove: slot.pendingMove,
+          outgoingAsset: currentAsset,
+          incomingAsset: slot.pendingMove.incomingAsset
+        };
+      }
+    }
+  }
+
+  for (const slotIds of Object.values(expectedRosterSlotIdsByOwner)) {
+    slotIds.sort();
+  }
+
+  return {
+    picks: nextPicks.sort((first, second) => {
+      if (first.ownerId !== second.ownerId) {
+        return first.ownerId.localeCompare(second.ownerId);
+      }
+
+      return (first.snapshotOrder ?? first.overallPick) -
+        (second.snapshotOrder ?? second.overallPick);
+    }),
+    expectedRosterSlotIdsByOwner,
+    activationPlansBySlotKey
+  };
+}
+
+/**
+ * Opens only the roster-slot windows that are ready to move forward. This is
+ * the key regular-season overlap behavior: Cycle N+1 may begin accumulating
+ * for fast NHL schedules while Cycle N remains active for slower schedules.
+ * Playoff windows use the separate bank-and-route flow implemented by the
+ * playoff window bank service.
+ */
+export async function advanceCompletedRegularSeasonAssetWindows(
+  leagueId: string,
+  teams: FantasyTeam[],
+  currentCycle: FantasyCycle,
+  currentPicks: DraftPick[],
+  scoring: CycleScoringResult
+): Promise<FantasyCycle | null> {
+  if (
+    currentCycle.phase !== 'regular_season' ||
+    currentCycle.status !== 'active'
+  ) {
+    return null;
+  }
+
+  const regularSeasonCycleCount =
+    getStandardRegularSeasonCycleCount(teams.length);
+  const nextCycleNumber = currentCycle.cycleNumber + 1;
+
+  // The final regular-season -> playoff transition still needs bracket-aware
+  // banking/routing, which is implemented in the later playoff barrier stage.
+  if (nextCycleNumber > regularSeasonCycleCount) {
+    return null;
+  }
+
+  const completedWindowKeys = getCompletedWindowPickKeys(
+    currentPicks,
+    scoring
+  );
+
+  if (completedWindowKeys.size === 0) {
+    return null;
+  }
+
+  const {
+    picks: nextPicks,
+    activationPlansBySlotKey
+  } = await buildNextWindowSnapshotPicks(
+    leagueId,
+    teams,
+    completedWindowKeys,
+    nextCycleNumber
+  );
+  const expectedRosterSlotIdsByOwner =
+    Object.keys(currentCycle.expectedRosterSlotIdsByOwner ?? {}).length > 0
+      ? currentCycle.expectedRosterSlotIdsByOwner ?? {}
+      : buildExpectedRosterSlotIdsByOwner(currentPicks);
+
+  if (nextPicks.length === 0) {
+    return null;
+  }
+
+  const nextCycleRef = getCycleRef(leagueId, nextCycleNumber);
+  const currentCycleRef = getCycleRef(
+    leagueId,
+    currentCycle.cycleNumber
+  );
+  const draftRef = getDraftRef(leagueId);
+  const nextPickRefs = nextPicks.map((pick) =>
+    getCycleRosterSlotPickRef(
+      leagueId,
+      nextCycleNumber,
+      pick.ownerId,
+      getRosterSlotIdFromPick(pick)
+    )
+  );
+  const activationOwnerIds = [...new Set(
+    nextPicks
+      .filter((pick) =>
+        Boolean(
+          activationPlansBySlotKey[
+            `${pick.ownerId}::${getRosterSlotIdFromPick(pick)}`
+          ]
+        )
+      )
+      .map((pick) => pick.ownerId)
+  )];
+  const activationRosterRefs = activationOwnerIds.map((ownerId) =>
+    getTeamRosterRef(leagueId, ownerId)
+  );
+  const currentExpectedRosterSlotIdsByOwner =
+    Object.keys(currentCycle.expectedRosterSlotIdsByOwner ?? {}).length > 0
+      ? currentCycle.expectedRosterSlotIdsByOwner ?? {}
+      : buildExpectedRosterSlotIdsByOwner(currentPicks);
+  const currentCompletedWindowCount = currentPicks.filter((pick) => {
+    const slotId = getRosterSlotIdFromPick(pick);
+    const windowId = pick.cycleWindowId ??
+      getCycleWindowId(
+        pick.ownerId,
+        slotId,
+        currentCycle.cycleNumber
+      );
+    const summary = scoring.windowScores[windowId] ??
+      scoring.assetScores[pick.asset.assetKey];
+
+    return summary?.status === 'complete';
+  }).length;
+
+  return runTransaction(db, async (transaction) => {
+    const snapshots = await Promise.all([
+      transaction.get(nextCycleRef),
+      transaction.get(draftRef),
+      ...nextPickRefs.map((ref) => transaction.get(ref)),
+      ...activationRosterRefs.map((ref) => transaction.get(ref))
+    ]);
+    const nextCycleSnapshot = snapshots[0];
+    const draftSnapshot = snapshots[1];
+    const nextPickSnapshots = snapshots.slice(
+      2,
+      2 + nextPickRefs.length
+    );
+    const activationRosterSnapshots = snapshots.slice(
+      2 + nextPickRefs.length
+    );
+    const activationRostersByOwnerId = new Map(
+      activationOwnerIds.map((ownerId, index) => {
+        const snapshot = activationRosterSnapshots[index];
+
+        return [
+          ownerId,
+          snapshot?.exists()
+            ? normalizeFantasyRoster(
+                snapshot.data() as Partial<FantasyRoster>
+              )
+            : null
+        ] as const;
+      })
+    );
+
+    if (!draftSnapshot.exists()) {
+      throw new Error(
+        'The completed draft is required to open overlapping slot windows.'
+      );
+    }
+
+    const draft = draftSnapshot.data() as FantasyDraft;
+
+    if (draft.status !== 'complete') {
+      throw new Error(
+        'The draft must be complete before overlapping cycles can open.'
+      );
+    }
+
+    let nextCycle: FantasyCycle;
+    let existingAssignedWindowCount = 0;
+
+    if (nextCycleSnapshot.exists()) {
+      nextCycle = normalizeCycle(
+        nextCycleSnapshot.data() as Partial<FantasyCycle>,
+        nextCycleNumber
+      );
+
+      if (nextCycle.phase !== 'regular_season') {
+        throw new Error(
+          `Cycle ${nextCycleNumber} already exists as a playoff period.`
+        );
+      }
+
+      existingAssignedWindowCount = nextCycle.activeWindowCount ?? 0;
     } else {
       const orderedOwnerIds = getOrderedOwnerIds(teams, draft);
       const pairings = createCyclePairings(
         orderedOwnerIds,
         nextCycleNumber
       );
+      const matchupIds: string[] = [];
 
       pairings.forEach((pairing, index) => {
         const matchupId = `matchup-${index + 1}`;
@@ -1450,49 +2483,567 @@ export async function startNextCycle(
             teamBScore: 0,
             winnerOwnerId: null,
             status: 'active',
+            completedAt: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }
         );
       });
+
+      nextCycle = {
+        id: getCycleDocumentId(nextCycleNumber),
+        cycleNumber: nextCycleNumber,
+        status: 'active',
+        phase: 'regular_season',
+        playoffRoundNumber: null,
+        playoffRoundCount: null,
+        playoffRoundLabel: null,
+        matchupIds,
+        windowSchemaVersion: 1,
+        expectedRosterSlotIdsByOwner,
+        parentCycleNumber: currentCycle.cycleNumber,
+        overlapsPreviousCycle: true,
+        totalExpectedWindowCount: countExpectedWindows(
+          expectedRosterSlotIdsByOwner
+        ),
+        activeWindowCount: 0,
+        completedWindowCount: 0,
+        matchupCompletionSchemaVersion: 1,
+        totalMatchupCount: matchupIds.length,
+        completedMatchupCount: 0,
+        pendingMatchupCount: matchupIds.length,
+        lastMatchupCompletedAt: null,
+        standingsAppliedAt: null,
+        projectionAccuracyStatus: 'pending',
+        projectionAccuracyAssetCount: 0,
+        projectionAccuracyProjectionVersions: [],
+        projectionAccuracyUpdatedAt: null,
+        completedAt: null
+      };
+
+      transaction.set(nextCycleRef, {
+        ...nextCycle,
+        startedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
     }
 
-    writeCycleRosterPickSnapshots(
-      transaction,
-      leagueId,
-      nextCycleNumber,
-      rosterSnapshotPicks
-    );
+    let newlyAssignedWindowCount = 0;
+    const updatedRosterOwnerIds = new Set<string>();
 
-    const cycle: FantasyCycle = {
-      id: getCycleDocumentId(nextCycleNumber),
-      cycleNumber: nextCycleNumber,
-      status: 'active',
-      phase: isPlayoffCycle
-        ? 'playoffs'
-        : 'regular_season',
-      playoffRoundNumber,
-      playoffRoundCount:
-        isPlayoffCycle && playoffState
-          ? playoffState.playoffRoundCount
-          : null,
-      playoffRoundLabel,
-      matchupIds,
-      projectionAccuracyStatus: 'pending',
-      projectionAccuracyAssetCount: 0,
-      projectionAccuracyProjectionVersions: [],
-      projectionAccuracyUpdatedAt: null,
-      completedAt: null
-    };
+    nextPicks.forEach((pick, index) => {
+      if (nextPickSnapshots[index]?.exists()) {
+        return;
+      }
 
-    transaction.set(nextCycleRef, {
-      ...cycle,
-      startedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      const rosterSlotId = getRosterSlotIdFromPick(pick);
+      const slotKey = `${pick.ownerId}::${rosterSlotId}`;
+      const activationPlan = activationPlansBySlotKey[slotKey] ?? null;
+
+      if (activationPlan) {
+        const roster = activationRostersByOwnerId.get(pick.ownerId);
+
+        if (!roster) {
+          throw new Error(
+            `The roster for ${pick.ownerId} is missing while activating ${rosterSlotId}.`
+          );
+        }
+
+        const slotIndex = roster.activeSlots.findIndex(
+          (slot) => slot.slotId === rosterSlotId
+        );
+
+        if (slotIndex === -1) {
+          throw new Error(
+            `Roster slot ${rosterSlotId} was not found while activating its queued move.`
+          );
+        }
+
+        const savedSlot = roster.activeSlots[slotIndex];
+        const savedPendingMove = savedSlot.pendingMove;
+
+        if (
+          !savedPendingMove ||
+          savedPendingMove.id !== activationPlan.pendingMoveId
+        ) {
+          throw new Error(
+            `The queued move for ${rosterSlotId} changed before its slot boundary. Refresh and try again.`
+          );
+        }
+
+        const incomingAssetKey = getRosterAssetKey(
+          savedPendingMove.incomingAsset
+        );
+
+        if (incomingAssetKey !== pick.asset.assetKey) {
+          throw new Error(
+            `The queued asset for ${rosterSlotId} no longer matches the next window snapshot.`
+          );
+        }
+
+        const outgoingAsset = savedSlot.asset;
+
+        roster.activeSlots[slotIndex] = {
+          ...savedSlot,
+          asset: savedPendingMove.incomingAsset,
+          pendingMove: null
+        };
+        updatedRosterOwnerIds.add(pick.ownerId);
+
+        if (outgoingAsset) {
+          const outgoingAssetKey = getRosterAssetKey(outgoingAsset);
+
+          if (
+            outgoingAssetKey &&
+            outgoingAssetKey !== incomingAssetKey
+          ) {
+            transaction.set(
+              getWaiverRef(leagueId, outgoingAssetKey),
+              buildActivatedDropWaiverPayload(
+                outgoingAsset,
+                pick.ownerId,
+                nextCycleNumber
+              )
+            );
+          }
+        }
+
+        if (savedPendingMove.sourceWaiverId) {
+          transaction.set(
+            getWaiverRef(
+              leagueId,
+              savedPendingMove.sourceWaiverId
+            ),
+            {
+              effectiveCycleNumber: nextCycleNumber,
+              effectiveLabel: `Cycle ${nextCycleNumber}`,
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+        }
+
+        transaction.set(doc(getTransactionsRef(leagueId)), {
+          type: 'slot-move-activated',
+          ownerId: pick.ownerId,
+          addedAsset: rosterAssetToDraftableAsset(
+            savedPendingMove.incomingAsset
+          ),
+          droppedAsset: outgoingAsset,
+          waiverId: outgoingAsset
+            ? getRosterAssetKey(outgoingAsset)
+            : null,
+          rosterSlotId,
+          targetSlotId: rosterSlotId,
+          queuedMoveId: savedPendingMove.id,
+          effectiveCycleNumber: nextCycleNumber,
+          effectiveLabel: `Cycle ${nextCycleNumber}`,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      newlyAssignedWindowCount += 1;
+      transaction.set(nextPickRefs[index], {
+        ...pick,
+        snapshotCycleNumber: nextCycleNumber,
+        snapshotSource: activationPlan
+          ? 'queued-slot-move'
+          : 'slot-window-advance',
+        snapshottedAt: serverTimestamp()
+      });
     });
 
-    return cycle;
+    for (const ownerId of updatedRosterOwnerIds) {
+      const roster = activationRostersByOwnerId.get(ownerId);
+
+      if (!roster) {
+        continue;
+      }
+
+      transaction.set(
+        getTeamRosterRef(leagueId, ownerId),
+        {
+          schemaVersion: roster.schemaVersion,
+          activeSlots: roster.activeSlots,
+          irSlots: roster.irSlots,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    transaction.set(
+      nextCycleRef,
+      {
+        windowSchemaVersion: 1,
+        expectedRosterSlotIdsByOwner,
+        parentCycleNumber: currentCycle.cycleNumber,
+        overlapsPreviousCycle: true,
+        totalExpectedWindowCount: countExpectedWindows(
+          expectedRosterSlotIdsByOwner
+        ),
+        activeWindowCount:
+          existingAssignedWindowCount + newlyAssignedWindowCount,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      currentCycleRef,
+      {
+        windowSchemaVersion: 1,
+        expectedRosterSlotIdsByOwner:
+          currentExpectedRosterSlotIdsByOwner,
+        totalExpectedWindowCount: countExpectedWindows(
+          currentExpectedRosterSlotIdsByOwner
+        ),
+        activeWindowCount: currentPicks.length,
+        completedWindowCount: currentCompletedWindowCount,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    return {
+      ...nextCycle,
+      activeWindowCount:
+        existingAssignedWindowCount + newlyAssignedWindowCount
+    };
+  });
+}
+
+
+/**
+ * Reconciles regular-season matchup completion from the persisted per-team
+ * slot-window documents. A matchup becomes final as soon as every expected
+ * slot for both teams is complete. The league cycle remains active until all
+ * matchups are final, at which point standings are applied exactly once in the
+ * same transaction.
+ */
+export async function reconcileRegularSeasonCycleMatchupCompletion(
+  leagueId: string,
+  cycleNumber: number
+): Promise<CycleMatchupCompletionResult> {
+  const cycleRef = getCycleRef(leagueId, cycleNumber);
+
+  return runTransaction(db, async (transaction) => {
+    const cycleSnapshot = await transaction.get(cycleRef);
+
+    if (!cycleSnapshot.exists()) {
+      throw new Error(`Cycle ${cycleNumber} has not been started yet.`);
+    }
+
+    const cycle = normalizeCycle(
+      cycleSnapshot.data() as Partial<FantasyCycle>,
+      cycleNumber
+    );
+    const matchupIds = [...new Set(cycle.matchupIds)];
+    const totalMatchupCount = matchupIds.length;
+
+    if (cycle.phase !== 'regular_season') {
+      return {
+        newlyCompletedMatchupIds: [],
+        completedMatchupCount: cycle.completedMatchupCount ?? 0,
+        totalMatchupCount,
+        pendingMatchupCount: Math.max(
+          0,
+          totalMatchupCount - (cycle.completedMatchupCount ?? 0)
+        ),
+        cycleCompleted: cycle.status === 'complete'
+      };
+    }
+
+    if (cycle.status === 'complete') {
+      return {
+        newlyCompletedMatchupIds: [],
+        completedMatchupCount:
+          cycle.completedMatchupCount ?? totalMatchupCount,
+        totalMatchupCount,
+        pendingMatchupCount: 0,
+        cycleCompleted: true
+      };
+    }
+
+    if (totalMatchupCount === 0) {
+      throw new Error(
+        `Cycle ${cycleNumber} does not have any matchups to reconcile.`
+      );
+    }
+
+    const matchupRefs = matchupIds.map((matchupId) =>
+      getCycleMatchupRef(leagueId, cycleNumber, matchupId)
+    );
+    const matchupSnapshots = await Promise.all(
+      matchupRefs.map((matchupRef) => transaction.get(matchupRef))
+    );
+    const savedMatchups = matchupSnapshots.map((snapshot, index) => {
+      if (!snapshot.exists()) {
+        throw new Error(
+          `Cycle ${cycleNumber} matchup ${matchupIds[index]} is missing.`
+        );
+      }
+
+      return normalizeMatchup(
+        snapshot.data() as Partial<FantasyMatchup>
+      );
+    });
+    const ownerIds = [...new Set(
+      savedMatchups.flatMap((matchup) => [
+        matchup.teamAOwnerId,
+        ...(matchup.teamBOwnerId
+          ? [matchup.teamBOwnerId]
+          : [])
+      ])
+    )];
+    const teamWindowRefs = ownerIds.map((ownerId) =>
+      getCycleTeamWindowsRef(
+        leagueId,
+        cycleNumber,
+        ownerId
+      )
+    );
+    const teamWindowSnapshots = await Promise.all(
+      teamWindowRefs.map((teamWindowRef) =>
+        transaction.get(teamWindowRef)
+      )
+    );
+    const teamWindowsByOwnerId = new Map(
+      ownerIds.map((ownerId, index) => {
+        const snapshot = teamWindowSnapshots[index];
+
+        return [
+          ownerId,
+          snapshot.exists()
+            ? normalizeFantasyTeamCycleWindows(
+                ownerId,
+                cycleNumber,
+                snapshot.data()
+              )
+            : null
+        ] as const;
+      })
+    );
+    const completedAssetWindowCount = [...teamWindowsByOwnerId.values()]
+      .filter((teamWindows) => Boolean(teamWindows))
+      .reduce(
+        (total, teamWindows) =>
+          total + (teamWindows?.completedWindowCount ?? 0),
+        0
+      );
+    const effectiveMatchups: FantasyMatchup[] = [];
+    const newlyCompletedMatchupIds: string[] = [];
+
+    for (let index = 0; index < savedMatchups.length; index += 1) {
+      const matchup = savedMatchups[index];
+
+      if (matchup.status === 'complete') {
+        effectiveMatchups.push(matchup);
+        continue;
+      }
+
+      const teamAWindows = teamWindowsByOwnerId.get(
+        matchup.teamAOwnerId
+      );
+      const teamBWindows = matchup.teamBOwnerId
+        ? teamWindowsByOwnerId.get(matchup.teamBOwnerId)
+        : null;
+      const teamAComplete = isFantasyTeamCycleWindowsComplete(
+        teamAWindows
+      );
+      const teamBComplete = matchup.teamBOwnerId
+        ? isFantasyTeamCycleWindowsComplete(teamBWindows)
+        : true;
+
+      if (!teamAComplete || !teamBComplete) {
+        effectiveMatchups.push(matchup);
+        continue;
+      }
+
+      const teamAScore = roundScore(
+        getFantasyTeamCycleWindowScore(teamAWindows)
+      );
+      const teamBScore = matchup.teamBOwnerId
+        ? roundScore(
+            getFantasyTeamCycleWindowScore(teamBWindows)
+          )
+        : 0;
+      const winnerOwnerId = getMatchupWinnerOwnerId(
+        matchup.teamAOwnerId,
+        matchup.teamBOwnerId,
+        teamAScore,
+        teamBScore
+      );
+      const completedMatchup: FantasyMatchup = {
+        ...matchup,
+        teamAScore,
+        teamBScore,
+        winnerOwnerId,
+        status: 'complete'
+      };
+
+      transaction.update(matchupRefs[index], {
+        teamAScore,
+        teamBScore,
+        winnerOwnerId,
+        status: 'complete',
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      newlyCompletedMatchupIds.push(matchup.id);
+      effectiveMatchups.push(completedMatchup);
+    }
+
+    const completedMatchupCount = effectiveMatchups.filter(
+      (matchup) => matchup.status === 'complete'
+    ).length;
+    const pendingMatchupCount = Math.max(
+      0,
+      totalMatchupCount - completedMatchupCount
+    );
+    const cycleCompleted =
+      totalMatchupCount > 0 && pendingMatchupCount === 0;
+
+    if (cycleCompleted) {
+      if (!cycle.standingsAppliedAt) {
+        const recordDeltas: Record<
+          string,
+          {
+            wins: number;
+            losses: number;
+            ties: number;
+            pointsFor: number;
+            pointsAgainst: number;
+          }
+        > = {};
+
+        function ensureRecordDelta(ownerId: string): void {
+          recordDeltas[ownerId] ??= {
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            pointsFor: 0,
+            pointsAgainst: 0
+          };
+        }
+
+        for (const matchup of effectiveMatchups) {
+          if (!matchup.teamBOwnerId) {
+            continue;
+          }
+
+          ensureRecordDelta(matchup.teamAOwnerId);
+          ensureRecordDelta(matchup.teamBOwnerId);
+          recordDeltas[matchup.teamAOwnerId].pointsFor +=
+            matchup.teamAScore;
+          recordDeltas[matchup.teamAOwnerId].pointsAgainst +=
+            matchup.teamBScore;
+          recordDeltas[matchup.teamBOwnerId].pointsFor +=
+            matchup.teamBScore;
+          recordDeltas[matchup.teamBOwnerId].pointsAgainst +=
+            matchup.teamAScore;
+
+          if (matchup.teamAScore === matchup.teamBScore) {
+            recordDeltas[matchup.teamAOwnerId].ties += 1;
+            recordDeltas[matchup.teamBOwnerId].ties += 1;
+            continue;
+          }
+
+          if (matchup.winnerOwnerId === matchup.teamAOwnerId) {
+            recordDeltas[matchup.teamAOwnerId].wins += 1;
+            recordDeltas[matchup.teamBOwnerId].losses += 1;
+          } else {
+            recordDeltas[matchup.teamBOwnerId].wins += 1;
+            recordDeltas[matchup.teamAOwnerId].losses += 1;
+          }
+        }
+
+        for (const [ownerId, delta] of Object.entries(recordDeltas)) {
+          const teamUpdate: Record<string, unknown> = {
+            updatedAt: serverTimestamp()
+          };
+
+          if (delta.wins !== 0) {
+            teamUpdate['wins'] = increment(delta.wins);
+          }
+
+          if (delta.losses !== 0) {
+            teamUpdate['losses'] = increment(delta.losses);
+          }
+
+          if (delta.ties !== 0) {
+            teamUpdate['ties'] = increment(delta.ties);
+          }
+
+          if (delta.pointsFor !== 0) {
+            teamUpdate['pointsFor'] = increment(
+              roundScore(delta.pointsFor)
+            );
+          }
+
+          if (delta.pointsAgainst !== 0) {
+            teamUpdate['pointsAgainst'] = increment(
+              roundScore(delta.pointsAgainst)
+            );
+          }
+
+          transaction.update(
+            getTeamRef(leagueId, ownerId),
+            teamUpdate
+          );
+        }
+      }
+
+      transaction.update(cycleRef, {
+        status: 'complete',
+        matchupCompletionSchemaVersion: 1,
+        totalMatchupCount,
+        completedMatchupCount,
+        pendingMatchupCount: 0,
+        completedWindowCount: completedAssetWindowCount,
+        lastMatchupCompletedAt:
+          newlyCompletedMatchupIds.length > 0
+            ? serverTimestamp()
+            : cycle.lastMatchupCompletedAt ?? serverTimestamp(),
+        standingsAppliedAt:
+          cycle.standingsAppliedAt ?? serverTimestamp(),
+        projectionAccuracyStatus: 'pending',
+        projectionAccuracyAssetCount: 0,
+        projectionAccuracyProjectionVersions: [],
+        projectionAccuracyUpdatedAt: null,
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else if (
+      newlyCompletedMatchupIds.length > 0 ||
+      cycle.matchupCompletionSchemaVersion !== 1 ||
+      cycle.totalMatchupCount !== totalMatchupCount ||
+      cycle.completedMatchupCount !== completedMatchupCount ||
+      cycle.pendingMatchupCount !== pendingMatchupCount ||
+      cycle.completedWindowCount !== completedAssetWindowCount
+    ) {
+      transaction.update(cycleRef, {
+        matchupCompletionSchemaVersion: 1,
+        totalMatchupCount,
+        completedMatchupCount,
+        pendingMatchupCount,
+        completedWindowCount: completedAssetWindowCount,
+        ...(newlyCompletedMatchupIds.length > 0
+          ? { lastMatchupCompletedAt: serverTimestamp() }
+          : {}),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    return {
+      newlyCompletedMatchupIds,
+      completedMatchupCount,
+      totalMatchupCount,
+      pendingMatchupCount,
+      cycleCompleted
+    };
   });
 }
 
@@ -1507,24 +3058,47 @@ export async function updateCycleMatchupScores(
   }
 
   const batch = writeBatch(db);
+  let changedMatchupCount = 0;
 
   for (const matchup of matchups) {
-    const teamAScore =
-      teamScores[matchup.teamAOwnerId] ?? 0;
+    // Once a matchup is finalized from completed slot windows, later score
+    // refreshes must not mutate its locked result while other league matchups
+    // are still finishing the same cycle.
+    if (matchup.status === 'complete') {
+      continue;
+    }
 
-    const teamBScore =
+    const teamAScore = roundScore(
+      teamScores[matchup.teamAOwnerId] ?? 0
+    );
+
+    const teamBScore = roundScore(
       matchup.teamBOwnerId
         ? teamScores[matchup.teamBOwnerId] ?? 0
-        : 0;
+        : 0
+    );
+
+    if (
+      roundScore(matchup.teamAScore ?? 0) === teamAScore &&
+      roundScore(matchup.teamBScore ?? 0) === teamBScore
+    ) {
+      continue;
+    }
+
+    changedMatchupCount += 1;
 
     batch.update(
       getCycleMatchupRef(leagueId, cycleNumber, matchup.id),
       {
-        teamAScore: roundScore(teamAScore),
-        teamBScore: roundScore(teamBScore),
+        teamAScore,
+        teamBScore,
         updatedAt: serverTimestamp()
       }
     );
+  }
+
+  if (changedMatchupCount === 0) {
+    return;
   }
 
   batch.update(
@@ -1638,6 +3212,7 @@ export async function completeCycle(
             winnerOwnerId: winner.winnerOwnerId,
             tieBrokenByHigherSeed: winner.tieBrokenByHigherSeed,
             status: 'complete',
+            completedAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }
         );
@@ -1663,6 +3238,11 @@ export async function completeCycle(
 
       transaction.update(cycleRef, {
         status: 'complete',
+        matchupCompletionSchemaVersion: 1,
+        totalMatchupCount: matchups.length,
+        completedMatchupCount: matchups.length,
+        pendingMatchupCount: 0,
+        lastMatchupCompletedAt: serverTimestamp(),
         projectionAccuracyStatus: 'pending',
         projectionAccuracyAssetCount: 0,
         projectionAccuracyProjectionVersions: [],
@@ -1747,6 +3327,7 @@ export async function completeCycle(
           teamBScore,
           winnerOwnerId,
           status: 'complete',
+          completedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }
       );
@@ -1820,6 +3401,12 @@ export async function completeCycle(
 
     transaction.update(cycleRef, {
       status: 'complete',
+      matchupCompletionSchemaVersion: 1,
+      totalMatchupCount: matchups.length,
+      completedMatchupCount: matchups.length,
+      pendingMatchupCount: 0,
+      lastMatchupCompletedAt: serverTimestamp(),
+      standingsAppliedAt: serverTimestamp(),
       projectionAccuracyStatus: 'pending',
       projectionAccuracyAssetCount: 0,
       projectionAccuracyProjectionVersions: [],

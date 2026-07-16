@@ -1,7 +1,6 @@
 import {
   Component,
   computed,
-  OnDestroy,
   signal
 } from '@angular/core';
 
@@ -11,18 +10,16 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
 
-import {
-  DraftableAsset
-} from '../../../core/draft/draft.models';
-
-import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
 
 import {
   getLeagueById,
   League
 } from '../../../core/league/league.service';
+
+import {
+  clearCurrentNhlDraftSkaterCache,
+  getCurrentNhlDraftSkaters
+} from '../../../core/nhl/nhl-api.service';
 
 import {
   NHLPlayer
@@ -61,7 +58,6 @@ interface AvailabilityStatusOption {
   description: string;
 }
 
-const AUTO_SYNC_INTERVAL_MILLISECONDS = 30 * 60 * 1000;
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -78,7 +74,7 @@ function waitForAuthUser(): Promise<User | null> {
   templateUrl: './player-availability-manager.html',
   styleUrl: './player-availability-manager.css'
 })
-export class PlayerAvailabilityManager implements OnDestroy {
+export class PlayerAvailabilityManager {
   leagueId = '';
   userId = '';
 
@@ -144,7 +140,6 @@ export class PlayerAvailabilityManager implements OnDestroy {
     }
   ];
 
-  private syncTimer: ReturnType<typeof setInterval> | null = null;
 
   readonly managedRecordCount = computed(() =>
     playerAvailabilityDatabaseRecords().size
@@ -226,13 +221,6 @@ export class PlayerAvailabilityManager implements OnDestroy {
     void this.loadPage();
   }
 
-  ngOnDestroy(): void {
-    if (this.syncTimer) {
-      clearInterval(this.syncTimer);
-      this.syncTimer = null;
-    }
-  }
-
   async loadPage(): Promise<void> {
     const leagueId = this.route.snapshot.paramMap.get('leagueId');
     const user = await waitForAuthUser();
@@ -265,7 +253,6 @@ export class PlayerAvailabilityManager implements OnDestroy {
       await this.loadPlayers();
       await this.refreshSyncState();
       void this.syncEspnInjuries(false);
-      this.startAutomaticSyncTimer();
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
@@ -277,37 +264,23 @@ export class PlayerAvailabilityManager implements OnDestroy {
     }
   }
 
-  private startAutomaticSyncTimer(): void {
-    if (this.syncTimer) {
-      clearInterval(this.syncTimer);
-    }
-
-    this.syncTimer = setInterval(() => {
-      void this.syncEspnInjuries(false);
-    }, AUTO_SYNC_INTERVAL_MILLISECONDS);
-  }
-
-  async loadPlayers(): Promise<void> {
+  async loadPlayers(forceRefresh: boolean = false): Promise<void> {
     this.playerPoolLoading.set(true);
 
+    if (forceRefresh) {
+      clearCurrentNhlDraftSkaterCache();
+    }
+
     try {
-      const assets = await loadDraftPlayerPool(true);
+      const players = await getCurrentNhlDraftSkaters();
 
       this.players.set(
-        assets
-          .filter(
-            (asset): asset is Extract<
-              DraftableAsset,
-              { assetType: 'skater' }
-            > => asset.assetType === 'skater'
-          )
-          .map((asset) => asset.player)
-          .filter(
-            (player, index, players) =>
-              players.findIndex(
-                (candidate) => candidate.id === player.id
-              ) === index
-          )
+        players.filter(
+          (player, index, allPlayers) =>
+            allPlayers.findIndex(
+              (candidate) => candidate.id === player.id
+            ) === index
+        )
       );
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -359,8 +332,7 @@ export class PlayerAvailabilityManager implements OnDestroy {
       const result = await syncPlayerAvailabilityFromEspn({
         leagueId: this.leagueId,
         players: this.players(),
-        force,
-        minimumIntervalMinutes: 30
+        trigger: 'commissioner-browser'
       });
 
       this.lastSyncResult.set(result);
@@ -562,7 +534,7 @@ export class PlayerAvailabilityManager implements OnDestroy {
       });
 
       this.successMessage.set(
-        `${player.fullName} now has a commissioner override of ${getPlayerAvailabilityStatusLabel(this.selectedStatus())}. Automatic sync will preserve this choice.`
+        `${player.fullName} now has a commissioner override of ${getPlayerAvailabilityStatusLabel(this.selectedStatus())}. The shared daily report will preserve this choice.`
       );
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -594,6 +566,13 @@ export class PlayerAvailabilityManager implements OnDestroy {
       return;
     }
 
+    if (currentRecord.source === 'espn') {
+      this.errorMessage.set(
+        'The ESPN report is shared across the entire app and cannot be deleted from one league. Save a commissioner override instead.'
+      );
+      return;
+    }
+
     this.saving.set(true);
 
     try {
@@ -607,9 +586,7 @@ export class PlayerAvailabilityManager implements OnDestroy {
       this.selectedStatus.set(fallbackAvailability.status);
       this.selectedNote.set(fallbackAvailability.note);
       this.successMessage.set(
-        currentRecord.source === 'commissioner'
-          ? `${player.fullName}'s commissioner override was removed. The next ESPN sync can manage this player automatically.`
-          : `${player.fullName}'s ESPN record was cleared. It will return if ESPN still lists the player during the next sync.`
+        `${player.fullName}'s commissioner override was removed. The shared ESPN report now applies again.`
       );
     } catch (error: unknown) {
       this.errorMessage.set(

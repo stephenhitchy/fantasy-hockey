@@ -648,6 +648,7 @@ export class TeamSettings implements OnDestroy {
       slot.asset.assetType === 'skater' &&
       this.isPlayerIrEligible(slot.asset) &&
       this.getOpenIrSlotCount() > 0 &&
+      !slot.pendingMove &&
       !this.rosterMoveLoading()
     );
   }
@@ -655,6 +656,10 @@ export class TeamSettings implements OnDestroy {
   getMoveToIrDisabledText(slot: ActiveRosterSlot): string {
     if (!slot.asset) {
       return '';
+    }
+
+    if (slot.pendingMove) {
+      return 'A move is already queued for this slot.';
     }
 
     if (slot.asset.assetType !== 'skater') {
@@ -1568,6 +1573,14 @@ export class TeamSettings implements OnDestroy {
       : '—';
   }
 
+  getPendingRosterMoveText(slot: ActiveRosterSlot): string {
+    if (!slot.pendingMove) {
+      return '';
+    }
+
+    return `Next window: ${this.getRosterAssetName(slot.pendingMove.incomingAsset)}`;
+  }
+
   getTransactionAssetName(asset: DraftableAsset | RosterAsset | null | undefined): string {
     if (!asset) {
       return 'Unknown Asset';
@@ -1616,6 +1629,19 @@ export class TeamSettings implements OnDestroy {
       case 'waiver-cleared':
         return `${this.getTransactionAssetName(transaction.waiverAsset)} cleared waivers`;
 
+      case 'queue-add-drop':
+      case 'queue-add-open-slot':
+        return `Queued ${this.getTransactionAssetName(transaction.addedAsset)}`;
+
+      case 'queue-waiver-award':
+        return `Reserved ${this.getTransactionAssetName(transaction.waiverAsset)} from waivers`;
+
+      case 'slot-move-activated':
+        return `Activated ${this.getTransactionAssetName(transaction.addedAsset)}`;
+
+      case 'cancel-queued-move':
+        return `Canceled ${this.getTransactionAssetName(transaction.addedAsset)}`;
+
       case 'add-drop':
       default:
         return `Added ${this.getTransactionAssetName(transaction.addedAsset)}`;
@@ -1652,6 +1678,25 @@ export class TeamSettings implements OnDestroy {
 
       case 'waiver-cleared':
         return 'No claim was awarded, so this player became a normal free agent.';
+
+      case 'queue-add-drop':
+        return `${this.getTransactionAssetName(transaction.droppedAsset)} keeps the current six-game slot window. The incoming player is reserved until that slot advances.`;
+
+      case 'queue-add-open-slot':
+        return 'The incoming player is reserved and will activate when this active roster slot reaches its next boundary.';
+
+      case 'queue-waiver-award':
+        return transaction.droppedAsset
+          ? `The waiver winner is reserved. ${this.getTransactionAssetName(transaction.droppedAsset)} remains in the current slot window until the boundary.`
+          : 'The waiver winner is reserved for the selected open slot boundary.';
+
+      case 'slot-move-activated':
+        return transaction.droppedAsset
+          ? `${this.getTransactionAssetName(transaction.addedAsset)} started the new slot window. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+          : `${this.getTransactionAssetName(transaction.addedAsset)} started the new slot window.`;
+
+      case 'cancel-queued-move':
+        return `${this.getTransactionAssetName(transaction.addedAsset)} was released from its reservation before the slot boundary.`;
 
       case 'add-drop':
       default:
@@ -1728,7 +1773,9 @@ export class TeamSettings implements OnDestroy {
     asset: SkaterRosterAsset
   ): ActiveRosterSlot[] {
     return this.roster()?.activeSlots.filter(
-      (slot) => slot.position === asset.position
+      (slot) =>
+        slot.position === asset.position &&
+        !slot.pendingMove
     ) ?? [];
   }
 

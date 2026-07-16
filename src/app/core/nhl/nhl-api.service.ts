@@ -1,5 +1,176 @@
 const NHL_API_BASE_URL = '/v1';
 
+interface CachedApiResponse {
+  loadedAt: number;
+  value: unknown;
+}
+
+const apiResponseCache = new Map<string, CachedApiResponse>();
+const apiRequestInFlight = new Map<string, Promise<unknown>>();
+const MAX_API_RESPONSE_CACHE_ENTRIES = 2500;
+
+const NHL_SCHEDULE_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_GAME_DATA_CACHE_MILLISECONDS = 60 * 1000;
+const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_STATS_CACHE_MILLISECONDS = 5 * 60 * 1000;
+
+const RETRYABLE_HTTP_STATUSES = new Set([
+  408,
+  425,
+  429,
+  500,
+  502,
+  503,
+  504
+]);
+
+function waitForApiRetry(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function getRetryDelayMilliseconds(
+  response: Response | null,
+  attemptNumber: number
+): number {
+  const retryAfterSeconds = Number(
+    response?.headers.get('retry-after') ?? ''
+  );
+
+  if (
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds > 0
+  ) {
+    return Math.min(retryAfterSeconds * 1000, 15_000);
+  }
+
+  return Math.min(
+    750 * 2 ** Math.max(0, attemptNumber - 1),
+    8_000
+  );
+}
+
+async function requestApiJsonWithRetry<T>(
+  url: string,
+  errorLabel: string,
+  maxAttempts: number = 3
+): Promise<T> {
+  let lastError: unknown = null;
+
+  for (
+    let attemptNumber = 1;
+    attemptNumber <= maxAttempts;
+    attemptNumber += 1
+  ) {
+    let response: Response | null = null;
+
+    try {
+      response = await fetch(url);
+    } catch (error: unknown) {
+      lastError = error;
+
+      if (attemptNumber >= maxAttempts) {
+        throw error;
+      }
+
+      await waitForApiRetry(
+        getRetryDelayMilliseconds(null, attemptNumber)
+      );
+      continue;
+    }
+
+    if (response.ok) {
+      return await response.json() as T;
+    }
+
+    const error = new Error(
+      `${errorLabel}: ${response.status} ${response.statusText}`
+    );
+
+    lastError = error;
+
+    if (
+      !RETRYABLE_HTTP_STATUSES.has(response.status) ||
+      attemptNumber >= maxAttempts
+    ) {
+      throw error;
+    }
+
+    await waitForApiRetry(
+      getRetryDelayMilliseconds(response, attemptNumber)
+    );
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(errorLabel);
+}
+
+async function getCachedApiJson<T>(
+  url: string,
+  cacheMilliseconds: number,
+  errorLabel: string
+): Promise<T> {
+  const cached = apiResponseCache.get(url);
+
+  if (
+    cached &&
+    Date.now() - cached.loadedAt < cacheMilliseconds
+  ) {
+    return cached.value as T;
+  }
+
+  const existingRequest = apiRequestInFlight.get(url);
+
+  if (existingRequest) {
+    return existingRequest as Promise<T>;
+  }
+
+  const request = requestApiJsonWithRetry<T>(
+    url,
+    errorLabel
+  )
+    .then((value) => {
+      apiResponseCache.set(url, {
+        loadedAt: Date.now(),
+        value
+      });
+
+      if (apiResponseCache.size > MAX_API_RESPONSE_CACHE_ENTRIES) {
+        const entriesByAge = [...apiResponseCache.entries()].sort(
+          (first, second) => first[1].loadedAt - second[1].loadedAt
+        );
+        const removeCount = Math.ceil(
+          MAX_API_RESPONSE_CACHE_ENTRIES * 0.2
+        );
+
+        for (const [cacheKey] of entriesByAge.slice(0, removeCount)) {
+          apiResponseCache.delete(cacheKey);
+        }
+      }
+
+      return value;
+    })
+    .finally(() => {
+      apiRequestInFlight.delete(url);
+    });
+
+  apiRequestInFlight.set(url, request as Promise<unknown>);
+  return request;
+}
+
+export function clearNhlProjectionApiCache(): void {
+  for (const cacheKey of [...apiResponseCache.keys()]) {
+    if (
+      cacheKey.startsWith('/stats/') ||
+      cacheKey.includes('/club-schedule-season/')
+    ) {
+      apiResponseCache.delete(cacheKey);
+    }
+  }
+}
+
 export interface NhlPlayerGameLogEntry {
   gameId: number;
   teamAbbrev: string;
@@ -162,35 +333,28 @@ export async function getRegularSeasonGameLog(
   playerId: number,
   season: string
 ): Promise<NhlPlayerGameLogResponse> {
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/player/${playerId}/game-log/${season}/2`
+  const url =
+    `${NHL_API_BASE_URL}/player/${playerId}/game-log/${season}/2`;
+
+  return getCachedApiJson<NhlPlayerGameLogResponse>(
+    url,
+    NHL_PLAYER_LOG_CACHE_MILLISECONDS,
+    'NHL player game-log request failed'
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL API request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<NhlPlayerGameLogResponse>;
 }
 
 export async function getRegularSeasonTeamGames(
   teamAbbreviation: string,
   season: string
 ): Promise<NhlTeamSeasonGame[]> {
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`
+  const url =
+    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`;
+
+  const data = await getCachedApiJson<NhlTeamSeasonScheduleResponse>(
+    url,
+    NHL_SCHEDULE_CACHE_MILLISECONDS,
+    'NHL schedule request failed'
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL schedule request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const data =
-    (await response.json()) as NhlTeamSeasonScheduleResponse;
 
   const games = Array.isArray(data.games) ? data.games : [];
 
@@ -214,18 +378,14 @@ export async function getNhlTeamSeasonSchedule(
   teamAbbreviation: string,
   season: string
 ): Promise<NhlTeamSeasonGame[]> {
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`
+  const url =
+    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`;
+
+  const data = await getCachedApiJson<NhlTeamSeasonScheduleResponse>(
+    url,
+    NHL_SCHEDULE_CACHE_MILLISECONDS,
+    'NHL season schedule request failed'
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL season schedule request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const data =
-    (await response.json()) as NhlTeamSeasonScheduleResponse;
 
   const games = Array.isArray(data.games) ? data.games : [];
 
@@ -239,33 +399,26 @@ export async function getNhlTeamSeasonSchedule(
 export async function getGameBoxscore(
   gameId: number
 ): Promise<NhlGameBoxscoreResponse> {
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/gamecenter/${gameId}/boxscore`
+  const url = `${NHL_API_BASE_URL}/gamecenter/${gameId}/boxscore`;
+
+  return getCachedApiJson<NhlGameBoxscoreResponse>(
+    url,
+    NHL_GAME_DATA_CACHE_MILLISECONDS,
+    'NHL boxscore request failed'
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL boxscore request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<NhlGameBoxscoreResponse>;
 }
 
 export async function getGamePlayByPlay(
   gameId: number
 ): Promise<NhlGamePlayByPlayResponse> {
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/gamecenter/${gameId}/play-by-play`
+  const url =
+    `${NHL_API_BASE_URL}/gamecenter/${gameId}/play-by-play`;
+
+  return getCachedApiJson<NhlGamePlayByPlayResponse>(
+    url,
+    NHL_GAME_DATA_CACHE_MILLISECONDS,
+    'NHL play-by-play request failed'
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL play-by-play request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<NhlGamePlayByPlayResponse>;
 }
 
 export function findSkaterBoxscoreLine(
@@ -429,6 +582,16 @@ interface NhlCurrentRosterResponse {
 
 const NHL_ROSTER_BATCH_SIZE = 1;
 const NHL_ROSTER_DELAY_MS = 350;
+const NHL_ROSTER_CACHE_MILLISECONDS = 6 * 60 * 60 * 1000;
+const NHL_ROSTER_CACHE_KEY = 'fantasy-hockey:nhl-rosters:v1';
+
+let cachedDraftSkaters: {
+  season: string;
+  loadedAt: number;
+  players: NhlDraftSkater[];
+} | null = null;
+
+let draftSkaterRequestInFlight: Promise<NhlDraftSkater[]> | null = null;
 
 export const NHL_DRAFT_CLUBS: NhlDraftClub[] = [
   { abbreviation: 'ANA', name: 'Anaheim Ducks' },
@@ -526,19 +689,17 @@ async function getDraftClubRoster(
 }> {
   const season = getCurrentDraftRosterSeason();
 
-  const response = await fetch(
-    `${NHL_API_BASE_URL}/roster/${club.abbreviation.toLowerCase()}/${season}`
+  const url =
+    `${NHL_API_BASE_URL}/roster/${club.abbreviation.toLowerCase()}/${season}`;
+  const roster = await getCachedApiJson<NhlCurrentRosterResponse>(
+    url,
+    NHL_ROSTER_CACHE_MILLISECONDS,
+    `${club.abbreviation} roster request failed`
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `${club.abbreviation} roster request failed with ${response.status} ${response.statusText}.`
-    );
-  }
 
   return {
     club,
-    roster: (await response.json()) as NhlCurrentRosterResponse
+    roster
   };
 }
 
@@ -584,7 +745,7 @@ function addRosterSkaters(
   }
 }
 
-export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
+async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
   const skaters = new Map<number, NhlDraftSkater>();
   const retryClubs: NhlDraftClub[] = [];
   const failedClubs = new Map<string, string>();
@@ -676,6 +837,123 @@ export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
   );
 }
 
+function isValidCachedDraftSkaters(value: unknown): value is {
+  season: string;
+  loadedAt: number;
+  players: NhlDraftSkater[];
+} {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as {
+    season?: unknown;
+    loadedAt?: unknown;
+    players?: unknown;
+  };
+
+  return (
+    typeof candidate.season === 'string' &&
+    typeof candidate.loadedAt === 'number' &&
+    Array.isArray(candidate.players) &&
+    candidate.players.length >= 300
+  );
+}
+
+function readDraftSkatersFromBrowserCache(): typeof cachedDraftSkaters {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(NHL_ROSTER_CACHE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+
+    return isValidCachedDraftSkaters(parsed)
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraftSkatersToBrowserCache(
+  value: NonNullable<typeof cachedDraftSkaters>
+): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.setItem(
+      NHL_ROSTER_CACHE_KEY,
+      JSON.stringify(value)
+    );
+  } catch {
+    // Browser storage is an optimization only.
+  }
+}
+
+export function clearCurrentNhlDraftSkaterCache(): void {
+  cachedDraftSkaters = null;
+
+  for (const url of apiResponseCache.keys()) {
+    if (url.includes('/roster/')) {
+      apiResponseCache.delete(url);
+    }
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(NHL_ROSTER_CACHE_KEY);
+    } catch {
+      // Browser storage is an optimization only.
+    }
+  }
+}
+
+export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
+  const season = getCurrentDraftRosterSeason();
+  const now = Date.now();
+  const cached = cachedDraftSkaters ?? readDraftSkatersFromBrowserCache();
+
+  if (
+    cached &&
+    cached.season === season &&
+    now - cached.loadedAt < NHL_ROSTER_CACHE_MILLISECONDS
+  ) {
+    cachedDraftSkaters = cached;
+    return cached.players;
+  }
+
+  if (draftSkaterRequestInFlight) {
+    return draftSkaterRequestInFlight;
+  }
+
+  draftSkaterRequestInFlight = loadCurrentNhlDraftSkatersFromApi()
+    .then((players) => {
+      const value = {
+        season,
+        loadedAt: Date.now(),
+        players
+      };
+
+      cachedDraftSkaters = value;
+      saveDraftSkatersToBrowserCache(value);
+      return players;
+    })
+    .finally(() => {
+      draftSkaterRequestInFlight = null;
+    });
+
+  return draftSkaterRequestInFlight;
+}
+
 const NHL_STATS_API_BASE_URL = '/stats/rest/en';
 
 export type NhlStatsRecord = Record<string, unknown>;
@@ -690,17 +968,13 @@ async function getNhlStatsRestData(
 ): Promise<NhlStatsRecord[]> {
   const query = new URLSearchParams(params);
 
-  const response = await fetch(
-    `${NHL_STATS_API_BASE_URL}${path}?${query.toString()}`
+  const url =
+    `${NHL_STATS_API_BASE_URL}${path}?${query.toString()}`;
+  const data = await getCachedApiJson<NhlStatsApiResponse>(
+    url,
+    NHL_STATS_CACHE_MILLISECONDS,
+    `NHL stats request failed for ${path}`
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `NHL stats request failed for ${path}: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const data = (await response.json()) as NhlStatsApiResponse;
 
   return Array.isArray(data.data) ? data.data : [];
 }

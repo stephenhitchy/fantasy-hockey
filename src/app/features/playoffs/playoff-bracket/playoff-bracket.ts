@@ -151,6 +151,28 @@ export class PlayoffBracket implements OnDestroy {
     this.stopPlayoffsListener?.();
   }
 
+  isCommissioner(): boolean {
+    return this.league()?.commissionerId === this.userId;
+  }
+
+  getTeamWindowLabel(
+    matchup: FantasyPlayoffMatchup,
+    side: 'A' | 'B'
+  ): string {
+    const windowNumber = side === 'A'
+      ? matchup.teamAWindowNumber
+      : matchup.teamBWindowNumber;
+    const cycleNumber = side === 'A'
+      ? matchup.teamAWindowCycleNumber
+      : matchup.teamBWindowCycleNumber;
+
+    if (!windowNumber || !cycleNumber) {
+      return 'Window pending';
+    }
+
+    return `Window ${windowNumber} · block ${cycleNumber}`;
+  }
+
   isPlayoffsStarted(): boolean {
     return this.playoffs() !== null;
   }

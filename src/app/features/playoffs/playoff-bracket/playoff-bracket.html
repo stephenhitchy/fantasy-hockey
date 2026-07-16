@@ -205,6 +205,14 @@
             <span class="eyebrow">Postseason Bracket</span>
             <h2>Follow the Bracket</h2>
           </div>
+          @if (isCommissioner()) {
+            <a
+              class="simulator-link"
+              [routerLink]="['/leagues', leagueId, 'playoffs', 'simulator']"
+            >
+              Test Banked Windows
+            </a>
+          }
         </div>
 
         <p class="section-copy bracket-copy">
@@ -258,7 +266,10 @@
                           <span class="mini-seed">
                             {{ matchup.teamASeed ? '#' + matchup.teamASeed : '—' }}
                           </span>
-                          <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                          <div class="bracket-team-copy">
+                            <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                            <small>{{ getTeamWindowLabel(matchup, 'A') }}</small>
+                          </div>
                           <span class="score">{{ getScoreLabel(matchup.teamAScore) }}</span>
                         </div>
 
@@ -269,7 +280,10 @@
                           <span class="mini-seed">
                             {{ matchup.teamBSeed ? '#' + matchup.teamBSeed : '—' }}
                           </span>
-                          <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                          <div class="bracket-team-copy">
+                            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                            <small>{{ getTeamWindowLabel(matchup, 'B') }}</small>
+                          </div>
                           <span class="score">{{ getScoreLabel(matchup.teamBScore) }}</span>
                         </div>
 

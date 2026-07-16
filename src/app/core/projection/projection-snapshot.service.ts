@@ -30,12 +30,13 @@ import {
   getPlayerAvailabilityRecordsForLeague
 } from '../player/player-availability.service';
 
-export const SHARED_PROJECTION_VERSION = 4;
+export const SHARED_PROJECTION_VERSION = 5;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 
 const SNAPSHOT_POINTER_ID = 'current';
-const SNAPSHOT_ASSET_BATCH_SIZE = 400;
+const SNAPSHOT_ASSET_WRITE_BATCH_SIZE = 400;
+const SNAPSHOT_ASSET_CHUNK_SIZE = 25;
 const GOALIE_UNIT_TALENT_SCALE = 0.88;
 const GOALIE_UNIT_TALENT_WEIGHT = 0.63;
 const GOALIE_UNIT_SCARCITY_WEIGHT = 0.12;
@@ -62,6 +63,28 @@ const generationByLeague = new Map<
   Promise<SharedProjectionSnapshot>
 >();
 
+const SNAPSHOT_READ_CACHE_MILLISECONDS = 15_000;
+
+const metadataReadCache = new Map<
+  string,
+  { loadedAt: number; value: SharedProjectionSnapshotMetadata | null }
+>();
+
+const snapshotReadCache = new Map<
+  string,
+  { loadedAt: number; value: SharedProjectionSnapshot | null }
+>();
+
+const metadataReadInFlight = new Map<
+  string,
+  Promise<SharedProjectionSnapshotMetadata | null>
+>();
+
+const snapshotReadInFlight = new Map<
+  string,
+  Promise<SharedProjectionSnapshot | null>
+>();
+
 export type SharedProjectionSnapshotStatus =
   | 'building'
   | 'ready'
@@ -82,6 +105,8 @@ export interface SharedProjectionSnapshotMetadata {
   generatedAt: string;
   generatedBy: string;
   assetCount: number;
+  assetDocumentCount?: number;
+  assetStorageVersion?: number;
   teamCount: number;
   targetCycleNumber: number;
   requiredGamesPerCycle: number;
@@ -150,6 +175,48 @@ function getAssetName(asset: DraftableAsset): string {
   return asset.assetType === 'skater'
     ? asset.player.fullName
     : asset.teamName;
+}
+
+function assertSharedProjectionPoolHealthy(
+  assets: DraftableAsset[]
+): void {
+  const skaters = assets.filter(
+    (asset) => asset.assetType === 'skater'
+  );
+
+  if (skaters.length < 100) {
+    return;
+  }
+
+  const dataBackedSkaters = skaters.filter(
+    (asset) =>
+      asset.projectionDataSource !== 'conservative-baseline' &&
+      typeof asset.draftProjectedSeasonPoints === 'number' &&
+      asset.draftProjectedSeasonPoints > 0
+  );
+
+  const distinctSeasonOutlooks = new Set(
+    skaters
+      .map((asset) => asset.draftProjectedSeasonPoints)
+      .filter((value): value is number =>
+        typeof value === 'number' && Number.isFinite(value)
+      )
+      .map((value) => value.toFixed(1))
+  );
+
+  const minimumDataBackedCount = Math.max(
+    75,
+    Math.floor(skaters.length * 0.2)
+  );
+
+  if (
+    dataBackedSkaters.length < minimumDataBackedCount ||
+    distinctSeasonOutlooks.size < 20
+  ) {
+    throw new Error(
+      `Projection generation was stopped because the NHL statistics response produced a collapsed draft board (${dataBackedSkaters.length} of ${skaters.length} skaters had data-backed projections and only ${distinctSeasonOutlooks.size} distinct season outlooks were produced). The previous shared projection was preserved.`
+    );
+  }
 }
 
 function getSortNumber(
@@ -625,6 +692,14 @@ function normalizeMetadata(
       typeof data.assetCount === 'number'
         ? data.assetCount
         : 0,
+    assetDocumentCount:
+      typeof data.assetDocumentCount === 'number'
+        ? data.assetDocumentCount
+        : undefined,
+    assetStorageVersion:
+      typeof data.assetStorageVersion === 'number'
+        ? data.assetStorageVersion
+        : undefined,
     teamCount:
       typeof data.teamCount === 'number'
         ? data.teamCount
@@ -651,23 +726,56 @@ function normalizeMetadata(
   };
 }
 
-export async function loadSharedProjectionSnapshotMetadata(
+function isRecentRead(loadedAt: number): boolean {
+  return Date.now() - loadedAt < SNAPSHOT_READ_CACHE_MILLISECONDS;
+}
+
+function invalidateSharedProjectionReadCache(leagueId: string): void {
+  metadataReadCache.delete(leagueId);
+  snapshotReadCache.delete(leagueId);
+}
+
+export function loadSharedProjectionSnapshotMetadata(
   leagueId: string
 ): Promise<SharedProjectionSnapshotMetadata | null> {
-  const pointerSnapshot = await getDoc(
+  const cached = metadataReadCache.get(leagueId);
+
+  if (cached && isRecentRead(cached.loadedAt)) {
+    return Promise.resolve(cached.value);
+  }
+
+  const existingRequest = metadataReadInFlight.get(leagueId);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = getDoc(
     getProjectionSnapshotRef(
       leagueId,
       SNAPSHOT_POINTER_ID
     )
-  );
+  )
+    .then((pointerSnapshot) => {
+      const value = pointerSnapshot.exists()
+        ? normalizeMetadata(
+            pointerSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>
+          )
+        : null;
 
-  if (!pointerSnapshot.exists()) {
-    return null;
-  }
+      metadataReadCache.set(leagueId, {
+        loadedAt: Date.now(),
+        value
+      });
 
-  return normalizeMetadata(
-    pointerSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>
-  );
+      return value;
+    })
+    .finally(() => {
+      metadataReadInFlight.delete(leagueId);
+    });
+
+  metadataReadInFlight.set(leagueId, request);
+  return request;
 }
 
 export function isSharedProjectionSnapshotFreshForDraft(
@@ -703,49 +811,86 @@ export function isSharedProjectionSnapshotFreshForDraft(
   );
 }
 
-export async function loadSharedProjectionSnapshot(
+export function loadSharedProjectionSnapshot(
   leagueId: string
 ): Promise<SharedProjectionSnapshot | null> {
-  const metadata =
-    await loadSharedProjectionSnapshotMetadata(leagueId);
+  const cached = snapshotReadCache.get(leagueId);
 
-  if (!metadata) {
-    return null;
+  if (cached && isRecentRead(cached.loadedAt)) {
+    return Promise.resolve(cached.value);
   }
 
-  const assetSnapshot = await getDocs(
-    getProjectionSnapshotAssetsRef(
-      leagueId,
-      metadata.activeSnapshotId
-    )
-  );
+  const existingRequest = snapshotReadInFlight.get(leagueId);
 
-  const assets = assetSnapshot.docs
-    .map((assetDocument: { data: () => unknown }) =>
-      assetDocument.data() as DraftableAsset
-    )
-    .sort(
-      (first: DraftableAsset, second: DraftableAsset) =>
-        getSortNumber(first.draftRank) -
-          getSortNumber(second.draftRank) ||
-        getSortNumber(first.balancedRank) -
-          getSortNumber(second.balancedRank) ||
-        compareDraftProjectionOrder(first, second)
-    );
-
-  if (
-    metadata.assetCount > 0 &&
-    assets.length !== metadata.assetCount
-  ) {
-    throw new Error(
-      `The shared projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`
-    );
+  if (existingRequest) {
+    return existingRequest;
   }
 
-  return {
-    metadata,
-    assets
-  };
+  const request = loadSharedProjectionSnapshotMetadata(leagueId)
+    .then(async (metadata) => {
+      if (!metadata) {
+        return null;
+      }
+
+      const assetSnapshot = await getDocs(
+        getProjectionSnapshotAssetsRef(
+          leagueId,
+          metadata.activeSnapshotId
+        )
+      );
+
+      const assets = assetSnapshot.docs
+        .flatMap((assetDocument: { data: () => unknown }) => {
+          const data = assetDocument.data() as {
+            assets?: unknown;
+            assetKey?: unknown;
+          };
+
+          if (Array.isArray(data.assets)) {
+            return data.assets as DraftableAsset[];
+          }
+
+          return typeof data.assetKey === 'string'
+            ? [data as DraftableAsset]
+            : [];
+        })
+        .sort(
+          (first: DraftableAsset, second: DraftableAsset) =>
+            getSortNumber(first.draftRank) -
+              getSortNumber(second.draftRank) ||
+            getSortNumber(first.balancedRank) -
+              getSortNumber(second.balancedRank) ||
+            compareDraftProjectionOrder(first, second)
+        );
+
+      if (
+        metadata.assetCount > 0 &&
+        assets.length !== metadata.assetCount
+      ) {
+        throw new Error(
+          `The shared projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`
+        );
+      }
+
+      return {
+        metadata,
+        assets
+      } satisfies SharedProjectionSnapshot;
+    })
+    .then((value) => {
+      snapshotReadCache.set(leagueId, {
+        loadedAt: Date.now(),
+        value
+      });
+
+      return value;
+    })
+    .finally(() => {
+      snapshotReadInFlight.delete(leagueId);
+    });
+
+  snapshotReadInFlight.set(leagueId, request);
+  return request;
 }
 
 async function generateSnapshotInternal(
@@ -770,6 +915,9 @@ async function generateSnapshotInternal(
     1,
     Math.floor(input.requiredGamesPerCycle)
   );
+
+  // Any new generation makes previously cached metadata/assets stale.
+  invalidateSharedProjectionReadCache(leagueId);
 
   const latestCycle = await getLatestCycle(leagueId);
   const targetCycleNumber = latestCycle
@@ -827,6 +975,8 @@ async function generateSnapshotInternal(
       availabilityByPlayerId
     });
 
+    assertSharedProjectionPoolHealthy(localAssets);
+
     const rankedAssets = rankSharedProjectionAssets(
       localAssets,
       teamCount
@@ -836,27 +986,48 @@ async function generateSnapshotInternal(
       projectionGeneratedAt: generatedAt
     }));
 
+    const assetChunks: DraftableAsset[][] = [];
+
     for (
       let index = 0;
       index < rankedAssets.length;
-      index += SNAPSHOT_ASSET_BATCH_SIZE
+      index += SNAPSHOT_ASSET_CHUNK_SIZE
+    ) {
+      assetChunks.push(
+        rankedAssets.slice(index, index + SNAPSHOT_ASSET_CHUNK_SIZE)
+      );
+    }
+
+    for (
+      let index = 0;
+      index < assetChunks.length;
+      index += SNAPSHOT_ASSET_WRITE_BATCH_SIZE
     ) {
       const batch = writeBatch(db);
-      const assetBatch = rankedAssets.slice(
+      const chunkBatch = assetChunks.slice(
         index,
-        index + SNAPSHOT_ASSET_BATCH_SIZE
+        index + SNAPSHOT_ASSET_WRITE_BATCH_SIZE
       );
 
-      for (const asset of assetBatch) {
+      chunkBatch.forEach((assets, offset) => {
+        const chunkIndex = index + offset;
+        const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
+
         batch.set(
           getProjectionSnapshotAssetRef(
             leagueId,
             snapshotId,
-            asset.assetKey
+            chunkId
           ),
-          sanitizeForFirestore(asset)
+          sanitizeForFirestore({
+            schemaVersion: 2,
+            chunkIndex,
+            assetCount: assets.length,
+            sharedProjectionSnapshotId: snapshotId,
+            assets
+          })
         );
-      }
+      });
 
       await batch.commit();
     }
@@ -869,6 +1040,8 @@ async function generateSnapshotInternal(
       generatedAt,
       generatedBy: user.uid,
       assetCount: rankedAssets.length,
+      assetDocumentCount: assetChunks.length,
+      assetStorageVersion: 2,
       teamCount,
       targetCycleNumber,
       requiredGamesPerCycle,
@@ -900,10 +1073,24 @@ async function generateSnapshotInternal(
 
     await finalBatch.commit();
 
-    return {
+    const completedSnapshot: SharedProjectionSnapshot = {
       metadata,
       assets: rankedAssets
     };
+
+    const loadedAt = Date.now();
+
+    metadataReadCache.set(leagueId, {
+      loadedAt,
+      value: metadata
+    });
+
+    snapshotReadCache.set(leagueId, {
+      loadedAt,
+      value: completedSnapshot
+    });
+
+    return completedSnapshot;
   } catch (error: unknown) {
     const message = error instanceof Error
       ? error.message

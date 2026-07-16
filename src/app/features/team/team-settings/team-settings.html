@@ -329,6 +329,12 @@
                           }
                         </div>
 
+                        @if (slot.pendingMove) {
+                          <div class="pending-slot-move-pill">
+                            {{ getPendingRosterMoveText(slot) }}
+                          </div>
+                        }
+
                         @if (getRosterAssetLogoUrl(asset); as logoUrl) {
                           <img
                             class="fantasy-player-logo"
@@ -402,7 +408,7 @@
                               type="button"
                               class="mini-roster-action drop-action"
                               (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
-                              [disabled]="rosterMoveLoading()"
+                              [disabled]="rosterMoveLoading() || !!slot.pendingMove"
                             >
                               Drop
                             </button>
@@ -464,6 +470,12 @@
                           </span>
                         }
                       </div>
+
+                      @if (slot.pendingMove) {
+                        <div class="pending-slot-move-pill">
+                          {{ getPendingRosterMoveText(slot) }}
+                        </div>
+                      }
 
                       @if (getRosterAssetLogoUrl(asset); as logoUrl) {
                         <img
@@ -538,7 +550,7 @@
                             type="button"
                             class="mini-roster-action drop-action"
                             (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
-                            [disabled]="rosterMoveLoading()"
+                            [disabled]="rosterMoveLoading() || !!slot.pendingMove"
                           >
                             Drop
                           </button>
@@ -597,6 +609,12 @@
                           </span>
                         }
                       </div>
+
+                      @if (slot.pendingMove) {
+                        <div class="pending-slot-move-pill">
+                          {{ getPendingRosterMoveText(slot) }}
+                        </div>
+                      }
 
                       @if (getRosterAssetLogoUrl(asset); as logoUrl) {
                         <img
@@ -671,7 +689,7 @@
                             type="button"
                             class="mini-roster-action drop-action"
                             (click)="$event.stopPropagation(); beginRosterDrop('active', slot.slotId)"
-                            [disabled]="rosterMoveLoading()"
+                            [disabled]="rosterMoveLoading() || !!slot.pendingMove"
                           >
                             Drop
                           </button>

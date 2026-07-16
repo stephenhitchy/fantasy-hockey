@@ -20,6 +20,7 @@ import {
 import {
   addDropRosterAsset,
   addFreeAgentToOpenRosterSlot,
+  cancelQueuedRosterMove,
   FantasyWaiver,
   FantasyWaiverClaimMoveType,
   listenToFantasyDraft,
@@ -163,15 +164,31 @@ export class FreeAgents implements OnDestroy {
     this.rosters()[this.userId] ?? null
   );
 
+  readonly pendingRosterMoves = computed(() =>
+    (this.myRoster()?.activeSlots ?? [])
+      .filter((slot) => Boolean(slot.pendingMove))
+      .map((slot) => ({
+        slot,
+        move: slot.pendingMove!
+      }))
+  );
+
   readonly rosteredAssetKeys = computed(() => {
     const assetKeys = new Set<string>();
 
     Object.values(this.rosters()).forEach((roster) => {
       roster?.activeSlots.forEach((slot) => {
         const assetKey = this.getRosterAssetKey(slot.asset);
+        const pendingAssetKey = this.getRosterAssetKey(
+          slot.pendingMove?.incomingAsset ?? null
+        );
 
         if (assetKey) {
           assetKeys.add(assetKey);
+        }
+
+        if (pendingAssetKey) {
+          assetKeys.add(pendingAssetKey);
         }
       });
 
@@ -294,7 +311,8 @@ export class FreeAgents implements OnDestroy {
     const openSlotCandidates = roster.activeSlots
       .filter((slot) =>
         slot.position === addAsset.position &&
-        slot.asset === null
+        slot.asset === null &&
+        !slot.pendingMove
       )
       .map((slot) => ({
         slotId: slot.slotId,
@@ -307,7 +325,8 @@ export class FreeAgents implements OnDestroy {
     const dropCandidates = roster.activeSlots
       .filter((slot): slot is ActiveRosterSlot & { asset: RosterAsset } =>
         slot.position === addAsset.position &&
-        slot.asset !== null
+        slot.asset !== null &&
+        !slot.pendingMove
       )
       .map((slot) => ({
         slotId: slot.slotId,
@@ -546,7 +565,7 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(
-          `Claim submitted for ${this.getAssetName(addAsset)}. The commissioner can process waivers when ready. If your claim wins, the move should score starting ${effectiveLabel}.`
+          `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player will be reserved for the selected slot and activate after that slot's current six-game window.`
         );
       } else if (dropCandidate.moveType === 'open-slot') {
         await addFreeAgentToOpenRosterSlot({
@@ -560,7 +579,9 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(
-          `Added ${this.getAssetName(addAsset)} into an open ${addAsset.position} slot. This move is saved to your current roster and should score starting ${effectiveLabel}.`
+          this.hasStartedCycleWindows()
+            ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate at that slot's next boundary.`
+            : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`
         );
       } else {
         if (!dropCandidate.asset) {
@@ -578,7 +599,9 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(
-          `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}. The dropped player is now on waivers. This move should score starting ${effectiveLabel}.`
+          this.hasStartedCycleWindows()
+            ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the current window and will go to waivers when the slot advances.`
+            : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`
         );
       }
 
@@ -618,7 +641,9 @@ export class FreeAgents implements OnDestroy {
 
       this.successMessage.set(
         claimCount > 0
-          ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
+          ? this.hasStartedCycleWindows()
+            ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winner is reserved for the selected slot and will activate at its next boundary.`
+            : `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
           : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`
       );
     } catch (error: unknown) {
@@ -840,8 +865,87 @@ export class FreeAgents implements OnDestroy {
     return (this.latestCycle()?.cycleNumber ?? 0) + 1;
   }
 
+  hasStartedCycleWindows(): boolean {
+    return this.latestCycle() !== null;
+  }
+
   getEffectiveCycleText(): string {
-    return `Effective Cycle ${this.getEffectiveCycleNumber()}`;
+    return this.hasStartedCycleWindows()
+      ? 'after the selected slot finishes its current six-game window'
+      : `before Cycle ${this.getEffectiveCycleNumber()}`;
+  }
+
+  getPendingMoveIncomingName(index: number): string {
+    const entry = this.pendingRosterMoves()[index];
+
+    return entry
+      ? this.getRosterAssetName(entry.move.incomingAsset)
+      : 'Unknown Player';
+  }
+
+  getPendingMoveOutgoingName(index: number): string {
+    const entry = this.pendingRosterMoves()[index];
+
+    if (!entry?.slot.asset) {
+      return 'Open Slot';
+    }
+
+    return this.getRosterAssetName(entry.slot.asset);
+  }
+
+  getPendingMoveSlotLabel(index: number): string {
+    const entry = this.pendingRosterMoves()[index];
+
+    return entry
+      ? `${entry.slot.position} Slot ${entry.slot.slotNumber}`
+      : 'Roster Slot';
+  }
+
+  canCancelPendingMove(index: number): boolean {
+    const entry = this.pendingRosterMoves()[index];
+
+    return Boolean(entry && !entry.move.sourceWaiverId);
+  }
+
+  async cancelPendingMove(index: number): Promise<void> {
+    const entry = this.pendingRosterMoves()[index];
+
+    this.successMessage.set('');
+    this.errorMessage.set('');
+
+    if (!entry) {
+      this.errorMessage.set('That queued roster move is no longer available.');
+      return;
+    }
+
+    if (entry.move.sourceWaiverId) {
+      this.errorMessage.set(
+        'An awarded waiver move cannot be canceled after commissioner processing.'
+      );
+      return;
+    }
+
+    this.moving.set(true);
+
+    try {
+      await cancelQueuedRosterMove({
+        leagueId: this.leagueId,
+        ownerId: this.userId,
+        rosterSlotId: entry.slot.slotId
+      });
+
+      this.successMessage.set(
+        `Canceled the queued move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to cancel that queued roster move.'
+      );
+    } finally {
+      this.moving.set(false);
+    }
   }
 
   isSelectedAddAsset(asset: DraftableAsset): boolean {

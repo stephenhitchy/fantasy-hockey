@@ -1,0 +1,196 @@
+FANTASY HOCKEY — DATA ACCESS AUDIT
+
+AUDIT SCOPE
+- 72 Angular/TypeScript source files under src/app
+- 25 Angular templates
+- 25 component stylesheets
+- Firestore security rules
+- One legacy Firebase Functions source file
+- All Firestore getDoc/getDocs/onSnapshot/write/transaction usage
+- All browser fetch calls
+- All intervals, timeouts, retry paths, and page-load refresh paths
+
+SUMMARY
+The app's core atomic writes and real-time listeners are generally appropriate
+for a collaborative fantasy league. The largest avoidable costs were not the
+normal draft/roster transactions; they were repeated data preparation,
+per-league copies of globally identical injury data, repeated NHL requests,
+and writes whose values had not changed.
+
+IMPLEMENTED OPTIMIZATIONS
+
+1. REMOVED A WRITE ON EVERY APP START
+Previous behavior:
+- app.ts wrote /test/hello every time the app loaded.
+
+New behavior:
+- The test write and Firebase test logging are removed.
+- App startup performs no diagnostic Firestore write.
+
+2. ONE DAILY INJURY UPDATE FOR THE ENTIRE APP
+Previous behavior:
+- Injury refreshes could run per league, per Draft Room entry, and every
+  30 minutes while the Injury Manager remained open.
+- Automatic records were copied into every league.
+- Draft preparation could load a full projection player pool merely to match
+  ESPN injury names.
+
+New behavior:
+- One document stores the automatic report:
+  /appData/playerAvailability
+- One successful refresh per UTC date serves every league and signed-in account.
+- Only a commissioner can claim and write the report.
+- The first eligible commissioner browser uses a transaction to claim a
+  10-minute refresh lease.
+- Other browsers see that the refresh is current or in progress and do not call
+  ESPN or rebuild the NHL roster pool.
+- A failed attempt receives a 15-minute cooldown.
+- The NHL roster list is cached for six hours and may be reused directly by the
+  Injury Manager.
+- The ESPN refresh normally produces two global writes for the day:
+  one running/lease write and one success or error write.
+- League-specific commissioner overrides remain in each league and take
+  precedence over the global report.
+- Old per-league ESPN documents are no longer queried by the new client.
+
+Browser-triggered design note:
+- A report is refreshed when a commissioner visits a league on a new UTC date.
+- If no commissioner opens the app that day, no external request is made and
+  the previous report remains available until the next eligible visit.
+- This avoids requiring a scheduled paid/server process while still preventing
+  one refresh per league or account.
+
+3. ONE SHARED GLOBAL INJURY LISTENER PER ACTIVE LEAGUE SESSION
+- League pages share one onSnapshot listener for the single global report.
+- Navigation between pages of the same league reuses it.
+- Leaving league routes detaches the listener and clears its cache.
+- Manual league overrides use a separate query limited to
+  source == 'commissioner'.
+- If a page already has current listener data, helper methods reuse it instead
+  of issuing another getDocs query.
+
+4. NHL API REQUEST DEDUPLICATION AND CACHING
+Identical browser requests are now deduplicated while in flight and cached by
+URL for a short, data-appropriate period:
+- Team schedules: 2 minutes
+- Boxscores/play-by-play: 1 minute
+- Player game logs: 2 minutes
+- Stats endpoints: 5 minutes
+- Current NHL roster pool: 6 hours, season-keyed, memory + localStorage
+
+The response cache is bounded at 2,500 entries and prunes the oldest 20 percent
+when the limit is exceeded.
+
+This does not prevent fresh game data from arriving; live game endpoints have
+only a one-minute cache window.
+
+5. PROJECTION SNAPSHOT DOCUMENT CHUNKING
+Previous behavior:
+- A shared snapshot stored one Firestore document per draftable asset.
+- A 700-asset pool required approximately 700 asset writes during generation
+  and approximately 700 asset document reads when loaded.
+
+New behavior:
+- New snapshots store 25 assets per document.
+- Document count is ceil(asset count / 25).
+- A 700-asset pool uses 28 asset documents instead of 700, about a 96 percent
+  reduction in asset document operations for a complete snapshot.
+- Metadata and full snapshots have a 15-second read cache.
+- Simultaneous requests share the same in-flight promise.
+- Existing legacy one-asset snapshots remain readable.
+- Cycle creation can read both formats.
+
+6. SKIP UNCHANGED MATCHUP SCORE WRITES
+Previous behavior:
+- Score synchronization could rewrite every matchup even when its rounded
+  scores were unchanged.
+
+New behavior:
+- Existing and calculated scores are rounded and compared first.
+- Unchanged matchup documents are skipped.
+- If every matchup is unchanged, no write batch is committed.
+
+7. DRAFT PREPARATION AND ACTIVATION PROTECTION
+- Visible clocks update locally every second.
+- Scheduled draft preparation/activation checks run through one guarded
+  five-second scheduler rather than overlapping asynchronous checks.
+- Duplicate preparation and activation work is blocked.
+- Firestore resource-exhausted failures use exponential cooldowns.
+- Leaving the Draft Room prevents unfinished preparation from activating the
+  draft afterward.
+- The daily injury report is checked without loading an entire draft player
+  pool solely for injuries.
+
+8. SAFE LISTENER CLEANUP
+- Draft, cycle, team, roster, queue, and matchup listeners reviewed in their
+  component lifecycle paths.
+- The new global injury listener has explicit route and application cleanup.
+- Shared injury listeners are reused within league navigation rather than
+  recreated for every helper call.
+
+READS/WRITES THAT WERE KEPT INTENTIONALLY
+
+1. Draft transactions
+Draft picks, roster updates, queues, waivers, IR moves, and transaction history
+use atomic reads/writes because correctness and collision prevention are more
+important than removing those operations.
+
+2. Real-time collaboration listeners
+Draft state, picks, queues, teams, rosters, cycles, and matchups need real-time
+updates for multiple managers. Their listeners are retained and cleaned up by
+page lifecycle methods.
+
+3. Projection Accuracy Lab reads
+Projection accuracy history is analytics data and is loaded only when that
+feature is opened. It is not continuously polled.
+
+4. League Standings history
+The Standings page currently reads cycle documents and then matchup
+subcollections for those cycles. This is an N+1 historical-read pattern, but it
+runs only when the Standings page is opened/refreshed. Replacing it safely would
+require a new write-time standings-history summary and migration/backfill logic.
+It was intentionally not changed in this package because it touches standings,
+playoff seeding, and historical correctness. It is the strongest remaining
+candidate for a future optimization if usage grows.
+
+5. League create/join batches
+League, membership, team, roster, and invite documents are intentionally
+created or repaired together. These writes represent different persistent
+entities and should not be removed merely to reduce operation count.
+
+LEGACY FIREBASE FUNCTION REVIEW
+- functions/src/index.ts contains an older callable function named
+  refreshDailyPlayerAvailability.
+- firebase.json currently contains only Firestore configuration.
+- The Angular client does not call that function.
+- It was left unchanged so this package does not introduce a Functions deploy
+  or dependency migration.
+- Do not deploy the legacy injury function together with the new browser-global
+  injury flow unless it is deliberately rewritten to target the same global
+  document and lease rules.
+
+SECURITY AND DATA OWNERSHIP
+- Signed-in users can read the shared automatic injury report.
+- Only a commissioner of the supplied refresh league can claim or update it.
+- League commissioners can write manual overrides only inside their own league.
+- A shared ESPN record cannot be deleted from one league; a commissioner can
+  create a local override instead.
+
+EXPECTED OPERATION PROFILE
+Normal day with many leagues:
+- At most one successful ESPN injury fetch for the entire app.
+- At most one NHL roster-pool build for that refresh, usually served from the
+  six-hour cache when already loaded.
+- Normally two global injury-report writes total for the day.
+- Each active signed-in league browser reads the shared report once when its
+  listener starts and receives only later document changes.
+- No 30-minute injury polling.
+- No per-league automatic injury document fan-out.
+
+Projection generation day:
+- Projection asset operations scale by chunks of 25 rather than one document
+  per asset.
+
+Live cycle scoring:
+- NHL data requests are deduplicated/cache-limited.
+- Matchup documents are written only when scores actually change.

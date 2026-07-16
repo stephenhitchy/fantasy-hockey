@@ -19,8 +19,10 @@ import { ProjectionLab } from './features/projections/projection-lab/projection-
 import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-asset-detail';
 import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
 import { CycleMatchupOverview } from './features/cycles/matchup-overview/cycle-matchup-overview';
+import { CycleSimulator } from './features/cycles/cycle-simulator/cycle-simulator';
 import { PlayerAvailabilityManager } from './features/player-availability/player-availability-manager/player-availability-manager';
 import { PlayoffBracket } from './features/playoffs/playoff-bracket/playoff-bracket';
+import { PlayoffWindowSimulator } from './features/playoffs/playoff-window-simulator/playoff-window-simulator';
 
 export const routes: Routes = [
   {
@@ -84,12 +86,20 @@ export const routes: Routes = [
         component: LeagueStandings
       },
       {
+        path: 'leagues/:leagueId/playoffs/simulator',
+        component: PlayoffWindowSimulator
+      },
+      {
         path: 'leagues/:leagueId/playoffs',
         component: PlayoffBracket
       },
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',
         component: CycleSchedulePreview
+      },
+      {
+        path: 'leagues/:leagueId/cycles/simulator',
+        component: CycleSimulator
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId',

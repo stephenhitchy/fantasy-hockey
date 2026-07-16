@@ -1,0 +1,65 @@
+BANKED PLAYOFF WINDOW ARCHITECTURE
+
+CORE PRINCIPLE
+The NHL schedule determines when a six-game asset window occurs. The fantasy
+bracket determines which matchup receives that already-defined window.
+
+DATA PATH
+/leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-{N}
+
+ONE BANK DOCUMENT CONTAINS
+- ownerId
+- playoff window number
+- source schedule-block number
+- assignment status
+- assigned playoff matchup and round
+- frozen roster picks and stable rosterSlotIds
+- frozen projections
+- exact slot-window scoring progress
+- team score
+- completed/total slot counts
+
+TYPICAL SIX-TEAM CHAMPIONSHIP FIELD
+Opening round:
+- Seeds 3–6 use Window 1.
+- Seeds 1–2 keep Window 1 unassigned and banked.
+
+Semifinals / fifth place:
+- Seeds 1–2 use their banked Window 1.
+- Opening-round winners use Window 2 in the semifinals.
+- Opening-round losers use Window 2 in the fifth-place game.
+
+Final round:
+- Semifinal winners use their next unused banks in the Championship.
+- Semifinal losers use their next unused banks in the 3rd-place game.
+
+A SINGLE MATCHUP CAN THEREFORE LOOK LIKE
+Team A: Playoff Window 1 / schedule block 11
+Team B: Playoff Window 2 / schedule block 12
+
+This is intentional. Both sides still receive exactly six scheduled NHL-team
+games, but those six games do not need to occur on the same dates.
+
+WINDOW CREATION
+When all expected roster slots in a bank complete:
+1. The bank is marked complete.
+2. If that team can still participate in a later bracket matchup, its next bank
+   is created immediately.
+3. Pending slot moves activate atomically at that boundary.
+4. The next bank begins collecting NHL games even if the prior bracket result
+   is not yet known.
+
+WINDOW ASSIGNMENT
+When a playoff round becomes playable:
+1. Resolve the winner/loser sources in the bracket.
+2. Find each participant's earliest unassigned bank.
+3. Attach that bank's number and source block to the matchup.
+4. Materialize its frozen roster picks into the normal cycle-scoring view.
+5. Recalculate any already-final NHL games, instantly backfilling the score.
+
+WRITE EFFICIENCY
+- One bank document per fantasy team per postseason window.
+- Writes are skipped if status, score, completed games, appearance games, and
+  assignments have not changed.
+- Finalized NHL results are not deliberately rewritten every refresh.
+- The future shared live scorer will further centralize NHL ingestion.

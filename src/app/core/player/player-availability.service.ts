@@ -1,4 +1,5 @@
 import {
+  computed,
   Signal,
   signal
 } from '@angular/core';
@@ -9,9 +10,11 @@ import {
   doc,
   getDocs,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
-  Unsubscribe
+  Unsubscribe,
+  where
 } from 'firebase/firestore';
 
 import { onAuthStateChanged } from 'firebase/auth';
@@ -35,6 +38,13 @@ import {
   PlayerAvailabilityOverride,
   PlayerAvailabilityStatus
 } from './player-availability.models';
+
+import {
+  getGlobalPlayerAvailabilityRecords,
+  playerAvailabilityGlobalRecords,
+  startGlobalPlayerAvailabilityListener,
+  stopGlobalPlayerAvailabilityListener
+} from './player-availability-sync.service';
 
 const STATUS_LABELS: Record<PlayerAvailabilityStatus, string> = {
   active: 'Active',
@@ -78,18 +88,27 @@ const IR_ELIGIBLE_STATUSES = new Set<PlayerAvailabilityStatus>([
 const OVERRIDES_BY_PLAYER_ID = new Map<number, PlayerAvailabilityOverride>();
 const OVERRIDES_BY_PLAYER_NAME = new Map<string, PlayerAvailabilityOverride>();
 
-const databaseRecordsSignal = signal<
+const manualDatabaseRecordsSignal = signal<
   ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>
 >(new Map());
 
 export const playerAvailabilityDatabaseRecords: Signal<
   ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>
-> = databaseRecordsSignal.asReadonly();
+> = computed(() => {
+  const merged = new Map(playerAvailabilityGlobalRecords());
+
+  for (const [playerId, record] of manualDatabaseRecordsSignal()) {
+    merged.set(playerId, record);
+  }
+
+  return merged;
+});
 
 let activeLeagueId = '';
 let activeUserId = '';
 let queuedListenerKey = '';
 let stopDatabaseListener: Unsubscribe | null = null;
+let manualDatabaseRecordsLoaded = false;
 
 function normalizePlayerName(value: string): string {
   return value
@@ -202,7 +221,13 @@ function stopCurrentDatabaseListener(): void {
   activeLeagueId = '';
   activeUserId = '';
   queuedListenerKey = '';
-  databaseRecordsSignal.set(new Map());
+  manualDatabaseRecordsLoaded = false;
+  manualDatabaseRecordsSignal.set(new Map());
+}
+
+export function stopPlayerAvailabilityListeners(): void {
+  stopCurrentDatabaseListener();
+  stopGlobalPlayerAvailabilityListener();
 }
 
 for (const override of PLAYER_AVAILABILITY_OVERRIDES) {
@@ -225,7 +250,7 @@ for (const override of PLAYER_AVAILABILITY_OVERRIDES) {
 
 onAuthStateChanged(auth, (user) => {
   if (!user) {
-    stopCurrentDatabaseListener();
+    stopPlayerAvailabilityListeners();
   }
 });
 
@@ -297,6 +322,7 @@ export function startPlayerAvailabilityListenerForLeague(
   }
 
   queuedListenerKey = '';
+  startGlobalPlayerAvailabilityListener();
 
   if (
     stopDatabaseListener &&
@@ -310,15 +336,18 @@ export function startPlayerAvailabilityListenerForLeague(
   activeLeagueId = resolvedLeagueId;
   activeUserId = currentUserId;
 
-  const recordsCollection = collection(
-    db,
-    'leagues',
-    resolvedLeagueId,
-    'playerAvailability'
+  const manualRecordsQuery = query(
+    collection(
+      db,
+      'leagues',
+      resolvedLeagueId,
+      'playerAvailability'
+    ),
+    where('source', '==', 'commissioner')
   );
 
   stopDatabaseListener = onSnapshot(
-    recordsCollection,
+    manualRecordsQuery,
     (snapshot) => {
       const nextRecords = new Map<
         number,
@@ -331,12 +360,13 @@ export function startPlayerAvailabilityListenerForLeague(
           resolvedLeagueId
         );
 
-        if (record) {
+        if (record?.source === 'commissioner') {
           nextRecords.set(record.playerId, record);
         }
       });
 
-      databaseRecordsSignal.set(nextRecords);
+      manualDatabaseRecordsSignal.set(nextRecords);
+      manualDatabaseRecordsLoaded = true;
     },
     (error) => {
       console.error(
@@ -347,7 +377,8 @@ export function startPlayerAvailabilityListenerForLeague(
       stopDatabaseListener = null;
       activeLeagueId = '';
       activeUserId = '';
-      databaseRecordsSignal.set(new Map());
+      manualDatabaseRecordsLoaded = false;
+      manualDatabaseRecordsSignal.set(new Map());
     }
   );
 }
@@ -357,7 +388,7 @@ export function getPlayerAvailabilityDatabaseRecord(
 ): PlayerAvailabilityDatabaseRecord | null {
   queuePlayerAvailabilityListenerForCurrentLeague();
 
-  return databaseRecordsSignal().get(playerId) ?? null;
+  return playerAvailabilityDatabaseRecords().get(playerId) ?? null;
 }
 
 export async function getPlayerAvailabilityRecordsForLeague(
@@ -369,24 +400,43 @@ export async function getPlayerAvailabilityRecordsForLeague(
     return new Map();
   }
 
-  const snapshot = await getDocs(
-    collection(
-      db,
-      'leagues',
-      normalizedLeagueId,
-      'playerAvailability'
+  const globalRecords = await getGlobalPlayerAvailabilityRecords();
+
+  if (
+    activeLeagueId === normalizedLeagueId &&
+    activeUserId === (auth.currentUser?.uid ?? '') &&
+    manualDatabaseRecordsLoaded
+  ) {
+    const records = new Map(globalRecords);
+
+    for (const [playerId, record] of manualDatabaseRecordsSignal()) {
+      records.set(playerId, record);
+    }
+
+    return records;
+  }
+
+  const manualSnapshot = await getDocs(
+    query(
+      collection(
+        db,
+        'leagues',
+        normalizedLeagueId,
+        'playerAvailability'
+      ),
+      where('source', '==', 'commissioner')
     )
   );
 
-  const records = new Map<number, PlayerAvailabilityDatabaseRecord>();
+  const records = new Map(globalRecords);
 
-  snapshot.docs.forEach((snapshotDocument) => {
+  manualSnapshot.docs.forEach((snapshotDocument) => {
     const record = normalizeDatabaseRecord(
       snapshotDocument.data(),
       normalizedLeagueId
     );
 
-    if (record) {
+    if (record?.source === 'commissioner') {
       records.set(record.playerId, record);
     }
   });
@@ -411,7 +461,7 @@ export function getPlayerAvailabilityForPlayer(
 ): PlayerAvailability {
   queuePlayerAvailabilityListenerForCurrentLeague();
 
-  const databaseRecord = databaseRecordsSignal().get(player.id);
+  const databaseRecord = playerAvailabilityDatabaseRecords().get(player.id);
 
   if (databaseRecord) {
     return {
@@ -506,7 +556,7 @@ export async function savePlayerAvailabilityRecord(input: {
     leagueId
   });
 
-  const nextRecords = new Map(databaseRecordsSignal());
+  const nextRecords = new Map(manualDatabaseRecordsSignal());
 
   nextRecords.set(input.player.id, {
     playerId: input.player.id,
@@ -520,7 +570,7 @@ export async function savePlayerAvailabilityRecord(input: {
     leagueId
   });
 
-  databaseRecordsSignal.set(nextRecords);
+  manualDatabaseRecordsSignal.set(nextRecords);
   startPlayerAvailabilityListenerForLeague(leagueId);
 }
 
@@ -550,9 +600,9 @@ export async function deletePlayerAvailabilityRecord(input: {
     )
   );
 
-  const nextRecords = new Map(databaseRecordsSignal());
+  const nextRecords = new Map(manualDatabaseRecordsSignal());
   nextRecords.delete(input.playerId);
-  databaseRecordsSignal.set(nextRecords);
+  manualDatabaseRecordsSignal.set(nextRecords);
 }
 
 export function shouldDisplayPlayerAvailability(

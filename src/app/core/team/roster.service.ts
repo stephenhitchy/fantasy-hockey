@@ -26,7 +26,8 @@ function buildEmptyActiveSlots(): ActiveRosterSlot[] {
       slotId: `${group.position}-${index + 1}`,
       position: group.position,
       slotNumber: index + 1,
-      asset: null
+      asset: null,
+      pendingMove: null
     }))
   );
 }
@@ -55,7 +56,10 @@ export function normalizeFantasyRoster(
   return {
     schemaVersion: data.schemaVersion ?? 1,
     activeSlots: Array.isArray(data.activeSlots)
-      ? data.activeSlots as ActiveRosterSlot[]
+      ? (data.activeSlots as ActiveRosterSlot[]).map((slot) => ({
+          ...slot,
+          pendingMove: slot.pendingMove ?? null
+        }))
       : fallbackRoster.activeSlots,
     irSlots: Array.isArray(data.irSlots)
       ? data.irSlots as IrRosterSlot[]

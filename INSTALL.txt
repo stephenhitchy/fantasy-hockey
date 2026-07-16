@@ -1,34 +1,60 @@
-FANTASY HOCKEY — PLAYOFF BRACKET UI V2 INSTALL
+FANTASY HOCKEY — BANKED PLAYOFF WINDOWS V1
+READY-TO-INSTALL PACKAGE
 
-IMPORTANT
-- This package is a UI/UX update for the previously installed
-  "fantasy-hockey-standard-playoffs-v1-ready-to-install" package.
-- Do not use this by itself on the original pre-playoff project.
-- No dependency changes are required.
-- No Firestore rules changes are included in this update.
+PURPOSE
+This package lets every playoff roster slot continue into its next independent
+six-game NHL window before the fantasy bracket destination is known. Once the
+previous playoff matchup finishes, the already-started window is routed to the
+Championship, 3rd Place, 5th Place, or consolation matchup.
 
-REPLACE THESE FILES IN YOUR PROJECT
-1) src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
-2) src/app/features/playoffs/playoff-bracket/playoff-bracket.html
-3) src/app/features/playoffs/playoff-bracket/playoff-bracket.css
+REQUIRED BASELINE
+Install this on top of the current project after the previously supplied:
+- asynchronous cycle windows
+- slot-boundary roster moves
+- matchup window completion
+- cycle transparency and simulator
+- cycle simulator path fix
+- projection-board recovery
 
 PROJECT ROOT
 /Users/StephenH/Documents/Programming/fantasy-hockey
 
 INSTALL STEPS
-1) Make sure your prior Standard Playoffs V1 package is already installed.
-2) Open this ZIP.
-3) Copy the included src/app/features/playoffs/playoff-bracket/ folder into your project.
-4) Allow the three files above to replace the existing files.
-5) Start the app normally and open a league playoff page.
-6) Confirm the playoff page now shows:
-   - separate Championship Qualifiers and Placement Field seed sections
-   - clearer seed status text such as Finished 3rd place or Advanced to the Championship Game
-   - one unified postseason bracket read from left to right
-   - winner and loser destination labels on each matchup card
+1. Stop the Angular development server.
+2. Back up the project or commit the current working state.
+3. Open this package.
+4. Copy its contents into the project root.
+5. Allow all included source files and firestore.rules to replace the existing
+   versions.
+6. Deploy the included Firestore rules:
 
-NO OTHER ACTIONS REQUIRED
+   firebase deploy --only firestore:rules --project nhl-fantasy-app-ab673
+
+7. Restart the project with the known-good Node version:
+
+   npm start
+
+8. Hard-refresh the browser.
+9. Open a league's Playoff Bracket page as commissioner.
+10. Select "Test Banked Windows" and confirm all seven checks pass.
+
+NEW FIRESTORE LOCATION
+/leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-{N}
+
+Each document stores one fantasy team's complete roster snapshot for one
+postseason six-game window. It includes frozen projections, exact roster-slot
+assignments, accumulated scoring progress, completion state, and eventual
+bracket assignment.
+
+IMPORTANT TEST-LEAGUE NOTE
+Start a fresh playoff test after installing this package. A playoff that was
+already actively scored under the old non-banked format did not preserve all
+of the historical bank assignments needed for a perfect retroactive migration.
+Regular-season data and leagues whose playoffs have not started are unaffected.
+
+NO OTHER SETUP IS REQUIRED
 - No npm install
-- No Firebase deploy
-- No Firestore index updates
-- No Cloud Functions deploy
+- No dependency changes
+- No Firestore index deployment
+- No Cloud Functions deployment
+- No scheduled job

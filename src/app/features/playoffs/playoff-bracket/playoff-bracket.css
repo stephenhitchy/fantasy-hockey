@@ -687,3 +687,35 @@
     right: auto;
   }
 }
+.simulator-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 13px;
+  border: 1px solid #475569;
+  border-radius: 10px;
+  color: #bfdbfe;
+  background: #111827;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.bracket-team-copy {
+  min-width: 0;
+}
+
+.bracket-team-copy strong,
+.bracket-team-copy small {
+  display: block;
+}
+
+.bracket-team-copy small {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.winner-team .bracket-team-copy small {
+  color: #99f6e4;
+}

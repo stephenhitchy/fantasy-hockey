@@ -1,22 +1,26 @@
 import {
-  collection,
+  Signal,
+  signal
+} from '@angular/core';
+
+import {
   doc,
-  DocumentData,
-  DocumentReference,
-  getDoc,
-  getDocs,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc,
-  Unsubscribe,
-  writeBatch
+  Timestamp,
+  Unsubscribe
 } from 'firebase/firestore';
-
 
 import {
   auth,
   db
 } from '../firebase';
+
+import {
+  getCurrentNhlDraftSkaters
+} from '../nhl/nhl-api.service';
 
 import {
   NHLPlayer
@@ -30,16 +34,12 @@ import {
   PlayerAvailabilitySyncTrigger
 } from './player-availability.models';
 
-import {
-  isPlayerIrEligible
-} from './player-availability.service';
-
 const ESPN_NHL_INJURIES_URL =
   'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries';
 
 const MAX_NOTE_LENGTH = 500;
-const WRITE_BATCH_SIZE = 9;
-const DEFAULT_MINIMUM_SYNC_INTERVAL_MINUTES = 30;
+const GLOBAL_REFRESH_LEASE_MINUTES = 10;
+const GLOBAL_REFRESH_ERROR_COOLDOWN_MINUTES = 15;
 interface EspnInjuryEntry {
   playerName: string;
   position: string;
@@ -57,12 +57,6 @@ interface EspnInjuryEntry {
 interface MatchedInjury {
   player: NHLPlayer;
   injury: EspnInjuryEntry;
-}
-
-interface PendingWrite {
-  type: 'set' | 'delete';
-  reference: DocumentReference<DocumentData>;
-  data?: DocumentData;
 }
 
 const STATUS_STRENGTH: Record<PlayerAvailabilityStatus, number> = {
@@ -378,40 +372,90 @@ function matchInjuriesToPlayers(
   };
 }
 
-function normalizeExistingRecord(
-  data: Record<string, unknown>,
-  leagueId: string
+
+const GLOBAL_AVAILABILITY_COLLECTION = 'appData';
+const GLOBAL_AVAILABILITY_DOCUMENT = 'playerAvailability';
+
+const globalRecordsSignal = signal<
+  ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>
+>(new Map());
+
+const globalSyncStateSignal = signal<
+  PlayerAvailabilitySyncState | null
+>(null);
+
+export const playerAvailabilityGlobalRecords: Signal<
+  ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>
+> = globalRecordsSignal.asReadonly();
+
+export const playerAvailabilityGlobalSyncState: Signal<
+  PlayerAvailabilitySyncState | null
+> = globalSyncStateSignal.asReadonly();
+
+let stopGlobalListener: Unsubscribe | null = null;
+let globalListenerUserId = '';
+let globalDocumentLoaded = false;
+let globalListenerReadyPromise: Promise<void> | null = null;
+let resolveGlobalListenerReady: (() => void) | null = null;
+let rejectGlobalListenerReady: ((error: Error) => void) | null = null;
+const syncStateCallbacks = new Set<
+  (state: PlayerAvailabilitySyncState | null) => void
+>();
+
+let activeGlobalRefreshPromise: Promise<
+  PlayerAvailabilitySyncResult
+> | null = null;
+
+interface GlobalRefreshClaim {
+  status: 'claimed' | 'already-current' | 'in-progress' | 'cooldown';
+  data: Record<string, unknown>;
+}
+
+function isPlayerIrEligibleForSync(
+  status: PlayerAvailabilityStatus
+): boolean {
+  return (
+    status === 'out' ||
+    status === 'injured-reserve' ||
+    status === 'long-term-injured-reserve'
+  );
+}
+
+function getGlobalAvailabilityReference() {
+  return doc(
+    db,
+    GLOBAL_AVAILABILITY_COLLECTION,
+    GLOBAL_AVAILABILITY_DOCUMENT
+  );
+}
+
+function normalizeGlobalRecord(
+  value: unknown
 ): PlayerAvailabilityDatabaseRecord | null {
+  const data = asRecord(value);
   const playerId = data['playerId'];
-  const playerName = data['playerName'];
-  const status = data['status'];
+  const playerName = asString(data['playerName']);
+  const status = asString(data['status']) as PlayerAvailabilityStatus;
 
   if (
     typeof playerId !== 'number' ||
-    typeof playerName !== 'string' ||
-    typeof status !== 'string'
+    !playerName ||
+    !(status in STATUS_STRENGTH)
   ) {
     return null;
   }
 
-  const normalizedStatus = status as PlayerAvailabilityStatus;
-  const source = data['source'] === 'espn'
-    ? 'espn'
-    : 'commissioner';
-
   return {
     playerId,
     playerName,
-    status: normalizedStatus,
+    status,
     note: asString(data['note']),
-    irEligible: isPlayerIrEligible(normalizedStatus),
+    irEligible: isPlayerIrEligibleForSync(status),
     updatedAt: toIsoDate(data['updatedAt']),
     updatedBy: asString(data['updatedBy']),
-    source,
-    leagueId,
-    externalSource: data['externalSource'] === 'ESPN'
-      ? 'ESPN'
-      : undefined,
+    source: 'espn',
+    leagueId: 'global',
+    externalSource: 'ESPN',
     externalStatus: asString(data['externalStatus']) || undefined,
     externalReturnDate: asString(data['externalReturnDate']) || undefined,
     externalInjuryDate: asString(data['externalInjuryDate']) || undefined,
@@ -420,40 +464,20 @@ function normalizeExistingRecord(
   };
 }
 
-async function commitPendingWrites(
-  pendingWrites: PendingWrite[]
-): Promise<void> {
-  for (
-    let startIndex = 0;
-    startIndex < pendingWrites.length;
-    startIndex += WRITE_BATCH_SIZE
-  ) {
-    const batch = writeBatch(db);
-    const chunk = pendingWrites.slice(
-      startIndex,
-      startIndex + WRITE_BATCH_SIZE
-    );
+function normalizeGlobalRecords(
+  data: Record<string, unknown>
+): ReadonlyMap<number, PlayerAvailabilityDatabaseRecord> {
+  const records = new Map<number, PlayerAvailabilityDatabaseRecord>();
 
-    for (const pendingWrite of chunk) {
-      if (pendingWrite.type === 'delete') {
-        batch.delete(pendingWrite.reference);
-      } else if (pendingWrite.data) {
-        batch.set(pendingWrite.reference, pendingWrite.data);
-      }
+  for (const value of asArray(data['records'])) {
+    const record = normalizeGlobalRecord(value);
+
+    if (record) {
+      records.set(record.playerId, record);
     }
-
-    await batch.commit();
   }
-}
 
-function getSyncStateReference(leagueId: string) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'playerAvailabilitySync',
-    'current'
-  );
+  return records;
 }
 
 function normalizeSyncState(
@@ -490,10 +514,7 @@ function normalizeSyncState(
     clearedRecordCount: typeof data['clearedRecordCount'] === 'number'
       ? data['clearedRecordCount']
       : 0,
-    preservedManualOverrideCount:
-      typeof data['preservedManualOverrideCount'] === 'number'
-        ? data['preservedManualOverrideCount']
-        : 0,
+    preservedManualOverrideCount: 0,
     skippedGoalieCount: typeof data['skippedGoalieCount'] === 'number'
       ? data['skippedGoalieCount']
       : 0,
@@ -512,127 +533,315 @@ function normalizeSyncState(
   };
 }
 
-export async function getPlayerAvailabilitySyncState(
-  leagueId: string
-): Promise<PlayerAvailabilitySyncState | null> {
-  const snapshot = await getDoc(getSyncStateReference(leagueId));
+function updateGlobalDocumentState(
+  data: Record<string, unknown>
+): void {
+  globalRecordsSignal.set(normalizeGlobalRecords(data));
+  globalSyncStateSignal.set(normalizeSyncState(data));
+  globalDocumentLoaded = true;
 
-  if (!snapshot.exists()) {
-    return null;
+  for (const callback of syncStateCallbacks) {
+    callback(globalSyncStateSignal());
+  }
+}
+
+export function startGlobalPlayerAvailabilityListener(): void {
+  const userId = auth.currentUser?.uid ?? '';
+
+  if (!userId) {
+    return;
   }
 
-  return normalizeSyncState(snapshot.data());
+  if (stopGlobalListener && globalListenerUserId === userId) {
+    return;
+  }
+
+  stopGlobalPlayerAvailabilityListener();
+  globalListenerUserId = userId;
+  globalDocumentLoaded = false;
+  globalListenerReadyPromise = new Promise<void>((resolve, reject) => {
+    resolveGlobalListenerReady = resolve;
+    rejectGlobalListenerReady = reject;
+  });
+
+  // The same promise is also awaited by callers. This catch only prevents an
+  // unhandled rejection if a listener fails before any caller begins waiting.
+  void globalListenerReadyPromise.catch(() => undefined);
+
+  stopGlobalListener = onSnapshot(
+    getGlobalAvailabilityReference(),
+    (snapshot) => {
+      updateGlobalDocumentState(
+        snapshot.exists()
+          ? snapshot.data()
+          : {}
+      );
+
+      resolveGlobalListenerReady?.();
+      resolveGlobalListenerReady = null;
+      rejectGlobalListenerReady = null;
+    },
+    (error) => {
+      const normalizedError = error instanceof Error
+        ? error
+        : new Error(
+            'Unable to listen for the global player-availability report.'
+          );
+
+      rejectGlobalListenerReady?.(normalizedError);
+      resolveGlobalListenerReady = null;
+      rejectGlobalListenerReady = null;
+      stopGlobalListener = null;
+      globalListenerUserId = '';
+      globalDocumentLoaded = false;
+
+      console.error(
+        'Unable to listen for the global player-availability report.',
+        error
+      );
+    }
+  );
+}
+
+export function stopGlobalPlayerAvailabilityListener(): void {
+  stopGlobalListener?.();
+  stopGlobalListener = null;
+
+  rejectGlobalListenerReady?.(
+    new Error('The shared player-availability listener was stopped.')
+  );
+
+  globalListenerUserId = '';
+  globalDocumentLoaded = false;
+  globalListenerReadyPromise = null;
+  resolveGlobalListenerReady = null;
+  rejectGlobalListenerReady = null;
+  globalRecordsSignal.set(new Map());
+  globalSyncStateSignal.set(null);
+}
+
+async function ensureGlobalAvailabilityLoaded(): Promise<void> {
+  startGlobalPlayerAvailabilityListener();
+
+  if (globalDocumentLoaded) {
+    return;
+  }
+
+  if (!globalListenerReadyPromise) {
+    throw new Error(
+      'The shared player-availability report requires a signed-in user.'
+    );
+  }
+
+  await globalListenerReadyPromise;
+}
+
+export async function getGlobalPlayerAvailabilityRecords(): Promise<
+  ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>
+> {
+  await ensureGlobalAvailabilityLoaded();
+  return globalRecordsSignal();
+}
+
+export async function getPlayerAvailabilitySyncState(
+  _leagueId?: string
+): Promise<PlayerAvailabilitySyncState | null> {
+  await ensureGlobalAvailabilityLoaded();
+  return globalSyncStateSignal();
 }
 
 export function listenToPlayerAvailabilitySyncState(
-  leagueId: string,
+  _leagueId: string,
   callback: (state: PlayerAvailabilitySyncState | null) => void
 ): Unsubscribe {
-  return onSnapshot(
-    getSyncStateReference(leagueId),
-    (snapshot) => {
-      callback(
-        snapshot.exists()
-          ? normalizeSyncState(snapshot.data())
-          : null
-      );
-    },
-    (error) => {
-      console.error(
-        'Unable to listen for player availability sync state.',
-        error
-      );
-      callback(null);
-    }
-  );
+  syncStateCallbacks.add(callback);
+  startGlobalPlayerAvailabilityListener();
+  callback(globalSyncStateSignal());
+
+  return () => {
+    syncStateCallbacks.delete(callback);
+  };
 }
 
 function getUtcDailyKey(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
-function isSyncStateFresh(
-  state: PlayerAvailabilitySyncState | null,
-  minimumIntervalMinutes: number
-): boolean {
-  if (!state?.lastSuccessfulSyncAt) {
-    return false;
+function getTimestampMilliseconds(value: unknown): number {
+  if (value instanceof Timestamp) {
+    return value.toMillis();
   }
 
-  const timestamp = new Date(state.lastSuccessfulSyncAt).getTime();
-
-  if (Number.isNaN(timestamp)) {
-    return false;
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().getTime();
   }
 
-  return Date.now() - timestamp < minimumIntervalMinutes * 60_000;
+  if (typeof value === 'string') {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  return 0;
 }
 
-async function saveSyncRunning(
-  leagueId: string,
+function resultFromState(
+  state: PlayerAvailabilitySyncState | null,
+  message: string
+): PlayerAvailabilitySyncResult {
+  return {
+    skipped: true,
+    fetchedCount: state?.fetchedCount ?? 0,
+    matchedCount: state?.matchedCount ?? 0,
+    unmatchedCount: state?.unmatchedCount ?? 0,
+    syncedRecordCount: state?.syncedRecordCount ?? 0,
+    clearedRecordCount: state?.clearedRecordCount ?? 0,
+    preservedManualOverrideCount: 0,
+    skippedGoalieCount: state?.skippedGoalieCount ?? 0,
+    unmatchedPlayerNames: [],
+    completedAt: state?.lastSuccessfulSyncAt ?? '',
+    message
+  };
+}
+
+async function claimGlobalRefresh(
   userId: string,
-  trigger: PlayerAvailabilitySyncTrigger
-): Promise<void> {
-  await setDoc(
-    getSyncStateReference(leagueId),
-    {
-      source: 'ESPN',
-      status: 'running',
-      trigger,
-      dailyKey: trigger === 'daily-visit'
-        ? getUtcDailyKey()
-        : null,
-      lastAttemptAt: serverTimestamp(),
-      updatedBy: userId,
-      fetchedCount: 0,
-      matchedCount: 0,
-      unmatchedCount: 0,
-      syncedRecordCount: 0,
-      clearedRecordCount: 0,
-      preservedManualOverrideCount: 0,
-      skippedGoalieCount: 0,
-      message: trigger === 'daily-visit'
-        ? 'Refreshing today’s ESPN injury report from the commissioner browser.'
-        : 'Refreshing ESPN injury data before the draft opens.'
+  refreshLeagueId: string,
+  trigger: PlayerAvailabilitySyncTrigger,
+  dailyKey: string
+): Promise<GlobalRefreshClaim> {
+  const reference = getGlobalAvailabilityReference();
+  const now = Date.now();
+
+  return runTransaction(
+    db,
+    async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const data = snapshot.exists()
+        ? snapshot.data() as Record<string, unknown>
+        : {};
+      const state = normalizeSyncState(data);
+
+      if (state?.lastDailySyncKey === dailyKey) {
+        return {
+          status: 'already-current' as const,
+          data
+        };
+      }
+
+      const leaseExpiresAt = getTimestampMilliseconds(
+        data['leaseExpiresAt']
+      );
+
+      if (
+        state?.status === 'running' &&
+        leaseExpiresAt > now
+      ) {
+        return {
+          status: 'in-progress' as const,
+          data
+        };
+      }
+
+      const lastAttemptAt = getTimestampMilliseconds(
+        data['lastAttemptAt']
+      );
+
+      if (
+        state?.status === 'error' &&
+        lastAttemptAt > 0 &&
+        now - lastAttemptAt <
+          GLOBAL_REFRESH_ERROR_COOLDOWN_MINUTES * 60_000
+      ) {
+        return {
+          status: 'cooldown' as const,
+          data
+        };
+      }
+
+      transaction.set(
+        reference,
+        {
+          source: 'ESPN',
+          status: 'running',
+          refreshLeagueId,
+          trigger,
+          dailyKey,
+          lastAttemptAt: serverTimestamp(),
+          leaseExpiresAt: Timestamp.fromMillis(
+            now + GLOBAL_REFRESH_LEASE_MINUTES * 60_000
+          ),
+          updatedBy: userId,
+          message: 'Refreshing the single shared NHL injury report for the app.'
+        },
+        { merge: true }
+      );
+
+      return {
+        status: 'claimed' as const,
+        data
+      };
     },
-    { merge: true }
+    { maxAttempts: 2 }
   );
 }
 
-async function saveSyncError(
-  leagueId: string,
+function serializeGlobalRecord(
+  record: PlayerAvailabilityDatabaseRecord
+): Record<string, unknown> {
+  return {
+    playerId: record.playerId,
+    playerName: record.playerName,
+    status: record.status,
+    note: record.note,
+    irEligible: record.irEligible,
+    updatedAt: record.updatedAt,
+    updatedBy: record.updatedBy,
+    source: 'espn',
+    externalSource: 'ESPN',
+    externalStatus: record.externalStatus ?? '',
+    externalReturnDate: record.externalReturnDate ?? '',
+    externalInjuryDate: record.externalInjuryDate ?? '',
+    externalTeamName: record.externalTeamName ?? '',
+    syncedAt: record.syncedAt ?? record.updatedAt
+  };
+}
+
+async function saveGlobalSyncError(
   userId: string,
-  message: string,
-  trigger: PlayerAvailabilitySyncTrigger
+  refreshLeagueId: string,
+  trigger: PlayerAvailabilitySyncTrigger,
+  dailyKey: string,
+  message: string
 ): Promise<void> {
   try {
     await setDoc(
-      getSyncStateReference(leagueId),
+      getGlobalAvailabilityReference(),
       {
         source: 'ESPN',
         status: 'error',
+        refreshLeagueId,
         trigger,
+        dailyKey,
         lastAttemptAt: serverTimestamp(),
+        leaseExpiresAt: null,
         updatedBy: userId,
-        fetchedCount: 0,
-        matchedCount: 0,
-        unmatchedCount: 0,
-        syncedRecordCount: 0,
-        clearedRecordCount: 0,
-        preservedManualOverrideCount: 0,
-        skippedGoalieCount: 0,
         message: message.slice(0, 500)
       },
       { merge: true }
     );
   } catch {
-    // Preserve the original sync error even when metadata cannot be written.
+    // Preserve the original network or parsing error.
   }
 }
 
-export async function syncPlayerAvailabilityFromEspn(input: {
+async function performGlobalPlayerAvailabilityRefresh(input: {
   leagueId: string;
-  players: NHLPlayer[];
+  players?: NHLPlayer[];
   force?: boolean;
   minimumIntervalMinutes?: number;
   trigger?: PlayerAvailabilitySyncTrigger;
@@ -640,57 +849,69 @@ export async function syncPlayerAvailabilityFromEspn(input: {
   const user = auth.currentUser;
 
   if (!user) {
-    throw new Error('You must be logged in to sync player availability.');
+    throw new Error('You must be logged in to refresh player availability.');
   }
 
-  const leagueId = input.leagueId.trim();
-  const minimumIntervalMinutes = Math.max(
-    1,
-    input.minimumIntervalMinutes ?? DEFAULT_MINIMUM_SYNC_INTERVAL_MINUTES
+  const refreshLeagueId = input.leagueId?.trim() ?? '';
+
+  if (!refreshLeagueId) {
+    throw new Error(
+      'A commissioner league is required to refresh the shared injury report.'
+    );
+  }
+
+  const trigger = input.trigger ?? 'commissioner-browser';
+  const dailyKey = getUtcDailyKey();
+
+  await ensureGlobalAvailabilityLoaded();
+
+  const cachedState = globalSyncStateSignal();
+
+  if (cachedState?.lastDailySyncKey === dailyKey) {
+    return resultFromState(
+      cachedState,
+      'Today’s app-wide injury report is already current.'
+    );
+  }
+
+  const claim = await claimGlobalRefresh(
+    user.uid,
+    refreshLeagueId,
+    trigger,
+    dailyKey
   );
-  const trigger =
-    input.trigger ?? 'commissioner-browser';
+  const existingState = normalizeSyncState(claim.data);
 
-  if (!leagueId) {
-    throw new Error('A league is required to sync player availability.');
+  if (claim.status === 'already-current') {
+    return resultFromState(
+      existingState,
+      'Today’s app-wide injury report is already current.'
+    );
   }
 
-  if (input.players.length === 0) {
-    throw new Error('Load the NHL player pool before syncing injuries.');
+  if (claim.status === 'in-progress') {
+    return resultFromState(
+      existingState,
+      'Another browser is already refreshing today’s app-wide injury report.'
+    );
   }
 
-  const previousState = await getPlayerAvailabilitySyncState(leagueId);
-  const currentDailyKey = getUtcDailyKey();
-
-  const dailyVisitAlreadyCurrent =
-    trigger === 'daily-visit' &&
-    previousState?.lastDailySyncKey === currentDailyKey;
-
-  const nonDailySyncStillFresh =
-    trigger !== 'daily-visit' &&
-    isSyncStateFresh(previousState, minimumIntervalMinutes);
-
-  if (!input.force && (dailyVisitAlreadyCurrent || nonDailySyncStillFresh)) {
-    return {
-      skipped: true,
-      fetchedCount: previousState?.fetchedCount ?? 0,
-      matchedCount: previousState?.matchedCount ?? 0,
-      unmatchedCount: previousState?.unmatchedCount ?? 0,
-      syncedRecordCount: previousState?.syncedRecordCount ?? 0,
-      clearedRecordCount: previousState?.clearedRecordCount ?? 0,
-      preservedManualOverrideCount:
-        previousState?.preservedManualOverrideCount ?? 0,
-      skippedGoalieCount: previousState?.skippedGoalieCount ?? 0,
-      unmatchedPlayerNames: [],
-      completedAt: previousState?.lastSuccessfulSyncAt ?? '',
-      message: dailyVisitAlreadyCurrent
-        ? 'Today’s shared injury report is already current.'
-        : `ESPN injury data was already synced within the last ${minimumIntervalMinutes} minutes.`
-    };
+  if (claim.status === 'cooldown') {
+    return resultFromState(
+      existingState,
+      'The last refresh attempt failed recently, so the app is waiting before trying again.'
+    );
   }
 
   try {
-    await saveSyncRunning(leagueId, user.uid, trigger);
+    const providedPlayers = input.players ?? [];
+    const players = providedPlayers.length >= 300
+      ? providedPlayers
+      : await getCurrentNhlDraftSkaters();
+
+    if (players.length === 0) {
+      throw new Error('The NHL roster pool was empty, so injuries were not changed.');
+    }
 
     const response = await fetch(ESPN_NHL_INJURIES_URL, {
       cache: 'no-store',
@@ -710,171 +931,110 @@ export async function syncPlayerAvailabilityFromEspn(input: {
 
     if (parsed.entries.length === 0) {
       throw new Error(
-        'ESPN returned no NHL injury entries, so existing synced records were left unchanged.'
+        'ESPN returned no NHL injury entries, so the last saved report was preserved.'
       );
     }
 
     const matchResult = matchInjuriesToPlayers(
       parsed.entries,
-      input.players
+      players
     );
-
-    const availabilityCollection = collection(
-      db,
-      'leagues',
-      leagueId,
-      'playerAvailability'
-    );
-
-    const existingSnapshot = await getDocs(availabilityCollection);
-    const existingRecords = new Map<number, PlayerAvailabilityDatabaseRecord>();
-    const referencesByPlayerId = new Map<
-      number,
-      DocumentReference<DocumentData>
-    >();
-
-    existingSnapshot.docs.forEach((snapshotDocument) => {
-      const record = normalizeExistingRecord(
-        snapshotDocument.data(),
-        leagueId
-      );
-
-      if (record) {
-        existingRecords.set(record.playerId, record);
-        referencesByPlayerId.set(record.playerId, snapshotDocument.ref);
-      }
-    });
-
-    const matchedPlayerIds = new Set<number>();
-    const pendingWrites: PendingWrite[] = [];
-    let syncedRecordCount = 0;
-    let preservedManualOverrideCount = 0;
+    const nowIso = new Date().toISOString();
+    const nextRecords = new Map<number, PlayerAvailabilityDatabaseRecord>();
 
     for (const match of matchResult.matches) {
-      matchedPlayerIds.add(match.player.id);
-      const existingRecord = existingRecords.get(match.player.id);
-
-      if (existingRecord?.source === 'commissioner') {
-        preservedManualOverrideCount += 1;
-        continue;
-      }
-
-      const recordReference = doc(
-        db,
-        'leagues',
-        leagueId,
-        'playerAvailability',
-        String(match.player.id)
-      );
-
-      pendingWrites.push({
-        type: 'set',
-        reference: recordReference,
-        data: {
-          playerId: match.player.id,
-          playerName: match.player.fullName,
-          status: match.injury.normalizedStatus,
-          note: buildAvailabilityNote(match.injury),
-          irEligible: isPlayerIrEligible(match.injury.normalizedStatus),
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid,
-          source: 'espn',
-          leagueId,
-          externalSource: 'ESPN',
-          externalStatus: match.injury.rawStatus ||
-            match.injury.fantasyStatus ||
-            match.injury.injuryType ||
-            'Unknown',
-          externalReturnDate: match.injury.returnDate,
-          externalInjuryDate: match.injury.injuryDate,
-          externalTeamName: match.injury.teamName,
-          syncedAt: serverTimestamp()
-        }
+      nextRecords.set(match.player.id, {
+        playerId: match.player.id,
+        playerName: match.player.fullName,
+        status: match.injury.normalizedStatus,
+        note: buildAvailabilityNote(match.injury),
+        irEligible: isPlayerIrEligibleForSync(
+          match.injury.normalizedStatus
+        ),
+        updatedAt: nowIso,
+        updatedBy: user.uid,
+        source: 'espn',
+        leagueId: 'global',
+        externalSource: 'ESPN',
+        externalStatus: match.injury.rawStatus ||
+          match.injury.fantasyStatus ||
+          match.injury.injuryType ||
+          'Unknown',
+        externalReturnDate: match.injury.returnDate || undefined,
+        externalInjuryDate: match.injury.injuryDate || undefined,
+        externalTeamName: match.injury.teamName || undefined,
+        syncedAt: nowIso
       });
-
-      syncedRecordCount += 1;
     }
 
+    const previousRecords = normalizeGlobalRecords(claim.data);
     const feedLooksCompleteEnoughToClear =
       parsed.teamEntryCount >= 10 || parsed.entries.length >= 20;
 
-    let clearedRecordCount = 0;
-
-    if (feedLooksCompleteEnoughToClear) {
-      for (const [playerId, record] of existingRecords) {
-        if (
-          record.source === 'espn' &&
-          !matchedPlayerIds.has(playerId)
-        ) {
-          const reference = referencesByPlayerId.get(playerId);
-
-          if (reference) {
-            pendingWrites.push({
-              type: 'delete',
-              reference
-            });
-            clearedRecordCount += 1;
-          }
+    if (!feedLooksCompleteEnoughToClear) {
+      for (const [playerId, record] of previousRecords) {
+        if (!nextRecords.has(playerId)) {
+          nextRecords.set(playerId, record);
         }
       }
     }
 
-    await commitPendingWrites(pendingWrites);
-
-    const completedAt = new Date().toISOString();
+    const clearedRecordCount = feedLooksCompleteEnoughToClear
+      ? [...previousRecords.keys()].filter(
+          (playerId) => !nextRecords.has(playerId)
+        ).length
+      : 0;
     const unmatchedCount = matchResult.unmatchedNames.length;
     const messageParts = [
-      `Matched ${matchResult.matches.length} skaters from ${parsed.entries.length} ESPN injury entries.`,
-      `Saved ${syncedRecordCount} automatic records.`,
-      `Preserved ${preservedManualOverrideCount} commissioner overrides.`
+      `Matched ${matchResult.matches.length} injured skaters from ${parsed.entries.length} ESPN entries.`,
+      'Saved one shared report for every league and account.'
     ];
 
     if (clearedRecordCount > 0) {
       messageParts.push(
-        `Cleared ${clearedRecordCount} players no longer listed by ESPN.`
+        `Removed ${clearedRecordCount} players no longer listed by ESPN.`
       );
     }
 
     if (!feedLooksCompleteEnoughToClear) {
       messageParts.push(
-        'The feed was sparse, so older automatic records were preserved as a safety measure.'
+        'The feed looked sparse, so older automatic records were preserved.'
       );
     }
 
     if (unmatchedCount > 0) {
       messageParts.push(
-        `${unmatchedCount} injury names could not be matched to the NHL player pool.`
+        `${unmatchedCount} names could not be matched to the NHL roster pool.`
       );
     }
 
     const message = messageParts.join(' ');
 
     await setDoc(
-      getSyncStateReference(leagueId),
+      getGlobalAvailabilityReference(),
       {
         source: 'ESPN',
         status: 'success',
+        refreshLeagueId,
         trigger,
-        dailyKey: trigger === 'daily-visit'
-          ? currentDailyKey
-          : null,
-        lastDailySyncKey: trigger === 'daily-visit'
-          ? currentDailyKey
-          : previousState?.lastDailySyncKey ?? null,
-        lastDailySuccessfulSyncAt: trigger === 'daily-visit'
-          ? serverTimestamp()
-          : previousState?.lastDailySuccessfulSyncAt ?? null,
+        dailyKey,
+        lastDailySyncKey: dailyKey,
         lastAttemptAt: serverTimestamp(),
         lastSuccessfulSyncAt: serverTimestamp(),
+        lastDailySuccessfulSyncAt: serverTimestamp(),
+        leaseExpiresAt: null,
         updatedBy: user.uid,
         fetchedCount: parsed.entries.length,
         matchedCount: matchResult.matches.length,
         unmatchedCount,
-        syncedRecordCount,
+        syncedRecordCount: nextRecords.size,
         clearedRecordCount,
-        preservedManualOverrideCount,
+        preservedManualOverrideCount: 0,
         skippedGoalieCount: matchResult.skippedGoalieCount,
-        message: message.slice(0, 500)
+        message: message.slice(0, 500),
+        records: [...nextRecords.values()]
+          .sort((first, second) => first.playerId - second.playerId)
+          .map(serializeGlobalRecord)
       },
       { merge: true }
     );
@@ -884,20 +1044,47 @@ export async function syncPlayerAvailabilityFromEspn(input: {
       fetchedCount: parsed.entries.length,
       matchedCount: matchResult.matches.length,
       unmatchedCount,
-      syncedRecordCount,
+      syncedRecordCount: nextRecords.size,
       clearedRecordCount,
-      preservedManualOverrideCount,
+      preservedManualOverrideCount: 0,
       skippedGoalieCount: matchResult.skippedGoalieCount,
       unmatchedPlayerNames: matchResult.unmatchedNames,
-      completedAt,
+      completedAt: nowIso,
       message
     };
   } catch (error: unknown) {
     const message = error instanceof Error
       ? error.message
-      : 'Unable to sync NHL injury data.';
+      : 'Unable to refresh NHL injury data.';
 
-    await saveSyncError(leagueId, user.uid, message, trigger);
+    await saveGlobalSyncError(
+      user.uid,
+      refreshLeagueId,
+      trigger,
+      dailyKey,
+      message
+    );
     throw new Error(message);
   }
+}
+
+
+export function syncPlayerAvailabilityFromEspn(input: {
+  leagueId: string;
+  players?: NHLPlayer[];
+  force?: boolean;
+  minimumIntervalMinutes?: number;
+  trigger?: PlayerAvailabilitySyncTrigger;
+}): Promise<PlayerAvailabilitySyncResult> {
+  if (activeGlobalRefreshPromise) {
+    return activeGlobalRefreshPromise;
+  }
+
+  activeGlobalRefreshPromise =
+    performGlobalPlayerAvailabilityRefresh(input)
+      .finally(() => {
+        activeGlobalRefreshPromise = null;
+      });
+
+  return activeGlobalRefreshPromise;
 }

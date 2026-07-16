@@ -530,7 +530,17 @@ service cloud.firestore {
     function validSharedProjectionAsset(assetKey) {
       let data = request.resource.data;
 
-      return data.assetKey == assetKey &&
+      let validLegacyAsset =
+        data.keys().hasAll([
+          'assetKey',
+          'assetType',
+          'position',
+          'projectedCyclePoints',
+          'floorAdjustedCyclePoints',
+          'balancedRank',
+          'sharedProjectionSnapshotId'
+        ]) &&
+        data.assetKey == assetKey &&
         data.assetType in ['skater', 'team-goalie-unit'] &&
         data.position in ['LW', 'C', 'RW', 'D', 'G'] &&
         (
@@ -544,6 +554,26 @@ service cloud.firestore {
         data.balancedRank is int &&
         data.balancedRank >= 1 &&
         data.sharedProjectionSnapshotId is string;
+
+      let validChunk =
+        data.keys().hasAll([
+          'schemaVersion',
+          'chunkIndex',
+          'assetCount',
+          'assets',
+          'sharedProjectionSnapshotId'
+        ]) &&
+        data.schemaVersion == 2 &&
+        data.chunkIndex is int &&
+        data.chunkIndex >= 0 &&
+        data.assetCount is int &&
+        data.assetCount >= 1 &&
+        data.assetCount <= 25 &&
+        data.assets is list &&
+        data.assets.size() == data.assetCount &&
+        data.sharedProjectionSnapshotId is string;
+
+      return validLegacyAsset || validChunk;
     }
 
     function validOwnerTransactionCreate() {
@@ -556,7 +586,10 @@ service cloud.firestore {
           'move-to-ir',
           'activate-from-ir',
           'drop-to-waivers',
-          'waiver-claim'
+          'waiver-claim',
+          'queue-add-drop',
+          'queue-add-open-slot',
+          'cancel-queued-move'
         ];
     }
 
@@ -624,6 +657,35 @@ service cloud.firestore {
       ];
     }
 
+    function validGlobalPlayerAvailabilityWrite() {
+      let data = request.resource.data;
+
+      return signedIn() &&
+        data.keys().hasAll([
+          'source',
+          'status',
+          'dailyKey',
+          'lastAttemptAt',
+          'updatedBy',
+          'refreshLeagueId',
+          'message'
+        ]) &&
+        data.source == 'ESPN' &&
+        data.refreshLeagueId is string &&
+        data.refreshLeagueId.size() >= 1 &&
+        data.refreshLeagueId.size() <= 100 &&
+        isLeagueCommissioner(data.refreshLeagueId) &&
+        data.status in ['running', 'success', 'error'] &&
+        data.dailyKey is string &&
+        data.dailyKey.size() == 10 &&
+        data.lastAttemptAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.message is string &&
+        data.message.size() <= 500 &&
+        (!data.keys().hasAny(['records']) ||
+          (data.records is list && data.records.size() <= 250));
+    }
+
     function validPlayerAvailabilityBase(leagueId) {
       let data = request.resource.data;
 
@@ -670,155 +732,6 @@ service cloud.firestore {
         data.source == 'commissioner';
     }
 
-    function validEspnAvailabilityWrite(leagueId) {
-      let data = request.resource.data;
-
-      return validPlayerAvailabilityBase(leagueId) &&
-        data.keys().hasOnly([
-          'playerId',
-          'playerName',
-          'status',
-          'note',
-          'irEligible',
-          'updatedAt',
-          'updatedBy',
-          'source',
-          'leagueId',
-          'externalSource',
-          'externalStatus',
-          'externalReturnDate',
-          'externalInjuryDate',
-          'externalTeamName',
-          'syncedAt'
-        ]) &&
-        data.keys().hasAll([
-          'externalSource',
-          'externalStatus',
-          'externalReturnDate',
-          'externalInjuryDate',
-          'externalTeamName',
-          'syncedAt'
-        ]) &&
-        data.source == 'espn' &&
-        data.externalSource == 'ESPN' &&
-        data.externalStatus is string &&
-        data.externalStatus.size() <= 100 &&
-        data.externalReturnDate is string &&
-        data.externalReturnDate.size() <= 100 &&
-        data.externalInjuryDate is string &&
-        data.externalInjuryDate.size() <= 100 &&
-        data.externalTeamName is string &&
-        data.externalTeamName.size() <= 100 &&
-        data.syncedAt == request.time;
-    }
-
-    function validPlayerAvailabilityWrite(leagueId) {
-      return validCommissionerAvailabilityWrite(leagueId) ||
-        validEspnAvailabilityWrite(leagueId);
-    }
-
-    function validPlayerAvailabilitySyncWrite() {
-      let data = request.resource.data;
-
-      let commonFieldsValid =
-        data.keys().hasAll([
-          'source',
-          'status',
-          'trigger',
-          'lastAttemptAt',
-          'updatedBy',
-          'fetchedCount',
-          'matchedCount',
-          'unmatchedCount',
-          'syncedRecordCount',
-          'clearedRecordCount',
-          'preservedManualOverrideCount',
-          'skippedGoalieCount',
-          'message'
-        ]) &&
-        data.source == 'ESPN' &&
-        data.status in ['running', 'success', 'error'] &&
-        data.trigger in [
-          'daily-visit',
-          'draft-start',
-          'commissioner-browser'
-        ] &&
-        data.lastAttemptAt == request.time &&
-        data.updatedBy == currentUserId() &&
-        data.fetchedCount is int && data.fetchedCount >= 0 &&
-        data.matchedCount is int && data.matchedCount >= 0 &&
-        data.unmatchedCount is int && data.unmatchedCount >= 0 &&
-        data.syncedRecordCount is int && data.syncedRecordCount >= 0 &&
-        data.clearedRecordCount is int && data.clearedRecordCount >= 0 &&
-        data.preservedManualOverrideCount is int &&
-        data.preservedManualOverrideCount >= 0 &&
-        data.skippedGoalieCount is int && data.skippedGoalieCount >= 0 &&
-        data.message is string &&
-        data.message.size() <= 500;
-
-      let optionalLastSuccessValid =
-        !data.keys().hasAny(['lastSuccessfulSyncAt']) ||
-        data.lastSuccessfulSyncAt is timestamp;
-
-      let optionalDailyKeyValid =
-        !data.keys().hasAny(['dailyKey']) ||
-        data.dailyKey == null ||
-        (
-          data.dailyKey is string &&
-          data.dailyKey.size() == 10
-        );
-
-      let optionalLastDailyKeyValid =
-        !data.keys().hasAny(['lastDailySyncKey']) ||
-        data.lastDailySyncKey == null ||
-        (
-          data.lastDailySyncKey is string &&
-          data.lastDailySyncKey.size() == 10
-        );
-
-      let optionalLastDailySuccessValid =
-        !data.keys().hasAny(['lastDailySuccessfulSyncAt']) ||
-        data.lastDailySuccessfulSyncAt == null ||
-        data.lastDailySuccessfulSyncAt is timestamp;
-
-      let dailyTriggerValid =
-        data.trigger != 'daily-visit' ||
-        (
-          data.keys().hasAll(['dailyKey']) &&
-          data.dailyKey is string &&
-          data.dailyKey.size() == 10
-        );
-
-      let dailySuccessValid =
-        data.status != 'success' ||
-        data.trigger != 'daily-visit' ||
-        (
-          data.keys().hasAll([
-            'lastDailySyncKey',
-            'lastDailySuccessfulSyncAt'
-          ]) &&
-          data.lastDailySyncKey == data.dailyKey &&
-          data.lastDailySuccessfulSyncAt == request.time
-        );
-
-      let successStateValid =
-        data.status == 'success' &&
-        data.keys().hasAll(['lastSuccessfulSyncAt']) &&
-        data.lastSuccessfulSyncAt == request.time;
-
-      let nonSuccessStateValid =
-        data.status in ['running', 'error'] &&
-        optionalLastSuccessValid;
-
-      return commonFieldsValid &&
-        optionalDailyKeyValid &&
-        optionalLastDailyKeyValid &&
-        optionalLastDailySuccessValid &&
-        dailyTriggerValid &&
-        dailySuccessValid &&
-        (successStateValid || nonSuccessStateValid);
-    }
-
     match /users/{userId} {
       allow create: if signedIn() &&
         userId == currentUserId() &&
@@ -853,6 +766,12 @@ service cloud.firestore {
         request.resource.data.createdBy == resource.data.createdBy;
 
       allow delete: if isLeagueCommissioner(resource.data.leagueId);
+    }
+
+    match /appData/playerAvailability {
+      allow read: if signedIn();
+      allow create, update: if validGlobalPlayerAvailabilityWrite();
+      allow delete: if false;
     }
 
     match /leagues/{leagueId} {
@@ -1052,20 +971,30 @@ service cloud.firestore {
       match /playerAvailability/{playerId} {
         allow read: if isLeagueMember(leagueId);
 
+        // League documents now contain commissioner overrides only.
+        // Automatic ESPN records live once in /appData/playerAvailability.
         allow create, update: if isLeagueCommissioner(leagueId) &&
-          validPlayerAvailabilityWrite(leagueId);
+          validCommissionerAvailabilityWrite(leagueId);
 
         allow delete: if isLeagueCommissioner(leagueId);
       }
 
       match /playerAvailabilitySync/{syncId} {
+        // Legacy per-league sync metadata remains readable for old data,
+        // but new clients cannot recreate the former per-league sync flow.
         allow read: if isLeagueMember(leagueId);
-
-        allow create, update: if syncId == 'current' &&
-          isLeagueCommissioner(leagueId) &&
-          validPlayerAvailabilitySyncWrite();
-
+        allow create, update: if false;
         allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /playoffWindowBanks/{ownerId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+
+        match /windows/{windowId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
       }
 
       match /playoffs/{playoffId} {
@@ -1083,6 +1012,12 @@ service cloud.firestore {
         }
 
         match /rosterPicks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+
+        match /teamWindows/{ownerId} {
           allow read: if isLeagueMember(leagueId);
           allow create, update, delete: if isLeagueCommissioner(leagueId);
         }

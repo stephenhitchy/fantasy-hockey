@@ -1,0 +1,111 @@
+@if (loading()) {
+  <p class="simulator-loading">Loading cycle simulator...</p>
+} @else if (!league()) {
+  <p class="simulator-loading">{{ errorMessage() }}</p>
+} @else {
+  <section class="simulator-page">
+    <a class="back-link" [routerLink]="['/leagues', leagueId]">
+      ← Back to League
+    </a>
+
+    <header class="simulator-hero">
+      <div>
+        <span>Commissioner Development Tool</span>
+        <h1>Asynchronous Cycle Simulator</h1>
+        <p>
+          This test uses the same production window-selection helper as live
+          scoring. It performs no NHL requests and writes nothing to Firestore.
+        </p>
+      </div>
+
+      <button type="button" (click)="rerunSimulation()">
+        Run Again
+      </button>
+    </header>
+
+    <section
+      class="result-banner"
+      [class.result-failed]="!report().allPassed"
+    >
+      <strong>
+        {{ report().allPassed ? 'All deterministic checks passed' : 'One or more checks failed' }}
+      </strong>
+      <span>
+        {{ report().checks.length }} checks · {{ report().requiredGamesPerCycle }} games per window
+      </span>
+    </section>
+
+    <section class="timeline-card">
+      <div class="section-heading">
+        <div>
+          <span>Synthetic 7-versus-4 scenario</span>
+          <h2>Overlapping cycle timeline</h2>
+        </div>
+      </div>
+
+      <div class="timeline-grid">
+        @for (team of report().teams; track team.teamLabel) {
+          <article>
+            <h3>{{ team.teamLabel }}</h3>
+
+            <div class="cycle-row">
+              <strong>Cycle 1</strong>
+              <div class="game-chip-row">
+                @for (gameId of team.cycleOneGameIds; track gameId) {
+                  <span>{{ gameId }}</span>
+                } @empty {
+                  <em>No games assigned</em>
+                }
+              </div>
+              <small>{{ team.cycleOneFinalCount }} final</small>
+            </div>
+
+            <div class="cycle-row next-cycle-row">
+              <strong>Cycle 2</strong>
+              <div class="game-chip-row">
+                @for (gameId of team.cycleTwoGameIds; track gameId) {
+                  <span>{{ gameId }}</span>
+                } @empty {
+                  <em>Not started</em>
+                }
+              </div>
+              <small>{{ team.cycleTwoFinalCount }} final</small>
+            </div>
+          </article>
+        }
+      </div>
+
+      <div class="scenario-summary">
+        <span>
+          Cycle 1 matchup:
+          <strong>{{ report().cycleOneMatchupComplete ? 'Complete' : 'Still active' }}</strong>
+        </span>
+        <span>
+          Cycle 2:
+          <strong>{{ report().cycleTwoHasStarted ? 'Already started for the fast slot' : 'Not started' }}</strong>
+        </span>
+      </div>
+    </section>
+
+    <section class="checks-card">
+      <div class="section-heading">
+        <div>
+          <span>Production-helper assertions</span>
+          <h2>Test results</h2>
+        </div>
+      </div>
+
+      <div class="check-list">
+        @for (check of report().checks; track check.id) {
+          <article [class.check-failed]="!check.passed">
+            <span class="check-icon">{{ check.passed ? '✓' : '!' }}</span>
+            <div>
+              <strong>{{ check.label }}</strong>
+              <p>{{ check.detail }}</p>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+  </section>
+}

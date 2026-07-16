@@ -22,7 +22,6 @@ import {
 } from '../../../core/cycle/cycle.service';
 
 import {
-  DraftableAsset,
   FantasyDraft
 } from '../../../core/draft/draft.models';
 
@@ -33,9 +32,6 @@ import {
   listenToFantasyDraft
 } from '../../../core/draft/draft.service';
 
-import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
 
 import {
   generateSharedProjectionSnapshot,
@@ -121,15 +117,23 @@ export class LeagueDetail implements OnDestroy {
   private stopInjurySyncListener: (() => void) | null = null;
 
   private activationInProgress = false;
+  private scheduledDraftCheckInProgress = false;
+  private destroyed = false;
+  private activationFailureCount = 0;
+  private activationRetryNotBefore = 0;
   private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
 
   private readonly countdownTimer = setInterval(() => {
-    this.now.set(Date.now());
-    void this.maybeWarmPreDraftProjections();
-    void this.handleScheduledDraft();
+    if (!this.destroyed) {
+      this.now.set(Date.now());
+    }
   }, 1000);
+
+  private readonly scheduledDraftCheckTimer = setInterval(() => {
+    void this.runScheduledDraftChecks();
+  }, 5000);
 
   readonly sortedTeams = computed(() =>
     [...this.teams()].sort((first, second) => {
@@ -299,7 +303,9 @@ export class LeagueDetail implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     clearInterval(this.countdownTimer);
+    clearInterval(this.scheduledDraftCheckTimer);
 
     if (this.redirectTimer) {
       clearTimeout(this.redirectTimer);
@@ -359,8 +365,7 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (draft) => {
           this.draft.set(draft);
-          void this.maybeWarmPreDraftProjections();
-          void this.handleScheduledDraft();
+          void this.runScheduledDraftChecks();
         }
       );
 
@@ -368,7 +373,7 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (teams) => {
           this.teams.set(teams);
-          void this.maybeWarmPreDraftProjections();
+          void this.runScheduledDraftChecks();
         }
       );
 
@@ -420,7 +425,7 @@ export class LeagueDetail implements OnDestroy {
 
   getDailyInjuryStatusDescription(): string {
     if (this.dailyInjuryRefreshInProgress()) {
-      return 'The commissioner browser is checking ESPN for today’s injury changes.';
+      return 'A browser is checking whether today’s app-wide ESPN injury report is already current.';
     }
 
     if (this.dailyInjuryRefreshError()) {
@@ -443,12 +448,10 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (state?.lastSuccessfulSyncAt) {
-      return 'The shared injury report is available to every manager in this league.';
+      return 'The single shared injury report is available to every league and manager in the app.';
     }
 
-    return this.isCommissioner()
-      ? 'Opening League Home once per UTC day refreshes the shared report from this browser.'
-      : 'The shared report refreshes when the commissioner opens League Home each UTC day.';
+    return 'The first league visit each UTC day refreshes one shared report for the entire app.';
   }
 
   getDailyInjuryStatusTimeLabel(): string {
@@ -488,25 +491,19 @@ export class LeagueDetail implements OnDestroy {
     this.dailyInjuryRefreshInProgress.set(true);
     this.dailyInjuryRefreshError.set('');
     this.dailyInjuryRefreshMessage.set(
-      'Checking whether this league already has today’s injury report.'
+      'Checking the single app-wide injury report for today.'
     );
 
     try {
-      const assets = await loadDraftPlayerPool(true);
-      const players = this.getSkatersForInjurySync(assets);
-
       const result = await syncPlayerAvailabilityFromEspn({
         leagueId: this.leagueId,
-        players,
-        force: false,
-        minimumIntervalMinutes: 1440,
         trigger: 'daily-visit'
       });
 
       this.dailyInjuryRefreshMessage.set(
         result.skipped
           ? result.message
-          : `Today’s injury report is ready. ${result.matchedCount} injured skaters were matched.`
+          : `Today’s app-wide injury report is ready. ${result.matchedCount} injured skaters were matched.`
       );
     } catch (error: unknown) {
       this.dailyInjuryRefreshMessage.set('');
@@ -538,7 +535,7 @@ export class LeagueDetail implements OnDestroy {
 
   getDraftInjurySyncDescription(): string {
     if (this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running') {
-      return 'The commissioner is pulling the latest ESPN injury report. The draft will open after this attempt finishes.';
+      return 'The app is preparing today’s shared ESPN injury report. The draft will open after this one daily check finishes.';
     }
 
     if (this.draftInjurySyncWarning()) {
@@ -552,14 +549,14 @@ export class LeagueDetail implements OnDestroy {
     const state = this.injurySyncState();
 
     if (state?.status === 'success') {
-      return state.message || 'The shared ESPN injury report is ready for every team.';
+      return state.message || 'The shared ESPN injury report is ready for every league and account.';
     }
 
     if (state?.status === 'error') {
       return state.message || 'The last refresh failed, so the most recent saved report will remain available.';
     }
 
-    return `The commissioner browser begins preparing injuries and shared rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
+    return `The app checks the shared daily injury report and prepares league rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
   }
 
   getDraftInjurySyncTimeLabel(): string {
@@ -579,19 +576,6 @@ export class LeagueDetail implements OnDestroy {
       dateStyle: 'medium',
       timeStyle: 'short'
     })}`;
-  }
-
-  private getSkatersForInjurySync(
-    assets: DraftableAsset[]
-  ) {
-    return assets
-      .filter(
-        (asset): asset is Extract<
-          DraftableAsset,
-          { assetType: 'skater' }
-        > => asset.assetType === 'skater'
-      )
-      .map((asset) => asset.player);
   }
 
   private getProjectionTeamCount(): number {
@@ -661,32 +645,16 @@ export class LeagueDetail implements OnDestroy {
     );
 
     try {
-      let assets: DraftableAsset[] = [];
-
-      const existingSnapshot =
-        await loadSharedProjectionSnapshot(
-          this.leagueId
-        );
-
-      assets = existingSnapshot?.assets ?? [];
-
-      if (assets.length === 0) {
-        assets = await loadDraftPlayerPool(true);
-      }
-
       try {
         const result = await syncPlayerAvailabilityFromEspn({
           leagueId: this.leagueId,
-          players: this.getSkatersForInjurySync(assets),
-          force: true,
-          minimumIntervalMinutes: 1,
           trigger: 'draft-start'
         });
 
         this.draftInjurySyncMessage.set(
           result.skipped
             ? result.message
-            : `Injury report ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`
+            : `Today’s shared injury report is ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`
         );
       } catch (error: unknown) {
         const detail = error instanceof Error
@@ -694,7 +662,7 @@ export class LeagueDetail implements OnDestroy {
           : 'Unable to refresh ESPN injury data.';
 
         this.draftInjurySyncWarning.set(
-          `The live injury refresh failed: ${detail} The newest saved report will be used for projections.`
+          `The daily injury refresh failed: ${detail} The newest saved app-wide report will be used for projections.`
         );
       }
 
@@ -745,10 +713,6 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
-    if (await this.loadFreshDraftSnapshotIfAvailable()) {
-      return;
-    }
-
     const attemptKey = [
       startDate.getTime(),
       this.getProjectionTeamCount(),
@@ -758,6 +722,11 @@ export class LeagueDetail implements OnDestroy {
     if (
       this.preDraftPreparationAttemptKey === attemptKey
     ) {
+      return;
+    }
+
+    if (await this.loadFreshDraftSnapshotIfAvailable()) {
+      this.preDraftPreparationAttemptKey = attemptKey;
       return;
     }
 
@@ -1015,6 +984,25 @@ export class LeagueDetail implements OnDestroy {
     return (wins + ties * 0.5) / gamesPlayed;
   }
 
+  private async runScheduledDraftChecks(): Promise<void> {
+    if (
+      this.destroyed ||
+      this.scheduledDraftCheckInProgress ||
+      Date.now() < this.activationRetryNotBefore
+    ) {
+      return;
+    }
+
+    this.scheduledDraftCheckInProgress = true;
+
+    try {
+      await this.maybeWarmPreDraftProjections();
+      await this.handleScheduledDraft();
+    } finally {
+      this.scheduledDraftCheckInProgress = false;
+    }
+  }
+
   private async handleScheduledDraft(): Promise<void> {
     const draft = this.draft();
 
@@ -1064,14 +1052,31 @@ export class LeagueDetail implements OnDestroy {
         );
 
       if (activatedDraft?.status === 'live') {
+        this.activationFailureCount = 0;
+        this.activationRetryNotBefore = 0;
         this.draft.set(activatedDraft);
         this.openDraftStartedModal();
       }
     } catch (error: unknown) {
+      this.activationFailureCount += 1;
+
+      const retryDelayMilliseconds = Math.min(
+        5 * 60_000,
+        15_000 * 2 ** Math.max(0, this.activationFailureCount - 1)
+      );
+
+      this.activationRetryNotBefore =
+        Date.now() + retryDelayMilliseconds;
+
+      const detail = error instanceof Error
+        ? error.message
+        : 'Unable to open the scheduled draft.';
+      const retrySeconds = Math.ceil(
+        retryDelayMilliseconds / 1000
+      );
+
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to open the scheduled draft.'
+        `${detail} The next activation check will wait about ${retrySeconds} seconds.`
       );
     } finally {
       this.activationInProgress = false;

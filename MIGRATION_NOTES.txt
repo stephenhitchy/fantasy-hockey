@@ -1,0 +1,32 @@
+MIGRATION NOTES
+
+NO DATA DELETION
+Existing cycles, roster snapshots, draft picks, scores, standings, and playoff
+data remain in place.
+
+NEW CYCLES
+Cycles created after installation receive stable rosterSlotId and cycleWindowId
+values immediately.
+
+EXISTING ACTIVE CYCLES
+Older cycle snapshots without rosterSlotId remain readable. Scoring uses a
+legacy pick identity, and advancement can match the completed asset back to its
+current roster slot by asset key. The cleanest end-to-end test is still a newly
+created cycle because every slot identifier will be native from the start.
+
+LAZY TEAM-WINDOW DOCUMENTS
+teamWindows documents are created the first time the commissioner loads scoring
+for the cycle. They are not required to read old cycle pages.
+
+CURRENT ROSTER MOVES
+This package does not yet add formal pendingMove records. Existing cycle
+snapshots remain frozen, and a slot that has already advanced is protected from
+later roster changes. The next package should replace the current metadata-only
+effectiveCycleNumber approach with an explicit per-slot queue.
+
+SHARED PROJECTION LIMITATION
+The current projection system still has one active shared snapshot per league.
+This package refuses to use target-cycle-specific availability data for the
+wrong window, but truly current projections for several overlapping target
+cycles require target-specific snapshot storage or on-demand slot projection.
+That will be addressed with projection regeneration/live ingestion.

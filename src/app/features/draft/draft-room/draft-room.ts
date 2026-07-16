@@ -42,9 +42,6 @@ import {
   startDraftClock
 } from '../../../core/draft/draft.service';
 
-import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
 
 import {
   generateSharedProjectionSnapshot,
@@ -657,16 +654,26 @@ private getPositionSortValue(
   private stopInjurySyncListener: (() => void) | null = null;
   private stopQueueListener: (() => void) | null = null;
   private activationInProgress = false;
+  private scheduledDraftCheckInProgress = false;
+  private destroyed = false;
+  private activationFailureCount = 0;
+  private activationRetryNotBefore = 0;
   private preDraftPreparationAttemptKey = '';
   private lastAutoPickAttemptKey = '';
   private lastObservedDraftStatus: FantasyDraft['status'] | null = null;
 
   private readonly clockTimer = setInterval(() => {
+    if (this.destroyed) {
+      return;
+    }
+
     this.now.set(Date.now());
-    void this.maybeWarmPreDraftProjections();
-    void this.maybeActivateDraft();
     void this.maybeHandleAutomaticPick();
   }, 1000);
+
+  private readonly scheduledDraftCheckTimer = setInterval(() => {
+    void this.runScheduledDraftChecks();
+  }, 5000);
 
   readonly currentPick = computed<DraftPickPreview | null>(() =>
     getCurrentDraftPick(this.draft())
@@ -940,7 +947,9 @@ readonly availableAssets = computed(() => {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     clearInterval(this.clockTimer);
+    clearInterval(this.scheduledDraftCheckTimer);
     this.stopDraftListener?.();
     this.stopPickListener?.();
     this.stopInjurySyncListener?.();
@@ -950,6 +959,10 @@ readonly availableAssets = computed(() => {
   async loadDraftRoom(): Promise<void> {
     const leagueId = this.route.snapshot.paramMap.get('leagueId');
     const user = await waitForAuthUser();
+
+    if (this.destroyed) {
+      return;
+    }
 
     if (!leagueId || !user) {
       await this.router.navigate(['/']);
@@ -965,6 +978,10 @@ readonly availableAssets = computed(() => {
         getLeagueTeams(leagueId),
         getFantasyTeam(leagueId, user.uid)
       ]);
+
+      if (this.destroyed) {
+        return;
+      }
 
       if (!league || !myTeam) {
         await this.router.navigate(['/dashboard']);
@@ -985,7 +1002,9 @@ readonly availableAssets = computed(() => {
         this.stopQueueListener = listenToDraftQueues(
           leagueId,
           (queues) => {
-            this.draftQueues.set(queues);
+            if (!this.destroyed) {
+              this.draftQueues.set(queues);
+            }
           }
         );
       } else {
@@ -993,7 +1012,9 @@ readonly availableAssets = computed(() => {
           leagueId,
           user.uid,
           (queue) => {
-            this.draftQueues.set([queue]);
+            if (!this.destroyed) {
+              this.draftQueues.set([queue]);
+            }
           }
         );
       }
@@ -1003,13 +1024,19 @@ readonly availableAssets = computed(() => {
         listenToPlayerAvailabilitySyncState(
           leagueId,
           (state) => {
-            this.injurySyncState.set(state);
+            if (!this.destroyed) {
+              this.injurySyncState.set(state);
+            }
           }
         );
 
       this.stopDraftListener = listenToFantasyDraft(
         leagueId,
         (draft) => {
+          if (this.destroyed) {
+            return;
+          }
+
           const previousStatus =
             this.lastObservedDraftStatus;
 
@@ -1030,29 +1057,36 @@ readonly availableAssets = computed(() => {
             void this.loadPlayerPool();
           }
 
-          void this.maybeWarmPreDraftProjections();
-          void this.maybeActivateDraft();
+          void this.runScheduledDraftChecks();
         }
       );
 
       this.stopPickListener = listenToDraftPicks(
         leagueId,
         (picks) => {
-          this.picks.set(picks);
+          if (!this.destroyed) {
+            this.picks.set(picks);
+          }
         }
       );
 
       await this.loadPlayerPool();
-      await this.maybeWarmPreDraftProjections();
-      await this.maybeActivateDraft();
+
+      if (!this.destroyed) {
+        await this.runScheduledDraftChecks();
+      }
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the draft room.'
-      );
+      if (!this.destroyed) {
+        this.errorMessage.set(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load the draft room.'
+        );
+      }
     } finally {
-      this.loading.set(false);
+      if (!this.destroyed) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -1065,6 +1099,10 @@ readonly availableAssets = computed(() => {
         this.leagueId
       );
 
+      if (this.destroyed) {
+        return;
+      }
+
       if (!snapshot) {
         this.playerPool.set([]);
         throw new Error(
@@ -1074,13 +1112,17 @@ readonly availableAssets = computed(() => {
 
       this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
-      this.playerPoolError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the shared NHL player pool.'
-      );
+      if (!this.destroyed) {
+        this.playerPoolError.set(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load the shared NHL player pool.'
+        );
+      }
     } finally {
-      this.playerPoolLoading.set(false);
+      if (!this.destroyed) {
+        this.playerPoolLoading.set(false);
+      }
     }
   }
 
@@ -1108,7 +1150,7 @@ readonly availableAssets = computed(() => {
       this.draftInjurySyncInProgress() ||
       this.injurySyncState()?.status === 'running'
     ) {
-      return 'The commissioner is pulling the latest ESPN injury report. The draft will open when this attempt finishes.';
+      return 'The app is preparing today’s shared ESPN injury report. The draft will open after this one daily check finishes.';
     }
 
     if (this.draftInjurySyncWarning()) {
@@ -1122,7 +1164,7 @@ readonly availableAssets = computed(() => {
     const state = this.injurySyncState();
 
     if (state?.status === 'success') {
-      return state.message || 'The shared ESPN injury report is ready for every team.';
+      return state.message || 'The shared ESPN injury report is ready for every league and account.';
     }
 
     if (state?.status === 'error') {
@@ -1220,20 +1262,7 @@ readonly availableAssets = computed(() => {
 
     return this.isCommissioner()
       ? `Keep this Draft Room open. The injury refresh and shared projection build will begin automatically ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`
-      : 'The commissioner browser will prepare one shared ranking before the scheduled start.';
-  }
-
-  private getSkatersForInjurySync(
-    assets: DraftableAsset[]
-  ) {
-    return assets
-      .filter(
-        (asset): asset is Extract<
-          DraftableAsset,
-          { assetType: 'skater' }
-        > => asset.assetType === 'skater'
-      )
-      .map((asset) => asset.player);
+      : 'The app will check the shared daily injury report and prepare one league ranking before the scheduled start.';
   }
 
   private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {
@@ -1241,6 +1270,10 @@ readonly availableAssets = computed(() => {
       await loadSharedProjectionSnapshotMetadata(
         this.leagueId
       );
+
+    if (this.destroyed) {
+      return false;
+    }
 
     const isFresh =
       isSharedProjectionSnapshotFreshForDraft(
@@ -1261,7 +1294,11 @@ readonly availableAssets = computed(() => {
       this.leagueId
     );
 
-    if (!snapshot || snapshot.assets.length === 0) {
+    if (
+      this.destroyed ||
+      !snapshot ||
+      snapshot.assets.length === 0
+    ) {
       return false;
     }
 
@@ -1278,7 +1315,10 @@ readonly availableAssets = computed(() => {
   private async prepareDraftData(
     generationReason: SharedProjectionGenerationReason
   ): Promise<void> {
-    if (this.preDraftPreparationInProgress()) {
+    if (
+      this.destroyed ||
+      this.preDraftPreparationInProgress()
+    ) {
       return;
     }
 
@@ -1288,32 +1328,22 @@ readonly availableAssets = computed(() => {
     this.preDraftPreparationWarning.set('');
     this.draftInjurySyncWarning.set('');
     this.preDraftPreparationMessage.set(
-      'Refreshing the shared injury report before building the final draft snapshot.'
+      'Checking the daily app-wide injury report before building the final draft snapshot.'
     );
     this.draftInjurySyncMessage.set(
-      'Refreshing the shared ESPN injury report before building projections.'
+      'Checking the single shared ESPN injury report before building projections.'
     );
 
     try {
-      let assets = this.playerPool();
-
-      if (assets.length === 0) {
-        const sharedSnapshot =
-          await loadSharedProjectionSnapshot(
-            this.leagueId
-          );
-
-        assets = sharedSnapshot?.assets ??
-          await loadDraftPlayerPool(true);
-      }
-
       try {
         const result = await syncPlayerAvailabilityFromEspn({
           leagueId: this.leagueId,
-          players: this.getSkatersForInjurySync(assets),
-          force: true,
-          minimumIntervalMinutes: 1
+          trigger: 'draft-start'
         });
+
+        if (this.destroyed) {
+          return;
+        }
 
         this.draftInjurySyncMessage.set(
           result.skipped
@@ -1321,13 +1351,25 @@ readonly availableAssets = computed(() => {
             : `Injury report ready. ${result.matchedCount} injured skaters matched.`
         );
       } catch (error: unknown) {
+        if (this.destroyed) {
+          return;
+        }
+
+        if (this.isFirestoreResourceExhausted(error)) {
+          throw error;
+        }
+
         const detail = error instanceof Error
           ? error.message
           : 'Unable to refresh ESPN injury data.';
 
         this.draftInjurySyncWarning.set(
-          `The live injury refresh failed: ${detail} The newest saved report will be used.`
+          `The daily app-wide injury refresh failed: ${detail} The newest saved report will be used.`
         );
+      }
+
+      if (this.destroyed) {
+        return;
       }
 
       this.preDraftPreparationMessage.set(
@@ -1343,6 +1385,10 @@ readonly availableAssets = computed(() => {
           generationReason
         });
 
+      if (this.destroyed) {
+        return;
+      }
+
       this.playerPool.set(sharedSnapshot.assets);
       this.playerPoolError.set('');
       this.preDraftPreparationReady.set(true);
@@ -1353,6 +1399,10 @@ readonly availableAssets = computed(() => {
         `Shared Cycle ${sharedSnapshot.metadata.targetCycleNumber} projections are ready for every manager.`
       );
     } catch (error: unknown) {
+      if (this.destroyed) {
+        return;
+      }
+
       const detail = error instanceof Error
         ? error.message
         : 'Unable to build shared projections.';
@@ -1366,8 +1416,103 @@ readonly availableAssets = computed(() => {
 
       throw error;
     } finally {
-      this.draftInjurySyncInProgress.set(false);
-      this.preDraftPreparationInProgress.set(false);
+      if (!this.destroyed) {
+        this.draftInjurySyncInProgress.set(false);
+        this.preDraftPreparationInProgress.set(false);
+      }
+    }
+  }
+
+  private async runScheduledDraftChecks(): Promise<void> {
+    if (
+      this.destroyed ||
+      this.scheduledDraftCheckInProgress ||
+      Date.now() < this.activationRetryNotBefore
+    ) {
+      return;
+    }
+
+    this.scheduledDraftCheckInProgress = true;
+
+    try {
+      await this.maybeWarmPreDraftProjections();
+
+      if (this.destroyed) {
+        return;
+      }
+
+      await this.maybeActivateDraft();
+    } catch (error: unknown) {
+      if (this.destroyed) {
+        return;
+      }
+
+      if (this.isFirestoreResourceExhausted(error)) {
+        this.scheduleFirestoreRetry();
+        return;
+      }
+
+      this.errorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to check the scheduled draft state.'
+      );
+    } finally {
+      this.scheduledDraftCheckInProgress = false;
+    }
+  }
+
+  private isFirestoreResourceExhausted(
+    error: unknown
+  ): boolean {
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    } | null;
+
+    const code = typeof candidate?.code === 'string'
+      ? candidate.code.toLowerCase()
+      : '';
+    const message = typeof candidate?.message === 'string'
+      ? candidate.message.toLowerCase()
+      : '';
+
+    return (
+      code === 'resource-exhausted' ||
+      code === 'firestore/resource-exhausted' ||
+      message.includes('resource-exhausted') ||
+      message.includes('too many requests') ||
+      message.includes('429')
+    );
+  }
+
+  private scheduleFirestoreRetry(): void {
+    this.activationFailureCount += 1;
+
+    const delaySeconds = Math.min(
+      300,
+      15 * Math.pow(2, this.activationFailureCount - 1)
+    );
+
+    this.activationRetryNotBefore =
+      Date.now() + delaySeconds * 1000;
+
+    this.errorMessage.set(
+      `Firestore is temporarily throttling draft preparation. No injury or draft data was deleted. This browser will wait ${delaySeconds} seconds before checking again.`
+    );
+  }
+
+  private clearFirestoreRetry(): void {
+    this.activationFailureCount = 0;
+    this.activationRetryNotBefore = 0;
+
+    if (
+      this.errorMessage().includes(
+        'Firestore is temporarily throttling draft preparation.'
+      )
+    ) {
+      this.errorMessage.set('');
     }
   }
 
@@ -1376,6 +1521,7 @@ readonly availableAssets = computed(() => {
     const startDate = this.draftStartDate();
 
     if (
+      this.destroyed ||
       !draft ||
       draft.status !== 'scheduled' ||
       !startDate ||
@@ -1400,6 +1546,11 @@ readonly availableAssets = computed(() => {
     }
 
     if (await this.loadFreshDraftSnapshotIfAvailable()) {
+      this.clearFirestoreRetry();
+      return;
+    }
+
+    if (this.destroyed) {
       return;
     }
 
@@ -1419,7 +1570,15 @@ readonly availableAssets = computed(() => {
 
     try {
       await this.prepareDraftData('pre-draft');
-    } catch {
+
+      if (!this.destroyed) {
+        this.clearFirestoreRetry();
+      }
+    } catch (error: unknown) {
+      if (this.isFirestoreResourceExhausted(error)) {
+        throw error;
+      }
+
       // The scheduled-start fallback will retry once the start time arrives.
     }
   }
@@ -1428,9 +1587,11 @@ readonly availableAssets = computed(() => {
     const draft = this.draft();
 
     if (
+      this.destroyed ||
       !draft ||
       draft.status !== 'scheduled' ||
-      !isDraftStartTimeReached(draft)
+      !isDraftStartTimeReached(draft) ||
+      Date.now() < this.activationRetryNotBefore
     ) {
       return;
     }
@@ -1452,10 +1613,18 @@ readonly availableAssets = computed(() => {
       const snapshotReady =
         await this.loadFreshDraftSnapshotIfAvailable();
 
+      if (this.destroyed) {
+        return;
+      }
+
       if (!snapshotReady) {
         await this.prepareDraftData(
           'draft-start-fallback'
         );
+      }
+
+      if (this.destroyed) {
+        return;
       }
 
       const activatedDraft =
@@ -1464,10 +1633,25 @@ readonly availableAssets = computed(() => {
           this.userId
         );
 
+      if (this.destroyed) {
+        return;
+      }
+
+      this.clearFirestoreRetry();
+
       if (activatedDraft?.status === 'live') {
         this.draft.set(activatedDraft);
       }
     } catch (error: unknown) {
+      if (this.destroyed) {
+        return;
+      }
+
+      if (this.isFirestoreResourceExhausted(error)) {
+        this.scheduleFirestoreRetry();
+        return;
+      }
+
       this.errorMessage.set(
         error instanceof Error
           ? error.message

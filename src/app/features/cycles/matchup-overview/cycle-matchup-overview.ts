@@ -31,7 +31,8 @@ import {
   buildCycleSchedulePreview,
   CycleSchedulePreviewMatchup,
   listenToCycle,
-  listenToCycleMatchups
+  listenToCycleMatchups,
+  listenToCycleRosterPicks
 } from '../../../core/cycle/cycle.service';
 
 import {
@@ -51,6 +52,10 @@ import {
 import {
   loadDraftPlayerPool
 } from '../../../core/draft/draft-player-pool.service';
+
+import {
+  getFrozenCycleProjection
+} from '../../../core/projection/cycle-projection.util';
 
 import {
   getLeagueById,
@@ -105,6 +110,9 @@ export class CycleMatchupOverview implements OnDestroy {
   private stopCycleListener: (() => void) | null = null;
   private stopMatchupsListener: (() => void) | null = null;
   private stopPicksListener: (() => void) | null = null;
+  private stopCycleRosterPicksListener: (() => void) | null = null;
+  private liveDraftPicks: DraftPick[] = [];
+  private cycleRosterSnapshotPicks: DraftPick[] = [];
   private scoringLoadKey: string | null = null;
   private scoringRequestId = 0;
 
@@ -119,6 +127,7 @@ export class CycleMatchupOverview implements OnDestroy {
     this.stopCycleListener?.();
     this.stopMatchupsListener?.();
     this.stopPicksListener?.();
+    this.stopCycleRosterPicksListener?.();
   }
 
   async loadOverviewPage(): Promise<void> {
@@ -186,11 +195,20 @@ export class CycleMatchupOverview implements OnDestroy {
         }
       );
 
+      this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
+        leagueId,
+        this.cycleNumber,
+        (picks) => {
+          this.cycleRosterSnapshotPicks = picks;
+          this.refreshEffectivePicks();
+        }
+      );
+
       this.stopPicksListener = listenToDraftPicks(
         leagueId,
         (picks) => {
-          this.picks.set(picks);
-          void this.loadCurrentCycleScoringIfReady();
+          this.liveDraftPicks = picks;
+          this.refreshEffectivePicks();
         }
       );
     } catch (error: unknown) {
@@ -493,7 +511,9 @@ export class CycleMatchupOverview implements OnDestroy {
       this.cycleNumber,
       season,
       requiredGamesPerCycle,
-      picks.map((pick) => pick.asset.assetKey).join('|')
+      picks.map((pick) =>
+        `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`
+      ).join('|')
     ].join('::');
 
     if (this.scoringLoadKey === scoringKey) {
@@ -512,7 +532,9 @@ export class CycleMatchupOverview implements OnDestroy {
         cycleNumber: this.cycleNumber,
         season,
         requiredGamesPerCycle,
-        scoringRules
+        scoringRules,
+        expectedRosterSlotIdsByOwner:
+          cycle.expectedRosterSlotIdsByOwner ?? {}
       });
 
       if (requestId !== this.scoringRequestId) {
@@ -535,32 +557,19 @@ export class CycleMatchupOverview implements OnDestroy {
   }
 
   private getAssetProjectedCycle(asset: DraftableAsset): number | null {
-    const poolAsset = this.playerPool().find(
-      (availableAsset) => availableAsset.assetKey === asset.assetKey
-    );
+    return getFrozenCycleProjection(asset);
+  }
 
-    const projectedCyclePoints =
-      asset.projectedCyclePoints ??
-      poolAsset?.projectedCyclePoints;
+  private refreshEffectivePicks(): void {
+    const effectivePicks = this.cycleRosterSnapshotPicks.length > 0
+      ? this.cycleRosterSnapshotPicks
+      : this.liveDraftPicks;
 
-    if (typeof projectedCyclePoints === 'number') {
-      return projectedCyclePoints;
-    }
+    this.picks.set(effectivePicks);
+    this.scoringLoadKey = null;
+    this.cycleScoring.set(null);
 
-    const projectedSeasonPoints =
-      asset.projectedSeasonPoints ??
-      poolAsset?.projectedSeasonPoints;
-
-    if (typeof projectedSeasonPoints !== 'number') {
-      return null;
-    }
-
-    const requiredGamesPerCycle =
-      this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
-
-    return Number(
-      ((projectedSeasonPoints / 82) * requiredGamesPerCycle).toFixed(1)
-    );
+    void this.loadCurrentCycleScoringIfReady();
   }
 
   private getExistingMatchup(

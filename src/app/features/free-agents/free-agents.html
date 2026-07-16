@@ -31,8 +31,46 @@
     </header>
 
     <section class="message-card success-card">
-      Free agents can still be added immediately. Dropped players are placed on waivers, claims are submitted by teams, and the commissioner can manually process the waiver queue. Current cycle snapshots stay locked; scoring changes begin with {{ getEffectiveCycleText() }}.
+      Current six-game slot windows stay locked. Once cycles have started, a free-agent or awarded waiver move reserves the incoming player, keeps the current player in that slot through the existing window, and activates the move {{ getEffectiveCycleText() }}.
     </section>
+
+    @if (pendingRosterMoves().length > 0) {
+      <section class="pending-moves-card">
+        <div class="section-heading stacked-heading">
+          <div>
+            <span class="eyebrow">Reserved Moves</span>
+            <h2>Waiting for Slot Boundaries</h2>
+          </div>
+          <p>
+            These incoming players are reserved. Each move activates independently when that specific roster slot finishes its current six-game window.
+          </p>
+        </div>
+
+        <div class="pending-move-list">
+          @for (entry of pendingRosterMoves(); track entry.move.id; let index = $index) {
+            <article class="pending-move-row">
+              <span class="pending-slot-label">{{ getPendingMoveSlotLabel(index) }}</span>
+              <div>
+                <strong>{{ getPendingMoveIncomingName(index) }}</strong>
+                <span>replaces {{ getPendingMoveOutgoingName(index) }}</span>
+              </div>
+              @if (canCancelPendingMove(index)) {
+                <button
+                  type="button"
+                  class="cancel-pending-button"
+                  (click)="cancelPendingMove(index)"
+                  [disabled]="moving()"
+                >
+                  Cancel Move
+                </button>
+              } @else {
+                <span class="pending-status">Waiver award locked</span>
+              }
+            </article>
+          }
+        </div>
+      </section>
+    }
 
     @if (successMessage()) {
       <section class="message-card success-card">

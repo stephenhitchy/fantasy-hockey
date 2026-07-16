@@ -1,0 +1,105 @@
+@if (loading()) {
+  <p class="simulator-loading">Loading playoff-window simulator...</p>
+} @else if (!league()) {
+  <p class="simulator-loading">{{ errorMessage() }}</p>
+} @else {
+  <section class="simulator-page">
+    <a class="back-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
+      ← Back to Playoffs
+    </a>
+
+    <header class="simulator-hero">
+      <div>
+        <span>Commissioner Development Tool</span>
+        <h1>Banked Playoff Window Simulator</h1>
+        <p>
+          This synthetic eight-team league with a six-team championship field verifies that games may be banked
+          before an opponent is known and then routed to the correct title or
+          placement matchup. It performs no NHL requests and writes nothing to
+          Firestore.
+        </p>
+      </div>
+
+      <button type="button" (click)="rerunSimulation()">
+        Run Again
+      </button>
+    </header>
+
+    <section
+      class="result-banner"
+      [class.result-failed]="!report().allPassed"
+    >
+      <strong>
+        {{ report().allPassed ? 'All playoff-window checks passed' : 'One or more checks failed' }}
+      </strong>
+      <span>{{ report().checks.length }} deterministic checks</span>
+    </section>
+
+    <section class="assignment-card">
+      <div class="section-heading">
+        <span>Opening round</span>
+        <h2>Window 1 assignments</h2>
+      </div>
+
+      <div class="assignment-grid">
+        @for (assignment of report().openingAssignments; track assignment.ownerId) {
+          <article>
+            <strong>{{ assignment.teamName }}</strong>
+            <span>{{ assignment.matchupLabel }}</span>
+            <small>
+              Playoff Window {{ assignment.windowNumber }} · schedule block
+              {{ assignment.sourceCycleNumber }}
+            </small>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="assignment-card">
+      <div class="section-heading">
+        <span>Semifinals and placement</span>
+        <h2>Banked windows after routing</h2>
+      </div>
+
+      <div class="assignment-grid">
+        @for (assignment of report().secondRoundAssignments; track assignment.ownerId + assignment.matchupLabel) {
+          <article
+            [class.bye-window]="assignment.windowNumber === 1"
+          >
+            <strong>{{ assignment.teamName }}</strong>
+            <span>{{ assignment.matchupLabel }}</span>
+            <small>
+              Playoff Window {{ assignment.windowNumber }} · schedule block
+              {{ assignment.sourceCycleNumber }}
+            </small>
+          </article>
+        }
+      </div>
+
+      <p class="routing-note">
+        Bye teams retain Window 1. Opening-round teams use Window 2. A single
+        matchup can therefore compare different six-game schedule blocks while
+        still giving both teams exactly six games.
+      </p>
+    </section>
+
+    <section class="checks-card">
+      <div class="section-heading">
+        <span>Bracket-routing assertions</span>
+        <h2>Test results</h2>
+      </div>
+
+      <div class="check-list">
+        @for (check of report().checks; track check.id) {
+          <article [class.check-failed]="!check.passed">
+            <span class="check-icon">{{ check.passed ? '✓' : '!' }}</span>
+            <div>
+              <strong>{{ check.label }}</strong>
+              <p>{{ check.detail }}</p>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+  </section>
+}

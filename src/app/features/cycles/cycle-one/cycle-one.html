@@ -100,6 +100,30 @@
           Playoff Bracket
         </a>
 
+        @if (cycle()?.overlapsPreviousCycle) {
+          <span class="cycle-status-badge overlap-status-badge">
+            Overlapping Cycle
+          </span>
+        }
+
+        @if (
+          cycle()?.status === 'active' &&
+          (cycle()?.activeWindowCount ?? 0) <
+            (cycle()?.totalExpectedWindowCount ?? 0)
+        ) {
+          <span class="cycle-status-badge window-progress-badge">
+            {{ cycle()?.activeWindowCount ?? 0 }} /
+            {{ cycle()?.totalExpectedWindowCount ?? 0 }} Slots Started
+          </span>
+        }
+
+        @if ((cycle()?.totalMatchupCount ?? 0) > 0) {
+          <span class="cycle-status-badge matchup-progress-badge">
+            {{ cycle()?.completedMatchupCount ?? 0 }} /
+            {{ cycle()?.totalMatchupCount ?? 0 }} Matchups Final
+          </span>
+        }
+
         <span
           class="cycle-status-badge"
           [class.status-live]="cycle()?.status === 'active'"
@@ -134,6 +158,102 @@
   </section>
 }
 
+
+@if (cycle()) {
+  <section class="cycle-transparency-card">
+    <div class="transparency-heading">
+      <div>
+        <span class="eyebrow">Cycle Transparency</span>
+        <h2>What is still counting?</h2>
+        <p>
+          Every roster slot owns an independent six-game window. A faster slot
+          may begin Cycle {{ cycleNumber + 1 }} while slower slots are still
+          finishing Cycle {{ cycleNumber }}.
+        </p>
+      </div>
+
+      @if (isCommissioner()) {
+        <a
+          class="cycle-simulator-link"
+          [routerLink]="['/leagues', leagueId, 'cycles', 'simulator']"
+        >
+          Run 7-vs-4 Simulator
+        </a>
+      }
+    </div>
+
+    <div class="transparency-metrics">
+      <article>
+        <span>Current Windows Complete</span>
+        <strong>
+          {{ getCurrentCycleWindowCounts().complete }} /
+          {{ getCurrentCycleWindowCounts().total || (cycle()?.totalExpectedWindowCount ?? 0) }}
+        </strong>
+      </article>
+
+      <article>
+        <span>Next Cycle Already Started</span>
+        <strong>{{ getNextCycleStartedWindowCount() }} slots</strong>
+      </article>
+
+      <article>
+        <span>Matchups Final</span>
+        <strong>
+          {{ cycle()?.completedMatchupCount ?? 0 }} /
+          {{ cycle()?.totalMatchupCount ?? matchups().length }}
+        </strong>
+      </article>
+
+      <article>
+        <span>Queued Moves in View</span>
+        <strong>{{ getDisplayedQueuedMoveCount() }}</strong>
+      </article>
+    </div>
+
+    <div class="window-marker-legend" aria-label="Cycle game marker legend">
+      <span><i class="legend-dot marker-played"></i> Played</span>
+      <span><i class="legend-dot marker-missed"></i> Team game counted, no appearance</span>
+      <span><i class="legend-dot marker-upcoming"></i> Upcoming</span>
+      <span><i class="legend-dot marker-unavailable"></i> Not scheduled</span>
+    </div>
+
+    @if (getCurrentDisplayedMatchup(); as transparencyMatchup) {
+      <div class="matchup-window-summary">
+        <article>
+          <div>
+            <strong>{{ getTeamName(transparencyMatchup.teamAOwnerId) }}</strong>
+            <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamAOwnerId) }}</span>
+          </div>
+
+          <div class="pending-slot-chip-row">
+            @for (slotId of getPendingSlotLabels(transparencyMatchup.teamAOwnerId); track slotId) {
+              <span>{{ slotId }}</span>
+            } @empty {
+              <em>All slot windows complete</em>
+            }
+          </div>
+        </article>
+
+        @if (transparencyMatchup.teamBOwnerId) {
+          <article>
+            <div>
+              <strong>{{ getTeamName(transparencyMatchup.teamBOwnerId) }}</strong>
+              <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamBOwnerId) }}</span>
+            </div>
+
+            <div class="pending-slot-chip-row">
+              @for (slotId of getPendingSlotLabels(transparencyMatchup.teamBOwnerId); track slotId) {
+                <span>{{ slotId }}</span>
+              } @empty {
+                <em>All slot windows complete</em>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+}
 
 @if (isCommissioner()) {
 <details class="dev-controls-card">
@@ -477,6 +597,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">
@@ -568,6 +742,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">
@@ -657,6 +885,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">
@@ -795,6 +1077,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">
@@ -886,6 +1222,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">
@@ -975,6 +1365,60 @@
                                     {{ getAssetGamesLeft(pick.asset) }}
                                     left
                                   </em>
+
+                                  <div
+                                    class="window-game-markers"
+                                    [attr.aria-label]="getWindowStatusLabel(pick)"
+                                  >
+                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                      <span
+                                        class="window-game-marker"
+                                        [class.marker-played]="marker.status === 'played'"
+                                        [class.marker-missed]="marker.status === 'missed'"
+                                        [class.marker-upcoming]="marker.status === 'upcoming'"
+                                        [class.marker-unavailable]="marker.status === 'unavailable'"
+                                        [title]="marker.title"
+                                      >
+                                        {{ marker.index }}
+                                      </span>
+                                    }
+                                  </div>
+
+                                  <small class="window-status-copy">
+                                    {{ getWindowStatusLabel(pick) }}
+                                  </small>
+
+                                  @if (getPendingMoveForPick(pick); as pendingMove) {
+                                    <div class="queued-slot-move">
+                                      <span>Next window</span>
+                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
+                                    </div>
+                                  }
+
+                                  @if (getWindowForPick(pick)) {
+                                    <details
+                                      class="window-game-details"
+                                      (click)="stopCardNavigation($event)"
+                                      (keydown.enter)="stopCardNavigation($event)"
+                                    >
+                                      <summary>View six-game window</summary>
+                                      <div class="window-game-detail-list">
+                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
+                                          <div>
+                                            <span>Game {{ marker.index }}</span>
+                                            <strong>{{ marker.gameLabel }}</strong>
+                                            <small>
+                                              {{ marker.gameDate || 'Date pending' }}
+                                              · {{ marker.statusLabel }}
+                                              @if (marker.gameId) {
+                                                · ID {{ marker.gameId }}
+                                              }
+                                            </small>
+                                          </div>
+                                        }
+                                      </div>
+                                    </details>
+                                  }
                                 </div>
 
                                 <div class="fantasy-player-score-stack">

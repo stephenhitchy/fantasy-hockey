@@ -134,6 +134,10 @@ function normalizeMatchup(
     teamBOwnerId: getNullableString(value.teamBOwnerId),
     teamASeed: getNullableNumber(value.teamASeed),
     teamBSeed: getNullableNumber(value.teamBSeed),
+    teamAWindowNumber: getNullableNumber(value.teamAWindowNumber),
+    teamBWindowNumber: getNullableNumber(value.teamBWindowNumber),
+    teamAWindowCycleNumber: getNullableNumber(value.teamAWindowCycleNumber),
+    teamBWindowCycleNumber: getNullableNumber(value.teamBWindowCycleNumber),
     teamAScore: getNullableNumber(value.teamAScore),
     teamBScore: getNullableNumber(value.teamBScore),
     winnerOwnerId: getNullableString(value.winnerOwnerId),
@@ -180,7 +184,7 @@ export function normalizeFantasyPlayoffs(
 
   return {
     id: 'current',
-    formatVersion: 1,
+    formatVersion: 2,
     formatName: 'standard',
     status: value.status === 'complete'
       ? 'complete'
@@ -336,6 +340,10 @@ export function resolvePlayoffRound(
       teamBOwnerId,
       teamASeed: getOwnerSeed(teamAOwnerId, working),
       teamBSeed: getOwnerSeed(teamBOwnerId, working),
+      teamAWindowNumber: matchup.teamAWindowNumber ?? null,
+      teamBWindowNumber: matchup.teamBWindowNumber ?? null,
+      teamAWindowCycleNumber: matchup.teamAWindowCycleNumber ?? null,
+      teamBWindowCycleNumber: matchup.teamBWindowCycleNumber ?? null,
       status:
         teamAOwnerId && teamBOwnerId
           ? 'active'
@@ -405,7 +413,7 @@ export function createStandardFantasyPlayoffs(
 
   let playoffs: FantasyPlayoffs = {
     id: 'current',
-    formatVersion: 1,
+    formatVersion: 2,
     formatName: 'standard',
     status: 'active',
     regularSeasonCycleCount,
@@ -448,6 +456,51 @@ export function createStandardFantasyPlayoffs(
   playoffs = resolvePlayoffRound(playoffs, 1);
 
   return playoffs;
+}
+
+
+export interface PlayoffWindowAssignment {
+  ownerId: string;
+  windowNumber: number;
+  sourceCycleNumber: number;
+}
+
+export function assignPlayoffRoundWindows(
+  playoffs: FantasyPlayoffs,
+  roundNumber: number,
+  assignmentsByOwnerId: Record<string, PlayoffWindowAssignment>
+): FantasyPlayoffs {
+  return {
+    ...playoffs,
+    matchups: playoffs.matchups.map((matchup) => {
+      if (matchup.roundNumber !== roundNumber) {
+        return matchup;
+      }
+
+      const teamAAssignment = matchup.teamAOwnerId
+        ? assignmentsByOwnerId[matchup.teamAOwnerId]
+        : null;
+      const teamBAssignment = matchup.teamBOwnerId
+        ? assignmentsByOwnerId[matchup.teamBOwnerId]
+        : null;
+
+      return {
+        ...matchup,
+        teamAWindowNumber:
+          teamAAssignment?.windowNumber ?? matchup.teamAWindowNumber ?? null,
+        teamBWindowNumber:
+          teamBAssignment?.windowNumber ?? matchup.teamBWindowNumber ?? null,
+        teamAWindowCycleNumber:
+          teamAAssignment?.sourceCycleNumber ??
+          matchup.teamAWindowCycleNumber ??
+          null,
+        teamBWindowCycleNumber:
+          teamBAssignment?.sourceCycleNumber ??
+          matchup.teamBWindowCycleNumber ??
+          null
+      };
+    })
+  };
 }
 
 export function getPlayoffRoundMatchups(

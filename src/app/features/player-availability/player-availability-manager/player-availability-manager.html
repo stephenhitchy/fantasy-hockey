@@ -19,9 +19,10 @@
         <span class="eyebrow">Commissioner Tool</span>
         <h1>Player Availability</h1>
         <p>
-          ESPN injury data refreshes automatically while this page is open.
-          Commissioner overrides always take priority and update My Team, IR eligibility,
-          Draft Room, Free Agents, and Waivers without rebuilding the app.
+          One ESPN injury report is shared across every league and account,
+          and the app refreshes it at most once per UTC day. Commissioner overrides
+          remain league-specific and always take priority in My Team, IR eligibility,
+          Draft Room, Free Agents, and Waivers.
         </p>
       </div>
 
@@ -53,18 +54,19 @@
 
     <section class="sync-card">
       <div class="sync-card-copy">
-        <span class="eyebrow">Automatic Injury Sync</span>
+        <span class="eyebrow">Shared Daily Injury Report</span>
         <h2>ESPN NHL Injury Feed</h2>
         <p>
-          Last successful sync: <strong>{{ getLastSyncLabel() }}</strong>.
-          The page checks for fresh data when opened and every 30 minutes while it remains open.
+          Last successful refresh: <strong>{{ getLastSyncLabel() }}</strong>.
+          Opening a league or Draft Room checks whether today’s shared report already exists;
+          only the first eligible browser performs the ESPN and NHL roster requests.
         </p>
 
         @if (syncState(); as state) {
           <div class="sync-stat-row">
             <span>{{ state.fetchedCount }} feed entries</span>
             <span>{{ state.matchedCount }} matched skaters</span>
-            <span>{{ state.preservedManualOverrideCount }} manual overrides preserved</span>
+            <span>{{ manualRecordCount() }} league overrides</span>
           </div>
         }
       </div>
@@ -75,7 +77,7 @@
         (click)="syncEspnInjuries(true)"
         [disabled]="syncing() || playerPoolLoading()"
       >
-        {{ syncing() ? 'Syncing Injuries...' : 'Sync ESPN Now' }}
+        {{ syncing() ? 'Checking Today’s Report...' : 'Check Today’s Report' }}
       </button>
     </section>
 
@@ -87,9 +89,9 @@
 
     @if (syncErrorMessage()) {
       <section class="message-card error-card">
-        <strong>Automatic sync did not complete.</strong>
+        <strong>The shared daily refresh did not complete.</strong>
         <span>{{ syncErrorMessage() }}</span>
-        <small>Existing ESPN records and all commissioner overrides remain unchanged.</small>
+        <small>The previous shared ESPN report and all commissioner overrides remain unchanged.</small>
       </section>
     }
 
@@ -130,7 +132,7 @@
           <button
             type="button"
             class="refresh-button"
-            (click)="loadPlayers()"
+            (click)="loadPlayers(true)"
             [disabled]="playerPoolLoading()"
           >
             {{ playerPoolLoading() ? 'Refreshing...' : 'Refresh Players' }}
@@ -298,15 +300,15 @@
               type="button"
               class="clear-button"
               (click)="clearSelectedDatabaseRecord()"
-              [disabled]="saving() || !isPlayerManaged(player)"
+              [disabled]="saving() || !isPlayerManualOverride(player)"
             >
-              {{ isPlayerManualOverride(player) ? 'Return to Automatic' : 'Clear ESPN Record' }}
+              Return to Shared Report
             </button>
           </div>
 
           <p class="fallback-note">
-            Saving creates a manual commissioner override that automatic sync will not replace.
-            Returning to automatic removes that override; ESPN can restore the player during the next sync.
+            Saving creates a league-specific commissioner override that the shared daily report
+            will not replace. Returning to the shared report removes only that league override.
           </p>
         } @else {
           <div class="editor-empty-state">

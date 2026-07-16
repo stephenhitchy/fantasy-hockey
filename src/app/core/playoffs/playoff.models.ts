@@ -58,6 +58,10 @@ export interface FantasyPlayoffMatchup {
   teamBOwnerId: string | null;
   teamASeed: number | null;
   teamBSeed: number | null;
+  teamAWindowNumber: number | null;
+  teamBWindowNumber: number | null;
+  teamAWindowCycleNumber: number | null;
+  teamBWindowCycleNumber: number | null;
   teamAScore: number | null;
   teamBScore: number | null;
   winnerOwnerId: string | null;
@@ -71,7 +75,7 @@ export interface FantasyPlayoffMatchup {
 
 export interface FantasyPlayoffs {
   id: 'current';
-  formatVersion: 1;
+  formatVersion: 2;
   formatName: 'standard';
   status: FantasyPlayoffStatus;
   regularSeasonCycleCount: number;

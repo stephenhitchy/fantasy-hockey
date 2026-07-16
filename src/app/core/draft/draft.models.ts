@@ -52,6 +52,23 @@ export interface DraftProjection {
   projectedSeasonPoints?: number | null;
   projectedCyclePoints?: number | null;
 
+  /**
+   * Exact manager-facing projection frozen when a fantasy cycle begins.
+   * Live NHL schedule and scoring requests must never replace this value.
+   */
+  frozenCycleProjectionPoints?: number | null;
+
+  /** Fantasy cycle for which frozenCycleProjectionPoints was captured. */
+  frozenProjectionCycleNumber?: number | null;
+
+  /** Source used when the cycle projection was frozen. */
+  frozenProjectionSource?:
+    | 'shared-snapshot'
+    | 'roster'
+    | 'draft-pick'
+    | 'legacy'
+    | null;
+
   /** Projection before short-term form and role adjustments. */
   seasonBaselineCyclePoints?: number | null;
 
@@ -226,6 +243,17 @@ export interface DraftPickPreview {
 
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
+
+  /**
+   * Present on cycle roster snapshots. Draft picks remain backward-compatible
+   * because the field is optional for the original draft collection.
+   */
+  rosterSlotId?: string;
+  cycleWindowId?: string;
+  snapshotCycleNumber?: number;
+  snapshotOrder?: number;
+  playoffWindowNumber?: number;
+
   selectionType?: DraftSelectionType;
   selectedByUserId?: string;
   autoPickReason?: DraftAutoPickReason | null;

@@ -6,6 +6,7 @@ import {
   SkaterGameStats
 } from '../scoring/scoring-engine';
 import { ScoringRules } from '../scoring/scoring-rules';
+import { selectCycleWindowGames } from './cycle-window-selection.util';
 import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
@@ -22,6 +23,9 @@ import {
 
 export interface CycleAssetScoreSummary {
   assetKey: string;
+  ownerId: string;
+  rosterSlotId: string;
+  windowId: string;
   currentScore: number;
 
   /**
@@ -39,10 +43,23 @@ export interface CycleAssetScoreSummary {
 
   scheduledGames: number;
   gamesLeft: number;
+  scheduledGameIds: number[];
+  scheduledGameDates: string[];
+  scheduledGameLabels: string[];
+  completedGameIds: number[];
+  appearanceGameIds: number[];
+  firstScheduledGameDate: string | null;
+  lastScheduledGameDate: string | null;
+  status: 'scheduled' | 'active' | 'complete';
 }
 
 export interface CycleScoringResult {
+  /** Backward-compatible lookup used by existing asset cards. */
   assetScores: Record<string, CycleAssetScoreSummary>;
+
+  /** Canonical lookup for independent roster-slot windows. */
+  windowScores: Record<string, CycleAssetScoreSummary>;
+
   teamScores: Record<string, number>;
   teamGameCounts: Record<string, number>;
   teamCycleComplete: Record<string, boolean>;
@@ -60,6 +77,13 @@ export interface CalculateCycleScoringInput {
   season: string;
   requiredGamesPerCycle: number;
   scoringRules: ScoringRules;
+
+  /**
+   * Expected persistent slot ids for each team. This prevents a partially
+   * opened overlapping cycle from being marked complete before every slot has
+   * entered that cycle.
+   */
+  expectedRosterSlotIdsByOwner?: Record<string, string[]>;
 
   /**
    * Kept optional for older callers. Scoring no longer uses date windows.
@@ -104,6 +128,22 @@ function getAssetTeamAbbreviation(asset: DraftableAsset): string {
     : asset.teamAbbreviation;
 }
 
+function getRosterSlotId(pick: DraftPick): string {
+  return pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
+}
+
+function getWindowId(pick: DraftPick, cycleNumber: number): string {
+  return pick.cycleWindowId ??
+    `${pick.ownerId}__${getRosterSlotId(pick)}__cycle-${cycleNumber}`;
+}
+
+function getPickWindowCycleNumber(
+  pick: DraftPick,
+  fallbackCycleNumber: number
+): number {
+  return pick.snapshotCycleNumber ?? fallbackCycleNumber;
+}
+
 function getMinutesFromToi(toi: string | undefined): number {
   if (!toi) {
     return 0;
@@ -138,20 +178,6 @@ function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
   }
 
   return [...skatersByKey.values()];
-}
-
-function getCycleGameStartIndex(
-  cycleNumber: number,
-  requiredGamesPerCycle: number
-): number {
-  return Math.max(0, (cycleNumber - 1) * requiredGamesPerCycle);
-}
-
-function getCycleGameEndIndex(
-  cycleNumber: number,
-  requiredGamesPerCycle: number
-): number {
-  return cycleNumber * requiredGamesPerCycle;
 }
 
 async function loadSchedulesByTeam(
@@ -319,9 +345,10 @@ function getRelevantAssetGames(
   const teamAbbreviation = getAssetTeamAbbreviation(asset);
   const schedule = schedulesByTeam[teamAbbreviation] ?? [];
 
-  return schedule.slice(
-    getCycleGameStartIndex(cycleNumber, requiredGamesPerCycle),
-    getCycleGameEndIndex(cycleNumber, requiredGamesPerCycle)
+  return selectCycleWindowGames(
+    schedule,
+    cycleNumber,
+    requiredGamesPerCycle
   );
 }
 
@@ -335,18 +362,21 @@ function calculateSkaterAssetScore(
   currentScore: number;
   gamesPlayed: number;
   actualGamesPlayed: number;
+  appearanceGameIds: number[];
 } {
   if (asset.assetType !== 'skater') {
     return {
       currentScore: 0,
       gamesPlayed: 0,
-      actualGamesPlayed: 0
+      actualGamesPlayed: 0,
+      appearanceGameIds: []
     };
   }
 
   let currentScore = 0;
   let gamesPlayed = 0;
   let actualGamesPlayed = 0;
+  const appearanceGameIds: number[] = [];
 
   const gameLogByGameId =
     gameLogsByPlayerId.get(asset.player.id) ??
@@ -373,6 +403,7 @@ function calculateSkaterAssetScore(
     }
 
     actualGamesPlayed += 1;
+    appearanceGameIds.push(game.id);
 
     const assistBreakdown = finalGameData
       ? getSkaterAssistBreakdown(finalGameData.playByPlay, asset.player.id)
@@ -414,7 +445,8 @@ function calculateSkaterAssetScore(
   return {
     currentScore: rounded(currentScore),
     gamesPlayed,
-    actualGamesPlayed
+    actualGamesPlayed,
+    appearanceGameIds
   };
 }
 
@@ -427,18 +459,21 @@ function calculateGoalieUnitAssetScore(
   currentScore: number;
   gamesPlayed: number;
   actualGamesPlayed: number;
+  appearanceGameIds: number[];
 } {
   if (asset.assetType === 'skater') {
     return {
       currentScore: 0,
       gamesPlayed: 0,
-      actualGamesPlayed: 0
+      actualGamesPlayed: 0,
+      appearanceGameIds: []
     };
   }
 
   let currentScore = 0;
   let gamesPlayed = 0;
   let actualGamesPlayed = 0;
+  const appearanceGameIds: number[] = [];
 
   for (const game of games) {
     if (!isFinalGame(game)) {
@@ -447,6 +482,7 @@ function calculateGoalieUnitAssetScore(
 
     gamesPlayed += 1;
     actualGamesPlayed += 1;
+    appearanceGameIds.push(game.id);
 
     const finalGameData = finalGameDataById.get(game.id);
 
@@ -477,7 +513,8 @@ function calculateGoalieUnitAssetScore(
   return {
     currentScore: rounded(currentScore),
     gamesPlayed,
-    actualGamesPlayed
+    actualGamesPlayed,
+    appearanceGameIds
   };
 }
 
@@ -492,9 +529,10 @@ export async function calculateCycleScoring(
   for (const teamAbbreviation of draftedTeams) {
     const schedule = schedulesByTeam[teamAbbreviation] ?? [];
 
-    teamGameCounts[teamAbbreviation] = schedule.slice(
-      getCycleGameStartIndex(input.cycleNumber, input.requiredGamesPerCycle),
-      getCycleGameEndIndex(input.cycleNumber, input.requiredGamesPerCycle)
+    teamGameCounts[teamAbbreviation] = selectCycleWindowGames(
+      schedule,
+      input.cycleNumber,
+      input.requiredGamesPerCycle
     ).length;
   }
 
@@ -505,7 +543,7 @@ export async function calculateCycleScoring(
           getRelevantAssetGames(
             pick.asset,
             schedulesByTeam,
-            input.cycleNumber,
+            getPickWindowCycleNumber(pick, input.cycleNumber),
             input.requiredGamesPerCycle
           )
         )
@@ -520,13 +558,14 @@ export async function calculateCycleScoring(
   ]);
 
   const assetScores: Record<string, CycleAssetScoreSummary> = {};
+  const windowScores: Record<string, CycleAssetScoreSummary> = {};
   const teamScores: Record<string, number> = {};
 
   for (const pick of input.picks) {
     const games = getRelevantAssetGames(
       pick.asset,
       schedulesByTeam,
-      input.cycleNumber,
+      getPickWindowCycleNumber(pick, input.cycleNumber),
       input.requiredGamesPerCycle
     );
 
@@ -546,31 +585,88 @@ export async function calculateCycleScoring(
             input.scoringRules
           );
 
+    const rosterSlotId = getRosterSlotId(pick);
+    const pickWindowCycleNumber = getPickWindowCycleNumber(
+      pick,
+      input.cycleNumber
+    );
+    const windowId = getWindowId(pick, pickWindowCycleNumber);
+    const completedGames = games.filter(isFinalGame);
+    const gamesLeft = Math.max(0, games.length - result.gamesPlayed);
+    const status = games.length > 0 && gamesLeft === 0
+      ? 'complete'
+      : result.gamesPlayed > 0
+        ? 'active'
+        : 'scheduled';
+
     const summary: CycleAssetScoreSummary = {
       assetKey: pick.asset.assetKey,
+      ownerId: pick.ownerId,
+      rosterSlotId,
+      windowId,
       currentScore: result.currentScore,
       gamesPlayed: result.gamesPlayed,
       actualGamesPlayed: result.actualGamesPlayed,
       scheduledGames: games.length,
-      gamesLeft: Math.max(0, games.length - result.gamesPlayed)
+      gamesLeft,
+      scheduledGameIds: games.map((game) => game.id),
+      scheduledGameDates: games.map((game) => game.gameDate),
+      scheduledGameLabels: games.map((game) => {
+        const teamAbbreviation = getAssetTeamAbbreviation(pick.asset);
+        return game.homeTeam.abbrev === teamAbbreviation
+          ? `vs ${game.awayTeam.abbrev}`
+          : `@ ${game.homeTeam.abbrev}`;
+      }),
+      completedGameIds: completedGames.map((game) => game.id),
+      appearanceGameIds: result.appearanceGameIds,
+      firstScheduledGameDate: games[0]?.gameDate ?? null,
+      lastScheduledGameDate: games.at(-1)?.gameDate ?? null,
+      status
     };
 
     assetScores[pick.asset.assetKey] = summary;
+    windowScores[windowId] = summary;
     teamScores[pick.ownerId] = rounded(
       (teamScores[pick.ownerId] ?? 0) + summary.currentScore
     );
   }
 
   const teamCycleComplete: Record<string, boolean> = {};
-  const ownerIds = [...new Set(input.picks.map((pick) => pick.ownerId))];
+  const expectedOwnerIds = Object.keys(
+    input.expectedRosterSlotIdsByOwner ?? {}
+  );
+  const ownerIds = [
+    ...new Set([
+      ...input.picks.map((pick) => pick.ownerId),
+      ...expectedOwnerIds
+    ])
+  ];
 
   for (const ownerId of ownerIds) {
     const ownerPicks = input.picks.filter((pick) => pick.ownerId === ownerId);
+    const expectedSlotIds =
+      input.expectedRosterSlotIdsByOwner?.[ownerId] ??
+      ownerPicks.map(getRosterSlotId);
+    const pickBySlotId = new Map(
+      ownerPicks.map((pick) => [getRosterSlotId(pick), pick] as const)
+    );
 
     teamCycleComplete[ownerId] =
-      ownerPicks.length > 0 &&
-      ownerPicks.every((pick) => {
-        const summary = assetScores[pick.asset.assetKey];
+      expectedSlotIds.length > 0 &&
+      expectedSlotIds.every((slotId) => {
+        const pick = pickBySlotId.get(slotId);
+
+        if (!pick) {
+          return false;
+        }
+
+        const summary = windowScores[
+          getWindowId(
+            pick,
+            getPickWindowCycleNumber(pick, input.cycleNumber)
+          )
+        ];
+
         return Boolean(summary) && summary.gamesLeft === 0;
       });
   }
@@ -581,6 +677,7 @@ export async function calculateCycleScoring(
 
   return {
     assetScores,
+    windowScores,
     teamScores,
     teamGameCounts,
     teamCycleComplete,

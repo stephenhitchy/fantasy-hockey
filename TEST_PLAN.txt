@@ -1,0 +1,60 @@
+BANKED PLAYOFF WINDOWS V1 — TEST PLAN
+
+A. DETERMINISTIC SIMULATOR (AVAILABLE NOW)
+1. Sign in as commissioner.
+2. Open the Playoff Bracket page.
+3. Click "Test Banked Windows".
+4. Confirm the banner says all seven checks passed.
+
+THE SEVEN CHECKS VERIFY
+- Opening-round teams use Window 1.
+- Seeds with byes keep Window 1 banked.
+- Bye teams enter the semifinals using Window 1.
+- Opening-round teams advance using Window 2.
+- Opening-round losers route to the fifth-place game.
+- No owner/window pair is used twice.
+- One matchup can use different window numbers on its two sides.
+
+The simulator performs no NHL requests and no Firestore writes.
+
+B. FRESH HISTORICAL PLAYOFF TEST
+Use a new test league or reset the test league before playoffs begin.
+
+1. Finish the final regular-season cycle.
+2. Open the first playoff round as commissioner.
+3. In Firestore, confirm bank documents exist at:
+   /leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-1
+4. Confirm every seeded team has Window 1, including teams with a bye.
+5. Confirm only teams actually playing the opening round have Window 1 marked
+   assigned to a matchup.
+6. Open a playoff matchup and allow historical scoring to load.
+7. Confirm Window 1 progress updates without duplicate game IDs.
+8. Once an opening-round bank completes, confirm Window 2 is created even if
+   another roster slot or matchup is still pending.
+9. Complete the opening round.
+10. Open the next round and inspect the bracket:
+    - a bye seed should display Window 1
+    - its opening-round opponent should display Window 2
+11. Confirm already-completed Window 2 points appear immediately.
+12. Confirm opening-round losers use Window 2 in the fifth-place game.
+13. Reload and open a second tab; confirm no window is assigned twice and scores
+    do not duplicate.
+
+C. QUEUED MOVE TEST
+1. Queue a replacement for an active roster slot during a playoff bank.
+2. Confirm the outgoing asset remains in the current bank.
+3. Complete that slot's six-game bank.
+4. Confirm the incoming asset appears in the next bank.
+5. Confirm the outgoing asset enters waivers only at activation.
+6. Confirm the previous bank remains permanently tied to the outgoing asset.
+
+D. PROJECTION FREEZE TEST
+1. Record a player's frozen projection in Window 1.
+2. Refresh scoring and regenerate shared projections.
+3. Confirm Window 1 does not change.
+4. When Window 2 opens, confirm it receives its own frozen projection.
+
+E. EXPECTED LIMITATION OF HISTORICAL REPLAY
+The prior-season test mode processes finalized data rapidly. It does not mimic
+the real-time spacing of NHL games, but the deterministic simulator verifies the
+routing and mixed-window behavior independently of dates.

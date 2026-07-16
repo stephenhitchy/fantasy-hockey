@@ -1506,3 +1506,17 @@
   }
 }
 
+
+.pending-slot-move-pill {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 209, 102, 0.38);
+  border-radius: 9px;
+  color: #ffd98a;
+  background: rgba(255, 209, 102, 0.08);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: center;
+}
