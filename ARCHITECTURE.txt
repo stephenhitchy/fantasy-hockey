@@ -1,65 +1,69 @@
-BANKED PLAYOFF WINDOW ARCHITECTURE
+RELEASE READINESS + FULL-SEASON VALIDATION V1 - ARCHITECTURE
+===========================================================
 
-CORE PRINCIPLE
-The NHL schedule determines when a six-game asset window occurs. The fantasy
-bracket determines which matchup receives that already-defined window.
+1. RUNTIME CONFIGURATION
+------------------------
+Development imports:
 
-DATA PATH
-/leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-{N}
+src/environments/app-runtime.config.ts
 
-ONE BANK DOCUMENT CONTAINS
-- ownerId
-- playoff window number
-- source schedule-block number
-- assignment status
-- assigned playoff matchup and round
-- frozen roster picks and stable rosterSlotIds
-- frozen projections
-- exact slot-window scoring progress
-- team score
-- completed/total slot counts
+Production builds replace that module with:
 
-TYPICAL SIX-TEAM CHAMPIONSHIP FIELD
-Opening round:
-- Seeds 3–6 use Window 1.
-- Seeds 1–2 keep Window 1 unassigned and banked.
+src/environments/app-runtime.config.production.ts
 
-Semifinals / fifth place:
-- Seeds 1–2 use their banked Window 1.
-- Opening-round winners use Window 2 in the semifinals.
-- Opening-round losers use Window 2 in the fifth-place game.
+The production module is live-only and disables developer controls. The runtime
+layer also checks the hostname, so an accidentally deployed development build
+cannot use historical scoring on a production-like host unless it is explicitly
+allowed in configuration.
 
-Final round:
-- Semifinal winners use their next unused banks in the Championship.
-- Semifinal losers use their next unused banks in the 3rd-place game.
+2. FULL-SEASON SIMULATOR
+------------------------
+The simulator is deterministic and side-effect free. It makes no NHL requests
+and no Firestore writes. It validates:
 
-A SINGLE MATCHUP CAN THEREFORE LOOK LIKE
-Team A: Playoff Window 1 / schedule block 11
-Team B: Playoff Window 2 / schedule block 12
+- four teams and 14 active roster slots per team;
+- unique draft assets;
+- 11 regular-season cycles;
+- exact six-game slot windows;
+- 7-vs-4 asynchronous advancement;
+- missed appearances and zero-point appearances;
+- queued roster moves and IR return boundaries;
+- per-window projection immutability;
+- live-scoring lease/cadence/write-suppression invariants;
+- matchup completion and one-time standings application;
+- four-team semifinals using Window 1;
+- championship and third-place routing using Window 2;
+- unique playoff bank assignments;
+- first-through-fourth final placements and champion recording.
 
-This is intentional. Both sides still receive exactly six scheduled NHL-team
-games, but those six games do not need to occur on the same dates.
+3. LIVE READINESS SNAPSHOT
+--------------------------
+Release Readiness performs on-demand commissioner reads of existing league
+state. It does not create a new persistent readiness collection. It inspects:
 
-WINDOW CREATION
-When all expected roster slots in a bank complete:
-1. The bank is marked complete.
-2. If that team can still participate in a later bracket matchup, its next bank
-   is created immediately.
-3. Pending slot moves activate atomically at that boundary.
-4. The next bank begins collecting NHL games even if the prior bracket result
-   is not yet known.
+- league and team configuration;
+- draft status;
+- latest and active cycles;
+- projection metadata;
+- global injury synchronization state;
+- shared live-scoring control;
+- current playoff state.
 
-WINDOW ASSIGNMENT
-When a playoff round becomes playable:
-1. Resolve the winner/loser sources in the bracket.
-2. Find each participant's earliest unassigned bank.
-3. Attach that bank's number and source block to the matchup.
-4. Materialize its frozen roster picks into the normal cycle-scoring view.
-5. Recalculate any already-final NHL games, instantly backfilling the score.
+Checks are classified as pass, warning, or fail. Historical mode is a warning in
+local development because the build is intentionally still in testing mode.
 
-WRITE EFFICIENCY
-- One bank document per fantasy team per postseason window.
-- Writes are skipped if status, score, completed games, appearance games, and
-  assignments have not changed.
-- Finalized NHL results are not deliberately rewritten every refresh.
-- The future shared live scorer will further centralize NHL ingestion.
+4. RECOVERY SAFETY
+------------------
+The stuck-lease recovery transaction refuses to clear a healthy unexpired lease.
+Healthy workers must use the normal handoff flow. Only an expired lease or a
+control document in error state can be cleared by the recovery button.
+
+Projection regeneration uses the existing projection health checks. A collapsed
+NHL statistics response cannot replace the last healthy projection board.
+
+5. TEST UI LIFECYCLE
+--------------------
+Simulator logic remains useful as automated regression coverage. Production
+builds hide the temporary UI controls now. The visual redesign cleanup will
+remove obsolete standalone simulator pages/routes while retaining their pure
+simulator functions and spec files.

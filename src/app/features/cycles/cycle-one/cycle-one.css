@@ -2158,3 +2158,59 @@
     grid-template-columns: 1fr;
   }
 }
+
+.shared-scoring-status-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 13px 16px;
+  border: 1px solid #35536d;
+  border-radius: 14px;
+  color: #d8e8f5;
+  background: rgba(12, 31, 48, 0.88);
+}
+
+.shared-scoring-status-card strong,
+.shared-scoring-status-card p {
+  display: block;
+  margin: 0;
+}
+
+.shared-scoring-status-card p {
+  margin-top: 3px;
+  color: #aebfd0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.shared-scoring-pulse {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.12);
+}
+
+.shared-scoring-refreshing .shared-scoring-pulse {
+  background: #60a5fa;
+  box-shadow: 0 0 0 5px rgba(96, 165, 250, 0.14);
+  animation: shared-scoring-pulse 1.4s ease-in-out infinite;
+}
+
+.shared-scoring-error {
+  border-color: #be5265;
+  color: #ffd5dc;
+  background: rgba(61, 20, 31, 0.88);
+}
+
+.shared-scoring-error .shared-scoring-pulse {
+  background: #fb7185;
+  box-shadow: 0 0 0 5px rgba(251, 113, 133, 0.14);
+}
+
+@keyframes shared-scoring-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.08); }
+}

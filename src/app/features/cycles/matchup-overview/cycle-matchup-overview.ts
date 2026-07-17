@@ -18,7 +18,6 @@ import {
 import { auth } from '../../../core/firebase';
 
 import {
-  calculateCycleScoring,
   CycleScoringResult
 } from '../../../core/cycle/cycle-scoring.service';
 
@@ -35,9 +34,6 @@ import {
   listenToCycleRosterPicks
 } from '../../../core/cycle/cycle.service';
 
-import {
-  defaultScoringRules
-} from '../../../core/scoring/scoring-rules';
 
 import {
   DraftableAsset,
@@ -71,8 +67,9 @@ import {
   getLeagueTeams
 } from '../../../core/team/team.service';
 
-const TEST_CYCLE_START_DATE: Date | null =
-  new Date('2026-01-10T12:00:00');
+import {
+  listenToSharedCycleScoring
+} from '../../../core/live-scoring/live-scoring.service';
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -111,10 +108,9 @@ export class CycleMatchupOverview implements OnDestroy {
   private stopMatchupsListener: (() => void) | null = null;
   private stopPicksListener: (() => void) | null = null;
   private stopCycleRosterPicksListener: (() => void) | null = null;
+  private stopSharedScoringListener: (() => void) | null = null;
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
-  private scoringLoadKey: string | null = null;
-  private scoringRequestId = 0;
 
   constructor(
     private route: ActivatedRoute,
@@ -128,6 +124,7 @@ export class CycleMatchupOverview implements OnDestroy {
     this.stopMatchupsListener?.();
     this.stopPicksListener?.();
     this.stopCycleRosterPicksListener?.();
+    this.stopSharedScoringListener?.();
   }
 
   async loadOverviewPage(): Promise<void> {
@@ -161,6 +158,21 @@ export class CycleMatchupOverview implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
       this.playerPool.set(playerPool);
+
+      this.scoringLoading.set(true);
+      this.stopSharedScoringListener = listenToSharedCycleScoring(
+        leagueId,
+        this.cycleNumber,
+        (snapshot) => {
+          this.cycleScoring.set(snapshot?.result ?? null);
+          this.scoringLoading.set(false);
+          this.scoringError.set('');
+        },
+        (error) => {
+          this.scoringLoading.set(false);
+          this.scoringError.set(error.message);
+        }
+      );
 
       const regularSeasonCycleCount =
         getStandardRegularSeasonCycleCount(teams.length);
@@ -490,69 +502,13 @@ export class CycleMatchupOverview implements OnDestroy {
   }
 
   private async loadCurrentCycleScoringIfReady(): Promise<void> {
-    const cycle = this.cycle();
-    const league = this.league();
-    const picks = this.picks();
-
-    if (!cycle || !league || picks.length === 0 || cycle.status === 'complete') {
+    if (this.cycleScoring()) {
+      this.scoringLoading.set(false);
       return;
     }
 
-    const scoringRules = league.scoringRules ?? defaultScoringRules;
-    const requiredGamesPerCycle =
-      scoringRules.requiredGamesPerCycle ??
-      defaultScoringRules.requiredGamesPerCycle;
-
-    const testDate = TEST_CYCLE_START_DATE ?? new Date();
-    const season = this.getNhlSeasonForDate(testDate);
-
-    const scoringKey = [
-      cycle.id,
-      this.cycleNumber,
-      season,
-      requiredGamesPerCycle,
-      picks.map((pick) =>
-        `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`
-      ).join('|')
-    ].join('::');
-
-    if (this.scoringLoadKey === scoringKey) {
-      return;
-    }
-
-    this.scoringLoadKey = scoringKey;
-    this.scoringLoading.set(true);
-    this.scoringError.set('');
-
-    const requestId = ++this.scoringRequestId;
-
-    try {
-      const result = await calculateCycleScoring({
-        picks,
-        cycleNumber: this.cycleNumber,
-        season,
-        requiredGamesPerCycle,
-        scoringRules,
-        expectedRosterSlotIdsByOwner:
-          cycle.expectedRosterSlotIdsByOwner ?? {}
-      });
-
-      if (requestId !== this.scoringRequestId) {
-        return;
-      }
-
-      this.cycleScoring.set(result);
-    } catch (error: unknown) {
-      this.scoringLoadKey = null;
-      this.scoringError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load matchup scores.'
-      );
-    } finally {
-      if (requestId === this.scoringRequestId) {
-        this.scoringLoading.set(false);
-      }
+    if (this.cycle() && this.picks().length > 0) {
+      this.scoringLoading.set(true);
     }
   }
 
@@ -566,9 +522,6 @@ export class CycleMatchupOverview implements OnDestroy {
       : this.liveDraftPicks;
 
     this.picks.set(effectivePicks);
-    this.scoringLoadKey = null;
-    this.cycleScoring.set(null);
-
     void this.loadCurrentCycleScoringIfReady();
   }
 
@@ -620,15 +573,5 @@ export class CycleMatchupOverview implements OnDestroy {
     return null;
   }
 
-  private getNhlSeasonForDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
 
-    const seasonStartYear =
-      month >= 7
-        ? year
-        : year - 1;
-
-    return `${seasonStartYear}${seasonStartYear + 1}`;
-  }
 }

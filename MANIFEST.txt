@@ -1,44 +1,59 @@
-FANTASY HOCKEY — BANKED PLAYOFF WINDOWS V1 MANIFEST
+RELEASE READINESS + FULL-SEASON VALIDATION V1 - MANIFEST
+========================================================
 
-COMPLETE REPLACEMENT FILES
-1. firestore.rules
-2. src/app/app.routes.ts
-3. src/app/core/cycle/asset-cycle-window.service.ts
-4. src/app/core/cycle/cycle-scoring.service.ts
-5. src/app/core/cycle/cycle.models.ts
-6. src/app/core/cycle/cycle.service.ts
-7. src/app/core/draft/draft.models.ts
-8. src/app/core/playoffs/playoff-format.ts
-9. src/app/core/playoffs/playoff.models.ts
-10. src/app/core/playoffs/playoff.service.ts
-11. src/app/features/cycles/cycle-one/cycle-one.ts
-12. src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
-13. src/app/features/playoffs/playoff-bracket/playoff-bracket.html
-14. src/app/features/playoffs/playoff-bracket/playoff-bracket.css
+24 source/configuration files are included.
 
-NEW FILES
-15. src/app/core/playoffs/playoff-window-bank.models.ts
-16. src/app/core/playoffs/playoff-window-bank.service.ts
-17. src/app/core/playoffs/playoff-window-simulator.ts
-18. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.ts
-19. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.html
-20. src/app/features/playoffs/playoff-window-simulator/playoff-window-simulator.css
+CONFIGURATION
+-------------
+angular.json
+src/environments/app-runtime.types.ts
+src/environments/app-runtime.config.ts
+src/environments/app-runtime.config.production.ts
+
+ROUTING AND LEAGUE HUB
+----------------------
+src/app/app.routes.ts
+src/app/features/leagues/league-detail/league-detail.html
+
+RUNTIME SAFEGUARDS
+------------------
+src/app/core/cycle/cycle-runtime.config.ts
+src/app/layouts/main-layout/main-layout.ts
+src/app/layouts/main-layout/main-layout.html
+src/app/layouts/main-layout/main-layout.css
+
+RELEASE READINESS CORE
+----------------------
+src/app/core/release/release-readiness.models.ts
+src/app/core/release/release-readiness.service.ts
+src/app/core/release/season-lifecycle-simulator.ts
+src/app/core/release/season-lifecycle-simulator.spec.ts
+
+RELEASE READINESS PAGE
+----------------------
+src/app/features/release/release-readiness/release-readiness.ts
+src/app/features/release/release-readiness/release-readiness.html
+src/app/features/release/release-readiness/release-readiness.css
+
+SAFE LEASE RECOVERY
+-------------------
+src/app/core/live-scoring/live-scoring.service.ts
+
+PRODUCTION TEST-CONTROL VISIBILITY
+----------------------------------
+src/app/features/cycles/cycle-one/cycle-one.ts
+src/app/features/cycles/cycle-one/cycle-one.html
+src/app/features/playoffs/playoff-bracket/playoff-bracket.ts
+src/app/features/playoffs/playoff-bracket/playoff-bracket.html
+src/app/features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics.ts
+src/app/features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics.html
 
 DOCUMENTATION
-21. INSTALL.txt
-22. MANIFEST.txt
-23. CHANGELOG.txt
-24. ARCHITECTURE.txt
-25. TEST_PLAN.txt
-26. VALIDATION.txt
-
-REVIEWED BUT UNCHANGED
-- draft.service.ts and all timer-aware draft behavior
-- free-agents component and waiver UI
-- roster models/service outside the existing queued-move contract
-- projection generation and Projection Accuracy Tracking
-- global daily injury reporting
-- NHL API request caching and throttling
-- league standings and regular-season matchup history
-- navbar and mobile scorebar
-- Firebase indexes and dependencies
+-------------
+INSTALL.txt
+MANIFEST.txt
+CHANGELOG.txt
+ARCHITECTURE.txt
+TEST_PLAN.txt
+TEST_UI_CLEANUP_PLAN.txt
+VALIDATION.txt

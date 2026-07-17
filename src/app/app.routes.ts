@@ -23,11 +23,13 @@ import { CycleSimulator } from './features/cycles/cycle-simulator/cycle-simulato
 import { PlayerAvailabilityManager } from './features/player-availability/player-availability-manager/player-availability-manager';
 import { PlayoffBracket } from './features/playoffs/playoff-bracket/playoff-bracket';
 import { PlayoffWindowSimulator } from './features/playoffs/playoff-window-simulator/playoff-window-simulator';
+import { LiveScoringDiagnostics } from './features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics';
+import { ReleaseReadiness } from './features/release/release-readiness/release-readiness';
 
 export const routes: Routes = [
   {
     path: '',
-    component: Auth
+    component: Auth,
   },
   {
     path: '',
@@ -35,92 +37,100 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
-        component: Dashboard
+        component: Dashboard,
       },
       {
         path: 'leagues/create',
-        component: CreateLeague
+        component: CreateLeague,
       },
       {
         path: 'leagues/join',
-        component: JoinLeague
+        component: JoinLeague,
       },
       {
         path: 'account/settings',
-        component: AccountSettings
+        component: AccountSettings,
       },
       {
         path: 'scoring-test',
-        component: ScoringTest
+        component: ScoringTest,
       },
       {
         path: 'players/:playerId',
-        component: PlayerDetail
+        component: PlayerDetail,
       },
       {
         path: 'leagues/:leagueId/team',
-        component: TeamSettings
+        component: TeamSettings,
       },
       {
         path: 'leagues/:leagueId/free-agents',
-        component: FreeAgents
+        component: FreeAgents,
       },
       {
         path: 'leagues/:leagueId/draft/setup',
-        component: DraftSetup
+        component: DraftSetup,
       },
       {
         path: 'leagues/:leagueId/draft',
-        component: DraftRoom
+        component: DraftRoom,
       },
       {
         path: 'leagues/:leagueId/projections',
-        component: ProjectionLab
+        component: ProjectionLab,
       },
       {
         path: 'leagues/:leagueId/player-availability',
-        component: PlayerAvailabilityManager
+        component: PlayerAvailabilityManager,
+      },
+      {
+        path: 'leagues/:leagueId/live-scoring',
+        component: LiveScoringDiagnostics,
+      },
+      {
+        path: 'leagues/:leagueId/release-readiness',
+        component: ReleaseReadiness,
       },
       {
         path: 'leagues/:leagueId/standings',
-        component: LeagueStandings
+        component: LeagueStandings,
       },
       {
         path: 'leagues/:leagueId/playoffs/simulator',
-        component: PlayoffWindowSimulator
+        component: PlayoffWindowSimulator,
       },
       {
         path: 'leagues/:leagueId/playoffs',
-        component: PlayoffBracket
+        component: PlayoffBracket,
       },
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',
-        component: CycleSchedulePreview
+        component: CycleSchedulePreview,
       },
       {
         path: 'leagues/:leagueId/cycles/simulator',
-        component: CycleSimulator
+        component: CycleSimulator,
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId',
-        component: CycleOne
+        component: CycleOne,
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups',
-        component: CycleMatchupOverview
+        component: CycleMatchupOverview,
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',
-        component: CycleAssetDetail
+        component: CycleAssetDetail,
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber',
-        component: CycleOne
+        component: CycleOne,
       },
       {
         path: 'leagues/:leagueId',
-        component: LeagueDetail
-      }
-    ]
-  }
+        component: LeagueDetail,
+      },
+    ],
+  },
 ];

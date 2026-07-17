@@ -1,31 +1,17 @@
-import {
-  Component,
-  computed,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 
-import {
-  ActivatedRoute,
-  Router,
-  RouterLink
-} from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import {
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
+import { areDeveloperToolsEnabled } from '../../../core/cycle/cycle-runtime.config';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
 import {
   buildFantasyStandings,
-  FantasyStandingSnapshot
+  FantasyStandingSnapshot,
 } from '../../../core/league/standings.util';
 
 import {
@@ -33,23 +19,18 @@ import {
   getPlayoffRoundLabel,
   getStandardPlayoffRoundCount,
   getStandardPlayoffTeamCount,
-  getStandardRegularSeasonCycleCount
+  getStandardRegularSeasonCycleCount,
 } from '../../../core/playoffs/playoff-format';
 
 import {
   FantasyPlayoffMatchup,
   FantasyPlayoffPlacement,
-  FantasyPlayoffs
+  FantasyPlayoffs,
 } from '../../../core/playoffs/playoff.models';
 
-import {
-  listenToFantasyPlayoffs
-} from '../../../core/playoffs/playoff.service';
+import { listenToFantasyPlayoffs } from '../../../core/playoffs/playoff.service';
 
-import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -64,9 +45,10 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-playoff-bracket',
   imports: [RouterLink],
   templateUrl: './playoff-bracket.html',
-  styleUrl: './playoff-bracket.css'
+  styleUrl: './playoff-bracket.css',
 })
 export class PlayoffBracket implements OnDestroy {
+  readonly developerToolsEnabled = areDeveloperToolsEnabled();
   leagueId = '';
   userId = '';
 
@@ -79,29 +61,26 @@ export class PlayoffBracket implements OnDestroy {
   private stopPlayoffsListener: (() => void) | null = null;
 
   readonly previewStandings = computed<FantasyStandingSnapshot[]>(() =>
-    buildFantasyStandings(this.teams())
+    buildFantasyStandings(this.teams()),
   );
 
-  readonly playoffTeamCount = computed(() =>
-    this.playoffs()?.playoffTeamCount ??
-    getStandardPlayoffTeamCount(this.teams().length)
+  readonly playoffTeamCount = computed(
+    () => this.playoffs()?.playoffTeamCount ?? getStandardPlayoffTeamCount(this.teams().length),
   );
 
-  readonly playoffRoundCount = computed(() =>
-    this.playoffs()?.playoffRoundCount ??
-    getStandardPlayoffRoundCount(this.playoffTeamCount())
+  readonly playoffRoundCount = computed(
+    () =>
+      this.playoffs()?.playoffRoundCount ?? getStandardPlayoffRoundCount(this.playoffTeamCount()),
   );
 
-  readonly regularSeasonCycleCount = computed(() =>
-    this.playoffs()?.regularSeasonCycleCount ??
-    getStandardRegularSeasonCycleCount(this.teams().length)
+  readonly regularSeasonCycleCount = computed(
+    () =>
+      this.playoffs()?.regularSeasonCycleCount ??
+      getStandardRegularSeasonCycleCount(this.teams().length),
   );
 
   readonly roundNumbers = computed(() =>
-    Array.from(
-      { length: this.playoffRoundCount() },
-      (_, index) => index + 1
-    )
+    Array.from({ length: this.playoffRoundCount() }, (_, index) => index + 1),
   );
 
   readonly championshipSeeds = computed(() => {
@@ -115,7 +94,7 @@ export class PlayoffBracket implements OnDestroy {
       .slice(0, this.playoffTeamCount())
       .map((standing, index) => ({
         seed: index + 1,
-        ...standing
+        ...standing,
       }));
   });
 
@@ -130,19 +109,17 @@ export class PlayoffBracket implements OnDestroy {
       .slice(this.playoffTeamCount())
       .map((standing, index) => ({
         seed: this.playoffTeamCount() + index + 1,
-        ...standing
+        ...standing,
       }));
   });
 
   readonly placements = computed<FantasyPlayoffPlacement[]>(() =>
-    [...(this.playoffs()?.placements ?? [])].sort(
-      (first, second) => first.place - second.place
-    )
+    [...(this.playoffs()?.placements ?? [])].sort((first, second) => first.place - second.place),
   );
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadPage();
   }
@@ -155,16 +132,10 @@ export class PlayoffBracket implements OnDestroy {
     return this.league()?.commissionerId === this.userId;
   }
 
-  getTeamWindowLabel(
-    matchup: FantasyPlayoffMatchup,
-    side: 'A' | 'B'
-  ): string {
-    const windowNumber = side === 'A'
-      ? matchup.teamAWindowNumber
-      : matchup.teamBWindowNumber;
-    const cycleNumber = side === 'A'
-      ? matchup.teamAWindowCycleNumber
-      : matchup.teamBWindowCycleNumber;
+  getTeamWindowLabel(matchup: FantasyPlayoffMatchup, side: 'A' | 'B'): string {
+    const windowNumber = side === 'A' ? matchup.teamAWindowNumber : matchup.teamBWindowNumber;
+    const cycleNumber =
+      side === 'A' ? matchup.teamAWindowCycleNumber : matchup.teamBWindowCycleNumber;
 
     if (!windowNumber || !cycleNumber) {
       return 'Window pending';
@@ -182,10 +153,7 @@ export class PlayoffBracket implements OnDestroy {
   }
 
   getRoundLabel(roundNumber: number): string {
-    return getPlayoffRoundLabel(
-      roundNumber,
-      this.playoffRoundCount()
-    );
+    return getPlayoffRoundLabel(roundNumber, this.playoffRoundCount());
   }
 
   getRoundCycleNumber(roundNumber: number): number {
@@ -194,31 +162,26 @@ export class PlayoffBracket implements OnDestroy {
 
   getRoundMatchups(
     roundNumber: number,
-    bracketType: 'championship' | 'consolation'
+    bracketType: 'championship' | 'consolation',
   ): FantasyPlayoffMatchup[] {
     return (this.playoffs()?.matchups ?? [])
-      .filter((matchup) =>
-        matchup.roundNumber === roundNumber &&
-        matchup.bracketType === bracketType
+      .filter(
+        (matchup) => matchup.roundNumber === roundNumber && matchup.bracketType === bracketType,
       )
       .sort((first, second) => first.id.localeCompare(second.id));
   }
 
-  getDisplayRoundMatchups(
-    roundNumber: number
-  ): FantasyPlayoffMatchup[] {
+  getDisplayRoundMatchups(roundNumber: number): FantasyPlayoffMatchup[] {
     const matchups = (this.playoffs()?.matchups ?? [])
       .filter((matchup) => matchup.roundNumber === roundNumber)
       .sort((first, second) => {
-        const bracketPriority = this.getBracketPriority(first) -
-          this.getBracketPriority(second);
+        const bracketPriority = this.getBracketPriority(first) - this.getBracketPriority(second);
 
         if (bracketPriority !== 0) {
           return bracketPriority;
         }
 
-        const placePriority = this.getPlacementPriority(first) -
-          this.getPlacementPriority(second);
+        const placePriority = this.getPlacementPriority(first) - this.getPlacementPriority(second);
 
         if (placePriority !== 0) {
           return placePriority;
@@ -237,10 +200,7 @@ export class PlayoffBracket implements OnDestroy {
   getMatchupLabel(matchup: FantasyPlayoffMatchup): string {
     const placementLabel = getPlacementGameLabel(matchup);
 
-    if (
-      placementLabel !== 'Championship Bracket' &&
-      placementLabel !== 'Consolation Bracket'
-    ) {
+    if (placementLabel !== 'Championship Bracket' && placementLabel !== 'Consolation Bracket') {
       return placementLabel;
     }
 
@@ -256,11 +216,11 @@ export class PlayoffBracket implements OnDestroy {
       return 'To Be Determined';
     }
 
-    return this.playoffs()?.seeds.find(
-      (seed) => seed.ownerId === ownerId
-    )?.teamName ?? this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return (
+      this.playoffs()?.seeds.find((seed) => seed.ownerId === ownerId)?.teamName ??
+      this.teams().find((team) => team.ownerId === ownerId)?.teamName ??
+      'Unknown Team'
+    );
   }
 
   getSeed(ownerId: string | null): number | null {
@@ -268,28 +228,20 @@ export class PlayoffBracket implements OnDestroy {
       return null;
     }
 
-    return this.playoffs()?.seeds.find(
-      (seed) => seed.ownerId === ownerId
-    )?.seed ?? null;
+    return this.playoffs()?.seeds.find((seed) => seed.ownerId === ownerId)?.seed ?? null;
   }
 
-  getRecordLabel(
-    standing: Pick<FantasyStandingSnapshot, 'wins' | 'losses' | 'ties'>
-  ): string {
+  getRecordLabel(standing: Pick<FantasyStandingSnapshot, 'wins' | 'losses' | 'ties'>): string {
     return `${standing.wins}-${standing.losses}-${standing.ties}`;
   }
 
   getScoreLabel(value: number | null): string {
-    return value === null
-      ? '—'
-      : value.toFixed(1);
+    return value === null ? '—' : value.toFixed(1);
   }
 
   getMatchupStatusLabel(matchup: FantasyPlayoffMatchup): string {
     if (matchup.status === 'complete') {
-      return matchup.tieBrokenByHigherSeed
-        ? 'Final · Higher seed advanced on tie'
-        : 'Final';
+      return matchup.tieBrokenByHigherSeed ? 'Final · Higher seed advanced on tie' : 'Final';
     }
 
     if (matchup.status === 'active') {
@@ -299,38 +251,20 @@ export class PlayoffBracket implements OnDestroy {
     return 'Awaiting previous result';
   }
 
-  isWinner(
-    matchup: FantasyPlayoffMatchup,
-    ownerId: string | null
-  ): boolean {
-    return Boolean(
-      ownerId && matchup.winnerOwnerId === ownerId
-    );
+  isWinner(matchup: FantasyPlayoffMatchup, ownerId: string | null): boolean {
+    return Boolean(ownerId && matchup.winnerOwnerId === ownerId);
   }
 
   getMatchupLink(matchup: FantasyPlayoffMatchup): unknown[] | null {
-    if (
-      matchup.status === 'scheduled' ||
-      !matchup.teamAOwnerId ||
-      !matchup.teamBOwnerId
-    ) {
+    if (matchup.status === 'scheduled' || !matchup.teamAOwnerId || !matchup.teamBOwnerId) {
       return null;
     }
 
-    return [
-      '/leagues',
-      this.leagueId,
-      'cycles',
-      matchup.cycleNumber,
-      'matchups',
-      matchup.id
-    ];
+    return ['/leagues', this.leagueId, 'cycles', matchup.cycleNumber, 'matchups', matchup.id];
   }
 
   getChampionName(): string {
-    return this.getTeamName(
-      this.playoffs()?.championOwnerId ?? null
-    );
+    return this.getTeamName(this.playoffs()?.championOwnerId ?? null);
   }
 
   getFormatSummary(): string {
@@ -346,24 +280,15 @@ export class PlayoffBracket implements OnDestroy {
   }
 
   getSeedGroupTitle(isChampionshipSeed: boolean): string {
-    return isChampionshipSeed
-      ? 'Championship Qualifiers'
-      : 'Placement Field';
+    return isChampionshipSeed ? 'Championship Qualifiers' : 'Placement Field';
   }
 
   getSeedBadgeLabel(seedNumber: number): string {
-    return seedNumber <= this.playoffTeamCount()
-      ? 'Championship Seed'
-      : 'Placement Seed';
+    return seedNumber <= this.playoffTeamCount() ? 'Championship Seed' : 'Placement Seed';
   }
 
-  getSeedProgressLabel(
-    ownerId: string,
-    seedNumber: number
-  ): string {
-    const placement = this.placements().find(
-      (entry) => entry.ownerId === ownerId
-    );
+  getSeedProgressLabel(ownerId: string, seedNumber: number): string {
+    const placement = this.placements().find((entry) => entry.ownerId === ownerId);
 
     if (placement) {
       return `Finished ${this.getOrdinalPlaceLabel(placement.place)}`;
@@ -383,17 +308,13 @@ export class PlayoffBracket implements OnDestroy {
 
     if (
       latestMatchup.status === 'active' &&
-      (latestMatchup.teamAOwnerId === ownerId ||
-        latestMatchup.teamBOwnerId === ownerId)
+      (latestMatchup.teamAOwnerId === ownerId || latestMatchup.teamBOwnerId === ownerId)
     ) {
       return `Currently playing in the ${this.getMatchupLabel(latestMatchup)}.`;
     }
 
     if (latestMatchup.winnerOwnerId === ownerId) {
-      const nextMatchup = this.findDestinationMatchup(
-        latestMatchup.id,
-        'winner'
-      );
+      const nextMatchup = this.findDestinationMatchup(latestMatchup.id, 'winner');
 
       if (nextMatchup) {
         return `Advanced to the ${this.getMatchupLabel(nextMatchup)}.`;
@@ -405,10 +326,7 @@ export class PlayoffBracket implements OnDestroy {
     }
 
     if (latestMatchup.loserOwnerId === ownerId) {
-      const nextMatchup = this.findDestinationMatchup(
-        latestMatchup.id,
-        'loser'
-      );
+      const nextMatchup = this.findDestinationMatchup(latestMatchup.id, 'loser');
 
       if (nextMatchup) {
         return `Dropped to the ${this.getMatchupLabel(nextMatchup)}.`;
@@ -427,10 +345,7 @@ export class PlayoffBracket implements OnDestroy {
       return 'Title path';
     }
 
-    if (
-      matchup.bracketType === 'championship' &&
-      matchup.winnerPlace === 3
-    ) {
+    if (matchup.bracketType === 'championship' && matchup.winnerPlace === 3) {
       return 'Third-place path';
     }
 
@@ -441,26 +356,16 @@ export class PlayoffBracket implements OnDestroy {
     return 'Championship path';
   }
 
-  getAdvanceLabel(
-    matchup: FantasyPlayoffMatchup,
-    resultType: 'winner' | 'loser'
-  ): string {
-    const nextMatchup = this.findDestinationMatchup(
-      matchup.id,
-      resultType
-    );
+  getAdvanceLabel(matchup: FantasyPlayoffMatchup, resultType: 'winner' | 'loser'): string {
+    const nextMatchup = this.findDestinationMatchup(matchup.id, resultType);
 
     if (nextMatchup) {
       return this.getMatchupLabel(nextMatchup);
     }
 
-    const finalPlace = resultType === 'winner'
-      ? matchup.winnerPlace
-      : matchup.loserPlace;
+    const finalPlace = resultType === 'winner' ? matchup.winnerPlace : matchup.loserPlace;
 
-    return finalPlace === null
-      ? 'Eliminated'
-      : `Finish ${this.getOrdinalPlaceLabel(finalPlace)}`;
+    return finalPlace === null ? 'Eliminated' : `Finish ${this.getOrdinalPlaceLabel(finalPlace)}`;
   }
 
   getOrdinalPlaceLabel(place: number): string {
@@ -469,26 +374,25 @@ export class PlayoffBracket implements OnDestroy {
 
   private findDestinationMatchup(
     matchupId: string,
-    resultType: 'winner' | 'loser'
+    resultType: 'winner' | 'loser',
   ): FantasyPlayoffMatchup | null {
-    return (this.playoffs()?.matchups ?? []).find(
-      (candidate) =>
-        (candidate.sourceA.type === resultType &&
-          candidate.sourceA.matchupId === matchupId) ||
-        (candidate.sourceB.type === resultType &&
-          candidate.sourceB.matchupId === matchupId)
-    ) ?? null;
+    return (
+      (this.playoffs()?.matchups ?? []).find(
+        (candidate) =>
+          (candidate.sourceA.type === resultType && candidate.sourceA.matchupId === matchupId) ||
+          (candidate.sourceB.type === resultType && candidate.sourceB.matchupId === matchupId),
+      ) ?? null
+    );
   }
 
-  private getLatestMatchupForOwner(
-    ownerId: string
-  ): FantasyPlayoffMatchup | null {
+  private getLatestMatchupForOwner(ownerId: string): FantasyPlayoffMatchup | null {
     const matchups = (this.playoffs()?.matchups ?? [])
-      .filter((matchup) =>
-        matchup.teamAOwnerId === ownerId ||
-        matchup.teamBOwnerId === ownerId ||
-        matchup.winnerOwnerId === ownerId ||
-        matchup.loserOwnerId === ownerId
+      .filter(
+        (matchup) =>
+          matchup.teamAOwnerId === ownerId ||
+          matchup.teamBOwnerId === ownerId ||
+          matchup.winnerOwnerId === ownerId ||
+          matchup.loserOwnerId === ownerId,
       )
       .sort((first, second) => {
         if (first.roundNumber !== second.roundNumber) {
@@ -499,7 +403,7 @@ export class PlayoffBracket implements OnDestroy {
           const statusRank = {
             active: 3,
             scheduled: 2,
-            complete: 1
+            complete: 1,
           } as const;
 
           return statusRank[second.status] - statusRank[first.status];
@@ -511,9 +415,7 @@ export class PlayoffBracket implements OnDestroy {
     return matchups[0] ?? null;
   }
 
-  private getBracketPriority(
-    matchup: FantasyPlayoffMatchup
-  ): number {
+  private getBracketPriority(matchup: FantasyPlayoffMatchup): number {
     if (matchup.bracketType === 'championship') {
       return matchup.winnerPlace === 3 ? 2 : 1;
     }
@@ -521,9 +423,7 @@ export class PlayoffBracket implements OnDestroy {
     return 3;
   }
 
-  private getPlacementPriority(
-    matchup: FantasyPlayoffMatchup
-  ): number {
+  private getPlacementPriority(matchup: FantasyPlayoffMatchup): number {
     if (matchup.winnerPlace === 1) {
       return 0;
     }
@@ -569,7 +469,7 @@ export class PlayoffBracket implements OnDestroy {
     try {
       const [league, teams] = await Promise.all([
         getLeagueById(leagueId),
-        getLeagueTeams(leagueId)
+        getLeagueTeams(leagueId),
       ]);
 
       if (!league) {
@@ -588,13 +488,11 @@ export class PlayoffBracket implements OnDestroy {
         (error) => {
           this.errorMessage.set(error.message);
           this.loading.set(false);
-        }
+        },
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the playoff bracket.'
+        error instanceof Error ? error.message : 'Unable to load the playoff bracket.',
       );
       this.loading.set(false);
     }

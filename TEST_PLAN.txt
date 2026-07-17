@@ -1,60 +1,92 @@
-BANKED PLAYOFF WINDOWS V1 — TEST PLAN
+RELEASE READINESS + FULL-SEASON VALIDATION V1 - TEST PLAN
+=========================================================
 
-A. DETERMINISTIC SIMULATOR (AVAILABLE NOW)
-1. Sign in as commissioner.
-2. Open the Playoff Bracket page.
-3. Click "Test Banked Windows".
-4. Confirm the banner says all seven checks passed.
+A. INSTALLATION SMOKE TEST
+--------------------------
+1. Stop and restart `npm start`.
+2. Confirm Angular compiles successfully.
+3. Confirm a historical-test banner appears below the navbar in local
+   development.
+4. Open League Hub -> More league tools -> Release Readiness.
+5. Confirm the route loads only for the league commissioner.
 
-THE SEVEN CHECKS VERIFY
-- Opening-round teams use Window 1.
-- Seeds with byes keep Window 1 banked.
-- Bye teams enter the semifinals using Window 1.
-- Opening-round teams advance using Window 2.
-- Opening-round losers route to the fifth-place game.
-- No owner/window pair is used twice.
-- One matchup can use different window numbers on its two sides.
+B. FULL-SEASON SIMULATOR
+------------------------
+1. Select "Run Full Season".
+2. Confirm 22 / 22 checks pass.
+3. Confirm all eight milestones are marked passed:
 
-The simulator performs no NHL requests and no Firestore writes.
+   League and draft
+   Regular season windows
+   Roster transactions
+   Projection freezing
+   Shared live scoring
+   Standings completion
+   Banked playoffs
+   Final placements
 
-B. FRESH HISTORICAL PLAYOFF TEST
-Use a new test league or reset the test league before playoffs begin.
+4. Expand the detailed checks and confirm no row is red.
 
-1. Finish the final regular-season cycle.
-2. Open the first playoff round as commissioner.
-3. In Firestore, confirm bank documents exist at:
-   /leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-1
-4. Confirm every seeded team has Window 1, including teams with a bye.
-5. Confirm only teams actually playing the opening round have Window 1 marked
-   assigned to a matchup.
-6. Open a playoff matchup and allow historical scoring to load.
-7. Confirm Window 1 progress updates without duplicate game IDs.
-8. Once an opening-round bank completes, confirm Window 2 is created even if
-   another roster slot or matchup is still pending.
-9. Complete the opening round.
-10. Open the next round and inspect the bracket:
-    - a bye seed should display Window 1
-    - its opening-round opponent should display Window 2
-11. Confirm already-completed Window 2 points appear immediately.
-12. Confirm opening-round losers use Window 2 in the fifth-place game.
-13. Reload and open a second tab; confirm no window is assigned twice and scores
-    do not duplicate.
+C. LIVE READINESS CHECKLIST
+---------------------------
+1. Select "Refresh Checks".
+2. In local development, confirm Historical scoring test mode is a warning.
+3. Confirm six-game format passes.
+4. Confirm scoring-rules and projection versions are displayed.
+5. Confirm active-cycle schema checks pass when a cycle is active.
+6. Confirm any scorer or injury error is surfaced as a failure rather than
+   silently hidden.
+7. Confirm playoff format version 2 passes when playoffs exist.
 
-C. QUEUED MOVE TEST
-1. Queue a replacement for an active roster slot during a playoff bank.
-2. Confirm the outgoing asset remains in the current bank.
-3. Complete that slot's six-game bank.
-4. Confirm the incoming asset appears in the next bank.
-5. Confirm the outgoing asset enters waivers only at activation.
-6. Confirm the previous bank remains permanently tied to the outgoing asset.
+D. SAFE RECOVERY CONTROLS
+-------------------------
+Scoring refresh:
+1. Select Request Score Refresh.
+2. Confirm the diagnostics page later records the refresh.
+3. Repeat without changing scores and confirm unchanged snapshots remain
+   skipped.
 
-D. PROJECTION FREEZE TEST
-1. Record a player's frozen projection in Window 1.
-2. Refresh scoring and regenerate shared projections.
-3. Confirm Window 1 does not change.
-4. When Window 2 opens, confirm it receives its own frozen projection.
+Lease recovery:
+1. While a healthy active lease exists, select Clear Stuck Lease.
+2. Confirm the action refuses to interrupt the healthy worker.
+3. Test again only with an expired or errored control document and confirm it
+   clears safely.
 
-E. EXPECTED LIMITATION OF HISTORICAL REPLAY
-The prior-season test mode processes finalized data rapidly. It does not mimic
-the real-time spacing of NHL games, but the deterministic simulator verifies the
-routing and mixed-window behavior independently of dates.
+Injury refresh:
+1. Select Refresh Injuries.
+2. Confirm the result message is shown.
+3. Refresh readiness and confirm the latest successful sync is displayed.
+
+Projection recovery:
+1. Enter a valid target cycle.
+2. Select Regenerate Projection.
+3. Confirm the new snapshot id and target cycle appear in the success message.
+4. Refresh readiness and confirm projection status is ready.
+
+E. PRODUCTION SAFEGUARD CHECK
+-----------------------------
+On the user's Node v22.23.1 environment:
+
+1. Run:
+
+   npm run build
+
+2. Serve the production output locally or deploy to a test host.
+3. Confirm historical scoring is not active.
+4. Confirm the historical-test banner is absent.
+5. Confirm the following buttons are hidden:
+
+   Run 7-vs-4 Simulator
+   Test Banked Windows
+   Run Scorer Tests
+   Run Projection Tests
+
+6. Confirm Release Readiness reports live NHL scoring configuration.
+
+F. ACCESS CONTROL
+-----------------
+1. Sign in as a normal league manager.
+2. Paste `/leagues/{leagueId}/release-readiness` directly.
+3. Confirm the page shows Commissioner access required.
+4. Confirm the normal manager can still use ordinary league, matchup, and team
+   pages without regression.

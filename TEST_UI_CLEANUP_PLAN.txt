@@ -1,0 +1,45 @@
+TEST UI CLEANUP PLAN
+====================
+
+YES - THE TEMPORARY TEST BUTTONS AND TEST PAGES WILL BE CLEANED UP.
+
+CURRENT SAFEGUARD
+-----------------
+This package immediately hides simulator controls in production builds and on
+production-like hosts. Local development keeps them visible until the visual
+redesign and final preseason validation are finished.
+
+KEEP AS AUTOMATED REGRESSION TESTS
+----------------------------------
+The following pure simulator logic should remain in the repository because it
+protects the unusual six-game architecture:
+
+- cycle-window-selection.util.ts
+- cycle-window-simulator.ts
+- live-scoring-simulator.ts and its spec
+- playoff-window-simulator.ts
+- window-projection-simulator.ts and its spec
+- season-lifecycle-simulator.ts and its spec
+
+REMOVE OR CONSOLIDATE DURING VISUAL REWORK
+------------------------------------------
+After final validation, remove the user-facing standalone simulator routes and
+components where they no longer add support value:
+
+- /leagues/:leagueId/cycles/simulator
+- /leagues/:leagueId/playoffs/simulator
+- cycle-simulator component files
+- playoff-window-simulator component files
+- simulator buttons on matchup and bracket pages
+- deterministic test sections inside Scoring Diagnostics
+
+The useful live status and recovery information will remain consolidated in:
+
+- Scoring Diagnostics
+- Release Readiness / Commissioner Maintenance
+
+FINAL PRODUCTION EXPERIENCE
+---------------------------
+Normal managers will never see testing controls. Commissioners will see only
+real operational information and carefully guarded recovery actions. Automated
+simulators will run through the test suite rather than occupying production UI.

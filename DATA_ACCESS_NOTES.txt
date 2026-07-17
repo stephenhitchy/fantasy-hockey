@@ -1,0 +1,32 @@
+DATA ACCESS NOTES
+
+EXPECTED FIRESTORE OPERATIONS
+
+EACH SCHEDULED SCORING CHECK
+- One small transaction read/write to claim the control lease.
+- Reads for active cycle metadata, cycle roster snapshots, and matchup state.
+- One small control write on completion.
+- No shared cycle-snapshot write if the scoring fingerprint did not change.
+- No team-window or matchup score write if persisted values did not change.
+
+MANAGER BROWSERS
+- Listen to the shared cycle snapshot and relevant normal league documents.
+- Do not run NHL schedule, boxscore, play-by-play, or player-log scoring calls.
+- Do not claim or update the scoring lease.
+
+NHL REQUESTS
+- Team schedules are cached and in-flight duplicate requests are shared.
+- Finalized games are reused from the persisted per-game ledger.
+- Live games are refreshed at the shared interval.
+- Newly final games are fetched once to settle complete statistics.
+
+WHY THE CONTROL DOC STILL CHANGES
+The lease prevents two commissioner tabs from becoming concurrent scorers. Two
+small control writes per actual check are preferable to every open browser
+performing hundreds of NHL requests and duplicate Firestore writes.
+
+SCALE EXPECTATION
+For a private app with roughly 20 managers, this architecture should stay far
+below normal Firestore daily limits under ordinary use. The main remaining read
+area is historical standings, which still reads cycle/matchup history when that
+page is opened. It is not part of the continuous scorer.

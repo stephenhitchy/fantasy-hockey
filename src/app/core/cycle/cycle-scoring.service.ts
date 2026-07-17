@@ -21,6 +21,11 @@ import {
   NhlTeamSeasonGame
 } from '../nhl/nhl-api.service';
 
+export type CycleGameRuntimeState =
+  | 'scheduled'
+  | 'live'
+  | 'final';
+
 export interface CycleAssetScoreSummary {
   assetKey: string;
   ownerId: string;
@@ -28,17 +33,10 @@ export interface CycleAssetScoreSummary {
   windowId: string;
   currentScore: number;
 
-  /**
-   * This is the number that controls cycle progress.
-   * It counts the asset's NHL team games in this cycle, even if the skater
-   * was injured, scratched, suspended, benched, or otherwise did not play.
-   */
+  /** Final NHL team games that control six-game window progress. */
   gamesPlayed: number;
 
-  /**
-   * This is the number of games where the skater actually appeared.
-   * Goalie units count every final team game as an actual game.
-   */
+  /** Final NHL games where a skater actually appeared. */
   actualGamesPlayed?: number;
 
   scheduledGames: number;
@@ -47,13 +45,24 @@ export interface CycleAssetScoreSummary {
   scheduledGameDates: string[];
   scheduledGameLabels: string[];
   completedGameIds: number[];
+  liveGameIds: number[];
   appearanceGameIds: number[];
+
+  /**
+   * Per-game scoring lets later refreshes reuse finalized games instead of
+   * downloading every historical boxscore and player game log again.
+   */
+  gameScores: Record<string, number>;
+  gameStates: Record<string, CycleGameRuntimeState>;
+
   firstScheduledGameDate: string | null;
   lastScheduledGameDate: string | null;
   status: 'scheduled' | 'active' | 'complete';
 }
 
 export interface CycleScoringResult {
+  scoringSchemaVersion: 2;
+
   /** Backward-compatible lookup used by existing asset cards. */
   assetScores: Record<string, CycleAssetScoreSummary>;
 
@@ -65,10 +74,16 @@ export interface CycleScoringResult {
   teamCycleComplete: Record<string, boolean>;
 
   /**
-   * True when at least one drafted roster asset has an NHL team game in this cycle.
-   * This prevents the app from auto-completing empty off-season cycles forever.
+   * True when at least one drafted roster asset has an NHL team game in this
+   * cycle. This prevents empty off-season cycles from completing forever.
    */
   cycleHasScheduledGames: boolean;
+
+  /** Live-game metadata used by the shared scoring scheduler. */
+  hasLiveGames: boolean;
+  nextScheduledGameStart: string | null;
+  refreshedAt: string;
+  dataFingerprint: string;
 }
 
 export interface CalculateCycleScoringInput {
@@ -85,18 +100,22 @@ export interface CalculateCycleScoringInput {
    */
   expectedRosterSlotIdsByOwner?: Record<string, string[]>;
 
-  /**
-   * Kept optional for older callers. Scoring no longer uses date windows.
-   * A cycle is now based on NHL team game numbers:
-   * Cycle 1 = games 1-6, Cycle 2 = games 7-12, etc.
-   */
+  /** Previous shared result used for incremental final-game reuse. */
+  previousResult?: CycleScoringResult | null;
+
+  /** Kept optional for older callers. Scoring is based on NHL game numbers. */
   startDate?: Date;
   endDate?: Date;
 }
 
-interface FinalGameData {
+interface ScoringGameData {
   boxscore: NhlGameBoxscoreResponse;
   playByPlay: NhlGamePlayByPlayResponse;
+}
+
+interface GameScoreResult {
+  points: number;
+  appeared: boolean;
 }
 
 const NHL_SCORING_BATCH_SIZE = 6;
@@ -114,12 +133,32 @@ function isRegularSeasonGame(game: NhlTeamSeasonGame): boolean {
   return typeof game.gameType !== 'number' || game.gameType === 2;
 }
 
-function isFinalGame(game: NhlTeamSeasonGame): boolean {
-  const hasScores =
-    typeof game.homeTeam.score === 'number' &&
-    typeof game.awayTeam.score === 'number';
+function getGameRuntimeState(
+  game: NhlTeamSeasonGame
+): CycleGameRuntimeState {
+  const state = (game.gameState ?? '').toUpperCase();
 
-  return game.gameState === 'OFF' || game.gameState === 'FINAL' || hasScores;
+  if (state === 'OFF' || state === 'FINAL') {
+    return 'final';
+  }
+
+  if (state === 'LIVE' || state === 'CRIT') {
+    return 'live';
+  }
+
+  /*
+   * Historical NHL responses sometimes omit gameState but retain final scores.
+   * Do not use this fallback when an explicit live/scheduled state exists.
+   */
+  if (
+    !state &&
+    typeof game.homeTeam.score === 'number' &&
+    typeof game.awayTeam.score === 'number'
+  ) {
+    return 'final';
+  }
+
+  return 'scheduled';
 }
 
 function getAssetTeamAbbreviation(asset: DraftableAsset): string {
@@ -228,16 +267,18 @@ async function loadSchedulesByTeam(
       }
     }
 
-    await wait(NHL_SCORING_BATCH_DELAY_MS);
+    if (index + NHL_SCORING_BATCH_SIZE < teamAbbreviations.length) {
+      await wait(NHL_SCORING_BATCH_DELAY_MS);
+    }
   }
 
   return schedulesByTeam;
 }
 
-async function loadFinalGameData(
+async function loadScoringGameData(
   gameIds: number[]
-): Promise<Map<number, FinalGameData>> {
-  const finalGameDataById = new Map<number, FinalGameData>();
+): Promise<Map<number, ScoringGameData>> {
+  const gameDataById = new Map<number, ScoringGameData>();
 
   for (
     let index = 0;
@@ -265,16 +306,18 @@ async function loadFinalGameData(
 
     for (const result of results) {
       if (result.status === 'fulfilled') {
-        finalGameDataById.set(result.value.gameId, result.value.data);
+        gameDataById.set(result.value.gameId, result.value.data);
       } else {
-        console.warn('Unable to load final game scoring data.', result.reason);
+        console.warn('Unable to load NHL game scoring data.', result.reason);
       }
     }
 
-    await wait(NHL_SCORING_BATCH_DELAY_MS);
+    if (index + NHL_SCORING_BATCH_SIZE < gameIds.length) {
+      await wait(NHL_SCORING_BATCH_DELAY_MS);
+    }
   }
 
-  return finalGameDataById;
+  return gameDataById;
 }
 
 async function loadSkaterGameLogs(
@@ -301,9 +344,15 @@ async function loadSkaterGameLogs(
           );
         }
 
+        /*
+         * These players have a newly final game. Force one fresh log so
+         * power-play, short-handed, game-winning, and overtime bonuses settle
+         * accurately. Old finalized games are reused from the shared snapshot.
+         */
         const gameLogResponse = await getRegularSeasonGameLog(
           asset.player.id,
-          season
+          season,
+          true
         );
 
         const gameLogByGameId = new Map<number, NhlPlayerGameLogEntry>();
@@ -326,11 +375,13 @@ async function loadSkaterGameLogs(
           result.value.gameLogByGameId
         );
       } else {
-        console.warn('Unable to load skater game log.', result.reason);
+        console.warn('Unable to load newly final skater game log.', result.reason);
       }
     }
 
-    await wait(NHL_SCORING_BATCH_DELAY_MS);
+    if (index + NHL_SCORING_BATCH_SIZE < skaters.length) {
+      await wait(NHL_SCORING_BATCH_DELAY_MS);
+    }
   }
 
   return gameLogsByPlayerId;
@@ -352,170 +403,174 @@ function getRelevantAssetGames(
   );
 }
 
-function calculateSkaterAssetScore(
+function calculateSkaterGameScore(
   asset: DraftableAsset,
-  games: NhlTeamSeasonGame[],
-  finalGameDataById: Map<number, FinalGameData>,
-  gameLogsByPlayerId: Map<number, Map<number, NhlPlayerGameLogEntry>>,
+  gameData: ScoringGameData | undefined,
+  gameLog: NhlPlayerGameLogEntry | undefined,
+  gameIsFinal: boolean,
   scoringRules: ScoringRules
-): {
-  currentScore: number;
-  gamesPlayed: number;
-  actualGamesPlayed: number;
-  appearanceGameIds: number[];
-} {
+): GameScoreResult {
   if (asset.assetType !== 'skater') {
     return {
-      currentScore: 0,
-      gamesPlayed: 0,
-      actualGamesPlayed: 0,
-      appearanceGameIds: []
+      points: 0,
+      appeared: false
     };
   }
 
-  let currentScore = 0;
-  let gamesPlayed = 0;
-  let actualGamesPlayed = 0;
-  const appearanceGameIds: number[] = [];
+  const skaterLine = gameData
+    ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
+    : null;
 
-  const gameLogByGameId =
-    gameLogsByPlayerId.get(asset.player.id) ??
-    new Map<number, NhlPlayerGameLogEntry>();
-
-  for (const game of games) {
-    if (!isFinalGame(game)) {
-      continue;
-    }
-
-    // This is the important DNP/injury rule:
-    // a final NHL team game counts toward cycle progress even if the skater
-    // did not appear in the boxscore or game log.
-    gamesPlayed += 1;
-
-    const finalGameData = finalGameDataById.get(game.id);
-    const gameLog = gameLogByGameId.get(game.id);
-    const skaterLine = finalGameData
-      ? findSkaterBoxscoreLine(finalGameData.boxscore, asset.player.id)
-      : null;
-
-    if (!skaterLine && !gameLog) {
-      continue;
-    }
-
-    actualGamesPlayed += 1;
-    appearanceGameIds.push(game.id);
-
-    const assistBreakdown = finalGameData
-      ? getSkaterAssistBreakdown(finalGameData.playByPlay, asset.player.id)
-      : {
-          primaryAssists: 0,
-          secondaryAssists: 0
-        };
-
-    const totalAssists = skaterLine?.assists ?? gameLog?.assists ?? 0;
-
-    let primaryAssists = assistBreakdown.primaryAssists;
-    let secondaryAssists = assistBreakdown.secondaryAssists;
-
-    if (primaryAssists + secondaryAssists < totalAssists) {
-      secondaryAssists += totalAssists - primaryAssists - secondaryAssists;
-    }
-
-    const stats: SkaterGameStats = {
-      position: asset.position === 'D' ? 'D' : 'F',
-      goals: skaterLine?.goals ?? gameLog?.goals ?? 0,
-      primaryAssists,
-      secondaryAssists,
-      shotsOnGoal: skaterLine?.sog ?? gameLog?.shots ?? 0,
-      hits: skaterLine?.hits ?? 0,
-      blockedShots: skaterLine?.blockedShots ?? 0,
-      plusMinus: skaterLine?.plusMinus ?? gameLog?.plusMinus ?? 0,
-      powerPlayPoints:
-        gameLog?.powerPlayPoints ?? skaterLine?.powerPlayGoals ?? 0,
-      shortHandedPoints: gameLog?.shorthandedPoints ?? 0,
-      gameWinningGoal: Boolean(gameLog?.gameWinningGoals),
-      overtimeGoal: Boolean(gameLog?.otGoals),
-      timeOnIceMinutes: getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi)
+  if (!skaterLine && !gameLog) {
+    return {
+      points: 0,
+      appeared: false
     };
-
-    const breakdown = calculateSkaterGameBreakdown(stats, scoringRules);
-    currentScore += breakdown.total;
   }
+
+  const assistBreakdown = gameData
+    ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+    : {
+        primaryAssists: 0,
+        secondaryAssists: 0
+      };
+
+  const totalAssists = skaterLine?.assists ?? gameLog?.assists ?? 0;
+  let primaryAssists = assistBreakdown.primaryAssists;
+  let secondaryAssists = assistBreakdown.secondaryAssists;
+
+  if (primaryAssists + secondaryAssists < totalAssists) {
+    secondaryAssists += totalAssists - primaryAssists - secondaryAssists;
+  }
+
+  const stats: SkaterGameStats = {
+    position: asset.position === 'D' ? 'D' : 'F',
+    goals: skaterLine?.goals ?? gameLog?.goals ?? 0,
+    primaryAssists,
+    secondaryAssists,
+    shotsOnGoal: skaterLine?.sog ?? gameLog?.shots ?? 0,
+    hits: skaterLine?.hits ?? 0,
+    blockedShots: skaterLine?.blockedShots ?? 0,
+    plusMinus: skaterLine?.plusMinus ?? gameLog?.plusMinus ?? 0,
+
+    /*
+     * Live boxscores expose power-play goals but not every PP/SH assist bonus.
+     * The newly final player log settles those bonuses after the game ends.
+     */
+    powerPlayPoints: gameIsFinal
+      ? gameLog?.powerPlayPoints ?? skaterLine?.powerPlayGoals ?? 0
+      : skaterLine?.powerPlayGoals ?? 0,
+    shortHandedPoints: gameIsFinal
+      ? gameLog?.shorthandedPoints ?? 0
+      : 0,
+    gameWinningGoal: gameIsFinal && Boolean(gameLog?.gameWinningGoals),
+    overtimeGoal: gameIsFinal && Boolean(gameLog?.otGoals),
+    timeOnIceMinutes: getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi)
+  };
 
   return {
-    currentScore: rounded(currentScore),
-    gamesPlayed,
-    actualGamesPlayed,
-    appearanceGameIds
+    points: rounded(
+      calculateSkaterGameBreakdown(stats, scoringRules).total
+    ),
+    appeared: true
   };
 }
 
-function calculateGoalieUnitAssetScore(
+function calculateGoalieUnitGameScore(
   asset: DraftableAsset,
-  games: NhlTeamSeasonGame[],
-  finalGameDataById: Map<number, FinalGameData>,
+  gameData: ScoringGameData | undefined,
+  gameIsFinal: boolean,
   scoringRules: ScoringRules
-): {
-  currentScore: number;
-  gamesPlayed: number;
-  actualGamesPlayed: number;
-  appearanceGameIds: number[];
-} {
-  if (asset.assetType === 'skater') {
+): GameScoreResult {
+  if (asset.assetType === 'skater' || !gameData) {
     return {
-      currentScore: 0,
-      gamesPlayed: 0,
-      actualGamesPlayed: 0,
-      appearanceGameIds: []
+      points: 0,
+      appeared: false
     };
   }
 
-  let currentScore = 0;
-  let gamesPlayed = 0;
-  let actualGamesPlayed = 0;
-  const appearanceGameIds: number[] = [];
+  const goalieResult = getTeamGoalieUnitResult(
+    gameData.boxscore,
+    asset.teamAbbreviation
+  );
 
-  for (const game of games) {
-    if (!isFinalGame(game)) {
-      continue;
-    }
-
-    gamesPlayed += 1;
-    actualGamesPlayed += 1;
-    appearanceGameIds.push(game.id);
-
-    const finalGameData = finalGameDataById.get(game.id);
-
-    if (!finalGameData) {
-      continue;
-    }
-
-    const goalieResult = getTeamGoalieUnitResult(
-      finalGameData.boxscore,
-      asset.teamAbbreviation
-    );
-
-    if (!goalieResult) {
-      continue;
-    }
-
-    const stats: GoalieGameStats = {
-      saves: goalieResult.saves,
-      shotsAgainst: goalieResult.shotsAgainst,
-      won: goalieResult.won,
-      shutout: goalieResult.shutout
+  if (!goalieResult) {
+    return {
+      points: 0,
+      appeared: false
     };
-
-    const breakdown = calculateGoalieGameBreakdown(stats, scoringRules);
-    currentScore += breakdown.total;
   }
+
+  const stats: GoalieGameStats = {
+    saves: goalieResult.saves,
+    shotsAgainst: goalieResult.shotsAgainst,
+    won: gameIsFinal && goalieResult.won,
+    shutout: gameIsFinal && goalieResult.shutout
+  };
 
   return {
-    currentScore: rounded(currentScore),
-    gamesPlayed,
-    actualGamesPlayed,
-    appearanceGameIds
+    points: rounded(
+      calculateGoalieGameBreakdown(stats, scoringRules).total
+    ),
+    appeared: true
   };
+}
+
+function canReuseFinalGame(
+  previous: CycleAssetScoreSummary | undefined,
+  gameId: number
+): boolean {
+  const key = String(gameId);
+
+  return (
+    previous?.gameStates?.[key] === 'final' &&
+    typeof previous.gameScores?.[key] === 'number'
+  );
+}
+
+function getPreviousWindowSummary(
+  previousResult: CycleScoringResult | null | undefined,
+  windowId: string,
+  assetKey: string
+): CycleAssetScoreSummary | undefined {
+  return previousResult?.windowScores?.[windowId] ??
+    previousResult?.assetScores?.[assetKey];
+}
+
+function getNextScheduledStart(
+  games: NhlTeamSeasonGame[]
+): string | null {
+  const candidates = games
+    .filter((game) => getGameRuntimeState(game) === 'scheduled')
+    .map((game) => game.startTimeUTC ?? `${game.gameDate}T12:00:00Z`)
+    .filter((value) => Number.isFinite(Date.parse(value)))
+    .sort((first, second) => Date.parse(first) - Date.parse(second));
+
+  return candidates[0] ?? null;
+}
+
+function buildResultFingerprint(
+  cycleNumber: number,
+  windowScores: Record<string, CycleAssetScoreSummary>
+): string {
+  return [
+    `cycle:${cycleNumber}`,
+    ...Object.values(windowScores)
+      .sort((first, second) => first.windowId.localeCompare(second.windowId))
+      .map((summary) => [
+        summary.windowId,
+        summary.currentScore.toFixed(1),
+        summary.gamesPlayed,
+        summary.actualGamesPlayed ?? 0,
+        summary.status,
+        summary.completedGameIds.join(','),
+        summary.liveGameIds.join(','),
+        Object.entries(summary.gameScores)
+          .sort(([first], [second]) => first.localeCompare(second))
+          .map(([gameId, score]) => `${gameId}:${score.toFixed(1)}`)
+          .join(',')
+      ].join(':'))
+  ].join('|');
 }
 
 export async function calculateCycleScoring(
@@ -523,6 +578,10 @@ export async function calculateCycleScoring(
 ): Promise<CycleScoringResult> {
   const draftedTeams = getUniqueDraftedTeams(input.picks);
   const schedulesByTeam = await loadSchedulesByTeam(draftedTeams, input.season);
+  const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
+  const previousByWindowId = new Map<string, CycleAssetScoreSummary | undefined>();
+  const gameIdsToLoad = new Set<number>();
+  const skaterAssetKeysNeedingFinalLogs = new Set<string>();
 
   const teamGameCounts: Record<string, number> = {};
 
@@ -536,66 +595,146 @@ export async function calculateCycleScoring(
     ).length;
   }
 
-  const finalGameIds = [
-    ...new Set(
-      input.picks
-        .flatMap((pick) =>
-          getRelevantAssetGames(
-            pick.asset,
-            schedulesByTeam,
-            getPickWindowCycleNumber(pick, input.cycleNumber),
-            input.requiredGamesPerCycle
-          )
-        )
-        .filter(isFinalGame)
-        .map((game) => game.id)
-    )
-  ];
+  for (const pick of input.picks) {
+    const pickWindowCycleNumber = getPickWindowCycleNumber(
+      pick,
+      input.cycleNumber
+    );
+    const windowId = getWindowId(pick, pickWindowCycleNumber);
+    const games = getRelevantAssetGames(
+      pick.asset,
+      schedulesByTeam,
+      pickWindowCycleNumber,
+      input.requiredGamesPerCycle
+    );
+    const previous = getPreviousWindowSummary(
+      input.previousResult,
+      windowId,
+      pick.asset.assetKey
+    );
 
-  const [finalGameDataById, gameLogsByPlayerId] = await Promise.all([
-    loadFinalGameData(finalGameIds),
-    loadSkaterGameLogs(getUniqueSkaterAssets(input.picks), input.season)
+    gamesByWindowId.set(windowId, games);
+    previousByWindowId.set(windowId, previous);
+
+    for (const game of games) {
+      const state = getGameRuntimeState(game);
+
+      if (state === 'live') {
+        gameIdsToLoad.add(game.id);
+        continue;
+      }
+
+      if (state === 'final' && !canReuseFinalGame(previous, game.id)) {
+        gameIdsToLoad.add(game.id);
+
+        if (pick.asset.assetType === 'skater') {
+          skaterAssetKeysNeedingFinalLogs.add(pick.asset.assetKey);
+        }
+      }
+    }
+  }
+
+  const skatersNeedingLogs = getUniqueSkaterAssets(input.picks).filter(
+    (asset) => skaterAssetKeysNeedingFinalLogs.has(asset.assetKey)
+  );
+
+  const [gameDataById, gameLogsByPlayerId] = await Promise.all([
+    loadScoringGameData([...gameIdsToLoad]),
+    loadSkaterGameLogs(skatersNeedingLogs, input.season)
   ]);
 
   const assetScores: Record<string, CycleAssetScoreSummary> = {};
   const windowScores: Record<string, CycleAssetScoreSummary> = {};
   const teamScores: Record<string, number> = {};
+  let hasLiveGames = false;
+  const allRelevantGames: NhlTeamSeasonGame[] = [];
 
   for (const pick of input.picks) {
-    const games = getRelevantAssetGames(
-      pick.asset,
-      schedulesByTeam,
-      getPickWindowCycleNumber(pick, input.cycleNumber),
-      input.requiredGamesPerCycle
-    );
-
-    const result =
-      pick.asset.assetType === 'skater'
-        ? calculateSkaterAssetScore(
-            pick.asset,
-            games,
-            finalGameDataById,
-            gameLogsByPlayerId,
-            input.scoringRules
-          )
-        : calculateGoalieUnitAssetScore(
-            pick.asset,
-            games,
-            finalGameDataById,
-            input.scoringRules
-          );
-
     const rosterSlotId = getRosterSlotId(pick);
     const pickWindowCycleNumber = getPickWindowCycleNumber(
       pick,
       input.cycleNumber
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
-    const completedGames = games.filter(isFinalGame);
-    const gamesLeft = Math.max(0, games.length - result.gamesPlayed);
+    const games = gamesByWindowId.get(windowId) ?? [];
+    const previous = previousByWindowId.get(windowId);
+    const gameScores: Record<string, number> = {};
+    const gameStates: Record<string, CycleGameRuntimeState> = {};
+    const completedGameIds: number[] = [];
+    const liveGameIds: number[] = [];
+    const appearanceGameIds: number[] = [];
+    let gamesPlayed = 0;
+    let actualGamesPlayed = 0;
+    let currentScore = 0;
+
+    allRelevantGames.push(...games);
+
+    for (const game of games) {
+      const gameIdKey = String(game.id);
+      const state = getGameRuntimeState(game);
+      gameStates[gameIdKey] = state;
+
+      if (state === 'scheduled') {
+        continue;
+      }
+
+      if (state === 'live') {
+        hasLiveGames = true;
+        liveGameIds.push(game.id);
+      }
+
+      if (state === 'final') {
+        gamesPlayed += 1;
+        completedGameIds.push(game.id);
+      }
+
+      if (state === 'final' && canReuseFinalGame(previous, game.id)) {
+        const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
+        gameScores[gameIdKey] = rounded(previousScore);
+        currentScore += previousScore;
+
+        if (previous?.appearanceGameIds?.includes(game.id)) {
+          actualGamesPlayed += 1;
+          appearanceGameIds.push(game.id);
+        }
+
+        continue;
+      }
+
+      const gameData = gameDataById.get(game.id);
+      const gameLog = pick.asset.assetType === 'skater'
+        ? gameLogsByPlayerId
+            .get(pick.asset.player.id)
+            ?.get(game.id)
+        : undefined;
+      const scoreResult = pick.asset.assetType === 'skater'
+        ? calculateSkaterGameScore(
+            pick.asset,
+            gameData,
+            gameLog,
+            state === 'final',
+            input.scoringRules
+          )
+        : calculateGoalieUnitGameScore(
+            pick.asset,
+            gameData,
+            state === 'final',
+            input.scoringRules
+          );
+
+      gameScores[gameIdKey] = scoreResult.points;
+      currentScore += scoreResult.points;
+
+      if (state === 'final' && scoreResult.appeared) {
+        actualGamesPlayed += 1;
+        appearanceGameIds.push(game.id);
+      }
+    }
+
+    const gamesLeft = Math.max(0, games.length - gamesPlayed);
     const status = games.length > 0 && gamesLeft === 0
       ? 'complete'
-      : result.gamesPlayed > 0
+      : gamesPlayed > 0 || liveGameIds.length > 0
         ? 'active'
         : 'scheduled';
 
@@ -604,9 +743,9 @@ export async function calculateCycleScoring(
       ownerId: pick.ownerId,
       rosterSlotId,
       windowId,
-      currentScore: result.currentScore,
-      gamesPlayed: result.gamesPlayed,
-      actualGamesPlayed: result.actualGamesPlayed,
+      currentScore: rounded(currentScore),
+      gamesPlayed,
+      actualGamesPlayed,
       scheduledGames: games.length,
       gamesLeft,
       scheduledGameIds: games.map((game) => game.id),
@@ -617,8 +756,11 @@ export async function calculateCycleScoring(
           ? `vs ${game.awayTeam.abbrev}`
           : `@ ${game.homeTeam.abbrev}`;
       }),
-      completedGameIds: completedGames.map((game) => game.id),
-      appearanceGameIds: result.appearanceGameIds,
+      completedGameIds,
+      liveGameIds,
+      appearanceGameIds,
+      gameScores,
+      gameStates,
       firstScheduledGameDate: games[0]?.gameDate ?? null,
       lastScheduledGameDate: games.at(-1)?.gameDate ?? null,
       status
@@ -674,13 +816,22 @@ export async function calculateCycleScoring(
   const cycleHasScheduledGames = Object.values(assetScores).some(
     (summary) => summary.scheduledGames > 0
   );
+  const dataFingerprint = buildResultFingerprint(
+    input.cycleNumber,
+    windowScores
+  );
 
   return {
+    scoringSchemaVersion: 2,
     assetScores,
     windowScores,
     teamScores,
     teamGameCounts,
     teamCycleComplete,
-    cycleHasScheduledGames
+    cycleHasScheduledGames,
+    hasLiveGames,
+    nextScheduledGameStart: getNextScheduledStart(allRelevantGames),
+    refreshedAt: new Date().toISOString(),
+    dataFingerprint
   };
 }

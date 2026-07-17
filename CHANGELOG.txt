@@ -1,50 +1,37 @@
-BANKED PLAYOFF WINDOWS V1 — CHANGELOG
+RELEASE READINESS + FULL-SEASON VALIDATION V1 - CHANGELOG
+=========================================================
 
-1. POSTSEASON WINDOWS NO LONGER WAIT FOR THE BRACKET
-Every seeded fantasy team receives an independent six-game postseason window.
-When one window completes, the next window can begin immediately even if the
-prior fantasy matchup or opponent is still unresolved.
+ADDED
+-----
+- Commissioner-only Release Readiness page.
+- Deterministic 22-check, four-team full-season lifecycle simulator.
+- Eight-stage lifecycle milestone summary.
+- Live league readiness checklist covering configuration, league state,
+  independent cycle windows, live scoring, projections, injuries, and playoffs.
+- Architecture/version registry for scoring, projections, live scoring,
+  playoffs, cycle windows, and matchup completion.
+- Safe recovery controls for scoring refresh, expired/error lease clearing,
+  injury refresh, and exact-cycle projection regeneration.
+- Dedicated development and production runtime configuration files.
+- App-wide historical-testing warning banner.
+- Production historical-mode runtime guard.
 
-2. ALREADY-PLAYED GAMES ARE BANKED
-The exact roster, slot identities, game block, projection, progress, and points
-are saved before the bracket destination is known. No completed NHL game is
-thrown away merely because another fantasy roster is still finishing.
+CHANGED
+-------
+- Production Angular builds now replace the development runtime configuration
+  with a live-scoring configuration.
+- Temporary cycle, playoff, scorer, and projection simulator buttons are shown
+  only when local developer tools are enabled.
+- League Hub now links to Release Readiness for commissioners.
+- Live scoring service now exposes one-time control reads and guarded recovery
+  for expired or errored leases.
 
-3. BRACKET RESULTS ROUTE WINDOWS INSTEAD OF RESTARTING THEM
-Once a prior round completes, each team's earliest unused bank is attached to
-its actual destination:
-- Championship
-- 3rd Place
-- 5th Place
-- other consolation / placement matchup
-
-4. BYES PRESERVE THE FIRST WINDOW
-In a six-team championship field, seeds 1 and 2 may already accumulate Window 1
-while the opening round is being played. When the semifinal opponent becomes
-known, the bye team uses that banked Window 1. The opening-round winner may use
-Window 2 in the same matchup.
-
-5. EACH SIDE OF A MATCHUP MAY USE A DIFFERENT BLOCK
-A playoff matchup now stores a separate window number and source cycle block
-for Team A and Team B. Both still receive exactly six NHL-team games.
-
-6. PROJECTIONS AND ROSTERS FREEZE PER WINDOW
-Each bank stores the projection and roster assignment that existed when that
-slot window opened. Later projection updates cannot rewrite it.
-
-7. QUEUED SLOT MOVES ACTIVATE AT THE PLAYOFF WINDOW BOUNDARY
-The existing queued-move system carries into postseason banks. An incoming
-asset activates only when that slot's next six-game window is created. The
-outgoing asset enters waivers at that boundary.
-
-8. BANKED SCORES BACKFILL IMMEDIATELY
-When a new fantasy matchup is created, any games already completed in the
-assigned banks are calculated and displayed on the normal cycle page.
-
-9. DUPLICATE USE IS PREVENTED
-A team/window assignment can feed only one playoff matchup. Existing cycle and
-transaction idempotency protections remain active.
-
-10. COMMISSIONER SIMULATOR ADDED
-The Playoff Bracket page now links to a no-write deterministic simulator that
-checks opening-round, bye, semifinal, and fifth-place routing.
+PRESERVED
+---------
+- Asynchronous six-game roster-slot windows.
+- Overlapping regular-season cycle numbers.
+- Slot-boundary roster transactions.
+- Frozen per-window projections.
+- Shared live scoring lease and write suppression.
+- Banked playoff windows and bracket routing.
+- Existing scoring rules, draft, IR, waivers, standings, and injury systems.

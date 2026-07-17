@@ -987,6 +987,14 @@ service cloud.firestore {
         allow delete: if isLeagueCommissioner(leagueId);
       }
 
+      match /liveScoring/{scoringDocumentId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // One commissioner browser holds the league scoring lease and writes
+        // compact shared results. Other managers only listen to these docs.
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+      }
+
       match /playoffWindowBanks/{ownerId} {
         allow read: if isLeagueMember(leagueId);
         allow create, update, delete: if isLeagueCommissioner(leagueId);

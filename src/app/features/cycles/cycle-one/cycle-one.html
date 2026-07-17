@@ -13,7 +13,11 @@
         <article class="mobile-score-team mobile-score-team-a">
           <span>{{ getTeamName(mobileMatchup.teamAOwnerId) }}</span>
           <strong>
-            {{ getProjectionDisplay(getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)) }}
+            {{
+              getProjectionDisplay(
+                getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)
+              )
+            }}
           </strong>
           <small>
             Proj. {{ getProjectionDisplay(getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
@@ -29,7 +33,11 @@
         <article class="mobile-score-team mobile-score-team-b">
           <span>{{ getTeamName(mobileMatchup.teamBOwnerId) }}</span>
           <strong>
-            {{ getProjectionDisplay(getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)) }}
+            {{
+              getProjectionDisplay(
+                getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)
+              )
+            }}
           </strong>
           <small>
             Proj. {{ getProjectionDisplay(getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
@@ -38,12 +46,7 @@
       </section>
     }
 
-    <a
-      class="back-link"
-      [routerLink]="['/leagues', leagueId]"
-    >
-      ← Back to League
-    </a>
+    <a class="back-link" [routerLink]="['/leagues', leagueId]"> ← Back to League </a>
 
     <header class="cycle-header">
       <div class="cycle-header-main">
@@ -57,14 +60,12 @@
 
           <label class="cycle-picker-control">
             <span>Cycle Matchup</span>
-            <select
-              [value]="cycleNumber"
-              (change)="navigateToCycle($any($event.target).value)"
-            >
-              @for (availableCycleNumber of getAvailableCycleNumbers(); track availableCycleNumber) {
-                <option [value]="availableCycleNumber">
-                  Cycle {{ availableCycleNumber }}
-                </option>
+            <select [value]="cycleNumber" (change)="navigateToCycle($any($event.target).value)">
+              @for (
+                availableCycleNumber of getAvailableCycleNumbers();
+                track availableCycleNumber
+              ) {
+                <option [value]="availableCycleNumber">Cycle {{ availableCycleNumber }}</option>
               }
             </select>
           </label>
@@ -86,30 +87,21 @@
           Matchup Overview
         </a>
 
-        <a
-          class="schedule-preview-header-link"
-          [routerLink]="['/leagues', leagueId, 'standings']"
-        >
+        <a class="schedule-preview-header-link" [routerLink]="['/leagues', leagueId, 'standings']">
           League Standings
         </a>
 
-        <a
-          class="schedule-preview-header-link"
-          [routerLink]="['/leagues', leagueId, 'playoffs']"
-        >
+        <a class="schedule-preview-header-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
           Playoff Bracket
         </a>
 
         @if (cycle()?.overlapsPreviousCycle) {
-          <span class="cycle-status-badge overlap-status-badge">
-            Overlapping Cycle
-          </span>
+          <span class="cycle-status-badge overlap-status-badge"> Overlapping Cycle </span>
         }
 
         @if (
           cycle()?.status === 'active' &&
-          (cycle()?.activeWindowCount ?? 0) <
-            (cycle()?.totalExpectedWindowCount ?? 0)
+          (cycle()?.activeWindowCount ?? 0) < (cycle()?.totalExpectedWindowCount ?? 0)
         ) {
           <span class="cycle-status-badge window-progress-badge">
             {{ cycle()?.activeWindowCount ?? 0 }} /
@@ -140,274 +132,285 @@
       </div>
     </header>
 
-
-@if (shouldShowCompactAutoStatus()) {
-  <section
-    class="compact-auto-status"
-    [class.compact-status-error]="getAutoLeagueStatusClass() === 'auto-status-error'"
-    [class.compact-status-working]="getAutoLeagueStatusClass() === 'auto-status-working' || scoringLoading()"
-    role="status"
-    aria-live="polite"
-  >
-    <span class="compact-status-indicator" aria-hidden="true"></span>
-
-    <div>
-      <strong>{{ getAutoLeagueStatusTitle() }}</strong>
-      <p>{{ getAutoLeagueStatusText() }}</p>
-    </div>
-  </section>
-}
-
-
-@if (cycle()) {
-  <section class="cycle-transparency-card">
-    <div class="transparency-heading">
-      <div>
-        <span class="eyebrow">Cycle Transparency</span>
-        <h2>What is still counting?</h2>
-        <p>
-          Every roster slot owns an independent six-game window. A faster slot
-          may begin Cycle {{ cycleNumber + 1 }} while slower slots are still
-          finishing Cycle {{ cycleNumber }}.
-        </p>
-      </div>
-
-      @if (isCommissioner()) {
-        <a
-          class="cycle-simulator-link"
-          [routerLink]="['/leagues', leagueId, 'cycles', 'simulator']"
-        >
-          Run 7-vs-4 Simulator
-        </a>
-      }
-    </div>
-
-    <div class="transparency-metrics">
-      <article>
-        <span>Current Windows Complete</span>
-        <strong>
-          {{ getCurrentCycleWindowCounts().complete }} /
-          {{ getCurrentCycleWindowCounts().total || (cycle()?.totalExpectedWindowCount ?? 0) }}
-        </strong>
-      </article>
-
-      <article>
-        <span>Next Cycle Already Started</span>
-        <strong>{{ getNextCycleStartedWindowCount() }} slots</strong>
-      </article>
-
-      <article>
-        <span>Matchups Final</span>
-        <strong>
-          {{ cycle()?.completedMatchupCount ?? 0 }} /
-          {{ cycle()?.totalMatchupCount ?? matchups().length }}
-        </strong>
-      </article>
-
-      <article>
-        <span>Queued Moves in View</span>
-        <strong>{{ getDisplayedQueuedMoveCount() }}</strong>
-      </article>
-    </div>
-
-    <div class="window-marker-legend" aria-label="Cycle game marker legend">
-      <span><i class="legend-dot marker-played"></i> Played</span>
-      <span><i class="legend-dot marker-missed"></i> Team game counted, no appearance</span>
-      <span><i class="legend-dot marker-upcoming"></i> Upcoming</span>
-      <span><i class="legend-dot marker-unavailable"></i> Not scheduled</span>
-    </div>
-
-    @if (getCurrentDisplayedMatchup(); as transparencyMatchup) {
-      <div class="matchup-window-summary">
-        <article>
-          <div>
-            <strong>{{ getTeamName(transparencyMatchup.teamAOwnerId) }}</strong>
-            <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamAOwnerId) }}</span>
-          </div>
-
-          <div class="pending-slot-chip-row">
-            @for (slotId of getPendingSlotLabels(transparencyMatchup.teamAOwnerId); track slotId) {
-              <span>{{ slotId }}</span>
-            } @empty {
-              <em>All slot windows complete</em>
-            }
-          </div>
-        </article>
-
-        @if (transparencyMatchup.teamBOwnerId) {
-          <article>
-            <div>
-              <strong>{{ getTeamName(transparencyMatchup.teamBOwnerId) }}</strong>
-              <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamBOwnerId) }}</span>
-            </div>
-
-            <div class="pending-slot-chip-row">
-              @for (slotId of getPendingSlotLabels(transparencyMatchup.teamBOwnerId); track slotId) {
-                <span>{{ slotId }}</span>
-              } @empty {
-                <em>All slot windows complete</em>
-              }
-            </div>
-          </article>
-        }
-      </div>
-    }
-  </section>
-}
-
-@if (isCommissioner()) {
-<details class="dev-controls-card">
-  <summary>
-    <span>Dev Controls</span>
-    <small>Commissioner fallback tools for testing</small>
-  </summary>
-
-  <div class="dev-controls-body">
-    <div class="score-sync-actions">
-      <button
-        type="button"
-        class="score-sync-button"
-        (click)="syncCurrentScoresToFirestore()"
-        [disabled]="
-          syncingScores() ||
-          scoringLoading() ||
-          !cycleScoring() ||
-          cycle()?.status === 'complete'
+    @if (shouldShowCompactAutoStatus()) {
+      <section
+        class="compact-auto-status"
+        [class.compact-status-error]="getAutoLeagueStatusClass() === 'auto-status-error'"
+        [class.compact-status-working]="
+          getAutoLeagueStatusClass() === 'auto-status-working' || scoringLoading()
         "
-      >
-        {{
-          syncingScores()
-            ? 'Syncing Scores...'
-            : 'Sync Current Scores'
-        }}
-      </button>
-
-      @if (syncScoreMessage()) {
-        <small class="score-sync-success">
-          {{ syncScoreMessage() }}
-        </small>
-      }
-
-      @if (syncScoreError()) {
-        <small class="schedule-warning">
-          {{ syncScoreError() }}
-        </small>
-      }
-    </div>
-
-    <div class="cycle-complete-actions">
-      <button
-        type="button"
-        class="complete-cycle-button"
-        (click)="completeCurrentCycleFromCurrentScores()"
-        [disabled]="
-          completingCycle() ||
-          scoringLoading() ||
-          !cycleScoring() ||
-          !areAllMatchupsReadyToComplete() ||
-          cycle()?.status === 'complete'
-        "
-      >
-        {{
-          completingCycle()
-            ? 'Completing Cycle...'
-            : cycle()?.status === 'complete'
-              ? 'Cycle Complete'
-              : 'Complete ' + getCycleLabel()
-        }}
-      </button>
-
-      @if (completeCycleMessage()) {
-        <small class="cycle-complete-success">
-          {{ completeCycleMessage() }}
-        </small>
-      }
-
-      @if (completeCycleError()) {
-        <small class="schedule-warning">
-          {{ completeCycleError() }}
-        </small>
-      }
-    </div>
-
-    @if (
-      projectionAccuracySaving() ||
-      projectionAccuracyMessage() ||
-      projectionAccuracyError()
-    ) {
-      <div
-        class="projection-accuracy-save-status"
-        [class.projection-accuracy-save-error]="!!projectionAccuracyError()"
         role="status"
         aria-live="polite"
       >
-        <strong>
-          {{
-            projectionAccuracySaving()
-              ? 'Saving Projection Accuracy...'
-              : projectionAccuracyError()
-                ? 'Projection Accuracy Needs Attention'
-                : 'Projection Accuracy Saved'
-          }}
-        </strong>
+        <span class="compact-status-indicator" aria-hidden="true"></span>
 
-        <small>
-          {{
-            projectionAccuracyError() ||
-            projectionAccuracyMessage() ||
-            'Comparing the frozen cycle projections with final results.'
-          }}
-        </small>
-      </div>
+        <div>
+          <strong>{{ getAutoLeagueStatusTitle() }}</strong>
+          <p>{{ getAutoLeagueStatusText() }}</p>
+        </div>
+      </section>
     }
 
-    @if (cycle()?.status === 'complete') {
-      <div class="next-cycle-actions">
-        @if (isFinalPlayoffRound()) {
-          <a
-            class="start-next-cycle-button"
-            [routerLink]="['/leagues', leagueId, 'playoffs']"
-          >
-            View Final Playoff Bracket
-          </a>
-        } @else {
-          <button
-            type="button"
-            class="start-next-cycle-button"
-            (click)="startNextCycleFromCurrentCycle()"
-            [disabled]="startingNextCycle()"
-          >
-            {{
-              startingNextCycle()
-                ? 'Starting Next Matchup Period...'
-                : 'Start/Open ' + getNextCycleLabel()
-            }}
-          </button>
-        }
-
-        @if (startNextCycleMessage()) {
-          <small class="cycle-complete-success">
-            {{ startNextCycleMessage() }}
-          </small>
-        }
-
-        @if (startNextCycleError()) {
-          <small class="schedule-warning">
-            {{ startNextCycleError() }}
-          </small>
-        }
+    <section
+      class="shared-scoring-status-card"
+      [class.shared-scoring-refreshing]="liveScoringControl()?.status === 'refreshing'"
+      [class.shared-scoring-error]="liveScoringControl()?.status === 'error'"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="shared-scoring-pulse" aria-hidden="true"></span>
+      <div>
+        <strong>{{ getSharedScoringStatusLabel() }}</strong>
+        <p>{{ getSharedScoringStatusText() }}</p>
       </div>
+    </section>
+
+    @if (cycle()) {
+      <section class="cycle-transparency-card">
+        <div class="transparency-heading">
+          <div>
+            <span class="eyebrow">Cycle Transparency</span>
+            <h2>What is still counting?</h2>
+            <p>
+              Every roster slot owns an independent six-game window. A faster slot may begin Cycle
+              {{ cycleNumber + 1 }} while slower slots are still finishing Cycle {{ cycleNumber }}.
+            </p>
+          </div>
+
+          @if (isCommissioner() && developerToolsEnabled) {
+            <a
+              class="cycle-simulator-link"
+              [routerLink]="['/leagues', leagueId, 'cycles', 'simulator']"
+            >
+              Run 7-vs-4 Simulator
+            </a>
+          }
+        </div>
+
+        <div class="transparency-metrics">
+          <article>
+            <span>Current Windows Complete</span>
+            <strong>
+              {{ getCurrentCycleWindowCounts().complete }} /
+              {{ getCurrentCycleWindowCounts().total || (cycle()?.totalExpectedWindowCount ?? 0) }}
+            </strong>
+          </article>
+
+          <article>
+            <span>Next Cycle Already Started</span>
+            <strong>{{ getNextCycleStartedWindowCount() }} slots</strong>
+          </article>
+
+          <article>
+            <span>Matchups Final</span>
+            <strong>
+              {{ cycle()?.completedMatchupCount ?? 0 }} /
+              {{ cycle()?.totalMatchupCount ?? matchups().length }}
+            </strong>
+          </article>
+
+          <article>
+            <span>Queued Moves in View</span>
+            <strong>{{ getDisplayedQueuedMoveCount() }}</strong>
+          </article>
+        </div>
+
+        <div class="window-marker-legend" aria-label="Cycle game marker legend">
+          <span><i class="legend-dot marker-played"></i> Played</span>
+          <span><i class="legend-dot marker-missed"></i> Team game counted, no appearance</span>
+          <span><i class="legend-dot marker-upcoming"></i> Upcoming</span>
+          <span><i class="legend-dot marker-unavailable"></i> Not scheduled</span>
+        </div>
+
+        @if (getCurrentDisplayedMatchup(); as transparencyMatchup) {
+          <div class="matchup-window-summary">
+            <article>
+              <div>
+                <strong>{{ getTeamName(transparencyMatchup.teamAOwnerId) }}</strong>
+                <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamAOwnerId) }}</span>
+              </div>
+
+              <div class="pending-slot-chip-row">
+                @for (
+                  slotId of getPendingSlotLabels(transparencyMatchup.teamAOwnerId);
+                  track slotId
+                ) {
+                  <span>{{ slotId }}</span>
+                } @empty {
+                  <em>All slot windows complete</em>
+                }
+              </div>
+            </article>
+
+            @if (transparencyMatchup.teamBOwnerId) {
+              <article>
+                <div>
+                  <strong>{{ getTeamName(transparencyMatchup.teamBOwnerId) }}</strong>
+                  <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamBOwnerId) }}</span>
+                </div>
+
+                <div class="pending-slot-chip-row">
+                  @for (
+                    slotId of getPendingSlotLabels(transparencyMatchup.teamBOwnerId);
+                    track slotId
+                  ) {
+                    <span>{{ slotId }}</span>
+                  } @empty {
+                    <em>All slot windows complete</em>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
     }
-  </div>
-</details>
-}
+
+    @if (isCommissioner()) {
+      <details class="dev-controls-card">
+        <summary>
+          <span>Dev Controls</span>
+          <small>Commissioner fallback tools for testing</small>
+        </summary>
+
+        <div class="dev-controls-body">
+          <div class="score-sync-actions">
+            <button
+              type="button"
+              class="score-sync-button"
+              (click)="syncCurrentScoresToFirestore()"
+              [disabled]="
+                syncingScores() ||
+                scoringLoading() ||
+                !cycleScoring() ||
+                cycle()?.status === 'complete'
+              "
+            >
+              {{ syncingScores() ? 'Requesting Refresh...' : 'Refresh Shared Scores' }}
+            </button>
+
+            @if (syncScoreMessage()) {
+              <small class="score-sync-success">
+                {{ syncScoreMessage() }}
+              </small>
+            }
+
+            @if (syncScoreError()) {
+              <small class="schedule-warning">
+                {{ syncScoreError() }}
+              </small>
+            }
+          </div>
+
+          <div class="cycle-complete-actions">
+            <button
+              type="button"
+              class="complete-cycle-button"
+              (click)="completeCurrentCycleFromCurrentScores()"
+              [disabled]="
+                completingCycle() ||
+                scoringLoading() ||
+                !cycleScoring() ||
+                !areAllMatchupsReadyToComplete() ||
+                cycle()?.status === 'complete'
+              "
+            >
+              {{
+                completingCycle()
+                  ? 'Completing Cycle...'
+                  : cycle()?.status === 'complete'
+                    ? 'Cycle Complete'
+                    : 'Complete ' + getCycleLabel()
+              }}
+            </button>
+
+            @if (completeCycleMessage()) {
+              <small class="cycle-complete-success">
+                {{ completeCycleMessage() }}
+              </small>
+            }
+
+            @if (completeCycleError()) {
+              <small class="schedule-warning">
+                {{ completeCycleError() }}
+              </small>
+            }
+          </div>
+
+          @if (
+            projectionAccuracySaving() || projectionAccuracyMessage() || projectionAccuracyError()
+          ) {
+            <div
+              class="projection-accuracy-save-status"
+              [class.projection-accuracy-save-error]="!!projectionAccuracyError()"
+              role="status"
+              aria-live="polite"
+            >
+              <strong>
+                {{
+                  projectionAccuracySaving()
+                    ? 'Saving Projection Accuracy...'
+                    : projectionAccuracyError()
+                      ? 'Projection Accuracy Needs Attention'
+                      : 'Projection Accuracy Saved'
+                }}
+              </strong>
+
+              <small>
+                {{
+                  projectionAccuracyError() ||
+                    projectionAccuracyMessage() ||
+                    'Comparing the frozen cycle projections with final results.'
+                }}
+              </small>
+            </div>
+          }
+
+          @if (cycle()?.status === 'complete') {
+            <div class="next-cycle-actions">
+              @if (isFinalPlayoffRound()) {
+                <a
+                  class="start-next-cycle-button"
+                  [routerLink]="['/leagues', leagueId, 'playoffs']"
+                >
+                  View Final Playoff Bracket
+                </a>
+              } @else {
+                <button
+                  type="button"
+                  class="start-next-cycle-button"
+                  (click)="startNextCycleFromCurrentCycle()"
+                  [disabled]="startingNextCycle()"
+                >
+                  {{
+                    startingNextCycle()
+                      ? 'Starting Next Matchup Period...'
+                      : 'Start/Open ' + getNextCycleLabel()
+                  }}
+                </button>
+              }
+
+              @if (startNextCycleMessage()) {
+                <small class="cycle-complete-success">
+                  {{ startNextCycleMessage() }}
+                </small>
+              }
+
+              @if (startNextCycleError()) {
+                <small class="schedule-warning">
+                  {{ startNextCycleError() }}
+                </small>
+              }
+            </div>
+          }
+        </div>
+      </details>
+    }
 
     @if (!cycle()) {
       <section class="empty-cycle-card">
         <h2>{{ getCycleLabel() }} has not started yet.</h2>
-        <p>
-          Once the commissioner starts {{ getCycleLabel() }}, every matchup will appear here.
-        </p>
+        <p>Once the commissioner starts {{ getCycleLabel() }}, every matchup will appear here.</p>
       </section>
     } @else {
       <section class="matchups-section">
@@ -431,7 +434,9 @@
 
                 <span>
                   {{ getCurrentDisplayedMatchup()?.id || 'Matchup' }}
-                  <small>{{ getCurrentDisplayedMatchupIndex() + 1 }} / {{ matchups().length }}</small>
+                  <small
+                    >{{ getCurrentDisplayedMatchupIndex() + 1 }} / {{ matchups().length }}</small
+                  >
                 </span>
 
                 <button
@@ -487,1106 +492,1236 @@
           </section>
         } @else {
           <div class="matchup-grid">
-          @for (matchup of getDisplayedMatchups(); track matchup.id) {
-            <article
-              class="matchup-detail-card"
-              [class.my-matchup-outline]="isMyMatchup(matchup)"
-              [class.matchup-ready-outline]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-              [class.matchup-waiting-outline]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-            >
-              <div class="matchup-card-heading">
-                <strong>
-                  {{ matchup.id }}
-                </strong>
-                
+            @for (matchup of getDisplayedMatchups(); track matchup.id) {
+              <article
+                class="matchup-detail-card"
+                [class.my-matchup-outline]="isMyMatchup(matchup)"
+                [class.matchup-ready-outline]="
+                  isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                "
+                [class.matchup-waiting-outline]="
+                  !isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                "
+              >
+                <div class="matchup-card-heading">
+                  <strong>
+                    {{ matchup.id }}
+                  </strong>
 
-                @if (isMyMatchup(matchup)) {
-                  <span>Your Matchup</span>
-                }
+                  @if (isMyMatchup(matchup)) {
+                    <span>Your Matchup</span>
+                  }
 
-                <span
-                  class="matchup-readiness-badge"
-                  [class.readiness-complete]="isMatchupComplete(matchup)"
-                  [class.readiness-ready]="isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-                  [class.readiness-waiting]="!isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)"
-                >
-                  {{ getMatchupReadinessLabel(matchup) }}
-                </span>
-              </div>
+                  <span
+                    class="matchup-readiness-badge"
+                    [class.readiness-complete]="isMatchupComplete(matchup)"
+                    [class.readiness-ready]="
+                      isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                    "
+                    [class.readiness-waiting]="
+                      !isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                    "
+                  >
+                    {{ getMatchupReadinessLabel(matchup) }}
+                  </span>
+                </div>
 
-              <div [class]="getTeamsComparisonClass()">
-                @if (shouldShowTeamA()) {
-                <section
-  class="team-matchup-panel"
-  [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamAOwnerId)"
-  [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamAOwnerId)"
->
-                  <div class="team-summary-row">
-                    <div>
-                      <h3>
-  {{ getTeamName(matchup.teamAOwnerId) }}
+                <div [class]="getTeamsComparisonClass()">
+                  @if (shouldShowTeamA()) {
+                    <section
+                      class="team-matchup-panel"
+                      [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+                      [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+                    >
+                      <div class="team-summary-row">
+                        <div>
+                          <h3>
+                            {{ getTeamName(matchup.teamAOwnerId) }}
 
-  @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
-    <span
-      class="result-badge"
-      [class.result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
-      [class.result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
-    >
-      {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
-    </span>
-  }
-</h3>
-                      <p>{{ getTeamRecord(matchup.teamAOwnerId) }}</p>
-                    </div>
-
-                    <div class="team-score-pair">
-                      <div>
-                        <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
-                        <span>Current</span>
-                      </div>
-
-                      <div>
-                        <strong>
-                          {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}
-                        </strong>
-                        <span>Projected</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="fantasy-roster-board">
-                    <div class="forward-row">
-                      @for (position of forwardPositions; track position) {
-                        <section class="fantasy-position-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
+                            @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
+                              <span
+                                class="result-badge"
+                                [class.result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+                                [class.result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+                              >
+                                {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
+                              </span>
                             }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-                    </div>
-
-                    <div class="defense-goalie-row">
-                      @for (position of defensePositions; track position) {
-                        <section class="fantasy-position-group defense-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots defense-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
-                            }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-
-                      @for (position of goaliePositions; track position) {
-                        <section class="fantasy-position-group goalie-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card goalie-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
-                            }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamAOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-                    </div>
-                  </div>
-                </section>
-                }
-
-                @if (shouldShowMatchupDivider()) {
-                  <div class="comparison-vs">vs</div>
-                }
-
-                @if (shouldShowTeamB()) {
-                <section
-  class="team-matchup-panel"
-  [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamBOwnerId)"
-  [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamBOwnerId)"
->
-                  <div class="team-summary-row">
-                    <div>
-                      <h3>
-  {{ getTeamName(matchup.teamBOwnerId) }}
-
-  @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
-    <span
-      class="result-badge"
-      [class.result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
-      [class.result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
-    >
-      {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
-    </span>
-  }
-</h3>
-                      <p>{{ getTeamRecord(matchup.teamBOwnerId) }}</p>
-                    </div>
-
-                    <div class="team-score-pair">
-                      <div>
-                        <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
-                        <span>Current</span>
-                      </div>
-
-                      <div>
-                        <strong>
-                          {{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}
-                        </strong>
-                        <span>Projected</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="fantasy-roster-board">
-                    <div class="forward-row">
-                      @for (position of forwardPositions; track position) {
-                        <section class="fantasy-position-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
-                            }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-                    </div>
-
-                    <div class="defense-goalie-row">
-                      @for (position of defensePositions; track position) {
-                        <section class="fantasy-position-group defense-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots defense-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
-                            }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-
-                      @for (position of goaliePositions; track position) {
-                        <section class="fantasy-position-group goalie-group">
-                          <div class="fantasy-position-header">
-                            {{ getPositionLabel(position) }}
-                          </div>
-
-                          <div class="fantasy-position-slots">
-                            @for (
-                              pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
-                              track pick.overallPick
-                            ) {
-                              <article
-  class="fantasy-player-card goalie-card"
-  role="link"
-  tabindex="0"
-  (click)="openAssetDetail(pick.asset)"
-  (keydown.enter)="openAssetDetail(pick.asset)"
->
-                                @if (getAssetLogoUrl(pick.asset); as logoUrl) {
-                                  <img
-                                    class="fantasy-player-logo"
-                                    [src]="logoUrl"
-                                    [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-                                  />
-                                }
-
-                                <div class="fantasy-player-main">
-                                  <strong>{{ getAssetName(pick.asset) }}</strong>
-
-                                  <span>
-                                    {{ getAssetTeamLabel(pick.asset) }}
-                                    · {{ pick.asset.position }}
-                                  </span>
-
-                                  <em>
-                                    Games:
-                                    {{ getAssetGamesPlayed(pick.asset) }}
-                                    played /
-                                    {{ getAssetGamesLeft(pick.asset) }}
-                                    left
-                                  </em>
-
-                                  <div
-                                    class="window-game-markers"
-                                    [attr.aria-label]="getWindowStatusLabel(pick)"
-                                  >
-                                    @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                      <span
-                                        class="window-game-marker"
-                                        [class.marker-played]="marker.status === 'played'"
-                                        [class.marker-missed]="marker.status === 'missed'"
-                                        [class.marker-upcoming]="marker.status === 'upcoming'"
-                                        [class.marker-unavailable]="marker.status === 'unavailable'"
-                                        [title]="marker.title"
-                                      >
-                                        {{ marker.index }}
-                                      </span>
-                                    }
-                                  </div>
-
-                                  <small class="window-status-copy">
-                                    {{ getWindowStatusLabel(pick) }}
-                                  </small>
-
-                                  @if (getPendingMoveForPick(pick); as pendingMove) {
-                                    <div class="queued-slot-move">
-                                      <span>Next window</span>
-                                      <strong>{{ getPendingMoveAssetName(pendingMove) }}</strong>
-                                    </div>
-                                  }
-
-                                  @if (getWindowForPick(pick)) {
-                                    <details
-                                      class="window-game-details"
-                                      (click)="stopCardNavigation($event)"
-                                      (keydown.enter)="stopCardNavigation($event)"
-                                    >
-                                      <summary>View six-game window</summary>
-                                      <div class="window-game-detail-list">
-                                        @for (marker of getWindowGameMarkers(pick); track marker.index) {
-                                          <div>
-                                            <span>Game {{ marker.index }}</span>
-                                            <strong>{{ marker.gameLabel }}</strong>
-                                            <small>
-                                              {{ marker.gameDate || 'Date pending' }}
-                                              · {{ marker.statusLabel }}
-                                              @if (marker.gameId) {
-                                                · ID {{ marker.gameId }}
-                                              }
-                                            </small>
-                                          </div>
-                                        }
-                                      </div>
-                                    </details>
-                                  }
-                                </div>
-
-                                <div class="fantasy-player-score-stack">
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}
-                                    </strong>
-                                    <span>Cur</span>
-                                  </div>
-
-                                  <div>
-                                    <strong>
-                                      {{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}
-                                    </strong>
-                                    <span>Proj</span>
-                                  </div>
-                                </div>
-                              </article>
-                            }
-                          </div>
-
-                          <footer class="position-total-row">
-                            <span>{{ position }} Total</span>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionCurrentTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Cur</small>
-                            </div>
-
-                            <div>
-                              <strong>
-                                {{ getProjectionDisplay(getPositionProjectedTotal(matchup.teamBOwnerId, position)) }}
-                              </strong>
-                              <small>Proj</small>
-                            </div>
-
-                            <em>
-                              {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
-                              /
-                              {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
-                              GP/Left
-                            </em>
-                          </footer>
-                        </section>
-                      }
-                    </div>
-                  </div>
-                </section>
-                }
-              </div>
-
-              <p class="matchup-projection-note">
-                {{ getProjectedWinnerLabel(matchup) }}
-              </p>
-
-              @if (isMatchupComplete(matchup)) {
-                <section class="matchup-breakdown-card">
-                  <div class="breakdown-heading">
-                    <div>
-                      <span class="eyebrow">Balance Audit</span>
-                      <h3>Why this matchup finished this way</h3>
-                    </div>
-
-                    <p>{{ getMatchupBreakdownSummary(matchup) }}</p>
-                  </div>
-
-                  @if (!cycleScoring()) {
-                    <p class="breakdown-loading-message">
-                      Player-level breakdown is loading. Team totals are saved, but position and player details appear once scoring data finishes loading.
-                    </p>
-                  } @else {
-                    <div class="breakdown-team-grid">
-                      <article class="breakdown-team-card">
-                        <div class="breakdown-team-title">
-                          <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
-                          <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                          </h3>
+                          <p>{{ getTeamRecord(matchup.teamAOwnerId) }}</p>
                         </div>
 
-                        <div class="breakdown-total-grid">
+                        <div class="team-score-pair">
                           <div>
-                            <small>Actual</small>
-                            <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
+                            <strong>{{
+                              getProjectionDisplay(
+                                getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)
+                              )
+                            }}</strong>
+                            <span>Current</span>
                           </div>
 
                           <div>
-                            <small>Projected</small>
-                            <strong>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</strong>
-                          </div>
-
-                          <div>
-                            <small>Over / Under</small>
-                            <strong
-                              class="delta-value"
-                              [class.delta-positive]="isMeaningfulPositiveProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
-                              [class.delta-negative]="isMeaningfulNegativeProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
-                              [class.delta-neutral]="isNeutralProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId), getProjectedCycleForTeam(matchup.teamAOwnerId))"
-                            >
-                              {{ getSignedProjectionDisplay(getMatchupTeamProjectionDelta(matchup, matchup.teamAOwnerId)) }}
+                            <strong>
+                              {{
+                                getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId))
+                              }}
                             </strong>
+                            <span>Projected</span>
                           </div>
                         </div>
+                      </div>
 
-                        <div class="position-breakdown-list">
-                          @for (row of getPositionBreakdownRows(matchup.teamAOwnerId); track row.position) {
-                            <div class="position-breakdown-row">
-                              <span>{{ row.label }}</span>
-
-                              <div>
-                                <strong>{{ getProjectionDisplay(row.actual) }}</strong>
-                                <small>actual</small>
+                      <div class="fantasy-roster-board">
+                        <div class="forward-row">
+                          @for (position of forwardPositions; track position) {
+                            <section class="fantasy-position-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
                               </div>
 
-                              <div>
-                                <strong>{{ getProjectionDisplay(row.projected) }}</strong>
-                                <small>proj</small>
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
                               </div>
 
-                              <div>
-                                <strong
-                                  class="delta-value"
-                                  [class.delta-positive]="isMeaningfulPositiveProjectionDelta(row.actual, row.projected)"
-                                  [class.delta-negative]="isMeaningfulNegativeProjectionDelta(row.actual, row.projected)"
-                                  [class.delta-neutral]="isNeutralProjectionDelta(row.actual, row.projected)"
-                                >
-                                  {{ getSignedProjectionDisplay(row.delta) }}
-                                </strong>
-                                <small>+/-</small>
-                              </div>
-                            </div>
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
                           }
                         </div>
-                      </article>
 
-                      @if (matchup.teamBOwnerId) {
+                        <div class="defense-goalie-row">
+                          @for (position of defensePositions; track position) {
+                            <section class="fantasy-position-group defense-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots defense-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+
+                          @for (position of goaliePositions; track position) {
+                            <section class="fantasy-position-group goalie-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamAOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card goalie-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamAOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamAOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamAOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+                        </div>
+                      </div>
+                    </section>
+                  }
+
+                  @if (shouldShowMatchupDivider()) {
+                    <div class="comparison-vs">vs</div>
+                  }
+
+                  @if (shouldShowTeamB()) {
+                    <section
+                      class="team-matchup-panel"
+                      [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+                      [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+                    >
+                      <div class="team-summary-row">
+                        <div>
+                          <h3>
+                            {{ getTeamName(matchup.teamBOwnerId) }}
+
+                            @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
+                              <span
+                                class="result-badge"
+                                [class.result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+                                [class.result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+                              >
+                                {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
+                              </span>
+                            }
+                          </h3>
+                          <p>{{ getTeamRecord(matchup.teamBOwnerId) }}</p>
+                        </div>
+
+                        <div class="team-score-pair">
+                          <div>
+                            <strong>{{
+                              getProjectionDisplay(
+                                getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)
+                              )
+                            }}</strong>
+                            <span>Current</span>
+                          </div>
+
+                          <div>
+                            <strong>
+                              {{
+                                getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId))
+                              }}
+                            </strong>
+                            <span>Projected</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="fantasy-roster-board">
+                        <div class="forward-row">
+                          @for (position of forwardPositions; track position) {
+                            <section class="fantasy-position-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+                        </div>
+
+                        <div class="defense-goalie-row">
+                          @for (position of defensePositions; track position) {
+                            <section class="fantasy-position-group defense-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots defense-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+
+                          @for (position of goaliePositions; track position) {
+                            <section class="fantasy-position-group goalie-group">
+                              <div class="fantasy-position-header">
+                                {{ getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of getTeamPicksByPosition(matchup.teamBOwnerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card goalie-card"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="openAssetDetail(pick.asset)"
+                                    (keydown.enter)="openAssetDetail(pick.asset)"
+                                  >
+                                    @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      <em>
+                                        Games:
+                                        {{ getAssetGamesPlayed(pick.asset) }}
+                                        played /
+                                        {{ getAssetGamesLeft(pick.asset) }}
+                                        left
+                                      </em>
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                      <small class="window-status-copy">
+                                        {{ getWindowStatusLabel(pick) }}
+                                      </small>
+
+                                      @if (getPendingMoveForPick(pick); as pendingMove) {
+                                        <div class="queued-slot-move">
+                                          <span>Next window</span>
+                                          <strong>{{
+                                            getPendingMoveAssetName(pendingMove)
+                                          }}</strong>
+                                        </div>
+                                      }
+
+                                      @if (getWindowForPick(pick)) {
+                                        <details
+                                          class="window-game-details"
+                                          (click)="stopCardNavigation($event)"
+                                          (keydown.enter)="stopCardNavigation($event)"
+                                        >
+                                          <summary>View six-game window</summary>
+                                          <div class="window-game-detail-list">
+                                            @for (
+                                              marker of getWindowGameMarkers(pick);
+                                              track marker.index
+                                            ) {
+                                              <div>
+                                                <span>Game {{ marker.index }}</span>
+                                                <strong>{{ marker.gameLabel }}</strong>
+                                                <small>
+                                                  {{ marker.gameDate || 'Date pending' }}
+                                                  · {{ marker.statusLabel }}
+                                                  @if (marker.gameId) {
+                                                    · ID {{ marker.gameId }}
+                                                  }
+                                                </small>
+                                              </div>
+                                            }
+                                          </div>
+                                        </details>
+                                      }
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(
+                                              getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            getProjectionDisplay(getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionCurrentTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      getProjectionDisplay(
+                                        getPositionProjectedTotal(matchup.teamBOwnerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ getPositionGamesPlayed(matchup.teamBOwnerId, position) }}
+                                  /
+                                  {{ getPositionGamesLeft(matchup.teamBOwnerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+                        </div>
+                      </div>
+                    </section>
+                  }
+                </div>
+
+                <p class="matchup-projection-note">
+                  {{ getProjectedWinnerLabel(matchup) }}
+                </p>
+
+                @if (isMatchupComplete(matchup)) {
+                  <section class="matchup-breakdown-card">
+                    <div class="breakdown-heading">
+                      <div>
+                        <span class="eyebrow">Balance Audit</span>
+                        <h3>Why this matchup finished this way</h3>
+                      </div>
+
+                      <p>{{ getMatchupBreakdownSummary(matchup) }}</p>
+                    </div>
+
+                    @if (!cycleScoring()) {
+                      <p class="breakdown-loading-message">
+                        Player-level breakdown is loading. Team totals are saved, but position and
+                        player details appear once scoring data finishes loading.
+                      </p>
+                    } @else {
+                      <div class="breakdown-team-grid">
                         <article class="breakdown-team-card">
                           <div class="breakdown-team-title">
-                            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
-                            <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                            <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                            <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
                           </div>
 
                           <div class="breakdown-total-grid">
                             <div>
                               <small>Actual</small>
-                              <strong>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
+                              <strong>{{
+                                getProjectionDisplay(
+                                  getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)
+                                )
+                              }}</strong>
                             </div>
 
                             <div>
                               <small>Projected</small>
-                              <strong>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</strong>
+                              <strong>{{
+                                getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId))
+                              }}</strong>
                             </div>
 
                             <div>
                               <small>Over / Under</small>
                               <strong
                                 class="delta-value"
-                                [class.delta-positive]="isMeaningfulPositiveProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
-                                [class.delta-negative]="isMeaningfulNegativeProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
-                                [class.delta-neutral]="isNeutralProjectionDelta(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId), getProjectedCycleForTeam(matchup.teamBOwnerId))"
+                                [class.delta-positive]="
+                                  isMeaningfulPositiveProjectionDelta(
+                                    getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId),
+                                    getProjectedCycleForTeam(matchup.teamAOwnerId)
+                                  )
+                                "
+                                [class.delta-negative]="
+                                  isMeaningfulNegativeProjectionDelta(
+                                    getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId),
+                                    getProjectedCycleForTeam(matchup.teamAOwnerId)
+                                  )
+                                "
+                                [class.delta-neutral]="
+                                  isNeutralProjectionDelta(
+                                    getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId),
+                                    getProjectedCycleForTeam(matchup.teamAOwnerId)
+                                  )
+                                "
                               >
-                                {{ getSignedProjectionDisplay(getMatchupTeamProjectionDelta(matchup, matchup.teamBOwnerId)) }}
+                                {{
+                                  getSignedProjectionDisplay(
+                                    getMatchupTeamProjectionDelta(matchup, matchup.teamAOwnerId)
+                                  )
+                                }}
                               </strong>
                             </div>
                           </div>
 
                           <div class="position-breakdown-list">
-                            @for (row of getPositionBreakdownRows(matchup.teamBOwnerId); track row.position) {
+                            @for (
+                              row of getPositionBreakdownRows(matchup.teamAOwnerId);
+                              track row.position
+                            ) {
                               <div class="position-breakdown-row">
                                 <span>{{ row.label }}</span>
 
@@ -1603,9 +1738,15 @@
                                 <div>
                                   <strong
                                     class="delta-value"
-                                    [class.delta-positive]="isMeaningfulPositiveProjectionDelta(row.actual, row.projected)"
-                                    [class.delta-negative]="isMeaningfulNegativeProjectionDelta(row.actual, row.projected)"
-                                  [class.delta-neutral]="isNeutralProjectionDelta(row.actual, row.projected)"
+                                    [class.delta-positive]="
+                                      isMeaningfulPositiveProjectionDelta(row.actual, row.projected)
+                                    "
+                                    [class.delta-negative]="
+                                      isMeaningfulNegativeProjectionDelta(row.actual, row.projected)
+                                    "
+                                    [class.delta-neutral]="
+                                      isNeutralProjectionDelta(row.actual, row.projected)
+                                    "
                                   >
                                     {{ getSignedProjectionDisplay(row.delta) }}
                                   </strong>
@@ -1615,85 +1756,204 @@
                             }
                           </div>
                         </article>
-                      }
-                    </div>
 
-                    <div class="impact-grid">
-                      <article class="impact-card">
-                        <h4>Top Contributors</h4>
-
-                        @for (row of getTopContributors(matchup); track row.ownerId + row.asset.assetKey) {
-                          <div class="impact-row">
-                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
-                              <img
-                                [src]="logoUrl"
-                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
-                              />
-                            }
-
-                            <div>
-                              <strong>{{ getAssetName(row.asset) }}</strong>
-                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                        @if (matchup.teamBOwnerId) {
+                          <article class="breakdown-team-card">
+                            <div class="breakdown-team-title">
+                              <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                              <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
                             </div>
 
-                            <em>{{ getProjectionDisplay(row.actual) }}</em>
-                          </div>
-                        }
-                      </article>
+                            <div class="breakdown-total-grid">
+                              <div>
+                                <small>Actual</small>
+                                <strong>{{
+                                  getProjectionDisplay(
+                                    getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)
+                                  )
+                                }}</strong>
+                              </div>
 
-                      <article class="impact-card">
-                        <h4>Biggest Overperformers</h4>
+                              <div>
+                                <small>Projected</small>
+                                <strong>{{
+                                  getProjectionDisplay(
+                                    getProjectedCycleForTeam(matchup.teamBOwnerId)
+                                  )
+                                }}</strong>
+                              </div>
 
-                        @for (row of getTopOverPerformers(matchup); track row.ownerId + row.asset.assetKey) {
-                          <div class="impact-row">
-                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
-                              <img
-                                [src]="logoUrl"
-                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
-                              />
-                            }
-
-                            <div>
-                              <strong>{{ getAssetName(row.asset) }}</strong>
-                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                              <div>
+                                <small>Over / Under</small>
+                                <strong
+                                  class="delta-value"
+                                  [class.delta-positive]="
+                                    isMeaningfulPositiveProjectionDelta(
+                                      getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId),
+                                      getProjectedCycleForTeam(matchup.teamBOwnerId)
+                                    )
+                                  "
+                                  [class.delta-negative]="
+                                    isMeaningfulNegativeProjectionDelta(
+                                      getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId),
+                                      getProjectedCycleForTeam(matchup.teamBOwnerId)
+                                    )
+                                  "
+                                  [class.delta-neutral]="
+                                    isNeutralProjectionDelta(
+                                      getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId),
+                                      getProjectedCycleForTeam(matchup.teamBOwnerId)
+                                    )
+                                  "
+                                >
+                                  {{
+                                    getSignedProjectionDisplay(
+                                      getMatchupTeamProjectionDelta(matchup, matchup.teamBOwnerId)
+                                    )
+                                  }}
+                                </strong>
+                              </div>
                             </div>
 
-                            <em class="delta-positive">{{ getSignedProjectionDisplay(row.delta) }}</em>
-                          </div>
-                        } @empty {
-                          <p class="empty-impact-message">No players beat projection.</p>
-                        }
-                      </article>
+                            <div class="position-breakdown-list">
+                              @for (
+                                row of getPositionBreakdownRows(matchup.teamBOwnerId);
+                                track row.position
+                              ) {
+                                <div class="position-breakdown-row">
+                                  <span>{{ row.label }}</span>
 
-                      <article class="impact-card">
-                        <h4>Biggest Underperformers</h4>
+                                  <div>
+                                    <strong>{{ getProjectionDisplay(row.actual) }}</strong>
+                                    <small>actual</small>
+                                  </div>
 
-                        @for (row of getTopUnderPerformers(matchup); track row.ownerId + row.asset.assetKey) {
-                          <div class="impact-row">
-                            @if (getAssetLogoUrl(row.asset); as logoUrl) {
-                              <img
-                                [src]="logoUrl"
-                                [alt]="getAssetTeamLabel(row.asset) + ' logo'"
-                              />
-                            }
+                                  <div>
+                                    <strong>{{ getProjectionDisplay(row.projected) }}</strong>
+                                    <small>proj</small>
+                                  </div>
 
-                            <div>
-                              <strong>{{ getAssetName(row.asset) }}</strong>
-                              <span>{{ row.teamName }} · {{ row.position }}</span>
+                                  <div>
+                                    <strong
+                                      class="delta-value"
+                                      [class.delta-positive]="
+                                        isMeaningfulPositiveProjectionDelta(
+                                          row.actual,
+                                          row.projected
+                                        )
+                                      "
+                                      [class.delta-negative]="
+                                        isMeaningfulNegativeProjectionDelta(
+                                          row.actual,
+                                          row.projected
+                                        )
+                                      "
+                                      [class.delta-neutral]="
+                                        isNeutralProjectionDelta(row.actual, row.projected)
+                                      "
+                                    >
+                                      {{ getSignedProjectionDisplay(row.delta) }}
+                                    </strong>
+                                    <small>+/-</small>
+                                  </div>
+                                </div>
+                              }
                             </div>
-
-                            <em class="delta-negative">{{ getSignedProjectionDisplay(row.delta) }}</em>
-                          </div>
-                        } @empty {
-                          <p class="empty-impact-message">No players finished below projection.</p>
+                          </article>
                         }
-                      </article>
-                    </div>
-                  }
-                </section>
-              }
-            </article>
-          }
+                      </div>
+
+                      <div class="impact-grid">
+                        <article class="impact-card">
+                          <h4>Top Contributors</h4>
+
+                          @for (
+                            row of getTopContributors(matchup);
+                            track row.ownerId + row.asset.assetKey
+                          ) {
+                            <div class="impact-row">
+                              @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                                <img
+                                  [src]="logoUrl"
+                                  [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                                />
+                              }
+
+                              <div>
+                                <strong>{{ getAssetName(row.asset) }}</strong>
+                                <span>{{ row.teamName }} · {{ row.position }}</span>
+                              </div>
+
+                              <em>{{ getProjectionDisplay(row.actual) }}</em>
+                            </div>
+                          }
+                        </article>
+
+                        <article class="impact-card">
+                          <h4>Biggest Overperformers</h4>
+
+                          @for (
+                            row of getTopOverPerformers(matchup);
+                            track row.ownerId + row.asset.assetKey
+                          ) {
+                            <div class="impact-row">
+                              @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                                <img
+                                  [src]="logoUrl"
+                                  [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                                />
+                              }
+
+                              <div>
+                                <strong>{{ getAssetName(row.asset) }}</strong>
+                                <span>{{ row.teamName }} · {{ row.position }}</span>
+                              </div>
+
+                              <em class="delta-positive">{{
+                                getSignedProjectionDisplay(row.delta)
+                              }}</em>
+                            </div>
+                          } @empty {
+                            <p class="empty-impact-message">No players beat projection.</p>
+                          }
+                        </article>
+
+                        <article class="impact-card">
+                          <h4>Biggest Underperformers</h4>
+
+                          @for (
+                            row of getTopUnderPerformers(matchup);
+                            track row.ownerId + row.asset.assetKey
+                          ) {
+                            <div class="impact-row">
+                              @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                                <img
+                                  [src]="logoUrl"
+                                  [alt]="getAssetTeamLabel(row.asset) + ' logo'"
+                                />
+                              }
+
+                              <div>
+                                <strong>{{ getAssetName(row.asset) }}</strong>
+                                <span>{{ row.teamName }} · {{ row.position }}</span>
+                              </div>
+
+                              <em class="delta-negative">{{
+                                getSignedProjectionDisplay(row.delta)
+                              }}</em>
+                            </div>
+                          } @empty {
+                            <p class="empty-impact-message">
+                              No players finished below projection.
+                            </p>
+                          }
+                        </article>
+                      </div>
+                    }
+                  </section>
+                }
+              </article>
+            }
           </div>
         }
       </section>

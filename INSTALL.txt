@@ -1,60 +1,134 @@
-FANTASY HOCKEY — BANKED PLAYOFF WINDOWS V1
-READY-TO-INSTALL PACKAGE
+RELEASE READINESS + FULL-SEASON VALIDATION V1
+=============================================
 
 PURPOSE
-This package lets every playoff roster slot continue into its next independent
-six-game NHL window before the fantasy bracket destination is known. Once the
-previous playoff matchup finishes, the already-started window is routed to the
-Championship, 3rd Place, 5th Place, or consolation matchup.
+-------
+This package adds the final commissioner release-readiness layer before the
+visual redesign. It combines:
 
-REQUIRED BASELINE
-Install this on top of the current project after the previously supplied:
-- asynchronous cycle windows
-- slot-boundary roster moves
-- matchup window completion
-- cycle transparency and simulator
-- cycle simulator path fix
-- projection-board recovery
+- a deterministic four-team full-season simulator;
+- a live league production-readiness checklist;
+- production-safe historical/live scoring configuration;
+- architecture/version reporting;
+- guarded scoring, injury, projection, and lease recovery controls;
+- automatic hiding of temporary simulator buttons in production builds.
 
-PROJECT ROOT
+INSTALL LOCATION
+----------------
+Extract this package into:
+
 /Users/StephenH/Documents/Programming/fantasy-hockey
 
+Allow every included file to replace the existing file at the same relative
+path.
+
 INSTALL STEPS
-1. Stop the Angular development server.
-2. Back up the project or commit the current working state.
-3. Open this package.
-4. Copy its contents into the project root.
-5. Allow all included source files and firestore.rules to replace the existing
-   versions.
-6. Deploy the included Firestore rules:
+-------------
+1. Stop the Angular development server with Ctrl+C.
+2. Commit or back up the current working project.
+3. Extract this ZIP into the project root above.
+4. Confirm these new files exist:
 
-   firebase deploy --only firestore:rules --project nhl-fantasy-app-ab673
+   src/app/features/release/release-readiness/release-readiness.ts
+   src/app/core/release/release-readiness.service.ts
+   src/app/core/release/season-lifecycle-simulator.ts
+   src/environments/app-runtime.config.ts
+   src/environments/app-runtime.config.production.ts
 
-7. Restart the project with the known-good Node version:
+5. Restart with the established Node version:
 
+   node -v
    npm start
 
-8. Hard-refresh the browser.
-9. Open a league's Playoff Bracket page as commissioner.
-10. Select "Test Banked Windows" and confirm all seven checks pass.
+   The known-good local version is Node v22.23.1.
 
-NEW FIRESTORE LOCATION
-/leagues/{leagueId}/playoffWindowBanks/{ownerId}/windows/window-{N}
+6. Wait for a successful Angular compile and hard-refresh the browser.
 
-Each document stores one fantasy team's complete roster snapshot for one
-postseason six-game window. It includes frozen projections, exact roster-slot
-assignments, accumulated scoring progress, completion state, and eventual
-bracket assignment.
+7. Open the new page from:
 
-IMPORTANT TEST-LEAGUE NOTE
-Start a fresh playoff test after installing this package. A playoff that was
-already actively scored under the old non-banked format did not preserve all
-of the historical bank assignments needed for a perfect retroactive migration.
-Regular-season data and leagues whose playoffs have not started are unaffected.
+   League Hub -> More league tools -> Release Readiness
 
-NO OTHER SETUP IS REQUIRED
-- No npm install
-- No dependency changes
-- No Firestore index deployment
-- No Cloud Functions deployment
-- No scheduled job
+   Direct route:
+
+   /leagues/{leagueId}/release-readiness
+
+NO FIREBASE DEPLOYMENT REQUIRED
+-------------------------------
+This package does not change:
+
+- firestore.rules
+- firestore.indexes.json
+- Cloud Functions
+- package.json
+- package-lock.json
+- dependencies
+
+The recovery controls use existing commissioner-authorized collections and
+services. No data migration is required.
+
+DEVELOPMENT VS PRODUCTION MODE
+------------------------------
+Development (`npm start`) intentionally keeps historical scoring enabled for
+local testing and displays a prominent test-mode banner.
+
+The development configuration lives in:
+
+src/environments/app-runtime.config.ts
+
+A production build automatically replaces it with:
+
+src/environments/app-runtime.config.production.ts
+
+The production configuration:
+
+- uses live NHL scoring;
+- has no historical scoring date;
+- hides temporary simulator links/buttons;
+- blocks historical scoring on production-like hosts as an additional runtime
+  safety guard.
+
+This replacement is configured in angular.json. A manual source-code edit is no
+longer required before every production build.
+
+FIRST TEST
+----------
+1. Open Release Readiness as the commissioner.
+2. Select "Run Full Season".
+3. Confirm 22 / 22 deterministic lifecycle checks pass.
+4. Review the required launch checklist.
+5. Historical mode should be shown as a warning in local development, not as a
+   system failure.
+6. Use "Refresh Checks" after any recovery action.
+7. Confirm normal managers receive "Commissioner access required" if they try
+   to open the route directly.
+
+SAFE RECOVERY CONTROLS
+----------------------
+- Request Score Refresh:
+  requests one immediate shared scoring pass; unchanged snapshots remain
+  write-suppressed.
+
+- Clear Stuck Lease:
+  clears only an expired or errored scoring lease. It refuses to interrupt a
+  healthy active worker.
+
+- Refresh Injuries:
+  retries the shared global player-availability synchronization.
+
+- Regenerate Projection:
+  creates a fresh projection snapshot for one exact target cycle. The existing
+  collapsed-board health protection remains active.
+
+TEST BUTTON CLEANUP
+-------------------
+Temporary simulators remain available only in local development while final
+validation and visual work continue. Production builds now hide:
+
+- Run 7-vs-4 Simulator
+- Test Banked Windows
+- Run Scorer Tests
+- Run Projection Tests
+
+During the visual redesign, the old standalone simulator routes/components can
+be removed from the production source tree after their useful logic is retained
+as automated test files. See TEST_UI_CLEANUP_PLAN.txt.

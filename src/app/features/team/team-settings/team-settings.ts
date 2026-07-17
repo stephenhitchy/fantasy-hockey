@@ -17,7 +17,6 @@ import {
 } from '../../../core/cycle/cycle.models';
 
 import {
-  calculateCycleScoring,
   CycleAssetScoreSummary,
   CycleScoringResult
 } from '../../../core/cycle/cycle-scoring.service';
@@ -94,6 +93,10 @@ import {
   listenToFantasyRoster
 } from '../../../core/team/roster.service';
 
+import {
+  listenToSharedCycleScoring
+} from '../../../core/live-scoring/live-scoring.service';
+
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -115,8 +118,7 @@ interface PendingRosterDrop {
   asset: RosterAsset;
 }
 
-const TEST_CYCLE_START_DATE: Date | null =
-  new Date('2026-01-10T12:00:00');
+import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.config';
 
 @Component({
   selector: 'app-team-settings',
@@ -171,8 +173,7 @@ export class TeamSettings implements OnDestroy {
   private stopCycleRosterPicksListener: (() => void) | null = null;
   private stopLatestCycleListener: (() => void) | null = null;
   private stopMatchupsListener: (() => void) | null = null;
-  private scoringLoadKey: string | null = null;
-  private scoringRequestId = 0;
+  private stopSharedScoringListener: (() => void) | null = null;
 
   readonly currentMatchup = computed(() => {
     const userId = this.userId;
@@ -249,6 +250,7 @@ export class TeamSettings implements OnDestroy {
     this.stopCycleRosterPicksListener?.();
     this.stopLatestCycleListener?.();
     this.stopMatchupsListener?.();
+    this.stopSharedScoringListener?.();
   }
 
   async loadTeam(): Promise<void> {
@@ -402,16 +404,34 @@ export class TeamSettings implements OnDestroy {
         this.latestMatchups.set([]);
         this.cycleRosterPicks.set([]);
         this.cycleScoring.set(null);
-        this.scoringLoadKey = null;
         void this.loadCurrentCycleScoringIfReady();
         this.stopMatchupsListener?.();
         this.stopMatchupsListener = null;
         this.stopCycleRosterPicksListener?.();
         this.stopCycleRosterPicksListener = null;
+        this.stopSharedScoringListener?.();
+        this.stopSharedScoringListener = null;
 
         if (!cycle) {
           return;
         }
+
+        this.scoringLoading.set(true);
+        this.stopSharedScoringListener = listenToSharedCycleScoring(
+          leagueId,
+          cycle.cycleNumber,
+          (snapshot) => {
+            this.clearLiveDataWarning('Shared scoring');
+            this.cycleScoring.set(snapshot?.result ?? null);
+            this.scoringLoading.set(false);
+            this.scoringError.set('');
+          },
+          (error) => {
+            this.recordLiveDataWarning('Shared scoring', error);
+            this.scoringLoading.set(false);
+            this.scoringError.set(error.message);
+          }
+        );
 
         this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
           leagueId,
@@ -419,8 +439,7 @@ export class TeamSettings implements OnDestroy {
           (picks) => {
             this.clearLiveDataWarning('Cycle roster');
             this.cycleRosterPicks.set(picks);
-            this.scoringLoadKey = null;
-            void this.loadCurrentCycleScoringIfReady();
+                void this.loadCurrentCycleScoringIfReady();
           },
           (error) => {
             this.recordLiveDataWarning('Cycle roster', error);
@@ -447,72 +466,13 @@ export class TeamSettings implements OnDestroy {
 
 
   private async loadCurrentCycleScoringIfReady(): Promise<void> {
-    const cycle = this.latestCycle();
-    const league = this.league();
-    const picks = this.cycleRosterPicks().length > 0
-      ? this.cycleRosterPicks()
-      : this.picks();
-
-    if (!cycle || !league || picks.length === 0) {
+    if (this.cycleScoring()) {
+      this.scoringLoading.set(false);
       return;
     }
 
-    const startDate =
-      this.getProjectionWindowStartDate() ?? new Date();
-
-    const season =
-      this.getNhlSeasonForDate(startDate);
-
-    const scoringRules =
-      league.scoringRules ?? defaultScoringRules;
-
-    const requiredGamesPerCycle =
-      scoringRules.requiredGamesPerCycle ??
-      defaultScoringRules.requiredGamesPerCycle;
-
-    const scoringKey = [
-      cycle.id,
-      cycle.cycleNumber,
-      season,
-      requiredGamesPerCycle,
-      picks.map((pick) => pick.asset.assetKey).join('|')
-    ].join('::');
-
-    if (this.scoringLoadKey === scoringKey) {
-      return;
-    }
-
-    this.scoringLoadKey = scoringKey;
-    this.scoringLoading.set(true);
-    this.scoringError.set('');
-
-    const requestId = ++this.scoringRequestId;
-
-    try {
-      const result = await calculateCycleScoring({
-        picks,
-        cycleNumber: cycle.cycleNumber,
-        season,
-        requiredGamesPerCycle,
-        scoringRules
-      });
-
-      if (requestId !== this.scoringRequestId) {
-        return;
-      }
-
-      this.cycleScoring.set(result);
-    } catch (error: unknown) {
-      this.scoringLoadKey = null;
-      this.scoringError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load current roster scoring.'
-      );
-    } finally {
-      if (requestId === this.scoringRequestId) {
-        this.scoringLoading.set(false);
-      }
+    if (this.latestCycle()) {
+      this.scoringLoading.set(true);
     }
   }
 
@@ -1780,8 +1740,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   private getProjectionWindowStartDate(): Date | null {
-    if (TEST_CYCLE_START_DATE) {
-      return TEST_CYCLE_START_DATE;
+    const historicalTestDate = getHistoricalScoringTestDate();
+
+    if (historicalTestDate) {
+      return historicalTestDate;
     }
 
     const cycle = this.latestCycle();

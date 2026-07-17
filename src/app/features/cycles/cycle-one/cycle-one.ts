@@ -1,27 +1,15 @@
-import {
-  Component,
-  computed,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 
 import {
-  calculateCycleScoring,
   CycleAssetScoreSummary,
-  CycleScoringResult
+  CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
 
-import {
-  defaultScoringRules
-} from '../../../core/scoring/scoring-rules';
+import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 
-import {
-  saveProjectionAccuracyForCycle
-} from '../../../core/projection/projection-accuracy.service';
+import { saveProjectionAccuracyForCycle } from '../../../core/projection/projection-accuracy.service';
 
-import {
-  getFrozenCycleProjection
-} from '../../../core/projection/cycle-projection.util';
+import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
 
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -33,7 +21,7 @@ import {
   FantasyAssetCycleWindow,
   FantasyCycle,
   FantasyMatchup,
-  FantasyTeamCycleWindows
+  FantasyTeamCycleWindows,
 } from '../../../core/cycle/cycle.models';
 
 import {
@@ -45,40 +33,26 @@ import {
   listenToLeagueCycles,
   reconcileRegularSeasonCycleMatchupCompletion,
   startNextCycle,
-  updateCycleMatchupScores
 } from '../../../core/cycle/cycle.service';
 
 import {
   listenToCycleTeamWindows,
-  syncCycleTeamWindows
+  syncCycleTeamWindows,
 } from '../../../core/cycle/asset-cycle-window.service';
 
-import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
+import { loadDraftPlayerPool } from '../../../core/draft/draft-player-pool.service';
 
-import {
-  DraftableAsset,
-  DraftPick,
-  DraftPosition
-} from '../../../core/draft/draft.models';
+import { DraftableAsset, DraftPick, DraftPosition } from '../../../core/draft/draft.models';
 
-import {
-  listenToDraftPicks
-} from '../../../core/draft/draft.service';
+import { listenToDraftPicks } from '../../../core/draft/draft.service';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  getFantasyPlayoffs
-} from '../../../core/playoffs/playoff.service';
+import { getFantasyPlayoffs } from '../../../core/playoffs/playoff.service';
 
 import {
   ensureNextPlayoffBankWindows,
-  syncPlayoffWindowBankScores
+  syncPlayoffWindowBankScores,
 } from '../../../core/playoffs/playoff-window-bank.service';
 
 import {
@@ -86,33 +60,35 @@ import {
   getPlayoffRoundLabel,
   getStandardPlayoffRoundCount,
   getStandardPlayoffTeamCount,
-  getStandardRegularSeasonCycleCount
+  getStandardRegularSeasonCycleCount,
 } from '../../../core/playoffs/playoff-format';
 
-import {
-  getNhlTeamSeasonSchedule,
-  NHL_DRAFT_CLUBS
-} from '../../../core/nhl/nhl-api.service';
+import { getNhlTeamSeasonSchedule, NHL_DRAFT_CLUBS } from '../../../core/nhl/nhl-api.service';
+
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
+  areDeveloperToolsEnabled,
+  getHistoricalScoringTestDate,
+} from '../../../core/cycle/cycle-runtime.config';
 
 import {
-  FantasyRoster,
-  PendingRosterSlotMove
-} from '../../../core/team/roster.models';
+  listenToSharedCycleScoring,
+  listenToSharedLiveScoringControl,
+  requestLeagueLiveScoringRefresh,
+} from '../../../core/live-scoring/live-scoring.service';
 
 import {
-  listenToFantasyRoster
-} from '../../../core/team/roster.service';
+  SharedCycleScoringSnapshot,
+  SharedLiveScoringControl,
+} from '../../../core/live-scoring/live-scoring.models';
+
+import { FantasyRoster, PendingRosterSlotMove } from '../../../core/team/roster.models';
+
+import { listenToFantasyRoster } from '../../../core/team/roster.service';
 
 const CYCLE_PROJECTION_WINDOW_DAYS = 14;
 const NHL_SCHEDULE_BATCH_SIZE = 4;
-
-const TEST_CYCLE_START_DATE: Date | null =
-  new Date('2026-01-10T12:00:00');
 
 const PROJECTION_NEUTRAL_PERCENT = 0.1;
 const PROJECTION_NEUTRAL_POINTS = 10;
@@ -160,9 +136,10 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-cycle-one',
   imports: [RouterLink],
   templateUrl: './cycle-one.html',
-  styleUrl: './cycle-one.css'
+  styleUrl: './cycle-one.css',
 })
 export class CycleOne implements OnDestroy {
+  readonly developerToolsEnabled = areDeveloperToolsEnabled();
   leagueId = '';
   userId = '';
   cycleNumber = 1;
@@ -181,6 +158,8 @@ export class CycleOne implements OnDestroy {
   teamGameCounts = signal<Record<string, number>>({});
 
   cycleScoring = signal<CycleScoringResult | null>(null);
+  sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
+  liveScoringControl = signal<SharedLiveScoringControl | null>(null);
   matchupView = signal<MatchupViewMode>('both');
 
   scoringLoading = signal(false);
@@ -207,7 +186,6 @@ export class CycleOne implements OnDestroy {
   projectionAccuracySaving = signal(false);
   projectionAccuracyMessage = signal('');
   projectionAccuracyError = signal('');
-
 
   isCommissioner(): boolean {
     return this.league()?.commissionerId === this.userId;
@@ -317,7 +295,7 @@ export class CycleOne implements OnDestroy {
 
     const gamesLeft = this.matchups().reduce(
       (total, matchup) => total + this.getMatchupRosterGamesLeft(matchup),
-      0
+      0,
     );
 
     const gameLabel = gamesLeft === 1 ? 'counted roster game' : 'counted roster games';
@@ -356,7 +334,6 @@ export class CycleOne implements OnDestroy {
     return 'auto-status-active';
   }
 
-
   shouldShowCompactAutoStatus(): boolean {
     return Boolean(
       this.autoFlowError() ||
@@ -366,13 +343,9 @@ export class CycleOne implements OnDestroy {
       this.scoringLoading() ||
       this.completingCycle() ||
       this.startingNextCycle() ||
-      (
-        this.cycleScoring() &&
-        !this.hasCurrentCycleScheduledGames()
-      )
+      (this.cycleScoring() && !this.hasCurrentCycleScheduledGames()),
     );
   }
-
 
   hasCurrentCycleScheduledGames(): boolean {
     const scoring = this.cycleScoring();
@@ -381,9 +354,7 @@ export class CycleOne implements OnDestroy {
       return scoring.cycleHasScheduledGames;
     }
 
-    return Object.values(scoring?.assetScores ?? {}).some(
-      (summary) => summary.scheduledGames > 0
-    );
+    return Object.values(scoring?.assetScores ?? {}).some((summary) => summary.scheduledGames > 0);
   }
 
   getNoMoreGamesMessage(): string {
@@ -391,404 +362,353 @@ export class CycleOne implements OnDestroy {
   }
 
   setMatchupView(viewMode: MatchupViewMode): void {
-  this.matchupView.set(viewMode);
-}
+    this.matchupView.set(viewMode);
+  }
 
   shouldShowTeamA(): boolean {
-  return (
-    this.matchupView() === 'teamA' ||
-    this.matchupView() === 'both'
-  );
-}
+    return this.matchupView() === 'teamA' || this.matchupView() === 'both';
+  }
 
   shouldShowTeamB(): boolean {
-  return (
-    this.matchupView() === 'teamB' ||
-    this.matchupView() === 'both'
-  );
-}
+    return this.matchupView() === 'teamB' || this.matchupView() === 'both';
+  }
 
   shouldShowMatchupDivider(): boolean {
-  return this.matchupView() === 'both';
-}
+    return this.matchupView() === 'both';
+  }
 
   getTeamsComparisonClass(): string {
-  return this.matchupView() === 'both'
-    ? 'teams-comparison'
-    : 'teams-comparison single-team-view';
-}
+    return this.matchupView() === 'both' ? 'teams-comparison' : 'teams-comparison single-team-view';
+  }
 
   async completeCurrentCycleFromCurrentScores(): Promise<void> {
-  this.completeCycleMessage.set('');
-  this.completeCycleError.set('');
+    this.completeCycleMessage.set('');
+    this.completeCycleError.set('');
 
-  const cycle = this.cycle();
-  const scoring = this.cycleScoring();
-  const matchups = this.matchups();
+    const cycle = this.cycle();
+    const scoring = this.cycleScoring();
+    const matchups = this.matchups();
 
-  if (!cycle) {
-    this.completeCycleError.set(
-      `${this.getCycleLabel()} has not been started yet.`
-    );
-    return;
-  }
-
-  if (cycle.status === 'complete') {
-    this.completeCycleError.set(
-      `${this.getCycleLabel()} has already been completed.`
-    );
-    return;
-  }
-
-  if (!scoring) {
-    this.completeCycleError.set(
-      'Current scores are not ready yet. Wait for scoring to finish loading.'
-    );
-    return;
-  }
-
-  if (matchups.length === 0) {
-    this.completeCycleError.set(
-      'No matchups were found to complete.'
-    );
-    return;
-  }
-
-  if (!this.areAllMatchupsReadyToComplete()) {
-    this.completeCycleError.set(
-      `${this.getCycleLabel()} is not ready to complete yet. Some roster games are still unfinished.`
-    );
-    return;
-  }
-
-  this.completingCycle.set(true);
-
-  try {
-    if (cycle.phase === 'regular_season') {
-      const completionResult =
-        await reconcileRegularSeasonCycleMatchupCompletion(
-          this.leagueId,
-          this.cycleNumber
-        );
-
-      if (!completionResult.cycleCompleted) {
-        throw new Error(
-          `${this.getCycleLabel()} still has ${completionResult.pendingMatchupCount} matchup${completionResult.pendingMatchupCount === 1 ? '' : 's'} waiting on roster-slot windows.`
-        );
-      }
-    } else {
-      await completeCycle(
-        this.leagueId,
-        this.cycleNumber,
-        matchups,
-        scoring.teamScores
-      );
+    if (!cycle) {
+      this.completeCycleError.set(`${this.getCycleLabel()} has not been started yet.`);
+      return;
     }
 
-    await this.saveCurrentCycleProjectionAccuracy();
+    if (cycle.status === 'complete') {
+      this.completeCycleError.set(`${this.getCycleLabel()} has already been completed.`);
+      return;
+    }
 
-    this.completeCycleMessage.set(
-      cycle.phase === 'playoffs'
-        ? `${this.getCycleLabel()} was completed and the playoff bracket advanced.`
-        : `${this.getCycleLabel()} was completed and team records were updated.`
-    );
+    if (!scoring) {
+      this.completeCycleError.set(
+        'Current scores are not ready yet. Wait for scoring to finish loading.',
+      );
+      return;
+    }
 
-    this.teams.set(
-      await getLeagueTeams(this.leagueId)
-    );
+    if (matchups.length === 0) {
+      this.completeCycleError.set('No matchups were found to complete.');
+      return;
+    }
 
-    await this.startOrOpenNextCycleAfterCompletion('manual', true);
-  } catch (error: unknown) {
-    this.completeCycleError.set(
-      error instanceof Error
-        ? error.message
-        : `Unable to complete ${this.getCycleLabel()}.`
-    );
-  } finally {
-    this.completingCycle.set(false);
+    if (!this.areAllMatchupsReadyToComplete()) {
+      this.completeCycleError.set(
+        `${this.getCycleLabel()} is not ready to complete yet. Some roster games are still unfinished.`,
+      );
+      return;
+    }
+
+    this.completingCycle.set(true);
+
+    try {
+      if (cycle.phase === 'regular_season') {
+        const completionResult = await reconcileRegularSeasonCycleMatchupCompletion(
+          this.leagueId,
+          this.cycleNumber,
+        );
+
+        if (!completionResult.cycleCompleted) {
+          throw new Error(
+            `${this.getCycleLabel()} still has ${completionResult.pendingMatchupCount} matchup${completionResult.pendingMatchupCount === 1 ? '' : 's'} waiting on roster-slot windows.`,
+          );
+        }
+      } else {
+        await completeCycle(this.leagueId, this.cycleNumber, matchups, scoring.teamScores);
+      }
+
+      await this.saveCurrentCycleProjectionAccuracy();
+
+      this.completeCycleMessage.set(
+        cycle.phase === 'playoffs'
+          ? `${this.getCycleLabel()} was completed and the playoff bracket advanced.`
+          : `${this.getCycleLabel()} was completed and team records were updated.`,
+      );
+
+      this.teams.set(await getLeagueTeams(this.leagueId));
+
+      await this.startOrOpenNextCycleAfterCompletion('manual', true);
+    } catch (error: unknown) {
+      this.completeCycleError.set(
+        error instanceof Error ? error.message : `Unable to complete ${this.getCycleLabel()}.`,
+      );
+    } finally {
+      this.completingCycle.set(false);
+    }
   }
-}
-
 
   async startNextCycleFromCurrentCycle(): Promise<void> {
-  this.startNextCycleMessage.set('');
-  this.startNextCycleError.set('');
+    this.startNextCycleMessage.set('');
+    this.startNextCycleError.set('');
 
-  const cycle = this.cycle();
+    const cycle = this.cycle();
 
-  if (!cycle) {
-    this.startNextCycleError.set(
-      `${this.getCycleLabel()} has not been started yet.`
-    );
-    return;
+    if (!cycle) {
+      this.startNextCycleError.set(`${this.getCycleLabel()} has not been started yet.`);
+      return;
+    }
+
+    if (cycle.status !== 'complete') {
+      this.startNextCycleError.set(
+        `${this.getCycleLabel()} must be complete before opening ${this.getNextCycleLabel()}.`,
+      );
+      return;
+    }
+
+    await this.startOrOpenNextCycleAfterCompletion('manual');
   }
-
-  if (cycle.status !== 'complete') {
-    this.startNextCycleError.set(
-      `${this.getCycleLabel()} must be complete before opening ${this.getNextCycleLabel()}.`
-    );
-    return;
-  }
-
-  await this.startOrOpenNextCycleAfterCompletion('manual');
-}
 
   isMatchupComplete(matchup: FantasyMatchup): boolean {
-  return (
-    matchup.status === 'complete' ||
-    this.cycle()?.status === 'complete'
-  );
-}
+    return matchup.status === 'complete' || this.cycle()?.status === 'complete';
+  }
 
   getTeamRosterGamesLeft(ownerId: string | null): number {
-  if (!ownerId) {
-    return 0;
-  }
+    if (!ownerId) {
+      return 0;
+    }
 
-  return this.getTeamPicks(ownerId).reduce(
-    (total, pick) => total + this.getAssetGamesLeft(pick.asset),
-    0
-  );
-}
+    return this.getTeamPicks(ownerId).reduce(
+      (total, pick) => total + this.getAssetGamesLeft(pick.asset),
+      0,
+    );
+  }
 
   getTeamRosterGamesPlayed(ownerId: string | null): number {
-  if (!ownerId) {
-    return 0;
-  }
+    if (!ownerId) {
+      return 0;
+    }
 
-  return this.getTeamPicks(ownerId).reduce(
-    (total, pick) => total + this.getAssetGamesPlayed(pick.asset),
-    0
-  );
-}
+    return this.getTeamPicks(ownerId).reduce(
+      (total, pick) => total + this.getAssetGamesPlayed(pick.asset),
+      0,
+    );
+  }
 
   isTeamReadyToComplete(ownerId: string | null): boolean {
-  if (!ownerId) {
-    return true;
+    if (!ownerId) {
+      return true;
+    }
+
+    const scoring = this.cycleScoring();
+
+    if (typeof scoring?.teamCycleComplete?.[ownerId] === 'boolean') {
+      return scoring.teamCycleComplete[ownerId];
+    }
+
+    const picks = this.getTeamPicks(ownerId);
+
+    return picks.length > 0 && picks.every((pick) => this.getAssetGamesLeft(pick.asset) === 0);
   }
-
-  const scoring = this.cycleScoring();
-
-  if (typeof scoring?.teamCycleComplete?.[ownerId] === 'boolean') {
-    return scoring.teamCycleComplete[ownerId];
-  }
-
-  const picks = this.getTeamPicks(ownerId);
-
-  return (
-    picks.length > 0 &&
-    picks.every((pick) => this.getAssetGamesLeft(pick.asset) === 0)
-  );
-}
 
   getMatchupRosterGamesLeft(matchup: FantasyMatchup): number {
-  return (
-    this.getTeamRosterGamesLeft(matchup.teamAOwnerId) +
-    this.getTeamRosterGamesLeft(matchup.teamBOwnerId)
-  );
-}
+    return (
+      this.getTeamRosterGamesLeft(matchup.teamAOwnerId) +
+      this.getTeamRosterGamesLeft(matchup.teamBOwnerId)
+    );
+  }
 
   isMatchupReadyToComplete(matchup: FantasyMatchup): boolean {
-  if (this.isMatchupComplete(matchup)) {
-    return true;
-  }
+    if (this.isMatchupComplete(matchup)) {
+      return true;
+    }
 
-  if (!this.cycleScoring() || !this.hasCurrentCycleScheduledGames()) {
-    return false;
-  }
+    if (!this.cycleScoring() || !this.hasCurrentCycleScheduledGames()) {
+      return false;
+    }
 
-  return (
-    this.isTeamReadyToComplete(matchup.teamAOwnerId) &&
-    this.isTeamReadyToComplete(matchup.teamBOwnerId)
-  );
-}
+    return (
+      this.isTeamReadyToComplete(matchup.teamAOwnerId) &&
+      this.isTeamReadyToComplete(matchup.teamBOwnerId)
+    );
+  }
 
   areAllMatchupsReadyToComplete(): boolean {
-  const matchups = this.matchups();
+    const matchups = this.matchups();
 
-  return (
-    Boolean(this.cycleScoring()) &&
-    this.hasCurrentCycleScheduledGames() &&
-    matchups.length > 0 &&
-    matchups.every((matchup) => this.isMatchupReadyToComplete(matchup))
-  );
-}
+    return (
+      Boolean(this.cycleScoring()) &&
+      this.hasCurrentCycleScheduledGames() &&
+      matchups.length > 0 &&
+      matchups.every((matchup) => this.isMatchupReadyToComplete(matchup))
+    );
+  }
 
   getMatchupReadinessLabel(matchup: FantasyMatchup): string {
-  if (this.isMatchupComplete(matchup)) {
-    return 'Complete';
+    if (this.isMatchupComplete(matchup)) {
+      return 'Complete';
+    }
+
+    if (this.scoringLoading()) {
+      return 'Checking Games';
+    }
+
+    if (!this.cycleScoring()) {
+      return 'Waiting for Scores';
+    }
+
+    if (!this.hasCurrentCycleScheduledGames()) {
+      return 'No NHL Games Left';
+    }
+
+    if (this.isMatchupReadyToComplete(matchup)) {
+      return 'Ready to Complete';
+    }
+
+    const gamesLeft = this.getMatchupRosterGamesLeft(matchup);
+    const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
+
+    return `Waiting on ${gamesLeft} ${gameLabel}`;
   }
-
-  if (this.scoringLoading()) {
-    return 'Checking Games';
-  }
-
-  if (!this.cycleScoring()) {
-    return 'Waiting for Scores';
-  }
-
-  if (!this.hasCurrentCycleScheduledGames()) {
-    return 'No NHL Games Left';
-  }
-
-  if (this.isMatchupReadyToComplete(matchup)) {
-    return 'Ready to Complete';
-  }
-
-  const gamesLeft = this.getMatchupRosterGamesLeft(matchup);
-  const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
-
-  return `Waiting on ${gamesLeft} ${gameLabel}`;
-}
 
   getCycleCompletionReadinessText(): string {
-  const cycle = this.cycle();
+    const cycle = this.cycle();
 
-  if (!cycle) {
-    return `${this.getCycleLabel()} readiness will appear once the cycle starts.`;
+    if (!cycle) {
+      return `${this.getCycleLabel()} readiness will appear once the cycle starts.`;
+    }
+
+    if (cycle.status === 'complete') {
+      return `${this.getCycleLabel()} is complete.`;
+    }
+
+    if (this.scoringLoading()) {
+      return 'Checking whether all matchup roster games are complete...';
+    }
+
+    if (!this.cycleScoring()) {
+      return 'Completion readiness will appear once current scoring loads.';
+    }
+
+    if (this.areAllMatchupsReadyToComplete()) {
+      return `${this.getCycleLabel()} is ready and will complete automatically.`;
+    }
+
+    const gamesLeft = this.matchups().reduce(
+      (total, matchup) => total + this.getMatchupRosterGamesLeft(matchup),
+      0,
+    );
+
+    const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
+
+    return `${this.getCycleLabel()} is waiting on ${gamesLeft} counted ${gameLabel}.`;
   }
 
-  if (cycle.status === 'complete') {
-    return `${this.getCycleLabel()} is complete.`;
+  isWinningTeam(matchup: FantasyMatchup, ownerId: string | null): boolean {
+    if (!ownerId || !this.isMatchupComplete(matchup)) {
+      return false;
+    }
+
+    return matchup.winnerOwnerId === ownerId;
   }
 
-  if (this.scoringLoading()) {
-    return 'Checking whether all matchup roster games are complete...';
+  isLosingTeam(matchup: FantasyMatchup, ownerId: string | null): boolean {
+    if (
+      !ownerId ||
+      !this.isMatchupComplete(matchup) ||
+      !matchup.teamBOwnerId ||
+      !matchup.winnerOwnerId
+    ) {
+      return false;
+    }
+
+    return matchup.winnerOwnerId !== ownerId;
   }
 
-  if (!this.cycleScoring()) {
-    return 'Completion readiness will appear once current scoring loads.';
+  getTeamResultLabel(matchup: FantasyMatchup, ownerId: string | null): string {
+    if (!ownerId || !this.isMatchupComplete(matchup)) {
+      return '';
+    }
+
+    if (!matchup.teamBOwnerId && ownerId === matchup.teamAOwnerId) {
+      return 'Bye Win';
+    }
+
+    if (!matchup.winnerOwnerId) {
+      return 'Tie';
+    }
+
+    return matchup.winnerOwnerId === ownerId ? 'Winner' : 'Lost';
   }
-
-  if (this.areAllMatchupsReadyToComplete()) {
-    return `${this.getCycleLabel()} is ready and will complete automatically.`;
-  }
-
-  const gamesLeft = this.matchups().reduce(
-    (total, matchup) => total + this.getMatchupRosterGamesLeft(matchup),
-    0
-  );
-
-  const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
-
-  return `${this.getCycleLabel()} is waiting on ${gamesLeft} counted ${gameLabel}.`;
-}
-
-  isWinningTeam(
-  matchup: FantasyMatchup,
-  ownerId: string | null
-): boolean {
-  if (!ownerId || !this.isMatchupComplete(matchup)) {
-    return false;
-  }
-
-  return matchup.winnerOwnerId === ownerId;
-}
-
-  isLosingTeam(
-  matchup: FantasyMatchup,
-  ownerId: string | null
-): boolean {
-  if (
-    !ownerId ||
-    !this.isMatchupComplete(matchup) ||
-    !matchup.teamBOwnerId ||
-    !matchup.winnerOwnerId
-  ) {
-    return false;
-  }
-
-  return matchup.winnerOwnerId !== ownerId;
-}
-
-  getTeamResultLabel(
-  matchup: FantasyMatchup,
-  ownerId: string | null
-): string {
-  if (!ownerId || !this.isMatchupComplete(matchup)) {
-    return '';
-  }
-
-  if (!matchup.teamBOwnerId && ownerId === matchup.teamAOwnerId) {
-    return 'Bye Win';
-  }
-
-  if (!matchup.winnerOwnerId) {
-    return 'Tie';
-  }
-
-  return matchup.winnerOwnerId === ownerId
-    ? 'Winner'
-    : 'Lost';
-}
 
   async syncCurrentScoresToFirestore(): Promise<void> {
-  this.syncScoreMessage.set('');
-  this.syncScoreError.set('');
+    this.syncScoreMessage.set('');
+    this.syncScoreError.set('');
+    this.syncingScores.set(true);
 
-  const scoring = this.cycleScoring();
-  const matchups = this.matchups();
-
-  if (!scoring) {
-    this.syncScoreError.set(
-      'Current scores are not ready yet. Wait for scoring to finish loading.'
-    );
-    return;
+    try {
+      await requestLeagueLiveScoringRefresh(this.leagueId);
+      this.syncScoreMessage.set(
+        'Shared scoring refresh requested. The league scorer will publish only if NHL data changed.',
+      );
+    } catch (error: unknown) {
+      this.syncScoreError.set(
+        error instanceof Error ? error.message : 'Unable to request a shared scoring refresh.',
+      );
+    } finally {
+      this.syncingScores.set(false);
+    }
   }
 
-  if (matchups.length === 0) {
-    this.syncScoreError.set(
-      'No matchups were found to update.'
-    );
-    return;
+  getSharedScoringStatusLabel(): string {
+    const control = this.liveScoringControl();
+
+    if (!control) {
+      return 'Waiting for shared scorer';
+    }
+
+    if (control.status === 'refreshing') {
+      return 'Checking NHL scores';
+    }
+
+    if (control.status === 'error') {
+      return 'Shared scorer needs attention';
+    }
+
+    return this.cycleScoring() ? 'Shared scoring active' : 'Waiting for first shared update';
   }
 
-  this.syncingScores.set(true);
+  getSharedScoringStatusText(): string {
+    const control = this.liveScoringControl();
 
-  try {
-    await updateCycleMatchupScores(
-      this.leagueId,
-      this.cycleNumber,
-      matchups,
-      scoring.teamScores
-    );
+    if (control?.lastError) {
+      return control.lastError;
+    }
 
-    this.syncScoreMessage.set(
-      'Current scores were synced to Firestore.'
-    );
-  } catch (error: unknown) {
-    this.syncScoreError.set(
-      error instanceof Error
-        ? error.message
-        : 'Unable to sync current scores.'
-    );
-  } finally {
-    this.syncingScores.set(false);
+    const snapshot = this.sharedScoringSnapshot();
+
+    if (snapshot?.result.refreshedAt) {
+      return `Last NHL calculation: ${new Date(snapshot.result.refreshedAt).toLocaleString()}. Live games refresh about every 10 minutes.`;
+    }
+
+    return 'One commissioner browser calculates scores for the entire league. Other managers read the shared result.';
   }
-}
 
-  readonly forwardPositions: DraftPosition[] = [
-    'LW',
-    'C',
-    'RW'
-  ];
+  readonly forwardPositions: DraftPosition[] = ['LW', 'C', 'RW'];
 
-  readonly defensePositions: DraftPosition[] = [
-    'D'
-  ];
+  readonly defensePositions: DraftPosition[] = ['D'];
 
-  readonly goaliePositions: DraftPosition[] = [
-    'G'
-  ];
+  readonly goaliePositions: DraftPosition[] = ['G'];
 
-
-  readonly breakdownPositions: DraftPosition[] = [
-    'LW',
-    'C',
-    'RW',
-    'D',
-    'G'
-  ];
+  readonly breakdownPositions: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
 
   private routeSubscription: Subscription | null = null;
   private pageLoadRequestId = 0;
@@ -798,6 +718,8 @@ export class CycleOne implements OnDestroy {
   private stopPicksListener: (() => void) | null = null;
   private stopCycleRosterPicksListener: (() => void) | null = null;
   private stopTeamWindowsListener: (() => void) | null = null;
+  private stopSharedScoringListener: (() => void) | null = null;
+  private stopLiveScoringControlListener: (() => void) | null = null;
   private stopDisplayedRosterListeners: (() => void)[] = [];
   private displayedRosterOwnerKey = '';
   private liveDraftPicks: DraftPick[] = [];
@@ -806,6 +728,7 @@ export class CycleOne implements OnDestroy {
   private scheduleLoadStartedForCycleId: string | null = null;
   private scoringLoadKey: string | null = null;
   private scoringRequestId = 0;
+  private sharedScoringRefreshRequestKey: string | null = null;
   private windowProgressSyncKey: string | null = null;
   private matchupCompletionSyncKey: string | null = null;
   private autoCompleteAttemptKey: string | null = null;
@@ -815,19 +738,15 @@ export class CycleOne implements OnDestroy {
   private refreshEffectivePicks(): void {
     const snapshotPicks = this.cycleRosterSnapshotPicks;
     const livePicks = this.liveDraftPicks;
-    const effectivePicks = snapshotPicks.length > 0
-      ? snapshotPicks
-      : livePicks;
+    const effectivePicks = snapshotPicks.length > 0 ? snapshotPicks : livePicks;
 
-    const source = snapshotPicks.length > 0
-      ? 'cycle-snapshot'
-      : 'live-draft-picks';
+    const source = snapshotPicks.length > 0 ? 'cycle-snapshot' : 'live-draft-picks';
 
     const nextKey = [
       source,
-      effectivePicks.map((pick) =>
-        `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`
-      ).join('|')
+      effectivePicks
+        .map((pick) => `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`)
+        .join('|'),
     ].join('::');
 
     if (this.effectivePicksKey === nextKey) {
@@ -843,116 +762,96 @@ export class CycleOne implements OnDestroy {
   }
 
   private async loadCurrentCycleScoringIfReady(): Promise<void> {
-  const cycle = this.cycle();
-  const league = this.league();
-  const picks = this.picks();
+    const cycle = this.cycle();
+    const league = this.league();
+    const picks = this.picks();
 
-
-  if (!cycle || !league || picks.length === 0) {
-    return;
-  }
-
-  const startDate =
-    this.getProjectionWindowStartDate() ?? new Date();
-
-  const endDate =
-    this.getProjectionWindowEndDateFromStart(startDate);
-
-  const season =
-    this.getNhlSeasonForDate(startDate);
-
-  const scoringRules =
-    league.scoringRules ?? defaultScoringRules;
-
-  const requiredGamesPerCycle =
-    scoringRules.requiredGamesPerCycle ??
-    defaultScoringRules.requiredGamesPerCycle;
-
-  const scoringKey = [
-    cycle.id,
-    this.cycleNumber,
-    season,
-    requiredGamesPerCycle,
-    picks.map((pick) =>
-      `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`
-    ).join('|')
-  ].join('::');
-
-  if (this.scoringLoadKey === scoringKey) {
-    return;
-  }
-
-  this.scoringLoadKey = scoringKey;
-  this.scoringLoading.set(true);
-  this.scoringError.set('');
-
-  const requestId = ++this.scoringRequestId;
-
-  try {
-    const result =
-      await calculateCycleScoring({
-        picks,
-        cycleNumber: this.cycleNumber,
-        season,
-        requiredGamesPerCycle,
-        scoringRules,
-        expectedRosterSlotIdsByOwner:
-          cycle.expectedRosterSlotIdsByOwner ?? {}
-      });
-
-    if (requestId !== this.scoringRequestId) {
+    if (!cycle || !league || picks.length === 0) {
       return;
     }
 
-    this.cycleScoring.set(result);
+    const scoringKey = [
+      cycle.id,
+      cycle.activeWindowCount ?? 0,
+      picks
+        .map((pick) => `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`)
+        .join('|'),
+    ].join('::');
 
-    if (this.isCommissioner()) {
+    if (this.scoringLoadKey === scoringKey) {
+      const snapshot = this.sharedScoringSnapshot();
+
+      if (snapshot) {
+        await this.applySharedScoringSnapshot(snapshot);
+      }
+
+      return;
+    }
+
+    this.scoringLoadKey = scoringKey;
+    this.scoringLoading.set(!this.sharedScoringSnapshot());
+    this.scoringError.set('');
+
+    const snapshot = this.sharedScoringSnapshot();
+
+    if (snapshot) {
+      await this.applySharedScoringSnapshot(snapshot);
+      return;
+    }
+
+    if (this.isCommissioner() && this.sharedScoringRefreshRequestKey !== scoringKey) {
+      this.sharedScoringRefreshRequestKey = scoringKey;
+
+      try {
+        await requestLeagueLiveScoringRefresh(this.leagueId);
+      } catch (error: unknown) {
+        this.scoringError.set(
+          error instanceof Error ? error.message : 'Unable to request shared NHL scoring.',
+        );
+        this.scoringLoading.set(false);
+      }
+    }
+  }
+
+  private async applySharedScoringSnapshot(snapshot: SharedCycleScoringSnapshot): Promise<void> {
+    if (snapshot.cycleNumber !== this.cycleNumber) {
+      return;
+    }
+
+    const cycle = this.cycle();
+    const picks = this.picks();
+    const result = snapshot.result;
+
+    this.sharedScoringSnapshot.set(snapshot);
+    this.cycleScoring.set(result);
+    this.scoringLoading.set(false);
+    this.scoringError.set('');
+    this.teamGameCounts.set({
+      ...this.teamGameCounts(),
+      ...result.teamGameCounts,
+    });
+
+    if (this.isCommissioner() && cycle && picks.length > 0) {
       await this.persistWindowProgressAndAdvance(cycle, picks, result);
     }
 
-    if (
-      this.isCommissioner() &&
-      cycle.status === 'complete'
-    ) {
-      void this.saveCurrentCycleProjectionAccuracy();
-    }
-
-    this.teamGameCounts.set({
-      ...this.teamGameCounts(),
-      ...result.teamGameCounts
-    });
-
     void this.evaluateAutoCompleteCycleIfReady();
-  } catch (error: unknown) {
-    this.scoringLoadKey = null;
-
-    this.scoringError.set(
-      error instanceof Error
-        ? error.message
-        : 'Unable to load current fantasy scoring.'
-    );
-  } finally {
-    if (requestId === this.scoringRequestId) {
-      this.scoringLoading.set(false);
-      void this.evaluateAutoCompleteCycleIfReady();
-    }
   }
-}
-
 
   private async persistWindowProgressAndAdvance(
     cycle: FantasyCycle,
     picks: DraftPick[],
-    scoring: CycleScoringResult
+    scoring: CycleScoringResult,
   ): Promise<void> {
     const progressKey = [
       cycle.id,
       picks.length,
       ...Object.values(scoring.windowScores)
         .sort((first, second) => first.windowId.localeCompare(second.windowId))
-        .map((summary) =>
-          `${summary.windowId}:${summary.status}:${summary.gamesPlayed}:${summary.currentScore}`
-        )
+        .map(
+          (summary) =>
+            `${summary.windowId}:${summary.status}:${summary.gamesPlayed}:${summary.currentScore}`,
+        ),
     ].join('|');
 
     if (this.windowProgressSyncKey === progressKey) {
@@ -962,41 +861,30 @@ export class CycleOne implements OnDestroy {
     this.windowProgressSyncKey = progressKey;
 
     try {
-      const windowSyncResult = await syncCycleTeamWindows(
-        this.leagueId,
-        cycle,
-        picks,
-        scoring
-      );
+      const windowSyncResult = await syncCycleTeamWindows(this.leagueId, cycle, picks, scoring);
 
       if (cycle.phase === 'regular_season') {
-        const completionKey = [
-          cycle.id,
-          windowSyncResult.completionFingerprint
-        ].join('::');
+        const completionKey = [cycle.id, windowSyncResult.completionFingerprint].join('::');
 
         if (this.matchupCompletionSyncKey !== completionKey) {
           this.matchupCompletionSyncKey = completionKey;
 
-          const completionResult =
-            await reconcileRegularSeasonCycleMatchupCompletion(
-              this.leagueId,
-              cycle.cycleNumber
-            );
+          const completionResult = await reconcileRegularSeasonCycleMatchupCompletion(
+            this.leagueId,
+            cycle.cycleNumber,
+          );
 
           if (completionResult.newlyCompletedMatchupIds.length > 0) {
             this.autoFlowMessage.set(
               completionResult.cycleCompleted
                 ? `${this.getCycleLabel()} is complete. All matchup results were finalized and standings were updated.`
-                : `${completionResult.newlyCompletedMatchupIds.length} matchup${completionResult.newlyCompletedMatchupIds.length === 1 ? '' : 's'} finalized. ${completionResult.pendingMatchupCount} still waiting on roster-slot windows.`
+                : `${completionResult.newlyCompletedMatchupIds.length} matchup${completionResult.newlyCompletedMatchupIds.length === 1 ? '' : 's'} finalized. ${completionResult.pendingMatchupCount} still waiting on roster-slot windows.`,
             );
           }
 
           if (completionResult.cycleCompleted) {
             await this.saveCurrentCycleProjectionAccuracy();
-            this.teams.set(
-              await getLeagueTeams(this.leagueId)
-            );
+            this.teams.set(await getLeagueTeams(this.leagueId));
           }
         }
       }
@@ -1008,10 +896,9 @@ export class CycleOne implements OnDestroy {
         if (playoffs && league) {
           const scoringRules = league.scoringRules ?? defaultScoringRules;
           const requiredGamesPerCycle =
-            scoringRules.requiredGamesPerCycle ??
-            defaultScoringRules.requiredGamesPerCycle;
+            scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
           const season = this.getNhlSeasonForDate(
-            this.getProjectionWindowStartDate() ?? new Date()
+            this.getProjectionWindowStartDate() ?? new Date(),
           );
           const banks = await syncPlayoffWindowBankScores({
             leagueId: this.leagueId,
@@ -1020,13 +907,13 @@ export class CycleOne implements OnDestroy {
             requiredGamesPerCycle,
             scoringRules,
             assignedPicks: picks,
-            assignedScoring: scoring
+            assignedScoring: scoring,
           });
 
           await ensureNextPlayoffBankWindows({
             leagueId: this.leagueId,
             playoffs,
-            banks
+            banks,
           });
         }
       }
@@ -1037,21 +924,18 @@ export class CycleOne implements OnDestroy {
           this.teams(),
           cycle,
           picks,
-          scoring
+          scoring,
         );
       } catch (advanceError: unknown) {
         console.warn(
           'Current window progress was saved, but one or more next-window assignments could not be opened yet.',
-          advanceError
+          advanceError,
         );
       }
     } catch (error: unknown) {
       this.windowProgressSyncKey = null;
       this.matchupCompletionSyncKey = null;
-      console.warn(
-        'Unable to save independent cycle-window progress.',
-        error
-      );
+      console.warn('Unable to save independent cycle-window progress.', error);
     }
   }
 
@@ -1108,31 +992,22 @@ export class CycleOne implements OnDestroy {
     this.completingCycle.set(true);
 
     try {
-      await completeCycle(
-        this.leagueId,
-        this.cycleNumber,
-        matchups,
-        scoring.teamScores
-      );
+      await completeCycle(this.leagueId, this.cycleNumber, matchups, scoring.teamScores);
 
       await this.saveCurrentCycleProjectionAccuracy();
 
       this.autoFlowMessage.set(
         cycle.phase === 'playoffs'
           ? `${this.getCycleLabel()} was completed automatically and the playoff bracket advanced.`
-          : `${this.getCycleLabel()} was completed automatically and team records were updated.`
+          : `${this.getCycleLabel()} was completed automatically and team records were updated.`,
       );
 
-      this.teams.set(
-        await getLeagueTeams(this.leagueId)
-      );
+      this.teams.set(await getLeagueTeams(this.leagueId));
 
       await this.startOrOpenNextCycleAfterCompletion('automatic', true);
     } catch (error: unknown) {
       const message =
-        error instanceof Error
-          ? error.message
-          : `Unable to auto-complete ${this.getCycleLabel()}.`;
+        error instanceof Error ? error.message : `Unable to auto-complete ${this.getCycleLabel()}.`;
 
       if (message.includes('has already been completed')) {
         this.autoFlowMessage.set(`${this.getCycleLabel()} is already complete.`);
@@ -1146,13 +1021,11 @@ export class CycleOne implements OnDestroy {
     }
   }
 
-
   private getDisplayedProjectionByAssetKey(): Record<string, number | null> {
     const projections: Record<string, number | null> = {};
 
     for (const pick of this.picks()) {
-      projections[pick.asset.assetKey] =
-        this.getBestCycleProjection(pick.asset);
+      projections[pick.asset.assetKey] = this.getBestCycleProjection(pick.asset);
     }
 
     return projections;
@@ -1168,20 +1041,14 @@ export class CycleOne implements OnDestroy {
     }
 
     const scoreKey = Object.values(scoring.assetScores)
-      .sort((first, second) =>
-        first.assetKey.localeCompare(second.assetKey)
-      )
-      .map((summary) =>
-        `${summary.assetKey}:${summary.currentScore}:${summary.actualGamesPlayed ?? 0}`
+      .sort((first, second) => first.assetKey.localeCompare(second.assetKey))
+      .map(
+        (summary) =>
+          `${summary.assetKey}:${summary.currentScore}:${summary.actualGamesPlayed ?? 0}`,
       )
       .join('|');
 
-    return [
-      this.leagueId,
-      cycle.id,
-      cycle.cycleNumber,
-      scoreKey
-    ].join('::');
+    return [this.leagueId, cycle.id, cycle.cycleNumber, scoreKey].join('::');
   }
 
   private async saveCurrentCycleProjectionAccuracy(): Promise<void> {
@@ -1217,25 +1084,23 @@ export class CycleOne implements OnDestroy {
         cycleNumber: cycle.cycleNumber,
         picks,
         scoring,
-        displayedProjectionByAssetKey:
-          this.getDisplayedProjectionByAssetKey()
+        displayedProjectionByAssetKey: this.getDisplayedProjectionByAssetKey(),
       });
 
       this.projectionAccuracyMessage.set(
-        `Projection accuracy saved for ${result.summary.gradedAssetCount} assets. Average error: ${result.summary.meanAbsoluteError.toFixed(1)} points.`
+        `Projection accuracy saved for ${result.summary.gradedAssetCount} assets. Average error: ${result.summary.meanAbsoluteError.toFixed(1)} points.`,
       );
     } catch (error: unknown) {
       this.projectionAccuracyAttemptKey = null;
       this.projectionAccuracyError.set(
         error instanceof Error
           ? error.message
-          : 'Unable to save projection accuracy for this cycle.'
+          : 'Unable to save projection accuracy for this cycle.',
       );
     } finally {
       this.projectionAccuracySaving.set(false);
     }
   }
-
 
   private async hasAnyRosterGamesForCycle(cycleNumber: number): Promise<boolean> {
     const league = this.league();
@@ -1247,46 +1112,34 @@ export class CycleOne implements OnDestroy {
 
     const scoringRules = league.scoringRules ?? defaultScoringRules;
     const requiredGamesPerCycle =
-      scoringRules.requiredGamesPerCycle ??
-      defaultScoringRules.requiredGamesPerCycle;
+      scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
 
     const startIndex = (cycleNumber - 1) * requiredGamesPerCycle;
     const endIndex = cycleNumber * requiredGamesPerCycle;
-    const season = this.getNhlSeasonForDate(
-      this.getProjectionWindowStartDate() ?? new Date()
-    );
+    const season = this.getNhlSeasonForDate(this.getProjectionWindowStartDate() ?? new Date());
 
     const teamAbbreviations = [
-      ...new Set(
-        picks.map((pick) => this.getAssetNhlTeamAbbreviation(pick.asset))
-      )
+      ...new Set(picks.map((pick) => this.getAssetNhlTeamAbbreviation(pick.asset))),
     ];
 
     for (const teamAbbreviation of teamAbbreviations) {
       try {
-        const schedule = await getNhlTeamSeasonSchedule(
-          teamAbbreviation,
-          season
-        );
+        const schedule = await getNhlTeamSeasonSchedule(teamAbbreviation, season);
 
         if (schedule.slice(startIndex, endIndex).length > 0) {
           return true;
         }
       } catch (error: unknown) {
-        console.warn(
-          `Unable to check next-cycle games for ${teamAbbreviation}.`,
-          error
-        );
+        console.warn(`Unable to check next-cycle games for ${teamAbbreviation}.`, error);
       }
     }
 
     return false;
   }
 
-
   private async startOrOpenNextCycleAfterCompletion(
     source: 'automatic' | 'manual',
-    allowBeforeCycleSnapshotUpdates: boolean = false
+    allowBeforeCycleSnapshotUpdates: boolean = false,
   ): Promise<void> {
     const cycle = this.cycle();
 
@@ -1303,11 +1156,7 @@ export class CycleOne implements OnDestroy {
       this.startNextCycleMessage.set(message);
       this.autoFlowMessage.set(message);
 
-      await this.router.navigate([
-        '/leagues',
-        this.leagueId,
-        'playoffs'
-      ]);
+      await this.router.navigate(['/leagues', this.leagueId, 'playoffs']);
       return;
     }
 
@@ -1327,7 +1176,7 @@ export class CycleOne implements OnDestroy {
     // season before a bye team returns in the following round.
     const nextCycleHasGames =
       nextCycleNumber <= STANDARD_FULL_CYCLE_SEASON_COUNT ||
-      await this.hasAnyRosterGamesForCycle(nextCycleNumber);
+      (await this.hasAnyRosterGamesForCycle(nextCycleNumber));
 
     if (!nextCycleHasGames) {
       const message = `No NHL team games were found for ${this.getNextCycleLabel()}. The season flow is stopping instead of creating an empty matchup period.`;
@@ -1336,17 +1185,11 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    const attemptKey = [
-      this.leagueId,
-      this.cycleNumber,
-      cycle.id,
-      this.getNextCycleLabel()
-    ].join('::');
+    const attemptKey = [this.leagueId, this.cycleNumber, cycle.id, this.getNextCycleLabel()].join(
+      '::',
+    );
 
-    if (
-      this.autoStartNextCycleAttemptKey === attemptKey ||
-      this.startingNextCycle()
-    ) {
+    if (this.autoStartNextCycleAttemptKey === attemptKey || this.startingNextCycle()) {
       return;
     }
 
@@ -1364,11 +1207,7 @@ export class CycleOne implements OnDestroy {
     this.autoFlowMessage.set(preparingMessage);
 
     try {
-      const nextCycle = await startNextCycle(
-        this.leagueId,
-        this.teams(),
-        this.cycleNumber
-      );
+      const nextCycle = await startNextCycle(this.leagueId, this.teams(), this.cycleNumber);
 
       if (!nextCycle) {
         const completeMessage =
@@ -1377,11 +1216,7 @@ export class CycleOne implements OnDestroy {
         this.startNextCycleMessage.set(completeMessage);
         this.autoFlowMessage.set(completeMessage);
 
-        await this.router.navigate([
-          '/leagues',
-          this.leagueId,
-          'playoffs'
-        ]);
+        await this.router.navigate(['/leagues', this.leagueId, 'playoffs']);
         return;
       }
 
@@ -1393,35 +1228,18 @@ export class CycleOne implements OnDestroy {
       this.startNextCycleMessage.set(successMessage);
       this.autoFlowMessage.set(successMessage);
 
-      await this.router.navigate([
-        '/leagues',
-        this.leagueId,
-        'cycles',
-        nextCycleNumber
-      ]);
+      await this.router.navigate(['/leagues', this.leagueId, 'cycles', nextCycleNumber]);
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : `Unable to start ${this.getNextCycleLabel()}.`;
+        error instanceof Error ? error.message : `Unable to start ${this.getNextCycleLabel()}.`;
 
-      if (
-        errorMessage.includes(
-          `Cycle ${nextCycleNumber} has already been started`
-        )
-      ) {
-        const alreadyStartedMessage =
-          `${this.getNextCycleLabel()} already exists. Opening it now...`;
+      if (errorMessage.includes(`Cycle ${nextCycleNumber} has already been started`)) {
+        const alreadyStartedMessage = `${this.getNextCycleLabel()} already exists. Opening it now...`;
 
         this.startNextCycleMessage.set(alreadyStartedMessage);
         this.autoFlowMessage.set(alreadyStartedMessage);
 
-        await this.router.navigate([
-          '/leagues',
-          this.leagueId,
-          'cycles',
-          nextCycleNumber
-        ]);
+        await this.router.navigate(['/leagues', this.leagueId, 'cycles', nextCycleNumber]);
 
         return;
       }
@@ -1437,45 +1255,32 @@ export class CycleOne implements OnDestroy {
   private getAutoCompleteAttemptKey(
     cycle: FantasyCycle,
     scoring: CycleScoringResult,
-    matchups: FantasyMatchup[]
+    matchups: FantasyMatchup[],
   ): string {
     const teamScoreKey = Object.entries(scoring.teamScores)
-      .sort(([firstOwnerId], [secondOwnerId]) =>
-        firstOwnerId.localeCompare(secondOwnerId)
-      )
+      .sort(([firstOwnerId], [secondOwnerId]) => firstOwnerId.localeCompare(secondOwnerId))
       .map(([ownerId, score]) => `${ownerId}:${score}`)
       .join('|');
 
-    const matchupKey = matchups
-      .map((matchup) => `${matchup.id}:${matchup.status}`)
-      .join('|');
+    const matchupKey = matchups.map((matchup) => `${matchup.id}:${matchup.status}`).join('|');
 
-    return [
-      this.leagueId,
-      cycle.id,
-      this.cycleNumber,
-      teamScoreKey,
-      matchupKey
-    ].join('::');
+    return [this.leagueId, cycle.id, this.cycleNumber, teamScoreKey, matchupKey].join('::');
   }
 
-  readonly myMatchup = computed(() =>
-    this.matchups().find(
-      (matchup) =>
-        matchup.teamAOwnerId === this.userId ||
-        matchup.teamBOwnerId === this.userId
-    ) ?? null
+  readonly myMatchup = computed(
+    () =>
+      this.matchups().find(
+        (matchup) => matchup.teamAOwnerId === this.userId || matchup.teamBOwnerId === this.userId,
+      ) ?? null,
   );
 
   readonly scheduleHasGamesInWindow = computed(() =>
-    Object.values(this.teamGameCounts()).some(
-      (gameCount) => gameCount > 0
-    )
+    Object.values(this.teamGameCounts()).some((gameCount) => gameCount > 0),
   );
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
       void this.loadCyclePageFromParams(params);
@@ -1494,9 +1299,9 @@ export class CycleOne implements OnDestroy {
     this.stopPicksListener?.();
     this.stopCycleRosterPicksListener?.();
     this.stopTeamWindowsListener?.();
-    this.stopDisplayedRosterListeners.forEach((stopListener) =>
-      stopListener()
-    );
+    this.stopSharedScoringListener?.();
+    this.stopLiveScoringControlListener?.();
+    this.stopDisplayedRosterListeners.forEach((stopListener) => stopListener());
 
     this.stopCyclesListener = null;
     this.stopCycleListener = null;
@@ -1504,6 +1309,8 @@ export class CycleOne implements OnDestroy {
     this.stopPicksListener = null;
     this.stopCycleRosterPicksListener = null;
     this.stopTeamWindowsListener = null;
+    this.stopSharedScoringListener = null;
+    this.stopLiveScoringControlListener = null;
     this.stopDisplayedRosterListeners = [];
     this.displayedRosterOwnerKey = '';
   }
@@ -1527,6 +1334,8 @@ export class CycleOne implements OnDestroy {
     this.displayedRostersByOwner.set({});
     this.teamGameCounts.set({});
     this.cycleScoring.set(null);
+    this.sharedScoringSnapshot.set(null);
+    this.liveScoringControl.set(null);
     this.matchupView.set('both');
 
     this.scoringLoading.set(false);
@@ -1558,15 +1367,15 @@ export class CycleOne implements OnDestroy {
     this.autoStartNextCycleAttemptKey = null;
     this.projectionAccuracyAttemptKey = null;
     this.scoringRequestId += 1;
+    this.sharedScoringRefreshRequestKey = null;
   }
 
   async loadCyclePageFromParams(params: ParamMap): Promise<void> {
     const leagueId = params.get('leagueId');
     const cycleNumberRaw = params.get('cycleNumber') ?? '1';
     const parsedCycleNumber = Number(cycleNumberRaw);
-    const cycleNumber = Number.isInteger(parsedCycleNumber) && parsedCycleNumber > 0
-      ? parsedCycleNumber
-      : 1;
+    const cycleNumber =
+      Number.isInteger(parsedCycleNumber) && parsedCycleNumber > 0 ? parsedCycleNumber : 1;
 
     const matchupId = params.get('matchupId');
 
@@ -1592,7 +1401,7 @@ export class CycleOne implements OnDestroy {
     try {
       const [league, teams] = await Promise.all([
         getLeagueById(leagueId),
-        getLeagueTeams(leagueId)
+        getLeagueTeams(leagueId),
       ]);
 
       if (requestId !== this.pageLoadRequestId) {
@@ -1607,44 +1416,60 @@ export class CycleOne implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
 
-      this.stopCyclesListener = listenToLeagueCycles(
-        leagueId,
-        (cycles) => {
-          this.allCycles.set(cycles);
-        }
-      );
-
-      this.stopCycleListener = listenToCycle(
+      this.stopSharedScoringListener = listenToSharedCycleScoring(
         leagueId,
         cycleNumber,
-        (cycle) => {
-          this.cycle.set(cycle);
-          void this.loadScheduleAdjustedProjectionData(cycle);
-          void this.loadCurrentCycleScoringIfReady();
-          void this.evaluateAutoCompleteCycleIfReady();
-        }
+        (snapshot) => {
+          if (!snapshot) {
+            this.scoringLoading.set(true);
+            void this.loadCurrentCycleScoringIfReady();
+            return;
+          }
+
+          void this.applySharedScoringSnapshot(snapshot);
+        },
+        (error) => {
+          this.scoringLoading.set(false);
+          this.scoringError.set(error.message);
+        },
       );
 
-      this.stopMatchupsListener = listenToCycleMatchups(
+      this.stopLiveScoringControlListener = listenToSharedLiveScoringControl(
         leagueId,
-        cycleNumber,
-        (matchups) => {
-          this.matchups.set(matchups);
-          this.refreshDisplayedRosterListeners();
-          void this.evaluateAutoCompleteCycleIfReady();
-        }
+        (control) => {
+          this.liveScoringControl.set(control);
+
+          if (control?.status === 'error' && control.lastError) {
+            this.scoringError.set(control.lastError);
+          }
+        },
       );
+
+      this.stopCyclesListener = listenToLeagueCycles(leagueId, (cycles) => {
+        this.allCycles.set(cycles);
+      });
+
+      this.stopCycleListener = listenToCycle(leagueId, cycleNumber, (cycle) => {
+        this.cycle.set(cycle);
+        void this.loadScheduleAdjustedProjectionData(cycle);
+        void this.loadCurrentCycleScoringIfReady();
+        void this.evaluateAutoCompleteCycleIfReady();
+      });
+
+      this.stopMatchupsListener = listenToCycleMatchups(leagueId, cycleNumber, (matchups) => {
+        this.matchups.set(matchups);
+        this.refreshDisplayedRosterListeners();
+        void this.evaluateAutoCompleteCycleIfReady();
+      });
 
       this.stopTeamWindowsListener = listenToCycleTeamWindows(
         leagueId,
         cycleNumber,
         (teamWindows) => {
           this.teamWindowsByOwner.set(
-            Object.fromEntries(
-              teamWindows.map((entry) => [entry.ownerId, entry])
-            )
+            Object.fromEntries(teamWindows.map((entry) => [entry.ownerId, entry])),
           );
-        }
+        },
       );
 
       this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
@@ -1653,23 +1478,18 @@ export class CycleOne implements OnDestroy {
         (picks) => {
           this.cycleRosterSnapshotPicks = picks;
           this.refreshEffectivePicks();
-        }
+        },
       );
 
-      this.stopPicksListener = listenToDraftPicks(
-        leagueId,
-        (picks) => {
-          this.liveDraftPicks = picks;
-          this.refreshEffectivePicks();
-        }
-      );
+      this.stopPicksListener = listenToDraftPicks(leagueId, (picks) => {
+        this.liveDraftPicks = picks;
+        this.refreshEffectivePicks();
+      });
 
       void this.loadPlayerPoolForProjectionFallback();
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : `Unable to load ${this.getCycleLabel()}.`
+        error instanceof Error ? error.message : `Unable to load ${this.getCycleLabel()}.`,
       );
     } finally {
       if (requestId === this.pageLoadRequestId) {
@@ -1677,7 +1497,6 @@ export class CycleOne implements OnDestroy {
       }
     }
   }
-
 
   getAvailableCycleNumbers(): number[] {
     const cycleNumbers = new Set<number>();
@@ -1709,20 +1528,8 @@ export class CycleOne implements OnDestroy {
     }
 
     const route = this.matchupId
-      ? [
-          '/leagues',
-          this.leagueId,
-          'cycles',
-          targetCycleNumber,
-          'matchups',
-          this.matchupId
-        ]
-      : [
-          '/leagues',
-          this.leagueId,
-          'cycles',
-          targetCycleNumber
-        ];
+      ? ['/leagues', this.leagueId, 'cycles', targetCycleNumber, 'matchups', this.matchupId]
+      : ['/leagues', this.leagueId, 'cycles', targetCycleNumber];
 
     void this.router.navigate(route);
   }
@@ -1738,9 +1545,7 @@ export class CycleOne implements OnDestroy {
       return -1;
     }
 
-    return this.matchups().findIndex(
-      (matchup) => matchup.id === currentMatchup.id
-    );
+    return this.matchups().findIndex((matchup) => matchup.id === currentMatchup.id);
   }
 
   getPreviousMatchup(): FantasyMatchup | null {
@@ -1751,8 +1556,7 @@ export class CycleOne implements OnDestroy {
       return null;
     }
 
-    const previousIndex =
-      (currentIndex - 1 + matchups.length) % matchups.length;
+    const previousIndex = (currentIndex - 1 + matchups.length) % matchups.length;
 
     return matchups[previousIndex] ?? null;
   }
@@ -1765,8 +1569,7 @@ export class CycleOne implements OnDestroy {
       return null;
     }
 
-    const nextIndex =
-      (currentIndex + 1) % matchups.length;
+    const nextIndex = (currentIndex + 1) % matchups.length;
 
     return matchups[nextIndex] ?? null;
   }
@@ -1790,7 +1593,7 @@ export class CycleOne implements OnDestroy {
       'cycles',
       this.cycleNumber,
       'matchups',
-      matchup.id
+      matchup.id,
     ]);
   }
 
@@ -1806,8 +1609,7 @@ export class CycleOne implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ??
-        `Playoff Cycle ${this.cycleNumber}`;
+      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.cycleNumber}`;
     }
 
     return `Cycle ${this.cycleNumber}`;
@@ -1824,21 +1626,15 @@ export class CycleOne implements OnDestroy {
         return 'Season Complete';
       }
 
-      return getPlayoffRoundLabel(
-        roundNumber + 1,
-        roundCount
-      );
+      return getPlayoffRoundLabel(roundNumber + 1, roundCount);
     }
 
     const teamCount = this.teams().length;
-    const regularSeasonCycleCount =
-      getStandardRegularSeasonCycleCount(teamCount);
+    const regularSeasonCycleCount = getStandardRegularSeasonCycleCount(teamCount);
 
     if (this.cycleNumber >= regularSeasonCycleCount) {
-      const playoffTeamCount =
-        getStandardPlayoffTeamCount(teamCount);
-      const playoffRoundCount =
-        getStandardPlayoffRoundCount(playoffTeamCount);
+      const playoffTeamCount = getStandardPlayoffTeamCount(teamCount);
+      const playoffRoundCount = getStandardPlayoffRoundCount(playoffTeamCount);
 
       return getPlayoffRoundLabel(1, playoffRoundCount);
     }
@@ -1853,7 +1649,7 @@ export class CycleOne implements OnDestroy {
       cycle?.phase === 'playoffs' &&
       cycle.playoffRoundNumber &&
       cycle.playoffRoundCount &&
-      cycle.playoffRoundNumber >= cycle.playoffRoundCount
+      cycle.playoffRoundNumber >= cycle.playoffRoundCount,
     );
   }
 
@@ -1899,34 +1695,27 @@ export class CycleOne implements OnDestroy {
     total: number;
   } {
     const teamWindows = Object.values(this.teamWindowsByOwner());
-    const total = teamWindows.reduce(
-      (sum, team) => sum + team.expectedRosterSlotIds.length,
-      0
-    );
-    const complete = teamWindows.reduce(
-      (sum, team) => sum + team.completedWindowCount,
-      0
-    );
+    const total = teamWindows.reduce((sum, team) => sum + team.expectedRosterSlotIds.length, 0);
+    const complete = teamWindows.reduce((sum, team) => sum + team.completedWindowCount, 0);
     const started = teamWindows.reduce(
-      (sum, team) =>
-        sum + team.windows.filter((window) => window.status !== 'scheduled').length,
-      0
+      (sum, team) => sum + team.windows.filter((window) => window.status !== 'scheduled').length,
+      0,
     );
 
     return { complete, started, total };
   }
 
   getNextCycleStartedWindowCount(): number {
-    return this.allCycles().find(
-      (cycle) => cycle.cycleNumber === this.cycleNumber + 1
-    )?.activeWindowCount ?? 0;
+    return (
+      this.allCycles().find((cycle) => cycle.cycleNumber === this.cycleNumber + 1)
+        ?.activeWindowCount ?? 0
+    );
   }
 
   getDisplayedQueuedMoveCount(): number {
     return Object.values(this.displayedRostersByOwner()).reduce(
-      (sum, roster) =>
-        sum + roster.activeSlots.filter((slot) => Boolean(slot.pendingMove)).length,
-      0
+      (sum, roster) => sum + roster.activeSlots.filter((slot) => Boolean(slot.pendingMove)).length,
+      0,
     );
   }
 
@@ -1964,12 +1753,10 @@ export class CycleOne implements OnDestroy {
     const completedSlotIds = new Set(
       teamWindows.windows
         .filter((window) => window.status === 'complete')
-        .map((window) => window.rosterSlotId)
+        .map((window) => window.rosterSlotId),
     );
 
-    return teamWindows.expectedRosterSlotIds.filter(
-      (slotId) => !completedSlotIds.has(slotId)
-    );
+    return teamWindows.expectedRosterSlotIds.filter((slotId) => !completedSlotIds.has(slotId));
   }
 
   getWindowForPick(pick: DraftPick): FantasyAssetCycleWindow | null {
@@ -1981,7 +1768,7 @@ export class CycleOne implements OnDestroy {
 
     if (pick.rosterSlotId) {
       const slotWindow = teamWindows.windows.find(
-        (window) => window.rosterSlotId === pick.rosterSlotId
+        (window) => window.rosterSlotId === pick.rosterSlotId,
       );
 
       if (slotWindow) {
@@ -1989,33 +1776,28 @@ export class CycleOne implements OnDestroy {
       }
     }
 
-    return teamWindows.windows.find(
-      (window) => window.assetKey === pick.asset.assetKey
-    ) ?? null;
+    return teamWindows.windows.find((window) => window.assetKey === pick.asset.assetKey) ?? null;
   }
 
   getWindowGameMarkers(pick: DraftPick): CycleWindowGameMarker[] {
     const window = this.getWindowForPick(pick);
-    const requiredGames =
-      this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+    const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
     return Array.from({ length: requiredGames }, (_, index) => {
       const gameId = window?.scheduledGameIds[index] ?? null;
       const gameDate = window?.scheduledGameDates[index] ?? null;
       const gameLabel = window?.scheduledGameLabels[index] ?? 'Schedule pending';
-      const completed = Boolean(
-        gameId && window?.completedGameIds.includes(gameId)
-      );
+      const completed = Boolean(gameId && window?.completedGameIds.includes(gameId));
       const hasAppearanceData = Boolean(window?.appearanceGameIds.length);
       const inferredAllAppearances = Boolean(
         window &&
         window.actualGamesPlayed === window.completedGameIds.length &&
-        window.completedGameIds.length > 0
+        window.completedGameIds.length > 0,
       );
       const appeared = Boolean(
         gameId &&
         (window?.appearanceGameIds.includes(gameId) ||
-          (!hasAppearanceData && inferredAllAppearances))
+          (!hasAppearanceData && inferredAllAppearances)),
       );
 
       let status: CycleWindowGameMarker['status'] = 'unavailable';
@@ -2043,7 +1825,7 @@ export class CycleOne implements OnDestroy {
         gameLabel,
         status,
         statusLabel,
-        title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`
+        title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`,
       };
     });
   }
@@ -2072,9 +1854,7 @@ export class CycleOne implements OnDestroy {
     }
 
     const roster = this.displayedRostersByOwner()[pick.ownerId];
-    const slot = roster?.activeSlots.find(
-      (candidate) => candidate.slotId === pick.rosterSlotId
-    );
+    const slot = roster?.activeSlots.find((candidate) => candidate.slotId === pick.rosterSlotId);
 
     return slot?.pendingMove ?? null;
   }
@@ -2091,10 +1871,7 @@ export class CycleOne implements OnDestroy {
 
   private refreshDisplayedRosterListeners(): void {
     const matchup = this.getCurrentDisplayedMatchup();
-    const ownerIds = [
-      matchup?.teamAOwnerId ?? null,
-      matchup?.teamBOwnerId ?? null
-    ]
+    const ownerIds = [matchup?.teamAOwnerId ?? null, matchup?.teamBOwnerId ?? null]
       .filter((ownerId): ownerId is string => Boolean(ownerId))
       .sort();
     const ownerKey = ownerIds.join('|');
@@ -2103,31 +1880,25 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    this.stopDisplayedRosterListeners.forEach((stopListener) =>
-      stopListener()
-    );
+    this.stopDisplayedRosterListeners.forEach((stopListener) => stopListener());
     this.stopDisplayedRosterListeners = [];
     this.displayedRosterOwnerKey = ownerKey;
     this.displayedRostersByOwner.set({});
 
     for (const ownerId of ownerIds) {
-      const stopListener = listenToFantasyRoster(
-        this.leagueId,
-        ownerId,
-        (roster) => {
-          this.displayedRostersByOwner.update((current) => {
-            const next = { ...current };
+      const stopListener = listenToFantasyRoster(this.leagueId, ownerId, (roster) => {
+        this.displayedRostersByOwner.update((current) => {
+          const next = { ...current };
 
-            if (roster) {
-              next[ownerId] = roster;
-            } else {
-              delete next[ownerId];
-            }
+          if (roster) {
+            next[ownerId] = roster;
+          } else {
+            delete next[ownerId];
+          }
 
-            return next;
-          });
-        }
-      );
+          return next;
+        });
+      });
 
       this.stopDisplayedRosterListeners.push(stopListener);
     }
@@ -2138,9 +1909,7 @@ export class CycleOne implements OnDestroy {
       return 'Bye';
     }
 
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   getTeamRecord(ownerId: string | null): string {
@@ -2148,9 +1917,7 @@ export class CycleOne implements OnDestroy {
       return '';
     }
 
-    const team = this.teams().find(
-      (candidate) => candidate.ownerId === ownerId
-    );
+    const team = this.teams().find((candidate) => candidate.ownerId === ownerId);
 
     if (!team) {
       return '';
@@ -2175,19 +1942,12 @@ export class CycleOne implements OnDestroy {
           return positionComparison;
         }
 
-        return this.getAssetName(first.asset).localeCompare(
-          this.getAssetName(second.asset)
-        );
+        return this.getAssetName(first.asset).localeCompare(this.getAssetName(second.asset));
       });
   }
 
-  getTeamPicksByPosition(
-    ownerId: string | null,
-    position: DraftPosition
-  ): DraftPick[] {
-    return this.getTeamPicks(ownerId).filter(
-      (pick) => pick.asset.position === position
-    );
+  getTeamPicksByPosition(ownerId: string | null, position: DraftPosition): DraftPick[] {
+    return this.getTeamPicks(ownerId).filter((pick) => pick.asset.position === position);
   }
 
   getProjectedCycleForTeam(ownerId: string | null): number | null {
@@ -2198,9 +1958,8 @@ export class CycleOne implements OnDestroy {
     }
 
     const projectionTotal = picks.reduce(
-      (total, pick) =>
-        total + (this.getBestCycleProjection(pick.asset) ?? 0),
-      0
+      (total, pick) => total + (this.getBestCycleProjection(pick.asset) ?? 0),
+      0,
     );
 
     return Number(projectionTotal.toFixed(1));
@@ -2214,55 +1973,41 @@ export class CycleOne implements OnDestroy {
     }
 
     const projectionTotal = picks.reduce(
-      (total, pick) =>
-        total + (this.getAssetProjectedSeason(pick.asset) ?? 0),
-      0
+      (total, pick) => total + (this.getAssetProjectedSeason(pick.asset) ?? 0),
+      0,
     );
 
     return Number(projectionTotal.toFixed(1));
   }
 
   getProjectedWinnerLabel(matchup: FantasyMatchup): string {
-    if (
-  matchup.status === 'complete' ||
-  this.cycle()?.status === 'complete'
-) {
-  if (!matchup.teamBOwnerId) {
-    return `Final: ${this.getTeamName(matchup.teamAOwnerId)} had a bye.`;
-  }
+    if (matchup.status === 'complete' || this.cycle()?.status === 'complete') {
+      if (!matchup.teamBOwnerId) {
+        return `Final: ${this.getTeamName(matchup.teamAOwnerId)} had a bye.`;
+      }
 
-  if (matchup.teamAScore === matchup.teamBScore) {
-    return `Final: Tie, ${matchup.teamAScore.toFixed(1)} to ${matchup.teamBScore.toFixed(1)}.`;
-  }
+      if (matchup.teamAScore === matchup.teamBScore) {
+        return `Final: Tie, ${matchup.teamAScore.toFixed(1)} to ${matchup.teamBScore.toFixed(1)}.`;
+      }
 
-  const winnerOwnerId =
-    matchup.winnerOwnerId ??
-    (
-      matchup.teamAScore > matchup.teamBScore
-        ? matchup.teamAOwnerId
-        : matchup.teamBOwnerId
-    );
+      const winnerOwnerId =
+        matchup.winnerOwnerId ??
+        (matchup.teamAScore > matchup.teamBScore ? matchup.teamAOwnerId : matchup.teamBOwnerId);
 
-  const difference =
-    Math.abs(matchup.teamAScore - matchup.teamBScore);
+      const difference = Math.abs(matchup.teamAScore - matchup.teamBScore);
 
-  return `Final: ${this.getTeamName(winnerOwnerId)} won by ${difference.toFixed(1)}.`;
-}
+      return `Final: ${this.getTeamName(winnerOwnerId)} won by ${difference.toFixed(1)}.`;
+    }
 
     if (!matchup.teamBOwnerId) {
       return `${this.getTeamName(matchup.teamAOwnerId)} has a bye.`;
     }
 
-    const teamAProjection =
-      this.getProjectedCycleForTeam(matchup.teamAOwnerId);
+    const teamAProjection = this.getProjectedCycleForTeam(matchup.teamAOwnerId);
 
-    const teamBProjection =
-      this.getProjectedCycleForTeam(matchup.teamBOwnerId);
+    const teamBProjection = this.getProjectedCycleForTeam(matchup.teamBOwnerId);
 
-    if (
-      typeof teamAProjection !== 'number' ||
-      typeof teamBProjection !== 'number'
-    ) {
+    if (typeof teamAProjection !== 'number' || typeof teamBProjection !== 'number') {
       return 'Projection unavailable';
     }
 
@@ -2271,21 +2016,15 @@ export class CycleOne implements OnDestroy {
     }
 
     const winnerOwnerId =
-      teamAProjection > teamBProjection
-        ? matchup.teamAOwnerId
-        : matchup.teamBOwnerId;
+      teamAProjection > teamBProjection ? matchup.teamAOwnerId : matchup.teamBOwnerId;
 
-    const difference =
-      Math.abs(teamAProjection - teamBProjection);
+    const difference = Math.abs(teamAProjection - teamBProjection);
 
     return `${this.getTeamName(winnerOwnerId)} by ${difference.toFixed(1)}`;
   }
 
   isMyMatchup(matchup: FantasyMatchup): boolean {
-    return (
-      matchup.teamAOwnerId === this.userId ||
-      matchup.teamBOwnerId === this.userId
-    );
+    return matchup.teamAOwnerId === this.userId || matchup.teamBOwnerId === this.userId;
   }
 
   getProjectionDisplay(value: number | null | undefined): string {
@@ -2295,7 +2034,6 @@ export class CycleOne implements OnDestroy {
 
     return value.toFixed(1);
   }
-
 
   getSignedProjectionDisplay(value: number | null | undefined): string {
     if (typeof value !== 'number') {
@@ -2319,21 +2057,19 @@ export class CycleOne implements OnDestroy {
 
   isMeaningfulPositiveProjectionDelta(
     actual: number | null | undefined,
-    projected: number | null | undefined
+    projected: number | null | undefined,
   ): boolean {
     const delta = this.getProjectionDelta(actual, projected);
     const neutralThreshold = this.getProjectionNeutralThreshold(projected);
 
     return (
-      typeof delta === 'number' &&
-      typeof neutralThreshold === 'number' &&
-      delta >= neutralThreshold
+      typeof delta === 'number' && typeof neutralThreshold === 'number' && delta >= neutralThreshold
     );
   }
 
   isMeaningfulNegativeProjectionDelta(
     actual: number | null | undefined,
-    projected: number | null | undefined
+    projected: number | null | undefined,
   ): boolean {
     const delta = this.getProjectionDelta(actual, projected);
     const neutralThreshold = this.getProjectionNeutralThreshold(projected);
@@ -2347,7 +2083,7 @@ export class CycleOne implements OnDestroy {
 
   isNeutralProjectionDelta(
     actual: number | null | undefined,
-    projected: number | null | undefined
+    projected: number | null | undefined,
   ): boolean {
     const delta = this.getProjectionDelta(actual, projected);
     const neutralThreshold = this.getProjectionNeutralThreshold(projected);
@@ -2361,35 +2097,24 @@ export class CycleOne implements OnDestroy {
 
   private getProjectionDelta(
     actual: number | null | undefined,
-    projected: number | null | undefined
+    projected: number | null | undefined,
   ): number | null {
-    if (
-      typeof actual !== 'number' ||
-      typeof projected !== 'number'
-    ) {
+    if (typeof actual !== 'number' || typeof projected !== 'number') {
       return null;
     }
 
     return Number((actual - projected).toFixed(1));
   }
 
-  private getProjectionNeutralThreshold(
-    projected: number | null | undefined
-  ): number | null {
+  private getProjectionNeutralThreshold(projected: number | null | undefined): number | null {
     if (typeof projected !== 'number') {
       return null;
     }
 
-    return Math.max(
-      PROJECTION_NEUTRAL_POINTS,
-      Math.abs(projected) * PROJECTION_NEUTRAL_PERCENT
-    );
+    return Math.max(PROJECTION_NEUTRAL_POINTS, Math.abs(projected) * PROJECTION_NEUTRAL_PERCENT);
   }
 
-  getMatchupTeamProjectionDelta(
-    matchup: FantasyMatchup,
-    ownerId: string | null
-  ): number | null {
+  getMatchupTeamProjectionDelta(matchup: FantasyMatchup, ownerId: string | null): number | null {
     if (!ownerId) {
       return null;
     }
@@ -2404,10 +2129,7 @@ export class CycleOne implements OnDestroy {
     return Number((actual - projected).toFixed(1));
   }
 
-  getPositionProjectionDelta(
-    ownerId: string | null,
-    position: DraftPosition
-  ): number | null {
+  getPositionProjectionDelta(ownerId: string | null, position: DraftPosition): number | null {
     if (!ownerId) {
       return null;
     }
@@ -2422,9 +2144,7 @@ export class CycleOne implements OnDestroy {
     return Number((actual - projected).toFixed(1));
   }
 
-  getPositionBreakdownRows(
-    ownerId: string | null
-  ): MatchupPositionBreakdownRow[] {
+  getPositionBreakdownRows(ownerId: string | null): MatchupPositionBreakdownRow[] {
     if (!ownerId) {
       return [];
     }
@@ -2432,35 +2152,29 @@ export class CycleOne implements OnDestroy {
     return this.breakdownPositions.map((position) => {
       const actual = this.getPositionCurrentTotal(ownerId, position);
       const projected = this.getPositionProjectedTotal(ownerId, position);
-      const delta = typeof projected === 'number'
-        ? Number((actual - projected).toFixed(1))
-        : null;
+      const delta = typeof projected === 'number' ? Number((actual - projected).toFixed(1)) : null;
 
       return {
         position,
         label: position,
         actual,
         projected,
-        delta
+        delta,
       };
     });
   }
 
-  getMatchupAssetPerformanceRows(
-    matchup: FantasyMatchup
-  ): MatchupAssetPerformanceRow[] {
-    const ownerIds = [
-      matchup.teamAOwnerId,
-      matchup.teamBOwnerId
-    ].filter((ownerId): ownerId is string => Boolean(ownerId));
+  getMatchupAssetPerformanceRows(matchup: FantasyMatchup): MatchupAssetPerformanceRow[] {
+    const ownerIds = [matchup.teamAOwnerId, matchup.teamBOwnerId].filter(
+      (ownerId): ownerId is string => Boolean(ownerId),
+    );
 
     return ownerIds.flatMap((ownerId) =>
       this.getTeamPicks(ownerId).map((pick) => {
         const actual = this.getAssetCurrentCycleScore(pick.asset);
         const projected = this.getBestCycleProjection(pick.asset);
-        const delta = typeof projected === 'number'
-          ? Number((actual - projected).toFixed(1))
-          : null;
+        const delta =
+          typeof projected === 'number' ? Number((actual - projected).toFixed(1)) : null;
 
         return {
           asset: pick.asset,
@@ -2469,37 +2183,27 @@ export class CycleOne implements OnDestroy {
           actual,
           projected,
           delta,
-          position: pick.asset.position
+          position: pick.asset.position,
         };
-      })
+      }),
     );
   }
 
-  getTopContributors(
-    matchup: FantasyMatchup,
-    limit: number = 5
-  ): MatchupAssetPerformanceRow[] {
+  getTopContributors(matchup: FantasyMatchup, limit: number = 5): MatchupAssetPerformanceRow[] {
     return [...this.getMatchupAssetPerformanceRows(matchup)]
       .sort((first, second) => {
         if (second.actual !== first.actual) {
           return second.actual - first.actual;
         }
 
-        return this.getAssetName(first.asset).localeCompare(
-          this.getAssetName(second.asset)
-        );
+        return this.getAssetName(first.asset).localeCompare(this.getAssetName(second.asset));
       })
       .slice(0, limit);
   }
 
-  getTopOverPerformers(
-    matchup: FantasyMatchup,
-    limit: number = 5
-  ): MatchupAssetPerformanceRow[] {
+  getTopOverPerformers(matchup: FantasyMatchup, limit: number = 5): MatchupAssetPerformanceRow[] {
     return [...this.getMatchupAssetPerformanceRows(matchup)]
-      .filter((row) =>
-        this.isMeaningfulPositiveProjectionDelta(row.actual, row.projected)
-      )
+      .filter((row) => this.isMeaningfulPositiveProjectionDelta(row.actual, row.projected))
       .sort((first, second) => {
         const secondDelta = second.delta ?? 0;
         const firstDelta = first.delta ?? 0;
@@ -2513,14 +2217,9 @@ export class CycleOne implements OnDestroy {
       .slice(0, limit);
   }
 
-  getTopUnderPerformers(
-    matchup: FantasyMatchup,
-    limit: number = 5
-  ): MatchupAssetPerformanceRow[] {
+  getTopUnderPerformers(matchup: FantasyMatchup, limit: number = 5): MatchupAssetPerformanceRow[] {
     return [...this.getMatchupAssetPerformanceRows(matchup)]
-      .filter((row) =>
-        this.isMeaningfulNegativeProjectionDelta(row.actual, row.projected)
-      )
+      .filter((row) => this.isMeaningfulNegativeProjectionDelta(row.actual, row.projected))
       .sort((first, second) => {
         const secondDelta = second.delta ?? 0;
         const firstDelta = first.delta ?? 0;
@@ -2539,20 +2238,11 @@ export class CycleOne implements OnDestroy {
       return `${this.getTeamName(matchup.teamAOwnerId)} had a bye this cycle.`;
     }
 
-    const teamADelta = this.getMatchupTeamProjectionDelta(
-      matchup,
-      matchup.teamAOwnerId
-    );
+    const teamADelta = this.getMatchupTeamProjectionDelta(matchup, matchup.teamAOwnerId);
 
-    const teamBDelta = this.getMatchupTeamProjectionDelta(
-      matchup,
-      matchup.teamBOwnerId
-    );
+    const teamBDelta = this.getMatchupTeamProjectionDelta(matchup, matchup.teamBOwnerId);
 
-    if (
-      typeof teamADelta !== 'number' ||
-      typeof teamBDelta !== 'number'
-    ) {
+    if (typeof teamADelta !== 'number' || typeof teamBDelta !== 'number') {
       return 'Projection comparison will appear once projected totals are available.';
     }
 
@@ -2562,29 +2252,21 @@ export class CycleOne implements OnDestroy {
       return 'Both teams performed the same amount above or below their projections.';
     }
 
-    const betterOwnerId = swing > 0
-      ? matchup.teamAOwnerId
-      : matchup.teamBOwnerId;
+    const betterOwnerId = swing > 0 ? matchup.teamAOwnerId : matchup.teamBOwnerId;
 
     return `${this.getTeamName(betterOwnerId)} had a ${Math.abs(swing).toFixed(1)} point projection swing in this matchup.`;
   }
 
   getAssetName(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.fullName
-      : `${asset.teamName} Goalie Unit`;
+    return asset.assetType === 'skater' ? asset.player.fullName : `${asset.teamName} Goalie Unit`;
   }
 
   getAssetTeamLabel(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.nhlTeamAbbreviation
-      : asset.teamAbbreviation;
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
   }
 
   getAssetLogoUrl(asset: DraftableAsset): string | undefined {
-    return asset.assetType === 'skater'
-      ? asset.player.teamLogoUrl
-      : asset.teamLogoUrl;
+    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
   }
 
   getPositionLabel(position: DraftPosition): string {
@@ -2611,15 +2293,10 @@ export class CycleOne implements OnDestroy {
 
   getAssetProjectedSeason(asset: DraftableAsset): number | null {
     const poolAsset = this.playerPool().find(
-      (availableAsset) =>
-        availableAsset.assetKey === asset.assetKey
+      (availableAsset) => availableAsset.assetKey === asset.assetKey,
     );
 
-    return (
-      asset.projectedSeasonPoints ??
-      poolAsset?.projectedSeasonPoints ??
-      null
-    );
+    return asset.projectedSeasonPoints ?? poolAsset?.projectedSeasonPoints ?? null;
   }
 
   getBestCycleProjection(asset: DraftableAsset): number | null {
@@ -2628,123 +2305,102 @@ export class CycleOne implements OnDestroy {
     return getFrozenCycleProjection(asset);
   }
 
- getAssetScoreSummary(
-  asset: DraftableAsset
-): CycleAssetScoreSummary | null {
-  return (
-    this.cycleScoring()?.assetScores[asset.assetKey] ??
-    null
-  );
-}
+  getAssetScoreSummary(asset: DraftableAsset): CycleAssetScoreSummary | null {
+    return this.cycleScoring()?.assetScores[asset.assetKey] ?? null;
+  }
 
   getAssetCurrentCycleScore(asset: DraftableAsset): number {
-  return this.getAssetScoreSummary(asset)?.currentScore ?? 0;
-}
+    return this.getAssetScoreSummary(asset)?.currentScore ?? 0;
+  }
 
   getAssetGamesPlayed(asset: DraftableAsset): number {
-  return this.getAssetScoreSummary(asset)?.gamesPlayed ?? 0;
-}
+    return this.getAssetScoreSummary(asset)?.gamesPlayed ?? 0;
+  }
 
   getAssetGamesLeft(asset: DraftableAsset): number {
-  const summary = this.getAssetScoreSummary(asset);
+    const summary = this.getAssetScoreSummary(asset);
 
-  if (summary) {
-    return summary.gamesLeft;
+    if (summary) {
+      return summary.gamesLeft;
+    }
+
+    return Math.max(0, this.getAssetScheduledGames(asset));
   }
-
-  return Math.max(
-    0,
-    this.getAssetScheduledGames(asset)
-  );
-}
 
   getTeamCurrentCycleScore(ownerId: string | null): number {
-  if (!ownerId) {
-    return 0;
-  }
-
-  const scoringTotal =
-    this.cycleScoring()?.teamScores[ownerId];
-
-  if (typeof scoringTotal === 'number') {
-    return scoringTotal;
-  }
-
-  return Number(
-    this.getTeamPicks(ownerId)
-      .reduce(
-        (total, pick) =>
-          total + this.getAssetCurrentCycleScore(pick.asset),
-        0
-      )
-      .toFixed(1)
-  );
-}
-
-
-  getMatchupTeamCurrentScore(
-  matchup: FantasyMatchup,
-  ownerId: string | null
-): number {
-  if (!ownerId) {
-    return 0;
-  }
-
-  if (this.isMatchupComplete(matchup)) {
-    if (ownerId === matchup.teamAOwnerId) {
-      return matchup.teamAScore;
+    if (!ownerId) {
+      return 0;
     }
 
-    if (ownerId === matchup.teamBOwnerId) {
-      return matchup.teamBScore;
+    const scoringTotal = this.cycleScoring()?.teamScores[ownerId];
+
+    if (typeof scoringTotal === 'number') {
+      return scoringTotal;
     }
+
+    return Number(
+      this.getTeamPicks(ownerId)
+        .reduce((total, pick) => total + this.getAssetCurrentCycleScore(pick.asset), 0)
+        .toFixed(1),
+    );
   }
 
-  return this.getTeamCurrentCycleScore(ownerId);
-}
+  getMatchupTeamCurrentScore(matchup: FantasyMatchup, ownerId: string | null): number {
+    if (!ownerId) {
+      return 0;
+    }
+
+    if (this.isMatchupComplete(matchup)) {
+      if (ownerId === matchup.teamAOwnerId) {
+        return matchup.teamAScore;
+      }
+
+      if (ownerId === matchup.teamBOwnerId) {
+        return matchup.teamBScore;
+      }
+    }
+
+    return this.getTeamCurrentCycleScore(ownerId);
+  }
 
   getCurrentScoringStatusText(): string {
-  if (!this.cycle()) {
-    return `Current scoring will appear once ${this.getCycleLabel()} starts.`;
+    if (!this.cycle()) {
+      return `Current scoring will appear once ${this.getCycleLabel()} starts.`;
+    }
+
+    if (this.scoringLoading()) {
+      return 'Loading current fantasy scoring from final NHL games...';
+    }
+
+    if (this.scoringError()) {
+      return this.scoringError();
+    }
+
+    if (!this.cycleScoring()) {
+      return 'Current scoring is waiting for drafted player data.';
+    }
+
+    if (!this.hasCurrentCycleScheduledGames()) {
+      return this.getNoMoreGamesMessage();
+    }
+
+    const scoringRules = this.league()?.scoringRules ?? defaultScoringRules;
+    const requiredGamesPerCycle =
+      scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
+    const firstGameNumber = (this.cycleNumber - 1) * requiredGamesPerCycle + 1;
+    const lastGameNumber = this.cycleNumber * requiredGamesPerCycle;
+
+    return `Current scores use each asset's NHL team games ${firstGameNumber}-${lastGameNumber}. Missed games count as 0-point counted games.`;
   }
-
-  if (this.scoringLoading()) {
-    return 'Loading current fantasy scoring from final NHL games...';
-  }
-
-  if (this.scoringError()) {
-    return this.scoringError();
-  }
-
-  if (!this.cycleScoring()) {
-    return 'Current scoring is waiting for drafted player data.';
-  }
-
-  if (!this.hasCurrentCycleScheduledGames()) {
-    return this.getNoMoreGamesMessage();
-  }
-
-  const scoringRules = this.league()?.scoringRules ?? defaultScoringRules;
-  const requiredGamesPerCycle =
-    scoringRules.requiredGamesPerCycle ??
-    defaultScoringRules.requiredGamesPerCycle;
-  const firstGameNumber =
-    (this.cycleNumber - 1) * requiredGamesPerCycle + 1;
-  const lastGameNumber = this.cycleNumber * requiredGamesPerCycle;
-
-  return `Current scores use each asset's NHL team games ${firstGameNumber}-${lastGameNumber}. Missed games count as 0-point counted games.`;
-}
 
   getAssetScheduledGames(asset: DraftableAsset): number {
-    const requiredGames =
-      this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+    const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
     if (!this.scheduleHasGamesInWindow()) {
       return requiredGames;
     }
 
-    const teamAbbreviation =
-      this.getAssetNhlTeamAbbreviation(asset);
+    const teamAbbreviation = this.getAssetNhlTeamAbbreviation(asset);
 
     const gameCount = this.teamGameCounts()[teamAbbreviation];
 
@@ -2755,21 +2411,14 @@ export class CycleOne implements OnDestroy {
     return Math.min(gameCount, requiredGames);
   }
 
-  getPositionCurrentTotal(
-    ownerId: string | null,
-    position: DraftPosition
-  ): number {
+  getPositionCurrentTotal(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) =>
-        total + this.getAssetCurrentCycleScore(pick.asset),
-      0
+      (total, pick) => total + this.getAssetCurrentCycleScore(pick.asset),
+      0,
     );
   }
 
-  getPositionProjectedTotal(
-    ownerId: string | null,
-    position: DraftPosition
-  ): number | null {
+  getPositionProjectedTotal(ownerId: string | null, position: DraftPosition): number | null {
     const picks = this.getTeamPicksByPosition(ownerId, position);
 
     if (picks.length === 0) {
@@ -2777,33 +2426,24 @@ export class CycleOne implements OnDestroy {
     }
 
     const projectionTotal = picks.reduce(
-      (total, pick) =>
-        total + (this.getBestCycleProjection(pick.asset) ?? 0),
-      0
+      (total, pick) => total + (this.getBestCycleProjection(pick.asset) ?? 0),
+      0,
     );
 
     return Number(projectionTotal.toFixed(1));
   }
 
-  getPositionGamesPlayed(
-    ownerId: string | null,
-    position: DraftPosition
-  ): number {
+  getPositionGamesPlayed(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) =>
-        total + this.getAssetGamesPlayed(pick.asset),
-      0
+      (total, pick) => total + this.getAssetGamesPlayed(pick.asset),
+      0,
     );
   }
 
-  getPositionGamesLeft(
-    ownerId: string | null,
-    position: DraftPosition
-  ): number {
+  getPositionGamesLeft(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) =>
-        total + this.getAssetGamesLeft(pick.asset),
-      0
+      (total, pick) => total + this.getAssetGamesLeft(pick.asset),
+      0,
     );
   }
 
@@ -2828,8 +2468,7 @@ export class CycleOne implements OnDestroy {
     }
 
     if (!this.scheduleHasGamesInWindow()) {
-      const requiredGames =
-        this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+      const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
       return `No NHL games found in this window. Using ${requiredGames} projected games per player until games are available.`;
     }
@@ -2839,20 +2478,13 @@ export class CycleOne implements OnDestroy {
 
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
-      this.playerPool.set(
-        await loadDraftPlayerPool(true)
-      );
+      this.playerPool.set(await loadDraftPlayerPool(true));
     } catch (error: unknown) {
-      console.warn(
-        'Unable to load player pool projection fallback.',
-        error
-      );
+      console.warn('Unable to load player pool projection fallback.', error);
     }
   }
 
-  private async loadScheduleAdjustedProjectionData(
-    cycle: FantasyCycle | null
-  ): Promise<void> {
+  private async loadScheduleAdjustedProjectionData(cycle: FantasyCycle | null): Promise<void> {
     if (!cycle) {
       return;
     }
@@ -2865,60 +2497,38 @@ export class CycleOne implements OnDestroy {
     this.scheduleProjectionLoading.set(true);
     this.scheduleProjectionError.set('');
 
-    const startDate =
-      this.getProjectionWindowStartDate() ?? new Date();
+    const startDate = this.getProjectionWindowStartDate() ?? new Date();
 
-    const endDate =
-      this.getProjectionWindowEndDateFromStart(startDate);
+    const endDate = this.getProjectionWindowEndDateFromStart(startDate);
 
-    const season =
-      this.getNhlSeasonForDate(startDate);
+    const season = this.getNhlSeasonForDate(startDate);
 
     const gameCounts: Record<string, number> = {};
 
     try {
-      for (
-        let index = 0;
-        index < NHL_DRAFT_CLUBS.length;
-        index += NHL_SCHEDULE_BATCH_SIZE
-      ) {
-        const batch = NHL_DRAFT_CLUBS.slice(
-          index,
-          index + NHL_SCHEDULE_BATCH_SIZE
-        );
+      for (let index = 0; index < NHL_DRAFT_CLUBS.length; index += NHL_SCHEDULE_BATCH_SIZE) {
+        const batch = NHL_DRAFT_CLUBS.slice(index, index + NHL_SCHEDULE_BATCH_SIZE);
 
         const results = await Promise.allSettled(
           batch.map(async (club) => {
-            const schedule =
-              await getNhlTeamSeasonSchedule(
-                club.abbreviation,
-                season
-              );
+            const schedule = await getNhlTeamSeasonSchedule(club.abbreviation, season);
 
             const gameCount = schedule.filter((game) =>
-              this.isGameInProjectionWindow(
-                game.gameDate,
-                startDate,
-                endDate
-              )
+              this.isGameInProjectionWindow(game.gameDate, startDate, endDate),
             ).length;
 
             return {
               teamAbbreviation: club.abbreviation,
-              gameCount
+              gameCount,
             };
-          })
+          }),
         );
 
         for (const result of results) {
           if (result.status === 'fulfilled') {
-            gameCounts[result.value.teamAbbreviation] =
-              result.value.gameCount;
+            gameCounts[result.value.teamAbbreviation] = result.value.gameCount;
           } else {
-            console.warn(
-              'Unable to load one NHL team schedule.',
-              result.reason
-            );
+            console.warn('Unable to load one NHL team schedule.', result.reason);
           }
         }
 
@@ -2928,32 +2538,28 @@ export class CycleOne implements OnDestroy {
       this.teamGameCounts.set(gameCounts);
     } catch (error: unknown) {
       this.scheduleProjectionError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load NHL schedule projections.'
+        error instanceof Error ? error.message : 'Unable to load NHL schedule projections.',
       );
     } finally {
       this.scheduleProjectionLoading.set(false);
     }
   }
 
-  private getAssetNhlTeamAbbreviation(
-    asset: DraftableAsset
-  ): string {
-    return asset.assetType === 'skater'
-      ? asset.player.nhlTeamAbbreviation
-      : asset.teamAbbreviation;
+  private getAssetNhlTeamAbbreviation(asset: DraftableAsset): string {
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
   }
 
   private getProjectionWindowStartDate(): Date | null {
-  if (TEST_CYCLE_START_DATE) {
-    return TEST_CYCLE_START_DATE;
+    const historicalTestDate = getHistoricalScoringTestDate();
+
+    if (historicalTestDate) {
+      return historicalTestDate;
+    }
+
+    const cycle = this.cycle();
+
+    return this.getDateFromUnknown(cycle?.startedAt);
   }
-
-  const cycle = this.cycle();
-
-  return this.getDateFromUnknown(cycle?.startedAt);
-}
 
   private getProjectionWindowEndDate(): Date | null {
     const startDate = this.getProjectionWindowStartDate();
@@ -2965,14 +2571,10 @@ export class CycleOne implements OnDestroy {
     return this.getProjectionWindowEndDateFromStart(startDate);
   }
 
-  private getProjectionWindowEndDateFromStart(
-    startDate: Date
-  ): Date {
+  private getProjectionWindowEndDateFromStart(startDate: Date): Date {
     const endDate = new Date(startDate);
 
-    endDate.setDate(
-      endDate.getDate() + CYCLE_PROJECTION_WINDOW_DAYS
-    );
+    endDate.setDate(endDate.getDate() + CYCLE_PROJECTION_WINDOW_DAYS);
 
     return endDate;
   }
@@ -2986,11 +2588,7 @@ export class CycleOne implements OnDestroy {
       return value;
     }
 
-    if (
-      typeof value === 'object' &&
-      value !== null &&
-      'toDate' in value
-    ) {
+    if (typeof value === 'object' && value !== null && 'toDate' in value) {
       const timestampLike = value as {
         toDate?: () => Date;
       };
@@ -3015,19 +2613,12 @@ export class CycleOne implements OnDestroy {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
 
-    const seasonStartYear =
-      month >= 7
-        ? year
-        : year - 1;
+    const seasonStartYear = month >= 7 ? year : year - 1;
 
     return `${seasonStartYear}${seasonStartYear + 1}`;
   }
 
-  private isGameInProjectionWindow(
-    gameDate: string,
-    startDate: Date,
-    endDate: Date
-  ): boolean {
+  private isGameInProjectionWindow(gameDate: string, startDate: Date, endDate: Date): boolean {
     const startKey = this.getDateKey(startDate);
     const endKey = this.getDateKey(endDate);
 
@@ -3044,30 +2635,17 @@ export class CycleOne implements OnDestroy {
 
   async openAssetDetail(asset: DraftableAsset): Promise<void> {
     await this.router.navigate(
-      [
-        '/leagues',
-        this.leagueId,
-        'cycles',
-        this.cycleNumber,
-        'assets',
-        asset.assetKey
-      ],
+      ['/leagues', this.leagueId, 'cycles', this.cycleNumber, 'assets', asset.assetKey],
       {
         queryParams: {
-          returnTo: this.router.url
-        }
-      }
+          returnTo: this.router.url,
+        },
+      },
     );
   }
 
   private getPositionSortValue(position: DraftPosition): number {
-    const order: DraftPosition[] = [
-      'LW',
-      'C',
-      'RW',
-      'D',
-      'G'
-    ];
+    const order: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
 
     return order.indexOf(position);
   }

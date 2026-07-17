@@ -4,18 +4,15 @@
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="playoff-page">
-    <a class="back-link" [routerLink]="['/leagues', leagueId]">
-      ← Back to League
-    </a>
+    <a class="back-link" [routerLink]="['/leagues', leagueId]"> ← Back to League </a>
 
     <header class="playoff-hero">
       <div>
         <span class="eyebrow">Fantasy Postseason</span>
         <h1>{{ league()?.name }} Playoffs</h1>
         <p>
-          One complete six-game cycle per round. The regular-season standings
-          lock after Cycle {{ regularSeasonCycleCount() }}, and tied playoff
-          matchups advance the higher seed.
+          One complete six-game cycle per round. The regular-season standings lock after Cycle
+          {{ regularSeasonCycleCount() }}, and tied playoff matchups advance the higher seed.
         </p>
       </div>
 
@@ -77,9 +74,9 @@
         </div>
 
         <p>
-          {{ getFormatSummary() }} Seeding is based on win percentage, then
-          Points For, point differential, wins, and team name. The field shown
-          below remains live until the final regular-season cycle is completed.
+          {{ getFormatSummary() }} Seeding is based on win percentage, then Points For, point
+          differential, wins, and team name. The field shown below remains live until the final
+          regular-season cycle is completed.
         </p>
 
         <div class="seed-subsection">
@@ -110,9 +107,7 @@
             <div class="seed-subheading">
               <div>
                 <h3>Projected Placement Field</h3>
-                <p>
-                  These teams would begin in placement or consolation games.
-                </p>
+                <p>These teams would begin in placement or consolation games.</p>
               </div>
             </div>
 
@@ -139,15 +134,13 @@
             <span class="eyebrow">Locked Standings</span>
             <h2>Locked Playoff Seeds</h2>
           </div>
-          <a [routerLink]="['/leagues', leagueId, 'standings']">
-            View Regular-Season Standings
-          </a>
+          <a [routerLink]="['/leagues', leagueId, 'standings']"> View Regular-Season Standings </a>
         </div>
 
         <p class="section-copy">
-          These seeds show where each team started the postseason. Teams can
-          move into the championship game, 3rd-place game, 5th-place game, or
-          consolation placements as results come in.
+          These seeds show where each team started the postseason. Teams can move into the
+          championship game, 3rd-place game, 5th-place game, or consolation placements as results
+          come in.
         </p>
 
         <div class="seed-subsection">
@@ -191,7 +184,9 @@
                     <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
                     <small>{{ getSeedProgressLabel(seed.ownerId, seed.seed) }}</small>
                   </div>
-                  <span class="seed-badge consolation-badge">{{ getSeedBadgeLabel(seed.seed) }}</span>
+                  <span class="seed-badge consolation-badge">{{
+                    getSeedBadgeLabel(seed.seed)
+                  }}</span>
                 </article>
               }
             </div>
@@ -205,7 +200,7 @@
             <span class="eyebrow">Postseason Bracket</span>
             <h2>Follow the Bracket</h2>
           </div>
-          @if (isCommissioner()) {
+          @if (isCommissioner() && developerToolsEnabled) {
             <a
               class="simulator-link"
               [routerLink]="['/leagues', leagueId, 'playoffs', 'simulator']"
@@ -216,9 +211,9 @@
         </div>
 
         <p class="section-copy bracket-copy">
-          Styled like a traditional sports bracket. Read each round from left to
-          right, and use the winner and loser destination lines on each matchup
-          to see exactly where every team goes next.
+          Styled like a traditional sports bracket. Read each round from left to right, and use the
+          winner and loser destination lines on each matchup to see exactly where every team goes
+          next.
         </p>
 
         <div class="bracket-board">
@@ -235,20 +230,21 @@
                   </header>
 
                   <div class="round-matchups">
-                    @for (
-                      matchup of getDisplayRoundMatchups(roundNumber);
-                      track matchup.id
-                    ) {
+                    @for (matchup of getDisplayRoundMatchups(roundNumber); track matchup.id) {
                       <article
                         class="bracket-matchup"
                         [class.matchup-active]="matchup.status === 'active'"
                         [class.matchup-complete]="matchup.status === 'complete'"
-                        [class.placement-matchup]="matchup.bracketType === 'consolation' || matchup.winnerPlace === 3"
+                        [class.placement-matchup]="
+                          matchup.bracketType === 'consolation' || matchup.winnerPlace === 3
+                        "
                       >
                         <div class="matchup-path-row">
                           <span
                             class="path-badge"
-                            [class.placement-path-badge]="matchup.bracketType === 'consolation' || matchup.winnerPlace === 3"
+                            [class.placement-path-badge]="
+                              matchup.bracketType === 'consolation' || matchup.winnerPlace === 3
+                            "
                           >
                             {{ getMatchupPathLabel(matchup) }}
                           </span>
@@ -301,9 +297,7 @@
                         </div>
 
                         @if (getMatchupLink(matchup); as matchupLink) {
-                          <a class="matchup-link" [routerLink]="matchupLink">
-                            Open Matchup
-                          </a>
+                          <a class="matchup-link" [routerLink]="matchupLink"> Open Matchup </a>
                         }
                       </article>
                     } @empty {

@@ -16,17 +16,11 @@
 
       <div class="league-actions">
         @if (draft()?.status === 'live') {
-          <a
-            class="primary-action"
-            [routerLink]="['/leagues', leagueId, 'draft']"
-          >
+          <a class="primary-action" [routerLink]="['/leagues', leagueId, 'draft']">
             Enter Live Draft
           </a>
         } @else if (draft()?.status !== 'complete') {
-          <a
-            class="secondary-action"
-            [routerLink]="['/leagues', leagueId, 'draft']"
-          >
+          <a class="secondary-action" [routerLink]="['/leagues', leagueId, 'draft']">
             Draft Room
           </a>
         }
@@ -50,9 +44,13 @@
 
     <section
       class="daily-injury-status"
-      [class.daily-status-running]="dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'"
+      [class.daily-status-running]="
+        dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'
+      "
       [class.daily-status-success]="injurySyncState()?.lastDailySyncKey === getUtcDailyKey()"
-      [class.daily-status-warning]="dailyInjuryRefreshError() || injurySyncState()?.status === 'error'"
+      [class.daily-status-warning]="
+        dailyInjuryRefreshError() || injurySyncState()?.status === 'error'
+      "
       aria-live="polite"
     >
       <span class="daily-injury-icon" aria-hidden="true">🩹</span>
@@ -134,15 +132,15 @@
         } @else {
           <div class="draft-time-display empty-draft-time">
             <strong>No date selected yet</strong>
-            <span>
-              Check back once the commissioner schedules the draft.
-            </span>
+            <span> Check back once the commissioner schedules the draft. </span>
           </div>
         }
 
         <div
           class="draft-injury-sync-card"
-          [class.sync-running]="draftInjurySyncInProgress() || injurySyncState()?.status === 'running'"
+          [class.sync-running]="
+            draftInjurySyncInProgress() || injurySyncState()?.status === 'running'
+          "
           [class.sync-success]="injurySyncState()?.status === 'success'"
           [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
         >
@@ -164,16 +162,11 @@
           <h2>Where do you want to go?</h2>
         </div>
 
-        <p>
-          The most common league actions are kept up front.
-        </p>
+        <p>The most common league actions are kept up front.</p>
       </div>
 
       <div class="quick-actions-grid primary-actions-grid">
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'team']"
-        >
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'team']">
           <span class="hub-action-icon" aria-hidden="true">👕</span>
           <span class="hub-action-copy">
             <strong>My Team</strong>
@@ -181,10 +174,7 @@
           </span>
         </a>
 
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
-        >
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]">
           <span class="hub-action-icon" aria-hidden="true">⚔️</span>
           <span class="hub-action-copy">
             <strong>My Matchup</strong>
@@ -192,10 +182,7 @@
           </span>
         </a>
 
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'free-agents']"
-        >
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'free-agents']">
           <span class="hub-action-icon" aria-hidden="true">🔎</span>
           <span class="hub-action-copy">
             <strong>Players</strong>
@@ -203,10 +190,7 @@
           </span>
         </a>
 
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'standings']"
-        >
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'standings']">
           <span class="hub-action-icon" aria-hidden="true">🏆</span>
           <span class="hub-action-copy">
             <strong>Standings</strong>
@@ -214,10 +198,7 @@
           </span>
         </a>
 
-        <a
-          class="hub-action"
-          [routerLink]="['/leagues', leagueId, 'playoffs']"
-        >
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'playoffs']">
           <span class="hub-action-icon" aria-hidden="true">🥅</span>
           <span class="hub-action-copy">
             <strong>Playoffs</strong>
@@ -226,10 +207,7 @@
         </a>
 
         @if (draft()?.status !== 'complete') {
-          <a
-            class="hub-action hub-action-highlight"
-            [routerLink]="['/leagues', leagueId, 'draft']"
-          >
+          <a class="hub-action hub-action-highlight" [routerLink]="['/leagues', leagueId, 'draft']">
             <span class="hub-action-icon" aria-hidden="true">🧢</span>
             <span class="hub-action-copy">
               <strong>Draft Room</strong>
@@ -261,10 +239,7 @@
             </span>
           </a>
 
-          <a
-            class="tool-link"
-            [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
-          >
+          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
             <span aria-hidden="true">🗓</span>
             <span>
               <strong>Full Schedule</strong>
@@ -272,10 +247,7 @@
             </span>
           </a>
 
-          <a
-            class="tool-link"
-            [routerLink]="['/leagues', leagueId, 'playoffs']"
-          >
+          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
             <span aria-hidden="true">🏆</span>
             <span>
               <strong>Playoff Bracket</strong>
@@ -283,10 +255,7 @@
             </span>
           </a>
 
-          <a
-            class="tool-link"
-            [routerLink]="['/leagues', leagueId, 'projections']"
-          >
+          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'projections']">
             <span aria-hidden="true">📈</span>
             <span>
               <strong>Projection Lab</strong>
@@ -295,14 +264,27 @@
           </a>
 
           @if (isCommissioner()) {
-            <a
-              class="tool-link"
-              [routerLink]="['/leagues', leagueId, 'player-availability']"
-            >
+            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'player-availability']">
               <span aria-hidden="true">🩹</span>
               <span>
                 <strong>Player Availability</strong>
                 <small>Injury statuses and IR eligibility</small>
+              </span>
+            </a>
+
+            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'live-scoring']">
+              <span aria-hidden="true">📡</span>
+              <span>
+                <strong>Scoring Diagnostics</strong>
+                <small>Worker lease, snapshots, and write checks</small>
+              </span>
+            </a>
+
+            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'release-readiness']">
+              <span aria-hidden="true">✅</span>
+              <span>
+                <strong>Release Readiness</strong>
+                <small>Full-season validation and safe recovery</small>
               </span>
             </a>
           }
@@ -381,16 +363,10 @@
             (click)="startFirstCycle()"
             [disabled]="!canStartCycleOne() || cycleActionInProgress()"
           >
-            {{
-              cycleActionInProgress()
-                ? 'Starting Cycle...'
-                : 'Start Cycle 1'
-            }}
+            {{ cycleActionInProgress() ? 'Starting Cycle...' : 'Start Cycle 1' }}
           </button>
         } @else {
-          <p class="cycle-waiting-copy">
-            Waiting for the commissioner to start Cycle 1.
-          </p>
+          <p class="cycle-waiting-copy">Waiting for the commissioner to start Cycle 1.</p>
         }
       }
 
@@ -411,9 +387,7 @@
         </div>
 
         <div>
-          <button (click)="copyInviteCode()">
-            Copy Invite Code
-          </button>
+          <button (click)="copyInviteCode()">Copy Invite Code</button>
 
           @if (copyMessage()) {
             <span class="copy-message">
@@ -431,10 +405,7 @@
           <h2>Teams</h2>
         </div>
 
-        <a
-          class="standings-link"
-          [routerLink]="['/leagues', leagueId, 'standings']"
-        >
+        <a class="standings-link" [routerLink]="['/leagues', leagueId, 'standings']">
           Full Standings
         </a>
       </div>
@@ -490,20 +461,11 @@
         <span class="draft-live-icon">🏒</span>
         <span class="draft-live-eyebrow">Draft Is Live</span>
 
-        <h2 id="draft-live-title">
-          It is time to make your picks.
-        </h2>
+        <h2 id="draft-live-title">It is time to make your picks.</h2>
 
-        <p>
-          Opening the Draft Room automatically.
-        </p>
+        <p>Opening the Draft Room automatically.</p>
 
-        <button
-          type="button"
-          (click)="enterDraftRoom()"
-        >
-          Enter Draft Now
-        </button>
+        <button type="button" (click)="enterDraftRoom()">Enter Draft Now</button>
       </section>
     </div>
   }

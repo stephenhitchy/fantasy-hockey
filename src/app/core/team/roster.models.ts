@@ -8,12 +8,7 @@ export interface RosterCycleScore {
   fantasyPoints: number;
 }
 
-export type RosterStatus =
-  | 'active'
-  | 'injured'
-  | 'benched'
-  | 'new'
-  | 'moved';
+export type RosterStatus = 'active' | 'injured' | 'benched' | 'new' | 'moved';
 
 export interface BaseRosterAsset {
   /**
@@ -28,12 +23,11 @@ export interface BaseRosterAsset {
   projectedCyclePoints?: number | null;
   frozenCycleProjectionPoints?: number | null;
   frozenProjectionCycleNumber?: number | null;
-  frozenProjectionSource?:
-    | 'shared-snapshot'
-    | 'roster'
-    | 'draft-pick'
-    | 'legacy'
-    | null;
+  frozenProjectionSource?: 'shared-snapshot' | 'roster' | 'draft-pick' | 'legacy' | null;
+  frozenProjectionVersion?: number | null;
+  frozenProjectionSnapshotId?: string | null;
+  frozenProjectionGeneratedAt?: string | null;
+  frozenProjectionFrozenAt?: string | null;
   seasonBaselineCyclePoints?: number | null;
   recentFormAdjustment?: number | null;
   roleAdjustment?: number | null;
@@ -90,15 +84,9 @@ export interface TeamGoalieUnitAsset extends BaseRosterAsset {
   cycleScore: RosterCycleScore;
 }
 
-export type RosterAsset =
-  | SkaterRosterAsset
-  | TeamGoalieUnitAsset;
+export type RosterAsset = SkaterRosterAsset | TeamGoalieUnitAsset;
 
-
-export type PendingRosterMoveType =
-  | 'add-drop'
-  | 'add-open-slot'
-  | 'waiver-award';
+export type PendingRosterMoveType = 'add-drop' | 'add-open-slot' | 'waiver-award';
 
 /**
  * A roster change reserved for the next boundary of one persistent active

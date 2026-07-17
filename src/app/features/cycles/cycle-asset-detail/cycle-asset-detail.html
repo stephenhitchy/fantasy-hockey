@@ -6,11 +6,7 @@
   </p>
 } @else {
   <section class="asset-detail-page">
-    <a
-      class="back-link"
-      [href]="getBackUrl()"
-      (click)="navigateBack($event)"
-    >
+    <a class="back-link" [href]="getBackUrl()" (click)="navigateBack($event)">
       ← {{ getBackLinkLabel() }}
     </a>
 
@@ -34,10 +30,7 @@
         <header class="asset-detail-header">
           <div class="asset-title-row">
             @if (getAssetLogoUrl(selectedAsset); as logoUrl) {
-              <img
-                [src]="logoUrl"
-                [alt]="getAssetTeamLabel(selectedAsset) + ' logo'"
-              />
+              <img [src]="logoUrl" [alt]="getAssetTeamLabel(selectedAsset) + ' logo'" />
             }
 
             <div>
@@ -47,8 +40,7 @@
                 {{ getAssetTeamLabel(selectedAsset) }}
                 ·
                 {{ selectedAsset.position }}
-                ·
-                Drafted by {{ getDraftedByLabel() }}
+                · Drafted by {{ getDraftedByLabel() }}
               </p>
             </div>
           </div>
@@ -79,6 +71,24 @@
             <span>Games Left</span>
             <strong>{{ gamesLeft() }}</strong>
           </article>
+
+          <article>
+            <span>Frozen Projection</span>
+            <strong>{{ getFrozenProjectionDisplay(selectedAsset) }}</strong>
+            <small>{{ getFrozenProjectionSourceLabel(selectedAsset) }}</small>
+          </article>
+
+          <article>
+            <span>Projection Generated</span>
+            <strong>{{
+              formatProjectionTimestamp(
+                selectedAsset.frozenProjectionGeneratedAt ?? selectedAsset.projectionGeneratedAt
+              )
+            }}</strong>
+            <small>
+              Window frozen {{ formatProjectionTimestamp(selectedAsset.frozenProjectionFrozenAt) }}
+            </small>
+          </article>
         </section>
 
         @if (detailLoading()) {
@@ -96,8 +106,8 @@
             <span class="eyebrow">Game Breakdown</span>
             <h2>Fantasy Scoring by Counted NHL Team Game</h2>
             <p>
-              Injured, scratched, benched, or otherwise missed games still count
-              once the player's NHL team plays that game. Missed games are worth 0 points.
+              Injured, scratched, benched, or otherwise missed games still count once the player's
+              NHL team plays that game. Missed games are worth 0 points.
             </p>
           </div>
 
@@ -117,9 +127,8 @@
                   <div class="game-main">
                     <div>
                       <strong>
-                        Cycle Game {{ row.cycleGameNumber }}
-                        ·
-                        NHL Team Game {{ row.teamGameNumber }}
+                        Cycle Game {{ row.cycleGameNumber }} · NHL Team Game
+                        {{ row.teamGameNumber }}
                         ·
                         {{ row.gameDate }}
                       </strong>

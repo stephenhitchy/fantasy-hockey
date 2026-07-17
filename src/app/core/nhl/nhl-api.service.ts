@@ -9,9 +9,9 @@ const apiResponseCache = new Map<string, CachedApiResponse>();
 const apiRequestInFlight = new Map<string, Promise<unknown>>();
 const MAX_API_RESPONSE_CACHE_ENTRIES = 2500;
 
-const NHL_SCHEDULE_CACHE_MILLISECONDS = 2 * 60 * 1000;
-const NHL_GAME_DATA_CACHE_MILLISECONDS = 60 * 1000;
-const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
+const NHL_GAME_DATA_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 15 * 60 * 1000;
 const NHL_STATS_CACHE_MILLISECONDS = 5 * 60 * 1000;
 
 const RETRYABLE_HTTP_STATUSES = new Set([
@@ -110,8 +110,13 @@ async function requestApiJsonWithRetry<T>(
 async function getCachedApiJson<T>(
   url: string,
   cacheMilliseconds: number,
-  errorLabel: string
+  errorLabel: string,
+  forceRefresh: boolean = false
 ): Promise<T> {
+  if (forceRefresh) {
+    apiResponseCache.delete(url);
+  }
+
   const cached = apiResponseCache.get(url);
 
   if (
@@ -196,6 +201,7 @@ export interface NhlPlayerGameLogResponse {
 export interface NhlTeamSeasonGame {
   id: number;
   gameDate: string;
+  startTimeUTC?: string;
   gameType: number;
   gameState?: string;
   homeTeam: {
@@ -331,7 +337,8 @@ export function getSkaterAssistBreakdown(
 
 export async function getRegularSeasonGameLog(
   playerId: number,
-  season: string
+  season: string,
+  forceRefresh: boolean = false
 ): Promise<NhlPlayerGameLogResponse> {
   const url =
     `${NHL_API_BASE_URL}/player/${playerId}/game-log/${season}/2`;
@@ -339,7 +346,8 @@ export async function getRegularSeasonGameLog(
   return getCachedApiJson<NhlPlayerGameLogResponse>(
     url,
     NHL_PLAYER_LOG_CACHE_MILLISECONDS,
-    'NHL player game-log request failed'
+    'NHL player game-log request failed',
+    forceRefresh
   );
 }
 

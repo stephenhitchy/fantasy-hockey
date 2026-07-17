@@ -1,27 +1,14 @@
 import { NHLPlayer } from '../player/player.models';
 
-export type DraftStatus =
-  | 'setup'
-  | 'scheduled'
-  | 'live'
-  | 'complete';
+export type DraftStatus = 'setup' | 'scheduled' | 'live' | 'complete';
 
 export type DraftPosition = 'LW' | 'C' | 'RW' | 'D' | 'G';
 
-export type DraftClockStatus =
-  | 'stopped'
-  | 'running'
-  | 'paused'
-  | 'complete';
+export type DraftClockStatus = 'stopped' | 'running' | 'paused' | 'complete';
 
-export type DraftSelectionType =
-  | 'manual'
-  | 'queue'
-  | 'automatic';
+export type DraftSelectionType = 'manual' | 'queue' | 'automatic';
 
-export type DraftAutoPickReason =
-  | 'timer-expired'
-  | 'manager-auto-mode';
+export type DraftAutoPickReason = 'timer-expired' | 'manager-auto-mode';
 
 export type ProjectionDataSource =
   | 'current-season-form'
@@ -62,12 +49,19 @@ export interface DraftProjection {
   frozenProjectionCycleNumber?: number | null;
 
   /** Source used when the cycle projection was frozen. */
-  frozenProjectionSource?:
-    | 'shared-snapshot'
-    | 'roster'
-    | 'draft-pick'
-    | 'legacy'
-    | null;
+  frozenProjectionSource?: 'shared-snapshot' | 'roster' | 'draft-pick' | 'legacy' | null;
+
+  /** Projection model version captured for this immutable window. */
+  frozenProjectionVersion?: number | null;
+
+  /** Shared snapshot used to create the immutable window projection. */
+  frozenProjectionSnapshotId?: string | null;
+
+  /** When the underlying shared projection data was generated. */
+  frozenProjectionGeneratedAt?: string | null;
+
+  /** When this specific roster-slot window froze its projection. */
+  frozenProjectionFrozenAt?: string | null;
 
   /** Projection before short-term form and role adjustments. */
   seasonBaselineCyclePoints?: number | null;
@@ -199,9 +193,7 @@ export interface DraftableGoalieUnitAsset extends DraftProjection {
   teamLogoUrl?: string;
 }
 
-export type DraftableAsset =
-  | DraftableSkaterAsset
-  | DraftableGoalieUnitAsset;
+export type DraftableAsset = DraftableSkaterAsset | DraftableGoalieUnitAsset;
 
 export interface FantasyDraft {
   schemaVersion: number;

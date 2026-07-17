@@ -1,29 +1,18 @@
 import { DraftPosition, DraftableAsset } from '../draft/draft.models';
 
-export type FantasyCycleStatus =
-  | 'active'
-  | 'complete';
+export type FantasyCycleStatus = 'active' | 'complete';
 
-export type FantasyMatchupStatus =
-  | 'active'
-  | 'complete';
+export type FantasyMatchupStatus = 'active' | 'complete';
 
-export type ProjectionAccuracyStatus =
-  | 'pending'
-  | 'complete';
+export type ProjectionAccuracyStatus = 'pending' | 'complete';
 
-export type FantasySeasonPhase =
-  | 'regular_season'
-  | 'playoffs';
+export type FantasySeasonPhase = 'regular_season' | 'playoffs';
 
-export type FantasyPlayoffBracketType =
-  | 'championship'
-  | 'consolation';
+export type FantasyPlayoffBracketType = 'championship' | 'consolation';
 
-export type AssetCycleWindowStatus =
-  | 'scheduled'
-  | 'active'
-  | 'complete';
+export type AssetCycleWindowStatus = 'scheduled' | 'active' | 'complete';
+
+export type AssetCycleGameState = 'scheduled' | 'live' | 'final';
 
 /**
  * One immutable six-game assignment for one persistent fantasy roster slot.
@@ -42,7 +31,10 @@ export interface FantasyAssetCycleWindow {
   scheduledGameDates: string[];
   scheduledGameLabels: string[];
   completedGameIds: number[];
+  liveGameIds: number[];
   appearanceGameIds: number[];
+  gameScores: Record<string, number>;
+  gameStates: Record<string, AssetCycleGameState>;
   scheduledGames: number;
   gamesPlayed: number;
   actualGamesPlayed: number;
@@ -50,6 +42,11 @@ export interface FantasyAssetCycleWindow {
   fantasyPoints: number;
   frozenProjectionPoints: number | null;
   frozenProjectionVersion: number | null;
+  frozenProjectionSource: 'shared-snapshot' | 'roster' | 'draft-pick' | 'legacy' | null;
+  frozenProjectionSnapshotId: string | null;
+  frozenProjectionGeneratedAt: string | null;
+  frozenProjectionFrozenAt: string | null;
+  frozenProjectionTargetGameIds: number[];
   firstScheduledGameDate: string | null;
   lastScheduledGameDate: string | null;
   startedAt?: unknown | null;

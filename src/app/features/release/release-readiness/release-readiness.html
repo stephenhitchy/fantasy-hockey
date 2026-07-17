@@ -1,0 +1,390 @@
+@if (loading()) {
+  <main class="readiness-page">
+    <section class="state-card">
+      <span class="eyebrow">Release readiness</span>
+      <h1>Checking the league…</h1>
+      <p>Loading scoring, projection, injury, cycle, and playoff status.</p>
+    </section>
+  </main>
+} @else if (!league()) {
+  <main class="readiness-page">
+    <section class="state-card error-state">
+      <h1>League not found</h1>
+      <p>{{ errorMessage() }}</p>
+    </section>
+  </main>
+} @else if (!authorized()) {
+  <main class="readiness-page">
+    <section class="state-card error-state">
+      <h1>Commissioner access required</h1>
+      <p>
+        This page contains recovery controls and is intentionally limited to the league
+        commissioner.
+      </p>
+      <a [routerLink]="['/leagues', leagueId]">Return to league</a>
+    </section>
+  </main>
+} @else {
+  <main class="readiness-page">
+    <a class="back-link" [routerLink]="['/leagues', leagueId]">← Back to League</a>
+
+    <header class="readiness-header">
+      <div>
+        <span class="eyebrow">Release Candidate Validation</span>
+        <h1>{{ league()?.name }} Readiness</h1>
+        <p>
+          One commissioner page for the final season simulation, production safeguards, subsystem
+          versions, and safe recovery actions.
+        </p>
+      </div>
+
+      @if (snapshot(); as current) {
+        <div
+          class="overall-status"
+          [class.status-ready]="current.overallStatus === 'ready'"
+          [class.status-testing]="current.overallStatus === 'testing'"
+          [class.status-attention]="current.overallStatus === 'attention'"
+        >
+          <span>Current status</span>
+          <strong>{{ getOverallLabel(current) }}</strong>
+          <small
+            >{{ current.passedRequiredCount }} / {{ current.totalRequiredCount }} required checks
+            passed</small
+          >
+        </div>
+      }
+    </header>
+
+    @if (actionMessage()) {
+      <p class="message success-message" role="status">{{ actionMessage() }}</p>
+    }
+
+    @if (errorMessage()) {
+      <p class="message error-message" role="alert">{{ errorMessage() }}</p>
+    }
+
+    @if (snapshot(); as current) {
+      <section
+        class="mode-banner"
+        [class.mode-live]="current.scoringMode === 'live'"
+        [class.mode-historical]="current.scoringMode === 'historical'"
+      >
+        <span aria-hidden="true">{{ current.scoringMode === 'live' ? '🟢' : '🧪' }}</span>
+        <div>
+          <strong>
+            {{
+              current.scoringMode === 'live'
+                ? 'Live NHL scoring configuration'
+                : 'Historical testing configuration'
+            }}
+          </strong>
+          <p>
+            @if (current.scoringMode === 'live') {
+              This build follows the current NHL season. Production builds also hide temporary
+              simulator controls.
+            } @else {
+              Local testing is pinned to {{ formatTimestamp(current.historicalDateIso) }}. A
+              production build automatically swaps to live mode and hides test controls.
+            }
+          </p>
+        </div>
+      </section>
+
+      <section class="summary-grid">
+        <article>
+          <span>Teams</span>
+          <strong>{{ current.teamCount }} / {{ current.maxTeams }}</strong>
+          <small>Draft: {{ current.draftStatus }}</small>
+        </article>
+        <article>
+          <span>Active cycles</span>
+          <strong>{{ current.activeCycleNumbers.length }}</strong>
+          <small>
+            {{
+              current.activeCycleNumbers.length
+                ? current.activeCycleNumbers.join(', ')
+                : 'None active'
+            }}
+          </small>
+        </article>
+        <article>
+          <span>Projection</span>
+          <strong>{{ current.projectionStatus }}</strong>
+          <small>Target Cycle {{ current.projectionTargetCycleNumber ?? '—' }}</small>
+        </article>
+        <article>
+          <span>Live scorer</span>
+          <strong>{{ current.liveScoringStatus }}</strong>
+          <small>{{ formatTimestamp(current.lastLiveScoringSyncAt) }}</small>
+        </article>
+        <article>
+          <span>Injury report</span>
+          <strong>{{ current.lastInjurySyncAt ? 'Synced' : 'Not synced' }}</strong>
+          <small>{{ formatTimestamp(current.lastInjurySyncAt) }}</small>
+        </article>
+        <article>
+          <span>Playoffs</span>
+          <strong>{{ current.playoffStatus }}</strong>
+          <small>Latest cycle {{ current.latestCycleNumber ?? '—' }}</small>
+        </article>
+      </section>
+
+      <section class="readiness-card simulator-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">No NHL requests or Firestore writes</span>
+            <h2>Full-season release simulator</h2>
+          </div>
+          <button type="button" class="primary-button" (click)="runSeasonSimulator()">
+            Run Full Season
+          </button>
+        </div>
+
+        <p class="section-copy">
+          Simulates a four-team draft, 11 regular-season cycles, asynchronous six-game windows,
+          queued moves, IR, frozen projections, shared scoring, standings, semifinals, championship,
+          third place, and final placements.
+        </p>
+
+        @if (simulation(); as result) {
+          <div
+            class="simulation-summary"
+            [class.simulation-pass]="result.passed"
+            [class.simulation-fail]="!result.passed"
+          >
+            <div>
+              <strong>{{ result.passedCount }} / {{ result.totalCount }} checks passed</strong>
+              <span>
+                {{
+                  result.passed
+                    ? 'The complete deterministic league lifecycle passed.'
+                    : 'At least one lifecycle invariant failed.'
+                }}
+              </span>
+            </div>
+            <small>
+              {{ result.simulatedTeamCount }} teams ·
+              {{ result.simulatedRegularSeasonCycleCount }} regular cycles ·
+              {{ result.simulatedRosterSlotsPerTeam }} slots ·
+              {{ result.simulatedGamesPerWindow }} games per window
+            </small>
+          </div>
+
+          <div class="milestone-grid">
+            @for (milestone of result.milestones; track milestone.order) {
+              <article [class.milestone-failed]="milestone.status === 'failed'">
+                <span class="milestone-number">{{ milestone.order }}</span>
+                <div>
+                  <strong>{{ milestone.label }}</strong>
+                  <small>{{ milestone.detail }}</small>
+                </div>
+              </article>
+            }
+          </div>
+
+          <details class="simulation-details">
+            <summary>View all {{ result.totalCount }} lifecycle checks</summary>
+            <div class="check-list">
+              @for (check of result.checks; track check.id) {
+                <article
+                  class="check-row"
+                  [class.check-pass]="check.passed"
+                  [class.check-fail]="!check.passed"
+                >
+                  <span>{{ check.passed ? '✓' : '×' }}</span>
+                  <div>
+                    <small>{{ check.stage }}</small>
+                    <strong>{{ check.label }}</strong>
+                    <p>Expected: {{ check.expected }} · Actual: {{ check.actual }}</p>
+                  </div>
+                </article>
+              }
+            </div>
+          </details>
+        }
+      </section>
+
+      <section class="readiness-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Production checklist</span>
+            <h2>Required launch checks</h2>
+          </div>
+          <button
+            type="button"
+            class="secondary-button"
+            [disabled]="actionInProgress()"
+            (click)="refreshReadiness()"
+          >
+            Refresh Checks
+          </button>
+        </div>
+
+        <div class="check-groups">
+          @for (group of groupedRequiredChecks(); track group.category) {
+            <section class="check-group">
+              <h3>{{ group.label }}</h3>
+              <div class="check-list">
+                @for (check of group.checks; track check.id) {
+                  <article
+                    class="check-row"
+                    [class.check-pass]="check.level === 'pass'"
+                    [class.check-warning]="check.level === 'warning'"
+                    [class.check-fail]="check.level === 'fail'"
+                  >
+                    <span>{{ getCheckIcon(check) }}</span>
+                    <div>
+                      <strong>{{ check.label }}</strong>
+                      <p>{{ check.detail }}</p>
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+        </div>
+
+        @if (advisoryChecks().length) {
+          <details class="advisory-details">
+            <summary>Development-only advisory checks</summary>
+            <div class="check-list">
+              @for (check of advisoryChecks(); track check.id) {
+                <article
+                  class="check-row"
+                  [class.check-pass]="check.level === 'pass'"
+                  [class.check-warning]="check.level === 'warning'"
+                >
+                  <span>{{ getCheckIcon(check) }}</span>
+                  <div>
+                    <strong>{{ check.label }}</strong>
+                    <p>{{ check.detail }}</p>
+                  </div>
+                </article>
+              }
+            </div>
+          </details>
+        }
+      </section>
+
+      <section class="readiness-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Guarded commissioner actions</span>
+            <h2>Safe recovery controls</h2>
+          </div>
+        </div>
+
+        <div class="recovery-grid">
+          <article>
+            <span aria-hidden="true">📡</span>
+            <div>
+              <strong>Retry shared scoring</strong>
+              <p>
+                Requests one immediate worker pass. Unchanged score snapshots are still skipped.
+              </p>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="requestScoreRecovery()"
+              >
+                Request Score Refresh
+              </button>
+            </div>
+          </article>
+
+          <article>
+            <span aria-hidden="true">🔓</span>
+            <div>
+              <strong>Clear expired or errored lease</strong>
+              <p>A healthy active scorer cannot be interrupted by this control.</p>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="clearStuckLease()"
+              >
+                Clear Stuck Lease
+              </button>
+            </div>
+          </article>
+
+          <article>
+            <span aria-hidden="true">🩹</span>
+            <div>
+              <strong>Retry injury synchronization</strong>
+              <p>Runs the shared global player-availability refresh once.</p>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="retryInjurySync()"
+              >
+                Refresh Injuries
+              </button>
+            </div>
+          </article>
+
+          <article>
+            <span aria-hidden="true">📈</span>
+            <div>
+              <strong>Regenerate one projection target</strong>
+              <p>Creates a fresh, healthy shared snapshot for an exact six-game cycle target.</p>
+              <label>
+                Target cycle
+                <input
+                  type="number"
+                  min="1"
+                  [value]="targetProjectionCycle()"
+                  (input)="setTargetProjectionCycle($any($event.target).value)"
+                />
+              </label>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="regenerateProjection()"
+              >
+                Regenerate Projection
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="readiness-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Installed architecture</span>
+            <h2>Version registry</h2>
+          </div>
+          <span class="release-label">{{ current.versions.releaseLabel }}</span>
+        </div>
+
+        <div class="version-grid">
+          <article>
+            <span>Scoring rules</span><strong>v{{ current.versions.scoringRulesVersion }}</strong>
+          </article>
+          <article>
+            <span>Projection model</span><strong>v{{ current.versions.projectionVersion }}</strong>
+          </article>
+          <article>
+            <span>Live scoring schema</span
+            ><strong>v{{ current.versions.liveScoringSchemaVersion }}</strong>
+          </article>
+          <article>
+            <span>Playoff format</span><strong>v{{ current.versions.playoffFormatVersion }}</strong>
+          </article>
+          <article>
+            <span>Cycle windows</span
+            ><strong>v{{ current.versions.cycleWindowSchemaVersion }}</strong>
+          </article>
+          <article>
+            <span>Matchup completion</span
+            ><strong>v{{ current.versions.matchupCompletionSchemaVersion }}</strong>
+          </article>
+        </div>
+      </section>
+    }
+  </main>
+}

@@ -5,81 +5,43 @@ import {
   getDocs,
   runTransaction,
   serverTimestamp,
-  writeBatch
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
+import { DraftPick, DraftProjection, DraftableAsset } from '../draft/draft.models';
+import { getRawCycleProjection } from '../projection/cycle-projection.util';
 import {
-  DraftPick,
-  DraftProjection,
-  DraftableAsset
-} from '../draft/draft.models';
-import {
-  createFrozenCycleProjection,
-  getRawCycleProjection
-} from '../projection/cycle-projection.util';
-import {
-  FantasyRoster,
-  RosterAsset
-} from '../team/roster.models';
+  createFrozenWindowProjectionFields,
+  ensureWindowProjectionBundle,
+  FrozenWindowProjectionFields,
+} from '../projection/window-projection.service';
+import { FantasyRoster, RosterAsset } from '../team/roster.models';
 import { normalizeFantasyRoster } from '../team/roster.service';
-import {
-  calculateCycleScoring,
-  CycleScoringResult
-} from '../cycle/cycle-scoring.service';
-import { ScoringRules } from '../scoring/scoring-rules';
+import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scoring.service';
+import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
 import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
-import {
-  FantasyPlayoffWindowBank
-} from './playoff-window-bank.models';
+import { FantasyPlayoffWindowBank } from './playoff-window-bank.models';
 import { FantasyPlayoffs } from './playoff.models';
 
 function getOwnerBankRef(leagueId: string, ownerId: string) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'playoffWindowBanks',
-    ownerId
-  );
+  return doc(db, 'leagues', leagueId, 'playoffWindowBanks', ownerId);
 }
 
 function getOwnerWindowsRef(leagueId: string, ownerId: string) {
   return collection(getOwnerBankRef(leagueId, ownerId), 'windows');
 }
 
-export function getPlayoffWindowBankRef(
-  leagueId: string,
-  ownerId: string,
-  windowNumber: number
-) {
-  return doc(
-    getOwnerWindowsRef(leagueId, ownerId),
-    `window-${windowNumber}`
-  );
+export function getPlayoffWindowBankRef(leagueId: string, ownerId: string, windowNumber: number) {
+  return doc(getOwnerWindowsRef(leagueId, ownerId), `window-${windowNumber}`);
 }
 
 function getTeamRosterRef(leagueId: string, ownerId: string) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'teams',
-    ownerId,
-    'roster',
-    'current'
-  );
+  return doc(db, 'leagues', leagueId, 'teams', ownerId, 'roster', 'current');
 }
 
 function getDraftPicksRef(leagueId: string) {
-  return collection(
-    db,
-    'leagues',
-    leagueId,
-    'draft',
-    'current',
-    'picks'
-  );
+  return collection(db, 'leagues', leagueId, 'draft', 'current', 'picks');
 }
 
 function getWaiverRef(leagueId: string, waiverId: string) {
@@ -90,41 +52,106 @@ function getTransactionsRef(leagueId: string) {
   return collection(db, 'leagues', leagueId, 'transactions');
 }
 
-function getProjectionSnapshotPointerRef(leagueId: string) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'projectionSnapshots',
-    'current'
-  );
-}
-
-function getProjectionSnapshotAssetsRef(
-  leagueId: string,
-  snapshotId: string
-) {
-  return collection(
-    db,
-    'leagues',
-    leagueId,
-    'projectionSnapshots',
-    snapshotId,
-    'assets'
-  );
-}
-
 function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : [];
 }
 
+function normalizeNumberArray(value: unknown): number[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry))
+    : [];
+}
+
+function normalizeNumberRecord(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+    ),
+  );
+}
+
+function normalizeGameStateRecord(value: unknown): Record<string, 'scheduled' | 'live' | 'final'> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, 'scheduled' | 'live' | 'final'] =>
+        entry[1] === 'scheduled' || entry[1] === 'live' || entry[1] === 'final',
+    ),
+  );
+}
+
+function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAssetCycleWindow {
+  return {
+    id: value.id ?? '',
+    ownerId: value.ownerId ?? '',
+    rosterSlotId: value.rosterSlotId ?? '',
+    cycleNumber: typeof value.cycleNumber === 'number' ? value.cycleNumber : 0,
+    position: value.position ?? 'C',
+    assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
+    asset: value.asset as FantasyAssetCycleWindow['asset'],
+    status:
+      value.status === 'complete' ? 'complete' : value.status === 'active' ? 'active' : 'scheduled',
+    scheduledGameIds: normalizeNumberArray(value.scheduledGameIds),
+    scheduledGameDates: normalizeStringArray(value.scheduledGameDates),
+    scheduledGameLabels: normalizeStringArray(value.scheduledGameLabels),
+    completedGameIds: normalizeNumberArray(value.completedGameIds),
+    liveGameIds: normalizeNumberArray(value.liveGameIds),
+    appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
+    gameScores: normalizeNumberRecord(value.gameScores),
+    gameStates: normalizeGameStateRecord(value.gameStates),
+    scheduledGames: typeof value.scheduledGames === 'number' ? value.scheduledGames : 0,
+    gamesPlayed: typeof value.gamesPlayed === 'number' ? value.gamesPlayed : 0,
+    actualGamesPlayed: typeof value.actualGamesPlayed === 'number' ? value.actualGamesPlayed : 0,
+    gamesLeft: typeof value.gamesLeft === 'number' ? value.gamesLeft : 0,
+    fantasyPoints: typeof value.fantasyPoints === 'number' ? value.fantasyPoints : 0,
+    frozenProjectionPoints:
+      typeof value.frozenProjectionPoints === 'number' ? value.frozenProjectionPoints : null,
+    frozenProjectionVersion:
+      typeof value.frozenProjectionVersion === 'number' ? value.frozenProjectionVersion : null,
+    frozenProjectionSource:
+      value.frozenProjectionSource === 'shared-snapshot' ||
+      value.frozenProjectionSource === 'roster' ||
+      value.frozenProjectionSource === 'draft-pick' ||
+      value.frozenProjectionSource === 'legacy'
+        ? value.frozenProjectionSource
+        : null,
+    frozenProjectionSnapshotId:
+      typeof value.frozenProjectionSnapshotId === 'string'
+        ? value.frozenProjectionSnapshotId
+        : null,
+    frozenProjectionGeneratedAt:
+      typeof value.frozenProjectionGeneratedAt === 'string'
+        ? value.frozenProjectionGeneratedAt
+        : null,
+    frozenProjectionFrozenAt:
+      typeof value.frozenProjectionFrozenAt === 'string' ? value.frozenProjectionFrozenAt : null,
+    frozenProjectionTargetGameIds: normalizeNumberArray(value.frozenProjectionTargetGameIds),
+    firstScheduledGameDate:
+      typeof value.firstScheduledGameDate === 'string' ? value.firstScheduledGameDate : null,
+    lastScheduledGameDate:
+      typeof value.lastScheduledGameDate === 'string' ? value.lastScheduledGameDate : null,
+    startedAt: value.startedAt ?? null,
+    completedAt: value.completedAt ?? null,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
 function normalizeSlotWindows(value: unknown): FantasyAssetCycleWindow[] {
   return Array.isArray(value)
-    ? value.filter((entry): entry is FantasyAssetCycleWindow =>
-        Boolean(entry) && typeof entry === 'object'
-      )
+    ? value
+        .filter((entry) => Boolean(entry) && typeof entry === 'object')
+        .map((entry) => normalizeSlotWindow(entry as Partial<FantasyAssetCycleWindow>))
     : [];
 }
 
@@ -132,67 +159,45 @@ export function normalizePlayoffWindowBank(
   value: Partial<FantasyPlayoffWindowBank>,
   ownerId: string,
   windowNumber: number,
-  regularSeasonCycleCount: number
+  regularSeasonCycleCount: number,
 ): FantasyPlayoffWindowBank {
   return {
     id: value.id ?? `window-${windowNumber}`,
     ownerId: value.ownerId ?? ownerId,
     windowNumber: value.windowNumber ?? windowNumber,
-    sourceCycleNumber:
-      value.sourceCycleNumber ?? regularSeasonCycleCount + windowNumber,
+    sourceCycleNumber: value.sourceCycleNumber ?? regularSeasonCycleCount + windowNumber,
     status:
-      value.status === 'complete'
-        ? 'complete'
-        : value.status === 'active'
-          ? 'active'
-          : 'scheduled',
+      value.status === 'complete' ? 'complete' : value.status === 'active' ? 'active' : 'scheduled',
     assignmentStatus:
       value.assignmentStatus === 'assigned'
         ? 'assigned'
         : value.assignmentStatus === 'unused'
           ? 'unused'
           : 'unassigned',
-    assignedMatchupId:
-      typeof value.assignedMatchupId === 'string'
-        ? value.assignedMatchupId
-        : null,
+    assignedMatchupId: typeof value.assignedMatchupId === 'string' ? value.assignedMatchupId : null,
     assignedRoundNumber:
-      typeof value.assignedRoundNumber === 'number'
-        ? value.assignedRoundNumber
-        : null,
-    expectedRosterSlotIds: normalizeStringArray(
-      value.expectedRosterSlotIds
-    ),
-    picks: Array.isArray(value.picks)
-      ? value.picks as DraftPick[]
-      : [],
+      typeof value.assignedRoundNumber === 'number' ? value.assignedRoundNumber : null,
+    expectedRosterSlotIds: normalizeStringArray(value.expectedRosterSlotIds),
+    picks: Array.isArray(value.picks) ? (value.picks as DraftPick[]) : [],
     slotWindows: normalizeSlotWindows(value.slotWindows),
-    teamScore:
-      typeof value.teamScore === 'number' ? value.teamScore : 0,
+    teamScore: typeof value.teamScore === 'number' ? value.teamScore : 0,
     completedWindowCount:
-      typeof value.completedWindowCount === 'number'
-        ? value.completedWindowCount
-        : 0,
-    totalWindowCount:
-      typeof value.totalWindowCount === 'number'
-        ? value.totalWindowCount
-        : 0,
+      typeof value.completedWindowCount === 'number' ? value.completedWindowCount : 0,
+    totalWindowCount: typeof value.totalWindowCount === 'number' ? value.totalWindowCount : 0,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     completedAt: value.completedAt ?? null,
-    assignedAt: value.assignedAt ?? null
+    assignedAt: value.assignedAt ?? null,
   };
 }
 
 export async function getAllPlayoffWindowBanks(
   leagueId: string,
-  playoffs: FantasyPlayoffs
+  playoffs: FantasyPlayoffs,
 ): Promise<FantasyPlayoffWindowBank[]> {
   const results = await Promise.all(
     playoffs.seeds.map(async (seed) => {
-      const snapshot = await getDocs(
-        getOwnerWindowsRef(leagueId, seed.ownerId)
-      );
+      const snapshot = await getDocs(getOwnerWindowsRef(leagueId, seed.ownerId));
 
       return snapshot.docs.map((windowDocument) => {
         const match = /^window-(\d+)$/.exec(windowDocument.id);
@@ -202,10 +207,10 @@ export async function getAllPlayoffWindowBanks(
           windowDocument.data() as Partial<FantasyPlayoffWindowBank>,
           seed.ownerId,
           windowNumber,
-          playoffs.regularSeasonCycleCount
+          playoffs.regularSeasonCycleCount,
         );
       });
-    })
+    }),
   );
 
   return results.flat().sort((first, second) => {
@@ -219,14 +224,13 @@ export async function getAllPlayoffWindowBanks(
 
 export function getEarliestUnassignedPlayoffWindow(
   banks: FantasyPlayoffWindowBank[],
-  ownerId: string
+  ownerId: string,
 ): FantasyPlayoffWindowBank | null {
-  return banks
-    .filter((bank) =>
-      bank.ownerId === ownerId &&
-      bank.assignmentStatus === 'unassigned'
-    )
-    .sort((first, second) => first.windowNumber - second.windowNumber)[0] ?? null;
+  return (
+    banks
+      .filter((bank) => bank.ownerId === ownerId && bank.assignmentStatus === 'unassigned')
+      .sort((first, second) => first.windowNumber - second.windowNumber)[0] ?? null
+  );
 }
 
 function getRosterAssetKey(asset: RosterAsset | null): string {
@@ -245,123 +249,73 @@ function getRosterAssetKey(asset: RosterAsset | null): string {
   return `goalie-unit-${asset.teamAbbreviation}`;
 }
 
-function projectionFields(
-  asset: DraftableAsset | RosterAsset
-): DraftProjection {
+function projectionFields(asset: DraftableAsset | RosterAsset): DraftProjection {
   const projection = asset as DraftProjection;
 
   return {
-    projectedSeasonPoints:
-      projection.projectedSeasonPoints ?? null,
-    projectedCyclePoints:
-      projection.projectedCyclePoints ?? null,
-    frozenCycleProjectionPoints:
-      projection.frozenCycleProjectionPoints ?? null,
-    frozenProjectionCycleNumber:
-      projection.frozenProjectionCycleNumber ?? null,
-    frozenProjectionSource:
-      projection.frozenProjectionSource ?? null,
-    seasonBaselineCyclePoints:
-      projection.seasonBaselineCyclePoints ?? null,
-    recentFormAdjustment:
-      projection.recentFormAdjustment ?? null,
+    projectedSeasonPoints: projection.projectedSeasonPoints ?? null,
+    projectedCyclePoints: projection.projectedCyclePoints ?? null,
+    frozenCycleProjectionPoints: projection.frozenCycleProjectionPoints ?? null,
+    frozenProjectionCycleNumber: projection.frozenProjectionCycleNumber ?? null,
+    frozenProjectionSource: projection.frozenProjectionSource ?? null,
+    frozenProjectionVersion: projection.frozenProjectionVersion ?? null,
+    frozenProjectionSnapshotId: projection.frozenProjectionSnapshotId ?? null,
+    frozenProjectionGeneratedAt: projection.frozenProjectionGeneratedAt ?? null,
+    frozenProjectionFrozenAt: projection.frozenProjectionFrozenAt ?? null,
+    seasonBaselineCyclePoints: projection.seasonBaselineCyclePoints ?? null,
+    recentFormAdjustment: projection.recentFormAdjustment ?? null,
     roleAdjustment: projection.roleAdjustment ?? null,
-    projectionDataSeason:
-      projection.projectionDataSeason ?? null,
-    projectionDataSource:
-      projection.projectionDataSource ?? null,
-    projectionGamesPlayed:
-      projection.projectionGamesPlayed ?? null,
-    recentFormSampleSize:
-      projection.recentFormSampleSize ?? null,
-    seasonFantasyPointsPerGame:
-      projection.seasonFantasyPointsPerGame ?? null,
-    recentThreeGameFantasyPointsPerGame:
-      projection.recentThreeGameFantasyPointsPerGame ?? null,
-    recentFiveGameFantasyPointsPerGame:
-      projection.recentFiveGameFantasyPointsPerGame ?? null,
-    recentTenGameFantasyPointsPerGame:
-      projection.recentTenGameFantasyPointsPerGame ?? null,
-    recentTwentyGameFantasyPointsPerGame:
-      projection.recentTwentyGameFantasyPointsPerGame ?? null,
-    draftProjectedSeasonPoints:
-      projection.draftProjectedSeasonPoints ?? null,
-    draftProjectedCyclePoints:
-      projection.draftProjectedCyclePoints ?? null,
-    draftRecentTrendAdjustment:
-      projection.draftRecentTrendAdjustment ?? null,
-    draftRoleAdjustment:
-      projection.draftRoleAdjustment ?? null,
-    draftReliabilityRating:
-      projection.draftReliabilityRating ?? null,
-    draftVolatilityPenalty:
-      projection.draftVolatilityPenalty ?? null,
-    draftFloorAdjustedCyclePoints:
-      projection.draftFloorAdjustedCyclePoints ?? null,
-    draftValueAboveReplacement:
-      projection.draftValueAboveReplacement ?? null,
+    projectionDataSeason: projection.projectionDataSeason ?? null,
+    projectionDataSource: projection.projectionDataSource ?? null,
+    projectionGamesPlayed: projection.projectionGamesPlayed ?? null,
+    recentFormSampleSize: projection.recentFormSampleSize ?? null,
+    seasonFantasyPointsPerGame: projection.seasonFantasyPointsPerGame ?? null,
+    recentThreeGameFantasyPointsPerGame: projection.recentThreeGameFantasyPointsPerGame ?? null,
+    recentFiveGameFantasyPointsPerGame: projection.recentFiveGameFantasyPointsPerGame ?? null,
+    recentTenGameFantasyPointsPerGame: projection.recentTenGameFantasyPointsPerGame ?? null,
+    recentTwentyGameFantasyPointsPerGame: projection.recentTwentyGameFantasyPointsPerGame ?? null,
+    draftProjectedSeasonPoints: projection.draftProjectedSeasonPoints ?? null,
+    draftProjectedCyclePoints: projection.draftProjectedCyclePoints ?? null,
+    draftRecentTrendAdjustment: projection.draftRecentTrendAdjustment ?? null,
+    draftRoleAdjustment: projection.draftRoleAdjustment ?? null,
+    draftReliabilityRating: projection.draftReliabilityRating ?? null,
+    draftVolatilityPenalty: projection.draftVolatilityPenalty ?? null,
+    draftFloorAdjustedCyclePoints: projection.draftFloorAdjustedCyclePoints ?? null,
+    draftValueAboveReplacement: projection.draftValueAboveReplacement ?? null,
     draftScore: projection.draftScore ?? null,
     draftRank: projection.draftRank ?? null,
-    draftPositionRank:
-      projection.draftPositionRank ?? null,
-    cycleValueAboveReplacement:
-      projection.cycleValueAboveReplacement ?? null,
+    draftPositionRank: projection.draftPositionRank ?? null,
+    cycleValueAboveReplacement: projection.cycleValueAboveReplacement ?? null,
     cycleScore: projection.cycleScore ?? null,
     cycleRank: projection.cycleRank ?? null,
-    cyclePositionRank:
-      projection.cyclePositionRank ?? null,
-    seasonAverageTimeOnIceMinutes:
-      projection.seasonAverageTimeOnIceMinutes ?? null,
-    recentAverageTimeOnIceMinutes:
-      projection.recentAverageTimeOnIceMinutes ?? null,
-    actualRecentAppearances:
-      projection.actualRecentAppearances ?? null,
-    missedRecentTeamGames:
-      projection.missedRecentTeamGames ?? null,
-    weightedRecentAppearances:
-      projection.weightedRecentAppearances ?? null,
-    fullWeightRecentGames:
-      projection.fullWeightRecentGames ?? null,
-    partialWeightRecentGames:
-      projection.partialWeightRecentGames ?? null,
-    healthyProjectedCyclePoints:
-      projection.healthyProjectedCyclePoints ?? null,
-    scheduledGamesInProjectionCycle:
-      projection.scheduledGamesInProjectionCycle ?? null,
-    expectedGamesAvailable:
-      projection.expectedGamesAvailable ?? null,
-    availabilityAdjustment:
-      projection.availabilityAdjustment ?? null,
-    availabilityAdjustedCyclePoints:
-      projection.availabilityAdjustedCyclePoints ?? null,
-    availabilityStatus:
-      projection.availabilityStatus ?? null,
-    availabilityLabel:
-      projection.availabilityLabel ?? null,
-    availabilityReturnDate:
-      projection.availabilityReturnDate ?? null,
-    availabilityNote:
-      projection.availabilityNote ?? null,
-    availabilityAsOf:
-      projection.availabilityAsOf ?? null,
-    targetProjectionCycleNumber:
-      projection.targetProjectionCycleNumber ?? null,
-    sharedProjectionSnapshotId:
-      projection.sharedProjectionSnapshotId ?? null,
-    projectionGeneratedAt:
-      projection.projectionGeneratedAt ?? null,
-    balancedDraftValue:
-      projection.balancedDraftValue ?? null,
+    cyclePositionRank: projection.cyclePositionRank ?? null,
+    seasonAverageTimeOnIceMinutes: projection.seasonAverageTimeOnIceMinutes ?? null,
+    recentAverageTimeOnIceMinutes: projection.recentAverageTimeOnIceMinutes ?? null,
+    actualRecentAppearances: projection.actualRecentAppearances ?? null,
+    missedRecentTeamGames: projection.missedRecentTeamGames ?? null,
+    weightedRecentAppearances: projection.weightedRecentAppearances ?? null,
+    fullWeightRecentGames: projection.fullWeightRecentGames ?? null,
+    partialWeightRecentGames: projection.partialWeightRecentGames ?? null,
+    healthyProjectedCyclePoints: projection.healthyProjectedCyclePoints ?? null,
+    scheduledGamesInProjectionCycle: projection.scheduledGamesInProjectionCycle ?? null,
+    expectedGamesAvailable: projection.expectedGamesAvailable ?? null,
+    availabilityAdjustment: projection.availabilityAdjustment ?? null,
+    availabilityAdjustedCyclePoints: projection.availabilityAdjustedCyclePoints ?? null,
+    availabilityStatus: projection.availabilityStatus ?? null,
+    availabilityLabel: projection.availabilityLabel ?? null,
+    availabilityReturnDate: projection.availabilityReturnDate ?? null,
+    availabilityNote: projection.availabilityNote ?? null,
+    availabilityAsOf: projection.availabilityAsOf ?? null,
+    targetProjectionCycleNumber: projection.targetProjectionCycleNumber ?? null,
+    sharedProjectionSnapshotId: projection.sharedProjectionSnapshotId ?? null,
+    projectionGeneratedAt: projection.projectionGeneratedAt ?? null,
+    balancedDraftValue: projection.balancedDraftValue ?? null,
     balancedRank: projection.balancedRank ?? null,
     positionRank: projection.positionRank ?? null,
-    reliabilityRating:
-      projection.reliabilityRating ?? null,
-    volatilityPenalty:
-      projection.volatilityPenalty ?? null,
-    floorAdjustedCyclePoints:
-      projection.floorAdjustedCyclePoints ?? null,
-    floorAdjustedDraftValue:
-      projection.floorAdjustedDraftValue ?? null
+    reliabilityRating: projection.reliabilityRating ?? null,
+    volatilityPenalty: projection.volatilityPenalty ?? null,
+    floorAdjustedCyclePoints: projection.floorAdjustedCyclePoints ?? null,
+    floorAdjustedDraftValue: projection.floorAdjustedDraftValue ?? null,
   };
 }
 
@@ -369,19 +323,16 @@ function rosterAssetToDraftableAsset(
   asset: RosterAsset,
   sourceCycleNumber: number,
   sharedProjection: DraftableAsset | null,
-  draftFallback: DraftableAsset | null
+  draftFallback: DraftableAsset | null,
 ): DraftableAsset {
   let projectionSource: DraftableAsset | RosterAsset = asset;
-  let frozenProjectionSource: DraftProjection['frozenProjectionSource'] =
-    'roster';
+  let frozenProjectionSource: FrozenWindowProjectionFields['frozenProjectionSource'] = 'roster';
 
   const sharedTarget = sharedProjection?.targetProjectionCycleNumber;
   const sharedUsable = Boolean(
     sharedProjection &&
     getRawCycleProjection(sharedProjection) !== null &&
-    (sharedTarget === null ||
-      sharedTarget === undefined ||
-      sharedTarget === sourceCycleNumber)
+    (sharedTarget === null || sharedTarget === undefined || sharedTarget === sourceCycleNumber),
   );
 
   if (sharedUsable && sharedProjection) {
@@ -394,89 +345,66 @@ function rosterAssetToDraftableAsset(
 
   const assetKey = getRosterAssetKey(asset);
   const fields = projectionFields(projectionSource);
-  const base: DraftableAsset = asset.assetType === 'skater'
-    ? {
-        assetType: 'skater',
-        assetKey,
-        position: asset.position,
-        player: asset.player,
-        ...fields
-      }
-    : {
-        assetType: 'team-goalie-unit',
-        assetKey,
-        position: 'G',
-        teamName: asset.teamName,
-        teamAbbreviation: asset.teamAbbreviation,
-        teamLogoUrl: asset.teamLogoUrl,
-        ...fields
-      };
+  const base: DraftableAsset =
+    asset.assetType === 'skater'
+      ? {
+          assetType: 'skater',
+          assetKey,
+          position: asset.position,
+          player: asset.player,
+          ...fields,
+        }
+      : {
+          assetType: 'team-goalie-unit',
+          assetKey,
+          position: 'G',
+          teamName: asset.teamName,
+          teamAbbreviation: asset.teamAbbreviation,
+          teamLogoUrl: asset.teamLogoUrl,
+          ...fields,
+        };
 
   return {
     ...base,
-    frozenCycleProjectionPoints: createFrozenCycleProjection(base),
-    frozenProjectionCycleNumber: sourceCycleNumber,
-    frozenProjectionSource
+    ...createFrozenWindowProjectionFields(base, sourceCycleNumber, frozenProjectionSource),
   };
 }
 
-async function loadActiveProjectionAssetsByKey(
-  leagueId: string
+async function loadWindowProjectionAssetsByKey(
+  leagueId: string,
+  playoffs: FantasyPlayoffs,
+  sourceCycleNumber: number,
 ): Promise<Map<string, DraftableAsset>> {
-  const pointerSnapshot = await getDoc(
-    getProjectionSnapshotPointerRef(leagueId)
-  );
-
-  if (!pointerSnapshot.exists()) {
-    return new Map();
-  }
-
-  const pointer = pointerSnapshot.data() as {
-    activeSnapshotId?: unknown;
-    status?: unknown;
-  };
-
-  if (
-    pointer.status !== 'ready' ||
-    typeof pointer.activeSnapshotId !== 'string'
-  ) {
-    return new Map();
-  }
-
-  const snapshot = await getDocs(
-    getProjectionSnapshotAssetsRef(
-      leagueId,
-      pointer.activeSnapshotId
-    )
-  );
-  const assets = snapshot.docs.flatMap((assetDocument) => {
-    const data = assetDocument.data() as {
-      assets?: unknown;
-      assetKey?: unknown;
-    };
-
-    if (Array.isArray(data.assets)) {
-      return data.assets as DraftableAsset[];
-    }
-
-    return typeof data.assetKey === 'string'
-      ? [data as DraftableAsset]
-      : [];
+  const bundle = await ensureWindowProjectionBundle({
+    leagueId,
+    teamCount: Math.max(2, playoffs.seeds.length),
+    requiredGamesPerCycle: defaultScoringRules.requiredGamesPerCycle,
+    targetCycleNumber: sourceCycleNumber,
   });
 
-  return new Map(assets.map((asset) => [asset.assetKey, asset] as const));
+  if (bundle.errorMessage) {
+    console.warn(
+      `Playoff Window ${sourceCycleNumber - playoffs.regularSeasonCycleCount} opened with the best saved projection snapshot because the automatic refresh did not complete.`,
+      bundle.errorMessage,
+    );
+  }
+
+  return bundle.assetsByKey;
 }
 
 function buildSlotWindows(
   bank: FantasyPlayoffWindowBank,
-  scoring: CycleScoringResult
+  scoring: CycleScoringResult,
 ): FantasyAssetCycleWindow[] {
+  const previousById = new Map(bank.slotWindows.map((window) => [window.id, window] as const));
+
   return bank.picks.map((pick) => {
     const rosterSlotId = pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
-    const windowId = pick.cycleWindowId ??
-      `${pick.ownerId}__${rosterSlotId}__cycle-${bank.sourceCycleNumber}`;
-    const summary = scoring.windowScores[windowId] ??
-      scoring.assetScores[pick.asset.assetKey];
+    const windowId =
+      pick.cycleWindowId ?? `${pick.ownerId}__${rosterSlotId}__cycle-${bank.sourceCycleNumber}`;
+    const summary = scoring.windowScores[windowId] ?? scoring.assetScores[pick.asset.assetKey];
+    const previous = previousById.get(windowId);
+    const nowIso = new Date().toISOString();
 
     return {
       id: windowId,
@@ -490,26 +418,45 @@ function buildSlotWindows(
       scheduledGameIds: summary?.scheduledGameIds ?? [],
       scheduledGameDates: summary?.scheduledGameDates ?? [],
       scheduledGameLabels: summary?.scheduledGameLabels ?? [],
-      completedGameIds: summary?.completedGameIds ?? [],
-      appearanceGameIds: summary?.appearanceGameIds ?? [],
+      completedGameIds: summary?.completedGameIds ?? previous?.completedGameIds ?? [],
+      liveGameIds: summary?.liveGameIds ?? previous?.liveGameIds ?? [],
+      appearanceGameIds: summary?.appearanceGameIds ?? previous?.appearanceGameIds ?? [],
+      gameScores: summary?.gameScores ?? previous?.gameScores ?? {},
+      gameStates: summary?.gameStates ?? previous?.gameStates ?? {},
       scheduledGames: summary?.scheduledGames ?? 0,
       gamesPlayed: summary?.gamesPlayed ?? 0,
       actualGamesPlayed: summary?.actualGamesPlayed ?? 0,
       gamesLeft: summary?.gamesLeft ?? 0,
       fantasyPoints: summary?.currentScore ?? 0,
       frozenProjectionPoints:
-        pick.asset.frozenCycleProjectionPoints ??
-        pick.asset.projectedCyclePoints ??
+        pick.asset.frozenCycleProjectionPoints ?? pick.asset.projectedCyclePoints ?? null,
+      frozenProjectionVersion:
+        previous?.frozenProjectionVersion ?? pick.asset.frozenProjectionVersion ?? null,
+      frozenProjectionSource:
+        previous?.frozenProjectionSource ?? pick.asset.frozenProjectionSource ?? null,
+      frozenProjectionSnapshotId:
+        previous?.frozenProjectionSnapshotId ??
+        pick.asset.frozenProjectionSnapshotId ??
+        pick.asset.sharedProjectionSnapshotId ??
         null,
-      frozenProjectionVersion: null,
+      frozenProjectionGeneratedAt:
+        previous?.frozenProjectionGeneratedAt ??
+        pick.asset.frozenProjectionGeneratedAt ??
+        pick.asset.projectionGeneratedAt ??
+        null,
+      frozenProjectionFrozenAt:
+        previous?.frozenProjectionFrozenAt ?? pick.asset.frozenProjectionFrozenAt ?? null,
+      frozenProjectionTargetGameIds:
+        summary?.scheduledGameIds ?? previous?.frozenProjectionTargetGameIds ?? [],
       firstScheduledGameDate: summary?.firstScheduledGameDate ?? null,
       lastScheduledGameDate: summary?.lastScheduledGameDate ?? null,
-      startedAt: summary?.status === 'scheduled' ? null : new Date().toISOString(),
-      completedAt: summary?.status === 'complete'
-        ? new Date().toISOString()
-        : null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      startedAt:
+        summary?.status === 'scheduled'
+          ? (previous?.startedAt ?? null)
+          : (previous?.startedAt ?? nowIso),
+      completedAt: summary?.status === 'complete' ? (previous?.completedAt ?? nowIso) : null,
+      createdAt: previous?.createdAt ?? nowIso,
+      updatedAt: nowIso,
     };
   });
 }
@@ -526,10 +473,87 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
       id: window.id,
       status: window.status,
       completedGameIds: window.completedGameIds,
+      liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,
-      fantasyPoints: window.fantasyPoints
-    }))
+      gameScores: window.gameScores,
+      gameStates: window.gameStates,
+      fantasyPoints: window.fantasyPoints,
+      frozenProjectionPoints: window.frozenProjectionPoints,
+      frozenProjectionVersion: window.frozenProjectionVersion,
+      frozenProjectionSnapshotId: window.frozenProjectionSnapshotId,
+      frozenProjectionFrozenAt: window.frozenProjectionFrozenAt,
+      frozenProjectionTargetGameIds: window.frozenProjectionTargetGameIds,
+    })),
   });
+}
+
+function buildPreviousScoringResultFromBanks(
+  banks: FantasyPlayoffWindowBank[],
+): CycleScoringResult | null {
+  const slotWindows = banks.flatMap((bank) => bank.slotWindows);
+
+  if (slotWindows.length === 0) {
+    return null;
+  }
+
+  const assetScores: CycleScoringResult['assetScores'] = {};
+  const windowScores: CycleScoringResult['windowScores'] = {};
+  const teamScores: Record<string, number> = {};
+  const teamCycleComplete: Record<string, boolean> = {};
+  let hasLiveGames = false;
+
+  for (const window of slotWindows) {
+    const summary = {
+      assetKey: window.assetKey,
+      ownerId: window.ownerId,
+      rosterSlotId: window.rosterSlotId,
+      windowId: window.id,
+      currentScore: window.fantasyPoints,
+      gamesPlayed: window.gamesPlayed,
+      actualGamesPlayed: window.actualGamesPlayed,
+      scheduledGames: window.scheduledGames,
+      gamesLeft: window.gamesLeft,
+      scheduledGameIds: window.scheduledGameIds,
+      scheduledGameDates: window.scheduledGameDates,
+      scheduledGameLabels: window.scheduledGameLabels,
+      completedGameIds: window.completedGameIds,
+      liveGameIds: window.liveGameIds,
+      appearanceGameIds: window.appearanceGameIds,
+      gameScores: window.gameScores,
+      gameStates: window.gameStates,
+      firstScheduledGameDate: window.firstScheduledGameDate,
+      lastScheduledGameDate: window.lastScheduledGameDate,
+      status: window.status,
+    };
+
+    windowScores[window.id] = summary;
+    assetScores[window.assetKey] = summary;
+    teamScores[window.ownerId] = Number(
+      ((teamScores[window.ownerId] ?? 0) + window.fantasyPoints).toFixed(1),
+    );
+    hasLiveGames = hasLiveGames || window.liveGameIds.length > 0;
+  }
+
+  for (const bank of banks) {
+    teamCycleComplete[bank.ownerId] = bank.status === 'complete';
+  }
+
+  return {
+    scoringSchemaVersion: 2,
+    assetScores,
+    windowScores,
+    teamScores,
+    teamGameCounts: {},
+    teamCycleComplete,
+    cycleHasScheduledGames: slotWindows.some((window) => window.scheduledGames > 0),
+    hasLiveGames,
+    nextScheduledGameStart: null,
+    refreshedAt: new Date().toISOString(),
+    dataFingerprint: banks
+      .map((bank) => bankFingerprint(bank))
+      .sort()
+      .join('|'),
+  };
 }
 
 export async function syncPlayoffWindowBankScores(input: {
@@ -541,17 +565,12 @@ export async function syncPlayoffWindowBankScores(input: {
   assignedPicks?: DraftPick[];
   assignedScoring?: CycleScoringResult | null;
 }): Promise<FantasyPlayoffWindowBank[]> {
-  const banks = await getAllPlayoffWindowBanks(
-    input.leagueId,
-    input.playoffs
-  );
+  const banks = await getAllPlayoffWindowBanks(input.leagueId, input.playoffs);
   const scoringByOwnerWindow = new Map<string, CycleScoringResult>();
 
   if (input.assignedPicks?.length && input.assignedScoring) {
     const ownerWindowPairs = new Set(
-      input.assignedPicks.map((pick) =>
-        `${pick.ownerId}::${pick.playoffWindowNumber ?? 1}`
-      )
+      input.assignedPicks.map((pick) => `${pick.ownerId}::${pick.playoffWindowNumber ?? 1}`),
     );
 
     for (const pair of ownerWindowPairs) {
@@ -559,33 +578,28 @@ export async function syncPlayoffWindowBankScores(input: {
     }
   }
 
-  const unassignedBanks = banks.filter((bank) =>
-    bank.assignmentStatus === 'unassigned' &&
-    bank.picks.length > 0
+  const unassignedBanks = banks.filter(
+    (bank) => bank.assignmentStatus === 'unassigned' && bank.picks.length > 0,
   );
 
   if (unassignedBanks.length > 0) {
     const unassignedPicks = unassignedBanks.flatMap((bank) => bank.picks);
     const expectedRosterSlotIdsByOwner = Object.fromEntries(
-      unassignedBanks.map((bank) => [
-        bank.ownerId,
-        bank.expectedRosterSlotIds
-      ])
+      unassignedBanks.map((bank) => [bank.ownerId, bank.expectedRosterSlotIds]),
     );
+    const previousResult = buildPreviousScoringResultFromBanks(unassignedBanks);
     const scoring = await calculateCycleScoring({
       picks: unassignedPicks,
       cycleNumber: input.playoffs.regularSeasonCycleCount + 1,
       season: input.season,
       requiredGamesPerCycle: input.requiredGamesPerCycle,
       scoringRules: input.scoringRules,
-      expectedRosterSlotIdsByOwner
+      expectedRosterSlotIdsByOwner,
+      previousResult,
     });
 
     for (const bank of unassignedBanks) {
-      scoringByOwnerWindow.set(
-        `${bank.ownerId}::${bank.windowNumber}`,
-        scoring
-      );
+      scoringByOwnerWindow.set(`${bank.ownerId}::${bank.windowNumber}`, scoring);
     }
   }
 
@@ -594,9 +608,7 @@ export async function syncPlayoffWindowBankScores(input: {
   let writeCount = 0;
 
   for (const bank of banks) {
-    const scoring = scoringByOwnerWindow.get(
-      `${bank.ownerId}::${bank.windowNumber}`
-    );
+    const scoring = scoringByOwnerWindow.get(`${bank.ownerId}::${bank.windowNumber}`);
 
     if (!scoring) {
       updatedBanks.push(bank);
@@ -605,35 +617,22 @@ export async function syncPlayoffWindowBankScores(input: {
 
     const slotWindows = buildSlotWindows(bank, scoring);
     const completedWindowCount = slotWindows.filter(
-      (window) => window.status === 'complete'
+      (window) => window.status === 'complete',
     ).length;
     const totalWindowCount = bank.expectedRosterSlotIds.length;
-    const complete =
-      totalWindowCount > 0 &&
-      completedWindowCount >= totalWindowCount;
-    const active = slotWindows.some(
-      (window) => window.status !== 'scheduled'
-    );
+    const complete = totalWindowCount > 0 && completedWindowCount >= totalWindowCount;
+    const active = slotWindows.some((window) => window.status !== 'scheduled');
     const next: FantasyPlayoffWindowBank = {
       ...bank,
       slotWindows,
       teamScore: Number(
-        slotWindows.reduce(
-          (total, window) => total + window.fantasyPoints,
-          0
-        ).toFixed(1)
+        slotWindows.reduce((total, window) => total + window.fantasyPoints, 0).toFixed(1),
       ),
       completedWindowCount,
       totalWindowCount,
-      status: complete
-        ? 'complete'
-        : active
-          ? 'active'
-          : 'scheduled',
+      status: complete ? 'complete' : active ? 'active' : 'scheduled',
       updatedAt: serverTimestamp(),
-      completedAt: complete
-        ? bank.completedAt ?? serverTimestamp()
-        : null
+      completedAt: complete ? (bank.completedAt ?? serverTimestamp()) : null,
     };
 
     updatedBanks.push(next);
@@ -643,15 +642,9 @@ export async function syncPlayoffWindowBankScores(input: {
     }
 
     writeCount += 1;
-    batch.set(
-      getPlayoffWindowBankRef(
-        input.leagueId,
-        bank.ownerId,
-        bank.windowNumber
-      ),
-      next,
-      { merge: true }
-    );
+    batch.set(getPlayoffWindowBankRef(input.leagueId, bank.ownerId, bank.windowNumber), next, {
+      merge: true,
+    });
   }
 
   if (writeCount > 0) {
@@ -663,7 +656,7 @@ export async function syncPlayoffWindowBankScores(input: {
 
 export function createInitialPlayoffBankPayloads(
   playoffs: FantasyPlayoffs,
-  picks: DraftPick[]
+  picks: DraftPick[],
 ): FantasyPlayoffWindowBank[] {
   return playoffs.seeds.map((seed) => {
     const ownerPicks = picks
@@ -672,11 +665,10 @@ export function createInitialPlayoffBankPayloads(
         ...pick,
         snapshotCycleNumber: playoffs.regularSeasonCycleCount + 1,
         playoffWindowNumber: 1,
-        cycleWindowId:
-          `${seed.ownerId}__${pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`}__cycle-${playoffs.regularSeasonCycleCount + 1}`
+        cycleWindowId: `${seed.ownerId}__${pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`}__cycle-${playoffs.regularSeasonCycleCount + 1}`,
       }));
     const expectedRosterSlotIds = ownerPicks.map(
-      (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`
+      (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`,
     );
 
     return {
@@ -697,7 +689,7 @@ export function createInitialPlayoffBankPayloads(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       completedAt: null,
-      assignedAt: null
+      assignedAt: null,
     };
   });
 }
@@ -708,10 +700,7 @@ export async function ensureNextPlayoffBankWindows(input: {
   banks: FantasyPlayoffWindowBank[];
 }): Promise<void> {
   const completeBanks = input.banks.filter((bank) => {
-    if (
-      bank.status !== 'complete' ||
-      bank.windowNumber >= input.playoffs.playoffRoundCount
-    ) {
+    if (bank.status !== 'complete' || bank.windowNumber >= input.playoffs.playoffRoundCount) {
       return false;
     }
 
@@ -723,27 +712,20 @@ export async function ensureNextPlayoffBankWindows(input: {
       return true;
     }
 
-    return input.playoffs.matchups.some((matchup) =>
-      (
-        (
-          matchup.sourceA.type === 'winner' ||
-          matchup.sourceA.type === 'loser'
-        ) && matchup.sourceA.matchupId === bank.assignedMatchupId
-      ) ||
-      (
-        (
-          matchup.sourceB.type === 'winner' ||
-          matchup.sourceB.type === 'loser'
-        ) && matchup.sourceB.matchupId === bank.assignedMatchupId
-      )
+    return input.playoffs.matchups.some(
+      (matchup) =>
+        ((matchup.sourceA.type === 'winner' || matchup.sourceA.type === 'loser') &&
+          matchup.sourceA.matchupId === bank.assignedMatchupId) ||
+        ((matchup.sourceB.type === 'winner' || matchup.sourceB.type === 'loser') &&
+          matchup.sourceB.matchupId === bank.assignedMatchupId),
     );
   });
 
   for (const bank of completeBanks) {
     const nextWindowNumber = bank.windowNumber + 1;
-    const existing = input.banks.some((candidate) =>
-      candidate.ownerId === bank.ownerId &&
-      candidate.windowNumber === nextWindowNumber
+    const existing = input.banks.some(
+      (candidate) =>
+        candidate.ownerId === bank.ownerId && candidate.windowNumber === nextWindowNumber,
     );
 
     if (existing) {
@@ -754,7 +736,7 @@ export async function ensureNextPlayoffBankWindows(input: {
       input.leagueId,
       input.playoffs,
       bank.ownerId,
-      nextWindowNumber
+      nextWindowNumber,
     );
   }
 }
@@ -763,33 +745,26 @@ async function createNextPlayoffBankWindow(
   leagueId: string,
   playoffs: FantasyPlayoffs,
   ownerId: string,
-  windowNumber: number
+  windowNumber: number,
 ): Promise<void> {
-  const sourceCycleNumber =
-    playoffs.regularSeasonCycleCount + windowNumber;
+  const sourceCycleNumber = playoffs.regularSeasonCycleCount + windowNumber;
   const [draftSnapshot, projectionAssetsByKey] = await Promise.all([
     getDocs(getDraftPicksRef(leagueId)),
-    loadActiveProjectionAssetsByKey(leagueId)
+    loadWindowProjectionAssetsByKey(leagueId, playoffs, sourceCycleNumber),
   ]);
-  const draftPicks = draftSnapshot.docs.map(
-    (document) => document.data() as DraftPick
-  );
+  const draftPicks = draftSnapshot.docs.map((document) => document.data() as DraftPick);
   const draftByAssetKey = new Map(
     draftPicks
       .filter((pick) => pick.ownerId === ownerId)
-      .map((pick) => [pick.asset.assetKey, pick] as const)
+      .map((pick) => [pick.asset.assetKey, pick] as const),
   );
   const rosterRef = getTeamRosterRef(leagueId, ownerId);
-  const bankRef = getPlayoffWindowBankRef(
-    leagueId,
-    ownerId,
-    windowNumber
-  );
+  const bankRef = getPlayoffWindowBankRef(leagueId, ownerId, windowNumber);
 
   await runTransaction(db, async (transaction) => {
     const [rosterSnapshot, bankSnapshot] = await Promise.all([
       transaction.get(rosterRef),
-      transaction.get(bankRef)
+      transaction.get(bankRef),
     ]);
 
     if (bankSnapshot.exists()) {
@@ -797,14 +772,10 @@ async function createNextPlayoffBankWindow(
     }
 
     if (!rosterSnapshot.exists()) {
-      throw new Error(
-        `Roster ${ownerId} is missing while opening playoff window ${windowNumber}.`
-      );
+      throw new Error(`Roster ${ownerId} is missing while opening playoff window ${windowNumber}.`);
     }
 
-    const roster = normalizeFantasyRoster(
-      rosterSnapshot.data() as Partial<FantasyRoster>
-    );
+    const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
     const picks: DraftPick[] = [];
 
     for (const [slotIndex, slot] of roster.activeSlots.entries()) {
@@ -818,27 +789,21 @@ async function createNextPlayoffBankWindow(
       const incomingAssetKey = getRosterAssetKey(incomingAsset);
       const draftFallback = draftByAssetKey.get(incomingAssetKey)?.asset ?? null;
       const pick: DraftPick = {
-        overallPick:
-          draftByAssetKey.get(incomingAssetKey)?.overallPick ??
-          100000 + slotIndex + 1,
+        overallPick: draftByAssetKey.get(incomingAssetKey)?.overallPick ?? 100000 + slotIndex + 1,
         round: draftByAssetKey.get(incomingAssetKey)?.round ?? 0,
-        pickInRound:
-          draftByAssetKey.get(incomingAssetKey)?.pickInRound ?? slot.slotNumber,
+        pickInRound: draftByAssetKey.get(incomingAssetKey)?.pickInRound ?? slot.slotNumber,
         ownerId,
         rosterSlotId: slot.slotId,
-        cycleWindowId:
-          `${ownerId}__${slot.slotId}__cycle-${sourceCycleNumber}`,
+        cycleWindowId: `${ownerId}__${slot.slotId}__cycle-${sourceCycleNumber}`,
         snapshotCycleNumber: sourceCycleNumber,
         playoffWindowNumber: windowNumber,
-        snapshotOrder:
-          draftByAssetKey.get(incomingAssetKey)?.overallPick ??
-          100000 + slotIndex + 1,
+        snapshotOrder: draftByAssetKey.get(incomingAssetKey)?.overallPick ?? 100000 + slotIndex + 1,
         asset: rosterAssetToDraftableAsset(
           incomingAsset,
           sourceCycleNumber,
           projectionAssetsByKey.get(incomingAssetKey) ?? null,
-          draftFallback
-        )
+          draftFallback,
+        ),
       };
 
       picks.push(pick);
@@ -856,56 +821,46 @@ async function createNextPlayoffBankWindow(
               outgoingAsset,
               sourceCycleNumber,
               null,
-              null
+              null,
             );
 
-            transaction.set(
-              getWaiverRef(leagueId, outgoingAssetKey),
-              {
-                assetKey: outgoingAssetKey,
-                asset: outgoingDraftable,
-                droppedAsset: outgoingAsset,
-                droppedByOwnerId: ownerId,
-                status: 'active',
-                claims: [],
-                awardedToOwnerId: null,
-                effectiveCycleNumber: sourceCycleNumber,
-                effectiveLabel: `Playoff Window ${windowNumber}`,
-                queuedMoveId: pendingMove.id,
-                rosterSlotId: slot.slotId,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                processedAt: null
-              }
-            );
+            transaction.set(getWaiverRef(leagueId, outgoingAssetKey), {
+              assetKey: outgoingAssetKey,
+              asset: outgoingDraftable,
+              droppedAsset: outgoingAsset,
+              droppedByOwnerId: ownerId,
+              status: 'active',
+              claims: [],
+              awardedToOwnerId: null,
+              effectiveCycleNumber: sourceCycleNumber,
+              effectiveLabel: `Playoff Window ${windowNumber}`,
+              queuedMoveId: pendingMove.id,
+              rosterSlotId: slot.slotId,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              processedAt: null,
+            });
           }
         }
 
         transaction.set(doc(getTransactionsRef(leagueId)), {
           type: 'slot-move-activated',
           ownerId,
-          addedAsset: rosterAssetToDraftableAsset(
-            incomingAsset,
-            sourceCycleNumber,
-            null,
-            null
-          ),
+          addedAsset: rosterAssetToDraftableAsset(incomingAsset, sourceCycleNumber, null, null),
           droppedAsset: outgoingAsset,
-          waiverId: outgoingAsset
-            ? getRosterAssetKey(outgoingAsset)
-            : null,
+          waiverId: outgoingAsset ? getRosterAssetKey(outgoingAsset) : null,
           rosterSlotId: slot.slotId,
           targetSlotId: slot.slotId,
           queuedMoveId: pendingMove.id,
           effectiveCycleNumber: sourceCycleNumber,
           effectiveLabel: `Playoff Window ${windowNumber}`,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
         });
       }
     }
 
     const expectedRosterSlotIds = picks.map(
-      (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`
+      (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`,
     );
     const next: FantasyPlayoffWindowBank = {
       id: `window-${windowNumber}`,
@@ -925,7 +880,7 @@ async function createNextPlayoffBankWindow(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       completedAt: null,
-      assignedAt: null
+      assignedAt: null,
     };
 
     transaction.set(bankRef, next);
@@ -935,9 +890,9 @@ async function createNextPlayoffBankWindow(
         schemaVersion: roster.schemaVersion,
         activeSlots: roster.activeSlots,
         irSlots: roster.irSlots,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   });
 }

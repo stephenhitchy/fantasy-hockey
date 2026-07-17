@@ -1,0 +1,287 @@
+<main class="diagnostics-page">
+  <a class="back-link" [routerLink]="['/leagues', leagueId]">← Back to league</a>
+
+  @if (loading()) {
+    <section class="state-card">Loading shared scorer diagnostics…</section>
+  } @else if (!authorized()) {
+    <section class="state-card error-card">
+      <h1>Commissioner access required</h1>
+      <p>Only the league commissioner can view or control the shared NHL scoring worker.</p>
+    </section>
+  } @else {
+    <header class="page-header">
+      <div>
+        <span class="eyebrow">Commissioner Tools</span>
+        <h1>Shared NHL Scorer</h1>
+        <p>
+          Verify the single-worker lease, refresh cadence, shared snapshots, and skipped Firestore
+          writes without opening the browser console.
+        </p>
+      </div>
+
+      <span
+        class="status-pill"
+        [class.status-good]="control()?.status !== 'error'"
+        [class.status-error]="control()?.status === 'error'"
+      >
+        {{ getStatusLabel() }}
+      </span>
+    </header>
+
+    @if (errorMessage()) {
+      <div class="message error-message">{{ errorMessage() }}</div>
+    }
+
+    @if (actionMessage()) {
+      <div class="message success-message">{{ actionMessage() }}</div>
+    }
+
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow">Worker state</span>
+        <h2>{{ getStatusLabel() }}</h2>
+        <p>{{ getStatusDescription() }}</p>
+      </div>
+
+      <div class="worker-id">
+        <small>This tab</small>
+        <code>{{ sessionInfo().clientId }}</code>
+      </div>
+    </section>
+
+    <section class="metric-grid">
+      <article class="metric-card">
+        <span>Last completed refresh</span>
+        <strong>{{ formatTimestamp(control()?.lastRefreshCompletedAt) }}</strong>
+        <small>{{ getRefreshReasonLabel() }}</small>
+      </article>
+
+      <article class="metric-card">
+        <span>Next refresh</span>
+        <strong>{{ formatCountdown(control()?.nextRefreshAt) }}</strong>
+        <small>{{ formatTimestamp(control()?.nextRefreshAt) }}</small>
+      </article>
+
+      <article class="metric-card">
+        <span>Lease expires</span>
+        <strong>{{ formatCountdown(control()?.leaseExpiresAt) }}</strong>
+        <small>{{ isLeaseHolder() ? 'Held by this tab' : 'Shared worker protection' }}</small>
+      </article>
+
+      <article class="metric-card">
+        <span>Last runtime</span>
+        <strong>{{ formatDuration(control()?.lastRefreshDurationMs ?? 0) }}</strong>
+        <small>{{ control()?.activeCycleNumbers?.length ?? 0 }} active cycle(s)</small>
+      </article>
+    </section>
+
+    <section class="diagnostic-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Write suppression</span>
+          <h2>Last scoring pass</h2>
+        </div>
+      </div>
+
+      <div class="write-summary">
+        <div>
+          <strong>{{ control()?.lastPublishedSnapshotCount ?? 0 }}</strong>
+          <span>changed cycle snapshots published</span>
+        </div>
+        <div>
+          <strong>{{ control()?.lastSkippedSnapshotWriteCount ?? 0 }}</strong>
+          <span>unchanged snapshot writes skipped</span>
+        </div>
+        <div>
+          <strong>{{ control()?.totalSuccessfulRefreshCount ?? 0 }}</strong>
+          <span>successful refreshes recorded</span>
+        </div>
+        <div>
+          <strong>{{ control()?.totalFailedRefreshCount ?? 0 }}</strong>
+          <span>failed refreshes recorded</span>
+        </div>
+      </div>
+
+      <p class="helper-copy">
+        Requesting two refreshes with no NHL changes should increase the skipped count while the
+        published count stays at zero on the second pass.
+      </p>
+    </section>
+
+    <section class="diagnostic-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Active scoring documents</span>
+          <h2>Shared cycle snapshots</h2>
+        </div>
+        <span>{{ activeSnapshots().length }} active</span>
+      </div>
+
+      @if (activeSnapshots().length === 0) {
+        <div class="empty-state">
+          No active cycle snapshots are listed yet. Start a fantasy cycle or request a scoring
+          refresh.
+        </div>
+      } @else {
+        <div class="snapshot-list">
+          @for (entry of activeSnapshots(); track entry.cycleNumber) {
+            <article class="snapshot-row">
+              <div>
+                <strong>Cycle {{ entry.cycleNumber }}</strong>
+                <span>{{ getSnapshotState(entry.snapshot) }}</span>
+              </div>
+              <div class="snapshot-stat">
+                <strong>
+                  {{ getSnapshotCompletedTeamCount(entry.snapshot) }} /
+                  {{ getSnapshotTeamCount(entry.snapshot) }}
+                </strong>
+                <span>teams complete</span>
+              </div>
+              <div class="snapshot-stat">
+                <strong>{{ formatTimestamp(entry.snapshot?.refreshedAt) }}</strong>
+                <span>last published</span>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="diagnostic-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Safe commissioner actions</span>
+          <h2>Refresh and handoff</h2>
+        </div>
+      </div>
+
+      <div class="action-grid">
+        <button
+          type="button"
+          class="primary-button"
+          [disabled]="actionInProgress()"
+          (click)="requestRefresh()"
+        >
+          Refresh Scores Now
+        </button>
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="actionInProgress() || !isLeaseHolder()"
+          (click)="releaseForHandoff()"
+        >
+          Release Lease for Handoff
+        </button>
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="actionInProgress() || !isPaused()"
+          (click)="resumeThisTab()"
+        >
+          Resume This Tab
+        </button>
+      </div>
+
+      <p class="helper-copy">
+        For a two-tab test, open this page in both tabs. The lease holder releases the lease and
+        pauses itself; the other commissioner tab should claim the worker and display its own client
+        id as the holder.
+      </p>
+    </section>
+
+    @if (developerToolsEnabled) {
+      <section class="diagnostic-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">No API calls or writes</span>
+            <h2>Deterministic scorer simulator</h2>
+          </div>
+          <button type="button" class="test-button" (click)="runSimulator()">
+            Run Scorer Tests
+          </button>
+        </div>
+
+        @if (simulatorResult(); as result) {
+          <div
+            class="test-summary"
+            [class.test-pass]="result.passed"
+            [class.test-fail]="!result.passed"
+          >
+            <strong>{{ result.passedCount }} / {{ result.totalCount }} tests passed</strong>
+            <span>
+              {{
+                result.passed
+                  ? 'Lease, handoff, cadence, and write-suppression logic passed.'
+                  : 'One or more deterministic checks failed.'
+              }}
+            </span>
+          </div>
+
+          <div class="test-list">
+            @for (test of result.checks; track test.id) {
+              <article class="test-row" [class.failed-test]="!test.passed">
+                <span class="test-icon" aria-hidden="true">
+                  {{ test.passed ? '✓' : '!' }}
+                </span>
+                <div>
+                  <strong>{{ test.label }}</strong>
+                  <small>Expected: {{ test.expected }} · Actual: {{ test.actual }}</small>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="diagnostic-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">No NHL requests or Firestore writes</span>
+            <h2>Per-slot projection simulator</h2>
+          </div>
+          <button type="button" class="test-button" (click)="runWindowProjectionSimulator()">
+            Run Projection Tests
+          </button>
+        </div>
+
+        <p class="helper-copy">
+          Verifies exact-window freshness, independent slot start dates, queued replacements,
+          immutable prior projections, provenance, and fallback labels.
+        </p>
+
+        @if (windowProjectionSimulatorResult(); as result) {
+          <div
+            class="test-summary"
+            [class.test-pass]="result.passed"
+            [class.test-fail]="!result.passed"
+          >
+            <strong>{{ result.passedCount }} / {{ result.totalCount }} tests passed</strong>
+            <span>
+              {{
+                result.passed
+                  ? 'Automatic per-slot projection freezing passed.'
+                  : 'One or more projection-window checks failed.'
+              }}
+            </span>
+          </div>
+
+          <div class="test-list">
+            @for (test of result.checks; track test.id) {
+              <article class="test-row" [class.failed-test]="!test.passed">
+                <span class="test-icon" aria-hidden="true">
+                  {{ test.passed ? '✓' : '!' }}
+                </span>
+                <div>
+                  <strong>{{ test.label }}</strong>
+                  <small>Expected: {{ test.expected }} · Actual: {{ test.actual }}</small>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+</main>
