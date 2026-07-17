@@ -232,3 +232,185 @@ html[data-favorite-team] body :where(input, select, textarea):focus {
   border-color: var(--user-team-primary) !important;
   outline-color: var(--user-team-primary) !important;
 }
+
+/* Cycle page theme and mobile layout overrides live globally so the
+   component stylesheet stays below Angular's per-component budget. */
+app-cycle-one .cycle-header,
+app-cycle-one .schedule-preview-card,
+app-cycle-one .empty-cycle-card,
+app-cycle-one .transparency-card,
+app-cycle-one .dev-controls-card,
+app-cycle-one .matchup-scoreboard,
+app-cycle-one .position-column,
+app-cycle-one .position-total-row,
+app-cycle-one .window-detail-panel {
+  border-color: rgba(126, 170, 221, 0.16);
+  background: linear-gradient(180deg, rgba(11, 22, 38, 0.96), rgba(10, 20, 34, 0.92));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+app-cycle-one .matchup-view-selector button.active-view,
+app-cycle-one .matchup-arrow-nav button {
+  background: linear-gradient(180deg, rgba(255, 220, 120, 0.98), rgba(243, 193, 81, 0.98));
+  color: #342100;
+  border-color: rgba(255, 218, 119, 0.44);
+}
+
+app-cycle-one .matchup-view-selector button {
+  border-color: rgba(128, 176, 230, 0.16);
+  background: rgba(18, 33, 54, 0.9);
+}
+
+app-cycle-one .team-summary-row,
+app-cycle-one .position-card {
+  background: linear-gradient(180deg, rgba(17, 31, 50, 0.96), rgba(12, 23, 39, 0.96));
+}
+
+app-cycle-one .position-card small,
+app-cycle-one .position-card .window-status-copy {
+  color: #9ab0c9;
+}
+
+app-cycle-one .single-team-view .window-game-markers,
+app-cycle-one .single-team-view .window-status-copy {
+  margin-left: -64px;
+}
+
+app-cycle-one .window-game-details,
+app-cycle-one .window-game-detail-list {
+  display: none !important;
+}
+
+app-cycle-one .cycle-transparency-card {
+  border-color: #37557b;
+  background: linear-gradient(180deg, rgba(10, 20, 34, 0.96), rgba(12, 24, 42, 0.92));
+}
+
+app-cycle-one .transparency-heading h2,
+app-cycle-one .transparency-metrics strong,
+app-cycle-one .matchup-window-summary strong {
+  color: #f8fbff;
+}
+
+app-cycle-one .transparency-heading p,
+app-cycle-one .window-marker-legend,
+app-cycle-one .matchup-window-summary div > span,
+app-cycle-one .transparency-metrics span {
+  color: #aebfd2;
+}
+
+app-cycle-one .cycle-simulator-link {
+  border: 2px solid #7b6330;
+  background: linear-gradient(180deg, #ffe593, #efc04b);
+  color: #241700;
+}
+
+app-cycle-one .transparency-metrics article,
+app-cycle-one .window-marker-legend,
+app-cycle-one .matchup-window-summary > article {
+  border: 1px solid #2f4b6d;
+  background: linear-gradient(180deg, rgba(13, 25, 41, 0.98), rgba(9, 18, 30, 0.98));
+}
+
+app-cycle-one .pending-slot-chip-row span {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #f4e3a3;
+  background: rgba(83, 67, 22, 0.75);
+}
+
+app-cycle-one .window-game-markers {
+  min-width: 0;
+  max-width: 100%;
+}
+
+app-cycle-one .window-game-marker {
+  box-sizing: border-box;
+  border-radius: 6px;
+  color: #05070a !important;
+  line-height: 1;
+  text-align: center;
+  padding: 0;
+}
+
+@media (max-width: 520px) {
+  app-cycle-one .fantasy-position-group,
+  app-cycle-one .fantasy-position-slots,
+  app-cycle-one .fantasy-player-card,
+  app-cycle-one .fantasy-player-main {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  app-cycle-one .fantasy-position-group,
+  app-cycle-one .fantasy-player-card {
+    overflow: hidden;
+  }
+
+  app-cycle-one .fantasy-player-card,
+  app-cycle-one .single-team-view .fantasy-player-card {
+    width: 100%;
+    grid-template-columns: 28px minmax(0, 1fr) 38px;
+    gap: 6px;
+    padding: 8px 6px 8px 8px;
+  }
+
+  app-cycle-one .fantasy-player-logo,
+  app-cycle-one .single-team-view .fantasy-player-logo {
+    width: 27px;
+    height: 27px;
+  }
+
+  app-cycle-one .fantasy-player-score-stack,
+  app-cycle-one .single-team-view .fantasy-player-score-stack {
+    min-width: 0;
+    width: 38px;
+    gap: 4px;
+  }
+
+  app-cycle-one .fantasy-player-score-stack div,
+  app-cycle-one .single-team-view .fantasy-player-score-stack div {
+    min-width: 0;
+    padding: 3px 2px;
+  }
+
+  app-cycle-one .fantasy-player-score-stack strong,
+  app-cycle-one .single-team-view .fantasy-player-score-stack strong {
+    font-size: 10px;
+  }
+
+  app-cycle-one .fantasy-player-score-stack span,
+  app-cycle-one .single-team-view .fantasy-player-score-stack span {
+    font-size: 6px;
+  }
+
+  app-cycle-one .window-game-markers,
+  app-cycle-one .single-team-view .window-game-markers {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+    max-width: 166px;
+    margin: 9px 0 0;
+  }
+
+  app-cycle-one .window-game-marker,
+  app-cycle-one .single-team-view .window-game-marker {
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    aspect-ratio: 1;
+    border-radius: 5px;
+    font-size: 10px;
+    line-height: 1;
+    color: #05070a !important;
+    text-align: center;
+  }
+
+  app-cycle-one .window-status-copy,
+  app-cycle-one .single-team-view .window-status-copy {
+    max-width: 100%;
+    margin-left: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
