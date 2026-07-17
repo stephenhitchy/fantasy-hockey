@@ -1,13 +1,30 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { auth } from '../../../core/firebase';
+import { Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { Timestamp } from 'firebase/firestore';
+import { auth } from '../../../core/firebase';
+import { logoutUser } from '../../../core/auth/auth.service';
+import { getMyLeagueSummaries, LeagueSummary } from '../../../core/league/league.service';
 import {
+  DefaultLandingPage,
   getUserProfile,
-  updateUsername,
-  UserProfile
+  updateUserAccountSettings,
+  UserProfile,
 } from '../../../core/user/user.service';
+import { applyUserTheme } from '../../../core/user/user-theme.service';
+import {
+  getPixelTeamTheme,
+  NHL_PIXEL_TEAMS,
+  PixelTeamTheme,
+} from '../../../shared/pixel-theme/pixel-theme.data';
+
+interface AccountAchievement {
+  icon: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+}
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -20,49 +37,145 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-account-settings',
-  imports: [FormsModule],
+  standalone: true,
+  imports: [FormsModule, RouterLink],
   templateUrl: './account-settings.html',
-  styleUrl: './account-settings.css'
+  styleUrl: './account-settings.css',
 })
 export class AccountSettings {
-  profile = signal<UserProfile | null>(null);
+  readonly profile = signal<UserProfile | null>(null);
+  readonly leagueSummaries = signal<LeagueSummary[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly successMessage = signal('');
+  readonly errorMessage = signal('');
+
   username = '';
-  loading = signal(true);
-  saving = signal(false);
-  successMessage = signal('');
-  errorMessage = signal('');
+  favoriteTeamAbbreviation = 'VGK';
+  reducedMotion = false;
+  defaultLandingPage: DefaultLandingPage = 'dashboard';
+
+  readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
+
+  selectedTeam(): PixelTeamTheme {
+    return getPixelTeamTheme(this.favoriteTeamAbbreviation);
+  }
+
+  managerInitials(): string {
+    const username = this.username.trim() || this.profile()?.username?.trim() || 'Manager';
+    const parts = username.split(/\s+/).filter(Boolean).slice(0, 2);
+    return parts.map((part) => part.charAt(0).toUpperCase()).join('') || 'M';
+  }
+
+  readonly leagueCount = computed(() => this.leagueSummaries().length);
+  readonly commissionerLeagueCount = computed(
+    () => this.leagueSummaries().filter((league) => league.isCommissioner).length,
+  );
+  readonly opponentCount = computed(() =>
+    this.leagueSummaries().reduce((sum, league) => sum + Math.max(0, league.teamCount - 1), 0),
+  );
+  readonly totalTeamSlots = computed(() =>
+    this.leagueSummaries().reduce((sum, league) => sum + league.teamCount, 0),
+  );
+
+  readonly achievements = computed<AccountAchievement[]>(() => [
+    {
+      icon: '🏒',
+      title: 'First Line Change',
+      description: 'Join your first fantasy hockey league.',
+      unlocked: this.leagueCount() >= 1,
+    },
+    {
+      icon: '📋',
+      title: 'Commissioner Mode',
+      description: 'Create or manage a league.',
+      unlocked: this.commissionerLeagueCount() >= 1,
+    },
+    {
+      icon: '🏟️',
+      title: 'League Explorer',
+      description: 'Compete in three different leagues.',
+      unlocked: this.leagueCount() >= 3,
+    },
+    {
+      icon: '⚔️',
+      title: 'Crowded Schedule',
+      description: 'Face at least ten fantasy opponents.',
+      unlocked: this.opponentCount() >= 10,
+    },
+  ]);
 
   constructor(private router: Router) {
-    this.loadProfile();
+    void this.loadProfile();
   }
 
-  async loadProfile() {
-  const user = await waitForAuthUser();
+  async loadProfile(): Promise<void> {
+    const user = await waitForAuthUser();
 
-  if (!user) {
-    await this.router.navigate(['/']);
-    return;
+    if (!user) {
+      await this.router.navigate(['/']);
+      return;
+    }
+
+    try {
+      const [profile, summaries] = await Promise.all([
+        getUserProfile(user.uid),
+        getMyLeagueSummaries(),
+      ]);
+
+      this.profile.set(profile);
+      this.leagueSummaries.set(summaries);
+      this.username = profile?.username ?? '';
+      this.favoriteTeamAbbreviation = profile?.favoriteTeamAbbreviation || 'VGK';
+      this.reducedMotion = Boolean(profile?.reducedMotion);
+      this.defaultLandingPage =
+        profile?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard';
+
+      applyUserTheme({
+        favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+        reducedMotion: this.reducedMotion,
+        defaultLandingPage: this.defaultLandingPage,
+      });
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to load your manager profile.',
+      );
+    } finally {
+      this.loading.set(false);
+    }
   }
 
-  const profile = await getUserProfile(user.uid);
-
-  this.profile.set(profile);
-  this.username = profile?.username ?? '';
-  this.loading.set(false);
+  selectFavoriteTeam(team: PixelTeamTheme): void {
+    this.favoriteTeamAbbreviation = team.abbreviation;
+    this.successMessage.set('');
+    applyUserTheme({
+      favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+      reducedMotion: this.reducedMotion,
+      defaultLandingPage: this.defaultLandingPage,
+    });
   }
 
-  async saveUsername() {
+  previewPreferenceChanges(): void {
+    applyUserTheme({
+      favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+      reducedMotion: this.reducedMotion,
+      defaultLandingPage: this.defaultLandingPage,
+    });
+  }
+
+  async saveAccountSettings(): Promise<void> {
     this.successMessage.set('');
     this.errorMessage.set('');
 
     const user = auth.currentUser;
+    const normalizedUsername = this.username.trim();
 
     if (!user) {
       this.errorMessage.set('You must be logged in.');
       return;
     }
 
-    if (!this.username.trim()) {
+    if (!normalizedUsername) {
       this.errorMessage.set('Username cannot be empty.');
       return;
     }
@@ -70,12 +183,56 @@ export class AccountSettings {
     this.saving.set(true);
 
     try {
-      await updateUsername(user.uid, this.username.trim());
-      this.successMessage.set('Username updated!');
-    } catch (error: any) {
-      this.errorMessage.set(error.message);
+      await updateUserAccountSettings(user.uid, {
+        username: normalizedUsername,
+        favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+        reducedMotion: this.reducedMotion,
+        defaultLandingPage: this.defaultLandingPage,
+      });
+
+      this.profile.update((current) =>
+        current
+          ? {
+              ...current,
+              username: normalizedUsername,
+              favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+              reducedMotion: this.reducedMotion,
+              defaultLandingPage: this.defaultLandingPage,
+            }
+          : current,
+      );
+
+      applyUserTheme(this.profile());
+      this.successMessage.set('Manager profile and theme preferences saved.');
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to save your account settings.',
+      );
     } finally {
       this.saving.set(false);
     }
+  }
+
+  formatMemberSince(): string {
+    const createdAt = this.profile()?.createdAt;
+    let date: Date | null = null;
+
+    if (createdAt instanceof Timestamp) {
+      date = createdAt.toDate();
+    } else if (createdAt instanceof Date) {
+      date = createdAt;
+    } else if (createdAt && typeof createdAt === 'object' && 'toDate' in createdAt) {
+      const maybeTimestamp = createdAt as { toDate?: () => Date };
+      date = maybeTimestamp.toDate?.() ?? null;
+    }
+
+    return date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date)
+      : 'Founding manager';
+  }
+
+  async signOut(): Promise<void> {
+    await logoutUser();
+    await this.router.navigate(['/']);
   }
 }

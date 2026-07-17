@@ -1,24 +1,228 @@
 @if (loading()) {
-  <p>Loading account...</p>
+  <section class="account-loading" aria-live="polite">
+    <span aria-hidden="true">🏒</span>
+    <strong>Opening your locker...</strong>
+  </section>
 } @else {
-  <h1>Account Settings</h1>
+  <section class="account-locker-page">
+    <div class="locker-light locker-light-left" aria-hidden="true"></div>
+    <div class="locker-light locker-light-right" aria-hidden="true"></div>
 
-  <p>Email: {{ profile()?.email }}</p>
+    <section class="account-content">
+      <header class="profile-hero">
+        <div class="profile-avatar-wrap">
+          <div class="profile-avatar">{{ managerInitials() }}</div>
+          <span class="online-pixel" title="Manager profile active"></span>
+        </div>
 
-  <label>
-    Username
-    <input [(ngModel)]="username" />
-  </label>
+        <div class="profile-identity">
+          <span class="eyebrow">Manager Locker</span>
+          <h1>{{ profile()?.username || 'Fantasy Hockey Manager' }}</h1>
+          <p>{{ profile()?.email }}</p>
 
-  <button (click)="saveUsername()" [disabled]="saving()">
-    {{ saving() ? 'Saving...' : 'Save Username' }}
-  </button>
+          <div class="identity-chips">
+            <span>Member since {{ formatMemberSince() }}</span>
+            @if (commissionerLeagueCount() > 0) {
+              <span class="commissioner-chip">Commissioner</span>
+            }
+          </div>
+        </div>
 
-  @if (successMessage()) {
-    <p>{{ successMessage() }}</p>
-  }
+        <div
+          class="favorite-team-hero"
+          [style.--ref-team-primary]="selectedTeam().primaryColor"
+          [style.--ref-team-secondary]="selectedTeam().secondaryColor"
+        >
+          <span class="eyebrow">Favorite Club</span>
 
-  @if (errorMessage()) {
-    <p>{{ errorMessage() }}</p>
-  }
+          <div class="account-team-ref" aria-hidden="true">
+            <span class="account-ref-head"></span>
+            <span class="account-ref-body"></span>
+            <span class="account-ref-arm account-ref-arm-left"></span>
+            <span class="account-ref-arm account-ref-arm-right"></span>
+            <span class="account-ref-leg account-ref-leg-left"></span>
+            <span class="account-ref-leg account-ref-leg-right"></span>
+            <img
+              class="account-ref-team-logo"
+              [src]="selectedTeam().logoUrl"
+              [alt]="''"
+            />
+          </div>
+
+          <strong>{{ selectedTeam().name }}</strong>
+          <small>Your locker-room referee follows your saved favorite team.</small>
+        </div>
+      </header>
+
+      @if (successMessage()) {
+        <p class="status-message success" role="status">{{ successMessage() }}</p>
+      }
+
+      @if (errorMessage()) {
+        <p class="status-message error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <section class="manager-stats" aria-label="Fantasy manager statistics">
+        <article>
+          <span>Leagues</span>
+          <strong>{{ leagueCount() }}</strong>
+          <small>Active manager teams</small>
+        </article>
+
+        <article>
+          <span>Commissioner</span>
+          <strong>{{ commissionerLeagueCount() }}</strong>
+          <small>Leagues you manage</small>
+        </article>
+
+        <article>
+          <span>Opponents</span>
+          <strong>{{ opponentCount() }}</strong>
+          <small>Managers in your leagues</small>
+        </article>
+
+        <article>
+          <span>Team Slots</span>
+          <strong>{{ totalTeamSlots() }}</strong>
+          <small>Total league membership</small>
+        </article>
+      </section>
+
+      <div class="account-grid">
+        <section class="account-panel favorite-team-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Personalize the Arena</span>
+              <h2>Favorite Team</h2>
+            </div>
+
+            <span class="selected-team-badge">{{ selectedTeam().abbreviation }}</span>
+          </div>
+
+          <p class="panel-description">
+            Your selection controls the profile lighting and shared accent colors across the app.
+          </p>
+
+          <div class="team-selector-grid" role="list" aria-label="Choose a favorite NHL team">
+            @for (team of teams; track team.abbreviation) {
+              <button
+                type="button"
+                class="team-selector-button"
+                [class.selected]="team.abbreviation === favoriteTeamAbbreviation"
+                [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation"
+                [title]="team.name"
+                (click)="selectFavoriteTeam(team)"
+              >
+                <img [src]="team.logoUrl" [alt]="team.name + ' logo'" />
+                <span>{{ team.abbreviation }}</span>
+              </button>
+            }
+          </div>
+        </section>
+
+        <section class="account-panel settings-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Profile Settings</span>
+              <h2>Manager Preferences</h2>
+            </div>
+          </div>
+
+          <label class="form-field">
+            <span>Display Name</span>
+            <input [(ngModel)]="username" placeholder="Manager name" />
+          </label>
+
+          <label class="toggle-row">
+            <span>
+              <strong>Reduced Motion</strong>
+              <small>Pause decorative marquees and pixel animations.</small>
+            </span>
+
+            <input
+              type="checkbox"
+              [(ngModel)]="reducedMotion"
+              (change)="previewPreferenceChanges()"
+            />
+          </label>
+
+          <label class="form-field">
+            <span>After Login</span>
+            <select [(ngModel)]="defaultLandingPage" (change)="previewPreferenceChanges()">
+              <option value="dashboard">Open Dashboard</option>
+              <option value="lastLeague">Open Last League</option>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            class="save-profile-button"
+            (click)="saveAccountSettings()"
+            [disabled]="saving()"
+          >
+            {{ saving() ? 'Saving Profile...' : 'Save Manager Profile' }}
+          </button>
+        </section>
+      </div>
+
+      <div class="account-grid lower-grid">
+        <section class="account-panel achievement-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Trophy Shelf</span>
+              <h2>Manager Milestones</h2>
+            </div>
+          </div>
+
+          <div class="achievement-grid">
+            @for (achievement of achievements(); track achievement.title) {
+              <article [class.unlocked]="achievement.unlocked">
+                <span class="achievement-icon" aria-hidden="true">{{ achievement.icon }}</span>
+                <div>
+                  <strong>{{ achievement.title }}</strong>
+                  <small>{{ achievement.description }}</small>
+                </div>
+                <span class="achievement-status">
+                  {{ achievement.unlocked ? 'Unlocked' : 'Locked' }}
+                </span>
+              </article>
+            }
+          </div>
+        </section>
+
+        <section class="account-panel quick-links-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Manager Shortcuts</span>
+              <h2>Quick Actions</h2>
+            </div>
+          </div>
+
+          <nav class="account-quick-links" aria-label="Account shortcuts">
+            <a routerLink="/dashboard">
+              <span aria-hidden="true">⌂</span>
+              <div><strong>My Leagues</strong><small>Return to the arena lobby.</small></div>
+            </a>
+
+            <a routerLink="/leagues/create">
+              <span aria-hidden="true">＋</span>
+              <div><strong>Create League</strong><small>Open a new commissioner room.</small></div>
+            </a>
+
+            <a routerLink="/leagues/join">
+              <span aria-hidden="true">⇥</span>
+              <div>
+                <strong>Join League</strong><small>Enter a commissioner invite code.</small>
+              </div>
+            </a>
+
+            <button type="button" class="sign-out-button" (click)="signOut()">
+              <span aria-hidden="true">↪</span>
+              <div><strong>Sign Out</strong><small>Leave the locker room safely.</small></div>
+            </button>
+          </nav>
+        </section>
+      </div>
+    </section>
+  </section>
 }

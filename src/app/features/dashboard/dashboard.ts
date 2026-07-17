@@ -28,8 +28,11 @@ import {
 
 import {
   buildPixelMarquee,
+  getPixelTeamTheme,
   PixelLogoItem
 } from '../../shared/pixel-theme/pixel-theme.data';
+
+import { applyUserTheme } from '../../core/user/user-theme.service';
 
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
@@ -53,6 +56,11 @@ export class Dashboard {
   readonly errorMessage = signal('');
   readonly topRibbon: PixelLogoItem[] = buildPixelMarquee(6);
   readonly bottomRibbon: PixelLogoItem[] = buildPixelMarquee(19);
+
+
+  readonly favoriteTeam = computed(() =>
+    getPixelTeamTheme(this.profile()?.favoriteTeamAbbreviation)
+  );
 
   readonly displayName = computed(() => {
     const profile = this.profile();
@@ -94,6 +102,10 @@ export class Dashboard {
 
       this.profile.set(profile);
       this.leagueSummaries.set(leagueSummaries);
+
+      if (profile) {
+        applyUserTheme(profile);
+      }
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error

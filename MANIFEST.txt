@@ -1,4 +1,21 @@
-src/app/features/cycles/cycle-one/cycle-one.html
-src/app/features/cycles/cycle-one/cycle-one.css
-README.md
-MANIFEST.txt
+CHANGED FILES
+firestore.rules
+src/styles.css
+src/app/app.ts
+src/app/core/auth/auth.service.ts
+src/app/core/user/user.service.ts
+src/app/core/user/user-theme.service.ts
+src/app/shared/pixel-theme/pixel-theme.data.ts
+src/app/shared/navbar/navbar.css
+src/app/features/auth/auth.ts
+src/app/features/account/account-settings/account-settings.ts
+src/app/features/account/account-settings/account-settings.html
+src/app/features/account/account-settings/account-settings.css
+
+FIREBASE DEPLOYMENT
+Firestore rules deployment required.
+No index deployment required.
+No Cloud Functions deployment required.
+
+DEPENDENCIES
+No new npm packages.

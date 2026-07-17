@@ -2,6 +2,8 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
+import { getUserProfile } from '../../core/user/user.service';
+import { applyUserTheme, getRememberedLastLeagueId } from '../../core/user/user-theme.service';
 import { buildPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
 
 @Component({
@@ -9,7 +11,7 @@ import { buildPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel
   standalone: true,
   imports: [FormsModule],
   templateUrl: './auth.html',
-  styleUrl: './auth.css'
+  styleUrl: './auth.css',
 })
 export class Auth {
   email = '';
@@ -25,19 +27,23 @@ export class Auth {
   readonly bottomRibbon: PixelLogoItem[] = buildPixelMarquee(11);
 
   readonly pageTitle = computed(() =>
-    this.isRegistering() ? 'Create Your Franchise' : 'Enter the Rink'
+    this.isRegistering() ? 'Create Your Franchise' : 'Enter the Rink',
   );
 
   readonly pageSubtitle = computed(() =>
     this.isRegistering()
       ? 'Build your profile, join the league, and get ready for opening night.'
-      : 'Sign in to manage your roster, follow your six-game windows, and chase the Cup.'
+      : 'Sign in to manage your roster, follow your six-game windows, and chase the Cup.',
   );
 
   readonly submitLabel = computed(() =>
     this.loading()
-      ? (this.isRegistering() ? 'Creating...' : 'Logging in...')
-      : (this.isRegistering() ? 'Create Profile' : 'Login')
+      ? this.isRegistering()
+        ? 'Creating...'
+        : 'Logging in...'
+      : this.isRegistering()
+        ? 'Create Profile'
+        : 'Login',
   );
 
   constructor(private router: Router) {}
@@ -53,17 +59,29 @@ export class Auth {
     this.mascotCelebrating.set(false);
 
     try {
-      if (this.isRegistering()) {
-        await registerUser(this.email, this.password, this.username);
-        this.successMessage.set('Profile created. Welcome to the league!');
-      } else {
-        await loginUser(this.email, this.password);
-        this.successMessage.set('Login successful. Opening your dashboard...');
-      }
+      const user = this.isRegistering()
+        ? await registerUser(this.email, this.password, this.username)
+        : await loginUser(this.email, this.password);
+
+      this.successMessage.set(
+        this.isRegistering()
+          ? 'Profile created. Welcome to the league!'
+          : 'Login successful. Opening your manager home...',
+      );
+
+      const profile = await getUserProfile(user.uid);
+      applyUserTheme(profile);
 
       this.mascotCelebrating.set(true);
       await new Promise((resolve) => setTimeout(resolve, 850));
-      await this.router.navigate(['/dashboard']);
+
+      const lastLeagueId = getRememberedLastLeagueId();
+      const destination =
+        profile?.defaultLandingPage === 'lastLeague' && lastLeagueId
+          ? ['/leagues', lastLeagueId]
+          : ['/dashboard'];
+
+      await this.router.navigate(destination);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to continue right now.');
       this.mascotCelebrating.set(false);

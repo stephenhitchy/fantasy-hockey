@@ -18,6 +18,12 @@
   --accent-red: #ff8a8a;
   --shadow-deep: 0 22px 55px rgba(1, 6, 15, 0.45);
   --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --user-team-primary: #b99b52;
+  --user-team-secondary: #333f48;
+  --user-team-highlight: #fff0b8;
+  --user-team-outline: color-mix(in srgb, #b99b52 72%, #37557b);
+  --user-team-subtext: color-mix(in srgb, #fff0b8 68%, #8ea9c7);
+  --user-team-glow: color-mix(in srgb, #b99b52 28%, transparent);
 }
 
 html {
@@ -33,19 +39,37 @@ body {
   min-height: 100vh;
   background: transparent;
   color: var(--text-primary);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-a { color: inherit; }
+a {
+  color: inherit;
+}
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   font: inherit;
 }
 
 button {
-  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+  transition:
+    transform 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
 button:hover:not(:disabled) {
@@ -69,4 +93,142 @@ button:hover:not(:disabled) {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 175, 228, 0.82);
+}
+
+html[data-reduced-motion='true'] *,
+html[data-reduced-motion='true'] *::before,
+html[data-reduced-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}
+
+
+/* Favorite-team visual language shared across the application. */
+html[data-favorite-team] body :where(
+  .brand-mark,
+  .pixel-logo-chip,
+  .hero-copy,
+  .dashboard-mascot-card,
+  .league-card,
+  .empty-state,
+  .profile-hero,
+  .account-panel,
+  .manager-stats article,
+  .league-header,
+  .league-info-card,
+  .draft-status-card,
+  .quick-actions-card,
+  .cycle-status-card,
+  .invite-card,
+  .team-card,
+  .matchup-card,
+  .cycle-header,
+  .shared-scoring-status-card,
+  .cycle-transparency-card,
+  .my-matchup-card,
+  .matchup-detail-card,
+  .team-summary-row,
+  .fantasy-player-card,
+  .summary-card,
+  .requirements-card,
+  .schedule-card,
+  .order-card,
+  .preview-card,
+  .round-card,
+  .team-hero-card,
+  .current-matchup-card,
+  .roster-slot-card,
+  .ir-slot-card,
+  .transaction-card,
+  .my-team-score-card,
+  .free-agent-list-card,
+  .move-builder-card,
+  .pending-moves-card,
+  .waiver-queue-card,
+  .selected-summary-card,
+  .drop-panel-card,
+  .draft-room-header,
+  .player-pool-panel,
+  .sidebar-card,
+  .roster-card,
+  .turn-card,
+  .scheduled-card,
+  .champion-card,
+  .placements-card,
+  .qualifier-card,
+  .seed-card,
+  .placement-seed-card,
+  .standings-card,
+  .league-actions-card,
+  .projection-accuracy-card,
+  .projection-table-card,
+  .lab-control-card,
+  .balance-card,
+  .rating-explainer-card,
+  .shared-snapshot-card
+) {
+  border-color: var(--user-team-outline) !important;
+}
+
+html[data-favorite-team] body :where(
+  .eyebrow,
+  [class$='-eyebrow'],
+  [class*='-eyebrow '],
+  .card-label,
+  .panel-description,
+  .hero-copy p,
+  .dashboard-header p,
+  .league-header p,
+  .cycle-header p,
+  .section-title-row p,
+  .schedule-help,
+  .window-status-copy,
+  .team-summary-row p,
+  .profile-identity p,
+  .favorite-team-hero small,
+  .manager-stats small,
+  .hub-action-copy span,
+  .league-identity p,
+  .draft-status-description,
+  .quick-actions-card p,
+  .matchup-window-summary div > span,
+  .transparency-heading p,
+  .window-marker-legend,
+  .mascot-team-copy
+) {
+  color: var(--user-team-subtext) !important;
+}
+
+html[data-favorite-team] body :where(
+  .my-matchup-outline,
+  .team-selector-button.selected,
+  .active-view,
+  .mobile-bottom-nav a.active,
+  .desktop-links a.active
+) {
+  border-color: var(--user-team-primary) !important;
+  box-shadow: 0 0 0 2px var(--user-team-glow) !important;
+}
+
+html[data-favorite-team] body :where(
+  .matchup-view-selector button.active-view,
+  .matchup-arrow-nav button,
+  .save-profile-button,
+  .primary-action,
+  .open-league
+) {
+  border-color: var(--user-team-primary) !important;
+  background: linear-gradient(
+    180deg,
+    var(--user-team-highlight),
+    color-mix(in srgb, var(--user-team-primary) 72%, var(--user-team-highlight))
+  ) !important;
+  color: #07111d !important;
+}
+
+html[data-favorite-team] body :where(input, select, textarea):focus {
+  border-color: var(--user-team-primary) !important;
+  outline-color: var(--user-team-primary) !important;
 }

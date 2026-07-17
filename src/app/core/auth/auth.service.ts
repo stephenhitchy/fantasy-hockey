@@ -16,7 +16,10 @@ export async function registerUser(email: string, password: string, username: st
     uid: user.uid,
     email: user.email,
     username,
-    createdAt: new Date()
+    createdAt: new Date(),
+    favoriteTeamAbbreviation: 'VGK',
+    reducedMotion: false,
+    defaultLandingPage: 'dashboard'
   });
 
   return user;

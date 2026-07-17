@@ -139,7 +139,7 @@
 .mascot-rink { display: grid; place-items: center; min-height: 156px; border: 2px solid #2f4b6d; background: linear-gradient(180deg, rgba(13,25,41,0.98), rgba(9,18,30,0.98)); }
 .mini-ref { position: relative; width: 120px; height: 140px; animation: miniRefIdle 2.1s steps(2) infinite; }
 .mini-ref::before { content: ''; position: absolute; top: 8px; left: 37px; width: 46px; height: 46px; background: #e7c2a3; box-shadow: inset 0 -7px 0 #bb8f71, 0 0 0 5px #1f252d; }
-.mini-ref::after { content: ''; position: absolute; top: 62px; left: 27px; width: 66px; height: 70px; background: repeating-linear-gradient(90deg, #f7f8fb 0 8px, #232833 8px 16px); box-shadow: 0 0 0 5px #1f252d; }
+.mini-ref::after { content: ''; position: absolute; z-index: 1; top: 62px; left: 27px; width: 66px; height: 70px; background: linear-gradient(90deg, var(--ref-team-primary, #f7f8fb) 0 52%, var(--ref-team-secondary, #232833) 52% 100%); box-shadow: inset 0 -14px 0 color-mix(in srgb, var(--ref-team-secondary, #232833) 78%, #101722), 0 0 0 5px #1f252d; }
 
 .pixel-logo-ribbon { position: absolute; left: 0; width: 100%; overflow: hidden; z-index: 1; padding: 10px 0; border-block: 3px solid rgba(94,134,184,0.45); background: rgba(8,17,30,0.86); box-shadow: inset 0 0 0 3px rgba(3,8,16,0.85); }
 .top-ribbon { top: 22px; }
@@ -154,3 +154,29 @@
 @media (max-width: 980px) { .dashboard-header { grid-template-columns: 1fr; } .dashboard-mascot-card { max-width: 360px; } }
 @media (max-width: 720px) { .pixel-dashboard-page { padding: 30px 16px 120px; } .dashboard { margin-top: 72px; } .hero-copy, .dashboard-mascot-card, .league-card, .empty-state { padding: 20px; } .hero-copy h1 { font-size: 34px; } .league-grid { grid-template-columns: 1fr; } .league-summary-row { grid-template-columns: 1fr; } .pixel-logo-chip { min-width: 72px; height: 40px; } }
 @media (prefers-reduced-motion: reduce) { .ribbon-track-left, .ribbon-track-right, .mini-ref { animation: none !important; } }
+
+
+.mini-ref-team-logo {
+  position: absolute;
+  z-index: 3;
+  top: 76px;
+  left: 45px;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.favorite-team-ref::before {
+  z-index: 2;
+}
+
+.mascot-team-copy {
+  color: var(--user-team-subtext);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+}

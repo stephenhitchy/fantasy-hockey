@@ -1,0 +1,697 @@
+@keyframes lockerGlow {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.72;
+    transform: translateY(-5px);
+  }
+}
+
+:host {
+  display: block;
+  min-height: calc(100dvh - 68px);
+  color: #edf4ff;
+}
+
+.account-loading {
+  display: grid;
+  min-height: 55dvh;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #b8cbe0;
+}
+
+.account-loading span {
+  font-size: 40px;
+}
+
+.account-locker-page {
+  position: relative;
+  min-height: calc(100dvh - 68px);
+  overflow: hidden;
+  padding: 34px 20px 70px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(11, 24, 40, 0.88) 0 12%,
+      transparent 12% 88%,
+      rgba(11, 24, 40, 0.88) 88%
+    ),
+    radial-gradient(
+      circle at 18% 12%,
+      color-mix(in srgb, var(--user-team-primary) 25%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 82% 20%,
+      color-mix(in srgb, var(--user-team-secondary) 28%, transparent),
+      transparent 30%
+    ),
+    linear-gradient(180deg, #07111d 0%, #091728 54%, #06101c 100%);
+}
+
+.account-locker-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+.account-locker-page::after {
+  content: '';
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 0;
+  height: 72px;
+  border-top: 3px solid rgba(94, 134, 184, 0.34);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(19, 34, 55, 0.9) 0 42px,
+    rgba(10, 21, 36, 0.95) 42px 84px
+  );
+  box-shadow: inset 0 7px 0 rgba(4, 10, 18, 0.78);
+}
+
+.locker-light {
+  position: absolute;
+  top: 4%;
+  width: 140px;
+  height: 420px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--user-team-primary) 32%, transparent),
+    transparent 82%
+  );
+  filter: blur(18px);
+  animation: lockerGlow 3s steps(3) infinite;
+  pointer-events: none;
+}
+
+.locker-light-left {
+  left: 4%;
+}
+.locker-light-right {
+  right: 4%;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--user-team-secondary) 34%, transparent),
+    transparent 82%
+  );
+}
+
+.account-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.profile-hero,
+.account-panel,
+.manager-stats article,
+.status-message {
+  border: 3px solid #37557b;
+  background: linear-gradient(180deg, rgba(10, 20, 34, 0.97), rgba(12, 24, 42, 0.94));
+  box-shadow:
+    0 0 0 3px rgba(6, 14, 24, 0.9),
+    0 22px 50px rgba(0, 0, 0, 0.3);
+}
+
+.profile-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(220px, 300px);
+  gap: 24px;
+  align-items: center;
+  padding: 28px;
+  border-color: color-mix(in srgb, var(--user-team-primary) 62%, #37557b);
+}
+
+.profile-avatar-wrap {
+  position: relative;
+}
+
+.profile-avatar {
+  display: grid;
+  width: 106px;
+  height: 106px;
+  place-items: center;
+  border: 5px solid var(--user-team-primary);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--user-team-primary) 58%, #17283e),
+    color-mix(in srgb, var(--user-team-secondary) 42%, #0e1b2e)
+  );
+  color: var(--user-team-highlight);
+  box-shadow:
+    0 0 0 5px rgba(5, 12, 22, 0.95),
+    0 18px 35px rgba(0, 0, 0, 0.35);
+  font-size: 34px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+}
+
+.online-pixel {
+  position: absolute;
+  right: 1px;
+  bottom: 2px;
+  width: 22px;
+  height: 22px;
+  border: 4px solid #07111d;
+  background: #65e3a6;
+  box-shadow: 0 0 14px rgba(101, 227, 166, 0.7);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: color-mix(in srgb, var(--user-team-primary) 70%, #8ecfff);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.profile-identity h1,
+.panel-heading h2 {
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.035em;
+}
+
+.profile-identity h1 {
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1;
+}
+.profile-identity p {
+  margin: 8px 0 0;
+  color: #b4c8df;
+}
+
+.identity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.identity-chips span,
+.selected-team-badge {
+  padding: 7px 10px;
+  border: 1px solid #365578;
+  background: rgba(17, 32, 52, 0.95);
+  color: #d9e9fa;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.identity-chips .commissioner-chip {
+  border-color: #806a35;
+  background: rgba(91, 72, 26, 0.5);
+  color: #ffe7a0;
+}
+
+.favorite-team-hero {
+  display: grid;
+  justify-items: center;
+  min-height: 190px;
+  padding: 20px;
+  border: 2px solid color-mix(in srgb, var(--user-team-primary) 55%, #2f4b6d);
+  background:
+    radial-gradient(
+      circle at center,
+      color-mix(in srgb, var(--user-team-primary) 22%, transparent),
+      transparent 60%
+    ),
+    rgba(9, 18, 30, 0.92);
+  text-align: center;
+}
+
+
+.favorite-team-hero strong {
+  margin-top: 8px;
+  font-size: 18px;
+}
+.favorite-team-hero small {
+  margin-top: 5px;
+  color: #93aac4;
+}
+
+.status-message {
+  margin: 18px 0 0;
+  padding: 13px 15px;
+}
+.status-message.success {
+  border-color: #3d9967;
+  color: #caffdf;
+}
+.status-message.error {
+  border-color: #a14e5d;
+  color: #ffd3da;
+}
+
+.manager-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 20px;
+}
+
+.manager-stats article {
+  padding: 17px;
+}
+.manager-stats span,
+.manager-stats strong,
+.manager-stats small {
+  display: block;
+}
+.manager-stats span {
+  color: #8ea7c3;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.manager-stats strong {
+  margin-top: 7px;
+  color: var(--user-team-highlight);
+  font-size: 28px;
+  line-height: 1;
+}
+.manager-stats small {
+  margin-top: 5px;
+  color: #91a6be;
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.lower-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+}
+
+.account-panel {
+  padding: 24px;
+}
+.account-panel::before {
+  content: '';
+  display: block;
+  width: 74px;
+  height: 4px;
+  margin-bottom: 17px;
+  background: linear-gradient(90deg, var(--user-team-primary), var(--user-team-highlight));
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.panel-heading h2 {
+  font-size: 23px;
+}
+.panel-description {
+  margin: 10px 0 0;
+  color: #a9bdd4;
+  line-height: 1.55;
+}
+
+.team-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.team-selector-button {
+  display: grid;
+  min-width: 0;
+  min-height: 72px;
+  place-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  border: 2px solid #2f4b6d;
+  background: linear-gradient(180deg, rgba(17, 31, 50, 0.98), rgba(10, 20, 34, 0.98));
+  color: #dceafe;
+  cursor: pointer;
+}
+
+.team-selector-button:hover,
+.team-selector-button.selected {
+  border-color: var(--user-team-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--user-team-primary) 24%, #17273e),
+    rgba(10, 20, 34, 0.98)
+  );
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--user-team-primary) 25%, transparent);
+}
+
+.team-selector-button img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.team-selector-button span {
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.settings-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.form-field {
+  display: grid;
+  gap: 7px;
+}
+.form-field > span {
+  color: #9bb1ca;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.form-field input,
+.form-field select {
+  min-height: 50px;
+  padding: 12px 13px;
+  border: 2px solid #365578;
+  outline: none;
+  background: rgba(10, 20, 34, 0.96);
+  color: #edf4ff;
+}
+.form-field input:focus,
+.form-field select:focus {
+  border-color: var(--user-team-primary);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 14px;
+  border: 2px solid #2f4b6d;
+  background: rgba(9, 18, 30, 0.88);
+}
+.toggle-row strong,
+.toggle-row small {
+  display: block;
+}
+.toggle-row small {
+  margin-top: 4px;
+  color: #8fa6c0;
+  line-height: 1.4;
+}
+.toggle-row input {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--user-team-primary);
+}
+
+.save-profile-button {
+  min-height: 50px;
+  border: 2px solid color-mix(in srgb, var(--user-team-primary) 58%, #7b6330);
+  background: linear-gradient(
+    180deg,
+    var(--user-team-highlight),
+    color-mix(in srgb, var(--user-team-primary) 70%, #d2a23d)
+  );
+  color: #181100;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 950;
+}
+
+.achievement-grid {
+  display: grid;
+  gap: 10px;
+}
+.achievement-grid article {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #2c415e;
+  background: rgba(9, 18, 30, 0.76);
+  opacity: 0.58;
+}
+.achievement-grid article.unlocked {
+  border-color: color-mix(in srgb, var(--user-team-primary) 52%, #365578);
+  opacity: 1;
+}
+.achievement-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  background: #172a45;
+  font-size: 20px;
+}
+.achievement-grid strong,
+.achievement-grid small {
+  display: block;
+}
+.achievement-grid small {
+  margin-top: 4px;
+  color: #93a9c2;
+  line-height: 1.35;
+}
+.achievement-status {
+  color: #8498b0;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.unlocked .achievement-status {
+  color: var(--user-team-highlight);
+}
+
+.account-quick-links {
+  display: grid;
+  gap: 10px;
+}
+.account-quick-links a,
+.sign-out-button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 2px solid #2f4b6d;
+  background: linear-gradient(180deg, rgba(17, 31, 50, 0.98), rgba(10, 20, 34, 0.98));
+  color: #eaf3ff;
+  text-align: left;
+  text-decoration: none;
+}
+.account-quick-links > * > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  background: #1a3150;
+  font-size: 20px;
+}
+.account-quick-links strong,
+.account-quick-links small {
+  display: block;
+}
+.account-quick-links small {
+  margin-top: 3px;
+  color: #8fa6c0;
+}
+.sign-out-button {
+  width: 100%;
+  border-color: #71404b;
+  cursor: pointer;
+  font: inherit;
+}
+.sign-out-button > span {
+  background: #39222c;
+}
+
+@media (max-width: 1050px) {
+  .profile-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .favorite-team-hero {
+    grid-column: 1 / -1;
+    grid-template-columns: auto 90px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    min-height: auto;
+    text-align: left;
+  }
+  .favorite-team-hero .eyebrow {
+    grid-column: 1 / -1;
+  }
+  .favorite-team-hero img {
+    grid-row: 2 / 4;
+  }
+  .account-grid,
+  .lower-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .account-locker-page {
+    padding: 22px 14px 88px;
+  }
+  .profile-hero {
+    grid-template-columns: 1fr;
+    padding: 20px;
+    text-align: center;
+  }
+  .profile-avatar-wrap {
+    justify-self: center;
+  }
+  .identity-chips {
+    justify-content: center;
+  }
+  .favorite-team-hero {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+  .favorite-team-hero img {
+    grid-row: auto;
+  }
+  .manager-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .team-selector-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .account-panel {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .manager-stats {
+    grid-template-columns: 1fr;
+  }
+  .team-selector-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .achievement-grid article {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .achievement-status {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locker-light {
+    animation: none;
+  }
+}
+
+
+.account-team-ref {
+  position: relative;
+  width: 118px;
+  height: 142px;
+  margin: 5px 0 2px;
+  animation: accountRefIdle 2.1s steps(2) infinite;
+}
+
+.account-ref-head,
+.account-ref-body,
+.account-ref-arm,
+.account-ref-leg,
+.account-ref-team-logo {
+  position: absolute;
+}
+
+.account-ref-head {
+  z-index: 3;
+  top: 5px;
+  left: 38px;
+  width: 42px;
+  height: 42px;
+  background: #e7c2a3;
+  box-shadow: inset 0 -7px 0 #bb8f71, 0 0 0 5px #1f252d;
+}
+
+.account-ref-body {
+  z-index: 1;
+  top: 55px;
+  left: 27px;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(
+    90deg,
+    var(--ref-team-primary, var(--user-team-primary)) 0 52%,
+    var(--ref-team-secondary, var(--user-team-secondary)) 52% 100%
+  );
+  box-shadow:
+    inset 0 -13px 0 color-mix(in srgb, var(--ref-team-secondary) 78%, #101722),
+    0 0 0 5px #1f252d;
+}
+
+.account-ref-arm {
+  z-index: 2;
+  top: 61px;
+  width: 17px;
+  height: 51px;
+  background: repeating-linear-gradient(180deg, #f7f8fb 0 7px, #232833 7px 14px);
+  box-shadow: 0 0 0 4px #1f252d;
+}
+
+.account-ref-arm-left { left: 3px; }
+.account-ref-arm-right { right: 3px; }
+
+.account-ref-leg {
+  top: 124px;
+  width: 18px;
+  height: 17px;
+  background: #232833;
+  box-shadow: 0 0 0 4px #1f252d;
+}
+
+.account-ref-leg-left { left: 35px; }
+.account-ref-leg-right { right: 35px; }
+
+.account-ref-team-logo {
+  z-index: 4;
+  top: 69px;
+  left: 44px;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@keyframes accountRefIdle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}

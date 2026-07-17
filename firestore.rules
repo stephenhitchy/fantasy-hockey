@@ -1,0 +1,1070 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserId() {
+      return request.auth.uid;
+    }
+
+    function leaguePath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId);
+    }
+
+    function memberPath(leagueId, userId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(userId);
+    }
+
+    function teamPath(leagueId, ownerId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/teams/$(ownerId);
+    }
+
+    function invitePath(inviteCode) {
+      return /databases/$(database)/documents/leagueInvites/$(inviteCode);
+    }
+
+    function draftPath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
+    }
+
+    function draftPickPath(leagueId, pickId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/picks/$(pickId);
+    }
+
+    function draftQueuePath(leagueId, ownerId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/queues/$(ownerId);
+    }
+
+    function sharedProjectionPointerPath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/projectionSnapshots/current;
+    }
+
+    function hasReadySharedProjectionSnapshot(leagueId) {
+      return exists(sharedProjectionPointerPath(leagueId)) &&
+        get(sharedProjectionPointerPath(leagueId)).data.status == 'ready' &&
+        get(sharedProjectionPointerPath(leagueId)).data.activeSnapshotId is string &&
+        get(sharedProjectionPointerPath(leagueId)).data.assetCount is int &&
+        get(sharedProjectionPointerPath(leagueId)).data.assetCount > 0;
+    }
+
+    function hasExistingOwnedTeam(leagueId) {
+      return signedIn() &&
+        exists(teamPath(leagueId, currentUserId())) &&
+        get(teamPath(leagueId, currentUserId())).data.ownerId ==
+          currentUserId();
+    }
+
+    function isLeagueMember(leagueId) {
+      return signedIn() &&
+        (
+          exists(memberPath(leagueId, currentUserId())) ||
+          hasExistingOwnedTeam(leagueId)
+        );
+    }
+
+    /*
+     * Shared projection snapshots must support older joined-team records that
+     * may not contain the newer ownerId field. Draft/league pages can still be
+     * visible from cached or broader reads, while the projection asset query
+     * fails unless this read check accepts either a membership document, the
+     * user's team document, or the commissioner.
+     */
+    function canReadSharedLeagueProjection(leagueId) {
+      return signedIn() &&
+        exists(leaguePath(leagueId)) &&
+        (
+          get(leaguePath(leagueId)).data.commissionerId ==
+            currentUserId() ||
+          exists(memberPath(leagueId, currentUserId())) ||
+          exists(teamPath(leagueId, currentUserId()))
+        );
+    }
+
+    function isLeagueMemberAfter(leagueId) {
+      return signedIn() &&
+        (
+          existsAfter(memberPath(leagueId, currentUserId())) ||
+          hasExistingOwnedTeam(leagueId)
+        );
+    }
+
+    function isLeagueCommissioner(leagueId) {
+      return signedIn() &&
+        exists(leaguePath(leagueId)) &&
+        get(leaguePath(leagueId)).data.commissionerId == currentUserId();
+    }
+
+    function isLeagueCommissionerAfter(leagueId) {
+      return signedIn() &&
+        existsAfter(leaguePath(leagueId)) &&
+        getAfter(leaguePath(leagueId)).data.commissionerId == currentUserId();
+    }
+
+    function validUsername(username) {
+      return username is string &&
+        username.size() >= 1 &&
+        username.size() <= 40;
+    }
+
+    function validLeagueName(name) {
+      return name is string &&
+        name.size() >= 1 &&
+        name.size() <= 80;
+    }
+
+    function validTeamName(name) {
+      return name is string &&
+        name.size() >= 1 &&
+        name.size() <= 60;
+    }
+
+    function validLeagueCreate(leagueId) {
+      return request.resource.data.id == leagueId &&
+        request.resource.data.commissionerId == currentUserId() &&
+        validLeagueName(request.resource.data.name) &&
+        request.resource.data.inviteCode is string &&
+        request.resource.data.inviteCode.size() == 6 &&
+        request.resource.data.maxTeams is int &&
+        request.resource.data.maxTeams >= 2 &&
+        request.resource.data.maxTeams <= 12 &&
+        request.resource.data.matchupFormat == 'cycle_matchup' &&
+        request.resource.data.scoringRules is map;
+    }
+
+    function validInviteCreate(inviteCode) {
+      return request.resource.data.inviteCode == inviteCode &&
+        request.resource.data.leagueId is string &&
+        request.resource.data.createdBy == currentUserId() &&
+        request.resource.data.active == true &&
+        isLeagueCommissionerAfter(request.resource.data.leagueId);
+    }
+
+    function validMemberCreate(leagueId, memberId) {
+      let data = request.resource.data;
+
+      return signedIn() &&
+        memberId == currentUserId() &&
+        data.uid == currentUserId() &&
+        data.leagueId == leagueId &&
+        validUsername(data.username) &&
+        (
+          (
+            data.role == 'commissioner' &&
+            data.inviteCodeUsed == null &&
+            isLeagueCommissionerAfter(leagueId)
+          ) ||
+          (
+            data.role == 'member' &&
+            data.inviteCodeUsed is string &&
+            data.inviteCodeUsed.size() == 6 &&
+            exists(leaguePath(leagueId)) &&
+            exists(invitePath(data.inviteCodeUsed)) &&
+            get(invitePath(data.inviteCodeUsed)).data.active == true &&
+            get(invitePath(data.inviteCodeUsed)).data.inviteCode ==
+              data.inviteCodeUsed &&
+            get(invitePath(data.inviteCodeUsed)).data.leagueId == leagueId
+          )
+        );
+    }
+
+    function validTeamCreate(teamId) {
+      let data = request.resource.data;
+
+      return teamId == currentUserId() &&
+        data.id == currentUserId() &&
+        data.ownerId == currentUserId() &&
+        validTeamName(data.teamName) &&
+        data.logo is string &&
+        data.wins == 0 &&
+        data.losses == 0 &&
+        data.ties == 0 &&
+        data.pointsFor == 0 &&
+        data.pointsAgainst == 0 &&
+        data.waiverPriority == 1 &&
+        data.draftPosition == null;
+    }
+
+    function validOwnerTeamUpdate() {
+      return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['teamName', 'logo', 'updatedAt']) &&
+        validTeamName(request.resource.data.teamName) &&
+        request.resource.data.logo is string;
+    }
+
+    function validRosterDocument(rosterId) {
+      let data = request.resource.data;
+
+      return rosterId == 'current' &&
+        data.schemaVersion == 1 &&
+        data.activeSlots is list &&
+        data.activeSlots.size() == 14 &&
+        data.irSlots is list &&
+        data.irSlots.size() == 4;
+    }
+
+    function validDraftPickSequence(draft, data) {
+      let teamCount = draft.roundOneOrder.size();
+
+      return teamCount > 0 &&
+        data.round is int &&
+        data.round >= 1 &&
+        data.pickInRound is int &&
+        data.pickInRound >= 1 &&
+        data.pickInRound <= teamCount &&
+        data.overallPick ==
+          ((data.round - 1) * teamCount) +
+          data.pickInRound;
+    }
+
+    function expectedDraftPickOwner(draft, data) {
+      let teamCount = draft.roundOneOrder.size();
+
+      return data.round % 2 == 1
+        ? draft.roundOneOrder[data.pickInRound - 1]
+        : draft.roundOneOrder[teamCount - data.pickInRound];
+    }
+
+    function validNextPickClock(data) {
+      return data.status == 'complete'
+        ? (
+            data.clockStatus == 'complete' &&
+            data.pickStartedAt == null
+          )
+        : (
+            data.status == 'live' &&
+            data.clockStatus == 'running' &&
+            data.pickStartedAt == request.time &&
+            data.currentPickSeconds ==
+              data.pickSeconds
+          );
+    }
+
+    function validManualDraftPickAfter(
+      leagueId,
+      pickId,
+      draft
+    ) {
+      let pick = getAfter(
+        draftPickPath(leagueId, pickId)
+      ).data;
+
+      return pick.overallPick == draft.nextOverallPick &&
+        pick.ownerId == currentUserId() &&
+        pick.selectedByUserId == currentUserId() &&
+        pick.selectionType == 'manual' &&
+        pick.asset is map &&
+        pick.asset.assetKey is string &&
+        !draft.draftedAssetKeys.hasAny([
+          pick.asset.assetKey
+        ]) &&
+        request.resource.data.draftedAssetKeys.hasAny([
+          pick.asset.assetKey
+        ]) &&
+        validDraftPickSequence(draft, pick) &&
+        expectedDraftPickOwner(draft, pick) ==
+          currentUserId();
+    }
+
+    function validInitialDraftClockStart(leagueId) {
+      let changedKeys = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+
+      return hasReadySharedProjectionSnapshot(leagueId) &&
+        resource.data.status == 'live' &&
+        resource.data.clockStatus == 'stopped' &&
+        resource.data.nextOverallPick == 1 &&
+        resource.data.roundOneOrder is list &&
+        resource.data.roundOneOrder.size() > 0 &&
+        resource.data.roundOneOrder[0] == currentUserId() &&
+        changedKeys.hasOnly([
+          'clockStatus',
+          'pickStartedAt',
+          'currentPickSeconds',
+          'pausedRemainingSeconds',
+          'clockUpdatedBy',
+          'clockUpdatedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'live' &&
+        request.resource.data.nextOverallPick == 1 &&
+        request.resource.data.draftedAssetKeys ==
+          resource.data.draftedAssetKeys &&
+        request.resource.data.clockStatus == 'running' &&
+        request.resource.data.pickStartedAt == request.time &&
+        request.resource.data.currentPickSeconds ==
+          resource.data.pickSeconds &&
+        request.resource.data.pausedRemainingSeconds == null &&
+        request.resource.data.clockUpdatedBy ==
+          currentUserId() &&
+        request.resource.data.clockUpdatedAt ==
+          request.time &&
+        request.resource.data.updatedAt ==
+          request.time;
+    }
+
+    function validMemberDraftUpdate(leagueId) {
+      let changedKeys = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+
+      let pickId = request.resource.data.lastPickId;
+
+      let pickProgress =
+        resource.data.status == 'live' &&
+        resource.data.clockStatus == 'running' &&
+        changedKeys.hasOnly([
+          'status',
+          'nextOverallPick',
+          'draftedAssetKeys',
+          'clockStatus',
+          'pickStartedAt',
+          'currentPickSeconds',
+          'pausedRemainingSeconds',
+          'clockUpdatedBy',
+          'clockUpdatedAt',
+          'lastPickId',
+          'updatedAt'
+        ]) &&
+        request.resource.data.nextOverallPick ==
+          resource.data.nextOverallPick + 1 &&
+        request.resource.data.draftedAssetKeys is list &&
+        resource.data.draftedAssetKeys is list &&
+        request.resource.data.draftedAssetKeys.size() ==
+          resource.data.draftedAssetKeys.size() + 1 &&
+        request.resource.data.draftedAssetKeys.hasAll(
+          resource.data.draftedAssetKeys
+        ) &&
+        request.resource.data.pausedRemainingSeconds == null &&
+        request.resource.data.clockUpdatedBy ==
+          currentUserId() &&
+        request.resource.data.clockUpdatedAt ==
+          request.time &&
+        request.resource.data.updatedAt ==
+          request.time &&
+        validNextPickClock(request.resource.data) &&
+        pickId is string &&
+        existsAfter(draftPickPath(leagueId, pickId)) &&
+        validManualDraftPickAfter(
+          leagueId,
+          pickId,
+          resource.data
+        );
+
+      return isLeagueMember(leagueId) &&
+        (
+          pickProgress ||
+          validInitialDraftClockStart(leagueId)
+        );
+    }
+
+    function validDraftProgressForCreatedPick(
+      leagueId,
+      pickId,
+      draft,
+      data
+    ) {
+      let nextDraft = getAfter(draftPath(leagueId)).data;
+
+      return nextDraft.nextOverallPick ==
+          draft.nextOverallPick + 1 &&
+        nextDraft.draftedAssetKeys is list &&
+        draft.draftedAssetKeys is list &&
+        nextDraft.draftedAssetKeys.size() ==
+          draft.draftedAssetKeys.size() + 1 &&
+        nextDraft.draftedAssetKeys.hasAll(
+          draft.draftedAssetKeys
+        ) &&
+        nextDraft.draftedAssetKeys.hasAny([
+          data.asset.assetKey
+        ]) &&
+        nextDraft.pausedRemainingSeconds == null &&
+        nextDraft.clockUpdatedBy == currentUserId() &&
+        nextDraft.clockUpdatedAt == request.time &&
+        nextDraft.updatedAt == request.time &&
+        nextDraft.lastPickId == pickId &&
+        validNextPickClock(nextDraft);
+    }
+
+    function validDraftPickCreate(leagueId, pickId) {
+      let draft = get(draftPath(leagueId)).data;
+      let data = request.resource.data;
+
+      let validCommonPick =
+        isLeagueMember(leagueId) &&
+        draft.status == 'live' &&
+        draft.clockStatus == 'running' &&
+        data.ownerId is string &&
+        data.overallPick is int &&
+        data.overallPick == draft.nextOverallPick &&
+        validDraftPickSequence(draft, data) &&
+        data.ownerId == expectedDraftPickOwner(draft, data) &&
+        data.asset is map &&
+        data.asset.assetKey is string &&
+        !draft.draftedAssetKeys.hasAny([
+          data.asset.assetKey
+        ]) &&
+        data.selectionType in [
+          'manual',
+          'queue',
+          'automatic'
+        ] &&
+        data.selectedByUserId == currentUserId() &&
+        data.madeAt == request.time;
+
+      let validManualPick =
+        data.selectionType == 'manual' &&
+        data.ownerId == currentUserId() &&
+        data.autoPickReason == null &&
+        draft.pickStartedAt is timestamp &&
+        draft.currentPickSeconds is int &&
+        request.time <
+          draft.pickStartedAt +
+          duration.value(
+            draft.currentPickSeconds,
+            's'
+          );
+
+      let ownerQueueExists =
+        exists(draftQueuePath(leagueId, data.ownerId));
+
+      let managerAutoDraftEnabled =
+        ownerQueueExists &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.autoDraftEnabled == true;
+
+      let queueContainsAsset =
+        ownerQueueExists &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.assetKeys is list &&
+        get(
+          draftQueuePath(leagueId, data.ownerId)
+        ).data.assetKeys.hasAny([
+          data.asset.assetKey
+        ]);
+
+      let timerExpired =
+        draft.pickStartedAt is timestamp &&
+        draft.currentPickSeconds is int &&
+        request.time >=
+          draft.pickStartedAt +
+          duration.value(
+            draft.currentPickSeconds,
+            's'
+          );
+
+      let validAutomaticPick =
+        isLeagueCommissioner(leagueId) &&
+        data.selectionType in [
+          'queue',
+          'automatic'
+        ] &&
+        (
+          data.selectionType == 'automatic' ||
+          queueContainsAsset
+        ) &&
+        (
+          (
+            data.autoPickReason == 'manager-auto-mode' &&
+            managerAutoDraftEnabled
+          ) ||
+          (
+            data.autoPickReason == 'timer-expired' &&
+            timerExpired
+          )
+        );
+
+      return validCommonPick &&
+        validDraftProgressForCreatedPick(
+          leagueId,
+          pickId,
+          draft,
+          data
+        ) &&
+        (
+          validManualPick ||
+          validAutomaticPick
+        );
+    }
+
+    function validDraftQueueWrite(leagueId, ownerId) {
+      let data = request.resource.data;
+
+      return get(draftPath(leagueId)).data.status != 'complete' &&
+        data.keys().hasOnly([
+          'ownerId',
+          'assetKeys',
+          'autoDraftEnabled',
+          'updatedAt'
+        ]) &&
+        data.ownerId == ownerId &&
+        data.assetKeys is list &&
+        data.assetKeys.size() <= 100 &&
+        data.assetKeys.toSet().size() ==
+          data.assetKeys.size() &&
+        data.autoDraftEnabled is bool &&
+        data.updatedAt == request.time;
+    }
+
+    function sharedProjectionWriteAllowed(leagueId) {
+      return isLeagueCommissioner(leagueId) &&
+        (
+          !exists(draftPath(leagueId)) ||
+          get(draftPath(leagueId)).data.status != 'live' ||
+          (
+            get(draftPath(leagueId)).data.status == 'live' &&
+            get(draftPath(leagueId)).data.nextOverallPick == 1 &&
+            get(draftPath(leagueId)).data.draftedAssetKeys is list &&
+            get(draftPath(leagueId)).data.draftedAssetKeys.size() == 0
+          )
+        );
+    }
+
+    function validSharedProjectionAsset(assetKey) {
+      let data = request.resource.data;
+
+      let validLegacyAsset =
+        data.keys().hasAll([
+          'assetKey',
+          'assetType',
+          'position',
+          'projectedCyclePoints',
+          'floorAdjustedCyclePoints',
+          'balancedRank',
+          'sharedProjectionSnapshotId'
+        ]) &&
+        data.assetKey == assetKey &&
+        data.assetType in ['skater', 'team-goalie-unit'] &&
+        data.position in ['LW', 'C', 'RW', 'D', 'G'] &&
+        (
+          data.projectedCyclePoints is int ||
+          data.projectedCyclePoints is float
+        ) &&
+        (
+          data.floorAdjustedCyclePoints is int ||
+          data.floorAdjustedCyclePoints is float
+        ) &&
+        data.balancedRank is int &&
+        data.balancedRank >= 1 &&
+        data.sharedProjectionSnapshotId is string;
+
+      let validChunk =
+        data.keys().hasAll([
+          'schemaVersion',
+          'chunkIndex',
+          'assetCount',
+          'assets',
+          'sharedProjectionSnapshotId'
+        ]) &&
+        data.schemaVersion == 2 &&
+        data.chunkIndex is int &&
+        data.chunkIndex >= 0 &&
+        data.assetCount is int &&
+        data.assetCount >= 1 &&
+        data.assetCount <= 25 &&
+        data.assets is list &&
+        data.assets.size() == data.assetCount &&
+        data.sharedProjectionSnapshotId is string;
+
+      return validLegacyAsset || validChunk;
+    }
+
+    function validOwnerTransactionCreate() {
+      let data = request.resource.data;
+
+      return data.ownerId == currentUserId() &&
+        data.type in [
+          'add-drop',
+          'add-open-slot',
+          'move-to-ir',
+          'activate-from-ir',
+          'drop-to-waivers',
+          'waiver-claim',
+          'queue-add-drop',
+          'queue-add-open-slot',
+          'cancel-queued-move'
+        ];
+    }
+
+    function validOwnerWaiverCreate(waiverId) {
+      let data = request.resource.data;
+
+      return data.droppedByOwnerId == currentUserId() &&
+        data.status == 'active' &&
+        data.claims is list &&
+        data.claims.size() == 0 &&
+        data.assetKey == waiverId &&
+        data.asset is map &&
+        data.asset.assetKey == waiverId;
+    }
+
+    function validOwnerWaiverReset(waiverId) {
+      let data = request.resource.data;
+
+      return data.droppedByOwnerId == currentUserId() &&
+        data.status == 'active' &&
+        data.claims is list &&
+        data.claims.size() == 0 &&
+        data.assetKey == waiverId &&
+        data.asset is map &&
+        data.asset.assetKey == waiverId;
+    }
+
+    function validOwnerWaiverClaimUpdate() {
+      let changedKeys = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+      let nextClaims = request.resource.data.claims;
+      let previousClaims = resource.data.claims;
+
+      return resource.data.status == 'active' &&
+        request.resource.data.status == 'active' &&
+        changedKeys.hasOnly(['claims', 'updatedAt']) &&
+        nextClaims is list &&
+        previousClaims is list &&
+        nextClaims.size() >= 1 &&
+        nextClaims.size() >= previousClaims.size() &&
+        nextClaims.size() <= previousClaims.size() + 1 &&
+        nextClaims[nextClaims.size() - 1].ownerId == currentUserId();
+    }
+
+
+    function validPlayerAvailabilityStatus(status) {
+      return status in [
+        'active',
+        'day-to-day',
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve',
+        'suspended',
+        'personal-leave',
+        'unknown'
+      ];
+    }
+
+    function playerAvailabilityIrEligible(status) {
+      return status in [
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve'
+      ];
+    }
+
+    function validGlobalPlayerAvailabilityWrite() {
+      let data = request.resource.data;
+
+      return signedIn() &&
+        data.keys().hasAll([
+          'source',
+          'status',
+          'dailyKey',
+          'lastAttemptAt',
+          'updatedBy',
+          'refreshLeagueId',
+          'message'
+        ]) &&
+        data.source == 'ESPN' &&
+        data.refreshLeagueId is string &&
+        data.refreshLeagueId.size() >= 1 &&
+        data.refreshLeagueId.size() <= 100 &&
+        isLeagueCommissioner(data.refreshLeagueId) &&
+        data.status in ['running', 'success', 'error'] &&
+        data.dailyKey is string &&
+        data.dailyKey.size() == 10 &&
+        data.lastAttemptAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.message is string &&
+        data.message.size() <= 500 &&
+        (!data.keys().hasAny(['records']) ||
+          (data.records is list && data.records.size() <= 250));
+    }
+
+    function validPlayerAvailabilityBase(leagueId) {
+      let data = request.resource.data;
+
+      return data.keys().hasAll([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.playerId is int &&
+        data.playerId >= 1 &&
+        data.playerName is string &&
+        data.playerName.size() >= 1 &&
+        data.playerName.size() <= 100 &&
+        validPlayerAvailabilityStatus(data.status) &&
+        data.note is string &&
+        data.note.size() <= 500 &&
+        data.irEligible == playerAvailabilityIrEligible(data.status) &&
+        data.updatedAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.leagueId == leagueId;
+    }
+
+    function validCommissionerAvailabilityWrite(leagueId) {
+      let data = request.resource.data;
+
+      return validPlayerAvailabilityBase(leagueId) &&
+        data.keys().hasOnly([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.source == 'commissioner';
+    }
+
+    match /users/{userId} {
+      function validFavoriteTeam(data) {
+        return !data.keys().hasAny(['favoriteTeamAbbreviation']) ||
+          data.favoriteTeamAbbreviation in [
+            'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
+            'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
+            'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
+            'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK', 'WSH', 'WPG'
+          ];
+      }
+
+      function validUserPreferences(data) {
+        return validFavoriteTeam(data) &&
+          (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
+          (!data.keys().hasAny(['defaultLandingPage']) ||
+            data.defaultLandingPage in ['dashboard', 'lastLeague']);
+      }
+
+      allow create: if signedIn() &&
+        userId == currentUserId() &&
+        request.resource.data.uid == currentUserId() &&
+        request.resource.data.email == request.auth.token.email &&
+        validUsername(request.resource.data.username) &&
+        validUserPreferences(request.resource.data);
+
+      allow get: if signedIn() && userId == currentUserId();
+      allow list: if false;
+
+      allow update: if signedIn() &&
+        userId == currentUserId() &&
+        request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'username',
+            'favoriteTeamAbbreviation',
+            'reducedMotion',
+            'defaultLandingPage'
+          ]) &&
+        validUsername(request.resource.data.username) &&
+        validUserPreferences(request.resource.data);
+
+      allow delete: if false;
+    }
+
+    match /leagueInvites/{inviteCode} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn() &&
+        validInviteCreate(inviteCode);
+
+      allow update: if isLeagueCommissioner(resource.data.leagueId) &&
+        request.resource.data.leagueId == resource.data.leagueId &&
+        request.resource.data.inviteCode == resource.data.inviteCode &&
+        request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isLeagueCommissioner(resource.data.leagueId);
+    }
+
+    match /appData/playerAvailability {
+      allow read: if signedIn();
+      allow create, update: if validGlobalPlayerAvailabilityWrite();
+      allow delete: if false;
+    }
+
+    match /leagues/{leagueId} {
+      allow create: if signedIn() &&
+        validLeagueCreate(leagueId);
+
+      allow get: if isLeagueMember(leagueId);
+      allow list: if false;
+
+      allow update, delete: if isLeagueCommissioner(leagueId);
+
+      match /members/{memberId} {
+        allow get: if signedIn() &&
+          (
+            memberId == currentUserId() ||
+            isLeagueMember(leagueId)
+          );
+
+        allow list: if false;
+
+        allow create: if validMemberCreate(leagueId, memberId);
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            signedIn() &&
+            memberId == currentUserId() &&
+            request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['username']) &&
+            validUsername(request.resource.data.username)
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /teams/{teamId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueMemberAfter(leagueId) &&
+          validTeamCreate(teamId);
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            signedIn() &&
+            teamId == currentUserId() &&
+            validOwnerTeamUpdate()
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+
+        match /roster/{rosterId} {
+          allow read: if isLeagueMember(leagueId);
+
+          allow create, update: if
+            (
+              isLeagueCommissioner(leagueId) ||
+              (
+                signedIn() &&
+                teamId == currentUserId() &&
+                isLeagueMemberAfter(leagueId)
+              )
+            ) &&
+            validRosterDocument(rosterId);
+
+          allow delete: if false;
+        }
+      }
+
+      match /draft/{draftId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if draftId == 'current' &&
+          isLeagueCommissioner(leagueId);
+
+        allow update: if draftId == 'current' &&
+          (
+            isLeagueCommissioner(leagueId) ||
+            validMemberDraftUpdate(leagueId)
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+
+        match /picks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+
+          allow create: if draftId == 'current' &&
+            validDraftPickCreate(leagueId, pickId);
+
+          allow update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+        match /queues/{ownerId} {
+          allow read: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            );
+
+          allow create, update: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            ) &&
+            validDraftQueueWrite(leagueId, ownerId);
+
+          allow delete: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            );
+        }
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            validOwnerTransactionCreate()
+          );
+
+        allow update, delete: if false;
+      }
+
+      match /waivers/{waiverId} {
+        allow read: if isLeagueMember(leagueId);
+
+        allow create: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            validOwnerWaiverCreate(waiverId)
+          );
+
+        allow update: if isLeagueCommissioner(leagueId) ||
+          (
+            isLeagueMember(leagueId) &&
+            (
+              validOwnerWaiverClaimUpdate() ||
+              validOwnerWaiverReset(waiverId)
+            )
+          );
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+
+      match /projectionSnapshots/{snapshotId} {
+        allow get, list: if
+          canReadSharedLeagueProjection(leagueId);
+
+        allow create, update: if
+          sharedProjectionWriteAllowed(leagueId);
+
+        allow delete: if
+          sharedProjectionWriteAllowed(leagueId);
+
+        match /assets/{assetKey} {
+          allow get, list: if
+            canReadSharedLeagueProjection(leagueId);
+
+          allow create, update: if
+            sharedProjectionWriteAllowed(leagueId) &&
+            validSharedProjectionAsset(assetKey);
+
+          allow delete: if
+            sharedProjectionWriteAllowed(leagueId);
+        }
+      }
+
+
+      match /projectionAccuracy/{cycleId} {
+        allow read: if canReadSharedLeagueProjection(leagueId);
+
+        allow create, update: if
+          isLeagueCommissioner(leagueId);
+
+        allow delete: if
+          isLeagueCommissioner(leagueId);
+
+        match /assets/{recordId} {
+          allow read: if canReadSharedLeagueProjection(leagueId);
+
+          allow create, update: if
+            isLeagueCommissioner(leagueId);
+
+          allow delete: if
+            isLeagueCommissioner(leagueId);
+        }
+      }
+
+
+      match /playerAvailability/{playerId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // League documents now contain commissioner overrides only.
+        // Automatic ESPN records live once in /appData/playerAvailability.
+        allow create, update: if isLeagueCommissioner(leagueId) &&
+          validCommissionerAvailabilityWrite(leagueId);
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /playerAvailabilitySync/{syncId} {
+        // Legacy per-league sync metadata remains readable for old data,
+        // but new clients cannot recreate the former per-league sync flow.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update: if false;
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /liveScoring/{scoringDocumentId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // One commissioner browser holds the league scoring lease and writes
+        // compact shared results. Other managers only listen to these docs.
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /playoffWindowBanks/{ownerId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+
+        match /windows/{windowId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+      }
+
+      match /playoffs/{playoffId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /cycles/{cycleId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
+
+        match /matchups/{matchupId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+        match /rosterPicks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+
+
+        match /teamWindows/{ownerId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if isLeagueCommissioner(leagueId);
+        }
+      }
+    }
+
+    // Required for getMyLeagues(), which performs:
+    // collectionGroup('members').where('uid', '==', request.auth.uid)
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() &&
+        resource.data.uid == currentUserId();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -36,16 +36,28 @@
           </div>
         </div>
 
-        <aside class="dashboard-mascot-card" aria-hidden="true">
-          <span class="eyebrow">Game Night</span>
-          <strong>Manager Entrance</strong>
+        <aside
+          class="dashboard-mascot-card"
+          [style.--ref-team-primary]="favoriteTeam().primaryColor"
+          [style.--ref-team-secondary]="favoriteTeam().secondaryColor"
+          aria-label="Favorite team rink attendant"
+        >
+          <span class="eyebrow">Favorite Team Crew</span>
+          <strong>{{ favoriteTeam().name }}</strong>
           <div class="mini-scoreboard">
             <div><span>Leagues</span><strong>{{ leagueSummaries().length }}</strong></div>
-            <div><span>Status</span><strong>Ready</strong></div>
+            <div><span>Club</span><strong>{{ favoriteTeam().abbreviation }}</strong></div>
           </div>
           <div class="mascot-rink">
-            <div class="mini-ref"></div>
+            <div class="mini-ref favorite-team-ref" aria-hidden="true">
+              <img
+                class="mini-ref-team-logo"
+                [src]="favoriteTeam().logoUrl"
+                [alt]="''"
+              />
+            </div>
           </div>
+          <small class="mascot-team-copy">Your rink attendant wears your saved team colors.</small>
         </aside>
       </header>
 

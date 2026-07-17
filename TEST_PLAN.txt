@@ -1,14 +1,29 @@
-1. Start the app with npm start.
-2. Confirm the global “Historical scoring test mode” banner is gone.
-3. Open Release Readiness and confirm “Live NHL scoring mode is active.”
-4. Use Regenerate Projection once.
-5. Confirm the shared projection metadata reports Projection Version 6.
-6. Open a newly created cycle/window and compare the manager-facing projection:
-   - a forward raw projection of 40.0 should freeze at 38.0;
-   - a defense raw projection of 40.0 should freeze at 37.2;
-   - a goalie-unit raw projection of 100.0 should freeze at 90.0.
-7. Confirm an existing active window retains its old frozen projection.
-8. Run the per-slot projection simulator and confirm 10 / 10 checks pass.
-9. Run npm run build and confirm bundle generation completes.
-10. After enough completed windows, compare Projection Accuracy by version.
-    Version 6 should be closer to the requested ~70% under-projection target.
+FAVORITE-TEAM THEME EXPANSION TEST PLAN
+
+1. Account page
+- Select a different team.
+- Confirm the account referee changes colors and crest immediately.
+- Save the profile.
+- Navigate away and return.
+- Confirm the same team remains selected.
+
+2. Dashboard
+- Confirm the rink attendant uses the saved team colors.
+- Confirm the saved team crest appears on the jersey.
+- Confirm the favorite-team name and abbreviation appear in the mascot card.
+
+3. Global theme
+- Open Dashboard, League Hub, Cycle page, My Team, Free Agents, Draft Room, Standings, Playoffs, and Projection Lab.
+- Confirm supported card outlines use the favorite-team outline.
+- Confirm eyebrow labels and supporting/subtext use the favorite-team tint.
+- Confirm errors and game-state colors remain semantic rather than team-colored.
+
+4. Cycle page
+- Confirm the current matchup outline uses the favorite-team accent.
+- Confirm Team A / Both / Team B active control uses the favorite-team palette.
+- Confirm played/upcoming/missed circles remain green/yellow/red.
+
+5. Persistence
+- Hard refresh.
+- Sign out and sign back in.
+- Confirm the theme is restored from the saved profile.
