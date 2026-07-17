@@ -1,13 +1,76 @@
-<h1>Create League</h1>
+<section class="pixel-shell-page">
+  <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-left">
+      @for (logo of topRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
 
-<input [(ngModel)]="name" placeholder="League name" />
+  <div class="shell-stage">
+    <section class="shell-copy">
+      <span class="eyebrow">Commissioner Setup</span>
+      <h1>Create a League</h1>
+      <p>Launch a new competition, invite your friends, and get the season ready before opening night.</p>
 
-<input [(ngModel)]="maxTeams" type="number" min="2" max="12" />
+      <ul>
+        <li>Set your league name.</li>
+        <li>Choose how many managers will compete.</li>
+        <li>Share the invite code after the league is created.</li>
+      </ul>
 
-<button (click)="submit()" [disabled]="loading()">
-  {{ loading() ? 'Creating...' : 'Create League' }}
-</button>
+      <a routerLink="/dashboard" class="back-link">← Back to Dashboard</a>
+    </section>
 
-@if (errorMessage()) {
-  <p>{{ errorMessage() }}</p>
-}
+    <section class="shell-card">
+      <div class="card-header">
+        <span class="card-label">New League</span>
+        <strong>Commissioner Panel</strong>
+      </div>
+
+      <label class="form-field">
+        <span>League Name</span>
+        <input [(ngModel)]="name" placeholder="Ex: Saturday Night Skaters" />
+      </label>
+
+      <label class="form-field">
+        <span>Maximum Teams</span>
+        <select [(ngModel)]="maxTeams">
+          @for (option of teamOptions(); track option) {
+            <option [ngValue]="option">{{ option }} Teams</option>
+          }
+        </select>
+      </label>
+
+      <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
+        {{ loading() ? 'Creating League...' : 'Create League' }}
+      </button>
+
+      @if (errorMessage()) {
+        <p class="status-message error">{{ errorMessage() }}</p>
+      }
+    </section>
+
+    <section class="pixel-mascot-card" aria-hidden="true">
+      <div class="mascot-scoreboard">
+        <span>League Builder</span>
+        <strong>Ready to Draft</strong>
+      </div>
+      <div class="mini-ref"></div>
+    </section>
+  </div>
+
+  <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-right">
+      @for (logo of bottomRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
+</section>

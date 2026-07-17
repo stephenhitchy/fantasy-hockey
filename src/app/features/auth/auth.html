@@ -1,26 +1,97 @@
-<div class="auth-container">
-  <h1>{{ isRegistering() ? 'Create Account' : 'Login' }}</h1>
+<section class="pixel-auth-page">
+  <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-left">
+      @for (logo of topRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
 
-  @if (isRegistering()) {
-    <input [(ngModel)]="username" placeholder="Username" />
-  }
+  <div class="pixel-auth-stage">
+    <section class="auth-hero-copy">
+      <span class="eyebrow">Fantasy Hockey</span>
+      <h1>{{ pageTitle() }}</h1>
+      <p>{{ pageSubtitle() }}</p>
 
-  <input [(ngModel)]="email" placeholder="Email" type="email" />
-  <input [(ngModel)]="password" placeholder="Password" type="password" />
+      <ul class="hero-points">
+        <li>Asynchronous six-game windows keep every matchup fair.</li>
+        <li>Live scoring, frozen projections, and full playoff routing are ready to go.</li>
+        <li>Draft, create leagues, and jump straight into the action.</li>
+      </ul>
+    </section>
 
-  <button (click)="submit()">
-    {{ isRegistering() ? 'Register' : 'Login' }}
-  </button>
+    <section class="pixel-auth-card">
+      <div class="card-header">
+        <span class="card-label">{{ isRegistering() ? 'New Manager Setup' : 'Manager Login' }}</span>
+        <strong>{{ isRegistering() ? 'Create Account' : 'Welcome Back' }}</strong>
+      </div>
 
-  <button class="switch-button" (click)="toggleMode()">
-    {{ isRegistering() ? 'Already have an account?' : 'Need an account?' }}
-  </button>
+      <div class="card-body">
+        @if (isRegistering()) {
+          <label class="form-field">
+            <span>Username</span>
+            <input [(ngModel)]="username" placeholder="Choose a username" />
+          </label>
+        }
 
-  @if (errorMessage()) {
-    <p class="error">{{ errorMessage() }}</p>
-  }
+        <label class="form-field">
+          <span>Email</span>
+          <input [(ngModel)]="email" placeholder="manager@example.com" type="email" />
+        </label>
 
-  @if (successMessage()) {
-    <p class="success">{{ successMessage() }}</p>
-  }
-</div>
+        <label class="form-field">
+          <span>Password</span>
+          <input [(ngModel)]="password" placeholder="Enter your password" type="password" />
+        </label>
+
+        <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
+          {{ submitLabel() }}
+        </button>
+
+        <button type="button" class="secondary-switch" (click)="toggleMode()" [disabled]="loading()">
+          {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
+        </button>
+
+        @if (errorMessage()) {
+          <p class="status-message error">{{ errorMessage() }}</p>
+        }
+
+        @if (successMessage()) {
+          <p class="status-message success">{{ successMessage() }}</p>
+        }
+      </div>
+    </section>
+
+    <section class="pixel-referee-zone" [class.celebrate]="mascotCelebrating()" aria-hidden="true">
+      <div class="referee-caption">
+        <span>Pixel Ref</span>
+        <strong>{{ mascotCelebrating() ? 'Cup Lift!' : 'Ready for Puck Drop' }}</strong>
+      </div>
+
+      <div class="pixel-referee">
+        <div class="cup cup-bottom"></div>
+        <div class="cup cup-top"></div>
+        <div class="ref-head"></div>
+        <div class="ref-body"></div>
+        <div class="ref-arm ref-arm-left"></div>
+        <div class="ref-arm ref-arm-right"></div>
+        <div class="ref-leg ref-leg-left"></div>
+        <div class="ref-leg ref-leg-right"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-right">
+      @for (logo of bottomRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
+</section>

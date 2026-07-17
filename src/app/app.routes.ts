@@ -1,30 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { Auth } from './features/auth/auth';
-import { Dashboard } from './features/dashboard/dashboard';
-import { CreateLeague } from './features/leagues/create-league/create-league';
-import { JoinLeague } from './features/leagues/join-league/join-league';
-import { LeagueDetail } from './features/leagues/league-detail/league-detail';
-import { LeagueStandings } from './features/leagues/league-standings/league-standings';
-import { TeamSettings } from './features/team/team-settings/team-settings';
-import { FreeAgents } from './features/free-agents/free-agents';
-import { AccountSettings } from './features/account/account-settings/account-settings';
-import { ScoringTest } from './features/scoring-test/scoring-test';
-import { PlayerDetail } from './features/players/player-detail/player-detail';
-import { DraftSetup } from './features/draft/draft-setup/draft-setup';
-import { DraftRoom } from './features/draft/draft-room/draft-room';
 import { MainLayout } from './layouts/main-layout/main-layout';
-import { CycleOne } from './features/cycles/cycle-one/cycle-one';
-import { ProjectionLab } from './features/projections/projection-lab/projection-lab';
-import { CycleAssetDetail } from './features/cycles/cycle-asset-detail/cycle-asset-detail';
-import { CycleSchedulePreview } from './features/cycles/schedule-preview/cycle-schedule-preview';
-import { CycleMatchupOverview } from './features/cycles/matchup-overview/cycle-matchup-overview';
-import { CycleSimulator } from './features/cycles/cycle-simulator/cycle-simulator';
-import { PlayerAvailabilityManager } from './features/player-availability/player-availability-manager/player-availability-manager';
-import { PlayoffBracket } from './features/playoffs/playoff-bracket/playoff-bracket';
-import { PlayoffWindowSimulator } from './features/playoffs/playoff-window-simulator/playoff-window-simulator';
-import { LiveScoringDiagnostics } from './features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics';
-import { ReleaseReadiness } from './features/release/release-readiness/release-readiness';
 
 export const routes: Routes = [
   {
@@ -37,99 +14,171 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
-        component: Dashboard,
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then(
+            (module) => module.Dashboard,
+          ),
       },
       {
         path: 'leagues/create',
-        component: CreateLeague,
+        loadComponent: () =>
+          import('./features/leagues/create-league/create-league').then(
+            (module) => module.CreateLeague,
+          ),
       },
       {
         path: 'leagues/join',
-        component: JoinLeague,
+        loadComponent: () =>
+          import('./features/leagues/join-league/join-league').then(
+            (module) => module.JoinLeague,
+          ),
       },
       {
         path: 'account/settings',
-        component: AccountSettings,
+        loadComponent: () =>
+          import('./features/account/account-settings/account-settings').then(
+            (module) => module.AccountSettings,
+          ),
       },
       {
         path: 'scoring-test',
-        component: ScoringTest,
+        loadComponent: () =>
+          import('./features/scoring-test/scoring-test').then(
+            (module) => module.ScoringTest,
+          ),
       },
       {
         path: 'players/:playerId',
-        component: PlayerDetail,
+        loadComponent: () =>
+          import('./features/players/player-detail/player-detail').then(
+            (module) => module.PlayerDetail,
+          ),
       },
       {
         path: 'leagues/:leagueId/team',
-        component: TeamSettings,
+        loadComponent: () =>
+          import('./features/team/team-settings/team-settings').then(
+            (module) => module.TeamSettings,
+          ),
       },
       {
         path: 'leagues/:leagueId/free-agents',
-        component: FreeAgents,
+        loadComponent: () =>
+          import('./features/free-agents/free-agents').then(
+            (module) => module.FreeAgents,
+          ),
       },
       {
         path: 'leagues/:leagueId/draft/setup',
-        component: DraftSetup,
+        loadComponent: () =>
+          import('./features/draft/draft-setup/draft-setup').then(
+            (module) => module.DraftSetup,
+          ),
       },
       {
         path: 'leagues/:leagueId/draft',
-        component: DraftRoom,
+        loadComponent: () =>
+          import('./features/draft/draft-room/draft-room').then(
+            (module) => module.DraftRoom,
+          ),
       },
       {
         path: 'leagues/:leagueId/projections',
-        component: ProjectionLab,
+        loadComponent: () =>
+          import('./features/projections/projection-lab/projection-lab').then(
+            (module) => module.ProjectionLab,
+          ),
       },
       {
         path: 'leagues/:leagueId/player-availability',
-        component: PlayerAvailabilityManager,
+        loadComponent: () =>
+          import(
+            './features/player-availability/player-availability-manager/player-availability-manager'
+          ).then((module) => module.PlayerAvailabilityManager),
       },
       {
         path: 'leagues/:leagueId/live-scoring',
-        component: LiveScoringDiagnostics,
+        loadComponent: () =>
+          import(
+            './features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics'
+          ).then((module) => module.LiveScoringDiagnostics),
       },
       {
         path: 'leagues/:leagueId/release-readiness',
-        component: ReleaseReadiness,
+        loadComponent: () =>
+          import(
+            './features/release/release-readiness/release-readiness'
+          ).then((module) => module.ReleaseReadiness),
       },
       {
         path: 'leagues/:leagueId/standings',
-        component: LeagueStandings,
+        loadComponent: () =>
+          import(
+            './features/leagues/league-standings/league-standings'
+          ).then((module) => module.LeagueStandings),
       },
       {
         path: 'leagues/:leagueId/playoffs/simulator',
-        component: PlayoffWindowSimulator,
+        loadComponent: () =>
+          import(
+            './features/playoffs/playoff-window-simulator/playoff-window-simulator'
+          ).then((module) => module.PlayoffWindowSimulator),
       },
       {
         path: 'leagues/:leagueId/playoffs',
-        component: PlayoffBracket,
+        loadComponent: () =>
+          import('./features/playoffs/playoff-bracket/playoff-bracket').then(
+            (module) => module.PlayoffBracket,
+          ),
       },
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',
-        component: CycleSchedulePreview,
+        loadComponent: () =>
+          import(
+            './features/cycles/schedule-preview/cycle-schedule-preview'
+          ).then((module) => module.CycleSchedulePreview),
       },
       {
         path: 'leagues/:leagueId/cycles/simulator',
-        component: CycleSimulator,
+        loadComponent: () =>
+          import('./features/cycles/cycle-simulator/cycle-simulator').then(
+            (module) => module.CycleSimulator,
+          ),
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId',
-        component: CycleOne,
+        loadComponent: () =>
+          import('./features/cycles/cycle-one/cycle-one').then(
+            (module) => module.CycleOne,
+          ),
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups',
-        component: CycleMatchupOverview,
+        loadComponent: () =>
+          import(
+            './features/cycles/matchup-overview/cycle-matchup-overview'
+          ).then((module) => module.CycleMatchupOverview),
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',
-        component: CycleAssetDetail,
+        loadComponent: () =>
+          import(
+            './features/cycles/cycle-asset-detail/cycle-asset-detail'
+          ).then((module) => module.CycleAssetDetail),
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber',
-        component: CycleOne,
+        loadComponent: () =>
+          import('./features/cycles/cycle-one/cycle-one').then(
+            (module) => module.CycleOne,
+          ),
       },
       {
         path: 'leagues/:leagueId',
-        component: LeagueDetail,
+        loadComponent: () =>
+          import('./features/leagues/league-detail/league-detail').then(
+            (module) => module.LeagueDetail,
+          ),
       },
     ],
   },

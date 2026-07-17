@@ -6,4 +6,5 @@ export interface AppRuntimeConfig {
   historicalScoringDateIso: string | null;
   developerToolsEnabled: boolean;
   productionHistoricalScoringAllowed: boolean;
+  regularSeasonAutoStartIso: string | null;
 }

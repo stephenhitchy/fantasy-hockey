@@ -1,61 +1,22 @@
-RELEASE READINESS + FULL-SEASON VALIDATION V1 - VALIDATION
-=========================================================
+VALIDATION COMPLETED
 
-VALIDATED IN THE PACKAGING ENVIRONMENT
---------------------------------------
-PASS - TypeScript application compile:
+PASS
+- TypeScript application compilation:
+  node node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit
+- Angular template compilation:
+  node node_modules/@angular/compiler-cli/bundles/src/bin/ngc.js -p tsconfig.app.json
+- Focused calibration tests: 2 / 2 passed.
+- Independent-window projection simulator: 10 / 10 checks passed.
+- Combined focused Vitest run: 3 / 3 tests passed using jsdom.
+- Prettier formatting completed for all changed TypeScript files.
 
-node node_modules/typescript/bin/tsc \
-  -p tsconfig.app.json --noEmit --pretty false
+KNOWN TEST ENVIRONMENT NOTE
+- Firebase Analytics emits non-fatal IndexedDB/network warnings under jsdom.
+- Running the projection simulator under a pure Node environment fails because
+  the existing Firebase Analytics initialization expects window. This is a
+  pre-existing test-environment issue, not a projection-calibration failure.
 
-PASS - Angular template/compiler validation:
-
-node node_modules/@angular/compiler-cli/bundles/src/bin/ngc.js \
-  -p tsconfig.app.json
-
-PASS - TypeScript test compile:
-
-node node_modules/typescript/bin/tsc \
-  -p tsconfig.spec.json --noEmit --pretty false
-
-PASS - Focused full-season simulator test:
-
-node node_modules/vitest/vitest.mjs run \
-  src/app/core/release/season-lifecycle-simulator.spec.ts \
-  --environment jsdom
-
-Result:
-- 1 test file passed
-- 1 test passed
-- full-season simulator passed 22 / 22 checks
-- all eight lifecycle milestones passed
-
-PASS - Prettier formatting on all changed source, template, style, and
-configuration files.
-
-PASS - angular.json validated against the installed Angular CLI workspace
-schema. The production fileReplacement is recognized.
-
-PASS - No Firestore rules, indexes, dependencies, or migration are required.
-
-FULL ANGULAR BUILD LIMITATION
------------------------------
-The packaging container uses Node v22.16.0. Angular CLI requires v22.22.3 or
-newer, so the full production bundle stops at the Node version gate. The user's
-known-good Node v22.23.1 satisfies this requirement.
-
-The application TypeScript compiler and Angular template compiler both passed.
-The production runtime configuration is also type-checked because both runtime
-configuration files are included by tsconfig.app.json.
-
-TEST ENVIRONMENT NOTE
----------------------
-Vitest emitted Firebase Analytics warnings because IndexedDB and network
-measurement lookup are unavailable in jsdom. These warnings did not fail the
-test and do not affect the release simulator.
-
-NOT LIVE-TESTED IN PACKAGING
-----------------------------
-This environment cannot authenticate against the user's Firebase project or
-contact the local NHL data server. Follow TEST_PLAN.txt to verify the on-demand
-readiness reads and guarded recovery actions in the installed application.
+BUILD NOTE
+- Full ng build was not executed in the packaging container because its Node
+  version is v22.16.0 and Angular 22 requires at least v22.22.3.
+- The user’s local Node v22.23.1 satisfies Angular’s requirement.

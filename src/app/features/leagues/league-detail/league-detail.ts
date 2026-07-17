@@ -9,6 +9,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
+import { APP_RUNTIME_CONFIG } from '../../../../environments/app-runtime.config';
 
 import {
   FantasyCycle,
@@ -124,6 +125,7 @@ export class LeagueDetail implements OnDestroy {
   private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
+  private automaticSeasonStartInProgress = false;
 
   private readonly countdownTimer = setInterval(() => {
     if (!this.destroyed) {
@@ -134,6 +136,10 @@ export class LeagueDetail implements OnDestroy {
   private readonly scheduledDraftCheckTimer = setInterval(() => {
     void this.runScheduledDraftChecks();
   }, 5000);
+
+  private readonly automaticCycleStartTimer = setInterval(() => {
+    void this.runAutomaticSeasonStartChecks();
+  }, 15000);
 
   readonly sortedTeams = computed(() =>
     [...this.teams()].sort((first, second) => {
@@ -193,6 +199,16 @@ export class LeagueDetail implements OnDestroy {
   readonly shouldShowInviteCode = computed(() =>
     this.draft()?.status !== 'complete'
   );
+
+  readonly regularSeasonAutoStartDate = computed(() => {
+    const iso = APP_RUNTIME_CONFIG.regularSeasonAutoStartIso;
+    return iso ? new Date(iso) : null;
+  });
+
+  readonly regularSeasonAutoStartReached = computed(() => {
+    const startDate = this.regularSeasonAutoStartDate();
+    return !!startDate && startDate.getTime() <= this.now();
+  });
 
   readonly draftStatusLabel = computed(() => {
     const draft = this.draft();
@@ -306,6 +322,7 @@ export class LeagueDetail implements OnDestroy {
     this.destroyed = true;
     clearInterval(this.countdownTimer);
     clearInterval(this.scheduledDraftCheckTimer);
+    clearInterval(this.automaticCycleStartTimer);
 
     if (this.redirectTimer) {
       clearTimeout(this.redirectTimer);
@@ -366,6 +383,7 @@ export class LeagueDetail implements OnDestroy {
         (draft) => {
           this.draft.set(draft);
           void this.runScheduledDraftChecks();
+          void this.runAutomaticSeasonStartChecks();
         }
       );
 
@@ -374,6 +392,7 @@ export class LeagueDetail implements OnDestroy {
         (teams) => {
           this.teams.set(teams);
           void this.runScheduledDraftChecks();
+          void this.runAutomaticSeasonStartChecks();
         }
       );
 
@@ -382,6 +401,7 @@ export class LeagueDetail implements OnDestroy {
         (cycle) => {
           this.cycle.set(cycle);
           this.listenToCurrentCycleMatchups(cycle);
+          void this.runAutomaticSeasonStartChecks();
         }
       );
     } catch (error: unknown) {
@@ -912,6 +932,122 @@ export class LeagueDetail implements OnDestroy {
     return `${this.getTeamName(matchup.winnerOwnerId)} won`;
   }
 
+
+  getRegularSeasonAutoStartLabel(): string {
+    const date = this.regularSeasonAutoStartDate();
+
+    if (!date) {
+      return 'Automatic regular-season start is disabled.';
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/Los_Angeles',
+      timeZoneName: 'short',
+    }).format(date);
+  }
+
+  getSeasonStartStatusTitle(): string {
+    if (this.cycle()) {
+      return `${this.currentCycleLabel()} is active.`;
+    }
+
+    if (this.draft()?.status !== 'complete') {
+      return 'Finish the draft to unlock the season start.';
+    }
+
+    if (this.teams().length < 2) {
+      return 'At least two teams are required to begin the season.';
+    }
+
+    if (this.regularSeasonAutoStartReached()) {
+      return this.isCommissioner()
+        ? 'The season is ready to open automatically.'
+        : 'Waiting for a commissioner to open the season.';
+    }
+
+    return 'The regular season is scheduled to open automatically.';
+  }
+
+  getSeasonStartStatusDescription(): string {
+    if (this.cycle()) {
+      return 'Scoring windows are already live. Managers can jump straight into their matchup, roster, or player tools.';
+    }
+
+    if (this.draft()?.status !== 'complete') {
+      return 'Cycle 1 will not open until the draft has been completed.';
+    }
+
+    if (this.teams().length < 2) {
+      return 'Invite more managers or complete the remaining team setup before the season begins.';
+    }
+
+    if (this.regularSeasonAutoStartReached()) {
+      return this.isCommissioner()
+        ? 'As soon as a commissioner opens the league after the NHL season begins, Fantasy Hockey will create Cycle 1 automatically from the official season-start time.'
+        : 'A commissioner visit is required to initialize Cycle 1 the first time.';
+    }
+
+    return 'Cycle 1 will open automatically the first time a commissioner visits after the scheduled season-start time.';
+  }
+
+  getSeasonStartCountdown(): string {
+    const date = this.regularSeasonAutoStartDate();
+
+    if (!date || this.regularSeasonAutoStartReached()) {
+      return 'Automatic start enabled';
+    }
+
+    const diff = Math.max(0, date.getTime() - this.now());
+    const totalMinutes = Math.floor(diff / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    const parts: string[] = [];
+
+    if (days > 0) {
+      parts.push(`${days}d`);
+    }
+
+    if (hours > 0 || days > 0) {
+      parts.push(`${hours}h`);
+    }
+
+    parts.push(`${minutes}m`);
+
+    return `Starts in ${parts.join(' ')}`;
+  }
+
+  shouldShowSeasonStartCard(): boolean {
+    return this.draft()?.status === 'complete' && !this.cycle();
+  }
+
+  async runAutomaticSeasonStartChecks(): Promise<void> {
+    if (
+      this.destroyed ||
+      this.automaticSeasonStartInProgress ||
+      !this.isCommissioner() ||
+      !this.canStartCycleOne() ||
+      !this.regularSeasonAutoStartReached()
+    ) {
+      return;
+    }
+
+    this.automaticSeasonStartInProgress = true;
+
+    try {
+      this.cycleActionMessage.set('');
+      await this.startFirstCycle(true);
+    } finally {
+      this.automaticSeasonStartInProgress = false;
+    }
+  }
+
   canStartCycleOne(): boolean {
     return (
       this.isCommissioner() &&
@@ -921,7 +1057,7 @@ export class LeagueDetail implements OnDestroy {
     );
   }
 
-  async startFirstCycle(): Promise<void> {
+  async startFirstCycle(automatic = false): Promise<void> {
     this.errorMessage.set('');
     this.cycleActionMessage.set('');
 
@@ -938,7 +1074,7 @@ export class LeagueDetail implements OnDestroy {
       );
 
       this.cycleActionMessage.set(
-        'Cycle 1 has been started.'
+        automatic ? 'Cycle 1 opened automatically.' : 'Cycle 1 has been started.'
       );
     } catch (error: unknown) {
       this.errorMessage.set(

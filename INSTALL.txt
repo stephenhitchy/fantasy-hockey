@@ -1,134 +1,22 @@
-RELEASE READINESS + FULL-SEASON VALIDATION V1
-=============================================
+FANTASY HOCKEY — LIVE MODE + PROJECTION CALIBRATION V1
 
-PURPOSE
--------
-This package adds the final commissioner release-readiness layer before the
-visual redesign. It combines:
-
-- a deterministic four-team full-season simulator;
-- a live league production-readiness checklist;
-- production-safe historical/live scoring configuration;
-- architecture/version reporting;
-- guarded scoring, injury, projection, and lease recovery controls;
-- automatic hiding of temporary simulator buttons in production builds.
-
-INSTALL LOCATION
-----------------
-Extract this package into:
-
-/Users/StephenH/Documents/Programming/fantasy-hockey
-
-Allow every included file to replace the existing file at the same relative
-path.
-
-INSTALL STEPS
--------------
-1. Stop the Angular development server with Ctrl+C.
-2. Commit or back up the current working project.
-3. Extract this ZIP into the project root above.
-4. Confirm these new files exist:
-
-   src/app/features/release/release-readiness/release-readiness.ts
-   src/app/core/release/release-readiness.service.ts
-   src/app/core/release/season-lifecycle-simulator.ts
-   src/environments/app-runtime.config.ts
-   src/environments/app-runtime.config.production.ts
-
-5. Restart with the established Node version:
-
-   node -v
+1. Stop the Angular development server.
+2. Extract this package into the project root:
+   /Users/StephenH/Documents/Programming/fantasy-hockey
+3. Allow the five included source files to replace/add files at their exact paths.
+4. Restart the app:
    npm start
+5. Open Release Readiness or Projection Lab and use Regenerate Projection once.
+   This publishes a Version 6 shared snapshot immediately. Otherwise the app
+   will automatically generate Version 6 when the next roster-slot window opens.
+6. Run:
+   npm run build
 
-   The known-good local version is Node v22.23.1.
+No Firebase rules, indexes, dependencies, Cloud Functions, or migration are required.
 
-6. Wait for a successful Angular compile and hard-refresh the browser.
-
-7. Open the new page from:
-
-   League Hub -> More league tools -> Release Readiness
-
-   Direct route:
-
-   /leagues/{leagueId}/release-readiness
-
-NO FIREBASE DEPLOYMENT REQUIRED
--------------------------------
-This package does not change:
-
-- firestore.rules
-- firestore.indexes.json
-- Cloud Functions
-- package.json
-- package-lock.json
-- dependencies
-
-The recovery controls use existing commissioner-authorized collections and
-services. No data migration is required.
-
-DEVELOPMENT VS PRODUCTION MODE
-------------------------------
-Development (`npm start`) intentionally keeps historical scoring enabled for
-local testing and displays a prominent test-mode banner.
-
-The development configuration lives in:
-
-src/environments/app-runtime.config.ts
-
-A production build automatically replaces it with:
-
-src/environments/app-runtime.config.production.ts
-
-The production configuration:
-
-- uses live NHL scoring;
-- has no historical scoring date;
-- hides temporary simulator links/buttons;
-- blocks historical scoring on production-like hosts as an additional runtime
-  safety guard.
-
-This replacement is configured in angular.json. A manual source-code edit is no
-longer required before every production build.
-
-FIRST TEST
-----------
-1. Open Release Readiness as the commissioner.
-2. Select "Run Full Season".
-3. Confirm 22 / 22 deterministic lifecycle checks pass.
-4. Review the required launch checklist.
-5. Historical mode should be shown as a warning in local development, not as a
-   system failure.
-6. Use "Refresh Checks" after any recovery action.
-7. Confirm normal managers receive "Commissioner access required" if they try
-   to open the route directly.
-
-SAFE RECOVERY CONTROLS
-----------------------
-- Request Score Refresh:
-  requests one immediate shared scoring pass; unchanged snapshots remain
-  write-suppressed.
-
-- Clear Stuck Lease:
-  clears only an expired or errored scoring lease. It refuses to interrupt a
-  healthy active worker.
-
-- Refresh Injuries:
-  retries the shared global player-availability synchronization.
-
-- Regenerate Projection:
-  creates a fresh projection snapshot for one exact target cycle. The existing
-  collapsed-board health protection remains active.
-
-TEST BUTTON CLEANUP
--------------------
-Temporary simulators remain available only in local development while final
-validation and visual work continue. Production builds now hide:
-
-- Run 7-vs-4 Simulator
-- Test Banked Windows
-- Run Scorer Tests
-- Run Projection Tests
-
-During the visual redesign, the old standalone simulator routes/components can
-be removed from the production source tree after their useful logic is retained
-as automated test files. See TEST_UI_CLEANUP_PLAN.txt.
+EXPECTED RESULT
+- The global historical-scoring warning banner is gone in local development.
+- Local scoring now uses the live NHL date/season.
+- Temporary deterministic developer tools remain available locally for now.
+- New six-game windows use the less-conservative Version 6 calibration.
+- Existing frozen windows do not change.

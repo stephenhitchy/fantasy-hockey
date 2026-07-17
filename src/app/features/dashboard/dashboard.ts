@@ -26,6 +26,11 @@ import {
   UserProfile
 } from '../../core/user/user.service';
 
+import {
+  buildPixelMarquee,
+  PixelLogoItem
+} from '../../shared/pixel-theme/pixel-theme.data';
+
 function waitForAuthUser(): Promise<User | null> {
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -46,6 +51,8 @@ export class Dashboard {
   readonly profile = signal<UserProfile | null>(null);
   readonly loading = signal(true);
   readonly errorMessage = signal('');
+  readonly topRibbon: PixelLogoItem[] = buildPixelMarquee(6);
+  readonly bottomRibbon: PixelLogoItem[] = buildPixelMarquee(19);
 
   readonly displayName = computed(() => {
     const profile = this.profile();

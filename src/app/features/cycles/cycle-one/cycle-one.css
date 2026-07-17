@@ -252,6 +252,13 @@
 }
 
 .matchup-detail-card {
+  border: 1px solid rgba(126, 170, 221, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(9, 20, 34, 0.96), rgba(11, 22, 38, 0.92));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
+}
+
+.matchup-detail-card {
   padding: 18px;
 }
 
@@ -403,13 +410,13 @@
 
 .fantasy-player-card {
   display: grid;
-  grid-template-columns: 25px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  min-height: 49px;
-  padding: 7px;
+  grid-template-columns: 34px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 8px;
+  min-height: 104px;
+  padding: 9px 8px 9px 9px;
   border: 1px solid rgba(217, 226, 235, 0.16);
-  border-radius: 7px;
+  border-radius: 9px;
   background: linear-gradient(180deg, #3d4654, #27313f);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
@@ -417,13 +424,15 @@
 }
 
 .goalie-card {
-  min-height: 62px;
+  min-height: 112px;
 }
 
 .fantasy-player-logo {
-  width: 24px;
-  height: 24px;
+  width: 33px;
+  height: 33px;
+  align-self: start;
   object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.24));
 }
 
 .fantasy-player-main {
@@ -438,26 +447,27 @@
 
 .fantasy-player-main strong {
   color: white;
-  font-size: 10.5px;
-  line-height: 1.15;
+  font-size: 12.5px;
+  line-height: 1.12;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .fantasy-player-main span {
-  margin-top: 2px;
-  color: #d6e0eb;
-  font-size: 8.5px;
-  font-weight: 850;
+  margin-top: 3px;
+  color: #edf5ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
 }
 
 .fantasy-player-main em {
-  margin-top: 2px;
-  color: #aebdcb;
-  font-size: 7.8px;
+  margin-top: 3px;
+  color: #b9c8d8;
+  font-size: 8.7px;
   font-style: normal;
-  font-weight: 750;
+  font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -465,8 +475,9 @@
 
 .fantasy-player-score-stack {
   display: grid;
+  align-self: start;
   gap: 4px;
-  min-width: 39px;
+  min-width: 42px;
   text-align: right;
 }
 
@@ -552,7 +563,7 @@
   border-top: 1px solid rgba(198, 213, 228, 0.14);
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 980px) {
   .teams-comparison {
     grid-template-columns: 1fr;
   }
@@ -890,15 +901,16 @@
 
 /* Bigger player cards */
 .single-team-view .fantasy-player-card {
+  grid-template-columns: 50px minmax(0, 1fr) 96px;
   gap: 14px;
-  min-height: 92px;
+  min-height: 122px;
   padding: 14px;
   border-radius: 16px;
 }
 
 .single-team-view .fantasy-player-logo {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
 }
 
 .single-team-view .fantasy-player-main strong {
@@ -1217,8 +1229,6 @@
     align-items: flex-start;
   }
 }
-
-
 .matchup-breakdown-card {
   margin-top: 1rem;
   padding: 1rem;
@@ -1811,8 +1821,6 @@
     animation: none;
   }
 }
-
-
 /* Projection Accuracy Tracking V1 */
 .projection-accuracy-save-status {
   display: grid;
@@ -1848,8 +1856,6 @@
 .projection-accuracy-save-error small {
   color: #e7bec1;
 }
-
-/* Cycle transparency and independent-window visibility */
 .cycle-transparency-card {
   margin: 18px 0 22px;
   padding: 20px;
@@ -2004,50 +2010,54 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 8px;
+  margin-top: 9px;
+  margin-left: -42px;
 }
 
 .window-game-marker {
   display: inline-grid;
   place-items: center;
-  width: 21px;
-  height: 21px;
+  width: 23px;
+  height: 23px;
   border: 1px solid transparent;
   border-radius: 50%;
-  font-size: 0.63rem;
+  font-size: 0.68rem;
   font-style: normal;
   font-weight: 950;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
 }
 
 .marker-played {
-  color: #ffffff;
-  border-color: #059669;
-  background: #059669;
+  color: #05070a;
+  border-color: #3fbf7b;
+  background: #9ff3c6;
 }
 
 .marker-missed {
-  color: #ffffff;
-  border-color: #dc2626;
-  background: #dc2626;
+  color: #05070a;
+  border-color: #ff8f8f;
+  background: #ffd2d2;
 }
 
 .marker-upcoming {
-  color: #0f766e;
-  border-color: #5eead4;
-  background: #ccfbf1;
+  color: #05070a;
+  border-color: #f4d35e;
+  background: #fff1ae;
 }
 
 .marker-unavailable {
-  color: #94a3b8;
-  border-color: #cbd5e1;
-  background: #f1f5f9;
+  color: #05070a;
+  border-color: #93a7bd;
+  background: #dce8f5;
 }
 
 .window-status-copy {
   display: block;
-  margin-top: 6px;
-  color: #64748b;
-  font-size: 0.72rem;
+  margin-top: 7px;
+  margin-left: -42px;
+  color: #b6c5d6;
+  font-size: 0.76rem;
   font-weight: 850;
 }
 
@@ -2214,3 +2224,74 @@
   0%, 100% { opacity: 0.6; transform: scale(0.92); }
   50% { opacity: 1; transform: scale(1.08); }
 }
+.cycle-header,
+.schedule-preview-card,
+.empty-cycle-card,
+.transparency-card,
+.dev-controls-card,
+.matchup-scoreboard,
+.position-column,
+.position-total-row,
+.window-detail-panel {
+  border-color: rgba(126, 170, 221, 0.16);
+  background: linear-gradient(180deg, rgba(11, 22, 38, 0.96), rgba(10, 20, 34, 0.92));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+.matchup-view-selector button.active-view,
+.matchup-arrow-nav button {
+  background: linear-gradient(180deg, rgba(255, 220, 120, 0.98), rgba(243, 193, 81, 0.98));
+  color: #342100;
+  border-color: rgba(255, 218, 119, 0.44);
+}
+
+.matchup-view-selector button {
+  border-color: rgba(128, 176, 230, 0.16);
+  background: rgba(18, 33, 54, 0.9);
+}
+
+.team-summary-row,
+.position-card {
+  background: linear-gradient(180deg, rgba(17, 31, 50, 0.96), rgba(12, 23, 39, 0.96));
+}
+
+.position-card small,
+.position-card .window-status-copy {
+  color: #9ab0c9;
+}
+.single-team-view .window-game-markers,
+.single-team-view .window-status-copy {
+  margin-left: -64px;
+}
+.window-game-details,
+.window-game-detail-list {
+  display: none !important;
+}
+
+@media (max-width: 520px) {
+  .fantasy-player-card {
+    grid-template-columns: 30px minmax(0, 1fr) 40px;
+    gap: 6px;
+    padding: 8px 6px 8px 8px;
+  }
+
+  .fantasy-player-logo {
+    width: 29px;
+    height: 29px;
+  }
+
+  .fantasy-player-main strong {
+    font-size: 11.5px;
+  }
+
+  .fantasy-player-main span {
+    font-size: 9px;
+  }
+
+  .window-game-markers,
+  .window-status-copy {
+    margin-left: -36px;
+  }
+}
+
+.cycle-transparency-card{border-color:#37557b;background:linear-gradient(180deg,rgba(10,20,34,.96),rgba(12,24,42,.92))}.transparency-heading h2,.transparency-metrics strong,.matchup-window-summary strong{color:#f8fbff}.transparency-heading p,.window-marker-legend,.matchup-window-summary div>span,.transparency-metrics span{color:#aebfd2}.cycle-simulator-link{border:2px solid #7b6330;background:linear-gradient(180deg,#ffe593,#efc04b);color:#241700}.transparency-metrics article,.window-marker-legend,.matchup-window-summary>article{border:1px solid #2f4b6d;background:linear-gradient(180deg,rgba(13,25,41,.98),rgba(9,18,30,.98))}.pending-slot-chip-row span{border:1px solid rgba(255,255,255,.06);color:#f4e3a3;background:rgba(83,67,22,.75)}

@@ -356,17 +356,34 @@
           }
         </div>
       } @else if (draft()?.status === 'complete') {
-        @if (isCommissioner()) {
-          <button
-            type="button"
-            class="start-cycle-button"
-            (click)="startFirstCycle()"
-            [disabled]="!canStartCycleOne() || cycleActionInProgress()"
-          >
-            {{ cycleActionInProgress() ? 'Starting Cycle...' : 'Start Cycle 1' }}
-          </button>
-        } @else {
-          <p class="cycle-waiting-copy">Waiting for the commissioner to start Cycle 1.</p>
+        @if (shouldShowSeasonStartCard()) {
+          <section class="season-start-card">
+            <div class="season-start-copy">
+              <span class="draft-section-eyebrow">Automatic Season Start</span>
+              <h3>{{ getSeasonStartStatusTitle() }}</h3>
+              <p>{{ getSeasonStartStatusDescription() }}</p>
+            </div>
+
+            <div class="season-start-meta">
+              <strong>{{ getRegularSeasonAutoStartLabel() }}</strong>
+              <span>{{ getSeasonStartCountdown() }}</span>
+            </div>
+
+            @if (isCommissioner()) {
+              <div class="season-start-actions">
+                <button
+                  type="button"
+                  class="start-cycle-button"
+                  (click)="startFirstCycle()"
+                  [disabled]="!canStartCycleOne() || cycleActionInProgress()"
+                >
+                  {{ cycleActionInProgress() ? 'Opening Cycle 1...' : 'Start Cycle 1 now' }}
+                </button>
+
+                <small>Commissioner fallback only. The league will normally open itself once the NHL season-start time is reached.</small>
+              </div>
+            }
+          </section>
         }
       }
 

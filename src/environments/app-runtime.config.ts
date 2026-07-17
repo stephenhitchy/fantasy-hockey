@@ -2,8 +2,9 @@ import { AppRuntimeConfig } from './app-runtime.types';
 
 export const APP_RUNTIME_CONFIG: AppRuntimeConfig = {
   releaseLabel: 'Release Candidate 1',
-  scoringMode: 'historical',
-  historicalScoringDateIso: '2026-01-10T12:00:00Z',
+  scoringMode: 'live',
+  historicalScoringDateIso: null,
   developerToolsEnabled: true,
   productionHistoricalScoringAllowed: false,
+  regularSeasonAutoStartIso: '2026-09-29T21:00:00Z',
 };

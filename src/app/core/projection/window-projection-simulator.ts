@@ -170,9 +170,9 @@ export function runWindowProjectionDeterministicSimulator(): WindowProjectionSim
     check(
       'cycle-one-frozen',
       'Cycle 1 keeps its original manager-facing projection',
-      '36.0',
+      '38.0',
       (slotACycleOne.frozenCycleProjectionPoints ?? 0).toFixed(1),
-      slotACycleOne.frozenCycleProjectionPoints === 36,
+      slotACycleOne.frozenCycleProjectionPoints === 38,
     ),
   );
 
@@ -180,9 +180,9 @@ export function runWindowProjectionDeterministicSimulator(): WindowProjectionSim
     check(
       'cycle-two-new-freeze',
       'The same player receives a new projection for Cycle 2',
-      '54.0',
+      '57.0',
       (slotACycleTwo.frozenCycleProjectionPoints ?? 0).toFixed(1),
-      slotACycleTwo.frozenCycleProjectionPoints === 54,
+      slotACycleTwo.frozenCycleProjectionPoints === 57,
     ),
   );
 
@@ -190,9 +190,9 @@ export function runWindowProjectionDeterministicSimulator(): WindowProjectionSim
     check(
       'prior-window-immutable',
       'Generating Cycle 2 does not mutate the saved Cycle 1 value',
-      '36.0 remains',
+      '38.0 remains',
       `${(slotACycleOne.frozenCycleProjectionPoints ?? 0).toFixed(1)} remains`,
-      slotACycleOne.frozenCycleProjectionPoints === 36,
+      slotACycleOne.frozenCycleProjectionPoints === 38,
     ),
   );
 
@@ -200,7 +200,7 @@ export function runWindowProjectionDeterministicSimulator(): WindowProjectionSim
     check(
       'independent-slot-starts',
       'One slot may use Cycle 2 while another remains frozen in Cycle 1',
-      'Slot A 54.0 · Slot B 36.0',
+      'Slot A 57.0 · Slot B 38.0',
       `Slot A ${(slotACycleTwo.frozenCycleProjectionPoints ?? 0).toFixed(1)} · Slot B ${(slotBCycleOne.frozenCycleProjectionPoints ?? 0).toFixed(1)}`,
       slotACycleTwo.frozenProjectionCycleNumber === 2 &&
         slotBCycleOne.frozenProjectionCycleNumber === 1,
@@ -211,9 +211,9 @@ export function runWindowProjectionDeterministicSimulator(): WindowProjectionSim
     check(
       'queued-player-projection',
       'A queued replacement freezes the incoming player projection',
-      '27.0 from skater-2',
+      '28.5 from skater-2',
       `${(queuedIncomingCycleTwo.frozenCycleProjectionPoints ?? 0).toFixed(1)} from skater-2`,
-      queuedIncomingCycleTwo.frozenCycleProjectionPoints === 27,
+      queuedIncomingCycleTwo.frozenCycleProjectionPoints === 28.5,
     ),
   );
 

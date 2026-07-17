@@ -1092,3 +1092,225 @@
     align-items: flex-start;
   }
 }
+
+
+/* Visual rework foundation */
+:host {
+  display: block;
+  color: #eff6ff;
+}
+
+.league-page {
+  max-width: 1280px;
+}
+
+.league-header h1,
+.quick-actions-heading h2,
+.section-heading h2,
+.draft-status-heading h2,
+.cycle-status-heading h2 {
+  letter-spacing: -0.03em;
+}
+
+.league-info-card,
+.draft-status-card,
+.quick-actions-card,
+.cycle-status-card,
+.invite-card,
+.matchup-card,
+.team-card,
+.season-start-card {
+  border-color: rgba(123, 166, 218, 0.16);
+  background: linear-gradient(180deg, rgba(11, 22, 37, 0.96), rgba(12, 25, 42, 0.92));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.26);
+}
+
+.hub-action,
+.tool-link,
+.primary-action,
+.secondary-action,
+.start-cycle-button,
+.view-cycle-link,
+.standings-link,
+.daily-injury-refresh-button {
+  box-shadow: 0 10px 22px rgba(3, 9, 18, 0.18);
+}
+
+.hub-action {
+  border-color: rgba(120, 170, 224, 0.16);
+  background: linear-gradient(180deg, rgba(15, 29, 48, 0.98), rgba(11, 23, 38, 0.96));
+}
+
+.hub-action:hover,
+.tool-link:hover {
+  border-color: rgba(122, 182, 241, 0.36);
+  transform: translateY(-2px);
+}
+
+.hub-action-highlight {
+  border-color: rgba(120, 191, 255, 0.38);
+  background: linear-gradient(180deg, rgba(21, 47, 78, 0.98), rgba(15, 31, 50, 0.96));
+}
+
+.season-start-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.9fr);
+  gap: 18px;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid rgba(117, 173, 227, 0.16);
+  border-radius: 18px;
+}
+
+.season-start-copy h3 {
+  margin: 6px 0 8px;
+  font-size: 22px;
+}
+
+.season-start-copy p {
+  margin: 0;
+  color: #aebfd3;
+  line-height: 1.6;
+}
+
+.season-start-meta {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(120, 170, 224, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(20, 39, 63, 0.92), rgba(13, 25, 41, 0.92));
+  text-align: right;
+}
+
+.season-start-meta strong {
+  font-size: 16px;
+}
+
+.season-start-meta span {
+  color: #8fd6ff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.season-start-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(120, 170, 224, 0.12);
+}
+
+.season-start-actions small {
+  max-width: 560px;
+  color: #8ea6c1;
+  line-height: 1.45;
+}
+
+@media (max-width: 860px) {
+  .season-start-card {
+    grid-template-columns: 1fr;
+  }
+
+  .season-start-meta {
+    text-align: left;
+  }
+
+  .season-start-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+@keyframes ribbonScrollLeft {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes ribbonScrollRight {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+.league-shell-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  padding-top: 54px;
+  padding-bottom: 120px;
+  background:
+    radial-gradient(circle at top left, rgba(86, 146, 242, 0.14), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(53, 198, 255, 0.08), transparent 24%);
+}
+
+.league-shell-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+.league-page {
+  position: relative;
+  z-index: 1;
+  margin-top: 72px;
+}
+
+.league-header {
+  padding: 26px;
+  border: 3px solid #37557b;
+  background: linear-gradient(180deg, rgba(10, 20, 34, 0.96), rgba(12, 24, 42, 0.92));
+  box-shadow: 0 0 0 3px rgba(6, 14, 24, 0.9), 0 22px 50px rgba(0, 0, 0, 0.28);
+}
+
+.league-header h1 {
+  letter-spacing: -0.04em;
+}
+
+.quick-actions-card::before,
+.draft-status-card::before,
+.cycle-status-card::before,
+.invite-card::before {
+  content: '';
+  display: block;
+  width: 72px;
+  height: 4px;
+  margin-bottom: 16px;
+  background: linear-gradient(90deg, #ffe593, #efc04b);
+}
+
+.hub-action {
+  border-width: 2px;
+  border-style: solid;
+}
+
+.pixel-logo-ribbon { position: absolute; left: 0; width: 100%; overflow: hidden; z-index: 1; padding: 10px 0; border-block: 3px solid rgba(94,134,184,0.45); background: rgba(8,17,30,0.86); box-shadow: inset 0 0 0 3px rgba(3,8,16,0.85); }
+.top-ribbon { top: 22px; }
+.bottom-ribbon { bottom: 26px; }
+.ribbon-track { display: flex; width: max-content; gap: 12px; }
+.ribbon-track-left { animation: ribbonScrollLeft 42s linear infinite; }
+.ribbon-track-right { animation: ribbonScrollRight 44s linear infinite; }
+.pixel-logo-chip { display: inline-flex; align-items: center; gap: 7px; min-width: 82px; height: 44px; padding: 0 10px; border: 2px solid #42658f; background: linear-gradient(180deg, rgba(18,33,54,0.98), rgba(14,25,42,0.98)); box-shadow: 0 0 0 2px rgba(4,10,18,0.9); }
+.pixel-logo-chip img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+.pixel-logo-chip small { color: #f4f8fd; font-size: 11px; font-weight: 900; letter-spacing: 0.08em; }
+
+@media (max-width: 720px) {
+  .league-shell-page { padding-top: 30px; padding-bottom: 120px; }
+  .league-page { margin-top: 72px; }
+  .league-header { padding: 20px; }
+  .pixel-logo-chip { min-width: 72px; height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ribbon-track-left, .ribbon-track-right { animation: none !important; }
+}

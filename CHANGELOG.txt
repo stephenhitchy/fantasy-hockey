@@ -1,37 +1,25 @@
-RELEASE READINESS + FULL-SEASON VALIDATION V1 - CHANGELOG
-=========================================================
+LIVE MODE + PROJECTION CALIBRATION V1
 
-ADDED
------
-- Commissioner-only Release Readiness page.
-- Deterministic 22-check, four-team full-season lifecycle simulator.
-- Eight-stage lifecycle milestone summary.
-- Live league readiness checklist covering configuration, league state,
-  independent cycle windows, live scoring, projections, injuries, and playoffs.
-- Architecture/version registry for scoring, projections, live scoring,
-  playoffs, cycle windows, and matchup completion.
-- Safe recovery controls for scoring refresh, expired/error lease clearing,
-  injury refresh, and exact-cycle projection regeneration.
-- Dedicated development and production runtime configuration files.
-- App-wide historical-testing warning banner.
-- Production historical-mode runtime guard.
+LIVE RUNTIME
+- Changed the local development runtime from historical replay to live NHL mode.
+- Removed the configured 2026-01-10 historical scoring date.
+- The historical-mode banner therefore no longer appears during npm start.
+- Production was already configured for live mode and remains protected.
+- Local developer tools remain enabled until the visual-interface cleanup.
 
-CHANGED
--------
-- Production Angular builds now replace the development runtime configuration
-  with a live-scoring configuration.
-- Temporary cycle, playoff, scorer, and projection simulator buttons are shown
-  only when local developer tools are enabled.
-- League Hub now links to Release Readiness for commissioners.
-- Live scoring service now exposes one-time control reads and guarded recovery
-  for expired or errored leases.
+PROJECTION VERSION 6
+- Forwards: manager-facing multiplier changed from 0.90 to 0.95.
+- Defensemen: manager-facing multiplier changed from 0.88 to 0.93.
+- Goalie units: manager-facing multiplier changed from 0.85 to 0.90.
+- The raw projection model is unchanged; only the final intentional
+  conservatism applied before freezing a window projection was narrowed.
+- The target is to move from roughly 90% under-projected outcomes toward
+  roughly 70%, while still making overperformance more common than misses.
+- Exact percentages will vary and should be reviewed with Projection Accuracy.
 
-PRESERVED
----------
-- Asynchronous six-game roster-slot windows.
-- Overlapping regular-season cycle numbers.
-- Slot-boundary roster transactions.
-- Frozen per-window projections.
-- Shared live scoring lease and write suppression.
-- Banked playoff windows and bracket routing.
-- Existing scoring rules, draft, IR, waivers, standings, and injury systems.
+DATA SAFETY
+- Shared projection version advanced from 5 to 6.
+- Version 5 snapshots are treated as stale and regenerate for new windows.
+- Existing frozen cycle and playoff projections remain immutable.
+- Completed projection-accuracy records remain associated with their original
+  version, allowing Version 5 and Version 6 results to be compared.

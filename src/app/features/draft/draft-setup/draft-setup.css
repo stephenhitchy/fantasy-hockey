@@ -527,3 +527,194 @@
   background: #fff7e4;
   color: #76551a;
 }
+
+
+/* Pixel Theme Expansion V3: draft setup dark-panel pass */
+.draft-setup-page {
+  color: #edf4ff;
+}
+
+.draft-setup-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.back-link {
+  color: #b8d4ef;
+}
+
+.draft-header,
+.summary-card,
+.requirements-card,
+.schedule-card,
+.order-card,
+.preview-card,
+.round-card {
+  border: 2px solid #37557b;
+  background: linear-gradient(180deg, rgba(10, 20, 34, .96), rgba(12, 24, 42, .92));
+  box-shadow: 0 0 0 3px rgba(6, 14, 24, .9), 0 20px 44px rgba(0,0,0,.28);
+}
+
+.draft-header {
+  padding: 24px;
+}
+
+.draft-header h1,
+.requirements-card h2,
+.order-card h2,
+.preview-card h2,
+.section-title-row h2,
+.saved-schedule strong,
+.summary-card strong,
+.team-order-copy strong,
+.round-card h3 {
+  color: #f8fbff;
+}
+
+.draft-header p,
+.requirements-card p,
+.section-title-row p,
+.schedule-help,
+.saved-schedule span,
+.team-order-copy span {
+  color: #aebfd2;
+}
+
+.eyebrow,
+.summary-card span,
+.schedule-input-group span,
+.round-card li span {
+  color: #8ecfff;
+}
+
+.draft-badge {
+  border: 2px solid #42658f;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(18,33,54,.98), rgba(14,25,42,.98));
+  box-shadow: 0 0 0 3px rgba(6,14,24,.88);
+}
+
+.summary-card,
+.requirements-card,
+.schedule-card,
+.order-card,
+.preview-card {
+  position: relative;
+}
+
+.requirements-card::before,
+.schedule-card::before,
+.order-card::before,
+.preview-card::before {
+  content: '';
+  display: block;
+  width: 74px;
+  height: 4px;
+  margin-bottom: 16px;
+  background: linear-gradient(90deg, #ffe593, #efc04b);
+}
+
+.requirements-list span,
+.schedule-status,
+.pending-slot-chip-row span {
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(32, 51, 76, .9);
+  color: #d9e8f8;
+}
+
+.schedule-status.status-scheduled {
+  background: rgba(24, 53, 86, .92);
+  color: #a9d3ff;
+}
+
+.schedule-status.status-ready {
+  background: rgba(73, 59, 24, .95);
+  color: #ffe0a3;
+}
+
+.saved-schedule,
+.order-row,
+.round-card li {
+  border: 1px solid #2f4b6d;
+  background: linear-gradient(180deg, rgba(13, 25, 41, .98), rgba(9, 18, 30, .98));
+}
+
+.empty-schedule {
+  border-style: dashed;
+}
+
+.schedule-input-group input,
+.schedule-input-group select,
+.secondary-button,
+.move-buttons button,
+.clear-schedule-button {
+  border: 1px solid #42658f;
+  background: rgba(14, 25, 42, .98);
+  color: #edf4ff;
+}
+
+.schedule-input-group input::placeholder {
+  color: #8ea9c7;
+}
+
+.schedule-input-group input:focus,
+.schedule-input-group select:focus {
+  outline: 2px solid #7bc2ff;
+  outline-offset: 1px;
+}
+
+.secondary-button:hover,
+.move-buttons button:hover:not(:disabled),
+.clear-schedule-button:hover:not(:disabled) {
+  border-color: #7bc2ff;
+  background: rgba(22, 38, 61, .98);
+}
+
+.pick-number,
+.save-button {
+  border: 2px solid #7b6330;
+  background: linear-gradient(180deg, #ffe593, #efc04b);
+  color: #241700;
+}
+
+.save-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffecae, #f3ca61);
+}
+
+.locked-message,
+.form-message {
+  border-radius: 12px;
+}
+
+.locked-message {
+  border: 1px solid rgba(228,200,139,.55);
+  background: rgba(118, 85, 26, .18);
+  color: #ffe0a3;
+}
+
+.error-message {
+  border: 1px solid rgba(241,181,181,.55);
+  background: rgba(101, 34, 34, .22);
+  color: #ffc7c7;
+}
+
+.success-message {
+  border: 1px solid rgba(169,215,181,.55);
+  background: rgba(18, 88, 46, .2);
+  color: #bcf2cb;
+}
+
+.round-card h3 {
+  background: rgba(24, 39, 61, .96);
+}
+
+.round-card li {
+  border-top-color: rgba(255,255,255,.06);
+  color: #dceafe;
+}

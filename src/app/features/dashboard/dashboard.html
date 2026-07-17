@@ -4,126 +4,146 @@
     <strong>Loading your leagues...</strong>
   </section>
 } @else {
-  <section class="dashboard">
-    <header class="dashboard-header">
-      <div>
-        <span class="eyebrow">Manager Home</span>
-        <h1>Welcome back, {{ displayName() }}</h1>
-        <p>Pick a league and get straight to the action.</p>
+  <section class="pixel-dashboard-page">
+    <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
+      <div class="ribbon-track ribbon-track-left">
+        @for (logo of topRibbon; track $index) {
+          <span class="pixel-logo-chip">
+            <img [src]="logo.logoUrl" [alt]="''" />
+            <small>{{ logo.abbreviation }}</small>
+          </span>
+        }
       </div>
+    </div>
 
-      <div class="quick-actions" aria-label="League actions">
-        <a
-          class="primary-action"
-          routerLink="/leagues/create"
-        >
-          <span aria-hidden="true">＋</span>
-          Create League
-        </a>
+    <section class="dashboard">
+      <header class="dashboard-header">
+        <div class="hero-copy">
+          <span class="eyebrow">Arena Lobby</span>
+          <h1>Welcome back, {{ displayName() }}</h1>
+          <p>Pick a league, manage your roster, and get straight to the action.</p>
 
-        <a
-          class="secondary-action"
-          routerLink="/leagues/join"
-        >
-          <span aria-hidden="true">⇥</span>
-          Join League
-        </a>
-      </div>
-    </header>
+          <div class="quick-actions" aria-label="League actions">
+            <a class="primary-action" routerLink="/leagues/create">
+              <span aria-hidden="true">＋</span>
+              Create League
+            </a>
 
-    @if (errorMessage()) {
-      <section class="error-card" role="alert">
-        <strong>Dashboard unavailable</strong>
-        <span>{{ errorMessage() }}</span>
-
-        <button
-          type="button"
-          (click)="loadDashboard()"
-        >
-          Try Again
-        </button>
-      </section>
-    }
-
-    <section class="leagues-section">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">Your Competition</span>
-          <h2>My Leagues</h2>
+            <a class="secondary-action" routerLink="/leagues/join">
+              <span aria-hidden="true">⇥</span>
+              Join League
+            </a>
+          </div>
         </div>
 
-        <span class="league-count">
-          {{ leagueSummaries().length }}
-        </span>
-      </div>
-
-      @if (leagueSummaries().length === 0) {
-        <article class="empty-state">
-          <span class="empty-icon" aria-hidden="true">🏟️</span>
-          <h3>Your locker room is empty</h3>
-          <p>Create a league or join one with an invite code.</p>
-
-          <div class="empty-actions">
-            <a routerLink="/leagues/create">Create League</a>
-            <a routerLink="/leagues/join">Join League</a>
+        <aside class="dashboard-mascot-card" aria-hidden="true">
+          <span class="eyebrow">Game Night</span>
+          <strong>Manager Entrance</strong>
+          <div class="mini-scoreboard">
+            <div><span>Leagues</span><strong>{{ leagueSummaries().length }}</strong></div>
+            <div><span>Status</span><strong>Ready</strong></div>
           </div>
-        </article>
-      } @else {
-        <div class="league-grid">
-          @for (league of leagueSummaries(); track league.leagueId) {
-            <article class="league-card">
-              <div class="league-card-top">
-                <div class="league-identity">
-                  <span class="league-icon" aria-hidden="true">🏆</span>
+          <div class="mascot-rink">
+            <div class="mini-ref"></div>
+          </div>
+        </aside>
+      </header>
+
+      @if (errorMessage()) {
+        <section class="error-card" role="alert">
+          <strong>Dashboard unavailable</strong>
+          <span>{{ errorMessage() }}</span>
+
+          <button type="button" (click)="loadDashboard()">
+            Try Again
+          </button>
+        </section>
+      }
+
+      <section class="leagues-section">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Your Competition</span>
+            <h2>My Leagues</h2>
+          </div>
+
+          <span class="league-count">
+            {{ leagueSummaries().length }}
+          </span>
+        </div>
+
+        @if (leagueSummaries().length === 0) {
+          <article class="empty-state">
+            <span class="empty-icon" aria-hidden="true">🏟️</span>
+            <h3>Your locker room is empty</h3>
+            <p>Create a league or join one with an invite code.</p>
+
+            <div class="empty-actions">
+              <a routerLink="/leagues/create">Create League</a>
+              <a routerLink="/leagues/join">Join League</a>
+            </div>
+          </article>
+        } @else {
+          <div class="league-grid">
+            @for (league of leagueSummaries(); track league.leagueId) {
+              <article class="league-card">
+                <div class="league-card-top">
+                  <div class="league-identity">
+                    <span class="league-icon" aria-hidden="true">🏆</span>
+
+                    <div>
+                      <h3>{{ league.leagueName }}</h3>
+                      <p>{{ league.myTeamName }}</p>
+                    </div>
+                  </div>
+
+                  @if (league.isCommissioner) {
+                    <span class="commissioner-badge">
+                      Commissioner
+                    </span>
+                  }
+                </div>
+
+                <div class="league-summary-row">
+                  <div>
+                    <span>Teams</span>
+                    <strong>
+                      {{ league.teamCount }} / {{ league.maxTeams }}
+                    </strong>
+                  </div>
 
                   <div>
-                    <h3>{{ league.leagueName }}</h3>
-                    <p>{{ league.myTeamName }}</p>
+                    <span>Your Club</span>
+                    <strong>{{ league.myTeamName }}</strong>
                   </div>
                 </div>
 
-                @if (league.isCommissioner) {
-                  <span class="commissioner-badge">
-                    Commissioner
-                  </span>
-                }
-              </div>
+                <div class="league-actions">
+                  <a class="open-league" [routerLink]="['/leagues', league.leagueId]">
+                    Open League
+                    <span aria-hidden="true">→</span>
+                  </a>
 
-              <div class="league-summary-row">
-                <div>
-                  <span>Teams</span>
-                  <strong>
-                    {{ league.teamCount }} / {{ league.maxTeams }}
-                  </strong>
+                  <a class="team-shortcut" [routerLink]="['/leagues', league.leagueId, 'team']" aria-label="Open my team">
+                    👕
+                  </a>
                 </div>
-
-                <div>
-                  <span>Your Club</span>
-                  <strong>{{ league.myTeamName }}</strong>
-                </div>
-              </div>
-
-              <div class="league-actions">
-                <a
-                  class="open-league"
-                  [routerLink]="['/leagues', league.leagueId]"
-                >
-                  Open League
-                  <span aria-hidden="true">→</span>
-                </a>
-
-                <a
-                  class="team-shortcut"
-                  [routerLink]="['/leagues', league.leagueId, 'team']"
-                  aria-label="Open my team"
-                >
-                  👕
-                </a>
-              </div>
-            </article>
-          }
-        </div>
-      }
+              </article>
+            }
+          </div>
+        }
+      </section>
     </section>
+
+    <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
+      <div class="ribbon-track ribbon-track-right">
+        @for (logo of bottomRibbon; track $index) {
+          <span class="pixel-logo-chip">
+            <img [src]="logo.logoUrl" [alt]="''" />
+            <small>{{ logo.abbreviation }}</small>
+          </span>
+        }
+      </div>
+    </div>
   </section>
 }

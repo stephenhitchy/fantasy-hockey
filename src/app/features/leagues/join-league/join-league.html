@@ -1,11 +1,67 @@
-<h1>Join League</h1>
+<section class="pixel-shell-page">
+  <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-left">
+      @for (logo of topRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
 
-<input [(ngModel)]="inviteCode" placeholder="Invite code" />
+  <div class="shell-stage">
+    <section class="shell-copy">
+      <span class="eyebrow">Join the Action</span>
+      <h1>Join a League</h1>
+      <p>Enter an invite code from your commissioner and jump directly into the race for the Cup.</p>
 
-<button (click)="submit()" [disabled]="loading()">
-  {{ loading() ? 'Joining...' : 'Join League' }}
-</button>
+      <ul>
+        <li>Use the invite code exactly as it appears.</li>
+        <li>Your team will be created automatically after you join.</li>
+        <li>From there you can draft, track windows, and make moves.</li>
+      </ul>
 
-@if (errorMessage()) {
-  <p>{{ errorMessage() }}</p>
-}
+      <a routerLink="/dashboard" class="back-link">← Back to Dashboard</a>
+    </section>
+
+    <section class="shell-card">
+      <div class="card-header">
+        <span class="card-label">Invite Code</span>
+        <strong>League Entry</strong>
+      </div>
+
+      <label class="form-field">
+        <span>Invite Code</span>
+        <input [(ngModel)]="inviteCode" placeholder="Ex: RINK-4729" />
+      </label>
+
+      <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
+        {{ loading() ? 'Joining League...' : 'Join League' }}
+      </button>
+
+      @if (errorMessage()) {
+        <p class="status-message error">{{ errorMessage() }}</p>
+      }
+    </section>
+
+    <section class="pixel-mascot-card" aria-hidden="true">
+      <div class="mascot-scoreboard">
+        <span>Invitation</span>
+        <strong>Skate In</strong>
+      </div>
+      <div class="mini-ref"></div>
+    </section>
+  </div>
+
+  <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
+    <div class="ribbon-track ribbon-track-right">
+      @for (logo of bottomRibbon; track $index) {
+        <span class="pixel-logo-chip">
+          <img [src]="logo.logoUrl" [alt]="''" />
+          <small>{{ logo.abbreviation }}</small>
+        </span>
+      }
+    </div>
+  </div>
+</section>
