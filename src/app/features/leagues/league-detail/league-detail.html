@@ -12,6 +12,72 @@
           Cycle Matchups ·
           {{ teams().length }} / {{ league()?.maxTeams }} Teams
         </p>
+
+        @if (myTeam(); as currentTeam) {
+          <div class="my-team-identity">
+            <div>
+              <span>Your Team</span>
+              <strong>{{ currentTeam.teamName }}</strong>
+            </div>
+
+            <button
+              type="button"
+              class="rename-team-trigger"
+              (click)="openRenameTeam()"
+              [attr.aria-expanded]="renameTeamOpen()"
+            >
+              ✎ Rename Team
+            </button>
+          </div>
+
+          @if (renameTeamOpen()) {
+            <div class="rename-team-panel" aria-label="Rename your fantasy team">
+              <label for="league-team-name">Team name</label>
+
+              <div class="rename-team-controls">
+                <input
+                  id="league-team-name"
+                  type="text"
+                  maxlength="60"
+                  [(ngModel)]="teamNameDraft"
+                  (keydown.enter)="saveMyTeamName()"
+                  placeholder="Enter your team name"
+                  [disabled]="renameTeamSaving()"
+                />
+
+                <button
+                  type="button"
+                  class="save-team-name-button"
+                  (click)="saveMyTeamName()"
+                  [disabled]="renameTeamSaving()"
+                >
+                  {{ renameTeamSaving() ? 'Saving…' : 'Save' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="cancel-team-name-button"
+                  (click)="cancelRenameTeam()"
+                  [disabled]="renameTeamSaving()"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              @if (renameTeamError()) {
+                <small class="rename-team-error" role="alert">
+                  {{ renameTeamError() }}
+                </small>
+              }
+            </div>
+          }
+
+          @if (renameTeamMessage()) {
+            <small class="rename-team-success" aria-live="polite">
+              {{ renameTeamMessage() }}
+            </small>
+          }
+        }
       </div>
 
       <div class="league-actions">

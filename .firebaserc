@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "Puck Cycle": "nhl-fantasy-app-ab673"
+  },
+  "targets": {
+    "nhl-fantasy-app-ab673": {
+      "hosting": {
+        "app": [
+          "cycle-puck"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

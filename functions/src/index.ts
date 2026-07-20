@@ -12,7 +12,8 @@ import {
 
 import {
   HttpsError,
-  onCall
+  onCall,
+  onRequest
 } from 'firebase-functions/v2/https';
 
 initializeApp();
@@ -23,6 +24,53 @@ const ESPN_NHL_INJURIES_URL =
   'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries';
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
+const NHL_WEB_API_ORIGIN = 'https://api-web.nhle.com';
+const NHL_STATS_API_ORIGIN = 'https://api.nhle.com';
+const NHL_PROXY_TIMEOUT_MS = 20_000;
+
+const NHL_PROXY_PATH_PATTERNS = [
+  /^\/v1\/player\/\d+\/game-log\/\d{8}\/2$/,
+  /^\/v1\/club-schedule-season\/[a-z]{3}\/\d{8}$/,
+  /^\/v1\/gamecenter\/\d+\/(boxscore|play-by-play)$/,
+  /^\/v1\/roster\/[a-z]{3}\/(current|\d{8})$/,
+  /^\/stats\/rest\/en\/skater\/(summary|realtime)$/,
+  /^\/stats\/rest\/en\/goalie\/summary$/
+] as const;
+
+function getNhlProxyTarget(originalUrl: string): URL | null {
+  const requestUrl = new URL(
+    originalUrl,
+    'https://cycle-puck-proxy.local'
+  );
+  const path = requestUrl.pathname;
+
+  if (!NHL_PROXY_PATH_PATTERNS.some((pattern) => pattern.test(path))) {
+    return null;
+  }
+
+  const origin = path.startsWith('/v1/')
+    ? NHL_WEB_API_ORIGIN
+    : NHL_STATS_API_ORIGIN;
+
+  return new URL(`${path}${requestUrl.search}`, origin);
+}
+
+function getNhlProxyCacheControl(path: string): string {
+  if (path.includes('/gamecenter/')) {
+    return 'public, max-age=8, s-maxage=12';
+  }
+
+  if (path.includes('/club-schedule-season/')) {
+    return 'public, max-age=60, s-maxage=300';
+  }
+
+  if (path.includes('/roster/')) {
+    return 'public, max-age=300, s-maxage=1800';
+  }
+
+  return 'public, max-age=120, s-maxage=600';
+}
+
 const MAX_NOTE_LENGTH = 500;
 const MAX_BATCH_WRITES = 400;
 const RUNNING_LEASE_MINUTES = 10;
@@ -960,6 +1008,83 @@ async function claimDailyRefresh(
     };
   });
 }
+
+export const nhlApiProxy = onRequest(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 10,
+    cors: false
+  },
+  async (request, response) => {
+    if (request.method !== 'GET') {
+      response
+        .status(405)
+        .set('Allow', 'GET')
+        .json({ message: 'Only GET requests are supported.' });
+      return;
+    }
+
+    const target = getNhlProxyTarget(request.originalUrl);
+
+    if (!target) {
+      response.status(404).json({
+        message: 'This NHL API route is not available through the app proxy.'
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      NHL_PROXY_TIMEOUT_MS
+    );
+
+    try {
+      const upstreamResponse = await fetch(target, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'cycle-puck/1.0'
+        },
+        signal: controller.signal
+      });
+
+      const responseBody = Buffer.from(
+        await upstreamResponse.arrayBuffer()
+      );
+
+      response
+        .status(upstreamResponse.status)
+        .set(
+          'Content-Type',
+          upstreamResponse.headers.get('content-type') ??
+            'application/json; charset=utf-8'
+        )
+        .set(
+          'Cache-Control',
+          getNhlProxyCacheControl(target.pathname)
+        )
+        .set('X-Content-Type-Options', 'nosniff')
+        .send(responseBody);
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unknown NHL API proxy error.';
+
+      console.error('NHL API proxy request failed.', {
+        target: target.toString(),
+        message
+      });
+
+      response.status(502).json({
+        message: 'The NHL data service could not be reached. Please try again shortly.'
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+);
 
 export const refreshDailyPlayerAvailability = onCall(
   {

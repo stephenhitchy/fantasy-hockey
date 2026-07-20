@@ -5,6 +5,7 @@ import {
   signal
 } from '@angular/core';
 
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -59,7 +60,8 @@ import {
 
 import {
   FantasyTeam,
-  listenToLeagueTeams
+  listenToLeagueTeams,
+  updateTeamName
 } from '../../../core/team/team.service';
 
 import {
@@ -77,12 +79,14 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [RouterLink],
+  imports: [FormsModule, RouterLink],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css'
 })
 export class LeagueDetail implements OnDestroy {
   leagueId = '';
+  userId = '';
+  teamNameDraft = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -108,6 +112,11 @@ export class LeagueDetail implements OnDestroy {
 
   cycleActionMessage = signal('');
   cycleActionInProgress = signal(false);
+
+  renameTeamOpen = signal(false);
+  renameTeamSaving = signal(false);
+  renameTeamMessage = signal('');
+  renameTeamError = signal('');
 
   readonly now = signal(Date.now());
 
@@ -140,6 +149,12 @@ export class LeagueDetail implements OnDestroy {
   private readonly automaticCycleStartTimer = setInterval(() => {
     void this.runAutomaticSeasonStartChecks();
   }, 15000);
+
+  readonly myTeam = computed(() =>
+    this.teams().find(
+      (team) => team.ownerId === this.userId
+    ) ?? null
+  );
 
   readonly sortedTeams = computed(() =>
     [...this.teams()].sort((first, second) => {
@@ -345,6 +360,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     this.leagueId = leagueId;
+    this.userId = user.uid;
 
     try {
       const league = await getLeagueById(leagueId);
@@ -391,6 +407,11 @@ export class LeagueDetail implements OnDestroy {
         leagueId,
         (teams) => {
           this.teams.set(teams);
+
+          if (!this.renameTeamOpen()) {
+            this.teamNameDraft = this.myTeam()?.teamName ?? '';
+          }
+
           void this.runScheduledDraftChecks();
           void this.runAutomaticSeasonStartChecks();
         }
@@ -412,6 +433,76 @@ export class LeagueDetail implements OnDestroy {
       );
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  openRenameTeam(): void {
+    this.teamNameDraft = this.myTeam()?.teamName ?? '';
+    this.renameTeamMessage.set('');
+    this.renameTeamError.set('');
+    this.renameTeamOpen.set(true);
+  }
+
+  cancelRenameTeam(): void {
+    this.teamNameDraft = this.myTeam()?.teamName ?? '';
+    this.renameTeamMessage.set('');
+    this.renameTeamError.set('');
+    this.renameTeamOpen.set(false);
+  }
+
+  async saveMyTeamName(): Promise<void> {
+    const updatedName = this.teamNameDraft.trim();
+
+    this.renameTeamMessage.set('');
+    this.renameTeamError.set('');
+
+    if (!this.leagueId || !this.userId) {
+      this.renameTeamError.set('Your league account is still loading.');
+      return;
+    }
+
+    if (!updatedName) {
+      this.renameTeamError.set('Please enter a team name.');
+      return;
+    }
+
+    if (updatedName.length > 60) {
+      this.renameTeamError.set('Team names must be 60 characters or fewer.');
+      return;
+    }
+
+    this.renameTeamSaving.set(true);
+
+    try {
+      await updateTeamName(
+        this.leagueId,
+        this.userId,
+        updatedName
+      );
+
+      this.teams.update((teams) =>
+        teams.map((team) =>
+          team.ownerId === this.userId
+            ? { ...team, teamName: updatedName }
+            : team
+        )
+      );
+
+      this.teamNameDraft = updatedName;
+      this.renameTeamOpen.set(false);
+      this.renameTeamMessage.set('Team name updated.');
+
+      setTimeout(() => {
+        this.renameTeamMessage.set('');
+      }, 2400);
+    } catch (error: unknown) {
+      this.renameTeamError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update your team name.'
+      );
+    } finally {
+      this.renameTeamSaving.set(false);
     }
   }
 

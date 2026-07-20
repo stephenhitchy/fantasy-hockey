@@ -10,7 +10,7 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions:refreshDailyPlayerAvailability",
+    "deploy": "npm run build && firebase deploy --only functions:nhlApiProxy,functions:refreshDailyPlayerAvailability",
     "logs": "firebase functions:log --only refreshDailyPlayerAvailability"
   },
   "dependencies": {

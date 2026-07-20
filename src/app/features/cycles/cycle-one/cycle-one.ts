@@ -11,6 +11,7 @@ import { saveProjectionAccuracyForCycle } from '../../../core/projection/project
 
 import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
 
+import { NgStyle } from '@angular/common';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -66,6 +67,8 @@ import {
 import { getNhlTeamSeasonSchedule, NHL_DRAFT_CLUBS } from '../../../core/nhl/nhl-api.service';
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
+import { getUserProfile } from '../../../core/user/user.service';
+import { PixelTeamTheme, getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
 
 import {
   areDeveloperToolsEnabled,
@@ -134,7 +137,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-one',
-  imports: [RouterLink],
+  imports: [RouterLink, NgStyle],
   templateUrl: './cycle-one.html',
   styleUrl: './cycle-one.css',
 })
@@ -147,6 +150,7 @@ export class CycleOne implements OnDestroy {
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
+  ownerFavoriteTeams = signal<Record<string, string>>({});
   allCycles = signal<FantasyCycle[]>([]);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
@@ -1325,6 +1329,7 @@ export class CycleOne implements OnDestroy {
 
     this.league.set(null);
     this.teams.set([]);
+    this.ownerFavoriteTeams.set({});
     this.allCycles.set([]);
     this.cycle.set(null);
     this.matchups.set([]);
@@ -1415,6 +1420,7 @@ export class CycleOne implements OnDestroy {
 
       this.league.set(league);
       this.teams.set(teams);
+      void this.loadOwnerFavoriteTeams(teams.map((team) => team.ownerId));
 
       this.stopSharedScoringListener = listenToSharedCycleScoring(
         leagueId,
@@ -1532,6 +1538,70 @@ export class CycleOne implements OnDestroy {
       : ['/leagues', this.leagueId, 'cycles', targetCycleNumber];
 
     void this.router.navigate(route);
+  }
+
+
+  private async loadOwnerFavoriteTeams(ownerIds: string[]): Promise<void> {
+    const uniqueOwnerIds = [...new Set(ownerIds.filter((ownerId) => !!ownerId))];
+
+    if (uniqueOwnerIds.length === 0) {
+      return;
+    }
+
+    const knownFavoriteTeams = this.ownerFavoriteTeams();
+    const unresolvedOwnerIds = uniqueOwnerIds.filter((ownerId) => !knownFavoriteTeams[ownerId]);
+
+    if (unresolvedOwnerIds.length === 0) {
+      return;
+    }
+
+    const resolvedEntries = await Promise.all(
+      unresolvedOwnerIds.map(async (ownerId) => {
+        try {
+          const profile = await getUserProfile(ownerId);
+          return [ownerId, profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId)] as const;
+        } catch {
+          return [ownerId, this.getFallbackFavoriteTeam(ownerId)] as const;
+        }
+      }),
+    );
+
+    this.ownerFavoriteTeams.set({
+      ...this.ownerFavoriteTeams(),
+      ...Object.fromEntries(resolvedEntries),
+    });
+  }
+
+  private getFallbackFavoriteTeam(ownerId: string): string {
+    if (typeof document !== 'undefined' && ownerId === this.userId) {
+      return document.documentElement.dataset['favoriteTeam'] || 'VGK';
+    }
+
+    return 'VGK';
+  }
+
+  getOwnerTheme(ownerId: string): PixelTeamTheme {
+    return getPixelTeamTheme(this.ownerFavoriteTeams()[ownerId] || this.getFallbackFavoriteTeam(ownerId));
+  }
+
+  getOwnerThemeStyles(ownerId: string): Record<string, string> {
+    const theme = this.getOwnerTheme(ownerId);
+
+    return {
+      '--owner-theme-primary': theme.primaryColor,
+      '--owner-theme-secondary': theme.secondaryColor,
+      '--owner-theme-highlight': theme.highlightColor,
+      '--owner-theme-outline': `color-mix(in srgb, ${theme.primaryColor} 70%, #496685)`,
+      '--owner-theme-outline-strong': `color-mix(in srgb, ${theme.primaryColor} 82%, #6f8eac)`,
+      '--owner-theme-outline-soft': `color-mix(in srgb, ${theme.primaryColor} 30%, rgba(198, 213, 228, 0.16))`,
+      '--owner-theme-subtle': `color-mix(in srgb, ${theme.primaryColor} 18%, transparent)`,
+      '--owner-theme-surface': `color-mix(in srgb, ${theme.secondaryColor} 78%, #0b1322)`,
+      '--owner-theme-surface-2': `color-mix(in srgb, ${theme.primaryColor} 12%, #101827)`,
+      '--owner-theme-chip-background': `color-mix(in srgb, ${theme.highlightColor} 85%, ${theme.primaryColor} 15%)`,
+      '--owner-theme-chip-text': `color-mix(in srgb, ${theme.secondaryColor} 88%, #0d1422 12%)`,
+      '--owner-theme-glow': `color-mix(in srgb, ${theme.primaryColor} 22%, transparent)`,
+      '--owner-theme-accent-text': `color-mix(in srgb, ${theme.highlightColor} 80%, #eff6ff)`,
+    };
   }
 
   getCurrentDisplayedMatchup(): FantasyMatchup | null {

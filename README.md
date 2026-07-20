@@ -1,83 +1,96 @@
-# Fantasy Hockey Favorite-Team Theme Expansion V1
+# Fantasy Hockey Beta Hosting and Team Name Fix V1
 
-This package expands the saved favorite-team identity across the app. It does not change the Firestore save workflow or rules.
+This package addresses the three issues found during the first hosted beta test.
 
-## What changed
+## 1. Team renaming is now visible from League Home
 
-### Dashboard favorite-team referee
-- The dashboard rink attendant now wears the user's saved favorite-team colors.
-- The selected NHL team crest appears on the attendant's jersey.
-- The scoreboard beside the attendant shows the saved team abbreviation and name.
+The League Home header now displays:
 
-### Account locker favorite-team referee
-- The favorite-team profile area now contains a pixel referee wearing the selected team's colors and crest.
-- Changing the favorite team updates this referee immediately.
-- The saved selection remains the source of truth when returning to the page.
+- `Your Team`
+- the current team name
+- a clearly labeled `Rename Team` button
+- an inline save/cancel form
 
-### Site-wide favorite-team accents
-The favorite team's palette now controls shared presentation throughout the app:
-- card and panel outlines
-- eyebrow labels and secondary/subtext
-- navbar borders and muted navigation labels
-- active navigation indicators
-- focused form fields
-- primary actions
-- active matchup view controls
-- Cycle page matchup outlines, transparency panels, and supporting text
-- My Team, Free Agents, Draft, Playoffs, Standings, and Projection card outlines where matching shared classes are present
+The form uses the saved favorite-team accent colors and becomes a stacked, phone-friendly layout on mobile.
 
-Semantic colors remain unchanged:
-- green = completed/played
-- yellow = upcoming
-- red = missed/error
+The original Team Name editor on the My Team page remains available.
 
-### Persistence note
-This package assumes the updated Firestore rules from Pixel Account Page V1 are deployed. No additional rules update is required.
+## 2. New teams default to the account name
 
-## Files included
-- `src/app/core/user/user-theme.service.ts`
-- `src/styles.css`
-- `src/app/shared/navbar/navbar.css`
-- `src/app/features/dashboard/dashboard.ts`
-- `src/app/features/dashboard/dashboard.html`
-- `src/app/features/dashboard/dashboard.css`
-- `src/app/features/account/account-settings/account-settings.html`
-- `src/app/features/account/account-settings/account-settings.css`
+When someone creates or joins a league, the initial fantasy team name now uses the account username already passed into the league setup flow.
 
-## Install
-1. Stop the dev server.
-2. Extract into the project root:
-   `/Users/StephenH/Documents/Programming/fantasy-hockey`
-3. Replace the included files.
-4. Restart:
+Examples:
+
+- Account name `Stephen` creates team `Stephen`
+- Account name `Hockey Dad` joins with team `Hockey Dad`
+
+This applies to newly created teams and repaired legacy memberships that are missing their team document. Existing team names are not overwritten.
+
+## 3. Hosted NHL API requests are repaired
+
+Local Angular development uses `src/proxy.conf.json` for these paths:
+
+- `/v1/**`
+- `/stats/**`
+
+Firebase Hosting does not use Angular's development proxy. The previous SPA fallback therefore handled those URLs instead of the NHL API, causing the hosted roster request to parse the Angular page as data.
+
+This package adds:
+
+- `nhlApiProxy`, an allow-listed HTTPS Cloud Function
+- Firebase Hosting rewrites for `/v1/**` and `/stats/**`
+- the SPA fallback after the API rewrites
+- short cache windows appropriate for rosters, schedules, gamecenter data, and stats
+- request timeout and safe error responses
+
+The browser continues using the same relative API paths, so localhost development is unchanged.
+
+## Installation
+
+1. Stop the Angular dev server.
+2. Extract this package into the project root and replace the included files.
+3. From the project root, install function dependencies if needed:
 
 ```bash
-npm start
+cd functions
+npm install
+cd ..
 ```
 
-## Recommended test
-1. Open Account Settings.
-2. Select a favorite team and save.
-3. Return to the Dashboard.
-4. Confirm the dashboard referee wears that team's colors and crest.
-5. Open the League Hub and Cycle page.
-6. Confirm outlines and secondary text use the saved favorite-team palette.
-7. Refresh and sign back in to verify the theme remains applied.
+4. Confirm the Cycle Puck Hosting target exists:
 
-## Validation
-- TypeScript application compilation passed.
-- Angular template compilation passed.
-- `npm run build` passed.
-- The existing non-blocking `cycle-one.css` warning remains below its error threshold.
+```bash
+firebase target:apply hosting app cycle-puck
+```
 
-## Next visual stage
-The next focused package should be a mobile-first refinement pass for:
-- Dashboard
-- League Hub
-- Cycle / Matchup
-- My Team
-- Free Agents
-- Draft Room
-- Account
+You only need to run that command once. If the `app` target already exists, Firebase will keep using it.
 
-That pass should prioritize thumb reach, horizontal overflow removal, readable player cards, compact navigation, and side-by-side comparison behavior appropriate to phone width.
+5. Build the Angular app:
+
+```bash
+npm run build
+```
+
+6. Deploy the new proxy function and website together:
+
+```bash
+firebase deploy --only functions:nhlApiProxy,hosting:app
+```
+
+The Cloud Function deployment requires the Firebase project to use the Blaze plan. This project already has a deployed daily injury callable function, so it may already be configured correctly.
+
+## Important deployment detail
+
+Deploying only Hosting will not create the API proxy. Until `nhlApiProxy` is deployed, the hosted draft/player loading requests will continue to fail.
+
+## No Firestore rules update
+
+This package does not change `firestore.rules`. Existing team-owner update permissions already allow a manager to change their own team name.
+
+## Validation completed
+
+- Root TypeScript compilation passed.
+- Angular template compilation with `ngc` passed.
+- Cloud Functions TypeScript build passed.
+- `firebase.json` and `functions/package.json` JSON validation passed.
+- The full Angular CLI bundle could not be run in the packaging container because its Node version is `22.16.0`; the project now requires Node `22.22.3+`. Run `npm run build` locally with your working Node `22.23.1` before deployment.

@@ -32,7 +32,8 @@ export interface FantasyTeam {
 
 export async function createFantasyTeam(
   leagueId: string,
-  ownerId: string
+  ownerId: string,
+  defaultTeamName = 'Unnamed Team'
 ): Promise<void> {
   const teamRef = doc(db, 'leagues', leagueId, 'teams', ownerId);
   const existingTeam = await getDoc(teamRef);
@@ -41,7 +42,7 @@ export async function createFantasyTeam(
     await setDoc(teamRef, {
       id: ownerId,
       ownerId,
-      teamName: 'Unnamed Team',
+      teamName: defaultTeamName.trim() || 'Unnamed Team',
       logo: '',
       wins: 0,
       losses: 0,

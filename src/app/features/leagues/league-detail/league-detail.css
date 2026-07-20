@@ -1314,3 +1314,158 @@
 @media (prefers-reduced-motion: reduce) {
   .ribbon-track-left, .ribbon-track-right { animation: none !important; }
 }
+
+/* Beta launch polish: make team identity and renaming obvious from league home. */
+.my-team-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--user-team-outline);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--user-team-primary) 9%, rgba(8, 18, 32, 0.9));
+}
+
+.my-team-identity > div {
+  display: grid;
+  gap: 2px;
+}
+
+.my-team-identity span {
+  color: var(--user-team-subtext);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.my-team-identity strong {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.rename-team-trigger,
+.save-team-name-button,
+.cancel-team-name-button {
+  min-height: 38px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.rename-team-trigger {
+  border: 1px solid var(--user-team-primary);
+  background: color-mix(in srgb, var(--user-team-primary) 16%, rgba(12, 25, 43, 0.95));
+  color: var(--user-team-highlight);
+}
+
+.rename-team-trigger:hover {
+  background: color-mix(in srgb, var(--user-team-primary) 24%, rgba(12, 25, 43, 0.95));
+}
+
+.rename-team-panel {
+  width: min(100%, 620px);
+  margin-top: 10px;
+  padding: 13px;
+  border: 1px solid var(--user-team-outline);
+  border-radius: 12px;
+  background: rgba(7, 16, 29, 0.96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+.rename-team-panel label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--user-team-subtext);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rename-team-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.rename-team-controls input {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #3b506b;
+  border-radius: 9px;
+  background: #0e1b2e;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.rename-team-controls input:focus {
+  border-color: var(--user-team-primary);
+  outline: 2px solid var(--user-team-glow);
+  outline-offset: 1px;
+}
+
+.save-team-name-button {
+  border: 1px solid color-mix(in srgb, var(--user-team-primary) 65%, #7b6330);
+  background: linear-gradient(
+    180deg,
+    var(--user-team-highlight),
+    color-mix(in srgb, var(--user-team-primary) 72%, var(--user-team-highlight))
+  );
+  color: #111827;
+}
+
+.cancel-team-name-button {
+  border: 1px solid #3b506b;
+  background: #132239;
+  color: #dceafe;
+}
+
+.rename-team-trigger:disabled,
+.save-team-name-button:disabled,
+.cancel-team-name-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.rename-team-error,
+.rename-team-success {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.rename-team-error {
+  color: #ffb4c2;
+}
+
+.rename-team-success {
+  color: #98f5bd;
+}
+
+@media (max-width: 720px) {
+  .my-team-identity {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .rename-team-trigger {
+    width: 100%;
+  }
+
+  .rename-team-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rename-team-controls input {
+    grid-column: 1 / -1;
+  }
+}

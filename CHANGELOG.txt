@@ -1,25 +1,13 @@
-LIVE MODE + PROJECTION CALIBRATION V1
+Matchup themed opponent + mobile fix v1
 
-LIVE RUNTIME
-- Changed the local development runtime from historical replay to live NHL mode.
-- Removed the configured 2026-01-10 historical scoring date.
-- The historical-mode banner therefore no longer appears during npm start.
-- Production was already configured for live mode and remains protected.
-- Local developer tools remain enabled until the visual-interface cleanup.
+Changed files
+- src/app/features/cycles/cycle-one/cycle-one.ts
+- src/app/features/cycles/cycle-one/cycle-one.html
+- src/app/features/cycles/cycle-one/cycle-one.css
 
-PROJECTION VERSION 6
-- Forwards: manager-facing multiplier changed from 0.90 to 0.95.
-- Defensemen: manager-facing multiplier changed from 0.88 to 0.93.
-- Goalie units: manager-facing multiplier changed from 0.85 to 0.90.
-- The raw projection model is unchanged; only the final intentional
-  conservatism applied before freezing a window projection was narrowed.
-- The target is to move from roughly 90% under-projected outcomes toward
-  roughly 70%, while still making overperformance more common than misses.
-- Exact percentages will vary and should be reviewed with Projection Accuracy.
-
-DATA SAFETY
-- Shared projection version advanced from 5 to 6.
-- Version 5 snapshots are treated as stale and regenerate for new windows.
-- Existing frozen cycle and playoff projections remain immutable.
-- Completed projection-accuracy records remain associated with their original
-  version, allowing Version 5 and Version 6 results to be compared.
+Highlights
+- Added favorite-team theme loading for matchup owners using stored user profiles.
+- Applied team theme styling to the desktop matchup panels and mobile sticky score bar.
+- Restyled the Cycle Transparency card from white to a dark blue surface.
+- Themed the transparency matchup summary chips/cards by team.
+- Added small-screen width/overflow guards to keep the matchup player area centered better on mobile.

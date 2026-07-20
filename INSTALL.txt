@@ -1,22 +1,13 @@
-FANTASY HOCKEY — LIVE MODE + PROJECTION CALIBRATION V1
+Install steps
+1. Open your project root.
+2. Replace these 3 files with the versions from this package:
+   - src/app/features/cycles/cycle-one/cycle-one.ts
+   - src/app/features/cycles/cycle-one/cycle-one.html
+   - src/app/features/cycles/cycle-one/cycle-one.css
+3. Run your normal build/start command.
 
-1. Stop the Angular development server.
-2. Extract this package into the project root:
-   /Users/StephenH/Documents/Programming/fantasy-hockey
-3. Allow the five included source files to replace/add files at their exact paths.
-4. Restart the app:
-   npm start
-5. Open Release Readiness or Projection Lab and use Regenerate Projection once.
-   This publishes a Version 6 shared snapshot immediately. Otherwise the app
-   will automatically generate Version 6 when the next roster-slot window opens.
-6. Run:
-   npm run build
-
-No Firebase rules, indexes, dependencies, Cloud Functions, or migration are required.
-
-EXPECTED RESULT
-- The global historical-scoring warning banner is gone in local development.
-- Local scoring now uses the live NHL date/season.
-- Temporary deterministic developer tools remain available locally for now.
-- New six-game windows use the less-conservative Version 6 calibration.
-- Existing frozen windows do not change.
+What this package changes
+- Opponent-side matchup styling now uses that owner's selected favorite team theme.
+- Mobile matchup score cards also reflect each team's favorite theme.
+- The Cycle Transparency section now uses a dark blue theme that matches the rest of the page.
+- Mobile overflow/centering on the player-card area is tightened so the matchup content no longer hangs off the right side as easily.

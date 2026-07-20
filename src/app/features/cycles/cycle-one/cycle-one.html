@@ -10,7 +10,7 @@
         aria-label="Current matchup score"
         aria-live="polite"
       >
-        <article class="mobile-score-team mobile-score-team-a">
+        <article class="mobile-score-team mobile-score-team-a" [ngStyle]="getOwnerThemeStyles(mobileMatchup.teamAOwnerId)">
           <span>{{ getTeamName(mobileMatchup.teamAOwnerId) }}</span>
           <strong>
             {{
@@ -30,7 +30,7 @@
           <small>{{ getMatchupReadinessLabel(mobileMatchup) }}</small>
         </div>
 
-        <article class="mobile-score-team mobile-score-team-b">
+        <article class="mobile-score-team mobile-score-team-b" [ngStyle]="getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">
           <span>{{ getTeamName(mobileMatchup.teamBOwnerId) }}</span>
           <strong>
             {{
@@ -224,7 +224,7 @@
 
         @if (getCurrentDisplayedMatchup(); as transparencyMatchup) {
           <div class="matchup-window-summary">
-            <article>
+            <article [ngStyle]="getOwnerThemeStyles(transparencyMatchup.teamAOwnerId)">
               <div>
                 <strong>{{ getTeamName(transparencyMatchup.teamAOwnerId) }}</strong>
                 <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamAOwnerId) }}</span>
@@ -243,7 +243,7 @@
             </article>
 
             @if (transparencyMatchup.teamBOwnerId) {
-              <article>
+              <article [ngStyle]="getOwnerThemeStyles(transparencyMatchup.teamBOwnerId)">
                 <div>
                   <strong>{{ getTeamName(transparencyMatchup.teamBOwnerId) }}</strong>
                   <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamBOwnerId) }}</span>
@@ -530,6 +530,7 @@
                   @if (shouldShowTeamA()) {
                     <section
                       class="team-matchup-panel"
+                      [ngStyle]="getOwnerThemeStyles(matchup.teamAOwnerId)"
                       [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamAOwnerId)"
                       [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamAOwnerId)"
                     >
@@ -1007,6 +1008,7 @@
                   @if (shouldShowTeamB()) {
                     <section
                       class="team-matchup-panel"
+                      [ngStyle]="getOwnerThemeStyles(matchup.teamBOwnerId)"
                       [class.matchup-winner-panel]="isWinningTeam(matchup, matchup.teamBOwnerId)"
                       [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamBOwnerId)"
                     >

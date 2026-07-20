@@ -224,11 +224,14 @@ function getLeagueTeamRef(
   );
 }
 
-function getNewTeamDocument(ownerId: string) {
+function getNewTeamDocument(
+  ownerId: string,
+  defaultTeamName: string
+) {
   return {
     id: ownerId,
     ownerId,
-    teamName: 'Unnamed Team',
+    teamName: normalizeUsername(defaultTeamName),
     logo: '',
     wins: 0,
     losses: 0,
@@ -413,7 +416,10 @@ export async function createLeague(
     joinedAt: serverTimestamp()
   });
 
-  batch.set(teamRef, getNewTeamDocument(user.uid));
+  batch.set(
+    teamRef,
+    getNewTeamDocument(user.uid, normalizedUsername)
+  );
   batch.set(rosterRef, getNewRosterDocument());
 
   await batch.commit();
@@ -606,7 +612,10 @@ export async function joinLeagueByInviteCode(
     let repairNeeded = false;
 
     if (!existingTeamSnapshot.exists()) {
-      repairBatch.set(teamRef, getNewTeamDocument(user.uid));
+      repairBatch.set(
+        teamRef,
+        getNewTeamDocument(user.uid, normalizedUsername)
+      );
       repairNeeded = true;
     }
 
@@ -636,7 +645,10 @@ export async function joinLeagueByInviteCode(
     joinedAt: serverTimestamp()
   });
 
-  joinBatch.set(teamRef, getNewTeamDocument(user.uid));
+  joinBatch.set(
+    teamRef,
+    getNewTeamDocument(user.uid, normalizedUsername)
+  );
   joinBatch.set(rosterRef, getNewRosterDocument());
 
   await joinBatch.commit();

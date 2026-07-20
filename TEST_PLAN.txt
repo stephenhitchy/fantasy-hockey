@@ -1,29 +1,40 @@
-FAVORITE-TEAM THEME EXPANSION TEST PLAN
+BETA HOSTING AND TEAM NAME FIX V1 TEST PLAN
 
-1. Account page
-- Select a different team.
-- Confirm the account referee changes colors and crest immediately.
-- Save the profile.
-- Navigate away and return.
-- Confirm the same team remains selected.
+A. BUILD
+1. Run `npm run build` from the project root.
+2. Run `cd functions && npm run build && cd ..`.
+3. Confirm both commands finish without errors.
 
-2. Dashboard
-- Confirm the rink attendant uses the saved team colors.
-- Confirm the saved team crest appears on the jersey.
-- Confirm the favorite-team name and abbreviation appear in the mascot card.
+B. LOCAL TEAM NAME
+1. Sign in with an account whose Account name is recognizable.
+2. Create a new test league.
+3. Confirm the new fantasy team name equals the Account name.
+4. Join a different league with another account.
+5. Confirm that account's team name also defaults to its Account name.
 
-3. Global theme
-- Open Dashboard, League Hub, Cycle page, My Team, Free Agents, Draft Room, Standings, Playoffs, and Projection Lab.
-- Confirm supported card outlines use the favorite-team outline.
-- Confirm eyebrow labels and supporting/subtext use the favorite-team tint.
-- Confirm errors and game-state colors remain semantic rather than team-colored.
+C. LEAGUE-HOME RENAME
+1. Open League Home.
+2. Confirm `Your Team` and `Rename Team` are visible below the league title.
+3. Rename the team and save.
+4. Confirm the header updates immediately.
+5. Refresh the page and confirm the name remains saved.
+6. Confirm the updated name appears in My Team, standings, draft order, and matchups.
+7. Repeat at a narrow mobile width and confirm the input and buttons remain inside the screen.
 
-4. Cycle page
-- Confirm the current matchup outline uses the favorite-team accent.
-- Confirm Team A / Both / Team B active control uses the favorite-team palette.
-- Confirm played/upcoming/missed circles remain green/yellow/red.
+D. HOSTED API PROXY
+1. Deploy with:
+   `firebase deploy --only functions:nhlApiProxy,hosting:app`
+2. Open `https://cycle-puck.web.app`.
+3. Open a league whose draft/player pool needs NHL rosters.
+4. Confirm the red `Unable to load all NHL rosters` message no longer appears.
+5. Open browser DevTools > Network.
+6. Confirm requests to `/v1/roster/...` return JSON and status 200.
+7. Confirm requests to `/stats/rest/en/...` return JSON and status 200 when projections load.
+8. Refresh a nested Angular route and confirm the app still loads rather than returning 404.
 
-5. Persistence
-- Hard refresh.
-- Sign out and sign back in.
-- Confirm the theme is restored from the saved profile.
+E. REGRESSION
+1. Confirm the daily injury report still loads.
+2. Confirm Draft Setup and Draft Room open.
+3. Confirm league members can rename only their own team.
+4. Confirm a normal manager cannot change another manager's team name.
+5. Confirm localhost `npm start` still loads NHL data through `src/proxy.conf.json`.

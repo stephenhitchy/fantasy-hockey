@@ -301,6 +301,12 @@
 
 .team-matchup-panel {
   min-width: 0;
+  --owner-theme-primary: var(--user-team-primary);
+  --owner-theme-secondary: var(--user-team-secondary);
+  --owner-theme-highlight: var(--user-team-highlight);
+  --owner-theme-outline: rgba(198, 213, 228, 0.18);
+  --owner-theme-outline-soft: rgba(198, 213, 228, 0.16);
+  --owner-theme-glow: transparent;
 }
 
 .team-summary-row {
@@ -309,20 +315,21 @@
   justify-content: space-between;
   gap: 14px;
   padding: 14px;
-  border: 1px solid rgba(198, 213, 228, 0.16);
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 12px;
-  background: #101827;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--owner-theme-primary) 10%, #101827), color-mix(in srgb, var(--owner-theme-secondary) 82%, #101827));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px var(--owner-theme-glow);
 }
 
 .team-summary-row h3 {
   margin: 0;
-  color: white;
+  color: var(--owner-theme-accent-text, white);
   font-size: 16px;
 }
 
 .team-summary-row p {
   margin: 5px 0 0;
-  color: #92a4b8;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 58%, #9bb0c6);
   font-size: 12px;
   font-weight: 800;
 }
@@ -336,8 +343,9 @@
 .team-score-pair div {
   min-width: 68px;
   padding: 8px 9px;
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 9px;
-  background: #1c2738;
+  background: color-mix(in srgb, var(--owner-theme-primary) 10%, #162234);
   text-align: right;
 }
 
@@ -354,7 +362,7 @@
 
 .team-score-pair span {
   margin-top: 3px;
-  color: #9fb0c2;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 54%, #9fb0c2);
   font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
@@ -367,11 +375,9 @@
   gap: 12px;
   margin-top: 12px;
   padding: 13px;
-  border: 1px solid rgba(198, 213, 228, 0.12);
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 13px;
-  background:
-    radial-gradient(circle at top center, rgba(79, 118, 157, 0.18), transparent 34%),
-    #0b111d;
+  background: radial-gradient(circle at top center, color-mix(in srgb, var(--owner-theme-primary) 16%, transparent), transparent 34%), color-mix(in srgb, var(--owner-theme-secondary) 84%, #0b111d);
 }
 
 .forward-row {
@@ -392,7 +398,7 @@
 
 .fantasy-position-header {
   margin-bottom: 7px;
-  color: #eef4fb;
+  color: var(--owner-theme-accent-text, #eef4fb);
   font-size: 10px;
   font-weight: 950;
   letter-spacing: 0.05em;
@@ -414,13 +420,13 @@
   align-items: start;
   gap: 8px;
   min-height: 104px;
+  min-width: 0;
+  max-width: 100%;
   padding: 9px 8px 9px 9px;
-  border: 1px solid rgba(217, 226, 235, 0.16);
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 9px;
-  background: linear-gradient(180deg, #3d4654, #27313f);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--owner-theme-highlight) 10%, #3d4654), color-mix(in srgb, var(--owner-theme-secondary) 72%, #27313f));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
 .goalie-card {
@@ -456,7 +462,7 @@
 
 .fantasy-player-main span {
   margin-top: 3px;
-  color: #edf5ff;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 70%, #edf5ff);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.01em;
@@ -483,8 +489,9 @@
 
 .fantasy-player-score-stack div {
   padding: 3px 4px;
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 5px;
-  background: rgba(12, 18, 29, 0.48);
+  background: color-mix(in srgb, var(--owner-theme-primary) 12%, rgba(12, 18, 29, 0.48));
 }
 
 .fantasy-player-score-stack strong,
@@ -501,7 +508,7 @@
 
 .fantasy-player-score-stack span {
   margin-top: 1px;
-  color: #aebdcb;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 52%, #aebdcb);
   font-size: 7px;
   font-weight: 950;
   text-transform: uppercase;
@@ -514,13 +521,13 @@
   align-items: center;
   margin-top: 7px;
   padding: 8px;
-  border: 1px solid rgba(198, 213, 228, 0.18);
+  border: 1px solid var(--owner-theme-outline-soft);
   border-radius: 7px;
-  background: rgba(17, 26, 42, 0.88);
+  background: color-mix(in srgb, var(--owner-theme-primary) 8%, rgba(17, 26, 42, 0.92));
 }
 
 .position-total-row > span {
-  color: white;
+  color: var(--owner-theme-accent-text, white);
   font-size: 10px;
   font-weight: 950;
 }
@@ -543,7 +550,7 @@
 
 .position-total-row small {
   margin-top: 2px;
-  color: #aebdcb;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 52%, #aebdcb);
   font-size: 7px;
   font-weight: 950;
   text-transform: uppercase;
@@ -551,7 +558,7 @@
 
 .position-total-row em {
   grid-column: 1 / -1;
-  color: #8fa1b5;
+  color: color-mix(in srgb, var(--owner-theme-highlight) 42%, #8fa1b5);
   font-size: 8px;
   font-style: normal;
   font-weight: 850;
@@ -1717,16 +1724,16 @@
     justify-content: center;
     flex-direction: column;
     padding: 7px 5px;
-    border: 1px solid rgba(198, 213, 228, 0.14);
+    border: 1px solid var(--owner-theme-outline-soft, rgba(198, 213, 228, 0.14));
     border-radius: 10px;
-    background: #101c2d;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--owner-theme-primary, #6ea8e5) 10%, #101c2d), color-mix(in srgb, var(--owner-theme-secondary, #13233a) 78%, #101c2d));
   }
 
   .mobile-score-team > span {
     display: block;
     width: 100%;
     overflow: hidden;
-    color: #dce9f7;
+    color: var(--owner-theme-accent-text, #dce9f7);
     font-size: 10px;
     font-weight: 900;
     line-height: 1.15;
@@ -1746,7 +1753,7 @@
   .mobile-score-team > small {
     display: block;
     margin-top: 3px;
-    color: #91a8c0;
+    color: color-mix(in srgb, var(--owner-theme-highlight, #91a8c0) 55%, #91a8c0);
     font-size: 9px;
     font-weight: 850;
   }
@@ -1859,12 +1866,10 @@
 .cycle-transparency-card {
   margin: 18px 0 22px;
   padding: 20px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid rgba(88, 128, 174, 0.32);
   border-radius: 20px;
-  background:
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.13), transparent 24%),
-    #ffffff;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  background: radial-gradient(circle at top right, rgba(86, 143, 199, 0.16), transparent 24%), linear-gradient(180deg, rgba(15, 29, 48, 0.96), rgba(11, 22, 38, 0.94));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
 .transparency-heading {
@@ -1876,23 +1881,23 @@
 
 .transparency-heading h2 {
   margin: 0;
-  color: #0f172a;
+  color: #f2f7ff;
 }
 
 .transparency-heading p {
   max-width: 780px;
   margin: 8px 0 0;
-  color: #64748b;
+  color: #9fb4ca;
   line-height: 1.55;
 }
 
 .cycle-simulator-link {
   flex: 0 0 auto;
   padding: 10px 13px;
-  border: 1px solid #0f766e;
+  border: 1px solid rgba(139, 230, 206, 0.35);
   border-radius: 12px;
-  color: #0f766e;
-  background: #f0fdfa;
+  color: #d8fff1;
+  background: rgba(8, 53, 50, 0.72);
   font-size: 0.82rem;
   font-weight: 950;
   text-decoration: none;
@@ -1907,9 +1912,9 @@
 
 .transparency-metrics article {
   padding: 13px;
-  border: 1px solid #dbe4ee;
+  border: 1px solid rgba(90, 127, 168, 0.24);
   border-radius: 13px;
-  background: #f8fafc;
+  background: rgba(15, 28, 46, 0.9);
 }
 
 .transparency-metrics span,
@@ -1918,7 +1923,7 @@
 }
 
 .transparency-metrics span {
-  color: #64748b;
+  color: #9fb2c9;
   font-size: 0.7rem;
   font-weight: 950;
   letter-spacing: 0.05em;
@@ -1927,7 +1932,7 @@
 
 .transparency-metrics strong {
   margin-top: 6px;
-  color: #0f172a;
+  color: #f3f8ff;
   font-size: 1.08rem;
 }
 
@@ -1938,9 +1943,10 @@
   gap: 10px 16px;
   margin-top: 15px;
   padding: 11px 13px;
+  border: 1px solid rgba(90, 127, 168, 0.22);
   border-radius: 12px;
-  color: #475569;
-  background: #f8fafc;
+  color: #b7c8d9;
+  background: rgba(13, 24, 40, 0.92);
   font-size: 0.78rem;
   font-weight: 850;
 }
@@ -1967,9 +1973,10 @@
 
 .matchup-window-summary > article {
   padding: 14px;
-  border: 1px solid #dbe4ee;
+  border: 1px solid var(--owner-theme-outline-soft, rgba(90, 127, 168, 0.22));
   border-radius: 14px;
-  background: #ffffff;
+  color: #f3f8ff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--owner-theme-primary, #6ea8e5) 10%, #13253d), color-mix(in srgb, var(--owner-theme-secondary, #13253d) 80%, #101827));
 }
 
 .matchup-window-summary strong,
@@ -1977,9 +1984,13 @@
   display: block;
 }
 
+.matchup-window-summary strong {
+  color: var(--owner-theme-accent-text, #f3f8ff);
+}
+
 .matchup-window-summary div > span {
   margin-top: 3px;
-  color: #64748b;
+  color: color-mix(in srgb, var(--owner-theme-highlight, #9fb2c9) 55%, #9fb2c9);
   font-size: 0.82rem;
 }
 
@@ -1993,14 +2004,14 @@
 .pending-slot-chip-row span {
   padding: 5px 7px;
   border-radius: 999px;
-  color: #92400e;
-  background: #fef3c7;
+  color: var(--owner-theme-chip-text, #1d2735);
+  background: var(--owner-theme-chip-background, #fef3c7);
   font-size: 0.7rem;
   font-weight: 950;
 }
 
 .pending-slot-chip-row em {
-  color: #047857;
+  color: #9ff0c6;
   font-size: 0.78rem;
   font-style: normal;
   font-weight: 900;
@@ -2009,9 +2020,10 @@
 .window-game-markers {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   margin-top: 9px;
-  margin-left: -42px;
+  margin-left: 0;
 }
 
 .window-game-marker {
@@ -2021,7 +2033,8 @@
   height: 23px;
   border: 1px solid transparent;
   border-radius: 50%;
-  font-size: 0.68rem;
+  color: #05070a;
+  font-size: 0.72rem;
   font-style: normal;
   font-weight: 950;
   line-height: 1;
@@ -2223,4 +2236,35 @@
 @keyframes shared-scoring-pulse {
   0%, 100% { opacity: 0.6; transform: scale(0.92); }
   50% { opacity: 1; transform: scale(1.08); }
+}
+
+@media (max-width: 640px) {
+  .matchup-detail-card {
+    overflow: hidden;
+    padding: 14px;
+  }
+
+  .team-matchup-panel,
+  .fantasy-roster-board,
+  .fantasy-position-group,
+  .fantasy-position-slots,
+  .fantasy-player-card,
+  .position-total-row {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .single-team-view .team-matchup-panel {
+    padding: 0;
+  }
+
+  .fantasy-player-card {
+    grid-template-columns: 30px minmax(0, 1fr) 48px;
+  }
+
+  .fantasy-player-score-stack {
+    min-width: 0;
+    width: 48px;
+  }
 }
