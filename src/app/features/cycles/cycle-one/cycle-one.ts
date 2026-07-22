@@ -2016,7 +2016,7 @@ export class CycleOne implements OnDestroy {
 
   isFutureWindowPending(pick: DraftPick): boolean {
     const window = this.getWindowForPick(pick);
-    return !window || window.status === 'pending';
+    return !window || window.status === 'scheduled';
   }
 
   getPendingWindowCallout(pick: DraftPick): string {
