@@ -26,7 +26,19 @@ const ESPN_NHL_INJURIES_URL =
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 const NHL_WEB_API_ORIGIN = 'https://api-web.nhle.com';
 const NHL_STATS_API_ORIGIN = 'https://api.nhle.com';
-const NHL_PROXY_TIMEOUT_MS = 20_000;
+const NHL_PROXY_TIMEOUT_MS = 18_000;
+const NHL_PROXY_MAX_ATTEMPTS = 2;
+const NHL_PROXY_MAX_CACHE_ENTRIES = 40;
+const NHL_PROXY_MAX_CACHE_BYTES = 32 * 1024 * 1024;
+
+interface CachedNhlProxyResponse {
+  loadedAt: number;
+  status: number;
+  contentType: string;
+  body: Buffer;
+}
+
+const nhlProxyResponseCache = new Map<string, CachedNhlProxyResponse>();
 
 const NHL_PROXY_PATH_PATTERNS = [
   /^\/v1\/player\/\d+\/game-log\/\d{8}\/2$/,
@@ -69,6 +81,109 @@ function getNhlProxyCacheControl(path: string): string {
   }
 
   return 'public, max-age=120, s-maxage=600';
+}
+
+function getNhlProxyFreshCacheMilliseconds(path: string): number {
+  if (path.includes('/gamecenter/')) {
+    return 8_000;
+  }
+
+  if (path.includes('/club-schedule-season/')) {
+    return 5 * 60 * 1000;
+  }
+
+  if (path.includes('/roster/')) {
+    return 30 * 60 * 1000;
+  }
+
+  return 10 * 60 * 1000;
+}
+
+function getNhlProxyStaleCacheMilliseconds(path: string): number {
+  // Never serve stale live boxscores or play-by-play into the scoring engine.
+  if (path.includes('/gamecenter/')) {
+    return 0;
+  }
+
+  if (path.includes('/club-schedule-season/')) {
+    return 6 * 60 * 60 * 1000;
+  }
+
+  return 24 * 60 * 60 * 1000;
+}
+
+function waitForNhlProxyRetry(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchNhlProxyUpstream(target: URL): Promise<Response> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= NHL_PROXY_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), NHL_PROXY_TIMEOUT_MS);
+
+    try {
+      const upstreamResponse = await fetch(target, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'cycle-puck/1.0'
+        },
+        signal: controller.signal
+      });
+
+      if (
+        upstreamResponse.ok ||
+        ![408, 425, 429, 500, 502, 503, 504].includes(upstreamResponse.status) ||
+        attempt >= NHL_PROXY_MAX_ATTEMPTS
+      ) {
+        return upstreamResponse;
+      }
+
+      lastError = new Error(
+        `NHL upstream returned ${upstreamResponse.status} ${upstreamResponse.statusText}.`
+      );
+    } catch (error: unknown) {
+      lastError = error;
+
+      if (attempt >= NHL_PROXY_MAX_ATTEMPTS) {
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await waitForNhlProxyRetry(500 * attempt);
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Unknown NHL API proxy error.');
+}
+
+function trimNhlProxyResponseCache(): void {
+  const entriesByAge = [...nhlProxyResponseCache.entries()].sort(
+    (first, second) => first[1].loadedAt - second[1].loadedAt
+  );
+
+  let totalBytes = entriesByAge.reduce(
+    (sum, [, entry]) => sum + entry.body.byteLength,
+    0
+  );
+
+  while (
+    entriesByAge.length > NHL_PROXY_MAX_CACHE_ENTRIES ||
+    totalBytes > NHL_PROXY_MAX_CACHE_BYTES
+  ) {
+    const oldest = entriesByAge.shift();
+
+    if (!oldest) {
+      break;
+    }
+
+    totalBytes -= oldest[1].body.byteLength;
+    nhlProxyResponseCache.delete(oldest[0]);
+  }
 }
 
 const MAX_NOTE_LENGTH = 500;
@@ -1012,7 +1127,7 @@ async function claimDailyRefresh(
 export const nhlApiProxy = onRequest(
   {
     region: FUNCTION_REGION,
-    timeoutSeconds: 30,
+    timeoutSeconds: 45,
     memory: '256MiB',
     maxInstances: 10,
     cors: false
@@ -1035,39 +1150,79 @@ export const nhlApiProxy = onRequest(
       return;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      NHL_PROXY_TIMEOUT_MS
-    );
+    const cacheKey = target.toString();
+    const cached = nhlProxyResponseCache.get(cacheKey);
+    const cachedAge = cached ? Date.now() - cached.loadedAt : Number.POSITIVE_INFINITY;
+
+    if (cached && cachedAge <= getNhlProxyFreshCacheMilliseconds(target.pathname)) {
+      response
+        .status(cached.status)
+        .set('Content-Type', cached.contentType)
+        .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
+        .set('X-Cycle-Puck-Proxy-Cache', 'fresh')
+        .set('X-Content-Type-Options', 'nosniff')
+        .send(cached.body);
+      return;
+    }
 
     try {
-      const upstreamResponse = await fetch(target, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'cycle-puck/1.0'
-        },
-        signal: controller.signal
-      });
+      const upstreamResponse = await fetchNhlProxyUpstream(target);
 
-      const responseBody = Buffer.from(
-        await upstreamResponse.arrayBuffer()
-      );
+      if (
+        !upstreamResponse.ok &&
+        cached &&
+        cachedAge <= getNhlProxyStaleCacheMilliseconds(target.pathname) &&
+        [408, 425, 429, 500, 502, 503, 504].includes(upstreamResponse.status)
+      ) {
+        response
+          .status(cached.status)
+          .set('Content-Type', cached.contentType)
+          .set('Cache-Control', 'private, no-cache')
+          .set('Warning', '110 - Response is stale because the NHL service was unavailable')
+          .set('X-Cycle-Puck-Proxy-Cache', 'stale')
+          .set('X-Content-Type-Options', 'nosniff')
+          .send(cached.body);
+        return;
+      }
+
+      const responseBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      const contentType =
+        upstreamResponse.headers.get('content-type') ??
+        'application/json; charset=utf-8';
+
+      if (upstreamResponse.ok) {
+        nhlProxyResponseCache.set(cacheKey, {
+          loadedAt: Date.now(),
+          status: upstreamResponse.status,
+          contentType,
+          body: responseBody
+        });
+        trimNhlProxyResponseCache();
+      }
 
       response
         .status(upstreamResponse.status)
-        .set(
-          'Content-Type',
-          upstreamResponse.headers.get('content-type') ??
-            'application/json; charset=utf-8'
-        )
-        .set(
-          'Cache-Control',
-          getNhlProxyCacheControl(target.pathname)
-        )
+        .set('Content-Type', contentType)
+        .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
+        .set('X-Cycle-Puck-Proxy-Cache', 'miss')
         .set('X-Content-Type-Options', 'nosniff')
         .send(responseBody);
     } catch (error: unknown) {
+      if (
+        cached &&
+        cachedAge <= getNhlProxyStaleCacheMilliseconds(target.pathname)
+      ) {
+        response
+          .status(cached.status)
+          .set('Content-Type', cached.contentType)
+          .set('Cache-Control', 'private, no-cache')
+          .set('Warning', '110 - Response is stale because the NHL service was unavailable')
+          .set('X-Cycle-Puck-Proxy-Cache', 'stale')
+          .set('X-Content-Type-Options', 'nosniff')
+          .send(cached.body);
+        return;
+      }
+
       const message = error instanceof Error
         ? error.message
         : 'Unknown NHL API proxy error.';
@@ -1080,8 +1235,6 @@ export const nhlApiProxy = onRequest(
       response.status(502).json({
         message: 'The NHL data service could not be reached. Please try again shortly.'
       });
-    } finally {
-      clearTimeout(timeout);
     }
   }
 );
@@ -1439,3 +1592,11 @@ export const refreshDailyPlayerAvailability = onCall(
     }
   }
 );
+
+export {
+  advanceHistoricalReplayDay,
+  initializeSeasonAfterDraft,
+  runScheduledLeagueAutomation,
+} from './league-automation';
+
+export { applyImmediateRosterMove } from './roster-moves';

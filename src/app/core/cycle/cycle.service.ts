@@ -389,6 +389,16 @@ function getStoredProjectionFields(asset: DraftableAsset | RosterAsset): DraftPr
     seasonBaselineCyclePoints: projection.seasonBaselineCyclePoints ?? null,
     recentFormAdjustment: projection.recentFormAdjustment ?? null,
     roleAdjustment: projection.roleAdjustment ?? null,
+    scheduleStrengthAdjustment: projection.scheduleStrengthAdjustment ?? null,
+    scheduleStrengthMultiplier: projection.scheduleStrengthMultiplier ?? null,
+    scheduleDifficultyRating: projection.scheduleDifficultyRating ?? null,
+    scheduleDifficultyLabel: projection.scheduleDifficultyLabel ?? null,
+    scheduleDataConfidence: projection.scheduleDataConfidence ?? null,
+    projectionHomeGames: projection.projectionHomeGames ?? null,
+    projectionRoadGames: projection.projectionRoadGames ?? null,
+    projectionBackToBackGames: projection.projectionBackToBackGames ?? null,
+    projectionRestAdvantageGames: projection.projectionRestAdvantageGames ?? null,
+    projectionOpponentAbbreviations: projection.projectionOpponentAbbreviations ?? null,
     projectionDataSeason: projection.projectionDataSeason ?? null,
     projectionDataSource: projection.projectionDataSource ?? null,
     projectionGamesPlayed: projection.projectionGamesPlayed ?? null,
@@ -423,6 +433,7 @@ function getStoredProjectionFields(asset: DraftableAsset | RosterAsset): DraftPr
     healthyProjectedCyclePoints: projection.healthyProjectedCyclePoints ?? null,
     scheduledGamesInProjectionCycle: projection.scheduledGamesInProjectionCycle ?? null,
     expectedGamesAvailable: projection.expectedGamesAvailable ?? null,
+    expectedGamesMissed: projection.expectedGamesMissed ?? null,
     availabilityAdjustment: projection.availabilityAdjustment ?? null,
     availabilityAdjustedCyclePoints: projection.availabilityAdjustedCyclePoints ?? null,
     availabilityStatus: projection.availabilityStatus ?? null,
@@ -1046,6 +1057,158 @@ export function listenToCycleMatchups(
   );
 }
 
+/**
+ * Follows every currently active fantasy cycle and selects the user's earliest
+ * unfinished matchup. This intentionally does not assume one league-wide cycle
+ * is the only active period: independent roster-slot windows can leave several
+ * matchup cycles open at the same time.
+ *
+ * When no unfinished matchup remains, the user's most recent completed matchup
+ * is returned as a useful fallback.
+ */
+export function listenToEarliestUnfinishedOwnerMatchup(
+  leagueId: string,
+  ownerId: string,
+  callback: (matchup: FantasyMatchup | null) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  let trackedCycles: FantasyCycle[] = [];
+  let stopped = false;
+  const matchupsByCycle = new Map<number, FantasyMatchup[]>();
+  const loadedCycleNumbers = new Set<number>();
+  const stopMatchupListeners = new Map<number, () => void>();
+
+  const emitSelection = (): void => {
+    if (stopped) {
+      return;
+    }
+
+    const expectedCycleNumbers = trackedCycles.map((cycle) => cycle.cycleNumber);
+
+    if (expectedCycleNumbers.some((cycleNumber) => !loadedCycleNumbers.has(cycleNumber))) {
+      return;
+    }
+
+    const ownerMatchups = trackedCycles
+      .flatMap((cycle) =>
+        (matchupsByCycle.get(cycle.cycleNumber) ?? [])
+          .filter(
+            (matchup) =>
+              matchup.teamAOwnerId === ownerId || matchup.teamBOwnerId === ownerId,
+          )
+          .map((matchup) => ({ cycleNumber: cycle.cycleNumber, matchup })),
+      )
+      .sort((first, second) => {
+        if (first.cycleNumber !== second.cycleNumber) {
+          return first.cycleNumber - second.cycleNumber;
+        }
+
+        return first.matchup.id.localeCompare(second.matchup.id);
+      });
+
+    const earliestUnfinished = ownerMatchups.find(
+      ({ matchup }) => matchup.status !== 'complete',
+    );
+
+    if (earliestUnfinished) {
+      callback(earliestUnfinished.matchup);
+      return;
+    }
+
+    callback(ownerMatchups.length > 0 ? ownerMatchups[ownerMatchups.length - 1].matchup : null);
+  };
+
+  const stopCyclesListener = listenToLeagueCycles(
+    leagueId,
+    (cycles) => {
+      const orderedCycles = [...cycles].sort(
+        (first, second) => first.cycleNumber - second.cycleNumber,
+      );
+      const activeCycles = orderedCycles.filter((cycle) => cycle.status === 'active');
+      const latestCompletedCycle = [...orderedCycles]
+        .reverse()
+        .find((cycle) => cycle.status === 'complete');
+      const nextTrackedCycles = [...activeCycles];
+
+      if (
+        latestCompletedCycle &&
+        !nextTrackedCycles.some(
+          (cycle) => cycle.cycleNumber === latestCompletedCycle.cycleNumber,
+        )
+      ) {
+        nextTrackedCycles.push(latestCompletedCycle);
+      }
+
+      if (nextTrackedCycles.length === 0 && orderedCycles.length > 0) {
+        nextTrackedCycles.push(orderedCycles[orderedCycles.length - 1]);
+      }
+
+      nextTrackedCycles.sort((first, second) => first.cycleNumber - second.cycleNumber);
+      trackedCycles = nextTrackedCycles;
+
+      const nextCycleNumbers = new Set(
+        nextTrackedCycles.map((cycle) => cycle.cycleNumber),
+      );
+
+      for (const [cycleNumber, stopListener] of stopMatchupListeners.entries()) {
+        if (nextCycleNumbers.has(cycleNumber)) {
+          continue;
+        }
+
+        stopListener();
+        stopMatchupListeners.delete(cycleNumber);
+        matchupsByCycle.delete(cycleNumber);
+        loadedCycleNumbers.delete(cycleNumber);
+      }
+
+      for (const cycle of nextTrackedCycles) {
+        if (stopMatchupListeners.has(cycle.cycleNumber)) {
+          continue;
+        }
+
+        const stopListener = listenToCycleMatchups(
+          leagueId,
+          cycle.cycleNumber,
+          (matchups) => {
+            matchupsByCycle.set(cycle.cycleNumber, matchups);
+            loadedCycleNumbers.add(cycle.cycleNumber);
+            emitSelection();
+          },
+          (error) => {
+            matchupsByCycle.set(cycle.cycleNumber, []);
+            loadedCycleNumbers.add(cycle.cycleNumber);
+            emitSelection();
+            onError?.(error);
+          },
+        );
+
+        stopMatchupListeners.set(cycle.cycleNumber, stopListener);
+      }
+
+      if (nextTrackedCycles.length === 0) {
+        callback(null);
+        return;
+      }
+
+      emitSelection();
+    },
+    onError,
+  );
+
+  return () => {
+    stopped = true;
+    stopCyclesListener();
+
+    for (const stopListener of stopMatchupListeners.values()) {
+      stopListener();
+    }
+
+    stopMatchupListeners.clear();
+    matchupsByCycle.clear();
+    loadedCycleNumbers.clear();
+  };
+}
+
 export function listenToCycleRosterPicks(
   leagueId: string,
   cycleNumber: number,
@@ -1601,24 +1764,43 @@ interface PendingSlotActivationPlan {
   incomingAsset: RosterAsset;
 }
 
+function getPendingMoveRequestedCycleNumber(
+  pendingMove: PendingRosterSlotMove | null | undefined,
+): number | null {
+  const requestedCycleNumber = pendingMove?.requestedEffectiveCycleNumber;
+
+  return typeof requestedCycleNumber === 'number' &&
+    Number.isFinite(requestedCycleNumber) &&
+    requestedCycleNumber > 0
+    ? Math.floor(requestedCycleNumber)
+    : null;
+}
+
+function canActivatePendingMoveInCycle(
+  pendingMove: PendingRosterSlotMove | null | undefined,
+  cycleNumber: number,
+): boolean {
+  if (!pendingMove) {
+    return false;
+  }
+
+  const requestedCycleNumber = getPendingMoveRequestedCycleNumber(pendingMove);
+
+  return requestedCycleNumber === null || cycleNumber >= requestedCycleNumber;
+}
+
 async function buildNextWindowSnapshotPicks(
   leagueId: string,
   teams: FantasyTeam[],
   completedWindowKeys: Set<string>,
+  currentWindowSlotKeys: Set<string>,
   nextCycleNumber: number,
 ): Promise<{
   picks: DraftPick[];
   expectedRosterSlotIdsByOwner: Record<string, string[]>;
   activationPlansBySlotKey: Record<string, PendingSlotActivationPlan>;
+  openSlotRolloversByOwner: Record<string, string[]>;
 }> {
-  if (completedWindowKeys.size === 0) {
-    return {
-      picks: [],
-      expectedRosterSlotIdsByOwner: {},
-      activationPlansBySlotKey: {},
-    };
-  }
-
   const draftPicksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
   const [draftPicksSnapshot, projectionAssetsByKey, rosterSnapshots] = await Promise.all([
     getDocs(draftPicksQuery),
@@ -1644,6 +1826,7 @@ async function buildNextWindowSnapshotPicks(
   const nextPicks: DraftPick[] = [];
   const expectedRosterSlotIdsByOwner: Record<string, string[]> = {};
   const activationPlansBySlotKey: Record<string, PendingSlotActivationPlan> = {};
+  const openSlotRolloversByOwner: Record<string, string[]> = {};
 
   for (const rosterSnapshot of rosterSnapshots) {
     const activeSlots = rosterSnapshot.roster?.activeSlots ?? [];
@@ -1655,17 +1838,30 @@ async function buildNextWindowSnapshotPicks(
       const completedAssetKey = currentAssetKey
         ? `${rosterSnapshot.ownerId}::asset:${currentAssetKey}`
         : '';
+      const pendingMoveReady = canActivatePendingMoveInCycle(slot.pendingMove, nextCycleNumber);
+      const slotWindowCompleted =
+        completedWindowKeys.has(completedSlotKey) ||
+        Boolean(completedAssetKey && completedWindowKeys.has(completedAssetKey));
+      const slotHasCurrentWindow = currentWindowSlotKeys.has(completedSlotKey);
+      const emptySlotReachedNextCycle =
+        !currentAsset && (slotWindowCompleted || !slotHasCurrentWindow);
+      const deferredOpenSlotReady = emptySlotReachedNextCycle && pendingMoveReady;
 
-      if (
-        !completedWindowKeys.has(completedSlotKey) &&
-        (!completedAssetKey || !completedWindowKeys.has(completedAssetKey))
-      ) {
+      if (!slotWindowCompleted && !deferredOpenSlotReady && !emptySlotReachedNextCycle) {
         continue;
       }
 
-      const nextAsset = slot.pendingMove?.incomingAsset ?? currentAsset;
+      const nextAsset = pendingMoveReady
+        ? (slot.pendingMove?.incomingAsset ?? currentAsset)
+        : currentAsset;
 
       if (!nextAsset) {
+        // An empty active slot has no NHL schedule of its own. Once the league
+        // has opened the next asynchronous cycle for other slots, carry this
+        // slot's immediate-entry marker forward so a still-untouched incoming
+        // asset can join that exact cycle instead of being forced one cycle late.
+        openSlotRolloversByOwner[rosterSnapshot.ownerId] ??= [];
+        openSlotRolloversByOwner[rosterSnapshot.ownerId].push(slot.slotId);
         continue;
       }
 
@@ -1701,7 +1897,7 @@ async function buildNextWindowSnapshotPicks(
         ),
       });
 
-      if (slot.pendingMove) {
+      if (slot.pendingMove && pendingMoveReady) {
         activationPlansBySlotKey[completedSlotKey] = {
           ownerId: rosterSnapshot.ownerId,
           rosterSlotId: slot.slotId,
@@ -1718,6 +1914,10 @@ async function buildNextWindowSnapshotPicks(
     slotIds.sort();
   }
 
+  for (const slotIds of Object.values(openSlotRolloversByOwner)) {
+    slotIds.sort();
+  }
+
   return {
     picks: nextPicks.sort((first, second) => {
       if (first.ownerId !== second.ownerId) {
@@ -1730,6 +1930,7 @@ async function buildNextWindowSnapshotPicks(
     }),
     expectedRosterSlotIdsByOwner,
     activationPlansBySlotKey,
+    openSlotRolloversByOwner,
   };
 }
 
@@ -1761,15 +1962,19 @@ export async function advanceCompletedRegularSeasonAssetWindows(
   }
 
   const completedWindowKeys = getCompletedWindowPickKeys(currentPicks, scoring);
+  const currentWindowSlotKeys = new Set(
+    currentPicks.map((pick) => `${pick.ownerId}::${getRosterSlotIdFromPick(pick)}`),
+  );
 
-  if (completedWindowKeys.size === 0) {
-    return null;
-  }
-
-  const { picks: nextPicks, activationPlansBySlotKey } = await buildNextWindowSnapshotPicks(
+  const {
+    picks: nextPicks,
+    activationPlansBySlotKey,
+    openSlotRolloversByOwner,
+  } = await buildNextWindowSnapshotPicks(
     leagueId,
     teams,
     completedWindowKeys,
+    currentWindowSlotKeys,
     nextCycleNumber,
   );
   const expectedRosterSlotIdsByOwner =
@@ -1777,6 +1982,8 @@ export async function advanceCompletedRegularSeasonAssetWindows(
       ? (currentCycle.expectedRosterSlotIdsByOwner ?? {})
       : buildExpectedRosterSlotIdsByOwner(currentPicks);
 
+  // Do not create a new league cycle solely because a roster slot is empty.
+  // The marker rolls forward only alongside at least one real asset window.
   if (nextPicks.length === 0) {
     return null;
   }
@@ -1792,16 +1999,17 @@ export async function advanceCompletedRegularSeasonAssetWindows(
       getRosterSlotIdFromPick(pick),
     ),
   );
-  const activationOwnerIds = [
-    ...new Set(
-      nextPicks
+  const rosterUpdateOwnerIds = [
+    ...new Set([
+      ...nextPicks
         .filter((pick) =>
           Boolean(activationPlansBySlotKey[`${pick.ownerId}::${getRosterSlotIdFromPick(pick)}`]),
         )
         .map((pick) => pick.ownerId),
-    ),
+      ...Object.keys(openSlotRolloversByOwner),
+    ]),
   ];
-  const activationRosterRefs = activationOwnerIds.map((ownerId) =>
+  const rosterUpdateRefs = rosterUpdateOwnerIds.map((ownerId) =>
     getTeamRosterRef(leagueId, ownerId),
   );
   const currentExpectedRosterSlotIdsByOwner =
@@ -1822,15 +2030,15 @@ export async function advanceCompletedRegularSeasonAssetWindows(
       transaction.get(nextCycleRef),
       transaction.get(draftRef),
       ...nextPickRefs.map((ref) => transaction.get(ref)),
-      ...activationRosterRefs.map((ref) => transaction.get(ref)),
+      ...rosterUpdateRefs.map((ref) => transaction.get(ref)),
     ]);
     const nextCycleSnapshot = snapshots[0];
     const draftSnapshot = snapshots[1];
     const nextPickSnapshots = snapshots.slice(2, 2 + nextPickRefs.length);
-    const activationRosterSnapshots = snapshots.slice(2 + nextPickRefs.length);
-    const activationRostersByOwnerId = new Map(
-      activationOwnerIds.map((ownerId, index) => {
-        const snapshot = activationRosterSnapshots[index];
+    const rosterUpdateSnapshots = snapshots.slice(2 + nextPickRefs.length);
+    const rostersByOwnerId = new Map(
+      rosterUpdateOwnerIds.map((ownerId, index) => {
+        const snapshot = rosterUpdateSnapshots[index];
 
         return [
           ownerId,
@@ -1938,6 +2146,36 @@ export async function advanceCompletedRegularSeasonAssetWindows(
     let newlyAssignedWindowCount = 0;
     const updatedRosterOwnerIds = new Set<string>();
 
+    for (const [ownerId, slotIds] of Object.entries(openSlotRolloversByOwner)) {
+      const roster = rostersByOwnerId.get(ownerId);
+
+      if (!roster) {
+        continue;
+      }
+
+      for (const slotId of slotIds) {
+        const slotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === slotId);
+
+        if (slotIndex < 0) {
+          continue;
+        }
+
+        const slot = roster.activeSlots[slotIndex];
+
+        // Re-check the authoritative roster inside the transaction. A user may
+        // have filled this slot after the preflight read; never overwrite that.
+        if (slot.asset || canActivatePendingMoveInCycle(slot.pendingMove, nextCycleNumber)) {
+          continue;
+        }
+
+        roster.activeSlots[slotIndex] = {
+          ...slot,
+          openFromCycleNumber: nextCycleNumber,
+        };
+        updatedRosterOwnerIds.add(ownerId);
+      }
+    }
+
     nextPicks.forEach((pick, index) => {
       if (nextPickSnapshots[index]?.exists()) {
         return;
@@ -1948,7 +2186,7 @@ export async function advanceCompletedRegularSeasonAssetWindows(
       const activationPlan = activationPlansBySlotKey[slotKey] ?? null;
 
       if (activationPlan) {
-        const roster = activationRostersByOwnerId.get(pick.ownerId);
+        const roster = rostersByOwnerId.get(pick.ownerId);
 
         if (!roster) {
           throw new Error(
@@ -1982,15 +2220,43 @@ export async function advanceCompletedRegularSeasonAssetWindows(
         }
 
         const outgoingAsset = savedSlot.asset;
+        const sourceBenchSlotId = savedPendingMove.sourceBenchSlotId ?? null;
+
+        if (sourceBenchSlotId) {
+          const benchSlotIndex = roster.benchSlots.findIndex(
+            (benchSlot) => benchSlot.slotId === sourceBenchSlotId,
+          );
+
+          if (benchSlotIndex === -1) {
+            throw new Error(
+              `Bench slot ${sourceBenchSlotId} was not found while activating ${rosterSlotId}.`,
+            );
+          }
+
+          const benchSlot = roster.benchSlots[benchSlotIndex];
+          if (getRosterAssetKey(benchSlot.asset) !== incomingAssetKey) {
+            throw new Error(
+              `The reserved bench asset for ${rosterSlotId} changed before activation.`,
+            );
+          }
+
+          roster.benchSlots[benchSlotIndex] = {
+            ...benchSlot,
+            asset: outgoingAsset
+              ? { ...outgoingAsset, rosterStatus: 'benched' }
+              : null,
+          };
+        }
 
         roster.activeSlots[slotIndex] = {
           ...savedSlot,
-          asset: savedPendingMove.incomingAsset,
+          asset: { ...savedPendingMove.incomingAsset, rosterStatus: 'active' },
           pendingMove: null,
+          openFromCycleNumber: null,
         };
         updatedRosterOwnerIds.add(pick.ownerId);
 
-        if (outgoingAsset) {
+        if (!sourceBenchSlotId && outgoingAsset) {
           const outgoingAssetKey = getRosterAssetKey(outgoingAsset);
 
           if (outgoingAssetKey && outgoingAssetKey !== incomingAssetKey) {
@@ -2014,11 +2280,12 @@ export async function advanceCompletedRegularSeasonAssetWindows(
         }
 
         transaction.set(doc(getTransactionsRef(leagueId)), {
-          type: 'slot-move-activated',
+          type: sourceBenchSlotId ? 'active-bench-swap-activated' : 'slot-move-activated',
           ownerId: pick.ownerId,
           addedAsset: rosterAssetToDraftableAsset(savedPendingMove.incomingAsset),
           droppedAsset: outgoingAsset,
-          waiverId: outgoingAsset ? getRosterAssetKey(outgoingAsset) : null,
+          waiverId: !sourceBenchSlotId && outgoingAsset ? getRosterAssetKey(outgoingAsset) : null,
+          benchSlotId: sourceBenchSlotId,
           rosterSlotId,
           targetSlotId: rosterSlotId,
           queuedMoveId: savedPendingMove.id,
@@ -2038,7 +2305,7 @@ export async function advanceCompletedRegularSeasonAssetWindows(
     });
 
     for (const ownerId of updatedRosterOwnerIds) {
-      const roster = activationRostersByOwnerId.get(ownerId);
+      const roster = rostersByOwnerId.get(ownerId);
 
       if (!roster) {
         continue;
@@ -2049,6 +2316,7 @@ export async function advanceCompletedRegularSeasonAssetWindows(
         {
           schemaVersion: roster.schemaVersion,
           activeSlots: roster.activeSlots,
+          benchSlots: roster.benchSlots,
           irSlots: roster.irSlots,
           updatedAt: serverTimestamp(),
         },

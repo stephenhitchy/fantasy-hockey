@@ -1,0 +1,18 @@
+ADD/DROP CYCLE-SAFETY REPLACEMENT FILES
+=======================================
+
+ADD_DROP_CYCLE_SAFETY_INSTALL.txt
+ADD_DROP_CYCLE_SAFETY_MANIFEST.txt
+ADD_DROP_CYCLE_SAFETY_REPORT.md
+
+src/app/features/free-agents/free-agents.ts
+src/app/features/free-agents/free-agents.html
+src/app/features/free-agents/free-agents.css
+
+src/app/core/transactions/roster-move-eligibility.service.ts
+src/app/core/draft/draft.service.ts
+src/app/core/cycle/cycle.service.ts
+src/app/core/playoffs/playoff-window-bank.service.ts
+
+functions/src/shared/core/cycle/cycle.service.ts
+functions/src/shared/core/playoffs/playoff-window-bank.service.ts

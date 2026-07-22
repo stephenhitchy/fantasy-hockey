@@ -1,13 +1,6 @@
-Matchup themed opponent + mobile fix v1
-
-Changed files
-- src/app/features/cycles/cycle-one/cycle-one.ts
-- src/app/features/cycles/cycle-one/cycle-one.html
-- src/app/features/cycles/cycle-one/cycle-one.css
-
-Highlights
-- Added favorite-team theme loading for matchup owners using stored user profiles.
-- Applied team theme styling to the desktop matchup panels and mobile sticky score bar.
-- Restyled the Cycle Transparency card from white to a dark blue surface.
-- Themed the transparency matchup summary chips/cards by team.
-- Added small-screen width/overflow guards to keep the matchup player area centered better on mobile.
+- Scoring Rules V3 preserves forward scoring, stabilizes defense through TOI/blocks/hits, and replaces goalie save-percentage tiers with a continuous baseline-relative quality curve.
+- Favorite-team selection saves immediately to the signed-in user's Firestore profile.
+- Dashboard mascot card links to account settings.
+- User update rules allow only username, favorite team, reduced motion, and landing page preferences.
+- Username validation runs only when username itself changes.
+- Signed-in users may get an individual profile document for matchup theme lookup; collection listing remains denied.

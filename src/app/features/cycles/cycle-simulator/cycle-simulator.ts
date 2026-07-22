@@ -5,14 +5,15 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../../../core/firebase';
 import {
   CycleSimulationReport,
-  runDeterministicCycleWindowSimulation
+  runDeterministicCycleWindowSimulation,
 } from '../../../core/cycle/cycle-window-simulator';
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -25,20 +26,18 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-cycle-simulator',
   imports: [RouterLink],
   templateUrl: './cycle-simulator.html',
-  styleUrl: './cycle-simulator.css'
+  styleUrl: './cycle-simulator.css',
 })
 export class CycleSimulator {
   leagueId = '';
   league = signal<League | null>(null);
-  report = signal<CycleSimulationReport>(
-    runDeterministicCycleWindowSimulation()
-  );
+  report = signal<CycleSimulationReport>(runDeterministicCycleWindowSimulation());
   loading = signal(true);
   errorMessage = signal('');
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadPage();
   }
@@ -72,9 +71,7 @@ export class CycleSimulator {
       this.league.set(league);
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to open the cycle simulator.'
+        error instanceof Error ? error.message : 'Unable to open the cycle simulator.',
       );
     } finally {
       this.loading.set(false);

@@ -23,6 +23,25 @@
   </aside>
 }
 
+<div class="global-team-ribbon" aria-hidden="true">
+  <div class="global-team-ribbon-track">
+    @for (logo of teamRibbon; track $index) {
+      <span class="global-team-logo-chip">
+        <img
+          [src]="logo.logoUrl"
+          [alt]="''"
+          width="22"
+          height="22"
+          loading="lazy"
+          decoding="async"
+          fetchpriority="low"
+        />
+        <small>{{ logo.abbreviation }}</small>
+      </span>
+    }
+  </div>
+</div>
+
 <main id="main-content" class="main-content" tabindex="-1">
   <router-outlet></router-outlet>
 </main>

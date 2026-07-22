@@ -1,22 +1,2 @@
-VALIDATION COMPLETED
-
-PASS
-- TypeScript application compilation:
-  node node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit
-- Angular template compilation:
-  node node_modules/@angular/compiler-cli/bundles/src/bin/ngc.js -p tsconfig.app.json
-- Focused calibration tests: 2 / 2 passed.
-- Independent-window projection simulator: 10 / 10 checks passed.
-- Combined focused Vitest run: 3 / 3 tests passed using jsdom.
-- Prettier formatting completed for all changed TypeScript files.
-
-KNOWN TEST ENVIRONMENT NOTE
-- Firebase Analytics emits non-fatal IndexedDB/network warnings under jsdom.
-- Running the projection simulator under a pure Node environment fails because
-  the existing Firebase Analytics initialization expects window. This is a
-  pre-existing test-environment issue, not a projection-calibration failure.
-
-BUILD NOTE
-- Full ng build was not executed in the packaging container because its Node
-  version is v22.16.0 and Angular 22 requires at least v22.22.3.
-- The user’s local Node v22.23.1 satisfies Angular’s requirement.
+The Angular project containing these files completed npm run build successfully on 2026-07-20.
+The Firestore rules file was checked for balanced braces, parentheses, and brackets.

@@ -1,0 +1,10 @@
+Extract this archive over:
+/Users/StephenH/Documents/Programming/fantasy-hockey
+
+Then run:
+
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+npm run build
+firebase deploy --only hosting:app -m "Recover interrupted injury refreshes"
+
+After deployment, hard-refresh the site. On Safari use Option + Command + R.

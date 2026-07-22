@@ -3,273 +3,168 @@ export interface PixelLogoItem {
   logoUrl: string;
 }
 
-export interface PixelTeamTheme extends PixelLogoItem {
+interface PixelTeamPalette extends PixelLogoItem {
   name: string;
   primaryColor: string;
   secondaryColor: string;
-  highlightColor: string;
+  tertiaryColor: string;
 }
 
-export const NHL_PIXEL_TEAMS: PixelTeamTheme[] = [
-  {
-    abbreviation: 'ANA',
-    name: 'Anaheim Ducks',
-    primaryColor: '#fc4c02',
-    secondaryColor: '#1b1b1b',
-    highlightColor: '#f5c242',
-    logoUrl: getNhlLogoUrl('ANA'),
-  },
-  {
-    abbreviation: 'BOS',
-    name: 'Boston Bruins',
-    primaryColor: '#ffb81c',
-    secondaryColor: '#111111',
-    highlightColor: '#fff1b8',
-    logoUrl: getNhlLogoUrl('BOS'),
-  },
-  {
-    abbreviation: 'BUF',
-    name: 'Buffalo Sabres',
-    primaryColor: '#2f76c7',
-    secondaryColor: '#ffb81c',
-    highlightColor: '#d9ebff',
-    logoUrl: getNhlLogoUrl('BUF'),
-  },
-  {
-    abbreviation: 'CGY',
-    name: 'Calgary Flames',
-    primaryColor: '#d62732',
-    secondaryColor: '#f1b434',
-    highlightColor: '#ffe9a6',
-    logoUrl: getNhlLogoUrl('CGY'),
-  },
-  {
-    abbreviation: 'CAR',
-    name: 'Carolina Hurricanes',
-    primaryColor: '#e03a3e',
-    secondaryColor: '#20252d',
-    highlightColor: '#ffd0d2',
-    logoUrl: getNhlLogoUrl('CAR'),
-  },
-  {
-    abbreviation: 'CHI',
-    name: 'Chicago Blackhawks',
-    primaryColor: '#cf0a2c',
-    secondaryColor: '#111111',
-    highlightColor: '#ffd0d8',
-    logoUrl: getNhlLogoUrl('CHI'),
-  },
-  {
-    abbreviation: 'COL',
-    name: 'Colorado Avalanche',
-    primaryColor: '#8a244b',
-    secondaryColor: '#3c7bb6',
-    highlightColor: '#d8eaff',
-    logoUrl: getNhlLogoUrl('COL'),
-  },
-  {
-    abbreviation: 'CBJ',
-    name: 'Columbus Blue Jackets',
-    primaryColor: '#244d85',
-    secondaryColor: '#ce2131',
-    highlightColor: '#d7e8ff',
-    logoUrl: getNhlLogoUrl('CBJ'),
-  },
-  {
-    abbreviation: 'DAL',
-    name: 'Dallas Stars',
-    primaryColor: '#0f8b5f',
-    secondaryColor: '#1b2427',
-    highlightColor: '#c5f3df',
-    logoUrl: getNhlLogoUrl('DAL'),
-  },
-  {
-    abbreviation: 'DET',
-    name: 'Detroit Red Wings',
-    primaryColor: '#ce1126',
-    secondaryColor: '#f5f5f5',
-    highlightColor: '#ffd3d8',
-    logoUrl: getNhlLogoUrl('DET'),
-  },
-  {
-    abbreviation: 'EDM',
-    name: 'Edmonton Oilers',
-    primaryColor: '#ff5b20',
-    secondaryColor: '#1d4f91',
-    highlightColor: '#ffd5c4',
-    logoUrl: getNhlLogoUrl('EDM'),
-  },
-  {
-    abbreviation: 'FLA',
-    name: 'Florida Panthers',
-    primaryColor: '#c8102e',
-    secondaryColor: '#d6b76e',
-    highlightColor: '#fff0bd',
-    logoUrl: getNhlLogoUrl('FLA'),
-  },
-  {
-    abbreviation: 'LAK',
-    name: 'Los Angeles Kings',
-    primaryColor: '#a7b1bd',
-    secondaryColor: '#151515',
-    highlightColor: '#eef5ff',
-    logoUrl: getNhlLogoUrl('LAK'),
-  },
-  {
-    abbreviation: 'MIN',
-    name: 'Minnesota Wild',
-    primaryColor: '#1d5b3a',
-    secondaryColor: '#c52d37',
-    highlightColor: '#d8f5e7',
-    logoUrl: getNhlLogoUrl('MIN'),
-  },
-  {
-    abbreviation: 'MTL',
-    name: 'Montreal Canadiens',
-    primaryColor: '#d9233f',
-    secondaryColor: '#2455a4',
-    highlightColor: '#dbe8ff',
-    logoUrl: getNhlLogoUrl('MTL'),
-  },
-  {
-    abbreviation: 'NSH',
-    name: 'Nashville Predators',
-    primaryColor: '#ffcc35',
-    secondaryColor: '#18375e',
-    highlightColor: '#fff2af',
-    logoUrl: getNhlLogoUrl('NSH'),
-  },
-  {
-    abbreviation: 'NJD',
-    name: 'New Jersey Devils',
-    primaryColor: '#ce1126',
-    secondaryColor: '#1b1b1b',
-    highlightColor: '#ffd1d7',
-    logoUrl: getNhlLogoUrl('NJD'),
-  },
-  {
-    abbreviation: 'NYI',
-    name: 'New York Islanders',
-    primaryColor: '#f47b20',
-    secondaryColor: '#2456a6',
-    highlightColor: '#ffd6b8',
-    logoUrl: getNhlLogoUrl('NYI'),
-  },
-  {
-    abbreviation: 'NYR',
-    name: 'New York Rangers',
-    primaryColor: '#2d64bd',
-    secondaryColor: '#d9223f',
-    highlightColor: '#dceaff',
-    logoUrl: getNhlLogoUrl('NYR'),
-  },
-  {
-    abbreviation: 'OTT',
-    name: 'Ottawa Senators',
-    primaryColor: '#c61d34',
-    secondaryColor: '#c9a65a',
-    highlightColor: '#ffe9ae',
-    logoUrl: getNhlLogoUrl('OTT'),
-  },
-  {
-    abbreviation: 'PHI',
-    name: 'Philadelphia Flyers',
-    primaryColor: '#f34a19',
-    secondaryColor: '#1b1b1b',
-    highlightColor: '#ffd2c4',
-    logoUrl: getNhlLogoUrl('PHI'),
-  },
-  {
-    abbreviation: 'PIT',
-    name: 'Pittsburgh Penguins',
-    primaryColor: '#fcb514',
-    secondaryColor: '#151515',
-    highlightColor: '#fff0a8',
-    logoUrl: getNhlLogoUrl('PIT'),
-  },
-  {
-    abbreviation: 'SEA',
-    name: 'Seattle Kraken',
-    primaryColor: '#55c3d9',
-    secondaryColor: '#17364f',
-    highlightColor: '#d5f8ff',
-    logoUrl: getNhlLogoUrl('SEA'),
-  },
-  {
-    abbreviation: 'SJS',
-    name: 'San Jose Sharks',
-    primaryColor: '#0f8b8d',
-    secondaryColor: '#ee6c2c',
-    highlightColor: '#caf5f3',
-    logoUrl: getNhlLogoUrl('SJS'),
-  },
-  {
-    abbreviation: 'STL',
-    name: 'St. Louis Blues',
-    primaryColor: '#2877c7',
-    secondaryColor: '#f7c948',
-    highlightColor: '#dcecff',
-    logoUrl: getNhlLogoUrl('STL'),
-  },
-  {
-    abbreviation: 'TBL',
-    name: 'Tampa Bay Lightning',
-    primaryColor: '#2b6ec2',
-    secondaryColor: '#f5f7fa',
-    highlightColor: '#d9ebff',
-    logoUrl: getNhlLogoUrl('TBL'),
-  },
-  {
-    abbreviation: 'TOR',
-    name: 'Toronto Maple Leafs',
-    primaryColor: '#2864ae',
-    secondaryColor: '#f5f7fa',
-    highlightColor: '#dcecff',
-    logoUrl: getNhlLogoUrl('TOR'),
-  },
-  {
-    abbreviation: 'UTA',
-    name: 'Utah',
-    primaryColor: '#6ed6ee',
-    secondaryColor: '#242b35',
-    highlightColor: '#d9f9ff',
-    logoUrl: getNhlLogoUrl('UTA'),
-  },
-  {
-    abbreviation: 'VAN',
-    name: 'Vancouver Canucks',
-    primaryColor: '#2a6cb5',
-    secondaryColor: '#1d6b45',
-    highlightColor: '#dcecff',
-    logoUrl: getNhlLogoUrl('VAN'),
-  },
-  {
-    abbreviation: 'VGK',
-    name: 'Vegas Golden Knights',
-    primaryColor: '#b99b52',
-    secondaryColor: '#333f48',
-    highlightColor: '#fff0b8',
-    logoUrl: getNhlLogoUrl('VGK'),
-  },
-  {
-    abbreviation: 'WSH',
-    name: 'Washington Capitals',
-    primaryColor: '#d3273d',
-    secondaryColor: '#25569e',
-    highlightColor: '#ffd7dd',
-    logoUrl: getNhlLogoUrl('WSH'),
-  },
-  {
-    abbreviation: 'WPG',
-    name: 'Winnipeg Jets',
-    primaryColor: '#2d6da9',
-    secondaryColor: '#8d2338',
-    highlightColor: '#dcecff',
-    logoUrl: getNhlLogoUrl('WPG'),
-  },
+export interface PixelTeamTheme extends PixelTeamPalette {
+  /** A visible team color for borders and focus states on the dark app canvas. */
+  accentColor: string;
+  /** Legacy alias retained for older page components. */
+  highlightColor: string;
+  primaryTextColor: string;
+  secondaryTextColor: string;
+  tertiaryTextColor: string;
+}
+
+const DARK_APP_SURFACE = '#0d1520';
+
+const NHL_TEAM_PALETTES: PixelTeamPalette[] = [
+  team('ANA', 'Anaheim Ducks', '#FC4C02', '#B9975B', '#000000'),
+  team('BOS', 'Boston Bruins', '#000000', '#FFB81C', '#FFFFFF'),
+  team('BUF', 'Buffalo Sabres', '#002654', '#FFB81C', '#FFFFFF'),
+  team('CGY', 'Calgary Flames', '#C8102E', '#F1BE48', '#FFFFFF'),
+  team('CAR', 'Carolina Hurricanes', '#CC0000', '#000000', '#A2AAAD'),
+  team('CHI', 'Chicago Blackhawks', '#CF0A2C', '#000000', '#FFFFFF'),
+  team('COL', 'Colorado Avalanche', '#6F263D', '#236192', '#A2AAAD'),
+  team('CBJ', 'Columbus Blue Jackets', '#041E42', '#CE1126', '#A2AAAD'),
+  team('DAL', 'Dallas Stars', '#006847', '#111111', '#8F8F8C'),
+  team('DET', 'Detroit Red Wings', '#CE1126', '#FFFFFF', '#111111'),
+  team('EDM', 'Edmonton Oilers', '#041E42', '#FF4C00', '#FFFFFF'),
+  team('FLA', 'Florida Panthers', '#C8102E', '#041E42', '#B9975B'),
+  team('LAK', 'Los Angeles Kings', '#111111', '#A2AAAD', '#FFFFFF'),
+  team('MIN', 'Minnesota Wild', '#154734', '#A6192E', '#EAAA00'),
+  team('MTL', 'Montreal Canadiens', '#AF1E2D', '#192168', '#FFFFFF'),
+  team('NSH', 'Nashville Predators', '#FFB81C', '#041E42', '#FFFFFF'),
+  team('NJD', 'New Jersey Devils', '#CE1126', '#000000', '#FFFFFF'),
+  team('NYI', 'New York Islanders', '#00539B', '#F47D30', '#FFFFFF'),
+  team('NYR', 'New York Rangers', '#0038A8', '#CE1126', '#FFFFFF'),
+  team('OTT', 'Ottawa Senators', '#000000', '#C8102E', '#C69214'),
+  team('PHI', 'Philadelphia Flyers', '#F74902', '#000000', '#FFFFFF'),
+  team('PIT', 'Pittsburgh Penguins', '#000000', '#FCB514', '#FFFFFF'),
+  team('SEA', 'Seattle Kraken', '#001628', '#99D9D9', '#E9072B'),
+  team('SJS', 'San Jose Sharks', '#006D75', '#000000', '#EA7200'),
+  team('STL', 'St. Louis Blues', '#00529B', '#FFB81C', '#FFFFFF'),
+  team('TBL', 'Tampa Bay Lightning', '#002868', '#FFFFFF', '#111111'),
+  team('TOR', 'Toronto Maple Leafs', '#003E7E', '#FFFFFF', '#A2AAAD'),
+  team('UTA', 'Utah Mammoth', '#010101', '#69B3E7', '#FFFFFF'),
+  team('VAN', 'Vancouver Canucks', '#00205B', '#00843D', '#FFFFFF'),
+  team('VGK', 'Vegas Golden Knights', '#B9975B', '#333F42', '#C8102E'),
+  team('WSH', 'Washington Capitals', '#C8102E', '#041E42', '#FFFFFF'),
+  team('WPG', 'Winnipeg Jets', '#041E42', '#004C97', '#AC162C'),
 ];
 
-const NHL_TEAM_ABBREVIATIONS = NHL_PIXEL_TEAMS.map((team) => team.abbreviation);
+export const NHL_PIXEL_TEAMS: PixelTeamTheme[] = NHL_TEAM_PALETTES.map((palette) => {
+  const accentColor = chooseVisibleAccent([
+    palette.primaryColor,
+    palette.secondaryColor,
+    palette.tertiaryColor,
+  ]);
+
+  return {
+    ...palette,
+    accentColor,
+    highlightColor: accentColor,
+    primaryTextColor: getReadableTextColor(palette.primaryColor),
+    secondaryTextColor: getReadableTextColor(palette.secondaryColor),
+    tertiaryTextColor: getReadableTextColor(palette.tertiaryColor),
+  };
+});
+
+const NHL_TEAM_ABBREVIATIONS = NHL_PIXEL_TEAMS.map((teamTheme) => teamTheme.abbreviation);
+
+function team(
+  abbreviation: string,
+  name: string,
+  primaryColor: string,
+  secondaryColor: string,
+  tertiaryColor: string,
+): PixelTeamPalette {
+  return {
+    abbreviation,
+    name,
+    primaryColor,
+    secondaryColor,
+    tertiaryColor,
+    logoUrl: getNhlLogoUrl(abbreviation),
+  };
+}
+
+function normalizeHex(hexColor: string): string {
+  const normalized = hexColor.trim().replace('#', '');
+
+  if (/^[0-9a-f]{3}$/i.test(normalized)) {
+    return normalized
+      .split('')
+      .map((character) => `${character}${character}`)
+      .join('');
+  }
+
+  return /^[0-9a-f]{6}$/i.test(normalized) ? normalized : '000000';
+}
+
+function hexToRgb(hexColor: string): [number, number, number] {
+  const normalized = normalizeHex(hexColor);
+
+  return [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  ];
+}
+
+function relativeLuminance(hexColor: string): number {
+  const [red, green, blue] = hexToRgb(hexColor).map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+export function getContrastRatio(firstColor: string, secondColor: string): number {
+  const firstLuminance = relativeLuminance(firstColor);
+  const secondLuminance = relativeLuminance(secondColor);
+  const lighter = Math.max(firstLuminance, secondLuminance);
+  const darker = Math.min(firstLuminance, secondLuminance);
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function getReadableTextColor(backgroundColor: string): string {
+  return getContrastRatio(backgroundColor, '#FFFFFF') >=
+    getContrastRatio(backgroundColor, '#07111D')
+    ? '#FFFFFF'
+    : '#07111D';
+}
+
+function chooseVisibleAccent(colors: string[]): string {
+  const identityColor = colors.find(
+    (color) => getContrastRatio(color, DARK_APP_SURFACE) >= 3,
+  );
+
+  if (identityColor) {
+    return identityColor;
+  }
+
+  return [...colors].sort(
+    (first, second) =>
+      getContrastRatio(second, DARK_APP_SURFACE) -
+      getContrastRatio(first, DARK_APP_SURFACE),
+  )[0];
+}
+
+export function hexToRgba(hexColor: string, alpha: number): string {
+  const [red, green, blue] = hexToRgb(hexColor);
+  const safeAlpha = Math.max(0, Math.min(1, alpha));
+
+  return `rgba(${red}, ${green}, ${blue}, ${safeAlpha})`;
+}
 
 export function getNhlLogoUrl(abbreviation: string): string {
   return `https://assets.nhle.com/logos/nhl/svg/${abbreviation}_light.svg`;
@@ -277,17 +172,32 @@ export function getNhlLogoUrl(abbreviation: string): string {
 
 export function getPixelTeamTheme(abbreviation: string | null | undefined): PixelTeamTheme {
   return (
-    NHL_PIXEL_TEAMS.find((team) => team.abbreviation === abbreviation) ??
-    NHL_PIXEL_TEAMS.find((team) => team.abbreviation === 'VGK')!
+    NHL_PIXEL_TEAMS.find((teamTheme) => teamTheme.abbreviation === abbreviation) ??
+    NHL_PIXEL_TEAMS.find((teamTheme) => teamTheme.abbreviation === 'VGK')!
   );
 }
 
 export function buildPixelMarquee(offset = 0): PixelLogoItem[] {
-  const rotated = NHL_TEAM_ABBREVIATIONS.map(
+  const visibleTeamCount = Math.min(16, NHL_TEAM_ABBREVIATIONS.length);
+  const sequence = Array.from(
+    { length: visibleTeamCount },
     (_, index) => NHL_TEAM_ABBREVIATIONS[(index + offset) % NHL_TEAM_ABBREVIATIONS.length],
   );
-  const sequence = [...rotated, ...rotated.slice(0, 16)];
-  return sequence.map((abbreviation) => ({
+
+  // Duplicate the same sequence so translateX(-50%) loops seamlessly while
+  // keeping the number of mobile DOM nodes and logo requests much smaller.
+  return [...sequence, ...sequence].map((abbreviation) => ({
+    abbreviation,
+    logoUrl: getNhlLogoUrl(abbreviation),
+  }));
+}
+
+/**
+ * Builds one seamless marquee containing every NHL team exactly once per pass.
+ * The sequence is duplicated so the shared layout can loop continuously.
+ */
+export function buildFullPixelMarquee(): PixelLogoItem[] {
+  return [...NHL_TEAM_ABBREVIATIONS, ...NHL_TEAM_ABBREVIATIONS].map((abbreviation) => ({
     abbreviation,
     logoUrl: getNhlLogoUrl(abbreviation),
   }));

@@ -6,6 +6,7 @@ import {
 import { RouterLink } from '@angular/router';
 
 import {
+  BENCH_SLOT_COUNT,
   DEFAULT_ROSTER_GROUPS,
   DEFAULT_STARTING_ROSTER_SIZE,
   IR_SLOT_COUNT
@@ -36,6 +37,7 @@ export class RosterBoard {
   @Input() roster: FantasyRoster | null = null;
 
   readonly startingRosterSize = DEFAULT_STARTING_ROSTER_SIZE;
+  readonly benchSlotCount = BENCH_SLOT_COUNT;
   readonly irSlotCount = IR_SLOT_COUNT;
 
   private readonly rosterGroups: RosterGroupView[] =
@@ -62,6 +64,11 @@ export class RosterBoard {
       group.position === 'G'
   );
 
+  readonly benchSlots = Array.from(
+    { length: BENCH_SLOT_COUNT },
+    (_, index) => index + 1
+  );
+
   readonly irSlots = Array.from(
     { length: IR_SLOT_COUNT },
     (_, index) => index + 1
@@ -75,6 +82,12 @@ export class RosterBoard {
       (slot) =>
         slot.position === position &&
         slot.slotNumber === slotNumber
+    )?.asset ?? null;
+  }
+
+  getBenchAsset(slotNumber: number): RosterAsset | null {
+    return this.roster?.benchSlots.find(
+      (slot) => slot.slotNumber === slotNumber
     )?.asset ?? null;
   }
 

@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
 import { Navbar } from '../../shared/navbar/navbar';
+import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
 
 @Component({
   selector: 'app-main-layout',
@@ -12,4 +13,5 @@ import { Navbar } from '../../shared/navbar/navbar';
 })
 export class MainLayout {
   readonly scoringRuntime = getScoringRuntimeState();
+  readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
 }

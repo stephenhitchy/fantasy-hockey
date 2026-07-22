@@ -1,9 +1,4 @@
-import {
-  Component,
-  computed,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -11,11 +6,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../core/firebase';
 
-import {
-  DraftableAsset,
-  DraftPosition,
-  FantasyDraft
-} from '../../core/draft/draft.models';
+import { DraftableAsset, DraftPosition, FantasyDraft } from '../../core/draft/draft.models';
 
 import {
   addDropRosterAsset,
@@ -26,54 +17,46 @@ import {
   listenToFantasyDraft,
   listenToLeagueWaivers,
   placeWaiverClaim,
-  processWaiver
+  processWaiver,
 } from '../../core/draft/draft.service';
 
-import {
-  loadSharedProjectionSnapshot
-} from '../../core/projection/projection-snapshot.service';
+import { loadSharedProjectionSnapshot } from '../../core/projection/projection-snapshot.service';
 
-import {
-  PlayerAvailability
-} from '../../core/player/player-availability.models';
+import { PlayerAvailability } from '../../core/player/player-availability.models';
 
 import {
   getPlayerAvailabilityForPlayer,
   getPlayerAvailabilityStatusClass,
-  shouldDisplayPlayerAvailability
+  shouldDisplayPlayerAvailability,
 } from '../../core/player/player-availability.service';
 
 import {
-  FantasyCycle
+  FantasyAssetCycleWindow,
+  FantasyCycle,
+  FantasyTeamCycleWindows,
 } from '../../core/cycle/cycle.models';
 
-import {
-  listenToLatestCycle
-} from '../../core/cycle/cycle.service';
+import { listenToLeagueCycles } from '../../core/cycle/cycle.service';
+
+import { listenToCycleTeamWindows } from '../../core/cycle/asset-cycle-window.service';
+
+import { getLeagueById, League } from '../../core/league/league.service';
+
+import { FantasyTeam, listenToLeagueTeams } from '../../core/team/team.service';
+
+import { ActiveRosterSlot, BenchRosterSlot, FantasyRoster, RosterAsset } from '../../core/team/roster.models';
+
+import { listenToFantasyRoster } from '../../core/team/roster.service';
+
+import { defaultScoringRules } from '../../core/scoring/scoring-rules';
 
 import {
-  getLeagueById,
-  League
-} from '../../core/league/league.service';
+  resolveRosterMoveAssetCycleEligibility,
+  RosterMoveAssetCycleEligibility,
+} from '../../core/transactions/roster-move-eligibility.service';
 
-import {
-  FantasyTeam,
-  listenToLeagueTeams
-} from '../../core/team/team.service';
-
-import {
-  ActiveRosterSlot,
-  FantasyRoster,
-  RosterAsset
-} from '../../core/team/roster.models';
-
-import {
-  listenToFantasyRoster
-} from '../../core/team/roster.service';
-
-type FreeAgentPositionFilter =
-  | 'ALL'
-  | DraftPosition;
+type FreeAgentPositionFilter = 'ALL' | DraftPosition;
+type FreeAgentFlowStep = 'player-pool' | 'roster-slot';
 
 interface DropCandidate {
   slotId: string;
@@ -81,9 +64,19 @@ interface DropCandidate {
   position: DraftPosition;
   asset: RosterAsset | null;
   moveType: 'open-slot' | 'drop';
+  rosterArea: 'active' | 'bench';
+  currentWindow: FantasyAssetCycleWindow | null;
+  slotNextCycleNumber: number;
+  effectiveCycleNumber: number;
+  currentWindowUntouched: boolean;
+  canApplyImmediately: boolean;
 }
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -96,7 +89,7 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-free-agents',
   imports: [FormsModule, RouterLink],
   templateUrl: './free-agents.html',
-  styleUrl: './free-agents.css'
+  styleUrl: './free-agents.css',
 })
 export class FreeAgents implements OnDestroy {
   leagueId = '';
@@ -107,6 +100,9 @@ export class FreeAgents implements OnDestroy {
   teams = signal<FantasyTeam[]>([]);
   rosters = signal<Record<string, FantasyRoster | null>>({});
   latestCycle = signal<FantasyCycle | null>(null);
+  leagueCycles = signal<FantasyCycle[]>([]);
+  myTeamWindowsByCycle = signal<Record<number, FantasyTeamCycleWindows | null>>({});
+  teamWindowLoadedByCycle = signal<Record<number, boolean>>({});
   waivers = signal<FantasyWaiver[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
 
@@ -122,30 +118,27 @@ export class FreeAgents implements OnDestroy {
   selectedAddAssetKey = signal('');
   selectedWaiverId = signal('');
   selectedDropSlotId = signal('');
+  flowStep = signal<FreeAgentFlowStep>('player-pool');
+  selectedAssetEligibility = signal<RosterMoveAssetCycleEligibility | null>(null);
+  eligibilityLoading = signal(false);
+  eligibilityError = signal('');
 
-  readonly positionFilters: FreeAgentPositionFilter[] = [
-    'ALL',
-    'LW',
-    'C',
-    'RW',
-    'D',
-    'G'
-  ];
+  readonly positionFilters: FreeAgentPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
 
   private stopDraftListener: (() => void) | null = null;
   private stopTeamsListener: (() => void) | null = null;
-  private stopLatestCycleListener: (() => void) | null = null;
+  private stopLeagueCyclesListener: (() => void) | null = null;
   private stopWaiversListener: (() => void) | null = null;
   private rosterListeners: Record<string, () => void> = {};
+  private teamWindowListeners: Record<number, () => void> = {};
+  private eligibilityRequestKey = '';
 
-  readonly selectedAddAsset = computed(() =>
-    this.playerPool().find(
-      (asset) => asset.assetKey === this.selectedAddAssetKey()
-    ) ??
-    this.waivers().find(
-      (waiver) => waiver.asset.assetKey === this.selectedAddAssetKey()
-    )?.asset ??
-    null
+  readonly selectedAddAsset = computed(
+    () =>
+      this.playerPool().find((asset) => asset.assetKey === this.selectedAddAssetKey()) ??
+      this.waivers().find((waiver) => waiver.asset.assetKey === this.selectedAddAssetKey())
+        ?.asset ??
+      null,
   );
 
   readonly selectedWaiver = computed(() => {
@@ -155,33 +148,29 @@ export class FreeAgents implements OnDestroy {
       return null;
     }
 
-    return this.waivers().find(
-      (waiver) => waiver.id === waiverId && waiver.status === 'active'
-    ) ?? null;
+    return (
+      this.waivers().find((waiver) => waiver.id === waiverId && waiver.status === 'active') ?? null
+    );
   });
 
-  readonly myRoster = computed(() =>
-    this.rosters()[this.userId] ?? null
-  );
+  readonly myRoster = computed(() => this.rosters()[this.userId] ?? null);
 
   readonly pendingRosterMoves = computed(() =>
     (this.myRoster()?.activeSlots ?? [])
       .filter((slot) => Boolean(slot.pendingMove))
       .map((slot) => ({
         slot,
-        move: slot.pendingMove!
-      }))
+        move: slot.pendingMove!,
+      })),
   );
 
   readonly rosteredAssetKeys = computed(() => {
     const assetKeys = new Set<string>();
 
-    Object.values(this.rosters()).forEach((roster) => {
+    (Object.values(this.rosters()) as Array<FantasyRoster | null>).forEach((roster) => {
       roster?.activeSlots.forEach((slot) => {
         const assetKey = this.getRosterAssetKey(slot.asset);
-        const pendingAssetKey = this.getRosterAssetKey(
-          slot.pendingMove?.incomingAsset ?? null
-        );
+        const pendingAssetKey = this.getRosterAssetKey(slot.pendingMove?.incomingAsset ?? null);
 
         if (assetKey) {
           assetKeys.add(assetKey);
@@ -189,6 +178,14 @@ export class FreeAgents implements OnDestroy {
 
         if (pendingAssetKey) {
           assetKeys.add(pendingAssetKey);
+        }
+      });
+
+      roster?.benchSlots.forEach((slot) => {
+        const assetKey = this.getRosterAssetKey(slot.asset);
+
+        if (assetKey) {
+          assetKeys.add(assetKey);
         }
       });
 
@@ -220,10 +217,7 @@ export class FreeAgents implements OnDestroy {
 
     return this.waivers()
       .filter((waiver) => waiver.status === 'active')
-      .filter((waiver) =>
-        positionFilter === 'ALL' ||
-        waiver.asset.position === positionFilter
-      )
+      .filter((waiver) => positionFilter === 'ALL' || waiver.asset.position === positionFilter)
       .filter((waiver) => {
         if (!search) {
           return true;
@@ -232,7 +226,7 @@ export class FreeAgents implements OnDestroy {
         return [
           this.getAssetName(waiver.asset),
           this.getAssetTeamLabel(waiver.asset),
-          waiver.asset.position
+          waiver.asset.position,
         ]
           .join(' ')
           .toLowerCase()
@@ -246,9 +240,7 @@ export class FreeAgents implements OnDestroy {
           return secondClaims - firstClaims;
         }
 
-        return this.getAssetName(first.asset).localeCompare(
-          this.getAssetName(second.asset)
-        );
+        return this.getAssetName(first.asset).localeCompare(this.getAssetName(second.asset));
       });
   });
 
@@ -261,20 +253,13 @@ export class FreeAgents implements OnDestroy {
     return this.playerPool()
       .filter((asset) => !rosteredAssetKeys.has(asset.assetKey))
       .filter((asset) => !activeWaiverAssetKeys.has(asset.assetKey))
-      .filter((asset) =>
-        positionFilter === 'ALL' ||
-        asset.position === positionFilter
-      )
+      .filter((asset) => positionFilter === 'ALL' || asset.position === positionFilter)
       .filter((asset) => {
         if (!search) {
           return true;
         }
 
-        return [
-          this.getAssetName(asset),
-          this.getAssetTeamLabel(asset),
-          asset.position
-        ]
+        return [this.getAssetName(asset), this.getAssetTeamLabel(asset), asset.position]
           .join(' ')
           .toLowerCase()
           .includes(search);
@@ -294,56 +279,114 @@ export class FreeAgents implements OnDestroy {
           return secondProjection - firstProjection;
         }
 
-        return this.getAssetName(first).localeCompare(
-          this.getAssetName(second)
-        );
+        return this.getAssetName(first).localeCompare(this.getAssetName(second));
       });
   });
 
   readonly dropCandidates = computed((): DropCandidate[] => {
     const addAsset = this.selectedAddAsset();
     const roster = this.myRoster();
+    const eligibility = this.selectedAssetEligibility();
 
     if (!addAsset || !roster) {
       return [];
     }
 
-    const openSlotCandidates = roster.activeSlots
-      .filter((slot) =>
-        slot.position === addAsset.position &&
+    const buildActiveCandidate = (
+      slot: ActiveRosterSlot,
+      asset: RosterAsset | null,
+      moveType: DropCandidate['moveType'],
+    ): DropCandidate => {
+      const currentWindow = this.getLatestWindowForSlot(slot.slotId);
+      const activeCycleNumbers = new Set(
+        this.leagueCycles()
+          .filter((cycle) => cycle.status === 'active')
+          .map((cycle) => cycle.cycleNumber),
+      );
+      const openFromCurrentCycle =
+        !currentWindow &&
         slot.asset === null &&
-        !slot.pendingMove
-      )
-      .map((slot) => ({
-        slotId: slot.slotId,
-        slotNumber: slot.slotNumber,
-        position: slot.position,
-        asset: null,
-        moveType: 'open-slot' as const
-      }));
-
-    const dropCandidates = roster.activeSlots
-      .filter((slot): slot is ActiveRosterSlot & { asset: RosterAsset } =>
-        slot.position === addAsset.position &&
-        slot.asset !== null &&
-        !slot.pendingMove
-      )
-      .map((slot) => ({
-        slotId: slot.slotId,
-        slotNumber: slot.slotNumber,
-        position: slot.position,
-        asset: slot.asset,
-        moveType: 'drop' as const
-      }))
-      .sort((first, second) =>
-        this.getRosterAssetName(first.asset).localeCompare(
-          this.getRosterAssetName(second.asset)
-        )
+        typeof slot.openFromCycleNumber === 'number' &&
+        activeCycleNumbers.has(slot.openFromCycleNumber);
+      const currentWindowUntouched =
+        this.isWindowUntouched(currentWindow) ||
+        openFromCurrentCycle ||
+        (!currentWindow && this.isAwaitingInitialWindowSync());
+      const slotNextCycleNumber = openFromCurrentCycle
+        ? slot.openFromCycleNumber!
+        : this.getSlotNextCycleNumber(currentWindow);
+      const effectiveCycleNumber = Math.max(
+        slotNextCycleNumber,
+        eligibility?.earliestEligibleCycleNumber ?? slotNextCycleNumber,
+      );
+      const canApplyImmediately = Boolean(
+        currentWindowUntouched &&
+        effectiveCycleNumber === slotNextCycleNumber,
       );
 
+      return {
+        slotId: slot.slotId,
+        slotNumber: slot.slotNumber,
+        position: slot.position,
+        asset,
+        moveType,
+        rosterArea: 'active',
+        currentWindow,
+        slotNextCycleNumber,
+        effectiveCycleNumber,
+        currentWindowUntouched,
+        canApplyImmediately,
+      };
+    };
+
+    const buildBenchCandidate = (
+      slot: BenchRosterSlot,
+      asset: RosterAsset | null,
+      moveType: DropCandidate['moveType'],
+    ): DropCandidate => {
+      const eligibleCycle = eligibility?.earliestEligibleCycleNumber ?? 1;
+
+      return {
+        slotId: slot.slotId,
+        slotNumber: slot.slotNumber,
+        position: addAsset.position,
+        asset,
+        moveType,
+        rosterArea: 'bench',
+        currentWindow: null,
+        slotNextCycleNumber: eligibleCycle,
+        effectiveCycleNumber: eligibleCycle,
+        currentWindowUntouched: false,
+        canApplyImmediately: false,
+      };
+    };
+
+    const openActiveCandidates = roster.activeSlots
+      .filter(
+        (slot) => slot.position === addAsset.position && slot.asset === null && !slot.pendingMove,
+      )
+      .map((slot) => buildActiveCandidate(slot, null, 'open-slot'));
+
+    const activeDropCandidates = roster.activeSlots
+      .filter(
+        (slot): slot is ActiveRosterSlot & { asset: RosterAsset } =>
+          slot.position === addAsset.position && slot.asset !== null && !slot.pendingMove,
+      )
+      .map((slot) => buildActiveCandidate(slot, slot.asset, 'drop'));
+
+    const openBenchCandidates = roster.benchSlots
+      .filter((slot) => slot.asset === null)
+      .map((slot) => buildBenchCandidate(slot, null, 'open-slot'));
+
+    const benchDropCandidates = roster.benchSlots
+      .filter((slot): slot is BenchRosterSlot & { asset: RosterAsset } => slot.asset !== null)
+      .map((slot) => buildBenchCandidate(slot, slot.asset, 'drop'));
+
     return [
-      ...openSlotCandidates,
-      ...dropCandidates
+      ...openActiveCandidates,
+      ...openBenchCandidates,
+      ...activeDropCandidates,
+      ...benchDropCandidates,
     ];
   });
 
@@ -354,14 +397,12 @@ export class FreeAgents implements OnDestroy {
       return null;
     }
 
-    return this.dropCandidates().find(
-      (candidate) => candidate.slotId === selectedSlotId
-    ) ?? null;
+    return this.dropCandidates().find((candidate) => candidate.slotId === selectedSlotId) ?? null;
   });
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.loadPage();
   }
@@ -369,9 +410,10 @@ export class FreeAgents implements OnDestroy {
   ngOnDestroy(): void {
     this.stopDraftListener?.();
     this.stopTeamsListener?.();
-    this.stopLatestCycleListener?.();
+    this.stopLeagueCyclesListener?.();
     this.stopWaiversListener?.();
     this.clearRosterListeners();
+    this.clearTeamWindowListeners();
   }
 
   async loadPage(): Promise<void> {
@@ -396,42 +438,28 @@ export class FreeAgents implements OnDestroy {
 
       this.league.set(league);
 
-      this.stopDraftListener = listenToFantasyDraft(
-        leagueId,
-        (draft) => {
-          this.draft.set(draft);
-        }
-      );
+      this.stopDraftListener = listenToFantasyDraft(leagueId, (draft) => {
+        this.draft.set(draft);
+      });
 
-      this.stopLatestCycleListener = listenToLatestCycle(
-        leagueId,
-        (cycle) => {
-          this.latestCycle.set(cycle);
-        }
-      );
+      this.stopLeagueCyclesListener = listenToLeagueCycles(leagueId, (cycles) => {
+        this.leagueCycles.set(cycles);
+        this.latestCycle.set(cycles.at(-1) ?? null);
+        this.refreshTeamWindowListeners(cycles);
+      });
 
-      this.stopWaiversListener = listenToLeagueWaivers(
-        leagueId,
-        (waivers) => {
-          this.waivers.set(waivers);
-        }
-      );
+      this.stopWaiversListener = listenToLeagueWaivers(leagueId, (waivers) => {
+        this.waivers.set(waivers);
+      });
 
-      this.stopTeamsListener = listenToLeagueTeams(
-        leagueId,
-        (teams) => {
-          this.teams.set(teams);
-          this.refreshRosterListeners(teams);
-        }
-      );
+      this.stopTeamsListener = listenToLeagueTeams(leagueId, (teams) => {
+        this.teams.set(teams);
+        this.refreshRosterListeners(teams);
+      });
 
       await this.loadPlayerPool();
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load free agents.'
-      );
+      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load free agents.');
     } finally {
       this.loading.set(false);
     }
@@ -442,23 +470,19 @@ export class FreeAgents implements OnDestroy {
     this.errorMessage.set('');
 
     try {
-      const snapshot = await loadSharedProjectionSnapshot(
-        this.leagueId
-      );
+      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
 
       if (!snapshot) {
         this.playerPool.set([]);
         throw new Error(
-          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.'
+          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.',
         );
       }
 
       this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the shared free agent pool.'
+        error instanceof Error ? error.message : 'Unable to load the shared free agent pool.',
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -470,14 +494,7 @@ export class FreeAgents implements OnDestroy {
   }
 
   setPositionFilter(value: string): void {
-    const validFilters: FreeAgentPositionFilter[] = [
-      'ALL',
-      'LW',
-      'C',
-      'RW',
-      'D',
-      'G'
-    ];
+    const validFilters: FreeAgentPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
 
     if (validFilters.includes(value as FreeAgentPositionFilter)) {
       this.positionFilter.set(value as FreeAgentPositionFilter);
@@ -490,12 +507,14 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set(asset.assetKey);
     this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.flowStep.set('roster-slot');
 
     if (this.positionFilter() === 'ALL') {
       this.positionFilter.set(asset.position);
     }
-  }
 
+    void this.loadSelectedAssetEligibility(asset);
+  }
 
   selectWaiver(waiver: FantasyWaiver): void {
     this.successMessage.set('');
@@ -503,10 +522,29 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set(waiver.asset.assetKey);
     this.selectedWaiverId.set(waiver.id);
     this.selectedDropSlotId.set('');
+    this.flowStep.set('roster-slot');
 
     if (this.positionFilter() === 'ALL') {
       this.positionFilter.set(waiver.asset.position);
     }
+
+    void this.loadSelectedAssetEligibility(waiver.asset);
+  }
+
+  returnToPlayerPool(): void {
+    this.flowStep.set('player-pool');
+    this.selectedDropSlotId.set('');
+    this.eligibilityError.set('');
+  }
+
+  async retryEligibilityCheck(): Promise<void> {
+    const asset = this.selectedAddAsset();
+
+    if (!asset) {
+      return;
+    }
+
+    await this.loadSelectedAssetEligibility(asset, true);
   }
 
   selectDropCandidate(candidate: DropCandidate): void {
@@ -517,28 +555,27 @@ export class FreeAgents implements OnDestroy {
     return Boolean(
       this.selectedAddAsset() &&
       this.selectedDropCandidate() &&
-      this.draft()?.status === 'complete'
+      this.selectedAssetEligibility() &&
+      !this.eligibilityLoading() &&
+      this.areRosterWindowsReady() &&
+      this.draft()?.status === 'complete',
     );
   }
 
   async confirmAddDrop(): Promise<void> {
     const addAsset = this.selectedAddAsset();
-    const dropCandidate = this.selectedDropCandidate();
-    const waiver = this.selectedWaiver();
 
     this.successMessage.set('');
     this.errorMessage.set('');
 
-    if (!addAsset || !dropCandidate) {
-      this.errorMessage.set(
-        'Choose a player and a same-position roster spot.'
-      );
+    if (!addAsset || !this.selectedDropCandidate()) {
+      this.errorMessage.set('Choose a player and an eligible active or bench roster spot.');
       return;
     }
 
-    if (addAsset.position !== dropCandidate.position) {
+    if (!this.areRosterWindowsReady()) {
       this.errorMessage.set(
-        'This version only allows same-position roster moves.'
+        'Your current roster windows are still loading. Try again in a moment.',
       );
       return;
     }
@@ -546,7 +583,24 @@ export class FreeAgents implements OnDestroy {
     this.moving.set(true);
 
     try {
-      const effectiveCycleNumber = this.getEffectiveCycleNumber();
+      await this.loadSelectedAssetEligibility(addAsset, true);
+
+      const dropCandidate = this.selectedDropCandidate();
+      const waiver = this.selectedWaiver();
+
+      if (!dropCandidate) {
+        throw new Error('The selected roster slot is no longer available.');
+      }
+
+      if (addAsset.position !== dropCandidate.position) {
+        throw new Error('Active roster moves must use the same position. Bench slots accept any position.');
+      }
+
+      if (!this.selectedAssetEligibility()) {
+        throw new Error(this.eligibilityError() || 'Unable to verify the player’s current cycle.');
+      }
+
+      const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const leagueOwnerIds = this.teams().map((team) => team.ownerId);
 
@@ -561,58 +615,64 @@ export class FreeAgents implements OnDestroy {
           dropSlotId: moveType === 'drop' ? dropCandidate.slotId : null,
           targetSlotId: moveType === 'open-slot' ? dropCandidate.slotId : null,
           effectiveCycleNumber,
-          effectiveLabel
+          effectiveLabel,
         });
 
         this.successMessage.set(
-          `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player will be reserved for the selected slot and activate after that slot's current six-game window.`
+          `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player is reserved for this slot and cannot activate before ${effectiveLabel}.`,
         );
       } else if (dropCandidate.moveType === 'open-slot') {
-        await addFreeAgentToOpenRosterSlot({
+        const execution = await addFreeAgentToOpenRosterSlot({
           leagueId: this.leagueId,
           ownerId: this.userId,
           targetSlotId: dropCandidate.slotId,
           addAsset,
           effectiveCycleNumber,
           effectiveLabel,
-          leagueOwnerIds
+          leagueOwnerIds,
+          preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
         });
 
-        this.successMessage.set(
-          this.hasStartedCycleWindows()
-            ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate at that slot's next boundary.`
-            : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`
-        );
+        this.successMessage.set(dropCandidate.rosterArea === 'bench'
+          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before ${effectiveLabel}.`
+          : execution.mode === 'immediate'
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Cycle ${execution.effectiveCycleNumber}.`
+            : this.hasStartedCycleWindows()
+              ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in ${effectiveLabel}.`
+              : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`);
       } else {
         if (!dropCandidate.asset) {
           throw new Error('The selected drop candidate is missing a roster asset.');
         }
 
-        await addDropRosterAsset({
+        const execution = await addDropRosterAsset({
           leagueId: this.leagueId,
           ownerId: this.userId,
           dropSlotId: dropCandidate.slotId,
           addAsset,
           effectiveCycleNumber,
           effectiveLabel,
-          leagueOwnerIds
+          leagueOwnerIds,
+          preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
         });
 
-        this.successMessage.set(
-          this.hasStartedCycleWindows()
-            ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the current window and will go to waivers when the slot advances.`
-            : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`
-        );
+        this.successMessage.set(dropCandidate.rosterArea === 'bench'
+          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before ${effectiveLabel}.`
+          : execution.mode === 'immediate'
+            ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both individual windows were untouched, so the change applies to Cycle ${execution.effectiveCycleNumber}.`
+            : this.hasStartedCycleWindows()
+              ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started window, and the move activates in ${effectiveLabel}.`
+              : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`);
       }
 
       this.selectedAddAssetKey.set('');
       this.selectedWaiverId.set('');
       this.selectedDropSlotId.set('');
+      this.selectedAssetEligibility.set(null);
+      this.flowStep.set('player-pool');
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to complete this roster move.'
+        error instanceof Error ? error.message : 'Unable to complete this roster move.',
       );
     } finally {
       this.moving.set(false);
@@ -625,7 +685,15 @@ export class FreeAgents implements OnDestroy {
     this.moving.set(true);
 
     try {
-      const effectiveCycleNumber = this.getEffectiveCycleNumber();
+      const eligibility = await resolveRosterMoveAssetCycleEligibility(
+        waiver.asset,
+        this.getRequiredGamesPerCycle(),
+        { forceRefresh: true },
+      );
+      const effectiveCycleNumber = Math.max(
+        this.getFallbackNextCycleNumber(),
+        eligibility.earliestEligibleCycleNumber,
+      );
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
 
       await processWaiver({
@@ -634,7 +702,7 @@ export class FreeAgents implements OnDestroy {
         waiverId: waiver.id,
         leagueTeams: this.teams(),
         effectiveCycleNumber,
-        effectiveLabel
+        effectiveLabel,
       });
 
       const claimCount = waiver.claims?.length ?? 0;
@@ -644,13 +712,11 @@ export class FreeAgents implements OnDestroy {
           ? this.hasStartedCycleWindows()
             ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winner is reserved for the selected slot and will activate at its next boundary.`
             : `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
-          : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`
+          : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to process that waiver.'
+        error instanceof Error ? error.message : 'Unable to process that waiver.',
       );
     } finally {
       this.moving.set(false);
@@ -661,10 +727,7 @@ export class FreeAgents implements OnDestroy {
     const expected = asset.expectedGamesAvailable;
     const scheduled = asset.scheduledGamesInProjectionCycle;
 
-    if (
-      typeof expected !== 'number' ||
-      typeof scheduled !== 'number'
-    ) {
+    if (typeof expected !== 'number' || typeof scheduled !== 'number') {
       return '';
     }
 
@@ -676,26 +739,18 @@ export class FreeAgents implements OnDestroy {
   }
 
   getAssetName(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.fullName
-      : `${asset.teamName} Goalie Unit`;
+    return asset.assetType === 'skater' ? asset.player.fullName : `${asset.teamName} Goalie Unit`;
   }
 
   getAssetTeamLabel(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.nhlTeamAbbreviation
-      : asset.teamAbbreviation;
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
   }
 
   getAssetLogoUrl(asset: DraftableAsset): string | undefined {
-    return asset.assetType === 'skater'
-      ? asset.player.teamLogoUrl
-      : asset.teamLogoUrl;
+    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
   }
 
-  getPlayerAvailability(
-    asset: DraftableAsset
-  ): PlayerAvailability | null {
+  getPlayerAvailability(asset: DraftableAsset): PlayerAvailability | null {
     if (asset.assetType !== 'skater') {
       return null;
     }
@@ -703,14 +758,10 @@ export class FreeAgents implements OnDestroy {
     return getPlayerAvailabilityForPlayer(asset.player);
   }
 
-  shouldShowPlayerAvailabilityBadge(
-    asset: DraftableAsset
-  ): boolean {
+  shouldShowPlayerAvailabilityBadge(asset: DraftableAsset): boolean {
     const availability = this.getPlayerAvailability(asset);
 
-    return availability
-      ? shouldDisplayPlayerAvailability(availability)
-      : false;
+    return availability ? shouldDisplayPlayerAvailability(availability) : false;
   }
 
   getPlayerAvailabilityLabel(asset: DraftableAsset): string {
@@ -720,9 +771,27 @@ export class FreeAgents implements OnDestroy {
   getPlayerAvailabilityClass(asset: DraftableAsset): string {
     const availability = this.getPlayerAvailability(asset);
 
-    return availability
-      ? getPlayerAvailabilityStatusClass(availability.status)
-      : '';
+    return availability ? getPlayerAvailabilityStatusClass(availability.status) : '';
+  }
+
+  isPlayerAvailabilitySuspended(asset: DraftableAsset): boolean {
+    return this.getPlayerAvailability(asset)?.status === 'suspended';
+  }
+
+  getPlayerAvailabilityIcon(asset: DraftableAsset): string {
+    return this.isPlayerAvailabilitySuspended(asset) ? '⛔' : '✚';
+  }
+
+  getPlayerAvailabilityTooltip(asset: DraftableAsset): string {
+    const availability = this.getPlayerAvailability(asset);
+
+    if (!availability) {
+      return '';
+    }
+
+    return availability.note?.trim()
+      ? `${availability.label}: ${availability.note.trim()}`
+      : availability.label;
   }
 
   getPlayerAvailabilityNote(asset: DraftableAsset): string {
@@ -741,12 +810,7 @@ export class FreeAgents implements OnDestroy {
         lastName?: string;
       };
 
-      const fallbackName = [
-        player.firstName,
-        player.lastName
-      ]
-        .filter(Boolean)
-        .join(' ');
+      const fallbackName = [player.firstName, player.lastName].filter(Boolean).join(' ');
 
       return player.fullName || fallbackName || 'Unknown Player';
     }
@@ -755,15 +819,11 @@ export class FreeAgents implements OnDestroy {
   }
 
   getRosterAssetTeamLabel(asset: RosterAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.nhlTeamAbbreviation
-      : asset.teamAbbreviation;
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
   }
 
   getRosterAssetLogoUrl(asset: RosterAsset): string | undefined {
-    return asset.assetType === 'skater'
-      ? asset.player.teamLogoUrl
-      : asset.teamLogoUrl;
+    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
   }
 
   getDisplayNumber(value: number | null | undefined): string {
@@ -774,28 +834,18 @@ export class FreeAgents implements OnDestroy {
     return value.toFixed(1);
   }
 
-
-  getProjectionAsset(
-    asset: DraftableAsset
-  ): DraftableAsset {
-    return this.playerPool().find(
-      (poolAsset) =>
-        poolAsset.assetKey === asset.assetKey
-    ) ?? asset;
+  getProjectionAsset(asset: DraftableAsset): DraftableAsset {
+    return this.playerPool().find((poolAsset) => poolAsset.assetKey === asset.assetKey) ?? asset;
   }
 
-  getRecentFormAdjustment(
-    asset: DraftableAsset
-  ): number | null {
-    const projectionAsset =
-      this.getProjectionAsset(asset);
+  getRecentFormAdjustment(asset: DraftableAsset): number | null {
+    const projectionAsset = this.getProjectionAsset(asset);
 
     return projectionAsset.recentFormAdjustment ?? null;
   }
 
   getRecentFormLabel(asset: DraftableAsset): string {
-    const adjustment =
-      this.getRecentFormAdjustment(asset);
+    const adjustment = this.getRecentFormAdjustment(asset);
 
     if (typeof adjustment !== 'number') {
       return 'Form —';
@@ -807,36 +857,21 @@ export class FreeAgents implements OnDestroy {
   }
 
   getRecentFormClass(asset: DraftableAsset): string {
-    const adjustment =
-      this.getRecentFormAdjustment(asset);
+    const adjustment = this.getRecentFormAdjustment(asset);
 
-    if (
-      typeof adjustment !== 'number' ||
-      Math.abs(adjustment) < 0.05
-    ) {
+    if (typeof adjustment !== 'number' || Math.abs(adjustment) < 0.05) {
       return 'form-neutral';
     }
 
-    return adjustment > 0
-      ? 'form-positive'
-      : 'form-negative';
+    return adjustment > 0 ? 'form-positive' : 'form-negative';
   }
 
-  getProjectedCyclePoints(
-    asset: DraftableAsset
-  ): number | null {
-    return (
-      this.getProjectionAsset(asset)
-        .projectedCyclePoints ??
-      null
-    );
+  getProjectedCyclePoints(asset: DraftableAsset): number | null {
+    return this.getProjectionAsset(asset).projectedCyclePoints ?? null;
   }
 
   getCycleRank(asset: DraftableAsset): number | null {
-    return (
-      this.getProjectionAsset(asset).cycleRank ??
-      null
-    );
+    return this.getProjectionAsset(asset).cycleRank ?? null;
   }
 
   getDraftRank(asset: DraftableAsset): number | null {
@@ -861,8 +896,18 @@ export class FreeAgents implements OnDestroy {
     return 'Add/drop opens after the draft is complete.';
   }
 
-  getEffectiveCycleNumber(): number {
-    return (this.latestCycle()?.cycleNumber ?? 0) + 1;
+  areRosterWindowsReady(): boolean {
+    const activeCycleNumbers = this.leagueCycles()
+      .filter((cycle) => cycle.status === 'active')
+      .map((cycle) => cycle.cycleNumber);
+
+    if (activeCycleNumbers.length === 0) {
+      return true;
+    }
+
+    const loadedByCycle = this.teamWindowLoadedByCycle();
+
+    return activeCycleNumbers.every((cycleNumber) => loadedByCycle[cycleNumber] === true);
   }
 
   hasStartedCycleWindows(): boolean {
@@ -870,17 +915,154 @@ export class FreeAgents implements OnDestroy {
   }
 
   getEffectiveCycleText(): string {
+    const candidate = this.selectedDropCandidate();
+
+    if (!this.hasStartedCycleWindows()) {
+      return 'immediately before Cycle 1 begins';
+    }
+
+    if (candidate?.rosterArea === 'bench') {
+      return `owned now · first active eligibility Cycle ${candidate.effectiveCycleNumber}`;
+    }
+
+    return candidate
+      ? `in Cycle ${candidate.effectiveCycleNumber}`
+      : 'at the selected slot’s first fair cycle boundary';
+  }
+
+  getRequiredGamesPerCycle(): number {
+    return (
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle
+    );
+  }
+
+  getSelectedAssetCycleHeadline(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility) {
+      return this.eligibilityLoading()
+        ? 'Checking current NHL-team cycle…'
+        : 'Cycle check unavailable';
+    }
+
+    const liveSuffix = eligibility.liveGamesInCurrentCycle > 0 ? ' · game live' : '';
+
+    return `Cycle ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} team games final${liveSuffix}`;
+  }
+
+  getSelectedAssetCycleDetail(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility) {
+      return this.eligibilityError() || 'The move cannot be confirmed until this check finishes.';
+    }
+
+    if (eligibility.currentCycleHasStarted) {
+      return `This player’s Cycle ${eligibility.currentCycleNumber} has already started. Those results cannot be acquired retroactively, so the earliest fair activation is Cycle ${eligibility.earliestEligibleCycleNumber}.`;
+    }
+
+    return `No game from this player’s Cycle ${eligibility.currentCycleNumber} has started. The player is eligible for Cycle ${eligibility.earliestEligibleCycleNumber}, subject to the selected roster slot’s boundary.`;
+  }
+
+  getSelectedAssetCycleClass(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility) {
+      return this.eligibilityError() ? 'eligibility-error' : 'eligibility-loading';
+    }
+
+    return eligibility.currentCycleHasStarted ? 'eligibility-delayed' : 'eligibility-ready';
+  }
+
+  getCandidateWindowLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'bench') {
+      return candidate.asset
+        ? 'Current location: flexible bench · no fantasy points counted'
+        : 'Open flexible bench slot · no scoring window';
+    }
+
+    const window = candidate.currentWindow;
+
+    if (!window) {
+      return this.hasStartedCycleWindows()
+        ? `No active slot window · next opening Cycle ${candidate.slotNextCycleNumber}`
+        : 'Season not started · available immediately';
+    }
+
+    return `Current window: Cycle ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames || this.getRequiredGamesPerCycle()} team games final`;
+  }
+
+  getCandidateWindowAssetLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'bench') {
+      return candidate.asset
+        ? `${this.getRosterAssetName(candidate.asset)} is currently benched`
+        : 'Open bench ownership slot';
+    }
+
+    const window = candidate.currentWindow;
+
+    if (!window) {
+      return candidate.asset ? this.getRosterAssetName(candidate.asset) : 'Open slot';
+    }
+
+    const windowAssetName = this.getAssetName(window.asset);
+
+    if (candidate.currentWindowUntouched) {
+      return `${windowAssetName} · individual window not started`;
+    }
+
+    if (!candidate.asset) {
+      return `Started window still belongs to ${windowAssetName}`;
+    }
+
+    return window.assetKey === this.getRosterAssetKey(candidate.asset)
+      ? `${windowAssetName} keeps the started window`
+      : `Started window: ${windowAssetName}`;
+  }
+
+  getCandidateActivationLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'bench') {
+      return this.hasStartedCycleWindows()
+        ? `Active eligibility Cycle ${candidate.effectiveCycleNumber}`
+        : 'Owned immediately';
+    }
+
+    if (candidate.canApplyImmediately) {
+      return `Applies now · Cycle ${candidate.effectiveCycleNumber}`;
+    }
+
     return this.hasStartedCycleWindows()
-      ? 'after the selected slot finishes its current six-game window'
-      : `before Cycle ${this.getEffectiveCycleNumber()}`;
+      ? `Activates Cycle ${candidate.effectiveCycleNumber}`
+      : 'Activates immediately';
+  }
+
+  getCandidateActivationDetail(candidate: DropCandidate): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!this.hasStartedCycleWindows()) {
+      return 'The season has not started, so no completed NHL games need to be skipped.';
+    }
+
+    if (candidate.rosterArea === 'bench') {
+      return `The add or replacement happens immediately on your bench. This asset cannot move into an active scoring slot before Cycle ${candidate.effectiveCycleNumber}, so already-played games are never backfilled.`;
+    }
+
+    if (candidate.canApplyImmediately) {
+      return `Neither the outgoing slot window nor the incoming player's eligible window has started. The server will replace only this untouched Cycle ${candidate.effectiveCycleNumber} assignment.`;
+    }
+
+    if (eligibility && eligibility.earliestEligibleCycleNumber > candidate.slotNextCycleNumber) {
+      return `The slot could advance in Cycle ${candidate.slotNextCycleNumber}, but the incoming player’s current block has already started. The player is reserved and waits until Cycle ${candidate.effectiveCycleNumber}.`;
+    }
+
+    return `The move begins when this roster slot advances into Cycle ${candidate.effectiveCycleNumber}.`;
   }
 
   getPendingMoveIncomingName(index: number): string {
     const entry = this.pendingRosterMoves()[index];
 
-    return entry
-      ? this.getRosterAssetName(entry.move.incomingAsset)
-      : 'Unknown Player';
+    return entry ? this.getRosterAssetName(entry.move.incomingAsset) : 'Unknown Player';
   }
 
   getPendingMoveOutgoingName(index: number): string {
@@ -896,9 +1078,7 @@ export class FreeAgents implements OnDestroy {
   getPendingMoveSlotLabel(index: number): string {
     const entry = this.pendingRosterMoves()[index];
 
-    return entry
-      ? `${entry.slot.position} Slot ${entry.slot.slotNumber}`
-      : 'Roster Slot';
+    return entry ? `${entry.slot.position} Slot ${entry.slot.slotNumber}` : 'Roster Slot';
   }
 
   canCancelPendingMove(index: number): boolean {
@@ -920,7 +1100,7 @@ export class FreeAgents implements OnDestroy {
 
     if (entry.move.sourceWaiverId) {
       this.errorMessage.set(
-        'An awarded waiver move cannot be canceled after commissioner processing.'
+        'An awarded waiver move cannot be canceled after commissioner processing.',
       );
       return;
     }
@@ -931,17 +1111,15 @@ export class FreeAgents implements OnDestroy {
       await cancelQueuedRosterMove({
         leagueId: this.leagueId,
         ownerId: this.userId,
-        rosterSlotId: entry.slot.slotId
+        rosterSlotId: entry.slot.slotId,
       });
 
       this.successMessage.set(
-        `Canceled the queued move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`
+        `Canceled the queued move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to cancel that queued roster move.'
+        error instanceof Error ? error.message : 'Unable to cancel that queued roster move.',
       );
     } finally {
       this.moving.set(false);
@@ -958,7 +1136,7 @@ export class FreeAgents implements OnDestroy {
 
   getRosterSpotCandidateName(candidate: DropCandidate): string {
     if (!candidate.asset) {
-      return `Open ${candidate.position} Slot`;
+      return candidate.rosterArea === 'bench' ? `Open Bench ${candidate.slotNumber}` : `Open ${candidate.position} Slot`;
     }
 
     return this.getRosterAssetName(candidate.asset);
@@ -966,10 +1144,14 @@ export class FreeAgents implements OnDestroy {
 
   getRosterSpotCandidateDescription(candidate: DropCandidate): string {
     if (!candidate.asset) {
-      return `${candidate.position} Slot ${candidate.slotNumber} · opened by IR or roster move`;
+      return candidate.rosterArea === 'bench'
+        ? `Flexible Bench Slot ${candidate.slotNumber} · any position`
+        : `${candidate.position} Slot ${candidate.slotNumber} · opened by IR or roster move`;
     }
 
-    return `${this.getRosterAssetTeamLabel(candidate.asset)} · ${candidate.position} · Slot ${candidate.slotNumber}`;
+    return candidate.rosterArea === 'bench'
+      ? `${this.getRosterAssetTeamLabel(candidate.asset)} · ${candidate.asset.position} · Bench ${candidate.slotNumber}`
+      : `${this.getRosterAssetTeamLabel(candidate.asset)} · ${candidate.position} · Slot ${candidate.slotNumber}`;
   }
 
   getMoveSummary(): string {
@@ -983,14 +1165,17 @@ export class FreeAgents implements OnDestroy {
 
     if (!dropCandidate) {
       return waiver
-        ? `Choose an open ${addAsset.position} slot or one ${addAsset.position} to drop for your waiver claim.`
-        : `Choose an open ${addAsset.position} slot or one ${addAsset.position} to drop.`;
+        ? `Choose an active ${addAsset.position} slot, an open bench slot, or a player to drop for your waiver claim.`
+        : `Choose an active ${addAsset.position} slot, an open bench slot, or a player to drop.`;
     }
 
     if (dropCandidate.moveType === 'open-slot') {
+      const destination = dropCandidate.rosterArea === 'bench'
+        ? `Fill Bench ${dropCandidate.slotNumber}`
+        : `Fill open ${addAsset.position} slot`;
       return waiver
-        ? `Claim ${this.getAssetName(addAsset)} · Fill open ${addAsset.position} slot · ${this.getEffectiveCycleText()}`
-        : `Add ${this.getAssetName(addAsset)} · Fill open ${addAsset.position} slot · ${this.getEffectiveCycleText()}`;
+        ? `Claim ${this.getAssetName(addAsset)} · ${destination} · ${this.getEffectiveCycleText()}`
+        : `Add ${this.getAssetName(addAsset)} · ${destination} · ${this.getEffectiveCycleText()}`;
     }
 
     if (!dropCandidate.asset) {
@@ -1006,14 +1191,10 @@ export class FreeAgents implements OnDestroy {
 
   getConfirmButtonLabel(): string {
     if (this.moving()) {
-      return this.selectedWaiver()
-        ? 'Submitting Claim...'
-        : 'Saving Move...';
+      return this.selectedWaiver() ? 'Submitting Claim...' : 'Saving Move...';
     }
 
-    return this.selectedWaiver()
-      ? 'Submit Waiver Claim'
-      : 'Confirm Add / Drop';
+    return this.selectedWaiver() ? 'Submit Waiver Claim' : 'Confirm Add / Drop';
   }
 
   isCommissioner(): boolean {
@@ -1035,9 +1216,7 @@ export class FreeAgents implements OnDestroy {
       return 'No claims yet';
     }
 
-    return claimCount === 1
-      ? '1 claim'
-      : `${claimCount} claims`;
+    return claimCount === 1 ? '1 claim' : `${claimCount} claims`;
   }
 
   getWaiverDroppedByLabel(waiver: FantasyWaiver): string {
@@ -1049,19 +1228,206 @@ export class FreeAgents implements OnDestroy {
       return 'Unknown Team';
     }
 
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   getWaiverPriorityLabel(ownerId: string | null | undefined = this.userId): string {
-    const team = this.teams().find(
-      (candidate) => candidate.ownerId === ownerId
-    );
+    const team = this.teams().find((candidate) => candidate.ownerId === ownerId);
 
     return typeof team?.waiverPriority === 'number'
       ? `Waiver Priority #${team.waiverPriority}`
       : 'Waiver Priority —';
+  }
+
+  getPendingMoveActivationText(index: number): string {
+    const entry = this.pendingRosterMoves()[index];
+
+    if (!entry) {
+      return 'Waiting for a slot boundary';
+    }
+
+    const targetCycle = entry.move.requestedEffectiveCycleNumber;
+
+    return typeof targetCycle === 'number'
+      ? `Reserved · earliest activation Cycle ${targetCycle}`
+      : 'Reserved · activates at the next eligible slot boundary';
+  }
+
+  private async loadSelectedAssetEligibility(
+    asset: DraftableAsset,
+    forceRefresh = false,
+  ): Promise<void> {
+    const requestKey = `${asset.assetKey}::${Date.now()}`;
+    this.eligibilityRequestKey = requestKey;
+    this.eligibilityLoading.set(true);
+    this.eligibilityError.set('');
+
+    try {
+      const eligibility = await resolveRosterMoveAssetCycleEligibility(
+        asset,
+        this.getRequiredGamesPerCycle(),
+        { forceRefresh },
+      );
+
+      if (
+        this.eligibilityRequestKey !== requestKey ||
+        this.selectedAddAssetKey() !== asset.assetKey
+      ) {
+        return;
+      }
+
+      this.selectedAssetEligibility.set(eligibility);
+    } catch (error: unknown) {
+      if (this.eligibilityRequestKey !== requestKey) {
+        return;
+      }
+
+      this.selectedAssetEligibility.set(null);
+      this.eligibilityError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to verify the selected player’s current cycle.',
+      );
+    } finally {
+      if (this.eligibilityRequestKey === requestKey) {
+        this.eligibilityLoading.set(false);
+      }
+    }
+  }
+
+  private refreshTeamWindowListeners(cycles: FantasyCycle[]): void {
+    const activeCycleNumbers = new Set(
+      cycles.filter((cycle) => cycle.status === 'active').map((cycle) => cycle.cycleNumber),
+    );
+
+    Object.entries(this.teamWindowListeners).forEach(([cycleNumberText, unsubscribe]) => {
+      const cycleNumber = Number(cycleNumberText);
+
+      if (!activeCycleNumbers.has(cycleNumber)) {
+        unsubscribe();
+        delete this.teamWindowListeners[cycleNumber];
+      }
+    });
+
+    const nextLoadedByCycle = Object.fromEntries(
+      Object.entries(this.teamWindowLoadedByCycle()).filter(([cycleNumberText]) =>
+        activeCycleNumbers.has(Number(cycleNumberText)),
+      ),
+    );
+    const nextWindowsByCycle = Object.fromEntries(
+      Object.entries(this.myTeamWindowsByCycle()).filter(([cycleNumberText]) =>
+        activeCycleNumbers.has(Number(cycleNumberText)),
+      ),
+    );
+
+    this.myTeamWindowsByCycle.set(nextWindowsByCycle);
+    this.teamWindowLoadedByCycle.set(nextLoadedByCycle);
+
+    activeCycleNumbers.forEach((cycleNumber) => {
+      if (this.teamWindowListeners[cycleNumber]) {
+        return;
+      }
+
+      this.teamWindowLoadedByCycle.set({
+        ...this.teamWindowLoadedByCycle(),
+        [cycleNumber]: false,
+      });
+      this.teamWindowListeners[cycleNumber] = listenToCycleTeamWindows(
+        this.leagueId,
+        cycleNumber,
+        (teamWindows) => {
+          const myWindows = teamWindows.find((entry) => entry.ownerId === this.userId) ?? null;
+
+          this.myTeamWindowsByCycle.set({
+            ...this.myTeamWindowsByCycle(),
+            [cycleNumber]: myWindows,
+          });
+          this.teamWindowLoadedByCycle.set({
+            ...this.teamWindowLoadedByCycle(),
+            [cycleNumber]: true,
+          });
+        },
+        (error) => {
+          console.warn(`Unable to load Cycle ${cycleNumber} roster windows.`, error);
+          this.teamWindowLoadedByCycle.set({
+            ...this.teamWindowLoadedByCycle(),
+            [cycleNumber]: false,
+          });
+        },
+      );
+    });
+  }
+
+  private clearTeamWindowListeners(): void {
+    Object.values(this.teamWindowListeners).forEach((unsubscribe) => unsubscribe());
+    this.teamWindowListeners = {};
+    this.myTeamWindowsByCycle.set({});
+    this.teamWindowLoadedByCycle.set({});
+  }
+
+  private getLatestWindowForSlot(slotId: string): FantasyAssetCycleWindow | null {
+    const windows = (Object.values(this.myTeamWindowsByCycle()) as Array<FantasyTeamCycleWindows | null>)
+      .flatMap((teamWindows) => teamWindows?.windows ?? [])
+      .filter((window) => window.rosterSlotId === slotId)
+      .sort((first, second) => second.cycleNumber - first.cycleNumber);
+
+    return windows[0] ?? null;
+  }
+
+  private isWindowUntouched(window: FantasyAssetCycleWindow | null): boolean {
+    return Boolean(
+      window &&
+      window.gamesPlayed === 0 &&
+      window.actualGamesPlayed === 0 &&
+      window.fantasyPoints === 0 &&
+      window.completedGameIds.length === 0 &&
+      window.liveGameIds.length === 0 &&
+      window.appearanceGameIds.length === 0,
+    );
+  }
+
+  private isAwaitingInitialWindowSync(): boolean {
+    const activeCycleNumbers = this.leagueCycles()
+      .filter((cycle) => cycle.status === 'active')
+      .map((cycle) => cycle.cycleNumber);
+
+    if (activeCycleNumbers.length === 0) {
+      return false;
+    }
+
+    const loadedByCycle = this.teamWindowLoadedByCycle();
+    const windowsByCycle = this.myTeamWindowsByCycle();
+
+    return activeCycleNumbers.every(
+      (cycleNumber) =>
+        loadedByCycle[cycleNumber] === true &&
+        (windowsByCycle[cycleNumber]?.windows.length ?? 0) === 0,
+    );
+  }
+
+  private getSlotNextCycleNumber(window: FantasyAssetCycleWindow | null): number {
+    if (!this.hasStartedCycleWindows()) {
+      return 1;
+    }
+
+    if (this.isWindowUntouched(window) && window) {
+      return window.cycleNumber;
+    }
+
+    if (!window && this.isAwaitingInitialWindowSync()) {
+      return Math.max(
+        1,
+        ...this.leagueCycles()
+          .filter((cycle) => cycle.status === 'active')
+          .map((cycle) => cycle.cycleNumber),
+      );
+    }
+
+    return window ? window.cycleNumber + 1 : this.getFallbackNextCycleNumber();
+  }
+
+  private getFallbackNextCycleNumber(): number {
+    return (this.latestCycle()?.cycleNumber ?? 0) + 1;
   }
 
   private refreshRosterListeners(teams: FantasyTeam[]): void {
@@ -1073,7 +1439,7 @@ export class FreeAgents implements OnDestroy {
         delete this.rosterListeners[ownerId];
 
         const nextRosters = {
-          ...this.rosters()
+          ...this.rosters(),
         };
 
         delete nextRosters[ownerId];
@@ -1092,9 +1458,9 @@ export class FreeAgents implements OnDestroy {
         (roster) => {
           this.rosters.set({
             ...this.rosters(),
-            [team.ownerId]: roster
+            [team.ownerId]: roster,
           });
-        }
+        },
       );
     });
   }
@@ -1123,18 +1489,11 @@ export class FreeAgents implements OnDestroy {
         nhlPlayerId?: number | string;
       };
 
-      const playerId =
-        player.id ??
-        player.playerId ??
-        player.nhlPlayerId;
+      const playerId = player.id ?? player.playerId ?? player.nhlPlayerId;
 
-      return playerId
-        ? `skater-${playerId}`
-        : '';
+      return playerId ? `skater-${playerId}` : '';
     }
 
-    return asset.teamAbbreviation
-      ? `goalie-unit-${asset.teamAbbreviation}`
-      : '';
+    return asset.teamAbbreviation ? `goalie-unit-${asset.teamAbbreviation}` : '';
   }
 }

@@ -4,7 +4,6 @@ import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { joinLeagueByInviteCode } from '../../../core/league/league.service';
 import { getUserProfile } from '../../../core/user/user.service';
-import { buildPixelMarquee, PixelLogoItem } from '../../../shared/pixel-theme/pixel-theme.data';
 
 @Component({
   selector: 'app-join-league',
@@ -18,8 +17,6 @@ export class JoinLeague {
   loading = signal(false);
   errorMessage = signal('');
 
-  readonly topRibbon: PixelLogoItem[] = buildPixelMarquee(9);
-  readonly bottomRibbon: PixelLogoItem[] = buildPixelMarquee(21);
 
   constructor(private router: Router) {}
 

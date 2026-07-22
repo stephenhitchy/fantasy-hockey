@@ -33,6 +33,10 @@ import { listenToFantasyPlayoffs } from '../../../core/playoffs/playoff.service'
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();

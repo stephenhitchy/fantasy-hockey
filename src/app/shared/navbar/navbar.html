@@ -213,6 +213,17 @@
           </a>
 
           <a
+            [routerLink]="['/leagues', activeLeagueId, 'leaders']"
+            (click)="closeMore()"
+          >
+            <span aria-hidden="true">⭐</span>
+            <span>
+              <strong>Point Leaders</strong>
+              <small>Forwards, defensemen, and goalie units</small>
+            </span>
+          </a>
+
+          <a
             [routerLink]="['/leagues', activeLeagueId, 'playoffs']"
             (click)="closeMore()"
           >

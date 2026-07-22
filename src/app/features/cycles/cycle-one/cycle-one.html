@@ -74,6 +74,13 @@
 
       <div class="cycle-header-actions">
         <a
+          class="schedule-preview-header-link my-team-header-link"
+          [routerLink]="['/leagues', leagueId, 'team']"
+        >
+          My Team
+        </a>
+
+        <a
           class="schedule-preview-header-link"
           [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
         >
@@ -109,26 +116,6 @@
           </span>
         }
 
-        @if ((cycle()?.totalMatchupCount ?? 0) > 0) {
-          <span class="cycle-status-badge matchup-progress-badge">
-            {{ cycle()?.completedMatchupCount ?? 0 }} /
-            {{ cycle()?.totalMatchupCount ?? 0 }} Matchups Final
-          </span>
-        }
-
-        <span
-          class="cycle-status-badge"
-          [class.status-live]="cycle()?.status === 'active'"
-          [class.status-complete]="cycle()?.status === 'complete'"
-        >
-          {{
-            cycle()?.status === 'complete'
-              ? 'Complete'
-              : cycle()?.status === 'active'
-                ? 'Active'
-                : 'Not Started'
-          }}
-        </span>
       </div>
     </header>
 
@@ -166,103 +153,110 @@
     </section>
 
     @if (cycle()) {
-      <section class="cycle-transparency-card">
-        <div class="transparency-heading">
+      <section class="cycle-explainer-card">
+        <div class="cycle-explainer-heading">
           <div>
-            <span class="eyebrow">Cycle Transparency</span>
-            <h2>What is still counting?</h2>
+            <span class="eyebrow">How Fantasy Cycles Work</span>
+            <h2>Every player gets six NHL team games.</h2>
             <p>
-              Every roster slot owns an independent six-game window. A faster slot may begin Cycle
-              {{ cycleNumber + 1 }} while slower slots are still finishing Cycle {{ cycleNumber }}.
+              A fantasy cycle is not a calendar week. Each player scores from the next six games
+              played by that player's NHL team, so every roster spot can move at its own pace.
+            </p>
+          </div>
+        </div>
+
+        <details class="cycle-explainer-details">
+          <summary>
+            <span>
+              <strong>Show the full cycle explanation</strong>
+              <small>See why players finish at different times and how the next window begins.</small>
+            </span>
+            <span class="cycle-explainer-chevron" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="cycle-explainer-expanded-content">
+            @if (isCommissioner() && developerToolsEnabled) {
+              <a
+                class="cycle-simulator-link"
+                [routerLink]="['/leagues', leagueId, 'cycles', 'simulator']"
+              >
+                Run 7-vs-4 Simulator
+              </a>
+            }
+
+            <div class="cycle-step-grid">
+              <article>
+                <span class="cycle-step-number">1</span>
+                <div>
+                  <strong>Each roster spot follows six games</strong>
+                  <p>
+                    The six numbered circles on a player card represent six scheduled games for
+                    that player's NHL team.
+                  </p>
+                </div>
+              </article>
+
+              <article>
+                <span class="cycle-step-number">2</span>
+                <div>
+                  <strong>Players finish at different times</strong>
+                  <p>
+                    NHL teams have different schedules. One player may finish all six games before
+                    another player has reached Game 4.
+                  </p>
+                </div>
+              </article>
+
+              <article>
+                <span class="cycle-step-number">3</span>
+                <div>
+                  <strong>All six games still count</strong>
+                  <p>
+                    Your matchup score keeps adding each player's fantasy points until every active
+                    roster spot has completed its own six-game window.
+                  </p>
+                </div>
+              </article>
+
+              <article>
+                <span class="cycle-step-number">4</span>
+                <div>
+                  <strong>The next window can begin early</strong>
+                  <p>
+                    When a player finishes Game 6, that player's next NHL team game begins the next
+                    cycle—even while other players are still finishing the current one.
+                  </p>
+                </div>
+              </article>
+            </div>
+
+            <div class="cycle-example-card">
+              <strong>Simple example</strong>
+              <p>
+                If Player A has finished six games and Player B has only finished four, Player A's
+                next NHL game begins Player A's next cycle. Player B's final two games still count
+                toward the current matchup. No game is skipped, and no game counts twice.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <div class="marker-guide">
+          <div class="marker-guide-copy">
+            <strong>How to read the circles on each player card</strong>
+            <p>
+              Read the circles from 1 to 6. Each circle shows what happened with one scheduled NHL
+              team game in that player's current fantasy window.
             </p>
           </div>
 
-          @if (isCommissioner() && developerToolsEnabled) {
-            <a
-              class="cycle-simulator-link"
-              [routerLink]="['/leagues', leagueId, 'cycles', 'simulator']"
-            >
-              Run 7-vs-4 Simulator
-            </a>
-          }
-        </div>
-
-        <div class="transparency-metrics">
-          <article>
-            <span>Current Windows Complete</span>
-            <strong>
-              {{ getCurrentCycleWindowCounts().complete }} /
-              {{ getCurrentCycleWindowCounts().total || (cycle()?.totalExpectedWindowCount ?? 0) }}
-            </strong>
-          </article>
-
-          <article>
-            <span>Next Cycle Already Started</span>
-            <strong>{{ getNextCycleStartedWindowCount() }} slots</strong>
-          </article>
-
-          <article>
-            <span>Matchups Final</span>
-            <strong>
-              {{ cycle()?.completedMatchupCount ?? 0 }} /
-              {{ cycle()?.totalMatchupCount ?? matchups().length }}
-            </strong>
-          </article>
-
-          <article>
-            <span>Queued Moves in View</span>
-            <strong>{{ getDisplayedQueuedMoveCount() }}</strong>
-          </article>
-        </div>
-
-        <div class="window-marker-legend" aria-label="Cycle game marker legend">
-          <span><i class="legend-dot marker-played"></i> Played</span>
-          <span><i class="legend-dot marker-missed"></i> Team game counted, no appearance</span>
-          <span><i class="legend-dot marker-upcoming"></i> Upcoming</span>
-          <span><i class="legend-dot marker-unavailable"></i> Not scheduled</span>
-        </div>
-
-        @if (getCurrentDisplayedMatchup(); as transparencyMatchup) {
-          <div class="matchup-window-summary">
-            <article [ngStyle]="getOwnerThemeStyles(transparencyMatchup.teamAOwnerId)">
-              <div>
-                <strong>{{ getTeamName(transparencyMatchup.teamAOwnerId) }}</strong>
-                <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamAOwnerId) }}</span>
-              </div>
-
-              <div class="pending-slot-chip-row">
-                @for (
-                  slotId of getPendingSlotLabels(transparencyMatchup.teamAOwnerId);
-                  track slotId
-                ) {
-                  <span>{{ slotId }}</span>
-                } @empty {
-                  <em>All slot windows complete</em>
-                }
-              </div>
-            </article>
-
-            @if (transparencyMatchup.teamBOwnerId) {
-              <article [ngStyle]="getOwnerThemeStyles(transparencyMatchup.teamBOwnerId)">
-                <div>
-                  <strong>{{ getTeamName(transparencyMatchup.teamBOwnerId) }}</strong>
-                  <span>{{ getTeamWindowProgressLabel(transparencyMatchup.teamBOwnerId) }}</span>
-                </div>
-
-                <div class="pending-slot-chip-row">
-                  @for (
-                    slotId of getPendingSlotLabels(transparencyMatchup.teamBOwnerId);
-                    track slotId
-                  ) {
-                    <span>{{ slotId }}</span>
-                  } @empty {
-                    <em>All slot windows complete</em>
-                  }
-                </div>
-              </article>
-            }
+          <div class="window-marker-legend" aria-label="Cycle game marker legend">
+            <span><i class="legend-dot marker-played"></i> Played and counted</span>
+            <span><i class="legend-dot marker-missed"></i> Team played, player did not</span>
+            <span><i class="legend-dot marker-upcoming"></i> Upcoming game</span>
+            <span><i class="legend-dot marker-unavailable"></i> Schedule not available yet</span>
           </div>
-        }
+        </div>
       </section>
     }
 
@@ -274,6 +268,82 @@
         </summary>
 
         <div class="dev-controls-body">
+          <section class="historical-replay-control" aria-labelledby="historical-replay-heading">
+            <div class="historical-replay-heading-row">
+              <div>
+                <span class="eyebrow">2026–27 Historical Season Replay</span>
+                <h3 id="historical-replay-heading">Advance the NHL calendar one day</h3>
+                <p>
+                  Only NHL teams scheduled on the simulated date advance. Every roster-slot window
+                  remains independent, and the released performances come from the matching
+                  2025–26 historical sequence.
+                </p>
+              </div>
+
+              <span
+                class="historical-replay-status"
+                [class.replay-status-active]="historicalReplayControl()?.enabled"
+                [class.replay-status-error]="historicalReplayControl()?.status === 'error'"
+              >
+                {{ getHistoricalReplayStatusLabel() }}
+              </span>
+            </div>
+
+            <div class="historical-replay-metrics">
+              <article>
+                <small>Simulated date</small>
+                <strong>{{ getHistoricalReplayDateLabel() }}</strong>
+              </article>
+              <article>
+                <small>Days advanced</small>
+                <strong>{{ historicalReplayControl()?.daysAdvanced ?? 0 }}</strong>
+              </article>
+              <article>
+                <small>Games released last step</small>
+                <strong>{{ historicalReplayControl()?.lastReleasedGameCount ?? 0 }}</strong>
+              </article>
+              <article>
+                <small>Historical source</small>
+                <strong>2025–26</strong>
+              </article>
+            </div>
+
+            <div class="historical-replay-actions">
+              <button
+                type="button"
+                class="advance-replay-button"
+                (click)="advanceReplayOneDay()"
+                [disabled]="historicalReplayAdvancing()"
+              >
+                {{
+                  historicalReplayAdvancing()
+                    ? 'Processing Day...'
+                    : historicalReplayControl()?.enabled
+                      ? 'Advance One NHL Day'
+                      : 'Start Replay + Advance One Day'
+                }}
+              </button>
+            </div>
+
+            <small class="historical-replay-safety-note">
+              Add/drop, queued activation, cycle completion, standings, and playoff progression use
+              the same stored window documents as live scoring. Use this only in a dedicated test
+              league because advancing the replay intentionally writes real cycle and standings data.
+            </small>
+
+            @if (historicalReplayMessage() || historicalReplayControl()?.message) {
+              <small class="score-sync-success" role="status" aria-live="polite">
+                {{ historicalReplayMessage() || historicalReplayControl()?.message }}
+              </small>
+            }
+
+            @if (historicalReplayError()) {
+              <small class="schedule-warning" role="alert">
+                {{ historicalReplayError() }}
+              </small>
+            }
+          </section>
+
           <div class="score-sync-actions">
             <button
               type="button"
@@ -508,23 +578,205 @@
                     {{ matchup.id }}
                   </strong>
 
-                  @if (isMyMatchup(matchup)) {
-                    <span>Your Matchup</span>
-                  }
+                  <div class="matchup-heading-statuses">
+                    @if (isMyMatchup(matchup)) {
+                      <span class="your-matchup-badge">Your Matchup</span>
+                    }
 
-                  <span
-                    class="matchup-readiness-badge"
-                    [class.readiness-complete]="isMatchupComplete(matchup)"
-                    [class.readiness-ready]="
-                      isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
-                    "
-                    [class.readiness-waiting]="
-                      !isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
-                    "
-                  >
-                    {{ getMatchupReadinessLabel(matchup) }}
-                  </span>
+                    <span
+                      class="matchup-cycle-state-badge"
+                      [class.matchup-cycle-active]="cycle()?.status === 'active'"
+                      [class.matchup-cycle-complete]="cycle()?.status === 'complete'"
+                    >
+                      {{
+                        cycle()?.status === 'complete'
+                          ? 'Complete'
+                          : cycle()?.status === 'active'
+                            ? 'Active'
+                            : 'Not Started'
+                      }}
+                    </span>
+
+                    <span
+                      class="matchup-readiness-badge"
+                      [class.readiness-complete]="isMatchupComplete(matchup)"
+                      [class.readiness-ready]="
+                        isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                      "
+                      [class.readiness-waiting]="
+                        !isMatchupReadyToComplete(matchup) && !isMatchupComplete(matchup)
+                      "
+                    >
+                      {{ getMatchupReadinessLabel(matchup) }}
+                    </span>
+                  </div>
                 </div>
+
+                <section
+                  class="mobile-head-to-head-roster"
+                  aria-label="Condensed head-to-head player comparison"
+                >
+                  <div class="mobile-h2h-team-strip">
+                    <article
+                      class="mobile-h2h-team mobile-h2h-team-a"
+                      [ngStyle]="getOwnerThemeStyles(matchup.teamAOwnerId)"
+                    >
+                      <img
+                        [src]="getOwnerTheme(matchup.teamAOwnerId).logoUrl"
+                        [alt]="getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
+                      />
+
+                      <div>
+                        <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                        <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                      </div>
+
+                      <dl>
+                        <div>
+                          <dt>Cur</dt>
+                          <dd>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</dd>
+                        </div>
+                        <div>
+                          <dt>Proj</dt>
+                          <dd>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</dd>
+                        </div>
+                      </dl>
+                    </article>
+
+                    <div class="mobile-h2h-versus" aria-hidden="true">
+                      <span>{{ getCycleLabel() }}</span>
+                      <strong>VS</strong>
+                    </div>
+
+                    <article
+                      class="mobile-h2h-team mobile-h2h-team-b"
+                      [ngStyle]="getOwnerThemeStyles(matchup.teamBOwnerId)"
+                    >
+                      <img
+                        [src]="getOwnerTheme(matchup.teamBOwnerId).logoUrl"
+                        [alt]="getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
+                      />
+
+                      <div>
+                        <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                        <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                      </div>
+
+                      <dl>
+                        <div>
+                          <dt>Cur</dt>
+                          <dd>{{ getProjectionDisplay(getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</dd>
+                        </div>
+                        <div>
+                          <dt>Proj</dt>
+                          <dd>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  </div>
+
+                  <div class="mobile-h2h-position-list">
+                    @for (
+                      group of getMobileMatchupPositionGroups(matchup);
+                      track group.position
+                    ) {
+                      <section class="mobile-h2h-position-group">
+                        <header>
+                          <span>{{ group.label }}</span>
+                          <small>{{ group.position }}</small>
+                        </header>
+
+                        @for (
+                          row of group.rows;
+                          track getMobileMatchupPlayerTrackKey(row)
+                        ) {
+                          <div class="mobile-h2h-player-row">
+                            @if (row.teamAPick; as pick) {
+                              <article
+                                class="mobile-h2h-player mobile-h2h-player-a"
+                                [ngStyle]="getOwnerThemeStyles(matchup.teamAOwnerId)"
+                                role="link"
+                                tabindex="0"
+                                (click)="openAssetDetail(pick.asset)"
+                                (keydown.enter)="openAssetDetail(pick.asset)"
+                              >
+                                <div class="mobile-h2h-player-identity">
+                                  @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                    <img
+                                      [src]="logoUrl"
+                                      [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                    />
+                                  }
+
+                                  <div>
+                                    <strong>{{ getAssetName(pick.asset) }}</strong>
+                                    <span>{{ getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</span>
+                                    <small>
+                                      {{ getAssetGamesPlayed(pick.asset) }} played ·
+                                      {{ getAssetGamesLeft(pick.asset) }} left
+                                    </small>
+                                  </div>
+                                </div>
+
+                                <div class="mobile-h2h-player-scores">
+                                  <span>Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong></span>
+                                  <span>Proj <strong>{{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}</strong></span>
+                                </div>
+                              </article>
+                            } @else {
+                              <article class="mobile-h2h-player mobile-h2h-player-empty">
+                                <span>Open slot</span>
+                              </article>
+                            }
+
+                            <div class="mobile-h2h-slot-label" aria-hidden="true">
+                              <strong>{{ group.position }}</strong>
+                              <span>{{ row.slotIndex + 1 }}</span>
+                            </div>
+
+                            @if (row.teamBPick; as pick) {
+                              <article
+                                class="mobile-h2h-player mobile-h2h-player-b"
+                                [ngStyle]="getOwnerThemeStyles(matchup.teamBOwnerId)"
+                                role="link"
+                                tabindex="0"
+                                (click)="openAssetDetail(pick.asset)"
+                                (keydown.enter)="openAssetDetail(pick.asset)"
+                              >
+                                <div class="mobile-h2h-player-identity">
+                                  @if (getAssetLogoUrl(pick.asset); as logoUrl) {
+                                    <img
+                                      [src]="logoUrl"
+                                      [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
+                                    />
+                                  }
+
+                                  <div>
+                                    <strong>{{ getAssetName(pick.asset) }}</strong>
+                                    <span>{{ getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</span>
+                                    <small>
+                                      {{ getAssetGamesPlayed(pick.asset) }} played ·
+                                      {{ getAssetGamesLeft(pick.asset) }} left
+                                    </small>
+                                  </div>
+                                </div>
+
+                                <div class="mobile-h2h-player-scores">
+                                  <span>Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong></span>
+                                  <span>Proj <strong>{{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}</strong></span>
+                                </div>
+                              </article>
+                            } @else {
+                              <article class="mobile-h2h-player mobile-h2h-player-empty">
+                                <span>Open slot</span>
+                              </article>
+                            }
+                          </div>
+                        }
+                      </section>
+                    }
+                  </div>
+                </section>
 
                 <div [class]="getTeamsComparisonClass()">
                   @if (shouldShowTeamA()) {
@@ -588,11 +840,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -609,13 +878,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -639,19 +909,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 
@@ -730,11 +987,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -751,13 +1025,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -781,19 +1056,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 
@@ -870,11 +1132,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card goalie-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -891,13 +1170,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -921,19 +1201,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 
@@ -1066,11 +1333,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -1087,13 +1371,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -1117,19 +1402,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 
@@ -1208,11 +1480,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -1229,13 +1518,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -1259,19 +1549,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 
@@ -1348,11 +1625,28 @@
                                 ) {
                                   <article
                                     class="fantasy-player-card goalie-card"
+                                    [class.injured-player-card]="isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="isFutureWindowPending(pick)"
                                     role="link"
                                     tabindex="0"
                                     (click)="openAssetDetail(pick.asset)"
                                     (keydown.enter)="openAssetDetail(pick.asset)"
                                   >
+                                    @if (hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
                                     @if (getAssetLogoUrl(pick.asset); as logoUrl) {
                                       <img
                                         class="fantasy-player-logo"
@@ -1369,13 +1663,14 @@
                                         · {{ pick.asset.position }}
                                       </span>
 
-                                      <em>
-                                        Games:
-                                        {{ getAssetGamesPlayed(pick.asset) }}
-                                        played /
-                                        {{ getAssetGamesLeft(pick.asset) }}
-                                        left
-                                      </em>
+                                      @if (isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
 
                                       <div
                                         class="window-game-markers"
@@ -1399,19 +1694,6 @@
                                           </span>
                                         }
                                       </div>
-
-                                      <small class="window-status-copy">
-                                        {{ getWindowStatusLabel(pick) }}
-                                      </small>
-
-                                      @if (getPendingMoveForPick(pick); as pendingMove) {
-                                        <div class="queued-slot-move">
-                                          <span>Next window</span>
-                                          <strong>{{
-                                            getPendingMoveAssetName(pendingMove)
-                                          }}</strong>
-                                        </div>
-                                      }
 
                                     </div>
 

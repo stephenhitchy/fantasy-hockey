@@ -1,0 +1,140 @@
+@if (loading()) {
+  <p class="page-loading">Loading league point leaders...</p>
+} @else if (!league()) {
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+} @else {
+  <section class="point-leaders-page">
+    <a class="back-link" [routerLink]="['/leagues', leagueId]">← Back to League</a>
+
+    <header class="point-leaders-header">
+      <div>
+        <span class="eyebrow">League Scoreboard</span>
+        <h1>Point Leaders</h1>
+        <p>
+          Every fantasy point from each player’s frozen six-game windows is added together.
+          Forwards, defensemen, and goalie units are ranked separately.
+        </p>
+      </div>
+
+      <label class="scope-control">
+        <span>Show</span>
+        <select [value]="selectedCycleNumber()" (change)="setCycleScope($any($event.target).value)">
+          <option value="0">Season total</option>
+          @for (cycle of sortedCycles(); track cycle.cycleNumber) {
+            <option [value]="cycle.cycleNumber">Cycle {{ cycle.cycleNumber }}</option>
+          }
+        </select>
+      </label>
+    </header>
+
+    @if (errorMessage()) {
+      <p class="leader-status error-status">{{ errorMessage() }}</p>
+    }
+
+    <section class="leader-summary-grid" aria-label="Current category leaders">
+      <button type="button" (click)="setGroup('forwards')" [class.active]="selectedGroup() === 'forwards'">
+        <span>Top Forward</span>
+        @if (topForward(); as leader) {
+          <strong>{{ getAssetName(leader.asset) }}</strong>
+          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
+        } @else {
+          <strong>No scoring yet</strong>
+          <small>Waiting for a counted game</small>
+        }
+      </button>
+
+      <button type="button" (click)="setGroup('defense')" [class.active]="selectedGroup() === 'defense'">
+        <span>Top Defenseman</span>
+        @if (topDefense(); as leader) {
+          <strong>{{ getAssetName(leader.asset) }}</strong>
+          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
+        } @else {
+          <strong>No scoring yet</strong>
+          <small>Waiting for a counted game</small>
+        }
+      </button>
+
+      <button type="button" (click)="setGroup('goalies')" [class.active]="selectedGroup() === 'goalies'">
+        <span>Top Goalie Unit</span>
+        @if (topGoalie(); as leader) {
+          <strong>{{ getAssetName(leader.asset) }}</strong>
+          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
+        } @else {
+          <strong>No scoring yet</strong>
+          <small>Waiting for a counted game</small>
+        }
+      </button>
+    </section>
+
+    <section class="leaderboard-card">
+      <div class="leaderboard-heading">
+        <div>
+          <span class="eyebrow">{{ getScopeLabel() }}</span>
+          <h2>{{ getGroupLabel() }}</h2>
+        </div>
+
+        <div class="leader-tabs" role="tablist" aria-label="Player position group">
+          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'forwards'" [class.active]="selectedGroup() === 'forwards'" (click)="setGroup('forwards')">
+            Forwards <span>{{ forwardRows().length }}</span>
+          </button>
+          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'defense'" [class.active]="selectedGroup() === 'defense'" (click)="setGroup('defense')">
+            Defense <span>{{ defenseRows().length }}</span>
+          </button>
+          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'goalies'" [class.active]="selectedGroup() === 'goalies'" (click)="setGroup('goalies')">
+            Goalies <span>{{ goalieRows().length }}</span>
+          </button>
+        </div>
+      </div>
+
+      @if (displayedRows().length === 0) {
+        <div class="empty-leaderboard">
+          <strong>No points have been recorded for this group yet.</strong>
+          <span>The leaderboard will update automatically as NHL games are counted.</span>
+        </div>
+      } @else {
+        <div class="leaderboard-list">
+          <div class="leaderboard-column-headings" aria-hidden="true">
+            <span>Rank</span>
+            <span>Player</span>
+            <span>Fantasy Team</span>
+            <span>Points</span>
+            <span>Pts/Game</span>
+            <span>Games</span>
+          </div>
+
+          @for (row of displayedRows(); track row.assetKey) {
+            <article class="leader-row" [class.top-three-row]="row.rank <= 3">
+              <strong class="leader-rank">#{{ row.rank }}</strong>
+
+              <div class="leader-player">
+                @if (getAssetLogoUrl(row.asset); as logoUrl) {
+                  <img [src]="logoUrl" [alt]="getAssetTeamLabel(row.asset) + ' logo'" />
+                } @else {
+                  <span class="leader-logo-fallback">{{ getAssetTeamLabel(row.asset) }}</span>
+                }
+
+                <div>
+                  <strong>{{ getAssetName(row.asset) }}</strong>
+                  <span>
+                    {{ getAssetTeamLabel(row.asset) }} · {{ row.asset.position }} ·
+                    {{ getFantasyTeamName(row.ownerId) }}
+                  </span>
+                  <small>{{ row.cycleCount }} scoring {{ row.cycleCount === 1 ? 'window' : 'windows' }}</small>
+                </div>
+              </div>
+
+              <span class="leader-owner">{{ getFantasyTeamName(row.ownerId) }}</span>
+              <strong class="leader-points">{{ getPointsLabel(row.totalPoints) }}</strong>
+              <span class="leader-ppg">{{ getPointsPerGameLabel(row) }}</span>
+              <span class="leader-games" [attr.title]="getGamesTitle(row)">{{ getGamesLabel(row) }}</span>
+            </article>
+          }
+        </div>
+      }
+
+      <p class="games-note">
+        Skater games display appearances/team games when a player missed one of their NHL team’s counted games.
+      </p>
+    </section>
+  </section>
+}

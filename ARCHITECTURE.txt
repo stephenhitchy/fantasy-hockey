@@ -21,7 +21,7 @@ allowed in configuration.
 The simulator is deterministic and side-effect free. It makes no NHL requests
 and no Firestore writes. It validates:
 
-- four teams and 14 active roster slots per team;
+- four teams, 14 active roster slots, 3 flexible bench slots, and 3 IR slots per team;
 - unique draft assets;
 - 11 regular-season cycles;
 - exact six-game slot windows;

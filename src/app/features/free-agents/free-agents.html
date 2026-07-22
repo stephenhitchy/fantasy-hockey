@@ -4,19 +4,15 @@
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="free-agents-page">
-    <a
-      class="back-link"
-      [routerLink]="['/leagues', leagueId, 'team']"
-    >
-      ← Back to My Team
-    </a>
+    <a class="back-link" [routerLink]="['/leagues', leagueId, 'team']"> ← Back to My Team </a>
 
     <header class="free-agent-hero">
       <div>
         <span class="eyebrow">Roster Moves</span>
         <h1>Add / Drop Player</h1>
         <p>
-          Pick a free agent for an instant add, or claim a player from waivers. Dropped players now go to waivers first, and commissioner processing decides who wins claims.
+          Choose a player first, then choose the exact roster slot. The app checks both six-game
+          windows before allowing the move.
         </p>
       </div>
 
@@ -30,8 +26,9 @@
       </div>
     </header>
 
-    <section class="message-card success-card">
-      Current six-game slot windows stay locked. Once cycles have started, a free-agent or awarded waiver move reserves the incoming player, keeps the current player in that slot through the existing window, and activates the move {{ getEffectiveCycleText() }}.
+    <section class="message-card fairness-card">
+      No retroactive scoring: if the incoming player’s current six-game block has already started,
+      that player is reserved but waits for the next untouched cycle.
     </section>
 
     @if (pendingRosterMoves().length > 0) {
@@ -39,10 +36,11 @@
         <div class="section-heading stacked-heading">
           <div>
             <span class="eyebrow">Reserved Moves</span>
-            <h2>Waiting for Slot Boundaries</h2>
+            <h2>Waiting for Fair Activation</h2>
           </div>
           <p>
-            These incoming players are reserved. Each move activates independently when that specific roster slot finishes its current six-game window.
+            Each move stays attached to its roster slot and activates only after the slot boundary
+            and the incoming player’s eligibility cycle are both ready.
           </p>
         </div>
 
@@ -53,6 +51,7 @@
               <div>
                 <strong>{{ getPendingMoveIncomingName(index) }}</strong>
                 <span>replaces {{ getPendingMoveOutgoingName(index) }}</span>
+                <small>{{ getPendingMoveActivationText(index) }}</small>
               </div>
               @if (canCancelPendingMove(index)) {
                 <button
@@ -73,39 +72,21 @@
     }
 
     @if (successMessage()) {
-      <section class="message-card success-card">
-        {{ successMessage() }}
-      </section>
+      <section class="message-card success-card">{{ successMessage() }}</section>
     }
 
     @if (errorMessage()) {
-      <section class="message-card error-card">
-        {{ errorMessage() }}
-      </section>
+      <section class="message-card error-card">{{ errorMessage() }}</section>
     }
 
-    <section class="move-builder-card">
-      <div>
-        <span class="eyebrow">Current Move</span>
-        <h2>{{ getMoveSummary() }}</h2>
-      </div>
-
-      <button
-        type="button"
-        class="confirm-move-button"
-        (click)="confirmAddDrop()"
-        [disabled]="!canConfirmMove() || moving()"
-      >
-        {{ getConfirmButtonLabel() }}
-      </button>
-    </section>
-
-    <section class="free-agent-layout">
-      <section class="free-agent-list-card">
-        <div class="section-heading">
+    @if (flowStep() === 'player-pool') {
+      <section class="free-agent-list-card player-pool-step">
+        <div class="step-heading-row">
+          <div class="step-number">1</div>
           <div>
-            <span class="eyebrow">Available Players</span>
+            <span class="eyebrow">Choose a Player</span>
             <h2>Free Agent Pool</h2>
+            <p>Selecting a player opens the roster-slot screen immediately.</p>
           </div>
 
           <button
@@ -114,7 +95,7 @@
             (click)="loadPlayerPool()"
             [disabled]="playerPoolLoading()"
           >
-            {{ playerPoolLoading() ? 'Reloading...' : 'Reload Shared Pool' }}
+            {{ playerPoolLoading() ? 'Reloading...' : 'Reload Pool' }}
           </button>
         </div>
 
@@ -130,10 +111,7 @@
 
           <label>
             Position
-            <select
-              [ngModel]="positionFilter()"
-              (ngModelChange)="setPositionFilter($event)"
-            >
+            <select [ngModel]="positionFilter()" (ngModelChange)="setPositionFilter($event)">
               @for (position of positionFilters; track position) {
                 <option [value]="position">
                   {{ position === 'ALL' ? 'All Positions' : position }}
@@ -145,10 +123,9 @@
 
         <div class="pool-count-row">
           <strong>{{ availableAssets().length }}</strong>
-          <span>normal free agents found</span>
-
+          <span>free agents</span>
           <strong>{{ availableWaivers().length }}</strong>
-          <span>waiver players match filters</span>
+          <span>on waivers</span>
         </div>
 
         @if (availableWaivers().length > 0) {
@@ -158,52 +135,51 @@
                 <span class="eyebrow">Waiver Queue</span>
                 <h2>Players on Waivers</h2>
               </div>
-
               <p>
-                Claims do not change your roster until the commissioner processes the waiver. Lowest waiver priority number wins, then moves to the bottom.
+                Choose the roster slot now. If your claim wins, the same cycle-protection rules
+                apply before activation.
               </p>
             </div>
 
             <div class="asset-list waiver-list">
               @for (waiver of availableWaivers(); track waiver.id) {
-                <article
-                  class="asset-row waiver-row"
-                  [class.selected-asset-row]="isSelectedWaiver(waiver)"
-                >
+                <article class="asset-row waiver-row" [class.suspended-asset-row]="isPlayerAvailabilitySuspended(waiver.asset)">
                   @if (getAssetLogoUrl(waiver.asset); as logoUrl) {
-                    <img
-                      [src]="logoUrl"
-                      [alt]="getAssetTeamLabel(waiver.asset) + ' logo'"
-                    />
+                    <img [src]="logoUrl" [alt]="getAssetTeamLabel(waiver.asset) + ' logo'" />
                   }
 
                   <div class="asset-main">
                     <strong>{{ getAssetName(waiver.asset) }}</strong>
                     <span>
-                      {{ getAssetTeamLabel(waiver.asset) }}
-                      ·
-                      {{ waiver.asset.position }}
-                      ·
+                      {{ getAssetTeamLabel(waiver.asset) }} · {{ waiver.asset.position }} ·
                       {{ getWaiverDroppedByLabel(waiver) }}
                     </span>
 
                     @if (shouldShowPlayerAvailabilityBadge(waiver.asset)) {
                       <div
                         class="player-availability-row"
-                        [attr.title]="getPlayerAvailabilityNote(waiver.asset) || getPlayerAvailabilityLabel(waiver.asset)"
+                        [attr.title]="
+                          getPlayerAvailabilityNote(waiver.asset) ||
+                          getPlayerAvailabilityLabel(waiver.asset)
+                        "
                       >
                         <span
-                          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)"
+                          [class]="
+                            'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)
+                          "
                         >
-                          ✚ {{ getPlayerAvailabilityLabel(waiver.asset) }}
+                          <span
+                            class="player-status-tooltip availability-symbol"
+                            role="img"
+                            tabindex="0"
+                            [attr.aria-label]="getPlayerAvailabilityTooltip(waiver.asset)"
+                            [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(waiver.asset)"
+                            [attr.title]="getPlayerAvailabilityTooltip(waiver.asset)"
+                          >{{ getPlayerAvailabilityIcon(waiver.asset) }}</span>
+                          {{ getPlayerAvailabilityLabel(waiver.asset) }}
                         </span>
-
                         @if (isPlayerAvailabilityIrEligible(waiver.asset)) {
                           <small class="ir-eligible-copy">IR eligible</small>
-                        }
-
-                        @if (getPlayerAvailabilityNote(waiver.asset); as availabilityNote) {
-                          <small class="player-availability-note">{{ availabilityNote }}</small>
                         }
                       </div>
                     }
@@ -213,19 +189,9 @@
 
                   <div class="asset-projection">
                     <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
-                    <span>Next Cycle</span>
+                    <span>Projection</span>
                     @if (getCycleRank(waiver.asset); as cycleRank) {
-                      <small class="projection-rank-pill">Cycle Rank #{{ cycleRank }}</small>
-                    }
-                    <small
-                      [class]="'recent-form-pill ' + getRecentFormClass(waiver.asset)"
-                    >
-                      Cycle {{ getRecentFormLabel(waiver.asset) }}
-                    </small>
-                    @if (getAssetExpectedGamesDisplay(waiver.asset); as expectedGames) {
-                      <small class="availability-projection-pill">
-                        {{ getAssetAvailabilityLabel(waiver.asset) }} · {{ expectedGames }}
-                      </small>
+                      <small class="projection-rank-pill">Rank #{{ cycleRank }}</small>
                     }
                   </div>
 
@@ -234,9 +200,11 @@
                       type="button"
                       class="claim-button"
                       (click)="selectWaiver(waiver)"
-                      [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId"
+                      [disabled]="
+                        draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId
+                      "
                     >
-                      {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : isSelectedWaiver(waiver) ? 'Claim Selected' : 'Claim' }}
+                      {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : 'Choose Slot' }}
                     </button>
 
                     @if (isCommissioner()) {
@@ -257,9 +225,7 @@
         }
 
         @if (playerPoolLoading()) {
-          <div class="empty-card">
-            Loading NHL player pool...
-          </div>
+          <div class="empty-card">Loading NHL player pool...</div>
         } @else if (availableAssets().length === 0) {
           <div class="empty-card">
             No normal free agents match your filters. Players currently on waivers appear above.
@@ -267,40 +233,38 @@
         } @else {
           <div class="asset-list">
             @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
-              <article
-                class="asset-row"
-                [class.selected-asset-row]="isSelectedAddAsset(asset)"
-              >
+              <article class="asset-row" [class.suspended-asset-row]="isPlayerAvailabilitySuspended(asset)">
                 @if (getAssetLogoUrl(asset); as logoUrl) {
-                  <img
-                    [src]="logoUrl"
-                    [alt]="getAssetTeamLabel(asset) + ' logo'"
-                  />
+                  <img [src]="logoUrl" [alt]="getAssetTeamLabel(asset) + ' logo'" />
                 }
 
                 <div class="asset-main">
                   <strong>{{ getAssetName(asset) }}</strong>
-                  <span>
-                    {{ getAssetTeamLabel(asset) }}
-                    ·
-                    {{ asset.position }}
-                  </span>
+                  <span>{{ getAssetTeamLabel(asset) }} · {{ asset.position }}</span>
 
                   @if (shouldShowPlayerAvailabilityBadge(asset)) {
                     <div
                       class="player-availability-row"
-                      [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
+                      [attr.title]="
+                        getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)
+                      "
                     >
                       <span
                         [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
                       >
-                        ✚ {{ getPlayerAvailabilityLabel(asset) }}
+                        <span
+                          class="player-status-tooltip availability-symbol"
+                          role="img"
+                          tabindex="0"
+                          [attr.aria-label]="getPlayerAvailabilityTooltip(asset)"
+                          [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(asset)"
+                          [attr.title]="getPlayerAvailabilityTooltip(asset)"
+                        >{{ getPlayerAvailabilityIcon(asset) }}</span>
+                        {{ getPlayerAvailabilityLabel(asset) }}
                       </span>
-
                       @if (isPlayerAvailabilityIrEligible(asset)) {
                         <small class="ir-eligible-copy">IR eligible</small>
                       }
-
                       @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
                         <small class="player-availability-note">{{ availabilityNote }}</small>
                       }
@@ -310,20 +274,13 @@
 
                 <div class="asset-projection">
                   <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
-                  <span>Next Cycle</span>
+                  <span>Projection</span>
                   @if (getCycleRank(asset); as cycleRank) {
-                    <small class="projection-rank-pill">Cycle Rank #{{ cycleRank }}</small>
+                    <small class="projection-rank-pill">Rank #{{ cycleRank }}</small>
                   }
-                  <small
-                    [class]="'recent-form-pill ' + getRecentFormClass(asset)"
-                  >
-                    Cycle {{ getRecentFormLabel(asset) }}
+                  <small [class]="'recent-form-pill ' + getRecentFormClass(asset)">
+                    {{ getRecentFormLabel(asset) }}
                   </small>
-                  @if (getAssetExpectedGamesDisplay(asset); as expectedGames) {
-                    <small class="availability-projection-pill">
-                      {{ getAssetAvailabilityLabel(asset) }} · {{ expectedGames }}
-                    </small>
-                  }
                 </div>
 
                 <button
@@ -331,102 +288,175 @@
                   (click)="selectAddAsset(asset)"
                   [disabled]="draft()?.status !== 'complete'"
                 >
-                  {{ isSelectedAddAsset(asset) && !selectedWaiver() ? 'Selected' : 'Add' }}
+                  Choose Slot
                 </button>
               </article>
             }
           </div>
         }
       </section>
+    } @else {
+      @if (selectedAddAsset(); as addAsset) {
+        <section class="roster-slot-step">
+          <div class="slot-step-header">
+            <button type="button" class="change-player-button" (click)="returnToPlayerPool()">
+              ← Change Player
+            </button>
 
-      <aside class="drop-panel-card">
-        <div class="section-heading stacked-heading">
-          <div>
-            <span class="eyebrow">Roster Spot</span>
-            <h2>Open Slot or Same-Position Drop</h2>
+            <div class="step-heading-row compact-step-heading">
+              <div class="step-number">2</div>
+              <div>
+                <span class="eyebrow">Choose a Roster Slot</span>
+                <h2>Where should {{ getAssetName(addAsset) }} go?</h2>
+              </div>
+            </div>
           </div>
 
-          <p>
-            For free agents, this saves immediately. For waiver claims, this is the roster move that will happen only if your claim wins.
-          </p>
-        </div>
+          <section class="selected-player-card">
+            @if (getAssetLogoUrl(addAsset); as logoUrl) {
+              <img [src]="logoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
+            }
+            <div class="selected-player-main">
+              <span class="eyebrow">{{
+                selectedWaiver() ? 'Waiver Claim' : 'Selected Player'
+              }}</span>
+              <strong>{{ getAssetName(addAsset) }}</strong>
+              <p>
+                {{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }} ·
+                {{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }} projected
+              </p>
+              @if (shouldShowPlayerAvailabilityBadge(addAsset)) {
+                <span [class]="'selected-availability-pill player-availability-pill ' + getPlayerAvailabilityClass(addAsset)">
+                  <span
+                    class="player-status-tooltip availability-symbol"
+                    role="img"
+                    tabindex="0"
+                    [attr.aria-label]="getPlayerAvailabilityTooltip(addAsset)"
+                    [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(addAsset)"
+                    [attr.title]="getPlayerAvailabilityTooltip(addAsset)"
+                  >{{ getPlayerAvailabilityIcon(addAsset) }}</span>
+                  {{ getPlayerAvailabilityLabel(addAsset) }}
+                </span>
+              }
+            </div>
+            <div class="selected-player-rank">
+              <strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong>
+              <span>Cycle Rank</span>
+            </div>
+          </section>
 
-        @if (!selectedAddAsset()) {
-          <div class="empty-card">
-            Select a free agent or waiver player first.
+          <section [class]="'eligibility-card ' + getSelectedAssetCycleClass()">
+            <div class="eligibility-icon">
+              @if (eligibilityLoading()) {
+                …
+              } @else if (eligibilityError()) {
+                !
+              } @else if (selectedAssetEligibility()?.currentCycleHasStarted) {
+                ⏳
+              } @else {
+                ✓
+              }
+            </div>
+            <div>
+              <span class="eyebrow">Incoming Player Window</span>
+              <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
+              <p>{{ getSelectedAssetCycleDetail() }}</p>
+            </div>
+            @if (eligibilityError()) {
+              <button type="button" class="retry-button" (click)="retryEligibilityCheck()">
+                Retry Check
+              </button>
+            }
+          </section>
+
+          <div class="slot-list-heading">
+            <div>
+              <span class="eyebrow">Compatible {{ addAsset.position }} Slots</span>
+              <h3>Select one slot</h3>
+            </div>
+            <span class="fairness-note"
+              >The cycle shown on each card is the actual activation cycle.</span
+            >
           </div>
-        } @else if (dropCandidates().length === 0) {
-          <div class="empty-card">
-            No open {{ selectedAddAsset()?.position }} slot or matching roster player was found.
-          </div>
-        } @else {
-          <div class="drop-list">
-            @for (candidate of dropCandidates(); track candidate.slotId) {
-              <article
-                class="drop-row"
-                [class.selected-drop-row]="isSelectedDropCandidate(candidate)"
-                [class.open-slot-row]="candidate.moveType === 'open-slot'"
-              >
-                @if (candidate.asset) {
-                  @if (getRosterAssetLogoUrl(candidate.asset); as logoUrl) {
-                    <img
-                      [src]="logoUrl"
-                      [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'"
-                    />
-                  }
-                } @else {
-                  <span class="open-slot-icon">+</span>
-                }
 
-                <div>
-                  <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
-                  <span>{{ getRosterSpotCandidateDescription(candidate) }}</span>
-                </div>
-
+          @if (!areRosterWindowsReady()) {
+            <div class="empty-card roster-window-loading">
+              Loading your active six-game roster windows before calculating the fair activation
+              cycle…
+            </div>
+          } @else if (dropCandidates().length === 0) {
+            <div class="empty-card">
+              No open {{ addAsset.position }} slot, flexible bench slot, or eligible roster player is available.
+            </div>
+          } @else {
+            <div class="drop-list slot-choice-list">
+              @for (candidate of dropCandidates(); track candidate.slotId) {
                 <button
                   type="button"
+                  class="slot-choice-card"
+                  [class.selected-slot-choice]="isSelectedDropCandidate(candidate)"
+                  [class.open-slot-choice]="candidate.moveType === 'open-slot'"
+                  [class.bench-slot-choice]="candidate.rosterArea === 'bench'"
                   (click)="selectDropCandidate(candidate)"
                 >
-                  @if (candidate.moveType === 'open-slot') {
-                    {{ isSelectedDropCandidate(candidate) ? 'Filling' : 'Fill Slot' }}
-                  } @else {
-                    {{ isSelectedDropCandidate(candidate) ? 'Dropping' : 'Drop' }}
-                  }
+                  <div class="slot-choice-asset">
+                    @if (candidate.asset) {
+                      @if (getRosterAssetLogoUrl(candidate.asset); as logoUrl) {
+                        <img
+                          [src]="logoUrl"
+                          [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'"
+                        />
+                      }
+                    } @else {
+                      <span class="open-slot-icon">+</span>
+                    }
+
+                    <div>
+                      <span class="slot-label"
+                        >{{ candidate.rosterArea === 'bench' ? 'Bench' : candidate.position + ' Slot' }} {{ candidate.slotNumber }}</span
+                      >
+                      <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
+                      <small>{{ getCandidateWindowAssetLabel(candidate) }}</small>
+                    </div>
+                  </div>
+
+                  <div class="slot-window-progress">
+                    <span>{{ getCandidateWindowLabel(candidate) }}</span>
+                    <strong>{{ getCandidateActivationLabel(candidate) }}</strong>
+                    <small>{{ getCandidateActivationDetail(candidate) }}</small>
+                  </div>
+
+                  <span class="slot-select-indicator">
+                    {{ isSelectedDropCandidate(candidate) ? 'Selected ✓' : 'Select' }}
+                  </span>
                 </button>
-              </article>
-            }
-          </div>
-        }
+              }
+            </div>
+          }
 
-        @if (selectedAddAsset(); as addAsset) {
-          <section class="selected-summary-card">
-            <span class="eyebrow">{{ selectedWaiver() ? 'Claiming' : 'Adding' }}</span>
-            <strong>{{ getAssetName(addAsset) }}</strong>
-            <p>
-              {{ getAssetTeamLabel(addAsset) }}
-              ·
-              {{ addAsset.position }}
-              ·
-              {{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }} next-cycle projection
-              · {{ getRecentFormLabel(addAsset) }}
-            </p>
-            <p>{{ getEffectiveCycleText() }}</p>
-            @if (selectedWaiver()) {
-              <p>Claim will be pending until commissioner processing.</p>
-            }
+          <section class="mobile-confirm-dock">
+            <div>
+              <span class="eyebrow">Move Summary</span>
+              <strong>{{ getMoveSummary() }}</strong>
+            </div>
+            <button
+              type="button"
+              class="confirm-move-button"
+              (click)="confirmAddDrop()"
+              [disabled]="!canConfirmMove() || moving()"
+            >
+              {{ getConfirmButtonLabel() }}
+            </button>
           </section>
-        }
-
-        @if (selectedDropCandidate(); as dropCandidate) {
-          <section class="selected-summary-card drop-summary">
-            <span class="eyebrow">
-              {{ dropCandidate.moveType === 'open-slot' ? 'Filling' : 'Dropping' }}
-            </span>
-            <strong>{{ getRosterSpotCandidateName(dropCandidate) }}</strong>
-            <p>{{ getRosterSpotCandidateDescription(dropCandidate) }}</p>
-          </section>
-        }
-      </aside>
-    </section>
+        </section>
+      } @else {
+        <section class="empty-card">
+          The selected player is no longer available.
+          <button type="button" class="change-player-button" (click)="returnToPlayerPool()">
+            Return to Player Pool
+          </button>
+        </section>
+      }
+    }
   </section>
 }

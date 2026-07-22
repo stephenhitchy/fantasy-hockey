@@ -3,16 +3,17 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 import {
   PlayoffWindowSimulationReport,
-  runDeterministicPlayoffWindowSimulation
+  runDeterministicPlayoffWindowSimulation,
 } from '../../../core/playoffs/playoff-window-simulator';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -25,20 +26,18 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-playoff-window-simulator',
   imports: [RouterLink],
   templateUrl: './playoff-window-simulator.html',
-  styleUrl: './playoff-window-simulator.css'
+  styleUrl: './playoff-window-simulator.css',
 })
 export class PlayoffWindowSimulator {
   leagueId = '';
   league = signal<League | null>(null);
-  report = signal<PlayoffWindowSimulationReport>(
-    runDeterministicPlayoffWindowSimulation()
-  );
+  report = signal<PlayoffWindowSimulationReport>(runDeterministicPlayoffWindowSimulation());
   loading = signal(true);
   errorMessage = signal('');
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadPage();
   }
@@ -72,9 +71,7 @@ export class PlayoffWindowSimulator {
       this.league.set(league);
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to open the playoff-window simulator.'
+        error instanceof Error ? error.message : 'Unable to open the playoff-window simulator.',
       );
     } finally {
       this.loading.set(false);

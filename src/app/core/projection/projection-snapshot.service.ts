@@ -19,10 +19,10 @@ import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
 
 import { getPlayerAvailabilityRecordsForLeague } from '../player/player-availability.service';
 
-export const SHARED_PROJECTION_VERSION = 6;
+export const SHARED_PROJECTION_VERSION = 8;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
-export const WINDOW_PROJECTION_FRESH_MINUTES = 20 * 60;
+export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
 
 const SNAPSHOT_POINTER_ID = 'current';
 const TARGET_CYCLE_POINTER_PREFIX = 'target-cycle-';
@@ -42,6 +42,7 @@ const POSITION_REQUIREMENTS: Record<DraftPosition, number> = {
 };
 
 const POSITIONS: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
+const FLEXIBLE_BENCH_SLOTS_PER_TEAM = 3;
 
 const generationByLeague = new Map<string, Promise<SharedProjectionSnapshot>>();
 
@@ -259,23 +260,65 @@ function getGoalieSlotCurveScore(
   return 55 - postStarterProgress * 20;
 }
 
+function getFlexibleBenchReplacementCounts(
+  assets: DraftableAsset[],
+  teamCount: number,
+  projection: (asset: DraftableAsset) => number,
+): Record<DraftPosition, number> {
+  const replacementCounts = { ...POSITION_REQUIREMENTS } as Record<DraftPosition, number>;
+
+  for (const position of POSITIONS) {
+    replacementCounts[position] = Math.max(1, teamCount * POSITION_REQUIREMENTS[position]);
+  }
+
+  const remainingCandidates = POSITIONS.flatMap((position) => {
+    const starterCount = replacementCounts[position];
+
+    return assets
+      .filter((asset) => asset.position === position)
+      .sort((first, second) => projection(second) - projection(first))
+      .slice(starterCount);
+  }).sort((first, second) => projection(second) - projection(first));
+
+  for (const asset of remainingCandidates.slice(0, teamCount * FLEXIBLE_BENCH_SLOTS_PER_TEAM)) {
+    replacementCounts[asset.position] += 1;
+  }
+
+  return replacementCounts;
+}
+
 function rankSharedProjectionAssets(assets: DraftableAsset[], teamCount: number): DraftableAsset[] {
   const working = new Map<string, DraftableAsset>();
+  const draftReplacementCounts = getFlexibleBenchReplacementCounts(
+    assets,
+    teamCount,
+    getDraftProjection,
+  );
+  const cycleReplacementCounts = getFlexibleBenchReplacementCounts(
+    assets,
+    teamCount,
+    getCycleProjection,
+  );
 
   for (const position of POSITIONS) {
     const positionAssets = assets
       .filter((asset) => asset.position === position)
       .sort(compareDraftProjectionOrder);
 
-    const starterCount = Math.max(1, teamCount * POSITION_REQUIREMENTS[position]);
+    const draftReplacementIndex = Math.max(
+      0,
+      Math.min(positionAssets.length - 1, draftReplacementCounts[position] - 1),
+    );
 
-    const replacementIndex = Math.max(0, Math.min(positionAssets.length - 1, starterCount - 1));
-
-    const draftReplacement = getDraftProjection(positionAssets[replacementIndex]);
+    const draftReplacement = getDraftProjection(positionAssets[draftReplacementIndex]);
 
     const cyclePositionAssets = [...positionAssets].sort(compareCycleProjectionOrder);
+    const cycleReplacementIndex = Math.max(
+      0,
+      Math.min(cyclePositionAssets.length - 1, cycleReplacementCounts[position] - 1),
+    );
 
-    const cycleReplacement = getCycleProjection(cyclePositionAssets[replacementIndex]);
+    const cycleReplacement = getCycleProjection(cyclePositionAssets[cycleReplacementIndex]);
 
     const draftPositionRankByKey = new Map(
       positionAssets.map((asset, index) => [asset.assetKey, index + 1]),

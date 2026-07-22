@@ -1,0 +1,16 @@
+Fantasy Hockey Scoring V3 installation
+
+1. Extract the replacement package over the project root.
+2. Run:
+
+   npm run build
+   npm --prefix functions run build
+
+3. Deploy the two scoring automation functions and Hosting:
+
+   firebase deploy --only functions:runScheduledLeagueAutomation,functions:initializeSeasonAfterDraft,hosting:app \
+     -m "Launch scoring v3 position identities"
+
+No Firestore rules or index deployment is required.
+
+Deploy this before real season scoring windows begin. Active test scoring can be recalculated by the scheduled automation after deployment.

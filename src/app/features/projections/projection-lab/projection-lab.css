@@ -105,7 +105,7 @@
 .rating-explainer-card {
   border: 1px solid rgba(198, 213, 228, 0.16);
   border-radius: 16px;
-  background: rgba(17, 26, 42, 0.94);
+  background: rgba(25, 39, 57, 0.94);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
@@ -128,7 +128,7 @@
 .rating-explainer-card article {
   padding: 13px;
   border-radius: 13px;
-  background: #101827;
+  background: #182536;
 }
 
 .rating-explainer-card strong,
@@ -176,7 +176,7 @@
   box-sizing: border-box;
   border: 1px solid rgba(198, 213, 228, 0.18);
   border-radius: 10px;
-  background: #101827;
+  background: #182536;
   color: white;
   font: inherit;
   font-size: 13px;
@@ -199,7 +199,7 @@
   padding: 15px;
   border: 1px solid rgba(198, 213, 228, 0.14);
   border-radius: 14px;
-  background: #101827;
+  background: #182536;
 }
 
 .summary-grid span,
@@ -243,7 +243,7 @@
   margin: 0;
   padding: 11px 12px;
   border-radius: 11px;
-  background: #101827;
+  background: #182536;
   color: #c8d6e4;
   font-size: 13px;
   font-weight: 750;
@@ -296,7 +296,7 @@
 .position-summary-stats div {
   padding: 10px;
   border-radius: 10px;
-  background: #101827;
+  background: #182536;
 }
 
 .position-summary-stats span,
@@ -625,7 +625,7 @@ tbody tr:hover {
   padding: 18px;
   border: 1px solid rgba(198, 213, 228, 0.16);
   border-radius: 16px;
-  background: rgba(17, 26, 42, 0.94);
+  background: rgba(25, 39, 57, 0.94);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
@@ -676,7 +676,7 @@ tbody tr:hover {
   margin-top: 14px;
   padding: 14px;
   border-radius: 11px;
-  background: #101827;
+  background: #182536;
   color: #a7b7c8;
   font-size: 13px;
   font-weight: 750;
@@ -698,7 +698,7 @@ tbody tr:hover {
   min-width: 0;
   padding: 14px;
   border-radius: 13px;
-  background: #101827;
+  background: #182536;
 }
 
 .accuracy-summary-grid span,
@@ -740,7 +740,7 @@ tbody tr:hover {
   min-width: 0;
   padding: 14px;
   border-radius: 13px;
-  background: #101827;
+  background: #182536;
 }
 
 .accuracy-cycle-panel {

@@ -1,0 +1,44 @@
+FANTASY HOCKEY — FAVORITE TEAM THEME V2
+=======================================
+
+WHAT THIS PACKAGE DOES
+----------------------
+- Replaces the page-wide team-color gradients with a consistent neutral dark canvas.
+- Uses each NHL team's primary, secondary, and tertiary colors as focused identity accents.
+- Automatically chooses readable black or white text on every solid team-colored control.
+- Adds a required favorite-team selector to new profile registration.
+- Applies the shared theme consistently to the global shell, navigation, dashboard,
+  account settings, league detail, and matchup owner cards.
+- Keeps existing account/profile favorite-team editing intact.
+
+INSTALLATION
+------------
+1. Back up your current project.
+2. Extract this zip directly over:
+
+   /Users/StephenH/Documents/Programming/fantasy-hockey
+
+3. From Terminal, run:
+
+   cd /Users/StephenH/Documents/Programming/fantasy-hockey
+   npm install
+   npm run build
+
+4. If the build succeeds, deploy hosting:
+
+   firebase deploy --only hosting:app \
+     -m "Improve favorite team theming and profile setup"
+
+FIREBASE NOTES
+--------------
+- No Cloud Functions deployment is required for this visual update.
+- No Firestore rules deployment is required. The existing user-profile rules already
+  allow favoriteTeamAbbreviation and recognize all 32 team abbreviations.
+- Existing profiles continue to work. New profiles must select a favorite team.
+
+VALIDATION NOTE
+---------------
+The package passed TypeScript syntax transpilation, CSS parsing, HTML structural checks,
+and contrast checks for all 32 team palettes. A full Angular build could not be run in
+this packaging environment because its npm registry repeatedly returned a service error.
+Run npm install and npm run build locally before deployment.

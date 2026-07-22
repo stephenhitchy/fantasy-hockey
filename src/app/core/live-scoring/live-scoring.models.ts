@@ -15,6 +15,9 @@ export type SharedLiveScoringRefreshReason =
 export interface SharedLiveScoringControl {
   id: 'control';
   schemaVersion: 1;
+  automationMode?: 'server' | 'historical-replay' | string;
+  historicalReplayEnabled?: boolean;
+  historicalReplayDate?: string | null;
   status: SharedLiveScoringStatus;
   holderUserId: string | null;
   holderClientId: string | null;

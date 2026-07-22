@@ -1,16 +1,16 @@
 /* Global visual refresh foundation */
 :root {
   color-scheme: dark;
-  --page-bg: #07111d;
-  --page-bg-secondary: #0b1728;
-  --surface-1: rgba(13, 24, 40, 0.92);
-  --surface-2: rgba(19, 34, 56, 0.94);
-  --surface-3: rgba(27, 46, 73, 0.92);
-  --border-soft: rgba(134, 175, 222, 0.18);
-  --border-strong: rgba(129, 183, 235, 0.38);
-  --text-primary: #f5f9ff;
-  --text-secondary: #b7c7da;
-  --text-muted: #87a0bc;
+  --page-bg: #0d1723;
+  --page-bg-secondary: #142131;
+  --surface-1: #182536;
+  --surface-2: #1d2c3d;
+  --surface-3: #233548;
+  --border-soft: #3a4d61;
+  --border-strong: #58718a;
+  --text-primary: #f7f9fc;
+  --text-secondary: #c2cfdb;
+  --text-muted: #94a6b8;
   --accent-blue: #55b3ff;
   --accent-cyan: #7ae6ff;
   --accent-green: #64d9a3;
@@ -18,26 +18,33 @@
   --accent-red: #ff8a8a;
   --shadow-deep: 0 22px 55px rgba(1, 6, 15, 0.45);
   --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.28);
-  --user-team-primary: #b99b52;
-  --user-team-secondary: #333f48;
-  --user-team-highlight: #fff0b8;
-  --user-team-outline: color-mix(in srgb, #b99b52 72%, #37557b);
-  --user-team-subtext: color-mix(in srgb, #fff0b8 68%, #8ea9c7);
-  --user-team-glow: color-mix(in srgb, #b99b52 28%, transparent);
+  --user-team-primary: #b9975b;
+  --user-team-secondary: #333f42;
+  --user-team-tertiary: #c8102e;
+  --user-team-accent: #b9975b;
+  --user-team-highlight: #b9975b;
+  --user-team-on-primary: #07111d;
+  --user-team-on-secondary: #ffffff;
+  --user-team-on-tertiary: #ffffff;
+  --user-team-outline: #b9975b;
+  --user-team-outline-soft: rgba(185, 151, 91, 0.28);
+  --user-team-subtext: #b7c4d2;
+  --user-team-glow: rgba(185, 151, 91, 0.22);
+  --user-team-wash: rgba(185, 151, 91, 0.09);
+  --user-team-primary-wash: rgba(185, 151, 91, 0.12);
+  --user-team-secondary-wash: rgba(51, 63, 66, 0.12);
+  --user-team-tertiary-wash: rgba(200, 16, 46, 0.12);
 }
 
 html {
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(63, 133, 221, 0.16), transparent 34%),
-    radial-gradient(circle at top right, rgba(27, 190, 221, 0.08), transparent 28%),
-    linear-gradient(180deg, #081120 0%, #091726 42%, #07111d 100%);
+  background: var(--page-bg);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: transparent;
+  background: var(--page-bg);
   color: var(--text-primary);
   font-family:
     Inter,
@@ -82,17 +89,17 @@ button:hover:not(:disabled) {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(10, 22, 36, 0.95);
+  background: #111c29;
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 2px solid rgba(10, 22, 36, 0.95);
+  border: 2px solid #111c29;
   border-radius: 999px;
-  background: rgba(99, 140, 186, 0.7);
+  background: var(--user-team-secondary);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 175, 228, 0.82);
+  background: var(--user-team-accent);
 }
 
 html[data-reduced-motion='true'] *,
@@ -104,11 +111,12 @@ html[data-reduced-motion='true'] *::after {
   transition-duration: 0.001ms !important;
 }
 
-
-/* Favorite-team visual language shared across the application. */
+/*
+ * Favorite-team visual language shared across the application.
+ * Team colors identify actions and active state; neutral surfaces and text
+ * remain stable so every NHL palette stays readable.
+ */
 html[data-favorite-team] body :where(
-  .brand-mark,
-  .pixel-logo-chip,
   .hero-copy,
   .dashboard-mascot-card,
   .league-card,
@@ -169,7 +177,8 @@ html[data-favorite-team] body :where(
   .rating-explainer-card,
   .shared-snapshot-card
 ) {
-  border-color: var(--user-team-outline) !important;
+  border-color: var(--border-soft) !important;
+  border-top-color: var(--user-team-outline-soft) !important;
 }
 
 html[data-favorite-team] body :where(
@@ -198,18 +207,20 @@ html[data-favorite-team] body :where(
   .window-marker-legend,
   .mascot-team-copy
 ) {
-  color: var(--user-team-subtext) !important;
+  color: var(--text-secondary) !important;
 }
 
 html[data-favorite-team] body :where(
-  .my-matchup-outline,
+  .brand-mark,
   .team-selector-button.selected,
+  .auth-team-button.selected,
   .active-view,
   .mobile-bottom-nav a.active,
-  .desktop-links a.active
+  .mobile-bottom-nav button.active,
+  .desktop-links a.active,
+  .my-matchup-outline
 ) {
-  border-color: var(--user-team-primary) !important;
-  box-shadow: 0 0 0 2px var(--user-team-glow) !important;
+  border-color: var(--user-team-accent) !important;
 }
 
 html[data-favorite-team] body :where(
@@ -217,20 +228,42 @@ html[data-favorite-team] body :where(
   .matchup-arrow-nav button,
   .save-profile-button,
   .primary-action,
-  .open-league
+  .open-league,
+  .primary-submit
 ) {
-  border-color: var(--user-team-primary) !important;
-  background: linear-gradient(
-    180deg,
-    var(--user-team-highlight),
-    color-mix(in srgb, var(--user-team-primary) 72%, var(--user-team-highlight))
-  ) !important;
-  color: #07111d !important;
+  border-color: var(--user-team-accent) !important;
+  background: var(--user-team-primary) !important;
+  color: var(--user-team-on-primary) !important;
+  box-shadow: inset 0 -4px 0 var(--user-team-secondary) !important;
+}
+
+html[data-favorite-team] body :where(
+  .secondary-action,
+  .team-shortcut,
+  .secondary-switch
+) {
+  border-color: var(--user-team-secondary) !important;
+}
+
+html[data-favorite-team] body .pixel-logo-ribbon {
+  border-top-color: var(--user-team-primary) !important;
+  border-bottom-color: var(--user-team-secondary) !important;
+  background: #111c29 !important;
+}
+
+html[data-favorite-team] body .pixel-logo-chip {
+  border-color: #2e4054 !important;
+  background: #1b2a3a !important;
+  box-shadow: none !important;
 }
 
 html[data-favorite-team] body :where(input, select, textarea):focus {
-  border-color: var(--user-team-primary) !important;
-  outline-color: var(--user-team-primary) !important;
+  border-color: var(--user-team-accent) !important;
+  outline-color: var(--user-team-accent) !important;
+}
+
+html[data-favorite-team] body :where(a, button, input, select, textarea):focus-visible {
+  outline-color: var(--user-team-accent);
 }
 
 /* Cycle page theme and mobile layout overrides live globally so the
@@ -245,7 +278,7 @@ app-cycle-one .position-column,
 app-cycle-one .position-total-row,
 app-cycle-one .window-detail-panel {
   border-color: rgba(126, 170, 221, 0.16);
-  background: linear-gradient(180deg, rgba(11, 22, 38, 0.96), rgba(10, 20, 34, 0.92));
+  background: linear-gradient(180deg, rgba(18, 34, 51, 0.96), rgba(17, 31, 47, 0.92));
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
 }
 
@@ -283,7 +316,7 @@ app-cycle-one .window-game-detail-list {
 
 app-cycle-one .cycle-transparency-card {
   border-color: #37557b;
-  background: linear-gradient(180deg, rgba(10, 20, 34, 0.96), rgba(12, 24, 42, 0.92));
+  background: linear-gradient(180deg, rgba(17, 31, 47, 0.96), rgba(12, 24, 42, 0.92));
 }
 
 app-cycle-one .transparency-heading h2,
@@ -309,7 +342,7 @@ app-cycle-one .transparency-metrics article,
 app-cycle-one .window-marker-legend,
 app-cycle-one .matchup-window-summary > article {
   border: 1px solid #2f4b6d;
-  background: linear-gradient(180deg, rgba(13, 25, 41, 0.98), rgba(9, 18, 30, 0.98));
+  background: linear-gradient(180deg, rgba(13, 25, 41, 0.98), rgba(16, 29, 44, 0.98));
 }
 
 app-cycle-one .pending-slot-chip-row span {
@@ -414,3 +447,1068 @@ app-cycle-one .window-game-marker {
   }
 }
 
+
+
+/* Matchup owner themes are global so CycleOne stays below Angular's component CSS budget. */
+app-cycle-one .cycle-page .team-matchup-panel .team-summary-row {
+  border-color: var(--owner-theme-outline-soft) !important;
+  background: var(--owner-theme-surface) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px var(--owner-theme-glow) !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .team-summary-row h3 {
+  color: var(--owner-theme-accent-text, #ffffff) !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .team-summary-row p,
+app-cycle-one .cycle-page .team-matchup-panel .team-score-pair span,
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-player-main span,
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-player-score-stack span,
+app-cycle-one .cycle-page .team-matchup-panel .position-total-row small,
+app-cycle-one .cycle-page .team-matchup-panel .position-total-row em {
+  color: #b7c4d2 !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .team-score-pair div,
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-player-score-stack div {
+  border-color: var(--owner-theme-outline-soft) !important;
+  background: var(--owner-theme-surface-2) !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-roster-board {
+  border-color: var(--owner-theme-outline-soft) !important;
+  background: #121d2a !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-position-header,
+app-cycle-one .cycle-page .team-matchup-panel .position-total-row > span {
+  color: var(--owner-theme-accent-text, #eef4fb) !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .fantasy-player-card {
+  min-width: 0;
+  max-width: 100%;
+  border-color: var(--owner-theme-outline-soft) !important;
+  background: #233548 !important;
+}
+
+app-cycle-one .cycle-page .team-matchup-panel .position-total-row {
+  border-color: var(--owner-theme-outline-soft) !important;
+  background: #1d2c3d !important;
+}
+
+@media (max-width: 780px) {
+  app-cycle-one .mobile-matchup-scorebar .mobile-score-team {
+    border-color: var(--owner-theme-outline-soft, rgba(198, 213, 228, 0.14)) !important;
+    background: var(--owner-theme-surface, #182536) !important;
+  }
+
+  app-cycle-one .mobile-matchup-scorebar .mobile-score-team > span {
+    color: var(--owner-theme-accent-text, #dce9f7) !important;
+  }
+
+  app-cycle-one .mobile-matchup-scorebar .mobile-score-team > small {
+    color: #b7c4d2 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  app-cycle-one .matchup-detail-card {
+    overflow: hidden;
+    padding: 14px;
+  }
+
+  app-cycle-one .team-matchup-panel,
+  app-cycle-one .fantasy-roster-board,
+  app-cycle-one .fantasy-position-group,
+  app-cycle-one .fantasy-position-slots,
+  app-cycle-one .fantasy-player-card,
+  app-cycle-one .position-total-row {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  app-cycle-one .single-team-view .team-matchup-panel {
+    padding: 0;
+  }
+
+  app-cycle-one .fantasy-player-card,
+  app-cycle-one .single-team-view .fantasy-player-card {
+    grid-template-columns: 30px minmax(0, 1fr) 48px;
+  }
+
+  app-cycle-one .fantasy-player-score-stack,
+  app-cycle-one .single-team-view .fantasy-player-score-stack {
+    min-width: 0;
+    width: 48px;
+  }
+}
+
+/* Condensed mobile head-to-head roster comparison. */
+app-cycle-one .mobile-head-to-head-roster {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  app-cycle-one .matchup-view-selector {
+    display: none !important;
+  }
+
+  app-cycle-one .matchup-detail-card > .teams-comparison {
+    display: none !important;
+  }
+
+  app-cycle-one .mobile-head-to-head-roster {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-h2h-team-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+
+  app-cycle-one .mobile-h2h-team {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-content: start;
+    gap: 5px 7px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--owner-theme-outline-soft);
+    border-radius: 12px;
+    color: #ffffff;
+    background: var(--owner-theme-surface, #182536);
+  }
+
+  app-cycle-one .mobile-h2h-team > img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+  }
+
+  app-cycle-one .mobile-h2h-team > div {
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-h2h-team > div strong,
+  app-cycle-one .mobile-h2h-team > div span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-cycle-one .mobile-h2h-team > div strong {
+    color: var(--owner-theme-accent-text, #ffffff);
+    font-size: 10px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-team > div span {
+    margin-top: 2px;
+    color: #b7c4d2;
+    font-size: 8px;
+    font-weight: 850;
+  }
+
+  app-cycle-one .mobile-h2h-team dl {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    margin: 0;
+  }
+
+  app-cycle-one .mobile-h2h-team dl div {
+    min-width: 0;
+    padding: 5px 4px;
+    border: 1px solid var(--owner-theme-outline-soft);
+    border-radius: 7px;
+    background: var(--owner-theme-surface-2, #1d2c3d);
+    text-align: center;
+  }
+
+  app-cycle-one .mobile-h2h-team dt,
+  app-cycle-one .mobile-h2h-team dd {
+    margin: 0;
+  }
+
+  app-cycle-one .mobile-h2h-team dt {
+    color: #9fadb9;
+    font-size: 6px;
+    font-weight: 950;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  app-cycle-one .mobile-h2h-team dd {
+    margin-top: 1px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 950;
+    line-height: 1;
+  }
+
+  app-cycle-one .mobile-h2h-versus {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    min-width: 0;
+    color: #d9e8f7;
+    text-align: center;
+  }
+
+  app-cycle-one .mobile-h2h-versus span {
+    max-width: 40px;
+    overflow: hidden;
+    color: #8fa8c0;
+    font-size: 6px;
+    font-weight: 950;
+    letter-spacing: 0.05em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  app-cycle-one .mobile-h2h-versus strong {
+    margin-top: 3px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-position-list {
+    display: grid;
+    gap: 9px;
+  }
+
+  app-cycle-one .mobile-h2h-position-group {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(91, 128, 168, 0.25);
+    border-radius: 12px;
+    background: rgba(7, 15, 27, 0.72);
+  }
+
+  app-cycle-one .mobile-h2h-position-group > header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(91, 128, 168, 0.2);
+    color: #dce9f7;
+    background: rgba(17, 31, 49, 0.9);
+  }
+
+  app-cycle-one .mobile-h2h-position-group > header span {
+    font-size: 9px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-position-group > header small {
+    color: #86a3bf;
+    font-size: 7px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-player-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 4px;
+    min-width: 0;
+    padding: 5px;
+  }
+
+  app-cycle-one .mobile-h2h-player-row + .mobile-h2h-player-row {
+    border-top: 1px solid rgba(91, 128, 168, 0.16);
+  }
+
+  app-cycle-one .mobile-h2h-player {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 7px;
+    border: 1px solid var(--owner-theme-outline-soft, rgba(91, 128, 168, 0.24));
+    border-radius: 9px;
+    cursor: pointer;
+    background: #233548;
+  }
+
+  app-cycle-one .mobile-h2h-player:focus-visible {
+    outline: 2px solid var(--owner-theme-highlight, #dce9f7);
+    outline-offset: 1px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-h2h-player-b .mobile-h2h-player-identity {
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity > img {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity > div {
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity strong,
+  app-cycle-one .mobile-h2h-player-identity span,
+  app-cycle-one .mobile-h2h-player-identity small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity strong {
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 950;
+    line-height: 1.1;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity span {
+    margin-top: 2px;
+    color: #b7c4d2;
+    font-size: 7.5px;
+    font-weight: 900;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity small {
+    margin-top: 2px;
+    color: #9eafc0;
+    font-size: 7px;
+    font-weight: 800;
+  }
+
+  app-cycle-one .mobile-h2h-player-scores {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-h2h-player-scores span {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 3px;
+    min-width: 0;
+    padding: 4px;
+    border-radius: 6px;
+    color: #b7c4d2;
+    background: #1d2c3d;
+    font-size: 6px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  app-cycle-one .mobile-h2h-player-scores strong {
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 950;
+    text-overflow: ellipsis;
+  }
+
+  app-cycle-one .mobile-h2h-slot-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    min-width: 0;
+    color: #d9e8f7;
+    text-align: center;
+  }
+
+  app-cycle-one .mobile-h2h-slot-label strong {
+    font-size: 7px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-slot-label span {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    border: 1px solid rgba(143, 181, 217, 0.3);
+    border-radius: 50%;
+    color: #0d1725;
+    background: #dce9f7;
+    font-size: 8px;
+    font-weight: 950;
+  }
+
+  app-cycle-one .mobile-h2h-player-empty {
+    place-items: center;
+    min-height: 66px;
+    cursor: default;
+    color: #7890a8;
+    background: rgba(20, 31, 46, 0.62);
+    font-size: 8px;
+    font-weight: 900;
+  }
+}
+
+@media (max-width: 390px) {
+  app-cycle-one .matchup-detail-card {
+    padding: 8px !important;
+  }
+
+  app-cycle-one .mobile-h2h-team-strip {
+    grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  app-cycle-one .mobile-h2h-team {
+    grid-template-columns: 24px minmax(0, 1fr);
+    padding: 6px;
+  }
+
+  app-cycle-one .mobile-h2h-team > img {
+    width: 24px;
+    height: 24px;
+  }
+
+  app-cycle-one .mobile-h2h-player-row {
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+    gap: 3px;
+    padding: 4px;
+  }
+
+  app-cycle-one .mobile-h2h-player {
+    gap: 4px;
+    padding: 6px 5px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity {
+    gap: 4px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity > img {
+    width: 21px;
+    height: 21px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity strong {
+    font-size: 9px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity span {
+    font-size: 7px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity small {
+    font-size: 6.5px;
+  }
+
+  app-cycle-one .mobile-h2h-player-scores span {
+    padding: 3px;
+    font-size: 5.5px;
+  }
+
+  app-cycle-one .mobile-h2h-player-scores strong {
+    font-size: 8px;
+  }
+}
+
+/* Mobile matchup width amendment: reclaim the outer gutters created by the
+   main layout and cycle page so the head-to-head board uses more of the phone. */
+@media (max-width: 780px) {
+  app-cycle-one .cycle-page {
+    width: calc(100% + 12px);
+    max-width: none;
+    margin-right: -6px;
+    margin-left: -6px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  app-cycle-one .matchups-section,
+  app-cycle-one .matchup-grid,
+  app-cycle-one .matchup-detail-card,
+  app-cycle-one .mobile-head-to-head-roster {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 390px) {
+  app-cycle-one .cycle-page {
+    width: calc(100% + 16px);
+    margin-right: -8px;
+    margin-left: -8px;
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Shared Pixel Arena design system
+ *
+ * Carries the dashboard's squared panels, three-color team identity, and
+ * restrained motion across every authenticated feature page. This section is
+ * intentionally global so future pages inherit the same visual language.
+ * -------------------------------------------------------------------------- */
+:root {
+  --pixel-grid-line: rgba(185, 207, 229, 0.035);
+  --pixel-edge: #42586f;
+  --pixel-edge-strong: #607b96;
+  --pixel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.42);
+  --pixel-shadow-hover: 7px 7px 0 rgba(2, 8, 16, 0.48);
+  --pixel-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+@keyframes pixelPageReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pixelTitleSignal {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(5px);
+  }
+}
+
+@keyframes pixelHeaderSweep {
+  0% {
+    left: -22%;
+  }
+  72%,
+  100% {
+    left: 104%;
+  }
+}
+
+@keyframes pixelActiveSignal {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 -3px 0 var(--user-team-tertiary),
+      0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      inset 0 -3px 0 var(--user-team-tertiary),
+      0 0 0 3px var(--user-team-glow);
+  }
+}
+
+/* One clean route-entry motion instead of dozens of competing card animations. */
+.main-content > :not(router-outlet) {
+  animation: pixelPageReveal 0.3s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+/* Keep the dashboard's own title treatment unchanged. */
+.main-content > :not(router-outlet):not(app-dashboard) h1 {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) h1::after {
+  content: '';
+  display: block;
+  width: 76px;
+  height: 5px;
+  margin-top: 10px;
+  background: linear-gradient(
+    90deg,
+    var(--user-team-primary) 0 33.333%,
+    var(--user-team-secondary) 33.333% 66.666%,
+    var(--user-team-tertiary) 66.666% 100%
+  );
+  animation: pixelTitleSignal 2.8s steps(4, end) infinite;
+}
+
+/* Square off the shared UI without touching circular game markers or avatars. */
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-card'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-card '],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-panel'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-panel '] {
+  border-radius: 0 !important;
+}
+
+/*
+ * The solid three-part rails use the user's real team colors. They sit on top
+ * of existing component backgrounds, so contrast remains stable even for dark
+ * NHL palettes.
+ */
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-card'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-card '],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-panel'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-panel '] {
+  border-top-color: var(--user-team-primary) !important;
+  border-right-color: var(--pixel-edge) !important;
+  border-bottom-color: var(--user-team-tertiary) !important;
+  border-left-color: var(--user-team-secondary) !important;
+  box-shadow:
+    var(--pixel-inset-highlight),
+    3px 3px 0 rgba(2, 8, 16, 0.42) !important;
+}
+
+/* Major page headers receive one subtle moving pixel highlight. */
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  .profile-hero,
+  .league-header,
+  .team-hero-card,
+  .draft-room-header,
+  .draft-header,
+  .cycle-header,
+  .standings-header,
+  .point-leaders-header,
+  .free-agent-hero,
+  .playoff-hero,
+  .projection-header,
+  .availability-hero,
+  .readiness-header,
+  .simulator-hero,
+  .schedule-preview-header,
+  .matchup-overview-header,
+  .asset-detail-header,
+  .player-header,
+  .hero-card
+) {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--pixel-edge-strong) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--pixel-inset-highlight), var(--pixel-shadow) !important;
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  .profile-hero,
+  .league-header,
+  .team-hero-card,
+  .draft-room-header,
+  .draft-header,
+  .cycle-header,
+  .standings-header,
+  .point-leaders-header,
+  .free-agent-hero,
+  .playoff-hero,
+  .projection-header,
+  .availability-hero,
+  .readiness-header,
+  .simulator-hero,
+  .schedule-preview-header,
+  .matchup-overview-header,
+  .asset-detail-header,
+  .player-header,
+  .hero-card
+)::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: -22%;
+  width: 18%;
+  height: 4px;
+  background: var(--user-team-tertiary);
+  box-shadow:
+    -12px 0 0 var(--user-team-secondary),
+    -24px 0 0 var(--user-team-primary);
+  pointer-events: none;
+  animation: pixelHeaderSweep 4.8s steps(12, end) infinite;
+}
+
+/* Buttons and form controls now share the dashboard's squared arcade controls. */
+.main-content > :not(router-outlet):not(app-dashboard) :where(button, input, select, textarea),
+.main-content > :not(router-outlet):not(app-dashboard) :where(a)[class*='button'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(a)[class*='action'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(a)[class*='link'] {
+  border-radius: 0 !important;
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) :where(button, a)[class*='primary'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(button, a)[class*='confirm'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(button, a)[class*='submit'],
+.main-content > :not(router-outlet):not(app-dashboard) :where(button, a)[class*='save'] {
+  border-color: var(--user-team-primary) !important;
+  box-shadow:
+    inset 0 -4px 0 var(--user-team-secondary),
+    inset 4px 0 0 var(--user-team-tertiary) !important;
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):hover:not(:disabled) {
+  box-shadow: var(--pixel-shadow-hover);
+  transform: translate(-2px, -2px);
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):active:not(:disabled) {
+  box-shadow: 2px 2px 0 rgba(2, 8, 16, 0.48);
+  transform: translate(1px, 1px);
+}
+
+/* Compact labels, badges, and filter chips should feel like pixel UI, not pills. */
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  [class$='-badge'],
+  [class*='-badge '],
+  [class$='-chip'],
+  [class*='-chip '],
+  [class$='-pill'],
+  [class*='-pill ']
+) {
+  border-radius: 0 !important;
+}
+
+/* Active controls get a slow signal pulse that is visible but not distracting. */
+.main-content > :not(router-outlet):not(app-dashboard) :where(
+  button.active,
+  button.selected,
+  button.active-view,
+  a.active,
+  [aria-selected='true']
+) {
+  animation: pixelActiveSignal 3.2s steps(2, end) infinite;
+}
+
+/* Tables and list boards inherit the squared scoreboard treatment. */
+.main-content > :not(router-outlet):not(app-dashboard) table {
+  border: 2px solid var(--pixel-edge) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--pixel-shadow);
+}
+
+.main-content > :not(router-outlet):not(app-dashboard) thead th {
+  border-bottom-color: var(--user-team-primary) !important;
+  background-color: var(--surface-2) !important;
+}
+
+/* Keep the global treatment mobile-safe and reduce visual density. */
+@media (max-width: 780px) {
+  .main-content > :not(router-outlet):not(app-dashboard) :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class$='-card'],
+  .main-content > :not(router-outlet):not(app-dashboard) :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class*='-card '],
+  .main-content > :not(router-outlet):not(app-dashboard) :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class$='-panel'],
+  .main-content > :not(router-outlet):not(app-dashboard) :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class*='-panel '] {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      3px 3px 0 rgba(2, 8, 16, 0.4) !important;
+  }
+
+  .main-content > :not(router-outlet):not(app-dashboard) h1::after {
+    width: 60px;
+    height: 4px;
+    margin-top: 8px;
+  }
+}
+
+
+/* Accessible status explanations for injury and suspension icons. */
+.player-status-tooltip {
+  position: relative;
+  isolation: isolate;
+  cursor: help;
+  outline: none;
+}
+
+.player-status-tooltip::after {
+  content: attr(data-status-tooltip);
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 7px);
+  right: 0;
+  width: max-content;
+  max-width: min(230px, 72vw);
+  padding: 8px 10px;
+  border: 1px solid rgba(214, 228, 243, 0.28);
+  background: #091523;
+  color: #f4f8fc;
+  box-shadow: 4px 4px 0 rgba(2, 8, 16, 0.52);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.player-status-tooltip:hover::after,
+.player-status-tooltip:focus::after,
+.player-status-tooltip:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 520px) {
+  .player-status-tooltip::after {
+    right: auto;
+    left: 0;
+    max-width: min(210px, 76vw);
+  }
+}
+
+/* Historical season replay controls */
+app-cycle-one .historical-replay-control {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(152, 245, 189, 0.3);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(36, 83, 64, 0.2), rgba(18, 32, 48, 0.82));
+}
+
+app-cycle-one .historical-replay-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+app-cycle-one .historical-replay-heading-row h3 {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+app-cycle-one .historical-replay-heading-row p {
+  max-width: 720px;
+  margin: 7px 0 0;
+  color: #aebed0;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+app-cycle-one .historical-replay-status {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(184, 212, 239, 0.12);
+  color: #cfe1f3;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+app-cycle-one .historical-replay-status.replay-status-active {
+  background: rgba(152, 245, 189, 0.15);
+  color: #a8f7c6;
+}
+
+app-cycle-one .historical-replay-status.replay-status-error {
+  background: rgba(255, 115, 128, 0.16);
+  color: #ffc2c8;
+}
+
+app-cycle-one .historical-replay-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+app-cycle-one .historical-replay-metrics article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(184, 212, 239, 0.14);
+  border-radius: 10px;
+  background: rgba(10, 21, 34, 0.55);
+}
+
+app-cycle-one .historical-replay-metrics small,
+app-cycle-one .historical-replay-metrics strong {
+  display: block;
+}
+
+app-cycle-one .historical-replay-metrics small {
+  color: #8fa6bd;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+app-cycle-one .historical-replay-metrics strong {
+  margin-top: 5px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-cycle-one .historical-replay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+app-cycle-one .advance-replay-button,
+app-cycle-one .disable-replay-button {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+app-cycle-one .advance-replay-button {
+  border: 1px solid rgba(152, 245, 189, 0.48);
+  background: #98f5bd;
+  color: #102016;
+}
+
+app-cycle-one .disable-replay-button {
+  border: 1px solid rgba(255, 190, 112, 0.35);
+  background: rgba(97, 62, 21, 0.65);
+  color: #ffe0b5;
+}
+
+app-cycle-one .advance-replay-button:disabled,
+app-cycle-one .disable-replay-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+app-cycle-one .historical-replay-safety-note {
+  color: #91a6bc;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  app-cycle-one .historical-replay-heading-row {
+    display: grid;
+  }
+
+  app-cycle-one .historical-replay-status {
+    justify-self: start;
+  }
+
+  app-cycle-one .historical-replay-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  app-cycle-one .historical-replay-actions {
+    display: grid;
+  }
+}

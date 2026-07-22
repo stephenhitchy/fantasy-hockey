@@ -8,22 +8,17 @@ import {
   serverTimestamp,
   setDoc,
   where,
-  writeBatch
+  writeBatch,
 } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
 import {
   CURRENT_SCORING_RULES_VERSION,
   defaultScoringRules,
-  ScoringRules
+  ScoringRules,
 } from '../scoring/scoring-rules';
-import {
-  getLeagueTeams
-} from '../team/team.service';
-import {
-  createEmptyFantasyRoster,
-  getFantasyRosterRef
-} from '../team/roster.service';
+import { getLeagueTeams } from '../team/team.service';
+import { createEmptyFantasyRoster, getFantasyRosterRef } from '../team/roster.service';
 
 export interface League {
   id: string;
@@ -77,9 +72,7 @@ const INVITE_CODE_LENGTH = 6;
 const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_INVITE_CODE_ATTEMPTS = 20;
 
-function normalizeLeagueScoringRules(
-  league: Partial<League>
-): League {
+function normalizeLeagueScoringRules(league: Partial<League>): League {
   const storedRules = league.scoringRules;
 
   const normalizedRules: ScoringRules = {
@@ -90,56 +83,75 @@ function normalizeLeagueScoringRules(
       ...(storedRules?.forward ?? {}),
       goal: {
         ...defaultScoringRules.forward.goal,
-        ...(storedRules?.forward?.goal ?? {})
+        ...(storedRules?.forward?.goal ?? {}),
       },
       primaryAssist: {
         ...defaultScoringRules.forward.primaryAssist,
-        ...(storedRules?.forward?.primaryAssist ?? {})
+        ...(storedRules?.forward?.primaryAssist ?? {}),
       },
       secondaryAssist: {
         ...defaultScoringRules.forward.secondaryAssist,
-        ...(storedRules?.forward?.secondaryAssist ?? {})
-      }
+        ...(storedRules?.forward?.secondaryAssist ?? {}),
+      },
     },
     defense: {
       ...defaultScoringRules.defense,
       ...(storedRules?.defense ?? {}),
       goal: {
         ...defaultScoringRules.defense.goal,
-        ...(storedRules?.defense?.goal ?? {})
+        ...(storedRules?.defense?.goal ?? {}),
       },
       primaryAssist: {
         ...defaultScoringRules.defense.primaryAssist,
-        ...(storedRules?.defense?.primaryAssist ?? {})
+        ...(storedRules?.defense?.primaryAssist ?? {}),
       },
       secondaryAssist: {
         ...defaultScoringRules.defense.secondaryAssist,
-        ...(storedRules?.defense?.secondaryAssist ?? {})
-      }
-    }
+        ...(storedRules?.defense?.secondaryAssist ?? {}),
+      },
+    },
   };
 
   /*
-   * Version 1 leagues stored the former high goalie values directly in the
-   * document. Upgrade only that legacy goalie section in memory while
-   * preserving every skater scoring setting.
+   * Scoring V3 preserves the forward identity while giving defensemen a more
+   * dependable floor and replacing goalie save-percentage cliffs with a
+   * continuous scoring-environment-relative quality curve. Upgrade older
+   * league documents in memory so existing leagues and new leagues calculate
+   * points identically without rewriting historical cycle-window data.
    */
   if (
     typeof league.scoringRulesVersion !== 'number' ||
     league.scoringRulesVersion < CURRENT_SCORING_RULES_VERSION
   ) {
-    normalizedRules.goalieSave =
-      defaultScoringRules.goalieSave;
-    normalizedRules.goalieWin =
-      defaultScoringRules.goalieWin;
-    normalizedRules.goalieShutout =
-      defaultScoringRules.goalieShutout;
-    normalizedRules.goalieSavePercentageTiers =
-      defaultScoringRules.goalieSavePercentageTiers.map(
-        (tier) => ({ ...tier })
-      );
-    normalizedRules.goalieGameMaximum =
-      defaultScoringRules.goalieGameMaximum;
+    normalizedRules.defense = {
+      ...defaultScoringRules.defense,
+      goal: { ...defaultScoringRules.defense.goal },
+      primaryAssist: { ...defaultScoringRules.defense.primaryAssist },
+      secondaryAssist: { ...defaultScoringRules.defense.secondaryAssist },
+    };
+    normalizedRules.defenseToiBaseMultiplier = defaultScoringRules.defenseToiBaseMultiplier;
+    normalizedRules.defenseToiPlusMinusModifier = defaultScoringRules.defenseToiPlusMinusModifier;
+    normalizedRules.defenseToiFloor = defaultScoringRules.defenseToiFloor;
+    normalizedRules.defenseToiCeiling = defaultScoringRules.defenseToiCeiling;
+
+    normalizedRules.goalieGameBase = defaultScoringRules.goalieGameBase;
+    normalizedRules.goalieSave = defaultScoringRules.goalieSave;
+    normalizedRules.goalieWin = defaultScoringRules.goalieWin;
+    normalizedRules.goalieShutout = defaultScoringRules.goalieShutout;
+    normalizedRules.goalieSavePercentageBaseline =
+      defaultScoringRules.goalieSavePercentageBaseline;
+    normalizedRules.goalieSavePercentageBasePoints =
+      defaultScoringRules.goalieSavePercentageBasePoints;
+    normalizedRules.goalieSavePercentagePointsPerPercentagePoint =
+      defaultScoringRules.goalieSavePercentagePointsPerPercentagePoint;
+    normalizedRules.goalieSavePercentageMinimum =
+      defaultScoringRules.goalieSavePercentageMinimum;
+    normalizedRules.goalieSavePercentageMaximum =
+      defaultScoringRules.goalieSavePercentageMaximum;
+    normalizedRules.goalieSavePercentageTiers = defaultScoringRules.goalieSavePercentageTiers.map(
+      (tier) => ({ ...tier }),
+    );
+    normalizedRules.goalieGameMaximum = defaultScoringRules.goalieGameMaximum;
   }
 
   return {
@@ -147,16 +159,11 @@ function normalizeLeagueScoringRules(
     name: league.name ?? '',
     commissionerId: league.commissionerId ?? '',
     inviteCode: league.inviteCode ?? '',
-    maxTeams:
-      typeof league.maxTeams === 'number'
-        ? league.maxTeams
-        : 2,
-    matchupFormat:
-      league.matchupFormat ?? 'cycle_matchup',
+    maxTeams: typeof league.maxTeams === 'number' ? league.maxTeams : 2,
+    matchupFormat: league.matchupFormat ?? 'cycle_matchup',
     scoringRules: normalizedRules,
-    scoringRulesVersion:
-      CURRENT_SCORING_RULES_VERSION,
-    createdAt: league.createdAt
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    createdAt: league.createdAt,
   };
 }
 
@@ -181,53 +188,29 @@ function createInviteCodeCandidate(): string {
     }
   }
 
-  return Array.from(values, (value) =>
-    INVITE_CODE_ALPHABET[value % INVITE_CODE_ALPHABET.length]
+  return Array.from(
+    values,
+    (value) => INVITE_CODE_ALPHABET[value % INVITE_CODE_ALPHABET.length],
   ).join('');
 }
 
 function getLeagueInviteRef(inviteCode: string) {
-  return doc(
-    db,
-    'leagueInvites',
-    normalizeInviteCode(inviteCode)
-  );
+  return doc(db, 'leagueInvites', normalizeInviteCode(inviteCode));
 }
 
 function getLeagueRef(leagueId: string) {
   return doc(db, 'leagues', leagueId);
 }
 
-function getLeagueMemberRef(
-  leagueId: string,
-  userId: string
-) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'members',
-    userId
-  );
+function getLeagueMemberRef(leagueId: string, userId: string) {
+  return doc(db, 'leagues', leagueId, 'members', userId);
 }
 
-function getLeagueTeamRef(
-  leagueId: string,
-  ownerId: string
-) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'teams',
-    ownerId
-  );
+function getLeagueTeamRef(leagueId: string, ownerId: string) {
+  return doc(db, 'leagues', leagueId, 'teams', ownerId);
 }
 
-function getNewTeamDocument(
-  ownerId: string,
-  defaultTeamName: string
-) {
+function getNewTeamDocument(ownerId: string, defaultTeamName: string) {
   return {
     id: ownerId,
     ownerId,
@@ -241,7 +224,7 @@ function getNewTeamDocument(
     waiverPriority: 1,
     draftPosition: null,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   };
 }
 
@@ -251,36 +234,27 @@ function getNewRosterDocument() {
   return {
     schemaVersion: roster.schemaVersion,
     activeSlots: roster.activeSlots,
+    benchSlots: roster.benchSlots,
     irSlots: roster.irSlots,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   };
 }
 
 async function createUniqueInviteCode(): Promise<string> {
-  for (
-    let attempt = 0;
-    attempt < MAX_INVITE_CODE_ATTEMPTS;
-    attempt += 1
-  ) {
+  for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt += 1) {
     const inviteCode = createInviteCodeCandidate();
-    const inviteSnapshot = await getDoc(
-      getLeagueInviteRef(inviteCode)
-    );
+    const inviteSnapshot = await getDoc(getLeagueInviteRef(inviteCode));
 
     if (!inviteSnapshot.exists()) {
       return inviteCode;
     }
   }
 
-  throw new Error(
-    'Unable to generate a unique league invite code. Please try again.'
-  );
+  throw new Error('Unable to generate a unique league invite code. Please try again.');
 }
 
-async function createLeagueInviteDocument(
-  league: League
-): Promise<void> {
+async function createLeagueInviteDocument(league: League): Promise<void> {
   const inviteCode = normalizeInviteCode(league.inviteCode);
 
   if (!inviteCode) {
@@ -293,13 +267,8 @@ async function createLeagueInviteDocument(
   if (inviteSnapshot.exists()) {
     const existingInvite = inviteSnapshot.data() as Partial<LeagueInvite>;
 
-    if (
-      existingInvite.leagueId &&
-      existingInvite.leagueId !== league.id
-    ) {
-      throw new Error(
-        'This invite code is already assigned to another league.'
-      );
+    if (existingInvite.leagueId && existingInvite.leagueId !== league.id) {
+      throw new Error('This invite code is already assigned to another league.');
     }
 
     return;
@@ -311,35 +280,21 @@ async function createLeagueInviteDocument(
     createdBy: league.commissionerId,
     active: true,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   } satisfies LeagueInvite);
 }
 
-async function ensureCommissionerInviteDocuments(
-  leagues: League[],
-  userId: string
-): Promise<void> {
-  const commissionerLeagues = leagues.filter(
-    (league) => league.commissionerId === userId
-  );
+async function ensureCommissionerInviteDocuments(leagues: League[], userId: string): Promise<void> {
+  const commissionerLeagues = leagues.filter((league) => league.commissionerId === userId);
 
-  await Promise.all(
-    commissionerLeagues.map((league) =>
-      createLeagueInviteDocument(league)
-    )
-  );
+  await Promise.all(commissionerLeagues.map((league) => createLeagueInviteDocument(league)));
 }
 
-function getLeagueIdFromMembershipPath(
-  membershipPath: string
-): string | null {
+function getLeagueIdFromMembershipPath(membershipPath: string): string | null {
   const pathParts = membershipPath.split('/');
   const leaguesIndex = pathParts.lastIndexOf('leagues');
 
-  if (
-    leaguesIndex < 0 ||
-    pathParts.length <= leaguesIndex + 1
-  ) {
+  if (leaguesIndex < 0 || pathParts.length <= leaguesIndex + 1) {
     return null;
   }
 
@@ -349,7 +304,7 @@ function getLeagueIdFromMembershipPath(
 export async function createLeague(
   name: string,
   maxTeams: number,
-  username: string
+  username: string,
 ): Promise<string> {
   const user = auth.currentUser;
 
@@ -363,11 +318,7 @@ export async function createLeague(
     throw new Error('Please enter a league name.');
   }
 
-  if (
-    !Number.isInteger(maxTeams) ||
-    maxTeams < 2 ||
-    maxTeams > 12
-  ) {
+  if (!Number.isInteger(maxTeams) || maxTeams < 2 || maxTeams > 12) {
     throw new Error('League size must be between 2 and 12 teams.');
   }
 
@@ -387,15 +338,14 @@ export async function createLeague(
     maxTeams,
     matchupFormat: 'cycle_matchup',
     scoringRules: defaultScoringRules,
-    scoringRulesVersion:
-      CURRENT_SCORING_RULES_VERSION
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
   };
 
   const batch = writeBatch(db);
 
   batch.set(leagueRef, {
     ...league,
-    createdAt: serverTimestamp()
+    createdAt: serverTimestamp(),
   });
 
   batch.set(inviteRef, {
@@ -404,7 +354,7 @@ export async function createLeague(
     createdBy: user.uid,
     active: true,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   } satisfies LeagueInvite);
 
   batch.set(memberRef, {
@@ -413,13 +363,10 @@ export async function createLeague(
     username: normalizedUsername,
     role: 'commissioner',
     inviteCodeUsed: null,
-    joinedAt: serverTimestamp()
+    joinedAt: serverTimestamp(),
   });
 
-  batch.set(
-    teamRef,
-    getNewTeamDocument(user.uid, normalizedUsername)
-  );
+  batch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
   batch.set(rosterRef, getNewRosterDocument());
 
   await batch.commit();
@@ -434,58 +381,37 @@ export async function getMyLeagues(): Promise<League[]> {
     return [];
   }
 
-  const membershipsQuery = query(
-    collectionGroup(db, 'members'),
-    where('uid', '==', user.uid)
-  );
+  const membershipsQuery = query(collectionGroup(db, 'members'), where('uid', '==', user.uid));
 
   const membershipSnapshot = await getDocs(membershipsQuery);
-  const leagueIds = Array.from(
-    new Set(
+  const leagueIds: string[] = Array.from(
+    new Set<string>(
       membershipSnapshot.docs
-        .map((membershipDocument) =>
-          getLeagueIdFromMembershipPath(
-            membershipDocument.ref.path
-          )
-        )
-        .filter((leagueId): leagueId is string => Boolean(leagueId))
-    )
+        .map((membershipDocument) => getLeagueIdFromMembershipPath(membershipDocument.ref.path))
+        .filter((leagueId): leagueId is string => Boolean(leagueId)),
+    ),
   );
 
   const leagueSnapshots = await Promise.all(
-    leagueIds.map((leagueId) =>
-      getDoc(getLeagueRef(leagueId))
-    )
+    leagueIds.map((leagueId) => getDoc(getLeagueRef(leagueId))),
   );
 
   const leagues = leagueSnapshots
     .filter((leagueSnapshot) => leagueSnapshot.exists())
-    .map((leagueSnapshot) =>
-      normalizeLeagueScoringRules(
-        leagueSnapshot.data() as Partial<League>
-      )
-    )
-    .sort((first, second) =>
-      first.name.localeCompare(second.name)
-    );
-
-  await ensureCommissionerInviteDocuments(leagues, user.uid);
+    .map((leagueSnapshot) => normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>))
+    .sort((first, second) => first.name.localeCompare(second.name));
 
   return leagues;
 }
 
-export async function getLeagueById(
-  leagueId: string
-): Promise<League | null> {
+export async function getLeagueById(leagueId: string): Promise<League | null> {
   const leagueSnapshot = await getDoc(getLeagueRef(leagueId));
 
   if (!leagueSnapshot.exists()) {
     return null;
   }
 
-  const league = normalizeLeagueScoringRules(
-    leagueSnapshot.data() as Partial<League>
-  );
+  const league = normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>);
   const user = auth.currentUser;
 
   if (user?.uid === league.commissionerId) {
@@ -503,46 +429,45 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
   }
 
   const leagues = await getMyLeagues();
-  const summaries: LeagueSummary[] = [];
 
-  for (const league of leagues) {
-    const teams = await getLeagueTeams(league.id);
-    const myTeam = teams.find(
-      (team) => team.ownerId === user.uid
-    );
+  // Team collections are independent, so fetch them together instead of
+  // paying one mobile network round trip per league in sequence.
+  return Promise.all(
+    leagues.map(async (league): Promise<LeagueSummary> => {
+      const teams = await getLeagueTeams(league.id);
+      const myTeam = teams.find((team) => team.ownerId === user.uid);
 
-    summaries.push({
-      leagueId: league.id,
-      leagueName: league.name,
-      inviteCode: league.inviteCode,
-      myTeamName: myTeam?.teamName ?? 'Unnamed Team',
-      teamCount: teams.length,
-      maxTeams: league.maxTeams,
-      isCommissioner: league.commissionerId === user.uid,
-      topOffensivePlayer: {
-        name: 'TBD',
-        teamLogo: '🏒',
-        points: 0
-      },
-      topDefensivePlayer: {
-        name: 'TBD',
-        teamLogo: '🛡️',
-        points: 0
-      },
-      topGoalie: {
-        name: 'TBD',
-        teamLogo: '🥅',
-        points: 0
-      }
-    });
-  }
-
-  return summaries;
+      return {
+        leagueId: league.id,
+        leagueName: league.name,
+        inviteCode: league.inviteCode,
+        myTeamName: myTeam?.teamName ?? 'Unnamed Team',
+        teamCount: teams.length,
+        maxTeams: league.maxTeams,
+        isCommissioner: league.commissionerId === user.uid,
+        topOffensivePlayer: {
+          name: 'TBD',
+          teamLogo: '🏒',
+          points: 0,
+        },
+        topDefensivePlayer: {
+          name: 'TBD',
+          teamLogo: '🛡️',
+          points: 0,
+        },
+        topGoalie: {
+          name: 'TBD',
+          teamLogo: '🥅',
+          points: 0,
+        },
+      };
+    }),
+  );
 }
 
 export async function joinLeagueByInviteCode(
   inviteCode: string,
-  username: string
+  username: string,
 ): Promise<string> {
   const user = auth.currentUser;
 
@@ -565,11 +490,7 @@ export async function joinLeagueByInviteCode(
 
   const invite = inviteSnapshot.data() as LeagueInvite;
 
-  if (
-    !invite.active ||
-    !invite.leagueId ||
-    invite.inviteCode !== normalizedInviteCode
-  ) {
+  if (!invite.active || !invite.leagueId || invite.inviteCode !== normalizedInviteCode) {
     throw new Error('This league invite is no longer active.');
   }
 
@@ -586,23 +507,17 @@ export async function joinLeagueByInviteCode(
   const existingMemberSnapshot = await getDoc(memberRef);
 
   if (existingMemberSnapshot.exists()) {
-    const [
-      leagueSnapshot,
-      existingTeamSnapshot,
-      existingRosterSnapshot
-    ] = await Promise.all([
+    const [leagueSnapshot, existingTeamSnapshot, existingRosterSnapshot] = await Promise.all([
       getDoc(leagueRef),
       getDoc(teamRef),
-      getDoc(rosterRef)
+      getDoc(rosterRef),
     ]);
 
     if (!leagueSnapshot.exists()) {
       throw new Error('This league no longer exists.');
     }
 
-    const league = normalizeLeagueScoringRules(
-      leagueSnapshot.data() as Partial<League>
-    );
+    const league = normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>);
 
     if (league.inviteCode !== normalizedInviteCode) {
       throw new Error('This invite code does not match the league.');
@@ -612,10 +527,7 @@ export async function joinLeagueByInviteCode(
     let repairNeeded = false;
 
     if (!existingTeamSnapshot.exists()) {
-      repairBatch.set(
-        teamRef,
-        getNewTeamDocument(user.uid, normalizedUsername)
-      );
+      repairBatch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
       repairNeeded = true;
     }
 
@@ -642,13 +554,10 @@ export async function joinLeagueByInviteCode(
     username: normalizedUsername,
     role: 'member',
     inviteCodeUsed: normalizedInviteCode,
-    joinedAt: serverTimestamp()
+    joinedAt: serverTimestamp(),
   });
 
-  joinBatch.set(
-    teamRef,
-    getNewTeamDocument(user.uid, normalizedUsername)
-  );
+  joinBatch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
   joinBatch.set(rosterRef, getNewRosterDocument());
 
   await joinBatch.commit();

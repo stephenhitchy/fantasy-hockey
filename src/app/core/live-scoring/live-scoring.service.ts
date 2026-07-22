@@ -161,6 +161,11 @@ function normalizeControl(
   return {
     id: 'control',
     schemaVersion: 1,
+    automationMode:
+      typeof value.automationMode === 'string' ? value.automationMode : 'server',
+    historicalReplayEnabled: value.historicalReplayEnabled === true,
+    historicalReplayDate:
+      typeof value.historicalReplayDate === 'string' ? value.historicalReplayDate : null,
     status:
       value.status === 'refreshing' ? 'refreshing' : value.status === 'error' ? 'error' : 'idle',
     holderUserId: typeof value.holderUserId === 'string' ? value.holderUserId : null,
@@ -706,6 +711,13 @@ async function attemptSharedRefresh(session: LiveScoringSession): Promise<void> 
     return;
   }
 
+  // Historical replay is server-authoritative. A commissioner browser must
+  // never publish live NHL results over the simulated ledger.
+  if (session.control?.historicalReplayEnabled) {
+    scheduleSessionAttempt(session, IDLE_REFRESH_INTERVAL_MS);
+    return;
+  }
+
   session.refreshInProgress = true;
 
   try {
@@ -993,6 +1005,17 @@ export async function requestLeagueLiveScoringRefresh(leagueId: string): Promise
 
   if (!league || league.commissionerId !== user.uid) {
     throw new Error('Only the league commissioner can force a shared scoring refresh.');
+  }
+
+  const existingControlSnapshot = await getDoc(getControlRef(leagueId));
+  const existingControl = existingControlSnapshot.exists()
+    ? normalizeControl(existingControlSnapshot.data() as Partial<SharedLiveScoringControl>)
+    : null;
+
+  if (existingControl?.historicalReplayEnabled) {
+    throw new Error(
+      'Live score refresh is disabled while historical replay is active. Use Advance One Day instead.',
+    );
   }
 
   await setDoc(

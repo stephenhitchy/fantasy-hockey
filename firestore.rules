@@ -200,11 +200,13 @@ service cloud.firestore {
       let data = request.resource.data;
 
       return rosterId == 'current' &&
-        data.schemaVersion == 1 &&
+        data.schemaVersion == 2 &&
         data.activeSlots is list &&
         data.activeSlots.size() == 14 &&
+        data.benchSlots is list &&
+        data.benchSlots.size() == 3 &&
         data.irSlots is list &&
-        data.irSlots.size() == 4;
+        data.irSlots.size() == 3;
     }
 
     function validDraftPickSequence(draft, data) {
@@ -496,12 +498,17 @@ service cloud.firestore {
 
     function validDraftQueueWrite(leagueId, ownerId) {
       let data = request.resource.data;
+      let timeoutStatePresent =
+        'consecutiveClockExpirations' in data ||
+        'autoDraftActivatedByTimeout' in data;
 
       return get(draftPath(leagueId)).data.status != 'complete' &&
         data.keys().hasOnly([
           'ownerId',
           'assetKeys',
           'autoDraftEnabled',
+          'consecutiveClockExpirations',
+          'autoDraftActivatedByTimeout',
           'updatedAt'
         ]) &&
         data.ownerId == ownerId &&
@@ -510,6 +517,24 @@ service cloud.firestore {
         data.assetKeys.toSet().size() ==
           data.assetKeys.size() &&
         data.autoDraftEnabled is bool &&
+        (
+          !timeoutStatePresent ||
+          (
+            'consecutiveClockExpirations' in data &&
+            'autoDraftActivatedByTimeout' in data &&
+            data.consecutiveClockExpirations is int &&
+            data.consecutiveClockExpirations >= 0 &&
+            data.consecutiveClockExpirations <= 2 &&
+            data.autoDraftActivatedByTimeout is bool &&
+            (
+              data.autoDraftActivatedByTimeout == false ||
+              (
+                data.autoDraftEnabled == true &&
+                data.consecutiveClockExpirations == 2
+              )
+            )
+          )
+        ) &&
         data.updatedAt == request.time;
     }
 
@@ -589,7 +614,10 @@ service cloud.firestore {
           'waiver-claim',
           'queue-add-drop',
           'queue-add-open-slot',
-          'cancel-queued-move'
+          'cancel-queued-move',
+          'queue-active-bench-swap',
+          'move-bench-to-ir',
+          'activate-ir-to-bench'
         ];
     }
 
@@ -750,6 +778,22 @@ service cloud.firestore {
             data.defaultLandingPage in ['dashboard', 'lastLeague']);
       }
 
+      function validUserProfileUpdate() {
+        let changedFields = request.resource.data
+          .diff(resource.data)
+          .affectedKeys();
+
+        return changedFields.hasOnly([
+            'username',
+            'favoriteTeamAbbreviation',
+            'reducedMotion',
+            'defaultLandingPage'
+          ]) &&
+          (!changedFields.hasAny(['username']) ||
+            validUsername(request.resource.data.username)) &&
+          validUserPreferences(request.resource.data);
+      }
+
       allow create: if signedIn() &&
         userId == currentUserId() &&
         request.resource.data.uid == currentUserId() &&
@@ -757,22 +801,15 @@ service cloud.firestore {
         validUsername(request.resource.data.username) &&
         validUserPreferences(request.resource.data);
 
-      allow get: if signedIn() && userId == currentUserId();
+      // Matchup pages read an opponent's favorite team by document ID so that
+      // each side can use that manager's saved colors. Listing all profiles is
+      // still blocked.
+      allow get: if signedIn();
       allow list: if false;
 
       allow update: if signedIn() &&
         userId == currentUserId() &&
-        request.resource.data
-          .diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'username',
-            'favoriteTeamAbbreviation',
-            'reducedMotion',
-            'defaultLandingPage'
-          ]) &&
-        validUsername(request.resource.data.username) &&
-        validUserPreferences(request.resource.data);
+        validUserProfileUpdate();
 
       allow delete: if false;
     }
@@ -1014,9 +1051,24 @@ service cloud.firestore {
       match /liveScoring/{scoringDocumentId} {
         allow read: if isLeagueMember(leagueId);
 
-        // One commissioner browser holds the league scoring lease and writes
-        // compact shared results. Other managers only listen to these docs.
-        allow create, update, delete: if isLeagueCommissioner(leagueId);
+        // Cloud Functions are the sole scoring authority. Admin SDK writes
+        // bypass rules; browsers can only consume the shared results.
+        allow create, update, delete: if false;
+      }
+
+
+      match /historicalReplay/{replayDocumentId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // The replay clock is advanced only by authenticated callable Functions.
+        allow create, update, delete: if false;
+      }
+
+      match /historicalReplayAssets/{assetKey} {
+        // Mapping documents are useful to commissioners when diagnosing a test,
+        // but are never writable from a browser.
+        allow read: if isLeagueCommissioner(leagueId);
+        allow create, update, delete: if false;
       }
 
       match /playoffWindowBanks/{ownerId} {

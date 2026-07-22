@@ -1,9 +1,4 @@
-import {
-  Component,
-  computed,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,6 +9,7 @@ import { auth } from '../../../core/firebase';
 import {
   buildSnakePickPreview,
   createDefaultFantasyDraft,
+  DEFAULT_DRAFT_BENCH_SLOTS,
   DEFAULT_DRAFT_PICK_SECONDS,
   DEFAULT_DRAFT_ROSTER_REQUIREMENTS,
   DEFAULT_DRAFT_TOTAL_ROUNDS,
@@ -21,30 +17,25 @@ import {
   getFantasyDraft,
   getScheduledStartDate,
   isDraftStartTimeReached,
-  saveFantasyDraft
+  saveFantasyDraft,
 } from '../../../core/draft/draft.service';
 
-import {
-  DraftPickPreview,
-  FantasyDraft
-} from '../../../core/draft/draft.models';
+import { DraftPickPreview, FantasyDraft } from '../../../core/draft/draft.models';
 
 import {
   generateSharedProjectionSnapshot,
-  PRE_DRAFT_PROJECTION_WARMUP_MINUTES
+  PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
 } from '../../../core/projection/projection-snapshot.service';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -62,7 +53,7 @@ interface DraftRoundPreview {
   selector: 'app-draft-setup',
   imports: [FormsModule, RouterLink],
   templateUrl: './draft-setup.html',
-  styleUrl: './draft-setup.css'
+  styleUrl: './draft-setup.css',
 })
 export class DraftSetup implements OnDestroy {
   leagueId = '';
@@ -82,9 +73,7 @@ export class DraftSetup implements OnDestroy {
   pickSecondsInput = DEFAULT_DRAFT_PICK_SECONDS;
   readonly pickSecondsOptions = DRAFT_PICK_SECONDS_OPTIONS;
 
-  readonly minimumStartInput = this.toDateTimeLocalValue(
-    new Date()
-  );
+  readonly minimumStartInput = this.toDateTimeLocalValue(new Date());
 
   readonly now = signal(Date.now());
 
@@ -94,15 +83,10 @@ export class DraftSetup implements OnDestroy {
 
   readonly totalRounds = DEFAULT_DRAFT_TOTAL_ROUNDS;
 
-  readonly savedStartDate = computed(() =>
-    getScheduledStartDate(this.draft())
-  );
+  readonly savedStartDate = computed(() => getScheduledStartDate(this.draft()));
 
   readonly startTimeReached = computed(() =>
-    isDraftStartTimeReached(
-      this.draft(),
-      new Date(this.now())
-    )
+    isDraftStartTimeReached(this.draft(), new Date(this.now())),
   );
 
   readonly scheduleStatus = computed(() => {
@@ -135,24 +119,17 @@ export class DraftSetup implements OnDestroy {
       return 'Choose a date and time when you are ready.';
     }
 
-    const millisecondsRemaining =
-      startDate.getTime() - this.now();
+    const millisecondsRemaining = startDate.getTime() - this.now();
 
     if (millisecondsRemaining <= 0) {
       return 'The scheduled start time has arrived.';
     }
 
-    const totalSeconds = Math.floor(
-      millisecondsRemaining / 1000
-    );
+    const totalSeconds = Math.floor(millisecondsRemaining / 1000);
 
     const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor(
-      (totalSeconds % 86400) / 3600
-    );
-    const minutes = Math.floor(
-      (totalSeconds % 3600) / 60
-    );
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
     if (days > 0) {
@@ -171,24 +148,19 @@ export class DraftSetup implements OnDestroy {
 
     const picks = buildSnakePickPreview(order, this.totalRounds);
 
-    return Array.from(
-      { length: this.totalRounds },
-      (_, index) => {
-        const round = index + 1;
+    return Array.from({ length: this.totalRounds }, (_, index) => {
+      const round = index + 1;
 
-        return {
-          round,
-          picks: picks.filter(
-            (pick) => pick.round === round
-          )
-        };
-      }
-    );
+      return {
+        round,
+        picks: picks.filter((pick) => pick.round === round),
+      };
+    });
   });
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.loadDraftSetup();
   }
@@ -212,7 +184,7 @@ export class DraftSetup implements OnDestroy {
       const [league, teams, existingDraft] = await Promise.all([
         getLeagueById(leagueId),
         getLeagueTeams(leagueId),
-        getFantasyDraft(leagueId)
+        getFantasyDraft(leagueId),
       ]);
 
       if (!league) {
@@ -230,45 +202,27 @@ export class DraftSetup implements OnDestroy {
       const savedOrderIsValid =
         existingDraft &&
         existingDraft.roundOneOrder.length === teamIds.length &&
-        existingDraft.roundOneOrder.every((ownerId) =>
-          teamIds.includes(ownerId)
-        ) &&
-        teamIds.every((ownerId) =>
-          existingDraft.roundOneOrder.includes(ownerId)
-        );
+        existingDraft.roundOneOrder.every((ownerId) => teamIds.includes(ownerId)) &&
+        teamIds.every((ownerId) => existingDraft.roundOneOrder.includes(ownerId));
 
       this.league.set(league);
       this.teams.set(teams);
       this.draft.set(existingDraft);
 
-      this.roundOneOrder.set(
-        savedOrderIsValid
-          ? [...existingDraft.roundOneOrder]
-          : teamIds
-      );
+      this.roundOneOrder.set(savedOrderIsValid ? [...existingDraft.roundOneOrder] : teamIds);
 
-      this.draftStartInput = this.toDateTimeLocalValue(
-        getScheduledStartDate(existingDraft)
-      );
+      this.draftStartInput = this.toDateTimeLocalValue(getScheduledStartDate(existingDraft));
 
-      this.pickSecondsInput =
-        existingDraft?.pickSeconds ??
-        DEFAULT_DRAFT_PICK_SECONDS;
+      this.pickSecondsInput = existingDraft?.pickSeconds ?? DEFAULT_DRAFT_PICK_SECONDS;
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load draft setup.'
-      );
+      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load draft setup.');
     } finally {
       this.loading.set(false);
     }
   }
 
   getTeamName(ownerId: string): string {
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   formatScheduledStart(): string {
@@ -280,7 +234,7 @@ export class DraftSetup implements OnDestroy {
 
     return startDate.toLocaleString(undefined, {
       dateStyle: 'full',
-      timeStyle: 'short'
+      timeStyle: 'short',
     });
   }
 
@@ -291,18 +245,12 @@ export class DraftSetup implements OnDestroy {
 
     const shuffledOrder = [...this.roundOneOrder()];
 
-    for (
-      let index = shuffledOrder.length - 1;
-      index > 0;
-      index--
-    ) {
-      const randomIndex = Math.floor(
-        Math.random() * (index + 1)
-      );
+    for (let index = shuffledOrder.length - 1; index > 0; index--) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
 
       [shuffledOrder[index], shuffledOrder[randomIndex]] = [
         shuffledOrder[randomIndex],
-        shuffledOrder[index]
+        shuffledOrder[index],
       ];
     }
 
@@ -315,9 +263,7 @@ export class DraftSetup implements OnDestroy {
       return;
     }
 
-    this.roundOneOrder.set(
-      this.teams().map((team) => team.ownerId)
-    );
+    this.roundOneOrder.set(this.teams().map((team) => team.ownerId));
 
     this.successMessage.set('');
   }
@@ -339,17 +285,11 @@ export class DraftSetup implements OnDestroy {
     const newIndex = index + direction;
     const currentOrder = [...this.roundOneOrder()];
 
-    if (
-      newIndex < 0 ||
-      newIndex >= currentOrder.length
-    ) {
+    if (newIndex < 0 || newIndex >= currentOrder.length) {
       return;
     }
 
-    [currentOrder[index], currentOrder[newIndex]] = [
-      currentOrder[newIndex],
-      currentOrder[index]
-    ];
+    [currentOrder[index], currentOrder[newIndex]] = [currentOrder[newIndex], currentOrder[index]];
 
     this.roundOneOrder.set(currentOrder);
     this.successMessage.set('');
@@ -358,11 +298,7 @@ export class DraftSetup implements OnDestroy {
   isDraftLocked(): boolean {
     const status = this.draft()?.status;
 
-    return (
-      status === 'live' ||
-      status === 'complete' ||
-      this.startTimeReached()
-    );
+    return status === 'live' || status === 'complete' || this.startTimeReached();
   }
 
   async saveDraftOrder(): Promise<void> {
@@ -372,7 +308,7 @@ export class DraftSetup implements OnDestroy {
 
     if (this.isDraftLocked()) {
       this.errorMessage.set(
-        'Draft settings are locked because the draft has started or its scheduled start time has arrived.'
+        'Draft settings are locked because the draft has started or its scheduled start time has arrived.',
       );
       return;
     }
@@ -380,32 +316,19 @@ export class DraftSetup implements OnDestroy {
     const order = this.roundOneOrder();
 
     if (order.length === 0) {
-      this.errorMessage.set(
-        'At least one team is required before saving a draft order.'
-      );
+      this.errorMessage.set('At least one team is required before saving a draft order.');
       return;
     }
 
-    const scheduledStartDate =
-      this.getSelectedDraftStartDate();
+    const scheduledStartDate = this.getSelectedDraftStartDate();
 
-    if (
-      this.draftStartInput &&
-      !scheduledStartDate
-    ) {
-      this.errorMessage.set(
-        'Choose a valid draft date and start time.'
-      );
+    if (this.draftStartInput && !scheduledStartDate) {
+      this.errorMessage.set('Choose a valid draft date and start time.');
       return;
     }
 
-    if (
-      scheduledStartDate &&
-      scheduledStartDate.getTime() <= Date.now()
-    ) {
-      this.errorMessage.set(
-        'Draft start time must be in the future.'
-      );
+    if (scheduledStartDate && scheduledStartDate.getTime() <= Date.now()) {
+      this.errorMessage.set('Draft start time must be in the future.');
       return;
     }
 
@@ -416,15 +339,14 @@ export class DraftSetup implements OnDestroy {
 
       const draftToSave: FantasyDraft = {
         ...(existingDraft ?? createDefaultFantasyDraft(order)),
-        schemaVersion: 2,
-        status: scheduledStartDate
-          ? 'scheduled'
-          : 'setup',
+        schemaVersion: 3,
+        status: scheduledStartDate ? 'scheduled' : 'setup',
         format: 'snake',
         totalRounds: this.totalRounds,
         rosterRequirements: {
-          ...DEFAULT_DRAFT_ROSTER_REQUIREMENTS
+          ...DEFAULT_DRAFT_ROSTER_REQUIREMENTS,
         },
+        benchSlots: DEFAULT_DRAFT_BENCH_SLOTS,
         roundOneOrder: [...order],
         scheduledStartAt: scheduledStartDate,
         pickSeconds: this.pickSecondsInput,
@@ -433,61 +355,41 @@ export class DraftSetup implements OnDestroy {
         currentPickSeconds: this.pickSecondsInput,
         pausedRemainingSeconds: null,
         clockUpdatedBy: null,
-        lastPickId: existingDraft?.lastPickId ?? null
+        lastPickId: existingDraft?.lastPickId ?? null,
       };
 
-      await saveFantasyDraft(
-        this.leagueId,
-        draftToSave
-      );
+      await saveFantasyDraft(this.leagueId, draftToSave);
 
       this.draft.set(draftToSave);
 
       if (scheduledStartDate) {
-        this.successMessage.set(
-          'Draft settings saved. Preparing an initial shared ranking now.'
-        );
+        this.successMessage.set('Draft settings saved. Preparing an initial shared ranking now.');
 
         try {
-          const snapshot =
-            await generateSharedProjectionSnapshot({
-              leagueId: this.leagueId,
-              teamCount: Math.max(
-                this.league()?.maxTeams ??
-                  this.teams().length,
-                2
-              ),
-              requiredGamesPerCycle:
-                this.league()?.scoringRules
-                  ?.requiredGamesPerCycle ?? 6,
-              generationReason: 'draft-setup'
-            });
+          const snapshot = await generateSharedProjectionSnapshot({
+            leagueId: this.leagueId,
+            teamCount: Math.max(this.league()?.maxTeams ?? this.teams().length, 2),
+            requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
+            generationReason: 'draft-setup',
+          });
 
           this.successMessage.set(
-            `Draft settings saved and ${snapshot.metadata.assetCount} shared projections prepared. They will refresh again ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the draft when the commissioner has the Draft Room open.`
+            `Draft settings saved and ${snapshot.metadata.assetCount} shared projections prepared. They will refresh again ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the draft when the commissioner has the Draft Room open.`,
           );
         } catch (projectionError: unknown) {
-          this.successMessage.set(
-            'Draft settings were saved.'
-          );
+          this.successMessage.set('Draft settings were saved.');
 
           this.projectionPreparationWarning.set(
             projectionError instanceof Error
               ? `The initial shared projection build did not finish: ${projectionError.message} The Draft Room will retry before the scheduled start.`
-              : 'The initial shared projection build did not finish. The Draft Room will retry before the scheduled start.'
+              : 'The initial shared projection build did not finish. The Draft Room will retry before the scheduled start.',
           );
         }
       } else {
-        this.successMessage.set(
-          'Draft order saved. No start time is scheduled yet.'
-        );
+        this.successMessage.set('Draft order saved. No start time is scheduled yet.');
       }
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to save draft setup.'
-      );
+      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to save draft setup.');
     } finally {
       this.saving.set(false);
     }
@@ -507,25 +409,17 @@ export class DraftSetup implements OnDestroy {
     return date;
   }
 
-  private toDateTimeLocalValue(
-    date: Date | null
-  ): string {
+  private toDateTimeLocalValue(date: Date | null): string {
     if (!date) {
       return '';
     }
 
-    const pad = (value: number) =>
-      value.toString().padStart(2, '0');
+    const pad = (value: number) => value.toString().padStart(2, '0');
 
-    return [
-      date.getFullYear(),
-      pad(date.getMonth() + 1),
-      pad(date.getDate())
-    ].join('-') +
+    return (
+      [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-') +
       'T' +
-      [
-        pad(date.getHours()),
-        pad(date.getMinutes())
-      ].join(':');
+      [pad(date.getHours()), pad(date.getMinutes())].join(':')
+    );
   }
 }

@@ -1,0 +1,7 @@
+AUTODRAFT_BALANCE_INSTALL.txt
+AUTODRAFT_BALANCE_REPORT.md
+src/app/core/draft/auto-draft-strategy.ts
+src/app/core/draft/auto-draft-strategy.spec.ts
+src/app/core/draft/draft.service.ts
+src/app/features/draft/draft-room/draft-room.ts
+src/app/features/draft/draft-room/draft-room.html

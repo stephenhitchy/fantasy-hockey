@@ -1,0 +1,90 @@
+FANTASY HOCKEY ROSTER V2 INSTALLATION
+=====================================
+
+This package upgrades the league roster to:
+
+- 14 active scoring slots
+- 3 flexible bench slots
+- 3 skater-only IR slots
+- 17 draft rounds per team
+- Projection Model Version 7
+
+It also removes the artificial 100-point minimum from team-goalie-unit
+projections and adds cycle-safe active/bench transactions.
+
+INSTALL LOCATION
+----------------
+Extract this package directly over:
+
+/Users/StephenH/Documents/Programming/fantasy-hockey
+
+The package already contains each replacement file in its exact project path.
+
+IMPORTANT TEST-LEAGUE RESET
+---------------------------
+Completed 14-round test drafts should not be used as the production baseline.
+The safest rollout is to recreate each test league, or clear that league's:
+
+- draft/current and draft/current/picks
+- team roster/current documents
+- cycles, matchups, team windows, and cycle roster picks
+- waivers and transactions
+- playoff state
+
+Do not delete Firebase Authentication users or profile documents for this
+roster migration. User accounts are unrelated to the draft/roster schema.
+
+A legacy roster opened through the app is normalized to schemaVersion 2. If an
+old fourth IR slot contains a player, the migration moves that player into the
+first open bench slot instead of silently losing the asset. A clean new league
+is still strongly recommended for final testing.
+
+LOCAL VALIDATION
+----------------
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+
+npm install
+npm --prefix functions install
+npm run build
+npm --prefix functions run build
+
+DEPLOYMENT ORDER
+----------------
+Deploy Functions first because the server-side cycle and playoff engines share
+the new roster schema:
+
+firebase deploy --only functions \
+  -m "Add flexible bench roster and cycle-safe lineup automation"
+
+Only after Functions deploy successfully, deploy Firestore rules and hosting:
+
+firebase deploy --only firestore:rules,hosting:app \
+  -m "Launch 17-round draft and roster schema v2"
+
+If the first-time Eventarc permission propagation error returns, wait several
+minutes and retry the server automation functions before deploying rules:
+
+firebase deploy \
+  --only functions:initializeSeasonAfterDraft,functions:runScheduledLeagueAutomation \
+  -m "Retry roster v2 server automation"
+
+POST-DEPLOY SMOKE TEST
+----------------------
+1. Create a new league with at least two teams.
+2. Generate a fresh shared projection snapshot (Version 7).
+3. Confirm weak goalie units can project below 100 fantasy points.
+4. Complete all 17 draft rounds per team.
+5. Confirm 14 selections fill active slots and three fill B-1 through B-3.
+6. Confirm a completed position says the next pick goes to the bench.
+7. Confirm the draft blocks a position after its starter slots and bench are full.
+8. Confirm Cycle 1 starts automatically after the final draft pick.
+9. Confirm each team receives exactly 14 scoring windows, not 17.
+10. Add or swap a bench asset and verify the first fair activation cycle is shown.
+11. Move a bench skater to IR and return an IR skater to an open or occupied bench slot.
+12. Close all browsers and confirm scheduled server scoring continues.
+
+PROJECTION SNAPSHOTS
+--------------------
+Projection Model Version 7 invalidates the older shared snapshot. Generate a
+fresh projection board before the first new draft so old goalie projections
+with the 100-point floor are not reused.

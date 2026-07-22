@@ -1,52 +1,24 @@
-import {
-  Component,
-  computed,
-  signal
-} from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 
-import {
-  ActivatedRoute,
-  Router,
-  RouterLink
-} from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import {
-  collection,
-  getDocs
-} from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
-import {
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth, db } from '../../../core/firebase';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  buildFantasyStandings
-} from '../../../core/league/standings.util';
+import { buildFantasyStandings } from '../../../core/league/standings.util';
 
-import {
-  getStandardPlayoffTeamCount
-} from '../../../core/playoffs/playoff-format';
+import { getStandardPlayoffTeamCount } from '../../../core/playoffs/playoff-format';
 
-import {
-  FantasyPlayoffs
-} from '../../../core/playoffs/playoff.models';
+import { FantasyPlayoffs } from '../../../core/playoffs/playoff.models';
 
-import {
-  getFantasyPlayoffs
-} from '../../../core/playoffs/playoff.service';
+import { getFantasyPlayoffs } from '../../../core/playoffs/playoff.service';
 
-import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 interface StandingCycleSummary {
   id: string;
@@ -85,6 +57,10 @@ interface StandingRow {
 }
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -99,28 +75,22 @@ function parseCycleNumberFromId(cycleId: string): number {
 }
 
 function getNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : fallback;
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 function getString(value: unknown, fallback = ''): string {
-  return typeof value === 'string'
-    ? value
-    : fallback;
+  return typeof value === 'string' ? value : fallback;
 }
 
 function getNullableString(value: unknown): string | null {
-  return typeof value === 'string'
-    ? value
-    : null;
+  return typeof value === 'string' ? value : null;
 }
 
 @Component({
   selector: 'app-league-standings',
   imports: [RouterLink],
   templateUrl: './league-standings.html',
-  styleUrl: './league-standings.css'
+  styleUrl: './league-standings.css',
 })
 export class LeagueStandings {
   leagueId = '';
@@ -137,19 +107,17 @@ export class LeagueStandings {
   errorMessage = signal('');
 
   readonly completedMatchups = computed(() =>
-    this.matchups().filter((matchup) =>
-      matchup.status === 'complete'
-    )
+    this.matchups().filter((matchup) => matchup.status === 'complete'),
   );
 
   readonly completedRegularSeasonMatchups = computed(() =>
-    this.completedMatchups().filter((matchup) =>
-      matchup.phase === 'regular_season' && matchup.teamBOwnerId
-    )
+    this.completedMatchups().filter(
+      (matchup) => matchup.phase === 'regular_season' && matchup.teamBOwnerId,
+    ),
   );
 
-  readonly activeCycle = computed(() =>
-    this.cycles().find((cycle) => cycle.status === 'active') ?? null
+  readonly activeCycle = computed(
+    () => this.cycles().find((cycle) => cycle.status === 'active') ?? null,
   );
 
   readonly latestCycle = computed(() => {
@@ -159,32 +127,27 @@ export class LeagueStandings {
       return null;
     }
 
-    return [...cycles].sort(
-      (first, second) => second.cycleNumber - first.cycleNumber
-    )[0];
+    return [...cycles].sort((first, second) => second.cycleNumber - first.cycleNumber)[0];
   });
 
-  readonly currentCycleNumber = computed(() =>
-    this.activeCycle()?.cycleNumber ??
-    this.latestCycle()?.cycleNumber ??
-    1
+  readonly currentCycleNumber = computed(
+    () => this.activeCycle()?.cycleNumber ?? this.latestCycle()?.cycleNumber ?? 1,
   );
 
-  readonly playoffTeamCount = computed(() =>
-    this.playoffs()?.playoffTeamCount ??
-    getStandardPlayoffTeamCount(this.teams().length)
+  readonly playoffTeamCount = computed(
+    () => this.playoffs()?.playoffTeamCount ?? getStandardPlayoffTeamCount(this.teams().length),
   );
 
   readonly standingsRows = computed<StandingRow[]>(() =>
     buildFantasyStandings(this.teams()).map((row, index) => ({
       ...row,
-      rank: index + 1
-    }))
+      rank: index + 1,
+    })),
   );
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadStandingsPage();
   }
@@ -205,9 +168,7 @@ export class LeagueStandings {
       await this.loadLeagueData();
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load league standings.'
+        error instanceof Error ? error.message : 'Unable to load league standings.',
       );
     } finally {
       this.loading.set(false);
@@ -222,9 +183,7 @@ export class LeagueStandings {
       await this.loadLeagueData();
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to refresh league standings.'
+        error instanceof Error ? error.message : 'Unable to refresh league standings.',
       );
     } finally {
       this.refreshing.set(false);
@@ -268,9 +227,7 @@ export class LeagueStandings {
       return 'Bye';
     }
 
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   getCurrentPeriodLabel(): string {
@@ -283,7 +240,7 @@ export class LeagueStandings {
     }
 
     return cycle.phase === 'playoffs'
-      ? cycle.playoffRoundLabel ?? `Playoff Cycle ${cycle.cycleNumber}`
+      ? (cycle.playoffRoundLabel ?? `Playoff Cycle ${cycle.cycleNumber}`)
       : `Cycle ${cycle.cycleNumber}`;
   }
 
@@ -295,9 +252,7 @@ export class LeagueStandings {
     }
 
     if (this.playoffs()?.status === 'complete') {
-      const champion = this.getTeamName(
-        this.playoffs()?.championOwnerId ?? null
-      );
+      const champion = this.getTeamName(this.playoffs()?.championOwnerId ?? null);
       return `The fantasy season is complete. ${champion} won the league championship.`;
     }
 
@@ -321,14 +276,14 @@ export class LeagueStandings {
       return null;
     }
 
-    return this.matchups().find((matchup) =>
-      matchup.cycleNumber === activeCycle.cycleNumber &&
-      matchup.status === 'active' &&
-      (
-        matchup.teamAOwnerId === ownerId ||
-        matchup.teamBOwnerId === ownerId
-      )
-    ) ?? null;
+    return (
+      this.matchups().find(
+        (matchup) =>
+          matchup.cycleNumber === activeCycle.cycleNumber &&
+          matchup.status === 'active' &&
+          (matchup.teamAOwnerId === ownerId || matchup.teamBOwnerId === ownerId),
+      ) ?? null
+    );
   }
 
   getActiveMatchupOpponentLabel(ownerId: string): string {
@@ -342,9 +297,8 @@ export class LeagueStandings {
       return 'Bye';
     }
 
-    const opponentOwnerId = matchup.teamAOwnerId === ownerId
-      ? matchup.teamBOwnerId
-      : matchup.teamAOwnerId;
+    const opponentOwnerId =
+      matchup.teamAOwnerId === ownerId ? matchup.teamBOwnerId : matchup.teamAOwnerId;
 
     return `vs ${this.getTeamName(opponentOwnerId)}`;
   }
@@ -370,36 +324,26 @@ export class LeagueStandings {
       return null;
     }
 
-    return [
-      '/leagues',
-      this.leagueId,
-      'cycles',
-      matchup.cycleNumber,
-      'matchups',
-      matchup.id
-    ];
+    return ['/leagues', this.leagueId, 'cycles', matchup.cycleNumber, 'matchups', matchup.id];
   }
 
   getLastResultLabel(ownerId: string): string {
     const lastMatchup = [...this.completedMatchups()]
-      .filter((matchup) =>
-        matchup.teamBOwnerId &&
-        (
-          matchup.teamAOwnerId === ownerId ||
-          matchup.teamBOwnerId === ownerId
-        )
+      .filter(
+        (matchup) =>
+          matchup.teamBOwnerId &&
+          (matchup.teamAOwnerId === ownerId || matchup.teamBOwnerId === ownerId),
       )
-      .sort((first, second) =>
-        second.cycleNumber - first.cycleNumber
-      )[0];
+      .sort((first, second) => second.cycleNumber - first.cycleNumber)[0];
 
     if (!lastMatchup) {
       return 'No completed matchups';
     }
 
-    const periodLabel = lastMatchup.phase === 'playoffs'
-      ? lastMatchup.playoffRoundLabel ?? `Playoffs`
-      : `Cycle ${lastMatchup.cycleNumber}`;
+    const periodLabel =
+      lastMatchup.phase === 'playoffs'
+        ? (lastMatchup.playoffRoundLabel ?? `Playoffs`)
+        : `Cycle ${lastMatchup.cycleNumber}`;
 
     if (lastMatchup.tieBrokenByHigherSeed) {
       return lastMatchup.winnerOwnerId === ownerId
@@ -411,16 +355,14 @@ export class LeagueStandings {
       return `${periodLabel}: Tie`;
     }
 
-    return lastMatchup.winnerOwnerId === ownerId
-      ? `${periodLabel}: Win`
-      : `${periodLabel}: Loss`;
+    return lastMatchup.winnerOwnerId === ownerId ? `${periodLabel}: Win` : `${periodLabel}: Loss`;
   }
 
   private async loadLeagueData(): Promise<void> {
     const [league, teams, playoffs] = await Promise.all([
       getLeagueById(this.leagueId),
       getLeagueTeams(this.leagueId),
-      getFantasyPlayoffs(this.leagueId)
+      getFantasyPlayoffs(this.leagueId),
     ]);
 
     if (!league) {
@@ -435,46 +377,28 @@ export class LeagueStandings {
   }
 
   private async loadCycleAndMatchupData(): Promise<void> {
-    const cycleSnapshots = await getDocs(
-      collection(db, 'leagues', this.leagueId, 'cycles')
-    );
+    const cycleSnapshots = await getDocs(collection(db, 'leagues', this.leagueId, 'cycles'));
 
     const cycles: StandingCycleSummary[] = cycleSnapshots.docs
       .map((cycleDoc) => {
         const data = cycleDoc.data();
-        const cycleNumber = getNumber(
-          data['cycleNumber'],
-          parseCycleNumberFromId(cycleDoc.id)
-        );
+        const cycleNumber = getNumber(data['cycleNumber'], parseCycleNumberFromId(cycleDoc.id));
 
         return {
           id: cycleDoc.id,
           cycleNumber,
           status: getString(data['status'], 'active'),
-          phase: data['phase'] === 'playoffs'
-            ? 'playoffs'
-            : 'regular_season',
-          playoffRoundLabel: getNullableString(
-            data['playoffRoundLabel']
-          )
+          phase: data['phase'] === 'playoffs' ? 'playoffs' : 'regular_season',
+          playoffRoundLabel: getNullableString(data['playoffRoundLabel']),
         } satisfies StandingCycleSummary;
       })
       .filter((cycle) => cycle.cycleNumber > 0)
-      .sort((first, second) =>
-        first.cycleNumber - second.cycleNumber
-      );
+      .sort((first, second) => first.cycleNumber - second.cycleNumber);
 
     const matchupsByCycle = await Promise.all(
       cycles.map(async (cycle) => {
         const matchupSnapshots = await getDocs(
-          collection(
-            db,
-            'leagues',
-            this.leagueId,
-            'cycles',
-            cycle.id,
-            'matchups'
-          )
+          collection(db, 'leagues', this.leagueId, 'cycles', cycle.id, 'matchups'),
         );
 
         return matchupSnapshots.docs.map((matchupDoc) => {
@@ -482,13 +406,8 @@ export class LeagueStandings {
 
           return {
             id: getString(data['id'], matchupDoc.id),
-            cycleNumber: getNumber(
-              data['cycleNumber'],
-              cycle.cycleNumber
-            ),
-            phase: data['phase'] === 'playoffs'
-              ? 'playoffs'
-              : cycle.phase,
+            cycleNumber: getNumber(data['cycleNumber'], cycle.cycleNumber),
+            phase: data['phase'] === 'playoffs' ? 'playoffs' : cycle.phase,
             playoffRoundLabel: cycle.playoffRoundLabel,
             teamAOwnerId: getString(data['teamAOwnerId']),
             teamBOwnerId: getNullableString(data['teamBOwnerId']),
@@ -496,24 +415,21 @@ export class LeagueStandings {
             teamBScore: getNumber(data['teamBScore']),
             winnerOwnerId: getNullableString(data['winnerOwnerId']),
             status: getString(data['status'], cycle.status),
-            tieBrokenByHigherSeed:
-              data['tieBrokenByHigherSeed'] === true
+            tieBrokenByHigherSeed: data['tieBrokenByHigherSeed'] === true,
           } satisfies StandingMatchupSummary;
         });
-      })
+      }),
     );
 
     this.cycles.set(cycles);
     this.matchups.set(
-      matchupsByCycle
-        .flat()
-        .sort((first, second) => {
-          if (first.cycleNumber !== second.cycleNumber) {
-            return first.cycleNumber - second.cycleNumber;
-          }
+      matchupsByCycle.flat().sort((first, second) => {
+        if (first.cycleNumber !== second.cycleNumber) {
+          return first.cycleNumber - second.cycleNumber;
+        }
 
-          return first.id.localeCompare(second.id);
-        })
+        return first.id.localeCompare(second.id);
+      }),
     );
   }
 }

@@ -557,7 +557,7 @@
 .preview-card,
 .round-card {
   border: 2px solid #37557b;
-  background: linear-gradient(180deg, rgba(10, 20, 34, .96), rgba(12, 24, 42, .92));
+  background: linear-gradient(180deg, rgba(17, 31, 47, .96), rgba(12, 24, 42, .92));
   box-shadow: 0 0 0 3px rgba(6, 14, 24, .9), 0 20px 44px rgba(0,0,0,.28);
 }
 
@@ -642,7 +642,7 @@
 .order-row,
 .round-card li {
   border: 1px solid #2f4b6d;
-  background: linear-gradient(180deg, rgba(13, 25, 41, .98), rgba(9, 18, 30, .98));
+  background: linear-gradient(180deg, rgba(13, 25, 41, .98), rgba(16, 29, 44, .98));
 }
 
 .empty-schedule {

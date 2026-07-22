@@ -1,0 +1,71 @@
+FANTASY HOCKEY — MOBILE ADD/DROP + CYCLE-SAFETY INSTALLATION
+============================================================
+
+Target project folder:
+/Users/StephenH/Documents/Programming/fantasy-hockey
+
+1. Back up the current project.
+
+2. Extract the replacement ZIP directly over the project folder. The ZIP
+   already contains every replacement/new file in its exact relative path.
+
+3. Install and validate both the Angular app and Firebase Functions:
+
+   cd /Users/StephenH/Documents/Programming/fantasy-hockey
+
+   npm install
+   npm --prefix functions install
+
+   npm run build
+   npm --prefix functions run build
+
+4. Deploy FUNCTIONS FIRST. The server cycle engine must understand the saved
+   earliest-activation cycle before the updated mobile UI starts creating
+   protected add/drop moves:
+
+   firebase deploy --only functions \
+     -m "Enforce fair add drop cycle eligibility"
+
+   Important: your previous first-time Eventarc deployment was still being
+   provisioned. Do not continue until Firebase reports successful deployment
+   for both initializeSeasonAfterDraft and runScheduledLeagueAutomation.
+
+5. Then deploy the website. Because the prior server-automation Firestore rules
+   have not yet been deployed on your project, include them in this deployment:
+
+   firebase deploy --only firestore:rules,hosting:app \
+     -m "Launch server automation and mobile add drop flow"
+
+No new Firestore index is required for this add/drop update.
+
+Expected mobile flow
+--------------------
+1. Open Add / Drop Player.
+2. Select a free agent or waiver player.
+3. The long player pool is replaced by a dedicated roster-slot screen.
+4. Review the incoming player's current six-game block and earliest fair cycle.
+5. Select a compatible same-position roster slot.
+6. Review that slot's current locked window and exact activation cycle.
+7. Confirm from the fixed bottom action bar.
+
+Fairness example
+----------------
+- Current roster player: Cycle 5.
+- Incoming free agent: already Cycle 6, Game 2.
+- Result: the incoming player is reserved but cannot activate before Cycle 7.
+- If the old player remains active, that player keeps the Cycle 6 slot window.
+- If the old player was moved to IR, the active slot may stay empty for Cycle 6
+  rather than receiving the incoming player's already-played Cycle 6 games.
+
+Recommended smoke test
+----------------------
+1. Use a test league with active asynchronous windows.
+2. Choose an incoming player whose NHL team has already started its current
+   six-game block.
+3. Confirm the UI labels the current block and delays activation one cycle.
+4. Queue the move into a filled slot and confirm the outgoing asset remains in
+   the intermediate window.
+5. Repeat with an open slot created by IR and confirm it does not backfill the
+   incoming player's earlier games.
+6. Process a waiver claim and confirm its target cycle is not moved earlier.
+7. Verify the queued move card shows "earliest activation Cycle N".

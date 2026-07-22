@@ -1,0 +1,29 @@
+PROJECTION ENGINE V8 — INSTALLATION
+
+1. Extract this archive directly over:
+   /Users/StephenH/Documents/Programming/fantasy-hockey
+
+2. Install and build:
+   cd /Users/StephenH/Documents/Programming/fantasy-hockey
+   npm install
+   npm --prefix functions install
+   npm run build
+   npm --prefix functions run build
+
+3. Deploy Functions first:
+   firebase deploy \
+     --only functions:applyImmediateRosterMove,functions:runScheduledLeagueAutomation,functions:initializeSeasonAfterDraft \
+     -m "Upgrade projection engine to Version 8"
+
+4. Deploy Hosting:
+   firebase deploy --only hosting:app \
+     -m "Launch schedule adjusted projection engine"
+
+5. In the app, have the commissioner open Projection Lab and select:
+   Refresh Shared Projections
+
+   Version 8 intentionally invalidates Version 7 projection snapshots.
+
+6. Test an untouched active/bench or add/drop swap and confirm the slot immediately shows the incoming player's projection.
+
+No Firestore rules or indexes changed.

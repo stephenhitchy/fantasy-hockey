@@ -1,0 +1,72 @@
+FANTASY HOCKEY — SERVER AUTOMATION INSTALLATION
+================================================
+
+Target project folder:
+/Users/StephenH/Documents/Programming/fantasy-hockey
+
+1. Back up the current project.
+
+2. Extract this package directly over the project folder. The ZIP already
+   contains the exact relative paths for every replacement and new file.
+
+3. Install and validate both projects:
+
+   cd /Users/StephenH/Documents/Programming/fantasy-hockey
+
+   npm install
+   npm --prefix functions install
+
+   npm run build
+   npm --prefix functions run build
+
+4. Deploy the FUNCTIONS FIRST. This brings the new scoring authority online
+   before browser writes are disabled by the updated Firestore rules:
+
+   firebase deploy --only functions \
+     -m "Move league automation to the server"
+
+5. Then deploy the Firestore rules and website:
+
+   firebase deploy --only firestore:rules,hosting:app \
+     -m "Enable server scoring and automatic Cycle 1"
+
+Firebase deployment notes
+-------------------------
+- The Firebase project must support Cloud Functions, Cloud Scheduler, and
+  Eventarc/Firestore event triggers. Firebase may prompt you to enable the
+  required Google Cloud APIs or billing when the scheduled function is first
+  deployed.
+- Keep the functions region as us-central1 unless the existing Firebase
+  project has intentionally standardized on another region.
+
+What should happen after deployment
+-----------------------------------
+- The browser no longer owns the live-scoring worker.
+- runScheduledLeagueAutomation checks completed-draft leagues every 10 minutes.
+- initializeSeasonAfterDraft runs as soon as a draft changes to complete.
+- Cycle 1 and its matchups are created automatically after the final pick.
+- The manual Start Cycle button and the old dated season-start gate are gone.
+- Existing completed drafts that somehow have no Cycle 1 are repaired by the
+  next scheduled run.
+
+Recommended smoke test
+----------------------
+1. Create a small test league with at least two teams.
+2. Finish the draft.
+3. Confirm the league page briefly says it is creating matchups.
+4. Confirm Cycle 1 and its matchups appear without commissioner action.
+5. Confirm there is no Start Cycle button.
+6. In Firestore, inspect:
+     leagues/{leagueId}/liveScoring/control
+   Expected fields include:
+     automationMode: "server"
+     serverAutomationEnabled: true
+     status: "idle" (or briefly "refreshing")
+     holderClientId beginning with "server:"
+7. Close every browser. Recheck after scheduled NHL activity to confirm the
+   control document heartbeat and scoring snapshots continue updating.
+
+Rollback order
+--------------
+If a rollback is ever necessary, restore the prior Firestore rules FIRST so
+clients are allowed to write again, then restore the prior hosting/functions.

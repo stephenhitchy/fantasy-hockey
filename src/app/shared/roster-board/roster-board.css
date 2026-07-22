@@ -279,7 +279,7 @@
 
 .ir-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -363,4 +363,36 @@
   margin-top: 3px;
   color: #98abc0;
   font-size: 10px;
+}
+
+.bench-section {
+  margin-top: 22px;
+}
+
+.bench-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bench-slot {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed rgba(223, 179, 77, 0.42);
+  border-radius: 14px;
+  background: rgba(100, 72, 20, 0.12);
+}
+
+.bench-slot-filled {
+  border-style: solid;
+  background: rgba(100, 72, 20, 0.2);
+}
+
+@media (max-width: 760px) {
+  .bench-grid {
+    grid-template-columns: 1fr;
+  }
 }

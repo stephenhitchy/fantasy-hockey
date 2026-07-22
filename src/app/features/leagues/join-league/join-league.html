@@ -1,15 +1,4 @@
 <section class="pixel-shell-page">
-  <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
-    <div class="ribbon-track ribbon-track-left">
-      @for (logo of topRibbon; track $index) {
-        <span class="pixel-logo-chip">
-          <img [src]="logo.logoUrl" [alt]="''" />
-          <small>{{ logo.abbreviation }}</small>
-        </span>
-      }
-    </div>
-  </div>
-
   <div class="shell-stage">
     <section class="shell-copy">
       <span class="eyebrow">Join the Action</span>
@@ -54,14 +43,5 @@
     </section>
   </div>
 
-  <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
-    <div class="ribbon-track ribbon-track-right">
-      @for (logo of bottomRibbon; track $index) {
-        <span class="pixel-logo-chip">
-          <img [src]="logo.logoUrl" [alt]="''" />
-          <small>{{ logo.abbreviation }}</small>
-        </span>
-      }
-    </div>
-  </div>
+
 </section>

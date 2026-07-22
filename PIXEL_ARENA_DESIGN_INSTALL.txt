@@ -1,0 +1,14 @@
+PIXEL ARENA DESIGN SYSTEM INSTALLATION
+
+1. Extract this archive directly over:
+   /Users/StephenH/Documents/Programming/fantasy-hockey
+
+2. Build locally:
+   cd /Users/StephenH/Documents/Programming/fantasy-hockey
+   npm install
+   npm run build
+
+3. Deploy Hosting only:
+   firebase deploy --only hosting:app -m "Apply shared pixel arena design system"
+
+No Functions, Firestore rules, or indexes need to be deployed.

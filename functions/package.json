@@ -10,8 +10,8 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "npm run build && firebase deploy --only functions:nhlApiProxy,functions:refreshDailyPlayerAvailability",
-    "logs": "firebase functions:log --only refreshDailyPlayerAvailability"
+    "deploy": "npm run build && firebase deploy --only functions",
+    "logs": "firebase functions:log --only runScheduledLeagueAutomation,initializeSeasonAfterDraft"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0",

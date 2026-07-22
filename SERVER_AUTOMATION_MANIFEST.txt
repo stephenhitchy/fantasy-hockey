@@ -1,0 +1,51 @@
+FANTASY HOCKEY — SERVER AUTOMATION REPLACEMENT MANIFEST
+=======================================================
+
+NEW FILES
+---------
+functions/src/league-automation.ts
+functions/src/shared/core/cycle/asset-cycle-window.service.ts
+functions/src/shared/core/cycle/cycle-scoring.service.ts
+functions/src/shared/core/cycle/cycle-window-selection.util.ts
+functions/src/shared/core/cycle/cycle.models.ts
+functions/src/shared/core/cycle/cycle.service.ts
+functions/src/shared/core/draft/draft.models.ts
+functions/src/shared/core/firebase-admin-compat.ts
+functions/src/shared/core/firebase.ts
+functions/src/shared/core/league/standings.util.ts
+functions/src/shared/core/live-scoring/live-scoring.models.ts
+functions/src/shared/core/nhl/nhl-api.service.ts
+functions/src/shared/core/player/player.models.ts
+functions/src/shared/core/playoffs/playoff-format.ts
+functions/src/shared/core/playoffs/playoff-window-bank.models.ts
+functions/src/shared/core/playoffs/playoff-window-bank.service.ts
+functions/src/shared/core/playoffs/playoff.models.ts
+functions/src/shared/core/playoffs/playoff.service.ts
+functions/src/shared/core/projection/cycle-projection.util.ts
+functions/src/shared/core/projection/projection-snapshot.service.ts
+functions/src/shared/core/projection/window-projection.service.ts
+functions/src/shared/core/scoring/scoring-engine.ts
+functions/src/shared/core/scoring/scoring-rules.ts
+functions/src/shared/core/team/roster-config.ts
+functions/src/shared/core/team/roster.models.ts
+functions/src/shared/core/team/roster.service.ts
+functions/src/shared/core/team/team.service.ts
+
+REPLACEMENT FILES
+-----------------
+firestore.rules
+functions/package.json
+functions/src/index.ts
+functions/tsconfig.json
+src/app/app.ts
+src/app/features/leagues/league-detail/league-detail.html
+src/app/features/leagues/league-detail/league-detail.ts
+src/environments/app-runtime.config.production.ts
+src/environments/app-runtime.config.ts
+src/environments/app-runtime.types.ts
+
+DOCUMENTATION INCLUDED IN THIS PACKAGE
+--------------------------------------
+INSTALL.txt
+MANIFEST.txt
+SERVER_AUTOMATION_REPORT.md

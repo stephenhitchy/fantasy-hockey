@@ -32,6 +32,7 @@
           class="favorite-team-hero"
           [style.--ref-team-primary]="selectedTeam().primaryColor"
           [style.--ref-team-secondary]="selectedTeam().secondaryColor"
+          [style.--ref-team-tertiary]="selectedTeam().tertiaryColor"
         >
           <span class="eyebrow">Favorite Club</span>
 
@@ -111,6 +112,7 @@
                 [class.selected]="team.abbreviation === favoriteTeamAbbreviation"
                 [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation"
                 [title]="team.name"
+                [disabled]="savingFavoriteTeam()"
                 (click)="selectFavoriteTeam(team)"
               >
                 <img [src]="team.logoUrl" [alt]="team.name + ' logo'" />
@@ -118,6 +120,14 @@
               </button>
             }
           </div>
+
+          <p class="favorite-team-save-status" role="status" aria-live="polite">
+            @if (savingFavoriteTeam()) {
+              Saving {{ selectedTeam().name }}...
+            } @else {
+              Favorite-team selections save automatically.
+            }
+          </p>
         </section>
 
         <section class="account-panel settings-panel">
@@ -158,7 +168,7 @@
             type="button"
             class="save-profile-button"
             (click)="saveAccountSettings()"
-            [disabled]="saving()"
+            [disabled]="saving() || savingFavoriteTeam()"
           >
             {{ saving() ? 'Saving Profile...' : 'Save Manager Profile' }}
           </button>

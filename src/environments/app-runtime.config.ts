@@ -6,5 +6,4 @@ export const APP_RUNTIME_CONFIG: AppRuntimeConfig = {
   historicalScoringDateIso: null,
   developerToolsEnabled: true,
   productionHistoricalScoringAllowed: false,
-  regularSeasonAutoStartIso: '2026-09-29T21:00:00Z',
 };

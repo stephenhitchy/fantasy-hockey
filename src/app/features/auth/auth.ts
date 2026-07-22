@@ -2,9 +2,18 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
-import { getUserProfile } from '../../core/user/user.service';
-import { applyUserTheme, getRememberedLastLeagueId } from '../../core/user/user-theme.service';
-import { buildPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
+import {
+  applyUserTheme,
+  getRememberedLastLeagueId,
+  loadStoredUserTheme,
+} from '../../core/user/user-theme.service';
+import {
+  buildFullPixelMarquee,
+  getPixelTeamTheme,
+  NHL_PIXEL_TEAMS,
+  PixelLogoItem,
+  PixelTeamTheme,
+} from '../../shared/pixel-theme/pixel-theme.data';
 
 @Component({
   selector: 'app-auth',
@@ -17,14 +26,20 @@ export class Auth {
   email = '';
   password = '';
   username = '';
-  isRegistering = signal(false);
-  errorMessage = signal('');
-  successMessage = signal('');
-  loading = signal(false);
-  mascotCelebrating = signal(false);
+  readonly favoriteTeamAbbreviation = signal('');
+  readonly isRegistering = signal(false);
+  readonly errorMessage = signal('');
+  readonly successMessage = signal('');
+  readonly loading = signal(false);
+  readonly mascotCelebrating = signal(false);
 
-  readonly topRibbon: PixelLogoItem[] = buildPixelMarquee(0);
-  readonly bottomRibbon: PixelLogoItem[] = buildPixelMarquee(11);
+  readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
+  readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
+
+  readonly selectedRegistrationTeam = computed(() => {
+    const abbreviation = this.favoriteTeamAbbreviation();
+    return abbreviation ? getPixelTeamTheme(abbreviation) : null;
+  });
 
   readonly pageTitle = computed(() =>
     this.isRegistering() ? 'Create Your Franchise' : 'Enter the Rink',
@@ -32,7 +47,7 @@ export class Auth {
 
   readonly pageSubtitle = computed(() =>
     this.isRegistering()
-      ? 'Build your profile, join the league, and get ready for opening night.'
+      ? 'Build your profile, choose your NHL club, and get ready for opening night.'
       : 'Sign in to manage your roster, follow your six-game windows, and chase the Cup.',
   );
 
@@ -53,6 +68,11 @@ export class Auth {
       return;
     }
 
+    if (this.isRegistering() && !this.favoriteTeamAbbreviation()) {
+      this.errorMessage.set('Choose your favorite NHL team to finish creating your profile.');
+      return;
+    }
+
     this.errorMessage.set('');
     this.successMessage.set('');
     this.loading.set(true);
@@ -60,7 +80,12 @@ export class Auth {
 
     try {
       const user = this.isRegistering()
-        ? await registerUser(this.email, this.password, this.username)
+        ? await registerUser(
+            this.email,
+            this.password,
+            this.username,
+            this.favoriteTeamAbbreviation(),
+          )
         : await loginUser(this.email, this.password);
 
       this.successMessage.set(
@@ -69,6 +94,7 @@ export class Auth {
           : 'Login successful. Opening your manager home...',
       );
 
+      const { getUserProfile } = await import('../../core/user/user.service');
       const profile = await getUserProfile(user.uid);
       applyUserTheme(profile);
 
@@ -90,11 +116,31 @@ export class Auth {
     }
   }
 
+  selectRegistrationTeam(team: PixelTeamTheme): void {
+    if (this.loading()) {
+      return;
+    }
+
+    this.favoriteTeamAbbreviation.set(team.abbreviation);
+    this.errorMessage.set('');
+    applyUserTheme(
+      {
+        ...loadStoredUserTheme(),
+        favoriteTeamAbbreviation: team.abbreviation,
+      },
+      { persist: false },
+    );
+  }
+
   toggleMode(): void {
-    this.isRegistering.set(!this.isRegistering());
+    const nextMode = !this.isRegistering();
+
+    this.isRegistering.set(nextMode);
+    this.favoriteTeamAbbreviation.set('');
     this.errorMessage.set('');
     this.successMessage.set('');
     this.loading.set(false);
     this.mascotCelebrating.set(false);
+    applyUserTheme(loadStoredUserTheme(), { persist: false });
   }
 }

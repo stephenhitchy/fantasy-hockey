@@ -34,26 +34,8 @@
   min-height: calc(100dvh - 68px);
   overflow: hidden;
   padding: 34px 20px 70px;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(11, 24, 40, 0.88) 0 12%,
-      transparent 12% 88%,
-      rgba(11, 24, 40, 0.88) 88%
-    ),
-    radial-gradient(
-      circle at 18% 12%,
-      color-mix(in srgb, var(--user-team-primary) 25%, transparent),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at 82% 20%,
-      color-mix(in srgb, var(--user-team-secondary) 28%, transparent),
-      transparent 30%
-    ),
-    linear-gradient(180deg, #07111d 0%, #091728 54%, #06101c 100%);
+  background: #0d1723;
 }
-
 .account-locker-page::before {
   content: '';
   position: absolute;
@@ -68,44 +50,23 @@
 .account-locker-page::after {
   content: '';
   position: absolute;
-  left: 4%;
-  right: 4%;
-  bottom: 0;
-  height: 72px;
-  border-top: 3px solid rgba(94, 134, 184, 0.34);
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(19, 34, 55, 0.9) 0 42px,
-    rgba(10, 21, 36, 0.95) 42px 84px
-  );
-  box-shadow: inset 0 7px 0 rgba(4, 10, 18, 0.78);
-}
-
-.locker-light {
-  position: absolute;
-  top: 4%;
-  width: 140px;
-  height: 420px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--user-team-primary) 32%, transparent),
-    transparent 82%
-  );
-  filter: blur(18px);
-  animation: lockerGlow 3s steps(3) infinite;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--user-team-primary);
+  box-shadow:
+    5px 0 0 var(--user-team-secondary),
+    10px 0 0 var(--user-team-tertiary);
   pointer-events: none;
 }
 
+.locker-light {
+  display: none;
+}
 .locker-light-left {
   left: 4%;
 }
 .locker-light-right {
   right: 4%;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--user-team-secondary) 34%, transparent),
-    transparent 82%
-  );
 }
 
 .account-content {
@@ -119,11 +80,9 @@
 .account-panel,
 .manager-stats article,
 .status-message {
-  border: 3px solid #37557b;
-  background: linear-gradient(180deg, rgba(10, 20, 34, 0.97), rgba(12, 24, 42, 0.94));
-  box-shadow:
-    0 0 0 3px rgba(6, 14, 24, 0.9),
-    0 22px 50px rgba(0, 0, 0, 0.3);
+  border: 2px solid #2a394a;
+  background: #182536;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.34);
 }
 
 .profile-hero {
@@ -132,7 +91,7 @@
   gap: 24px;
   align-items: center;
   padding: 28px;
-  border-color: color-mix(in srgb, var(--user-team-primary) 62%, #37557b);
+  border-top: 4px solid var(--user-team-primary);
 }
 
 .profile-avatar-wrap {
@@ -144,14 +103,11 @@
   width: 106px;
   height: 106px;
   place-items: center;
-  border: 5px solid var(--user-team-primary);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--user-team-primary) 58%, #17283e),
-    color-mix(in srgb, var(--user-team-secondary) 42%, #0e1b2e)
-  );
-  color: var(--user-team-highlight);
+  border: 5px solid var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
   box-shadow:
+    inset 0 -14px 0 var(--user-team-secondary),
     0 0 0 5px rgba(5, 12, 22, 0.95),
     0 18px 35px rgba(0, 0, 0, 0.35);
   font-size: 34px;
@@ -173,7 +129,7 @@
 .eyebrow {
   display: block;
   margin-bottom: 7px;
-  color: color-mix(in srgb, var(--user-team-primary) 70%, #8ecfff);
+  color: #b7c4d2;
   font-size: 11px;
   font-weight: 950;
   letter-spacing: 0.18em;
@@ -222,21 +178,30 @@
 }
 
 .favorite-team-hero {
+  position: relative;
   display: grid;
   justify-items: center;
   min-height: 190px;
-  padding: 20px;
-  border: 2px solid color-mix(in srgb, var(--user-team-primary) 55%, #2f4b6d);
-  background:
-    radial-gradient(
-      circle at center,
-      color-mix(in srgb, var(--user-team-primary) 22%, transparent),
-      transparent 60%
-    ),
-    rgba(9, 18, 30, 0.92);
+  padding: 20px 20px 24px;
+  border: 2px solid var(--user-team-accent);
+  background: #121d2a;
   text-align: center;
 }
 
+.favorite-team-hero::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--user-team-primary) 0 33.333%,
+    var(--user-team-secondary) 33.333% 66.666%,
+    var(--user-team-tertiary) 66.666% 100%
+  );
+}
 
 .favorite-team-hero strong {
   margin-top: 8px;
@@ -284,7 +249,7 @@
 }
 .manager-stats strong {
   margin-top: 7px;
-  color: var(--user-team-highlight);
+  color: #ffffff;
   font-size: 28px;
   line-height: 1;
 }
@@ -313,7 +278,12 @@
   width: 74px;
   height: 4px;
   margin-bottom: 17px;
-  background: linear-gradient(90deg, var(--user-team-primary), var(--user-team-highlight));
+  background: linear-gradient(
+    90deg,
+    var(--user-team-primary) 0 33.333%,
+    var(--user-team-secondary) 33.333% 66.666%,
+    var(--user-team-tertiary) 66.666% 100%
+  );
 }
 
 .panel-heading {
@@ -346,20 +316,22 @@
   gap: 5px;
   padding: 8px 4px;
   border: 2px solid #2f4b6d;
-  background: linear-gradient(180deg, rgba(17, 31, 50, 0.98), rgba(10, 20, 34, 0.98));
+  background: #1d2c3d;
   color: #dceafe;
   cursor: pointer;
 }
 
 .team-selector-button:hover,
+.team-selector-button:focus-visible {
+  border-color: var(--user-team-accent);
+  outline: none;
+}
+
 .team-selector-button.selected {
-  border-color: var(--user-team-primary);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--user-team-primary) 24%, #17273e),
-    rgba(10, 20, 34, 0.98)
-  );
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--user-team-primary) 25%, transparent);
+  border-color: var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: inset 0 -4px 0 var(--user-team-tertiary);
 }
 
 .team-selector-button img {
@@ -398,12 +370,12 @@
   padding: 12px 13px;
   border: 2px solid #365578;
   outline: none;
-  background: rgba(10, 20, 34, 0.96);
+  background: #121d2a;
   color: #edf4ff;
 }
 .form-field input:focus,
 .form-field select:focus {
-  border-color: var(--user-team-primary);
+  border-color: var(--user-team-accent);
 }
 
 .toggle-row {
@@ -413,7 +385,7 @@
   gap: 15px;
   padding: 14px;
   border: 2px solid #2f4b6d;
-  background: rgba(9, 18, 30, 0.88);
+  background: rgba(16, 29, 44, 0.88);
 }
 .toggle-row strong,
 .toggle-row small {
@@ -432,13 +404,10 @@
 
 .save-profile-button {
   min-height: 50px;
-  border: 2px solid color-mix(in srgb, var(--user-team-primary) 58%, #7b6330);
-  background: linear-gradient(
-    180deg,
-    var(--user-team-highlight),
-    color-mix(in srgb, var(--user-team-primary) 70%, #d2a23d)
-  );
-  color: #181100;
+  border: 2px solid var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: inset 0 -4px 0 var(--user-team-secondary);
   cursor: pointer;
   font: inherit;
   font-weight: 950;
@@ -455,11 +424,11 @@
   gap: 12px;
   padding: 12px;
   border: 2px solid #2c415e;
-  background: rgba(9, 18, 30, 0.76);
+  background: rgba(16, 29, 44, 0.76);
   opacity: 0.58;
 }
 .achievement-grid article.unlocked {
-  border-color: color-mix(in srgb, var(--user-team-primary) 52%, #365578);
+  border-color: var(--user-team-accent);
   opacity: 1;
 }
 .achievement-icon {
@@ -487,7 +456,7 @@
   text-transform: uppercase;
 }
 .unlocked .achievement-status {
-  color: var(--user-team-highlight);
+  color: var(--user-team-accent);
 }
 
 .account-quick-links {
@@ -503,7 +472,7 @@
   min-height: 64px;
   padding: 10px 12px;
   border: 2px solid #2f4b6d;
-  background: linear-gradient(180deg, rgba(17, 31, 50, 0.98), rgba(10, 20, 34, 0.98));
+  background: #1d2c3d;
   color: #eaf3ff;
   text-align: left;
   text-decoration: none;
@@ -652,7 +621,7 @@
     var(--ref-team-secondary, var(--user-team-secondary)) 52% 100%
   );
   box-shadow:
-    inset 0 -13px 0 color-mix(in srgb, var(--ref-team-secondary) 78%, #101722),
+    inset 0 -13px 0 var(--ref-team-tertiary, var(--user-team-tertiary)),
     0 0 0 5px #1f252d;
 }
 
@@ -694,4 +663,18 @@
 @keyframes accountRefIdle {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px); }
+}
+
+
+.favorite-team-save-status {
+  margin: 14px 0 0;
+  color: var(--user-team-subtext, #9eb6cf);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.team-selector-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }

@@ -60,7 +60,7 @@
 .schedule-cycle-card {
   border: 1px solid rgba(198, 213, 228, 0.16);
   border-radius: 16px;
-  background: rgba(17, 26, 42, 0.94);
+  background: rgba(25, 39, 57, 0.94);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
@@ -214,7 +214,7 @@
 .schedule-matchup-card {
   border: 1px solid rgba(198, 213, 228, 0.12);
   border-radius: 14px;
-  background: #101827;
+  background: #182536;
   padding: 12px;
 }
 
@@ -391,7 +391,7 @@
   padding: 18px;
   border: 1px solid rgba(198, 213, 228, 0.16);
   border-radius: 16px;
-  background: rgba(17, 26, 42, 0.94);
+  background: rgba(25, 39, 57, 0.94);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
@@ -424,7 +424,7 @@
   min-height: 42px;
   border: 1px solid rgba(198, 213, 228, 0.22);
   border-radius: 11px;
-  background: #101827;
+  background: #182536;
   color: white;
   font: inherit;
   font-weight: 800;
@@ -440,7 +440,7 @@
   padding: 16px;
   border: 1px solid rgba(198, 213, 228, 0.16);
   border-radius: 16px;
-  background: rgba(17, 26, 42, 0.94);
+  background: rgba(25, 39, 57, 0.94);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
 }
 

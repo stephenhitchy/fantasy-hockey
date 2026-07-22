@@ -5,6 +5,8 @@ import {
 
 import {
   doc,
+  getDoc,
+  getDocFromCache,
   onSnapshot,
   runTransaction,
   serverTimestamp,
@@ -40,6 +42,13 @@ const ESPN_NHL_INJURIES_URL =
 const MAX_NOTE_LENGTH = 500;
 const GLOBAL_REFRESH_LEASE_MINUTES = 10;
 const GLOBAL_REFRESH_ERROR_COOLDOWN_MINUTES = 15;
+const GLOBAL_REFRESH_STALE_AFTER_MS = 90_000;
+const GLOBAL_LISTENER_INITIAL_TIMEOUT_MS = 8_000;
+const GLOBAL_LISTENER_RETRY_BASE_MS = 2_000;
+const GLOBAL_LISTENER_RETRY_MAX_MS = 30_000;
+const FIRESTORE_OPERATION_TIMEOUT_MS = 12_000;
+const ESPN_REQUEST_TIMEOUT_MS = 15_000;
+const NHL_ROSTER_REQUEST_TIMEOUT_MS = 30_000;
 interface EspnInjuryEntry {
   playerName: string;
   position: string;
@@ -398,6 +407,8 @@ let globalDocumentLoaded = false;
 let globalListenerReadyPromise: Promise<void> | null = null;
 let resolveGlobalListenerReady: (() => void) | null = null;
 let rejectGlobalListenerReady: ((error: Error) => void) | null = null;
+let globalListenerRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let globalListenerRetryCount = 0;
 const syncStateCallbacks = new Set<
   (state: PlayerAvailabilitySyncState | null) => void
 >();
@@ -409,6 +420,54 @@ let activeGlobalRefreshPromise: Promise<
 interface GlobalRefreshClaim {
   status: 'claimed' | 'already-current' | 'in-progress' | 'cooldown';
   data: Record<string, unknown>;
+}
+
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMilliseconds: number,
+  message: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMilliseconds);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMilliseconds: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMilliseconds);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error: unknown) {
+    if (controller.signal.aborted) {
+      throw new Error('The ESPN injury service took too long to respond.');
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function isPlayerIrEligibleForSync(
@@ -483,21 +542,44 @@ function normalizeGlobalRecords(
 function normalizeSyncState(
   data: Record<string, unknown>
 ): PlayerAvailabilitySyncState | null {
-  const status = data['status'];
+  const storedStatus = data['status'];
 
   if (
-    status !== 'running' &&
-    status !== 'success' &&
-    status !== 'error'
+    storedStatus !== 'running' &&
+    storedStatus !== 'success' &&
+    storedStatus !== 'error'
   ) {
     return null;
   }
+
+  const leaseExpiresAt = toIsoDate(data['leaseExpiresAt']);
+  const leaseExpiresAtMilliseconds = Date.parse(leaseExpiresAt);
+  const lastAttemptAtMilliseconds = getTimestampMilliseconds(
+    data['lastAttemptAt']
+  );
+  const staleRunningLease =
+    storedStatus === 'running' &&
+    (
+      (
+        Number.isFinite(leaseExpiresAtMilliseconds) &&
+        leaseExpiresAtMilliseconds <= Date.now()
+      ) ||
+      (
+        lastAttemptAtMilliseconds > 0 &&
+        lastAttemptAtMilliseconds + GLOBAL_REFRESH_STALE_AFTER_MS <= Date.now()
+      )
+    );
+  const status: PlayerAvailabilitySyncState['status'] = staleRunningLease
+    ? 'error'
+    : storedStatus;
+  const storedMessage = asString(data['message']);
 
   return {
     source: 'ESPN',
     status,
     lastAttemptAt: toIsoDate(data['lastAttemptAt']),
     lastSuccessfulSyncAt: toIsoDate(data['lastSuccessfulSyncAt']),
+    leaseExpiresAt: leaseExpiresAt || undefined,
     updatedBy: asString(data['updatedBy']),
     fetchedCount: typeof data['fetchedCount'] === 'number'
       ? data['fetchedCount']
@@ -518,7 +600,9 @@ function normalizeSyncState(
     skippedGoalieCount: typeof data['skippedGoalieCount'] === 'number'
       ? data['skippedGoalieCount']
       : 0,
-    message: asString(data['message']),
+    message: staleRunningLease
+      ? 'The previous injury refresh was interrupted. The last saved report remains available and the app can retry.'
+      : storedMessage,
     trigger:
       data['trigger'] === 'daily-visit' ||
       data['trigger'] === 'draft-start' ||
@@ -545,6 +629,30 @@ function updateGlobalDocumentState(
   }
 }
 
+function clearGlobalListenerRetry(): void {
+  if (globalListenerRetryTimer) {
+    clearTimeout(globalListenerRetryTimer);
+    globalListenerRetryTimer = null;
+  }
+}
+
+function scheduleGlobalListenerRetry(userId: string): void {
+  if (!userId || auth.currentUser?.uid !== userId || globalListenerRetryTimer) {
+    return;
+  }
+
+  const delayMilliseconds = Math.min(
+    GLOBAL_LISTENER_RETRY_MAX_MS,
+    GLOBAL_LISTENER_RETRY_BASE_MS * 2 ** globalListenerRetryCount,
+  );
+
+  globalListenerRetryCount += 1;
+  globalListenerRetryTimer = setTimeout(() => {
+    globalListenerRetryTimer = null;
+    startGlobalPlayerAvailabilityListener();
+  }, delayMilliseconds);
+}
+
 export function startGlobalPlayerAvailabilityListener(): void {
   const userId = auth.currentUser?.uid ?? '';
 
@@ -556,21 +664,27 @@ export function startGlobalPlayerAvailabilityListener(): void {
     return;
   }
 
-  stopGlobalPlayerAvailabilityListener();
+  stopGlobalListener?.();
+  stopGlobalListener = null;
+  clearGlobalListenerRetry();
   globalListenerUserId = userId;
-  globalDocumentLoaded = false;
-  globalListenerReadyPromise = new Promise<void>((resolve, reject) => {
-    resolveGlobalListenerReady = resolve;
-    rejectGlobalListenerReady = reject;
-  });
 
-  // The same promise is also awaited by callers. This catch only prevents an
-  // unhandled rejection if a listener fails before any caller begins waiting.
-  void globalListenerReadyPromise.catch(() => undefined);
+  if (!globalDocumentLoaded) {
+    globalListenerReadyPromise = new Promise<void>((resolve, reject) => {
+      resolveGlobalListenerReady = resolve;
+      rejectGlobalListenerReady = reject;
+    });
+
+    // The same promise is also awaited by callers. This catch only prevents an
+    // unhandled rejection if a listener fails before any caller begins waiting.
+    void globalListenerReadyPromise.catch(() => undefined);
+  }
 
   stopGlobalListener = onSnapshot(
     getGlobalAvailabilityReference(),
     (snapshot) => {
+      globalListenerRetryCount = 0;
+      clearGlobalListenerRetry();
       updateGlobalDocumentState(
         snapshot.exists()
           ? snapshot.data()
@@ -580,6 +694,7 @@ export function startGlobalPlayerAvailabilityListener(): void {
       resolveGlobalListenerReady?.();
       resolveGlobalListenerReady = null;
       rejectGlobalListenerReady = null;
+      globalListenerReadyPromise = null;
     },
     (error) => {
       const normalizedError = error instanceof Error
@@ -588,17 +703,21 @@ export function startGlobalPlayerAvailabilityListener(): void {
             'Unable to listen for the global player-availability report.'
           );
 
-      rejectGlobalListenerReady?.(normalizedError);
+      if (!globalDocumentLoaded) {
+        rejectGlobalListenerReady?.(normalizedError);
+      }
+
       resolveGlobalListenerReady = null;
       rejectGlobalListenerReady = null;
+      globalListenerReadyPromise = null;
       stopGlobalListener = null;
-      globalListenerUserId = '';
-      globalDocumentLoaded = false;
 
-      console.error(
-        'Unable to listen for the global player-availability report.',
+      console.warn(
+        'The shared player-availability listener disconnected and will retry.',
         error
       );
+
+      scheduleGlobalListenerRetry(userId);
     }
   );
 }
@@ -606,18 +725,52 @@ export function startGlobalPlayerAvailabilityListener(): void {
 export function stopGlobalPlayerAvailabilityListener(): void {
   stopGlobalListener?.();
   stopGlobalListener = null;
+  clearGlobalListenerRetry();
 
   rejectGlobalListenerReady?.(
     new Error('The shared player-availability listener was stopped.')
   );
 
   globalListenerUserId = '';
+  globalListenerRetryCount = 0;
   globalDocumentLoaded = false;
   globalListenerReadyPromise = null;
   resolveGlobalListenerReady = null;
   rejectGlobalListenerReady = null;
   globalRecordsSignal.set(new Map());
   globalSyncStateSignal.set(null);
+}
+
+async function loadGlobalAvailabilityOnce(): Promise<boolean> {
+  const reference = getGlobalAvailabilityReference();
+
+  try {
+    const cachedSnapshot = await getDocFromCache(reference);
+
+    if (cachedSnapshot.exists()) {
+      updateGlobalDocumentState(cachedSnapshot.data());
+      return true;
+    }
+  } catch {
+    // The report may not have been cached on this device yet.
+  }
+
+  try {
+    const snapshot = await withTimeout(
+      getDoc(reference),
+      GLOBAL_LISTENER_INITIAL_TIMEOUT_MS,
+      'The shared injury report did not respond in time.',
+    );
+
+    updateGlobalDocumentState(
+      snapshot.exists()
+        ? snapshot.data()
+        : {},
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function ensureGlobalAvailabilityLoaded(): Promise<void> {
@@ -627,13 +780,33 @@ async function ensureGlobalAvailabilityLoaded(): Promise<void> {
     return;
   }
 
-  if (!globalListenerReadyPromise) {
+  if (!auth.currentUser) {
     throw new Error(
       'The shared player-availability report requires a signed-in user.'
     );
   }
 
-  await globalListenerReadyPromise;
+  if (globalListenerReadyPromise) {
+    try {
+      await withTimeout(
+        globalListenerReadyPromise,
+        GLOBAL_LISTENER_INITIAL_TIMEOUT_MS,
+        'The shared injury-report listener did not connect in time.',
+      );
+      return;
+    } catch {
+      // Fall through to a one-time read. Draft startup must not wait forever
+      // for a realtime listener on an unreliable mobile/Safari connection.
+    }
+  }
+
+  const loaded = await loadGlobalAvailabilityOnce();
+
+  if (!loaded) {
+    // Keep the last in-memory report (or an empty report on a first visit) and
+    // allow the caller to continue. The realtime listener will keep retrying.
+    globalDocumentLoaded = true;
+  }
 }
 
 export async function getGlobalPlayerAvailabilityRecords(): Promise<
@@ -717,9 +890,10 @@ async function claimGlobalRefresh(
   const reference = getGlobalAvailabilityReference();
   const now = Date.now();
 
-  return runTransaction(
-    db,
-    async (transaction) => {
+  return withTimeout(
+    runTransaction(
+      db,
+      async (transaction) => {
       const snapshot = await transaction.get(reference);
       const data = snapshot.exists()
         ? snapshot.data() as Record<string, unknown>
@@ -737,9 +911,17 @@ async function claimGlobalRefresh(
         data['leaseExpiresAt']
       );
 
+      const lastAttemptAt = getTimestampMilliseconds(
+        data['lastAttemptAt']
+      );
+      const runningAttemptIsFresh =
+        lastAttemptAt <= 0 ||
+        now - lastAttemptAt < GLOBAL_REFRESH_STALE_AFTER_MS;
+
       if (
-        state?.status === 'running' &&
-        leaseExpiresAt > now
+        data['status'] === 'running' &&
+        leaseExpiresAt > now &&
+        runningAttemptIsFresh
       ) {
         return {
           status: 'in-progress' as const,
@@ -747,12 +929,8 @@ async function claimGlobalRefresh(
         };
       }
 
-      const lastAttemptAt = getTimestampMilliseconds(
-        data['lastAttemptAt']
-      );
-
       if (
-        state?.status === 'error' &&
+        data['status'] === 'error' &&
         lastAttemptAt > 0 &&
         now - lastAttemptAt <
           GLOBAL_REFRESH_ERROR_COOLDOWN_MINUTES * 60_000
@@ -785,8 +963,11 @@ async function claimGlobalRefresh(
         status: 'claimed' as const,
         data
       };
-    },
-    { maxAttempts: 2 }
+      },
+      { maxAttempts: 2 }
+    ),
+    FIRESTORE_OPERATION_TIMEOUT_MS,
+    'The injury-report lock could not be reached in time.',
   );
 }
 
@@ -819,11 +1000,12 @@ async function saveGlobalSyncError(
   message: string
 ): Promise<void> {
   try {
-    await setDoc(
-      getGlobalAvailabilityReference(),
-      {
-        source: 'ESPN',
-        status: 'error',
+    await withTimeout(
+      setDoc(
+        getGlobalAvailabilityReference(),
+        {
+          source: 'ESPN',
+          status: 'error',
         refreshLeagueId,
         trigger,
         dailyKey,
@@ -831,8 +1013,11 @@ async function saveGlobalSyncError(
         leaseExpiresAt: null,
         updatedBy: userId,
         message: message.slice(0, 500)
-      },
-      { merge: true }
+        },
+        { merge: true }
+      ),
+      FIRESTORE_OPERATION_TIMEOUT_MS,
+      'The failed injury-refresh state could not be saved in time.',
     );
   } catch {
     // Preserve the original network or parsing error.
@@ -907,18 +1092,26 @@ async function performGlobalPlayerAvailabilityRefresh(input: {
     const providedPlayers = input.players ?? [];
     const players = providedPlayers.length >= 300
       ? providedPlayers
-      : await getCurrentNhlDraftSkaters();
+      : await withTimeout(
+          getCurrentNhlDraftSkaters(),
+          NHL_ROSTER_REQUEST_TIMEOUT_MS,
+          'The NHL roster service took too long to respond.',
+        );
 
     if (players.length === 0) {
       throw new Error('The NHL roster pool was empty, so injuries were not changed.');
     }
 
-    const response = await fetch(ESPN_NHL_INJURIES_URL, {
-      cache: 'no-store',
-      headers: {
-        Accept: 'application/json'
-      }
-    });
+    const response = await fetchWithTimeout(
+      ESPN_NHL_INJURIES_URL,
+      {
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json'
+        }
+      },
+      ESPN_REQUEST_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       throw new Error(
@@ -1010,11 +1203,12 @@ async function performGlobalPlayerAvailabilityRefresh(input: {
 
     const message = messageParts.join(' ');
 
-    await setDoc(
-      getGlobalAvailabilityReference(),
-      {
-        source: 'ESPN',
-        status: 'success',
+    await withTimeout(
+      setDoc(
+        getGlobalAvailabilityReference(),
+        {
+          source: 'ESPN',
+          status: 'success',
         refreshLeagueId,
         trigger,
         dailyKey,
@@ -1035,8 +1229,11 @@ async function performGlobalPlayerAvailabilityRefresh(input: {
         records: [...nextRecords.values()]
           .sort((first, second) => first.playerId - second.playerId)
           .map(serializeGlobalRecord)
-      },
-      { merge: true }
+        },
+        { merge: true }
+      ),
+      FIRESTORE_OPERATION_TIMEOUT_MS,
+      'The completed injury report could not be saved in time.',
     );
 
     return {

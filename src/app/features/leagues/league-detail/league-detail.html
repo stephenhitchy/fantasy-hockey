@@ -163,7 +163,7 @@
 
       <article class="league-info-card">
         <span>Roster Format</span>
-        <strong>14 Active + 4 IR</strong>
+        <strong>14 Active + 3 Bench + 3 IR</strong>
       </article>
     </section>
 
@@ -240,11 +240,11 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]">
+        <a class="hub-action" [routerLink]="getCurrentOwnerMatchupLink()">
           <span class="hub-action-icon" aria-hidden="true">⚔️</span>
           <span class="hub-action-copy">
             <strong>My Matchup</strong>
-            <span>Open your current cycle matchup.</span>
+            <span>Open your earliest unfinished matchup.</span>
           </span>
         </a>
 
@@ -261,6 +261,14 @@
           <span class="hub-action-copy">
             <strong>Standings</strong>
             <span>Records, points, and league rank.</span>
+          </span>
+        </a>
+
+        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'leaders']">
+          <span class="hub-action-icon" aria-hidden="true">⭐</span>
+          <span class="hub-action-copy">
+            <strong>Point Leaders</strong>
+            <span>Top forwards, defensemen, and goalie units.</span>
           </span>
         </a>
 
@@ -383,7 +391,7 @@
         <div class="cycle-link-row">
           <a
             class="view-cycle-link"
-            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
+            [routerLink]="getCurrentOwnerMatchupLink()"
           >
             View Current Matchup
           </a>
@@ -423,41 +431,24 @@
         </div>
       } @else if (draft()?.status === 'complete') {
         @if (shouldShowSeasonStartCard()) {
-          <section class="season-start-card">
+          <section class="season-start-card" aria-live="polite">
             <div class="season-start-copy">
-              <span class="draft-section-eyebrow">Automatic Season Start</span>
-              <h3>{{ getSeasonStartStatusTitle() }}</h3>
-              <p>{{ getSeasonStartStatusDescription() }}</p>
+              <span class="draft-section-eyebrow">Preparing the Season</span>
+              <h3>Creating Cycle 1 and your matchups…</h3>
+              <p>
+                The server starts the season automatically as soon as the draft finishes.
+                This page will update when the matchup schedule is ready.
+              </p>
             </div>
 
             <div class="season-start-meta">
-              <strong>{{ getRegularSeasonAutoStartLabel() }}</strong>
-              <span>{{ getSeasonStartCountdown() }}</span>
+              <strong>Automatic setup in progress</strong>
+              <span>No commissioner action is required.</span>
             </div>
-
-            @if (isCommissioner()) {
-              <div class="season-start-actions">
-                <button
-                  type="button"
-                  class="start-cycle-button"
-                  (click)="startFirstCycle()"
-                  [disabled]="!canStartCycleOne() || cycleActionInProgress()"
-                >
-                  {{ cycleActionInProgress() ? 'Opening Cycle 1...' : 'Start Cycle 1 now' }}
-                </button>
-
-                <small>Commissioner fallback only. The league will normally open itself once the NHL season-start time is reached.</small>
-              </div>
-            }
           </section>
         }
       }
 
-      @if (cycleActionMessage()) {
-        <p class="cycle-action-message">
-          {{ cycleActionMessage() }}
-        </p>
-      }
     </section>
 
     @if (shouldShowInviteCode()) {

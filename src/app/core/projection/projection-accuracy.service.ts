@@ -64,10 +64,14 @@ export interface ProjectionAccuracyAssetRecord {
 
   healthyProjectedCyclePoints: number | null;
   expectedGamesAvailable: number | null;
+  expectedGamesMissed: number | null;
   scheduledGamesInProjectionCycle: number | null;
   availabilityAdjustment: number | null;
   recentFormAdjustment: number | null;
   roleAdjustment: number | null;
+  scheduleStrengthAdjustment: number | null;
+  scheduleStrengthMultiplier: number | null;
+  scheduleDifficultyRating: number | null;
   reliabilityRating: number | null;
 
   actualFantasyPoints: number;
@@ -504,6 +508,8 @@ function buildAssetRecord(
       toFiniteNumber(asset.healthyProjectedCyclePoints),
     expectedGamesAvailable:
       toFiniteNumber(asset.expectedGamesAvailable),
+    expectedGamesMissed:
+      toFiniteNumber(asset.expectedGamesMissed),
     scheduledGamesInProjectionCycle:
       toFiniteNumber(asset.scheduledGamesInProjectionCycle),
     availabilityAdjustment:
@@ -512,6 +518,12 @@ function buildAssetRecord(
       toFiniteNumber(asset.recentFormAdjustment),
     roleAdjustment:
       toFiniteNumber(asset.roleAdjustment),
+    scheduleStrengthAdjustment:
+      toFiniteNumber(asset.scheduleStrengthAdjustment),
+    scheduleStrengthMultiplier:
+      toFiniteNumber(asset.scheduleStrengthMultiplier),
+    scheduleDifficultyRating:
+      toFiniteNumber(asset.scheduleDifficultyRating),
     reliabilityRating:
       toFiniteNumber(asset.reliabilityRating),
     actualFantasyPoints,
@@ -827,6 +839,8 @@ function normalizeAssetRecord(
       toFiniteNumber(data['healthyProjectedCyclePoints']),
     expectedGamesAvailable:
       toFiniteNumber(data['expectedGamesAvailable']),
+    expectedGamesMissed:
+      toFiniteNumber(data['expectedGamesMissed']),
     scheduledGamesInProjectionCycle:
       toFiniteNumber(data['scheduledGamesInProjectionCycle']),
     availabilityAdjustment:
@@ -835,6 +849,12 @@ function normalizeAssetRecord(
       toFiniteNumber(data['recentFormAdjustment']),
     roleAdjustment:
       toFiniteNumber(data['roleAdjustment']),
+    scheduleStrengthAdjustment:
+      toFiniteNumber(data['scheduleStrengthAdjustment']),
+    scheduleStrengthMultiplier:
+      toFiniteNumber(data['scheduleStrengthMultiplier']),
+    scheduleDifficultyRating:
+      toFiniteNumber(data['scheduleDifficultyRating']),
     reliabilityRating:
       toFiniteNumber(data['reliabilityRating']),
     actualFantasyPoints:

@@ -1,77 +1,44 @@
-import {
-  Component,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, OnDestroy, signal } from '@angular/core';
 
-import {
-  ActivatedRoute,
-  Router,
-  RouterLink
-} from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import {
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
 
-import {
-  CycleScoringResult
-} from '../../../core/cycle/cycle-scoring.service';
+import { CycleScoringResult } from '../../../core/cycle/cycle-scoring.service';
 
-import {
-  FantasyCycle,
-  FantasyMatchup
-} from '../../../core/cycle/cycle.models';
+import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
 import {
   buildCycleSchedulePreview,
   CycleSchedulePreviewMatchup,
   listenToCycle,
   listenToCycleMatchups,
-  listenToCycleRosterPicks
+  listenToCycleRosterPicks,
 } from '../../../core/cycle/cycle.service';
 
+import { DraftableAsset, DraftPick } from '../../../core/draft/draft.models';
 
-import {
-  DraftableAsset,
-  DraftPick
-} from '../../../core/draft/draft.models';
+import { getFantasyDraft, listenToDraftPicks } from '../../../core/draft/draft.service';
 
-import {
-  getFantasyDraft,
-  listenToDraftPicks
-} from '../../../core/draft/draft.service';
+import { loadDraftPlayerPool } from '../../../core/draft/draft-player-pool.service';
 
-import {
-  loadDraftPlayerPool
-} from '../../../core/draft/draft-player-pool.service';
+import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
 
-import {
-  getFrozenCycleProjection
-} from '../../../core/projection/cycle-projection.util';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getStandardRegularSeasonCycleCount } from '../../../core/playoffs/playoff-format';
 
-import {
-  getStandardRegularSeasonCycleCount
-} from '../../../core/playoffs/playoff-format';
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
-import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
-
-import {
-  listenToSharedCycleScoring
-} from '../../../core/live-scoring/live-scoring.service';
+import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -84,7 +51,7 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-cycle-matchup-overview',
   imports: [RouterLink],
   templateUrl: './cycle-matchup-overview.html',
-  styleUrl: './cycle-matchup-overview.css'
+  styleUrl: './cycle-matchup-overview.css',
 })
 export class CycleMatchupOverview implements OnDestroy {
   leagueId = '';
@@ -114,7 +81,7 @@ export class CycleMatchupOverview implements OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadOverviewPage();
   }
@@ -147,7 +114,7 @@ export class CycleMatchupOverview implements OnDestroy {
         getLeagueById(leagueId),
         getLeagueTeams(leagueId),
         getFantasyDraft(leagueId),
-        loadDraftPlayerPool()
+        loadDraftPlayerPool(),
       ]);
 
       if (!league) {
@@ -171,41 +138,27 @@ export class CycleMatchupOverview implements OnDestroy {
         (error) => {
           this.scoringLoading.set(false);
           this.scoringError.set(error.message);
-        }
+        },
       );
 
-      const regularSeasonCycleCount =
-        getStandardRegularSeasonCycleCount(teams.length);
-      const preview = this.cycleNumber <= regularSeasonCycleCount
-        ? buildCycleSchedulePreview(
-            teams,
-            draft,
-            this.cycleNumber
-          )
-        : [];
+      const regularSeasonCycleCount = getStandardRegularSeasonCycleCount(teams.length);
+      const preview =
+        this.cycleNumber <= regularSeasonCycleCount
+          ? buildCycleSchedulePreview(teams, draft, this.cycleNumber)
+          : [];
 
       this.previewMatchups.set(
-        preview.find(
-          (cycle) => cycle.cycleNumber === this.cycleNumber
-        )?.matchups ?? []
+        preview.find((cycle) => cycle.cycleNumber === this.cycleNumber)?.matchups ?? [],
       );
 
-      this.stopCycleListener = listenToCycle(
-        leagueId,
-        this.cycleNumber,
-        (cycle) => {
-          this.cycle.set(cycle);
-          void this.loadCurrentCycleScoringIfReady();
-        }
-      );
+      this.stopCycleListener = listenToCycle(leagueId, this.cycleNumber, (cycle) => {
+        this.cycle.set(cycle);
+        void this.loadCurrentCycleScoringIfReady();
+      });
 
-      this.stopMatchupsListener = listenToCycleMatchups(
-        leagueId,
-        this.cycleNumber,
-        (matchups) => {
-          this.matchups.set(matchups);
-        }
-      );
+      this.stopMatchupsListener = listenToCycleMatchups(leagueId, this.cycleNumber, (matchups) => {
+        this.matchups.set(matchups);
+      });
 
       this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
         leagueId,
@@ -213,21 +166,16 @@ export class CycleMatchupOverview implements OnDestroy {
         (picks) => {
           this.cycleRosterSnapshotPicks = picks;
           this.refreshEffectivePicks();
-        }
+        },
       );
 
-      this.stopPicksListener = listenToDraftPicks(
-        leagueId,
-        (picks) => {
-          this.liveDraftPicks = picks;
-          this.refreshEffectivePicks();
-        }
-      );
+      this.stopPicksListener = listenToDraftPicks(leagueId, (picks) => {
+        this.liveDraftPicks = picks;
+        this.refreshEffectivePicks();
+      });
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load matchup overview.'
+        error instanceof Error ? error.message : 'Unable to load matchup overview.',
       );
     } finally {
       this.loading.set(false);
@@ -238,8 +186,7 @@ export class CycleMatchupOverview implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ??
-        `Playoff Cycle ${this.cycleNumber}`;
+      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.cycleNumber}`;
     }
 
     return `Cycle ${this.cycleNumber}`;
@@ -288,7 +235,7 @@ export class CycleMatchupOverview implements OnDestroy {
       return this.matchups().map((matchup) => ({
         id: matchup.id,
         teamAOwnerId: matchup.teamAOwnerId,
-        teamBOwnerId: matchup.teamBOwnerId
+        teamBOwnerId: matchup.teamBOwnerId,
       }));
     }
 
@@ -300,9 +247,7 @@ export class CycleMatchupOverview implements OnDestroy {
       return 'Bye';
     }
 
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   getTeamRecord(ownerId: string | null): string {
@@ -310,9 +255,7 @@ export class CycleMatchupOverview implements OnDestroy {
       return '';
     }
 
-    const team = this.teams().find(
-      (candidate) => candidate.ownerId === ownerId
-    );
+    const team = this.teams().find((candidate) => candidate.ownerId === ownerId);
 
     if (!team) {
       return '';
@@ -334,9 +277,7 @@ export class CycleMatchupOverview implements OnDestroy {
       return null;
     }
 
-    const teamPicks = this.picks().filter(
-      (pick) => pick.ownerId === ownerId
-    );
+    const teamPicks = this.picks().filter((pick) => pick.ownerId === ownerId);
 
     if (teamPicks.length === 0) {
       return null;
@@ -344,16 +285,13 @@ export class CycleMatchupOverview implements OnDestroy {
 
     const total = teamPicks.reduce(
       (sum, pick) => sum + (this.getAssetProjectedCycle(pick.asset) ?? 0),
-      0
+      0,
     );
 
     return Number(total.toFixed(1));
   }
 
-  getTeamActualScore(
-    matchup: CycleSchedulePreviewMatchup,
-    ownerId: string | null
-  ): number | null {
+  getTeamActualScore(matchup: CycleSchedulePreviewMatchup, ownerId: string | null): number | null {
     if (!ownerId) {
       return null;
     }
@@ -391,9 +329,7 @@ export class CycleMatchupOverview implements OnDestroy {
   }
 
   getScoreLabel(): string {
-    return this.cycle()?.status === 'complete'
-      ? 'Final'
-      : 'Current';
+    return this.cycle()?.status === 'complete' ? 'Final' : 'Current';
   }
 
   getMatchupStatusLabel(matchup: CycleSchedulePreviewMatchup): string {
@@ -404,9 +340,7 @@ export class CycleMatchupOverview implements OnDestroy {
     }
 
     if (!matchup.teamBOwnerId) {
-      return this.isCompletedMatchup(matchup)
-        ? 'Bye Win'
-        : 'Bye';
+      return this.isCompletedMatchup(matchup) ? 'Bye Win' : 'Bye';
     }
 
     if (existingMatchup?.status === 'complete' || this.cycle()?.status === 'complete') {
@@ -442,10 +376,7 @@ export class CycleMatchupOverview implements OnDestroy {
     return `${this.getTeamName(winnerOwnerId)} won by ${difference.toFixed(1)}.`;
   }
 
-  getResultLabel(
-    matchup: CycleSchedulePreviewMatchup,
-    ownerId: string | null
-  ): string {
+  getResultLabel(matchup: CycleSchedulePreviewMatchup, ownerId: string | null): string {
     if (!ownerId || !this.isCompletedMatchup(matchup)) {
       return '';
     }
@@ -460,15 +391,10 @@ export class CycleMatchupOverview implements OnDestroy {
       return 'Tie';
     }
 
-    return winnerOwnerId === ownerId
-      ? 'Winner'
-      : 'Lost';
+    return winnerOwnerId === ownerId ? 'Winner' : 'Lost';
   }
 
-  isWinner(
-    matchup: CycleSchedulePreviewMatchup,
-    ownerId: string | null
-  ): boolean {
+  isWinner(matchup: CycleSchedulePreviewMatchup, ownerId: string | null): boolean {
     if (!ownerId || !this.isCompletedMatchup(matchup)) {
       return false;
     }
@@ -476,10 +402,7 @@ export class CycleMatchupOverview implements OnDestroy {
     return this.getWinnerOwnerId(matchup) === ownerId;
   }
 
-  isLoser(
-    matchup: CycleSchedulePreviewMatchup,
-    ownerId: string | null
-  ): boolean {
+  isLoser(matchup: CycleSchedulePreviewMatchup, ownerId: string | null): boolean {
     if (!ownerId || !matchup.teamBOwnerId || !this.isCompletedMatchup(matchup)) {
       return false;
     }
@@ -517,38 +440,34 @@ export class CycleMatchupOverview implements OnDestroy {
   }
 
   private refreshEffectivePicks(): void {
-    const effectivePicks = this.cycleRosterSnapshotPicks.length > 0
-      ? this.cycleRosterSnapshotPicks
-      : this.liveDraftPicks;
+    const effectivePicks =
+      this.cycleRosterSnapshotPicks.length > 0
+        ? this.cycleRosterSnapshotPicks
+        : this.liveDraftPicks;
 
     this.picks.set(effectivePicks);
     void this.loadCurrentCycleScoringIfReady();
   }
 
-  private getExistingMatchup(
-    matchup: CycleSchedulePreviewMatchup
-  ): FantasyMatchup | null {
-    return this.matchups().find(
-      (existingMatchup) => existingMatchup.id === matchup.id
-    ) ?? this.matchups().find(
-      (existingMatchup) =>
-        existingMatchup.teamAOwnerId === matchup.teamAOwnerId &&
-        existingMatchup.teamBOwnerId === matchup.teamBOwnerId
-    ) ?? null;
+  private getExistingMatchup(matchup: CycleSchedulePreviewMatchup): FantasyMatchup | null {
+    return (
+      this.matchups().find((existingMatchup) => existingMatchup.id === matchup.id) ??
+      this.matchups().find(
+        (existingMatchup) =>
+          existingMatchup.teamAOwnerId === matchup.teamAOwnerId &&
+          existingMatchup.teamBOwnerId === matchup.teamBOwnerId,
+      ) ??
+      null
+    );
   }
 
   private isCompletedMatchup(matchup: CycleSchedulePreviewMatchup): boolean {
     const existingMatchup = this.getExistingMatchup(matchup);
 
-    return (
-      existingMatchup?.status === 'complete' ||
-      this.cycle()?.status === 'complete'
-    );
+    return existingMatchup?.status === 'complete' || this.cycle()?.status === 'complete';
   }
 
-  private getWinnerOwnerId(
-    matchup: CycleSchedulePreviewMatchup
-  ): string | null {
+  private getWinnerOwnerId(matchup: CycleSchedulePreviewMatchup): string | null {
     const existingMatchup = this.getExistingMatchup(matchup);
 
     if (existingMatchup?.winnerOwnerId) {
@@ -572,6 +491,4 @@ export class CycleMatchupOverview implements OnDestroy {
 
     return null;
   }
-
-
 }

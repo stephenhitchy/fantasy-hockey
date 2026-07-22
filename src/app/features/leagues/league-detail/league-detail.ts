@@ -1,39 +1,27 @@
-import {
-  Component,
-  computed,
-  OnDestroy,
-  signal
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
-import { APP_RUNTIME_CONFIG } from '../../../../environments/app-runtime.config';
 
-import {
-  FantasyCycle,
-  FantasyMatchup
-} from '../../../core/cycle/cycle.models';
+import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
 import {
   listenToCycleMatchups,
+  listenToEarliestUnfinishedOwnerMatchup,
   listenToLatestCycle,
-  startCycleOne
 } from '../../../core/cycle/cycle.service';
 
-import {
-  FantasyDraft
-} from '../../../core/draft/draft.models';
+import { FantasyDraft } from '../../../core/draft/draft.models';
 
 import {
   activateScheduledDraftIfReady,
   getScheduledStartDate,
   isDraftStartTimeReached,
-  listenToFantasyDraft
+  listenToFantasyDraft,
 } from '../../../core/draft/draft.service';
-
 
 import {
   generateSharedProjectionSnapshot,
@@ -41,34 +29,28 @@ import {
   loadSharedProjectionSnapshot,
   loadSharedProjectionSnapshotMetadata,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
-  SharedProjectionGenerationReason
+  SHARED_PROJECTION_VERSION,
+  SharedProjectionGenerationReason,
 } from '../../../core/projection/projection-snapshot.service';
 
 import {
   listenToPlayerAvailabilitySyncState,
-  syncPlayerAvailabilityFromEspn
+  syncPlayerAvailabilityFromEspn,
 } from '../../../core/player/player-availability-sync.service';
 
-import {
-  PlayerAvailabilitySyncState
-} from '../../../core/player/player-availability.models';
+import { PlayerAvailabilitySyncState } from '../../../core/player/player-availability.models';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  FantasyTeam,
-  listenToLeagueTeams,
-  updateTeamName
-} from '../../../core/team/team.service';
+import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/team/team.service';
 
-import {
-  startPlayerAvailabilityListenerForLeague
-} from '../../../core/player/player-availability.service';
+import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -81,7 +63,7 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-league-detail',
   imports: [FormsModule, RouterLink],
   templateUrl: './league-detail.html',
-  styleUrl: './league-detail.css'
+  styleUrl: './league-detail.css',
 })
 export class LeagueDetail implements OnDestroy {
   leagueId = '';
@@ -93,6 +75,7 @@ export class LeagueDetail implements OnDestroy {
   draft = signal<FantasyDraft | null>(null);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
+  currentOwnerMatchup = signal<FantasyMatchup | null>(null);
   injurySyncState = signal<PlayerAvailabilitySyncState | null>(null);
 
   loading = signal(true);
@@ -110,9 +93,6 @@ export class LeagueDetail implements OnDestroy {
   dailyInjuryRefreshMessage = signal('');
   dailyInjuryRefreshError = signal('');
 
-  cycleActionMessage = signal('');
-  cycleActionInProgress = signal(false);
-
   renameTeamOpen = signal(false);
   renameTeamSaving = signal(false);
   renameTeamMessage = signal('');
@@ -124,6 +104,7 @@ export class LeagueDetail implements OnDestroy {
   private stopTeamListener: (() => void) | null = null;
   private stopCycleListener: (() => void) | null = null;
   private stopMatchupsListener: (() => void) | null = null;
+  private stopCurrentOwnerMatchupListener: (() => void) | null = null;
   private stopInjurySyncListener: (() => void) | null = null;
 
   private activationInProgress = false;
@@ -134,7 +115,6 @@ export class LeagueDetail implements OnDestroy {
   private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
-  private automaticSeasonStartInProgress = false;
 
   private readonly countdownTimer = setInterval(() => {
     if (!this.destroyed) {
@@ -146,14 +126,8 @@ export class LeagueDetail implements OnDestroy {
     void this.runScheduledDraftChecks();
   }, 5000);
 
-  private readonly automaticCycleStartTimer = setInterval(() => {
-    void this.runAutomaticSeasonStartChecks();
-  }, 15000);
-
-  readonly myTeam = computed(() =>
-    this.teams().find(
-      (team) => team.ownerId === this.userId
-    ) ?? null
+  readonly myTeam = computed(
+    () => this.teams().find((team) => team.ownerId === this.userId) ?? null,
   );
 
   readonly sortedTeams = computed(() =>
@@ -173,57 +147,32 @@ export class LeagueDetail implements OnDestroy {
       }
 
       return first.teamName.localeCompare(second.teamName);
-    })
+    }),
   );
 
-  readonly currentCycleNumber = computed(() =>
-    this.cycle()?.cycleNumber ?? 1
-  );
+  readonly currentCycleNumber = computed(() => this.cycle()?.cycleNumber ?? 1);
 
   readonly currentCycleLabel = computed(() => {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ??
-        `Playoff Cycle ${this.currentCycleNumber()}`;
+      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.currentCycleNumber()}`;
     }
 
     return `Cycle ${this.currentCycleNumber()}`;
   });
 
-  readonly scheduledStartDate = computed(() =>
-    getScheduledStartDate(this.draft())
-  );
+  readonly scheduledStartDate = computed(() => getScheduledStartDate(this.draft()));
 
   readonly startTimeReached = computed(() => {
     const draft = this.draft();
 
-    return (
-      draft?.status === 'scheduled' &&
-      isDraftStartTimeReached(
-        draft,
-        new Date(this.now())
-      )
-    );
+    return draft?.status === 'scheduled' && isDraftStartTimeReached(draft, new Date(this.now()));
   });
 
-  readonly shouldShowDraftStatus = computed(() =>
-    this.draft()?.status !== 'complete'
-  );
+  readonly shouldShowDraftStatus = computed(() => this.draft()?.status !== 'complete');
 
-  readonly shouldShowInviteCode = computed(() =>
-    this.draft()?.status !== 'complete'
-  );
-
-  readonly regularSeasonAutoStartDate = computed(() => {
-    const iso = APP_RUNTIME_CONFIG.regularSeasonAutoStartIso;
-    return iso ? new Date(iso) : null;
-  });
-
-  readonly regularSeasonAutoStartReached = computed(() => {
-    const startDate = this.regularSeasonAutoStartDate();
-    return !!startDate && startDate.getTime() <= this.now();
-  });
+  readonly shouldShowInviteCode = computed(() => this.draft()?.status !== 'complete');
 
   readonly draftStatusLabel = computed(() => {
     const draft = this.draft();
@@ -242,10 +191,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.startTimeReached()) {
-      return (
-        this.draftInjurySyncInProgress() ||
-        this.injurySyncState()?.status === 'running'
-      )
+      return this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running'
         ? 'Updating Injuries'
         : 'Opening Draft';
     }
@@ -294,29 +240,19 @@ export class LeagueDetail implements OnDestroy {
       return 'All picks are complete.';
     }
 
-    const millisecondsRemaining =
-      startDate.getTime() - this.now();
+    const millisecondsRemaining = startDate.getTime() - this.now();
 
     if (millisecondsRemaining <= 0) {
-      return (
-        this.draftInjurySyncInProgress() ||
-        this.injurySyncState()?.status === 'running'
-      )
+      return this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running'
         ? 'Updating injury report...'
         : 'Opening live draft...';
     }
 
-    const totalSeconds = Math.floor(
-      millisecondsRemaining / 1000
-    );
+    const totalSeconds = Math.floor(millisecondsRemaining / 1000);
 
     const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor(
-      (totalSeconds % 86400) / 3600
-    );
-    const minutes = Math.floor(
-      (totalSeconds % 3600) / 60
-    );
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
     if (days > 0) {
@@ -328,7 +264,7 @@ export class LeagueDetail implements OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.loadLeague();
   }
@@ -337,7 +273,6 @@ export class LeagueDetail implements OnDestroy {
     this.destroyed = true;
     clearInterval(this.countdownTimer);
     clearInterval(this.scheduledDraftCheckTimer);
-    clearInterval(this.automaticCycleStartTimer);
 
     if (this.redirectTimer) {
       clearTimeout(this.redirectTimer);
@@ -347,6 +282,7 @@ export class LeagueDetail implements OnDestroy {
     this.stopTeamListener?.();
     this.stopCycleListener?.();
     this.stopMatchupsListener?.();
+    this.stopCurrentOwnerMatchupListener?.();
     this.stopInjurySyncListener?.();
   }
 
@@ -372,18 +308,12 @@ export class LeagueDetail implements OnDestroy {
 
       this.league.set(league);
       startPlayerAvailabilityListenerForLeague(leagueId);
-      this.isCommissioner.set(
-        league.commissionerId === user.uid
-      );
+      this.isCommissioner.set(league.commissionerId === user.uid);
 
       this.stopInjurySyncListener?.();
-      this.stopInjurySyncListener =
-        listenToPlayerAvailabilitySyncState(
-          leagueId,
-          (state) => {
-            this.injurySyncState.set(state);
-          }
-        );
+      this.stopInjurySyncListener = listenToPlayerAvailabilitySyncState(leagueId, (state) => {
+        this.injurySyncState.set(state);
+      });
 
       if (this.isCommissioner()) {
         void this.requestTodayInjuryRefresh();
@@ -393,44 +323,40 @@ export class LeagueDetail implements OnDestroy {
       this.stopTeamListener?.();
       this.stopCycleListener?.();
       this.stopMatchupsListener?.();
+      this.stopCurrentOwnerMatchupListener?.();
 
-      this.stopDraftListener = listenToFantasyDraft(
-        leagueId,
-        (draft) => {
-          this.draft.set(draft);
-          void this.runScheduledDraftChecks();
-          void this.runAutomaticSeasonStartChecks();
+      this.stopDraftListener = listenToFantasyDraft(leagueId, (draft) => {
+        this.draft.set(draft);
+        void this.runScheduledDraftChecks();
+      });
+
+      this.stopTeamListener = listenToLeagueTeams(leagueId, (teams) => {
+        this.teams.set(teams);
+
+        if (!this.renameTeamOpen()) {
+          this.teamNameDraft = this.myTeam()?.teamName ?? '';
         }
-      );
 
-      this.stopTeamListener = listenToLeagueTeams(
+        void this.runScheduledDraftChecks();
+      });
+
+      this.stopCycleListener = listenToLatestCycle(leagueId, (cycle) => {
+        this.cycle.set(cycle);
+        this.listenToCurrentCycleMatchups(cycle);
+      });
+
+      this.stopCurrentOwnerMatchupListener = listenToEarliestUnfinishedOwnerMatchup(
         leagueId,
-        (teams) => {
-          this.teams.set(teams);
-
-          if (!this.renameTeamOpen()) {
-            this.teamNameDraft = this.myTeam()?.teamName ?? '';
-          }
-
-          void this.runScheduledDraftChecks();
-          void this.runAutomaticSeasonStartChecks();
-        }
-      );
-
-      this.stopCycleListener = listenToLatestCycle(
-        leagueId,
-        (cycle) => {
-          this.cycle.set(cycle);
-          this.listenToCurrentCycleMatchups(cycle);
-          void this.runAutomaticSeasonStartChecks();
-        }
+        user.uid,
+        (matchup) => {
+          this.currentOwnerMatchup.set(matchup);
+        },
+        (error) => {
+          console.warn('Unable to resolve the current owner matchup.', error);
+        },
       );
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load this league.'
-      );
+      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load this league.');
     } finally {
       this.loading.set(false);
     }
@@ -474,18 +400,12 @@ export class LeagueDetail implements OnDestroy {
     this.renameTeamSaving.set(true);
 
     try {
-      await updateTeamName(
-        this.leagueId,
-        this.userId,
-        updatedName
-      );
+      await updateTeamName(this.leagueId, this.userId, updatedName);
 
       this.teams.update((teams) =>
         teams.map((team) =>
-          team.ownerId === this.userId
-            ? { ...team, teamName: updatedName }
-            : team
-        )
+          team.ownerId === this.userId ? { ...team, teamName: updatedName } : team,
+        ),
       );
 
       this.teamNameDraft = updatedName;
@@ -497,9 +417,7 @@ export class LeagueDetail implements OnDestroy {
       }, 2400);
     } catch (error: unknown) {
       this.renameTeamError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to update your team name.'
+        error instanceof Error ? error.message : 'Unable to update your team name.',
       );
     } finally {
       this.renameTeamSaving.set(false);
@@ -509,10 +427,7 @@ export class LeagueDetail implements OnDestroy {
   getDailyInjuryStatusLabel(): string {
     const state = this.injurySyncState();
 
-    if (
-      this.dailyInjuryRefreshInProgress() ||
-      state?.status === 'running'
-    ) {
+    if (this.dailyInjuryRefreshInProgress() || state?.status === 'running') {
       return 'Updating Today’s Report';
     }
 
@@ -520,10 +435,7 @@ export class LeagueDetail implements OnDestroy {
       return 'Using Last Saved Report';
     }
 
-    if (
-      state?.lastDailySyncKey &&
-      state.lastDailySyncKey === this.getUtcDailyKey()
-    ) {
+    if (state?.lastDailySyncKey && state.lastDailySyncKey === this.getUtcDailyKey()) {
       return 'Updated Today';
     }
 
@@ -554,8 +466,10 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (state?.status === 'error') {
-      return state.message ||
-        'Today’s refresh failed. The most recent saved injury report is still being used.';
+      return (
+        state.message ||
+        'Today’s refresh failed. The most recent saved injury report is still being used.'
+      );
     }
 
     if (state?.lastSuccessfulSyncAt) {
@@ -582,7 +496,7 @@ export class LeagueDetail implements OnDestroy {
 
     return `Last updated: ${parsed.toLocaleString(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short'
+      timeStyle: 'short',
     })}`;
   }
 
@@ -591,37 +505,31 @@ export class LeagueDetail implements OnDestroy {
   }
 
   async requestTodayInjuryRefresh(): Promise<void> {
-    if (
-      !this.leagueId ||
-      !this.isCommissioner() ||
-      this.dailyInjuryRefreshInProgress()
-    ) {
+    if (!this.leagueId || !this.isCommissioner() || this.dailyInjuryRefreshInProgress()) {
       return;
     }
 
     this.dailyInjuryRefreshInProgress.set(true);
     this.dailyInjuryRefreshError.set('');
-    this.dailyInjuryRefreshMessage.set(
-      'Checking the single app-wide injury report for today.'
-    );
+    this.dailyInjuryRefreshMessage.set('Checking the single app-wide injury report for today.');
 
     try {
       const result = await syncPlayerAvailabilityFromEspn({
         leagueId: this.leagueId,
-        trigger: 'daily-visit'
+        trigger: 'daily-visit',
       });
 
       this.dailyInjuryRefreshMessage.set(
         result.skipped
           ? result.message
-          : `Today’s app-wide injury report is ready. ${result.matchedCount} injured skaters were matched.`
+          : `Today’s app-wide injury report is ready. ${result.matchedCount} injured skaters were matched.`,
       );
     } catch (error: unknown) {
       this.dailyInjuryRefreshMessage.set('');
       this.dailyInjuryRefreshError.set(
         error instanceof Error
           ? `Today’s refresh could not run: ${error.message} The last saved report remains available.`
-          : 'Today’s injury refresh could not run. The last saved report remains available.'
+          : 'Today’s injury refresh could not run. The last saved report remains available.',
       );
     } finally {
       this.dailyInjuryRefreshInProgress.set(false);
@@ -660,11 +568,16 @@ export class LeagueDetail implements OnDestroy {
     const state = this.injurySyncState();
 
     if (state?.status === 'success') {
-      return state.message || 'The shared ESPN injury report is ready for every league and account.';
+      return (
+        state.message || 'The shared ESPN injury report is ready for every league and account.'
+      );
     }
 
     if (state?.status === 'error') {
-      return state.message || 'The last refresh failed, so the most recent saved report will remain available.';
+      return (
+        state.message ||
+        'The last refresh failed, so the most recent saved report will remain available.'
+      );
     }
 
     return `The app checks the shared daily injury report and prepares league rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
@@ -685,48 +598,32 @@ export class LeagueDetail implements OnDestroy {
 
     return `Last successful sync: ${parsed.toLocaleString(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short'
+      timeStyle: 'short',
     })}`;
   }
 
   private getProjectionTeamCount(): number {
-    return Math.max(
-      this.league()?.maxTeams ?? this.teams().length,
-      2
-    );
+    return Math.max(this.league()?.maxTeams ?? this.teams().length, 2);
   }
 
   private getRequiredGamesPerCycle(): number {
-    return (
-      this.league()?.scoringRules
-        ?.requiredGamesPerCycle ?? 6
-    );
+    return this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
   }
 
   private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {
-    const metadata =
-      await loadSharedProjectionSnapshotMetadata(
-        this.leagueId
-      );
+    const metadata = await loadSharedProjectionSnapshotMetadata(this.leagueId);
 
-    const isFresh =
-      isSharedProjectionSnapshotFreshForDraft(
-        metadata,
-        {
-          teamCount: this.getProjectionTeamCount(),
-          requiredGamesPerCycle:
-            this.getRequiredGamesPerCycle(),
-          now: new Date(this.now())
-        }
-      );
+    const isFresh = isSharedProjectionSnapshotFreshForDraft(metadata, {
+      teamCount: this.getProjectionTeamCount(),
+      requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
+      now: new Date(this.now()),
+    });
 
     if (!isFresh) {
       return false;
     }
 
-    const snapshot = await loadSharedProjectionSnapshot(
-      this.leagueId
-    );
+    const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
 
     if (!snapshot || snapshot.assets.length === 0) {
       return false;
@@ -734,14 +631,60 @@ export class LeagueDetail implements OnDestroy {
 
     this.preDraftPreparationReady.set(true);
     this.draftInjurySyncMessage.set(
-      'Shared season draft rankings, next-cycle projections, and injury data are ready.'
+      'Shared season draft rankings, next-cycle projections, and injury data are ready.',
     );
 
     return true;
   }
 
+  private async loadLastGoodDraftSnapshotIfAvailable(
+    refreshFailureDetail: string,
+  ): Promise<boolean> {
+    try {
+      const metadata = await loadSharedProjectionSnapshotMetadata(this.leagueId);
+
+      if (!metadata) {
+        return false;
+      }
+
+      const generatedAt = Date.parse(metadata.generatedAt);
+      const snapshotAgeMilliseconds = this.now() - generatedAt;
+      const isCompatible =
+        metadata.status === 'ready' &&
+        metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+        metadata.assetCount > 0 &&
+        metadata.teamCount === this.getProjectionTeamCount() &&
+        metadata.requiredGamesPerCycle === this.getRequiredGamesPerCycle() &&
+        Number.isFinite(generatedAt) &&
+        snapshotAgeMilliseconds >= 0 &&
+        snapshotAgeMilliseconds <= 24 * 60 * 60 * 1000;
+
+      if (!isCompatible) {
+        return false;
+      }
+
+      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
+
+      if (!snapshot || snapshot.assets.length === 0) {
+        return false;
+      }
+
+      this.preDraftPreparationReady.set(true);
+      this.draftInjurySyncMessage.set(
+        `Using the last verified Version ${SHARED_PROJECTION_VERSION} projection snapshot from ${new Date(metadata.generatedAt).toLocaleString()}.`,
+      );
+      this.draftInjurySyncWarning.set(
+        `The live NHL statistics refresh was temporarily unavailable (${refreshFailureDetail}). The draft can still open with the last verified rankings.`,
+      );
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async prepareDraftData(
-    generationReason: SharedProjectionGenerationReason
+    generationReason: SharedProjectionGenerationReason,
   ): Promise<void> {
     if (this.preDraftPreparationInProgress()) {
       return;
@@ -752,44 +695,48 @@ export class LeagueDetail implements OnDestroy {
     this.draftInjurySyncInProgress.set(true);
     this.draftInjurySyncWarning.set('');
     this.draftInjurySyncMessage.set(
-      'Refreshing injuries and preparing one shared draft ranking before the scheduled start.'
+      'Refreshing injuries and preparing one shared draft ranking before the scheduled start.',
     );
 
     try {
       try {
         const result = await syncPlayerAvailabilityFromEspn({
           leagueId: this.leagueId,
-          trigger: 'draft-start'
+          trigger: 'draft-start',
         });
 
         this.draftInjurySyncMessage.set(
           result.skipped
             ? result.message
-            : `Today’s shared injury report is ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`
+            : `Today’s shared injury report is ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`,
         );
       } catch (error: unknown) {
-        const detail = error instanceof Error
-          ? error.message
-          : 'Unable to refresh ESPN injury data.';
+        const detail =
+          error instanceof Error ? error.message : 'Unable to refresh ESPN injury data.';
 
         this.draftInjurySyncWarning.set(
-          `The daily injury refresh failed: ${detail} The newest saved app-wide report will be used for projections.`
+          `The daily injury refresh failed: ${detail} The newest saved app-wide report will be used for projections.`,
         );
       }
 
-      const snapshot =
-        await generateSharedProjectionSnapshot({
-          leagueId: this.leagueId,
-          teamCount: this.getProjectionTeamCount(),
-          requiredGamesPerCycle:
-            this.getRequiredGamesPerCycle(),
-          generationReason
-        });
+      const snapshot = await generateSharedProjectionSnapshot({
+        leagueId: this.leagueId,
+        teamCount: this.getProjectionTeamCount(),
+        requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
+        generationReason,
+      });
 
       this.preDraftPreparationReady.set(true);
       this.draftInjurySyncMessage.set(
-        `Draft data ready: ${snapshot.metadata.assetCount} shared assets are prepared for every manager.`
+        `Draft data ready: ${snapshot.metadata.assetCount} shared assets are prepared for every manager.`,
       );
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : 'Unable to build shared projections.';
+      const fallbackLoaded = await this.loadLastGoodDraftSnapshotIfAvailable(detail);
+
+      if (!fallbackLoaded) {
+        throw error;
+      }
     } finally {
       this.draftInjurySyncInProgress.set(false);
       this.preDraftPreparationInProgress.set(false);
@@ -811,15 +758,11 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
-    const millisecondsRemaining =
-      startDate.getTime() - this.now();
+    const millisecondsRemaining = startDate.getTime() - this.now();
 
     if (
       millisecondsRemaining <= 0 ||
-      millisecondsRemaining >
-        PRE_DRAFT_PROJECTION_WARMUP_MINUTES *
-          60 *
-          1000
+      millisecondsRemaining > PRE_DRAFT_PROJECTION_WARMUP_MINUTES * 60 * 1000
     ) {
       return;
     }
@@ -827,12 +770,10 @@ export class LeagueDetail implements OnDestroy {
     const attemptKey = [
       startDate.getTime(),
       this.getProjectionTeamCount(),
-      this.getRequiredGamesPerCycle()
+      this.getRequiredGamesPerCycle(),
     ].join(':');
 
-    if (
-      this.preDraftPreparationAttemptKey === attemptKey
-    ) {
+    if (this.preDraftPreparationAttemptKey === attemptKey) {
       return;
     }
 
@@ -846,12 +787,11 @@ export class LeagueDetail implements OnDestroy {
     try {
       await this.prepareDraftData('pre-draft');
     } catch (error: unknown) {
-      const detail = error instanceof Error
-        ? error.message
-        : 'Unable to prepare shared projections.';
+      const detail =
+        error instanceof Error ? error.message : 'Unable to prepare shared projections.';
 
       this.draftInjurySyncWarning.set(
-        `Pre-draft preparation failed: ${detail} The app will retry at the scheduled start.`
+        `Pre-draft preparation failed: ${detail} The app will retry at the scheduled start.`,
       );
     }
   }
@@ -868,11 +808,7 @@ export class LeagueDetail implements OnDestroy {
       this.redirectTimer = null;
     }
 
-    await this.router.navigate([
-      '/leagues',
-      this.leagueId,
-      'draft'
-    ]);
+    await this.router.navigate(['/leagues', this.leagueId, 'draft']);
   }
 
   formatDraftStart(): string {
@@ -884,7 +820,7 @@ export class LeagueDetail implements OnDestroy {
 
     return startDate.toLocaleString(undefined, {
       dateStyle: 'full',
-      timeStyle: 'short'
+      timeStyle: 'short',
     });
   }
 
@@ -909,9 +845,7 @@ export class LeagueDetail implements OnDestroy {
       return 'Bye';
     }
 
-    return this.teams().find(
-      (team) => team.ownerId === ownerId
-    )?.teamName ?? 'Unknown Team';
+    return this.teams().find((team) => team.ownerId === ownerId)?.teamName ?? 'Unknown Team';
   }
 
   getTeamRecord(team: FantasyTeam | null | undefined): string {
@@ -923,23 +857,17 @@ export class LeagueDetail implements OnDestroy {
   }
 
   getWinPercentage(team: FantasyTeam): string {
-    return this.getWinPercentageValue(team)
-      .toFixed(3)
-      .replace(/^0/, '');
+    return this.getWinPercentageValue(team).toFixed(3).replace(/^0/, '');
   }
 
   getPointDifferential(team: FantasyTeam): number {
-    return Number(
-      ((team.pointsFor ?? 0) - (team.pointsAgainst ?? 0)).toFixed(1)
-    );
+    return Number(((team.pointsFor ?? 0) - (team.pointsAgainst ?? 0)).toFixed(1));
   }
 
   getSignedDisplayNumber(value: number): string {
     const rounded = value.toFixed(1);
 
-    return value > 0
-      ? `+${rounded}`
-      : rounded;
+    return value > 0 ? `+${rounded}` : rounded;
   }
 
   getDisplayNumber(value: number | null | undefined): string {
@@ -948,6 +876,23 @@ export class LeagueDetail implements OnDestroy {
     }
 
     return value.toFixed(1);
+  }
+
+  getCurrentOwnerMatchupLink(): Array<string | number> {
+    const matchup = this.currentOwnerMatchup();
+
+    if (matchup) {
+      return [
+        '/leagues',
+        this.leagueId,
+        'cycles',
+        matchup.cycleNumber,
+        'matchups',
+        matchup.id,
+      ];
+    }
+
+    return ['/leagues', this.leagueId, 'cycles', this.currentCycleNumber()];
   }
 
   getCurrentCycleStatusLabel(): string {
@@ -988,10 +933,7 @@ export class LeagueDetail implements OnDestroy {
     return 'Finish the draft before starting the fantasy season.';
   }
 
-  getMatchupScore(
-    matchup: FantasyMatchup,
-    ownerId: string | null
-  ): number {
+  getMatchupScore(matchup: FantasyMatchup, ownerId: string | null): number {
     if (!ownerId) {
       return 0;
     }
@@ -1023,164 +965,11 @@ export class LeagueDetail implements OnDestroy {
     return `${this.getTeamName(matchup.winnerOwnerId)} won`;
   }
 
-
-  getRegularSeasonAutoStartLabel(): string {
-    const date = this.regularSeasonAutoStartDate();
-
-    if (!date) {
-      return 'Automatic regular-season start is disabled.';
-    }
-
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'America/Los_Angeles',
-      timeZoneName: 'short',
-    }).format(date);
-  }
-
-  getSeasonStartStatusTitle(): string {
-    if (this.cycle()) {
-      return `${this.currentCycleLabel()} is active.`;
-    }
-
-    if (this.draft()?.status !== 'complete') {
-      return 'Finish the draft to unlock the season start.';
-    }
-
-    if (this.teams().length < 2) {
-      return 'At least two teams are required to begin the season.';
-    }
-
-    if (this.regularSeasonAutoStartReached()) {
-      return this.isCommissioner()
-        ? 'The season is ready to open automatically.'
-        : 'Waiting for a commissioner to open the season.';
-    }
-
-    return 'The regular season is scheduled to open automatically.';
-  }
-
-  getSeasonStartStatusDescription(): string {
-    if (this.cycle()) {
-      return 'Scoring windows are already live. Managers can jump straight into their matchup, roster, or player tools.';
-    }
-
-    if (this.draft()?.status !== 'complete') {
-      return 'Cycle 1 will not open until the draft has been completed.';
-    }
-
-    if (this.teams().length < 2) {
-      return 'Invite more managers or complete the remaining team setup before the season begins.';
-    }
-
-    if (this.regularSeasonAutoStartReached()) {
-      return this.isCommissioner()
-        ? 'As soon as a commissioner opens the league after the NHL season begins, Fantasy Hockey will create Cycle 1 automatically from the official season-start time.'
-        : 'A commissioner visit is required to initialize Cycle 1 the first time.';
-    }
-
-    return 'Cycle 1 will open automatically the first time a commissioner visits after the scheduled season-start time.';
-  }
-
-  getSeasonStartCountdown(): string {
-    const date = this.regularSeasonAutoStartDate();
-
-    if (!date || this.regularSeasonAutoStartReached()) {
-      return 'Automatic start enabled';
-    }
-
-    const diff = Math.max(0, date.getTime() - this.now());
-    const totalMinutes = Math.floor(diff / 60000);
-    const days = Math.floor(totalMinutes / (60 * 24));
-    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-    const minutes = totalMinutes % 60;
-
-    const parts: string[] = [];
-
-    if (days > 0) {
-      parts.push(`${days}d`);
-    }
-
-    if (hours > 0 || days > 0) {
-      parts.push(`${hours}h`);
-    }
-
-    parts.push(`${minutes}m`);
-
-    return `Starts in ${parts.join(' ')}`;
-  }
-
   shouldShowSeasonStartCard(): boolean {
     return this.draft()?.status === 'complete' && !this.cycle();
   }
 
-  async runAutomaticSeasonStartChecks(): Promise<void> {
-    if (
-      this.destroyed ||
-      this.automaticSeasonStartInProgress ||
-      !this.isCommissioner() ||
-      !this.canStartCycleOne() ||
-      !this.regularSeasonAutoStartReached()
-    ) {
-      return;
-    }
-
-    this.automaticSeasonStartInProgress = true;
-
-    try {
-      this.cycleActionMessage.set('');
-      await this.startFirstCycle(true);
-    } finally {
-      this.automaticSeasonStartInProgress = false;
-    }
-  }
-
-  canStartCycleOne(): boolean {
-    return (
-      this.isCommissioner() &&
-      this.draft()?.status === 'complete' &&
-      this.cycle() === null &&
-      this.teams().length >= 2
-    );
-  }
-
-  async startFirstCycle(automatic = false): Promise<void> {
-    this.errorMessage.set('');
-    this.cycleActionMessage.set('');
-
-    if (!this.canStartCycleOne()) {
-      return;
-    }
-
-    this.cycleActionInProgress.set(true);
-
-    try {
-      await startCycleOne(
-        this.leagueId,
-        this.teams()
-      );
-
-      this.cycleActionMessage.set(
-        automatic ? 'Cycle 1 opened automatically.' : 'Cycle 1 has been started.'
-      );
-    } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to start Cycle 1.'
-      );
-    } finally {
-      this.cycleActionInProgress.set(false);
-    }
-  }
-
-  private listenToCurrentCycleMatchups(
-    cycle: FantasyCycle | null
-  ): void {
+  private listenToCurrentCycleMatchups(cycle: FantasyCycle | null): void {
     this.stopMatchupsListener?.();
     this.stopMatchupsListener = null;
 
@@ -1194,7 +983,7 @@ export class LeagueDetail implements OnDestroy {
       cycle.cycleNumber,
       (matchups) => {
         this.matchups.set(matchups);
-      }
+      },
     );
   }
 
@@ -1242,16 +1031,13 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
-    if (
-      draft.status !== 'scheduled' ||
-      !isDraftStartTimeReached(draft)
-    ) {
+    if (draft.status !== 'scheduled' || !isDraftStartTimeReached(draft)) {
       return;
     }
 
     if (!this.isCommissioner()) {
       this.draftInjurySyncMessage.set(
-        'Waiting for the commissioner to refresh the shared injury report and open the draft.'
+        'Waiting for the commissioner to refresh the shared injury report and open the draft.',
       );
       return;
     }
@@ -1263,20 +1049,16 @@ export class LeagueDetail implements OnDestroy {
     this.activationInProgress = true;
 
     try {
-      const snapshotReady =
-        await this.loadFreshDraftSnapshotIfAvailable();
+      const snapshotReady = await this.loadFreshDraftSnapshotIfAvailable();
 
       if (!snapshotReady) {
-        await this.prepareDraftData(
-          'draft-start-fallback'
-        );
+        await this.prepareDraftData('draft-start-fallback');
       }
 
-      const activatedDraft =
-        await activateScheduledDraftIfReady(
-          this.leagueId,
-          auth.currentUser?.uid
-        );
+      const activatedDraft = await activateScheduledDraftIfReady(
+        this.leagueId,
+        auth.currentUser?.uid,
+      );
 
       if (activatedDraft?.status === 'live') {
         this.activationFailureCount = 0;
@@ -1289,21 +1071,16 @@ export class LeagueDetail implements OnDestroy {
 
       const retryDelayMilliseconds = Math.min(
         5 * 60_000,
-        15_000 * 2 ** Math.max(0, this.activationFailureCount - 1)
+        15_000 * 2 ** Math.max(0, this.activationFailureCount - 1),
       );
 
-      this.activationRetryNotBefore =
-        Date.now() + retryDelayMilliseconds;
+      this.activationRetryNotBefore = Date.now() + retryDelayMilliseconds;
 
-      const detail = error instanceof Error
-        ? error.message
-        : 'Unable to open the scheduled draft.';
-      const retrySeconds = Math.ceil(
-        retryDelayMilliseconds / 1000
-      );
+      const detail = error instanceof Error ? error.message : 'Unable to open the scheduled draft.';
+      const retrySeconds = Math.ceil(retryDelayMilliseconds / 1000);
 
       this.errorMessage.set(
-        `${detail} The next activation check will wait about ${retrySeconds} seconds.`
+        `${detail} The next activation check will wait about ${retrySeconds} seconds.`,
       );
     } finally {
       this.activationInProgress = false;

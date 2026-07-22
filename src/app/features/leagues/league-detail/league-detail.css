@@ -3,7 +3,7 @@
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(72, 121, 171, 0.25), transparent 34rem),
-    linear-gradient(135deg, #07111f 0%, #0d1728 50%, #101a2b 100%);
+    linear-gradient(135deg, #0d1825 0%, #0d1728 50%, #101a2b 100%);
   color: #edf4ff;
 }
 
@@ -1269,7 +1269,7 @@
 .league-header {
   padding: 26px;
   border: 3px solid #37557b;
-  background: linear-gradient(180deg, rgba(10, 20, 34, 0.96), rgba(12, 24, 42, 0.92));
+  background: linear-gradient(180deg, rgba(17, 31, 47, 0.96), rgba(12, 24, 42, 0.92));
   box-shadow: 0 0 0 3px rgba(6, 14, 24, 0.9), 0 22px 50px rgba(0, 0, 0, 0.28);
 }
 
@@ -1294,13 +1294,13 @@
   border-style: solid;
 }
 
-.pixel-logo-ribbon { position: absolute; left: 0; width: 100%; overflow: hidden; z-index: 1; padding: 10px 0; border-block: 3px solid rgba(94,134,184,0.45); background: rgba(8,17,30,0.86); box-shadow: inset 0 0 0 3px rgba(3,8,16,0.85); }
+.pixel-logo-ribbon { position: absolute; left: 0; width: 100%; overflow: hidden; z-index: 1; padding: 10px 0; border-top: 3px solid var(--user-team-primary); border-bottom: 3px solid var(--user-team-secondary); background: #111c29; box-shadow: inset 0 0 0 2px #03070d; }
 .top-ribbon { top: 22px; }
 .bottom-ribbon { bottom: 26px; }
 .ribbon-track { display: flex; width: max-content; gap: 12px; }
 .ribbon-track-left { animation: ribbonScrollLeft 42s linear infinite; }
 .ribbon-track-right { animation: ribbonScrollRight 44s linear infinite; }
-.pixel-logo-chip { display: inline-flex; align-items: center; gap: 7px; min-width: 82px; height: 44px; padding: 0 10px; border: 2px solid #42658f; background: linear-gradient(180deg, rgba(18,33,54,0.98), rgba(14,25,42,0.98)); box-shadow: 0 0 0 2px rgba(4,10,18,0.9); }
+.pixel-logo-chip { display: inline-flex; align-items: center; gap: 7px; min-width: 82px; height: 44px; padding: 0 10px; border: 2px solid #2e4054; background: #1b2a3a; box-shadow: none; }
 .pixel-logo-chip img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
 .pixel-logo-chip small { color: #f4f8fd; font-size: 11px; font-weight: 900; letter-spacing: 0.08em; }
 
@@ -1324,7 +1324,7 @@
   padding: 10px 12px;
   border: 1px solid var(--user-team-outline);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--user-team-primary) 9%, rgba(8, 18, 32, 0.9));
+  background: #182536;
 }
 
 .my-team-identity > div {
@@ -1358,13 +1358,14 @@
 }
 
 .rename-team-trigger {
-  border: 1px solid var(--user-team-primary);
-  background: color-mix(in srgb, var(--user-team-primary) 16%, rgba(12, 25, 43, 0.95));
-  color: var(--user-team-highlight);
+  border: 1px solid var(--user-team-accent);
+  background: #172230;
+  color: #ffffff;
 }
 
 .rename-team-trigger:hover {
-  background: color-mix(in srgb, var(--user-team-primary) 24%, rgba(12, 25, 43, 0.95));
+  border-color: var(--user-team-accent);
+  background: #1b2837;
 }
 
 .rename-team-panel {
@@ -1405,19 +1406,16 @@
 }
 
 .rename-team-controls input:focus {
-  border-color: var(--user-team-primary);
+  border-color: var(--user-team-accent);
   outline: 2px solid var(--user-team-glow);
   outline-offset: 1px;
 }
 
 .save-team-name-button {
-  border: 1px solid color-mix(in srgb, var(--user-team-primary) 65%, #7b6330);
-  background: linear-gradient(
-    180deg,
-    var(--user-team-highlight),
-    color-mix(in srgb, var(--user-team-primary) 72%, var(--user-team-highlight))
-  );
-  color: #111827;
+  border: 1px solid var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: inset 0 -3px 0 var(--user-team-secondary);
 }
 
 .cancel-team-name-button {

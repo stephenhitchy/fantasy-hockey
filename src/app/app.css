@@ -1,9 +1,4 @@
-body {
-  margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background-color: #f5f5f5;
-}
-
-* {
-  box-sizing: border-box;
+:host {
+  display: block;
+  min-height: 100vh;
 }

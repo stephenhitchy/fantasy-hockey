@@ -39,6 +39,18 @@ export async function updateUsername(uid: string, username: string): Promise<voi
   });
 }
 
+
+export async function updateFavoriteTeam(
+  uid: string,
+  favoriteTeamAbbreviation: string,
+): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+
+  await updateDoc(userRef, {
+    favoriteTeamAbbreviation,
+  });
+}
+
 export async function updateUserAccountSettings(
   uid: string,
   settings: UserAccountSettingsUpdate,

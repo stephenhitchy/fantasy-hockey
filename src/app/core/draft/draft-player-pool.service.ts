@@ -17,6 +17,7 @@ import {
   DiminishingReturnValues,
   defaultScoringRules
 } from '../scoring/scoring-rules';
+import { calculateGoalieSaveQualityPoints } from '../scoring/scoring-engine';
 
 import {
   DraftableAsset,
@@ -27,6 +28,13 @@ import {
   PlayerAvailabilityDatabaseRecord,
   PlayerAvailabilityStatus
 } from '../player/player-availability.models';
+
+import {
+  buildTeamStrengthProfiles,
+  calculateProjectionScheduleContext,
+  NEUTRAL_PROJECTION_SCHEDULE_CONTEXT,
+  ProjectionScheduleContext
+} from '../projection/schedule-projection.util';
 
 let cachedPlayerPool: DraftableAsset[] | null = null;
 
@@ -138,6 +146,16 @@ interface ProjectionCalculationResult {
   seasonBaselineCyclePoints: number | null;
   recentFormAdjustment: number | null;
   roleAdjustment: number | null;
+  scheduleStrengthAdjustment: number | null;
+  scheduleStrengthMultiplier: number | null;
+  scheduleDifficultyRating: number | null;
+  scheduleDifficultyLabel: string | null;
+  scheduleDataConfidence: number | null;
+  projectionHomeGames: number | null;
+  projectionRoadGames: number | null;
+  projectionBackToBackGames: number | null;
+  projectionRestAdvantageGames: number | null;
+  projectionOpponentAbbreviations: string[] | null;
   projectionDataSeason: string | null;
   projectionDataSource:
     | 'current-season-form'
@@ -162,6 +180,7 @@ interface ProjectionCalculationResult {
   healthyProjectedCyclePoints: number | null;
   scheduledGamesInProjectionCycle: number | null;
   expectedGamesAvailable: number | null;
+  expectedGamesMissed: number | null;
   availabilityAdjustment: number | null;
   availabilityAdjustedCyclePoints: number | null;
   availabilityStatus: PlayerAvailabilityStatus;
@@ -199,12 +218,13 @@ const POSITION_BASELINES: Record<DraftPosition, PositionProjectionBaseline> = {
   G: {
     /*
      * A team goalie unit receives every goalie appearance for the NHL club.
-     * With the current save, save-percentage, win, and shutout scoring,
-     * a normal six-game unit is commonly worth roughly 110-145 points.
+     * With the continuous save-quality model, a normal six-game unit is
+     * commonly worth roughly 90-115 points while elite units retain a
+     * meaningful high end without one game overwhelming the entire cycle.
      */
-    conservativeSeasonPoints: 1450,
-    replacementSeasonPoints: 1600,
-    highEndSeasonCap: 2200
+    conservativeSeasonPoints: 1180,
+    replacementSeasonPoints: 1380,
+    highEndSeasonCap: 2000
   }
 };
 
@@ -564,12 +584,18 @@ function applyAvailabilityAdjustment(
   const availabilityAdjustment =
     adjustedProjection - healthyProjection;
 
+  const recentMissedGamesPenalty = Math.min(
+    6,
+    Math.max(0, projection.missedRecentTeamGames ?? 0) * 0.75
+  );
+
   const reliabilityRating = clamp(
     (projection.reliabilityRating ?? 50) -
       getAvailabilityReliabilityPenalty(
         status,
         Boolean(returnDate)
-      ),
+      ) -
+      recentMissedGamesPenalty,
     25,
     98
   );
@@ -590,6 +616,8 @@ function applyAvailabilityAdjustment(
       scheduledGames,
     expectedGamesAvailable:
       roundOneDecimal(expectedGames),
+    expectedGamesMissed:
+      roundOneDecimal(Math.max(0, scheduledGames - expectedGames)),
     availabilityAdjustment:
       roundOneDecimal(availabilityAdjustment),
     availabilityAdjustedCyclePoints:
@@ -1485,12 +1513,18 @@ function getRecentMissedTeamGameCount(
 }
 
 function getWeightedRecentAverage(
+  lastThree: number | null,
+  lastFive: number | null,
   lastTen: number | null,
   lastTwenty: number | null
 ): number | null {
+  // Short windows capture real role/form changes, but receive deliberately
+  // small weights so one explosive game cannot overwhelm the stable baseline.
   const weightedValues = [
-    { value: lastTen, weight: 0.65 },
-    { value: lastTwenty, weight: 0.35 }
+    { value: lastThree, weight: 0.05 },
+    { value: lastFive, weight: 0.15 },
+    { value: lastTen, weight: 0.5 },
+    { value: lastTwenty, weight: 0.3 }
   ].filter(
     (
       entry
@@ -1801,6 +1835,8 @@ function buildSkaterRecentFormMetrics(
 
   const weightedRecent =
     getWeightedRecentAverage(
+      lastThree,
+      lastFive,
       lastTen,
       lastTwenty
     );
@@ -1962,18 +1998,6 @@ function calculateSkaterReliabilityRating(
   );
 }
 
-function getGoalieSavePercentageTierPoints(
-  savePercentage: number
-): number {
-  const matchingTier =
-    defaultScoringRules.goalieSavePercentageTiers.find(
-      (tier) =>
-        savePercentage >= tier.minSavePercentage
-    );
-
-  return matchingTier?.points ?? 0;
-}
-
 function calculateGoalieRawFantasyPoints(
   stats: Partial<GoalieProjectionStats>
 ): number {
@@ -1993,11 +2017,15 @@ function calculateGoalieRawFantasyPoints(
   );
 
   const uncappedTotal =
+    gamesPlayed * defaultScoringRules.goalieGameBase +
     saves * defaultScoringRules.goalieSave +
     wins * defaultScoringRules.goalieWin +
     shutouts * defaultScoringRules.goalieShutout +
     gamesPlayed *
-      getGoalieSavePercentageTierPoints(savePercentage);
+      calculateGoalieSaveQualityPoints(
+        savePercentage,
+        defaultScoringRules
+      );
 
   return Math.min(
     uncappedTotal,
@@ -2015,12 +2043,16 @@ function calculateGoalieGameFantasyPoints(
       : 0;
 
   const uncappedPoints =
+    defaultScoringRules.goalieGameBase +
     game.saves * defaultScoringRules.goalieSave +
     (game.won ? defaultScoringRules.goalieWin : 0) +
     (game.shutout
       ? defaultScoringRules.goalieShutout
       : 0) +
-    getGoalieSavePercentageTierPoints(savePercentage);
+    calculateGoalieSaveQualityPoints(
+      savePercentage,
+      defaultScoringRules
+    );
 
   return Math.min(
     defaultScoringRules.goalieGameMaximum,
@@ -2071,6 +2103,8 @@ function buildGoalieRecentFormMetrics(
       lastTwenty,
     weightedRecentFantasyPointsPerGame:
       getWeightedRecentAverage(
+        lastThree,
+        lastFive,
         lastTen,
         lastTwenty
       ),
@@ -2185,9 +2219,9 @@ function getCycleFormAdjustment(
     defaultScoringRules.requiredGamesPerCycle *
     sampleConfidence *
     seasonConfidence *
-    0.7;
+    0.78;
 
-  const capRate = isCurrentSeason ? 0.06 : 0.04;
+  const capRate = isCurrentSeason ? 0.085 : 0.045;
   const cap = baselineCyclePoints * capRate;
 
   return clamp(rawAdjustment, -cap, cap);
@@ -2396,6 +2430,8 @@ function buildProjectionResult(input: {
   seasonBaselineCyclePoints: number;
   recentFormAdjustment: number;
   roleAdjustment: number;
+  scheduleContext: ProjectionScheduleContext;
+  scheduleStrengthAdjustment: number;
   projectionDataSeason: string | null;
   projectionDataSource:
     | 'current-season-form'
@@ -2477,6 +2513,26 @@ function buildProjectionResult(input: {
       roundOneDecimal(input.recentFormAdjustment),
     roleAdjustment:
       roundOneDecimal(input.roleAdjustment),
+    scheduleStrengthAdjustment:
+      roundOneDecimal(input.scheduleStrengthAdjustment),
+    scheduleStrengthMultiplier:
+      Number(input.scheduleContext.multiplier.toFixed(4)),
+    scheduleDifficultyRating:
+      roundOneDecimal(input.scheduleContext.difficultyRating),
+    scheduleDifficultyLabel:
+      input.scheduleContext.adjustmentLabel,
+    scheduleDataConfidence:
+      roundOneDecimal(input.scheduleContext.dataConfidence),
+    projectionHomeGames:
+      input.scheduleContext.homeGames,
+    projectionRoadGames:
+      input.scheduleContext.roadGames,
+    projectionBackToBackGames:
+      input.scheduleContext.backToBackGames,
+    projectionRestAdvantageGames:
+      input.scheduleContext.restAdvantageGames,
+    projectionOpponentAbbreviations:
+      input.scheduleContext.opponentAbbreviations,
     projectionDataSeason:
       input.projectionDataSeason,
     projectionDataSource:
@@ -2560,6 +2616,7 @@ function buildProjectionResult(input: {
       defaultScoringRules.requiredGamesPerCycle,
     expectedGamesAvailable:
       defaultScoringRules.requiredGamesPerCycle,
+    expectedGamesMissed: 0,
     availabilityAdjustment: 0,
     availabilityAdjustedCyclePoints:
       roundOneDecimal(input.projectedCyclePoints),
@@ -2597,6 +2654,7 @@ function calculateSkaterProjection(input: {
   secondPreviousSeason: string;
   currentTeamSchedule: NhlTeamSeasonGame[];
   previousTeamSchedule: NhlTeamSeasonGame[];
+  scheduleContext: ProjectionScheduleContext;
 }): ProjectionCalculationResult {
   const currentGamesPlayed =
     input.currentStats?.gamesPlayed ?? 0;
@@ -2757,11 +2815,20 @@ function calculateSkaterProjection(input: {
         )
       : 0;
 
-  const projectedCyclePoints = Math.max(
+  const preScheduleCyclePoints = Math.max(
     0,
     seasonBaselineCyclePoints +
       recentFormAdjustment +
       roleAdjustment
+  );
+
+  const scheduleStrengthAdjustment =
+    preScheduleCyclePoints *
+    (input.scheduleContext.multiplier - 1);
+
+  const projectedCyclePoints = Math.max(
+    0,
+    preScheduleCyclePoints + scheduleStrengthAdjustment
   );
 
   const baseReliability =
@@ -2808,6 +2875,8 @@ function calculateSkaterProjection(input: {
     seasonBaselineCyclePoints,
     recentFormAdjustment,
     roleAdjustment,
+    scheduleContext: input.scheduleContext,
+    scheduleStrengthAdjustment,
     projectionDataSeason:
       usesCurrentSeason
         ? input.currentSeason
@@ -2841,6 +2910,7 @@ function calculateGoalieUnitProjection(input: {
   currentSeason: string;
   previousSeason: string;
   secondPreviousSeason: string;
+  scheduleContext: ProjectionScheduleContext;
 }): ProjectionCalculationResult {
   const currentGamesPlayed =
     input.currentGames.length;
@@ -2860,9 +2930,9 @@ function calculateGoalieUnitProjection(input: {
   /*
    * Prefer summed game-level fantasy points whenever they are available.
    * This mirrors calculateGoalieGameBreakdown exactly, including the
-   * save-percentage tier awarded separately in each game. The older
-   * season-summary fallback applied one aggregate save-percentage tier
-   * across the entire season and could materially understate goalie units.
+   * continuous save-quality value awarded separately in each game. The
+   * season-summary fallback applies the season save rate to each appearance,
+   * so game-level history remains preferred whenever it is available.
    */
   const currentRawPoints =
     input.currentGames.length > 0
@@ -2996,7 +3066,7 @@ function calculateGoalieUnitProjection(input: {
   const draftProjectedCyclePoints = clamp(
     draftBaselineCyclePoints +
       draftRecentTrendAdjustment,
-    100,
+    0,
     defaultScoringRules.goalieGameMaximum *
       defaultScoringRules.requiredGamesPerCycle
   );
@@ -3021,10 +3091,18 @@ function calculateGoalieUnitProjection(input: {
         )
       : 0;
 
+  const preScheduleCyclePoints = Math.max(
+    0,
+    seasonBaselineCyclePoints + recentFormAdjustment
+  );
+
+  const scheduleStrengthAdjustment =
+    preScheduleCyclePoints *
+    (input.scheduleContext.multiplier - 1);
+
   const projectedCyclePoints = clamp(
-    seasonBaselineCyclePoints +
-      recentFormAdjustment,
-    100,
+    preScheduleCyclePoints + scheduleStrengthAdjustment,
+    0,
     defaultScoringRules.goalieGameMaximum *
       defaultScoringRules.requiredGamesPerCycle
   );
@@ -3071,6 +3149,8 @@ function calculateGoalieUnitProjection(input: {
     seasonBaselineCyclePoints,
     recentFormAdjustment,
     roleAdjustment: 0,
+    scheduleContext: input.scheduleContext,
+    scheduleStrengthAdjustment,
     projectionDataSeason:
       usesCurrentSeason
         ? input.currentSeason
@@ -3131,13 +3211,25 @@ export async function loadDraftPlayerPool(
    */
   const [
     currentSkaterProjectionStats,
-    currentSkaterGameStats,
-    currentGoalieProjectionStats,
-    currentGoalieGameStats
+    currentGoalieProjectionStats
   ] = await Promise.all([
     loadSkaterProjectionStats(currentSeason),
+    loadGoalieProjectionStats(currentSeason)
+  ]);
+
+  /*
+   * The game-level endpoints are substantially larger than the season-summary
+   * endpoints. Starting all of them together can cause the public NHL stats
+   * service to time out during draft preparation. Give the aggregate wave a
+   * brief head start, then fetch recent-form data in a separate bounded wave.
+   */
+  await wait(250);
+
+  const [
+    currentSkaterGameStats,
+    currentGoalieGameStats
+  ] = await Promise.all([
     loadSkaterGameProjectionStats(currentSeason),
-    loadGoalieProjectionStats(currentSeason),
     loadGoalieGameProjectionStats(currentSeason)
   ]);
 
@@ -3210,13 +3302,38 @@ export async function loadDraftPlayerPool(
     ? await loadTeamProjectionSchedules(currentSeason)
     : new Map<string, NhlTeamSeasonGame[]>();
 
-  const previousTeamSchedules =
-    shouldLoadSchedules && !hasCurrentGameData
-      ? await loadTeamProjectionSchedules(previousSeason)
-      : new Map<string, NhlTeamSeasonGame[]>();
+  // Previous-season team strength remains useful early in a new season,
+  // even when current player game logs already exist. Current results take
+  // progressively more weight as the sample grows.
+  const previousTeamSchedules = shouldLoadSchedules
+    ? await loadTeamProjectionSchedules(previousSeason)
+    : new Map<string, NhlTeamSeasonGame[]>();
+
+  const teamStrengthProfiles = buildTeamStrengthProfiles(
+    currentTeamSchedules,
+    previousTeamSchedules
+  );
 
   const skaterAssets: DraftableAsset[] = skaters.map(
     (skater) => {
+      const currentTeamSchedule =
+        currentTeamSchedules.get(skater.nhlTeamAbbreviation) ?? [];
+      const targetGames = getTargetCycleGames(
+        currentTeamSchedule,
+        options.targetCycleNumber,
+        options.requiredGamesPerCycle
+      );
+      const scheduleContext = options.targetCycleNumber
+        ? calculateProjectionScheduleContext({
+            teamAbbreviation: skater.nhlTeamAbbreviation,
+            position: skater.position,
+            targetGames,
+            teamSchedules: currentTeamSchedules,
+            teamStrengthProfiles,
+            requiredGamesPerCycle: options.requiredGamesPerCycle
+          })
+        : NEUTRAL_PROJECTION_SCHEDULE_CONTEXT;
+
       const baseProjection = calculateSkaterProjection({
         position: skater.position,
         currentStats:
@@ -3232,26 +3349,18 @@ export async function loadDraftPlayerPool(
         currentSeason,
         previousSeason,
         secondPreviousSeason,
-        currentTeamSchedule:
-          currentTeamSchedules.get(
-            skater.nhlTeamAbbreviation
-          ) ?? [],
+        currentTeamSchedule,
         previousTeamSchedule:
           previousTeamSchedules.get(
             skater.nhlTeamAbbreviation
-          ) ?? []
+          ) ?? [],
+        scheduleContext
       });
 
       const projection = applyAvailabilityAdjustment(
         baseProjection,
         options.availabilityByPlayerId?.get(skater.id),
-        getTargetCycleGames(
-          currentTeamSchedules.get(
-            skater.nhlTeamAbbreviation
-          ) ?? [],
-          options.targetCycleNumber,
-          options.requiredGamesPerCycle
-        ),
+        targetGames,
         options.requiredGamesPerCycle,
         options.targetCycleNumber,
         0.22
@@ -3285,6 +3394,26 @@ export async function loadDraftPlayerPool(
           projection.recentFormAdjustment,
         roleAdjustment:
           projection.roleAdjustment,
+        scheduleStrengthAdjustment:
+          projection.scheduleStrengthAdjustment,
+        scheduleStrengthMultiplier:
+          projection.scheduleStrengthMultiplier,
+        scheduleDifficultyRating:
+          projection.scheduleDifficultyRating,
+        scheduleDifficultyLabel:
+          projection.scheduleDifficultyLabel,
+        scheduleDataConfidence:
+          projection.scheduleDataConfidence,
+        projectionHomeGames:
+          projection.projectionHomeGames,
+        projectionRoadGames:
+          projection.projectionRoadGames,
+        projectionBackToBackGames:
+          projection.projectionBackToBackGames,
+        projectionRestAdvantageGames:
+          projection.projectionRestAdvantageGames,
+        projectionOpponentAbbreviations:
+          projection.projectionOpponentAbbreviations,
         projectionDataSeason:
           projection.projectionDataSeason,
         projectionDataSource:
@@ -3323,6 +3452,8 @@ export async function loadDraftPlayerPool(
           projection.scheduledGamesInProjectionCycle,
         expectedGamesAvailable:
           projection.expectedGamesAvailable,
+        expectedGamesMissed:
+          projection.expectedGamesMissed,
         availabilityAdjustment:
           projection.availabilityAdjustment,
         availabilityAdjustedCyclePoints:
@@ -3360,6 +3491,24 @@ export async function loadDraftPlayerPool(
 
   const goalieUnitAssets: DraftableAsset[] =
     NHL_DRAFT_CLUBS.map((club) => {
+      const currentTeamSchedule =
+        currentTeamSchedules.get(club.abbreviation) ?? [];
+      const targetGames = getTargetCycleGames(
+        currentTeamSchedule,
+        options.targetCycleNumber,
+        options.requiredGamesPerCycle
+      );
+      const scheduleContext = options.targetCycleNumber
+        ? calculateProjectionScheduleContext({
+            teamAbbreviation: club.abbreviation,
+            position: 'G',
+            targetGames,
+            teamSchedules: currentTeamSchedules,
+            teamStrengthProfiles,
+            requiredGamesPerCycle: options.requiredGamesPerCycle
+          })
+        : NEUTRAL_PROJECTION_SCHEDULE_CONTEXT;
+
       const baseProjection = calculateGoalieUnitProjection({
         currentStats:
           currentGoalieProjectionStats.get(
@@ -3383,19 +3532,14 @@ export async function loadDraftPlayerPool(
           ) ?? [],
         currentSeason,
         previousSeason,
-        secondPreviousSeason
+        secondPreviousSeason,
+        scheduleContext
       });
 
       const projection = applyAvailabilityAdjustment(
         baseProjection,
         undefined,
-        getTargetCycleGames(
-          currentTeamSchedules.get(
-            club.abbreviation
-          ) ?? [],
-          options.targetCycleNumber,
-          options.requiredGamesPerCycle
-        ),
+        targetGames,
         options.requiredGamesPerCycle,
         options.targetCycleNumber,
         0.18
@@ -3434,6 +3578,26 @@ export async function loadDraftPlayerPool(
           projection.recentFormAdjustment,
         roleAdjustment:
           projection.roleAdjustment,
+        scheduleStrengthAdjustment:
+          projection.scheduleStrengthAdjustment,
+        scheduleStrengthMultiplier:
+          projection.scheduleStrengthMultiplier,
+        scheduleDifficultyRating:
+          projection.scheduleDifficultyRating,
+        scheduleDifficultyLabel:
+          projection.scheduleDifficultyLabel,
+        scheduleDataConfidence:
+          projection.scheduleDataConfidence,
+        projectionHomeGames:
+          projection.projectionHomeGames,
+        projectionRoadGames:
+          projection.projectionRoadGames,
+        projectionBackToBackGames:
+          projection.projectionBackToBackGames,
+        projectionRestAdvantageGames:
+          projection.projectionRestAdvantageGames,
+        projectionOpponentAbbreviations:
+          projection.projectionOpponentAbbreviations,
         projectionDataSeason:
           projection.projectionDataSeason,
         projectionDataSource:
@@ -3472,6 +3636,8 @@ export async function loadDraftPlayerPool(
           projection.scheduledGamesInProjectionCycle,
         expectedGamesAvailable:
           projection.expectedGamesAvailable,
+        expectedGamesMissed:
+          projection.expectedGamesMissed,
         availabilityAdjustment:
           projection.availabilityAdjustment,
         availabilityAdjustedCyclePoints:

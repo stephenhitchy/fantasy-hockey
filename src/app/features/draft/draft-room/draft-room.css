@@ -25,6 +25,26 @@
   margin-bottom: 20px;
 }
 
+.draft-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.header-auto-draft-toggle {
+  min-width: 158px;
+  padding: 9px 12px;
+  box-shadow: 0 5px 14px rgba(22, 36, 58, 0.08);
+}
+
+.header-auto-draft-toggle.forced-auto-draft {
+  border-color: #d4a84f;
+  background: #fff5d8;
+  color: #725012;
+}
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;
@@ -458,10 +478,46 @@
     padding: 20px 14px 36px;
   }
 
-  .draft-room-header,
+  .draft-room-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .draft-header-actions {
+    align-items: flex-end;
+    gap: 7px;
+  }
+
+  .header-auto-draft-toggle {
+    min-width: 0;
+    max-width: 150px;
+    min-height: 34px;
+    padding: 7px 9px;
+    font-size: 10px;
+    white-space: normal;
+  }
+
+  .draft-state-badge {
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
   .panel-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .draft-pick-track-card {
+    margin-right: -4px;
+    margin-left: -4px;
+    padding: 11px 10px 10px;
+  }
+
+  .draft-pick-track-item {
+    flex-basis: 154px;
+    min-height: 66px;
   }
 
   .pool-controls {
@@ -781,8 +837,7 @@
 .injury-sync-waiting-card {
   border-color: #9fb9d3;
   background:
-    radial-gradient(circle at top left, rgba(74, 125, 184, 0.12), transparent 40%),
-    #f5f9ff;
+    radial-gradient(circle at top left, rgba(74, 125, 184, 0.12), transparent 40%), #f5f9ff;
 }
 
 .injury-sync-waiting-card > span:last-child {
@@ -791,52 +846,32 @@
 }
 
 .draft-injury-sync-banner {
-  display: grid;
-  gap: 7px;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid #b8c9da;
-  border-radius: 12px;
-  background: #f5f8fb;
-  box-shadow: 0 6px 18px rgba(22, 36, 58, 0.05);
-}
-
-.draft-injury-sync-banner > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.draft-injury-sync-banner .eyebrow {
-  margin: 0;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid #c7d3df;
+  border-radius: 10px;
+  background: #f7f9fc;
 }
 
 .draft-injury-sync-banner strong {
   color: #203956;
-  font-size: 14px;
-}
-
-.draft-injury-sync-banner p,
-.draft-injury-sync-banner small {
-  margin: 0;
-}
-
-.draft-injury-sync-banner p {
-  color: #5f7388;
   font-size: 13px;
-  line-height: 1.4;
 }
 
-.draft-injury-sync-banner small {
+.draft-injury-sync-banner span {
   color: #718399;
   font-size: 11px;
   font-weight: 800;
+  text-align: right;
 }
 
 .draft-injury-sync-banner.sync-success {
-  border-color: #9bc9a7;
-  background: #eef9f0;
+  border-color: #a9cfb2;
+  background: #f1faf3;
 }
 
 .draft-injury-sync-banner.sync-warning {
@@ -845,12 +880,169 @@
 }
 
 @media (max-width: 620px) {
-  .draft-injury-sync-banner > div {
+  .draft-injury-sync-banner {
     align-items: flex-start;
     flex-direction: column;
+    gap: 3px;
+  }
+
+  .draft-injury-sync-banner span {
+    text-align: left;
   }
 }
 
+/* Combined recent and upcoming pick track */
+.draft-pick-track-card {
+  margin-bottom: 16px;
+  padding: 13px 14px 12px;
+  border: 1px solid #cbd7e3;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 7px 20px rgba(22, 36, 58, 0.07);
+}
+
+.draft-pick-track-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.draft-pick-track-heading .eyebrow {
+  margin-bottom: 3px;
+}
+
+.draft-pick-track-heading h2 {
+  margin: 0;
+  color: #1b2d45;
+  font-size: 16px;
+}
+
+.draft-pick-track-heading > span {
+  color: #718399;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.draft-pick-track {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 2px 1px 9px;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-color: #9eb0c2 #e9eff5;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+}
+
+.draft-pick-track::-webkit-scrollbar {
+  height: 8px;
+}
+
+.draft-pick-track::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e9eff5;
+}
+
+.draft-pick-track::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #9eb0c2;
+}
+
+.draft-pick-track-item {
+  position: relative;
+  display: grid;
+  flex: 0 0 178px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 70px;
+  padding: 20px 10px 10px;
+  border: 1px solid #d8e2eb;
+  border-radius: 11px;
+  background: #f7f9fc;
+  scroll-snap-align: center;
+}
+
+.draft-pick-track-item.completed-pick {
+  border-color: #b7d7bf;
+  background: #f0f9f2;
+}
+
+.draft-pick-track-item.current-pick {
+  border-color: #e0b950;
+  background: #fff8df;
+  box-shadow: inset 0 0 0 1px rgba(224, 185, 80, 0.28);
+}
+
+.draft-pick-number {
+  position: absolute;
+  top: 6px;
+  left: 9px;
+  color: #6f8194;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+}
+
+.draft-pick-logo,
+.draft-pick-logo-fallback,
+.upcoming-pick-marker {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+}
+
+.draft-pick-logo {
+  object-fit: contain;
+}
+
+.draft-pick-logo-fallback,
+.upcoming-pick-marker {
+  border-radius: 9px;
+  background: #e7eef5;
+  color: #45617e;
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.upcoming-pick-marker {
+  font-size: 18px;
+}
+
+.current-pick .upcoming-pick-marker {
+  background: #f4df9f;
+  color: #70520b;
+}
+
+.draft-pick-track-copy {
+  min-width: 0;
+}
+
+.draft-pick-track-copy strong,
+.draft-pick-track-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-pick-track-copy strong {
+  color: #1e344e;
+  font-size: 12px;
+}
+
+.draft-pick-track-copy small {
+  margin-top: 4px;
+  color: #6f8194;
+  font-size: 10px;
+  font-weight: 800;
+}
 
 /* Draft clock, queue, and auto-draft */
 .auto-pick-message {
@@ -1212,13 +1404,17 @@
     align-items: stretch;
     flex-direction: column;
   }
-
-  .auto-draft-toggle {
-    width: 100%;
-  }
 }
 
 @media (max-width: 430px) {
+  .draft-room-header h1 {
+    font-size: 25px;
+  }
+
+  .draft-pick-track-heading > span {
+    display: none;
+  }
+
   .draft-clock-team strong {
     font-size: 13px;
   }
@@ -1236,7 +1432,6 @@
     justify-content: flex-end;
   }
 }
-
 
 .recent-form-pill {
   display: inline-flex;
@@ -1270,7 +1465,6 @@
   font-weight: 850;
   white-space: nowrap;
 }
-
 
 /* Shared projection recovery */
 .pool-error-block {
@@ -1340,4 +1534,105 @@
 .preparation-ready-card {
   border-color: #9fd2ae;
   background: #f2fff5;
+}
+
+
+/* Roster schema v2: mobile-first starter and flexible bench guidance. */
+.draft-roster-needs {
+  margin: 12px 0 16px;
+  padding: 14px;
+  border: 1px solid rgba(116, 157, 201, 0.3);
+  border-radius: 16px;
+  background: rgba(10, 22, 39, 0.82);
+}
+
+.draft-roster-needs-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.draft-roster-needs-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.bench-need-pill {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(245, 186, 73, 0.17);
+  color: #ffd67a;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.bench-need-pill.bench-full {
+  background: rgba(219, 83, 83, 0.17);
+  color: #ff9b9b;
+}
+
+.draft-roster-needs-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.draft-roster-need {
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid rgba(124, 159, 194, 0.28);
+  border-radius: 12px;
+  background: rgba(19, 36, 58, 0.9);
+  color: inherit;
+  text-align: left;
+}
+
+.draft-roster-need strong,
+.draft-roster-need span {
+  display: block;
+}
+
+.draft-roster-need strong {
+  font-size: 0.9rem;
+}
+
+.draft-roster-need span {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: rgba(229, 239, 249, 0.72);
+}
+
+.draft-roster-need.need-open {
+  border-color: rgba(93, 190, 124, 0.55);
+  background: rgba(48, 126, 78, 0.16);
+}
+
+.draft-roster-need.need-bench {
+  border-color: rgba(240, 181, 61, 0.62);
+  background: rgba(170, 116, 24, 0.18);
+}
+
+.draft-roster-need.need-full {
+  opacity: 0.58;
+  border-color: rgba(208, 90, 90, 0.38);
+  background: rgba(115, 46, 46, 0.16);
+}
+
+@media (max-width: 760px) {
+  .draft-roster-needs-track {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scroll-snap-type: x proximity;
+  }
+
+  .draft-roster-need {
+    flex: 0 0 132px;
+    scroll-snap-align: start;
+  }
 }

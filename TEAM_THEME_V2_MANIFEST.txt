@@ -1,0 +1,22 @@
+TEAM THEME V2 — REPLACEMENT FILE MANIFEST
+=========================================
+
+src/app/app.css
+src/app/core/auth/auth.service.ts
+src/app/core/user/user-theme.service.ts
+src/app/features/account/account-settings/account-settings.css
+src/app/features/account/account-settings/account-settings.html
+src/app/features/auth/auth.css
+src/app/features/auth/auth.html
+src/app/features/auth/auth.ts
+src/app/features/cycles/cycle-one/cycle-one.css
+src/app/features/cycles/cycle-one/cycle-one.ts
+src/app/features/dashboard/dashboard.css
+src/app/features/dashboard/dashboard.html
+src/app/features/leagues/league-detail/league-detail.css
+src/app/shared/navbar/navbar.css
+src/app/shared/pixel-theme/pixel-theme.data.ts
+src/styles.css
+TEAM_THEME_V2_INSTALL.txt
+TEAM_THEME_V2_REPORT.md
+TEAM_THEME_V2_MANIFEST.txt

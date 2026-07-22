@@ -1,8 +1,4 @@
-import {
-  Component,
-  computed,
-  signal
-} from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -10,32 +6,26 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
 
-
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
 import {
   clearCurrentNhlDraftSkaterCache,
-  getCurrentNhlDraftSkaters
+  getCurrentNhlDraftSkaters,
 } from '../../../core/nhl/nhl-api.service';
 
-import {
-  NHLPlayer
-} from '../../../core/player/player.models';
+import { NHLPlayer } from '../../../core/player/player.models';
 
 import {
   PlayerAvailability,
   PlayerAvailabilityDatabaseRecord,
   PlayerAvailabilityStatus,
   PlayerAvailabilitySyncResult,
-  PlayerAvailabilitySyncState
+  PlayerAvailabilitySyncState,
 } from '../../../core/player/player-availability.models';
 
 import {
   getPlayerAvailabilitySyncState,
-  syncPlayerAvailabilityFromEspn
+  syncPlayerAvailabilityFromEspn,
 } from '../../../core/player/player-availability-sync.service';
 
 import {
@@ -49,7 +39,7 @@ import {
   isPlayerIrEligible,
   playerAvailabilityDatabaseRecords,
   savePlayerAvailabilityRecord,
-  startPlayerAvailabilityListenerForLeague
+  startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
 
 interface AvailabilityStatusOption {
@@ -58,8 +48,11 @@ interface AvailabilityStatusOption {
   description: string;
 }
 
-
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -72,7 +65,7 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-player-availability-manager',
   imports: [FormsModule, RouterLink],
   templateUrl: './player-availability-manager.html',
-  styleUrl: './player-availability-manager.css'
+  styleUrl: './player-availability-manager.css',
 })
 export class PlayerAvailabilityManager {
   leagueId = '';
@@ -101,60 +94,58 @@ export class PlayerAvailabilityManager {
     {
       value: 'active',
       label: 'Active',
-      description: 'Healthy and not eligible for IR.'
+      description: 'Healthy and not eligible for IR.',
     },
     {
       value: 'day-to-day',
       label: 'Day-to-Day',
-      description: 'Injured, but not eligible for IR under this league policy.'
+      description: 'Injured, but not eligible for IR under this league policy.',
     },
     {
       value: 'out',
       label: 'Out',
-      description: 'Unavailable and eligible for IR.'
+      description: 'Unavailable and eligible for IR.',
     },
     {
       value: 'injured-reserve',
       label: 'Injured Reserve',
-      description: 'Official IR designation and eligible for IR.'
+      description: 'Official IR designation and eligible for IR.',
     },
     {
       value: 'long-term-injured-reserve',
       label: 'Long-Term IR',
-      description: 'Official LTIR designation and eligible for IR.'
+      description: 'Official LTIR designation and eligible for IR.',
     },
     {
       value: 'suspended',
       label: 'Suspended',
-      description: 'Unavailable, but not eligible for IR.'
+      description: 'Unavailable, but not eligible for IR.',
     },
     {
       value: 'personal-leave',
       label: 'Personal Leave',
-      description: 'Away from the team, but not eligible for IR.'
+      description: 'Away from the team, but not eligible for IR.',
     },
     {
       value: 'unknown',
       label: 'Unknown',
-      description: 'Status has not been verified and is not eligible for IR.'
-    }
+      description: 'Status has not been verified and is not eligible for IR.',
+    },
   ];
 
+  readonly managedRecordCount = computed(() => playerAvailabilityDatabaseRecords().size);
 
-  readonly managedRecordCount = computed(() =>
-    playerAvailabilityDatabaseRecords().size
+  readonly syncedRecordCount = computed(
+    () =>
+      [...playerAvailabilityDatabaseRecords().values()].filter((record) => record.source === 'espn')
+        .length,
   );
 
-  readonly syncedRecordCount = computed(() =>
-    [...playerAvailabilityDatabaseRecords().values()].filter(
-      (record) => record.source === 'espn'
-    ).length
-  );
-
-  readonly manualRecordCount = computed(() =>
-    [...playerAvailabilityDatabaseRecords().values()].filter(
-      (record) => record.source === 'commissioner'
-    ).length
+  readonly manualRecordCount = computed(
+    () =>
+      [...playerAvailabilityDatabaseRecords().values()].filter(
+        (record) => record.source === 'commissioner',
+      ).length,
   );
 
   readonly selectedPlayer = computed(() => {
@@ -164,17 +155,13 @@ export class PlayerAvailabilityManager {
       return null;
     }
 
-    return this.players().find(
-      (player) => player.id === selectedPlayerId
-    ) ?? null;
+    return this.players().find((player) => player.id === selectedPlayerId) ?? null;
   });
 
   readonly selectedDatabaseRecord = computed(() => {
     const player = this.selectedPlayer();
 
-    return player
-      ? playerAvailabilityDatabaseRecords().get(player.id) ?? null
-      : null;
+    return player ? (playerAvailabilityDatabaseRecords().get(player.id) ?? null) : null;
   });
 
   readonly filteredPlayers = computed(() => {
@@ -186,11 +173,7 @@ export class PlayerAvailabilityManager {
           return true;
         }
 
-        return [
-          player.fullName,
-          player.nhlTeamAbbreviation,
-          player.position
-        ]
+        return [player.fullName, player.nhlTeamAbbreviation, player.position]
           .join(' ')
           .toLowerCase()
           .includes(search);
@@ -210,13 +193,11 @@ export class PlayerAvailabilityManager {
       .slice(0, 150);
   });
 
-  readonly selectedStatusIrEligible = computed(() =>
-    isPlayerIrEligible(this.selectedStatus())
-  );
+  readonly selectedStatusIrEligible = computed(() => isPlayerIrEligible(this.selectedStatus()));
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     void this.loadPage();
   }
@@ -242,9 +223,7 @@ export class PlayerAvailabilityManager {
       }
 
       if (league.commissionerId !== user.uid) {
-        this.errorMessage.set(
-          'Only the league commissioner can manage player availability.'
-        );
+        this.errorMessage.set('Only the league commissioner can manage player availability.');
         return;
       }
 
@@ -255,9 +234,7 @@ export class PlayerAvailabilityManager {
       void this.syncEspnInjuries(false);
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the player availability manager.'
+        error instanceof Error ? error.message : 'Unable to load the player availability manager.',
       );
     } finally {
       this.loading.set(false);
@@ -277,16 +254,12 @@ export class PlayerAvailabilityManager {
       this.players.set(
         players.filter(
           (player, index, allPlayers) =>
-            allPlayers.findIndex(
-              (candidate) => candidate.id === player.id
-            ) === index
-        )
+            allPlayers.findIndex((candidate) => candidate.id === player.id) === index,
+        ),
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the NHL player pool.'
+        error instanceof Error ? error.message : 'Unable to load the NHL player pool.',
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -299,24 +272,16 @@ export class PlayerAvailabilityManager {
     }
 
     try {
-      this.syncState.set(
-        await getPlayerAvailabilitySyncState(this.leagueId)
-      );
+      this.syncState.set(await getPlayerAvailabilitySyncState(this.leagueId));
     } catch (error: unknown) {
       this.syncErrorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load the latest injury-sync status.'
+        error instanceof Error ? error.message : 'Unable to load the latest injury-sync status.',
       );
     }
   }
 
   async syncEspnInjuries(force: boolean): Promise<void> {
-    if (
-      this.syncing() ||
-      this.playerPoolLoading() ||
-      this.players().length === 0
-    ) {
+    if (this.syncing() || this.playerPoolLoading() || this.players().length === 0) {
       return;
     }
 
@@ -332,7 +297,7 @@ export class PlayerAvailabilityManager {
       const result = await syncPlayerAvailabilityFromEspn({
         leagueId: this.leagueId,
         players: this.players(),
-        trigger: 'commissioner-browser'
+        trigger: 'commissioner-browser',
       });
 
       this.lastSyncResult.set(result);
@@ -340,9 +305,7 @@ export class PlayerAvailabilityManager {
       await this.refreshSyncState();
     } catch (error: unknown) {
       this.syncErrorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to sync ESPN NHL injury data.'
+        error instanceof Error ? error.message : 'Unable to sync ESPN NHL injury data.',
       );
       await this.refreshSyncState();
     } finally {
@@ -376,19 +339,17 @@ export class PlayerAvailabilityManager {
 
   isPlayerManualOverride(player: NHLPlayer): boolean {
     return isPlayerAvailabilityManualRecord(
-      playerAvailabilityDatabaseRecords().get(player.id) ?? null
+      playerAvailabilityDatabaseRecords().get(player.id) ?? null,
     );
   }
 
   isPlayerSynced(player: NHLPlayer): boolean {
     return isPlayerAvailabilitySyncedRecord(
-      playerAvailabilityDatabaseRecords().get(player.id) ?? null
+      playerAvailabilityDatabaseRecords().get(player.id) ?? null,
     );
   }
 
-  getPlayerDatabaseRecord(
-    player: NHLPlayer
-  ): PlayerAvailabilityDatabaseRecord | null {
+  getPlayerDatabaseRecord(player: NHLPlayer): PlayerAvailabilityDatabaseRecord | null {
     return playerAvailabilityDatabaseRecords().get(player.id) ?? null;
   }
 
@@ -447,9 +408,7 @@ export class PlayerAvailabilityManager {
   }
 
   getPlayerStatusClass(player: NHLPlayer): string {
-    return getPlayerAvailabilityStatusClass(
-      this.getPlayerAvailability(player).status
-    );
+    return getPlayerAvailabilityStatusClass(this.getPlayerAvailability(player).status);
   }
 
   getPlayerStatusLabel(player: NHLPlayer): string {
@@ -465,9 +424,9 @@ export class PlayerAvailabilityManager {
   }
 
   getSelectedStatusDescription(): string {
-    return this.statusOptions.find(
-      (option) => option.value === this.selectedStatus()
-    )?.description ?? '';
+    return (
+      this.statusOptions.find((option) => option.value === this.selectedStatus())?.description ?? ''
+    );
   }
 
   getPlayerLogoUrl(player: NHLPlayer): string | undefined {
@@ -489,7 +448,7 @@ export class PlayerAvailabilityManager {
 
     return date.toLocaleString(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short'
+      timeStyle: 'short',
     });
   }
 
@@ -508,7 +467,7 @@ export class PlayerAvailabilityManager {
 
     return date.toLocaleString(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short'
+      timeStyle: 'short',
     });
   }
 
@@ -530,17 +489,15 @@ export class PlayerAvailabilityManager {
         leagueId: this.leagueId,
         player,
         status: this.selectedStatus(),
-        note: this.selectedNote()
+        note: this.selectedNote(),
       });
 
       this.successMessage.set(
-        `${player.fullName} now has a commissioner override of ${getPlayerAvailabilityStatusLabel(this.selectedStatus())}. The shared daily report will preserve this choice.`
+        `${player.fullName} now has a commissioner override of ${getPlayerAvailabilityStatusLabel(this.selectedStatus())}. The shared daily report will preserve this choice.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to save this player status.'
+        error instanceof Error ? error.message : 'Unable to save this player status.',
       );
     } finally {
       this.saving.set(false);
@@ -560,15 +517,13 @@ export class PlayerAvailabilityManager {
     }
 
     if (!currentRecord) {
-      this.errorMessage.set(
-        'This player does not currently have a Firestore availability record.'
-      );
+      this.errorMessage.set('This player does not currently have a Firestore availability record.');
       return;
     }
 
     if (currentRecord.source === 'espn') {
       this.errorMessage.set(
-        'The ESPN report is shared across the entire app and cannot be deleted from one league. Save a commissioner override instead.'
+        'The ESPN report is shared across the entire app and cannot be deleted from one league. Save a commissioner override instead.',
       );
       return;
     }
@@ -578,7 +533,7 @@ export class PlayerAvailabilityManager {
     try {
       await deletePlayerAvailabilityRecord({
         leagueId: this.leagueId,
-        playerId: player.id
+        playerId: player.id,
       });
 
       const fallbackAvailability = getPlayerAvailabilityForPlayer(player);
@@ -586,22 +541,18 @@ export class PlayerAvailabilityManager {
       this.selectedStatus.set(fallbackAvailability.status);
       this.selectedNote.set(fallbackAvailability.note);
       this.successMessage.set(
-        `${player.fullName}'s commissioner override was removed. The shared ESPN report now applies again.`
+        `${player.fullName}'s commissioner override was removed. The shared ESPN report now applies again.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to clear this player status.'
+        error instanceof Error ? error.message : 'Unable to clear this player status.',
       );
     } finally {
       this.saving.set(false);
     }
   }
 
-  private getRecordSortPriority(
-    record: PlayerAvailabilityDatabaseRecord | null
-  ): number {
+  private getRecordSortPriority(record: PlayerAvailabilityDatabaseRecord | null): number {
     if (record?.source === 'commissioner') {
       return 2;
     }

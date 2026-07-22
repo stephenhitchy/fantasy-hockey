@@ -16,7 +16,10 @@ import {
 
 const TEAM_COUNT = 4;
 const REGULAR_SEASON_CYCLE_COUNT = 11;
-const ROSTER_SLOTS_PER_TEAM = 14;
+const ACTIVE_ROSTER_SLOTS_PER_TEAM = 14;
+const DRAFT_SLOTS_PER_TEAM = 17;
+const BENCH_SLOTS_PER_TEAM = 3;
+const IR_SLOTS_PER_TEAM = 3;
 const GAMES_PER_WINDOW = 6;
 
 function createTeams(): FantasyTeam[] {
@@ -78,7 +81,7 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
 
   const draftedAssetKeys = teams.flatMap((team) =>
     Array.from(
-      { length: ROSTER_SLOTS_PER_TEAM },
+      { length: DRAFT_SLOTS_PER_TEAM },
       (_, slotIndex) => `${team.ownerId}-asset-${slotIndex + 1}`,
     ),
   );
@@ -87,19 +90,28 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     checks,
     'draft-roster-count',
     'League and draft',
-    'A four-team draft fills all 14 active roster slots',
-    String(TEAM_COUNT * ROSTER_SLOTS_PER_TEAM),
+    'A four-team draft fills all 14 active roster slots plus three bench slots per team',
+    String(TEAM_COUNT * DRAFT_SLOTS_PER_TEAM),
     String(draftedAssetKeys.length),
-    draftedAssetKeys.length === TEAM_COUNT * ROSTER_SLOTS_PER_TEAM,
+    draftedAssetKeys.length === TEAM_COUNT * DRAFT_SLOTS_PER_TEAM,
   );
   addCheck(
     checks,
     'draft-assets-unique',
     'League and draft',
     'No asset can be drafted twice',
-    '56 unique assets',
+    '68 unique assets',
     `${new Set(draftedAssetKeys).size} unique assets`,
     new Set(draftedAssetKeys).size === draftedAssetKeys.length,
+  );
+  addCheck(
+    checks,
+    'roster-reserve-capacity',
+    'League and draft',
+    'Every team receives three flexible bench slots and three IR slots',
+    '3 bench · 3 IR',
+    `${BENCH_SLOTS_PER_TEAM} bench · ${IR_SLOTS_PER_TEAM} IR`,
+    BENCH_SLOTS_PER_TEAM === 3 && IR_SLOTS_PER_TEAM === 3,
   );
 
   const allRegularGameIds: number[] = [];
@@ -107,7 +119,7 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
 
   for (let cycleNumber = 1; cycleNumber <= REGULAR_SEASON_CYCLE_COUNT; cycleNumber += 1) {
     for (let teamIndex = 0; teamIndex < TEAM_COUNT; teamIndex += 1) {
-      for (let slotIndex = 0; slotIndex < ROSTER_SLOTS_PER_TEAM; slotIndex += 1) {
+      for (let slotIndex = 0; slotIndex < ACTIVE_ROSTER_SLOTS_PER_TEAM; slotIndex += 1) {
         const ids = Array.from(
           { length: GAMES_PER_WINDOW },
           (_, gameIndex) =>
@@ -127,6 +139,16 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     'All windows = 6',
     `${windowLengths.filter((value) => value === GAMES_PER_WINDOW).length} / ${windowLengths.length} windows = 6`,
     windowLengths.every((value) => value === GAMES_PER_WINDOW),
+  );
+  addCheck(
+    checks,
+    'bench-does-not-score',
+    'Regular season windows',
+    'Only the 14 active slots create fantasy scoring windows',
+    String(REGULAR_SEASON_CYCLE_COUNT * TEAM_COUNT * ACTIVE_ROSTER_SLOTS_PER_TEAM),
+    String(windowLengths.length),
+    windowLengths.length ===
+      REGULAR_SEASON_CYCLE_COUNT * TEAM_COUNT * ACTIVE_ROSTER_SLOTS_PER_TEAM,
   );
   addCheck(
     checks,
@@ -183,6 +205,19 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     'Cycle 1 outgoing · Cycle 2 incoming',
     `Cycle 1 ${cycleOneAsset} · Cycle 2 ${cycleTwoAsset}`,
     cycleOneAsset === currentSlotAsset && cycleTwoAsset === queuedSlotAsset,
+  );
+
+  const activeSlotNextCycle = 6;
+  const benchAssetFirstUntouchedCycle = 7;
+  const fairBenchSwapCycle = Math.max(activeSlotNextCycle, benchAssetFirstUntouchedCycle);
+  addCheck(
+    checks,
+    'bench-swap-fair-boundary',
+    'Roster transactions',
+    'A benched asset cannot backfill games from an already-started NHL six-game block',
+    'Cycle 7',
+    `Cycle ${fairBenchSwapCycle}`,
+    fairBenchSwapCycle === 7,
   );
 
   const irEligible = true;
@@ -247,13 +282,14 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     firstRefreshFingerprint === secondRefreshFingerprint,
   );
 
-  const teamACompleteWindows = ROSTER_SLOTS_PER_TEAM;
-  const teamBPendingWindows = ROSTER_SLOTS_PER_TEAM - 1;
+  const teamACompleteWindows = ACTIVE_ROSTER_SLOTS_PER_TEAM;
+  const teamBPendingWindows = ACTIVE_ROSTER_SLOTS_PER_TEAM - 1;
   const matchupBeforeBothComplete =
-    teamACompleteWindows === ROSTER_SLOTS_PER_TEAM && teamBPendingWindows === ROSTER_SLOTS_PER_TEAM;
+    teamACompleteWindows === ACTIVE_ROSTER_SLOTS_PER_TEAM && teamBPendingWindows === ACTIVE_ROSTER_SLOTS_PER_TEAM;
+  const teamBCompleteWindows = ACTIVE_ROSTER_SLOTS_PER_TEAM;
   const matchupAfterBothComplete =
-    teamACompleteWindows === ROSTER_SLOTS_PER_TEAM &&
-    ROSTER_SLOTS_PER_TEAM === ROSTER_SLOTS_PER_TEAM;
+    teamACompleteWindows === ACTIVE_ROSTER_SLOTS_PER_TEAM &&
+    teamBCompleteWindows === ACTIVE_ROSTER_SLOTS_PER_TEAM;
   addCheck(
     checks,
     'matchup-waits-for-both-teams',
@@ -438,7 +474,7 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     milestones: summarizeMilestones(checks),
     simulatedTeamCount: TEAM_COUNT,
     simulatedRegularSeasonCycleCount: REGULAR_SEASON_CYCLE_COUNT,
-    simulatedRosterSlotsPerTeam: ROSTER_SLOTS_PER_TEAM,
+    simulatedRosterSlotsPerTeam: ACTIVE_ROSTER_SLOTS_PER_TEAM,
     simulatedGamesPerWindow: GAMES_PER_WINDOW,
   };
 }

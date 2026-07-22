@@ -1,13 +1,22 @@
-Install steps
-1. Open your project root.
-2. Replace these 3 files with the versions from this package:
-   - src/app/features/cycles/cycle-one/cycle-one.ts
-   - src/app/features/cycles/cycle-one/cycle-one.html
-   - src/app/features/cycles/cycle-one/cycle-one.css
-3. Run your normal build/start command.
+Favorite-team persistence + Firestore rules fix V2
 
-What this package changes
-- Opponent-side matchup styling now uses that owner's selected favorite team theme.
-- Mobile matchup score cards also reflect each team's favorite theme.
-- The Cycle Transparency section now uses a dark blue theme that matches the rest of the page.
-- Mobile overflow/centering on the player-card area is tightened so the matchup content no longer hangs off the right side as easily.
+Replace these files in the project root:
+- firestore.rules
+- src/app/core/user/user.service.ts
+- src/app/features/account/account-settings/account-settings.ts
+- src/app/features/account/account-settings/account-settings.html
+- src/app/features/account/account-settings/account-settings.css
+- src/app/features/dashboard/dashboard.html
+- src/app/features/dashboard/dashboard.css
+
+Then run:
+  npm run build
+
+Deploy BOTH the rules and the hosted app:
+  firebase deploy --only firestore:rules,hosting:app -m "Fix favorite team persistence"
+
+Why the rules deployment matters:
+- A manager can update only their own username/theme preference fields.
+- A favorite-team-only write no longer fails because of an unrelated legacy username value.
+- Signed-in matchup users can get a specific opponent profile by ID to read the favorite team.
+- Listing the users collection remains blocked.

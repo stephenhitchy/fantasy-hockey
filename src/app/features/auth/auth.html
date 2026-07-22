@@ -1,9 +1,17 @@
 <section class="pixel-auth-page">
   <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
     <div class="ribbon-track ribbon-track-left">
-      @for (logo of topRibbon; track $index) {
+      @for (logo of teamRibbon; track $index) {
         <span class="pixel-logo-chip">
-          <img [src]="logo.logoUrl" [alt]="''" />
+          <img
+            [src]="logo.logoUrl"
+            [alt]="''"
+            width="22"
+            height="22"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+          />
           <small>{{ logo.abbreviation }}</small>
         </span>
       }
@@ -25,7 +33,9 @@
 
     <section class="pixel-auth-card">
       <div class="card-header">
-        <span class="card-label">{{ isRegistering() ? 'New Manager Setup' : 'Manager Login' }}</span>
+        <span class="card-label">{{
+          isRegistering() ? 'New Manager Setup' : 'Manager Login'
+        }}</span>
         <strong>{{ isRegistering() ? 'Create Account' : 'Welcome Back' }}</strong>
       </div>
 
@@ -35,6 +45,42 @@
             <span>Username</span>
             <input [(ngModel)]="username" placeholder="Choose a username" />
           </label>
+
+          <section class="registration-team-picker" aria-labelledby="favorite-team-label">
+            <div class="team-picker-heading">
+              <div>
+                <span id="favorite-team-label">Favorite NHL Team</span>
+                <small>Required · You can change this later</small>
+              </div>
+
+              @if (selectedRegistrationTeam(); as selectedTeam) {
+                <div class="selected-team-preview">
+                  <img [src]="selectedTeam.logoUrl" [alt]="selectedTeam.name + ' logo'" />
+                  <strong>{{ selectedTeam.abbreviation }}</strong>
+                </div>
+              } @else {
+                <span class="team-required-badge">Choose One</span>
+              }
+            </div>
+
+            <div class="auth-team-grid" role="list" aria-label="Choose your favorite NHL team">
+              @for (team of teams; track team.abbreviation) {
+                <button
+                  type="button"
+                  class="auth-team-button"
+                  [class.selected]="team.abbreviation === favoriteTeamAbbreviation()"
+                  [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation()"
+                  [attr.aria-label]="'Choose ' + team.name"
+                  [title]="team.name"
+                  [disabled]="loading()"
+                  (click)="selectRegistrationTeam(team)"
+                >
+                  <img [src]="team.logoUrl" [alt]="''" width="34" height="34" />
+                  <span>{{ team.abbreviation }}</span>
+                </button>
+              }
+            </div>
+          </section>
         }
 
         <label class="form-field">
@@ -51,7 +97,12 @@
           {{ submitLabel() }}
         </button>
 
-        <button type="button" class="secondary-switch" (click)="toggleMode()" [disabled]="loading()">
+        <button
+          type="button"
+          class="secondary-switch"
+          (click)="toggleMode()"
+          [disabled]="loading()"
+        >
           {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
         </button>
 
@@ -65,7 +116,14 @@
       </div>
     </section>
 
-    <section class="pixel-referee-zone" [class.celebrate]="mascotCelebrating()" aria-hidden="true">
+    <section
+      class="pixel-referee-zone"
+      [class.celebrate]="mascotCelebrating()"
+      [style.--ref-team-primary]="selectedRegistrationTeam()?.primaryColor || 'var(--user-team-primary)'"
+      [style.--ref-team-secondary]="selectedRegistrationTeam()?.secondaryColor || 'var(--user-team-secondary)'"
+      [style.--ref-team-tertiary]="selectedRegistrationTeam()?.tertiaryColor || 'var(--user-team-tertiary)'"
+      aria-hidden="true"
+    >
       <div class="referee-caption">
         <span>Pixel Ref</span>
         <strong>{{ mascotCelebrating() ? 'Cup Lift!' : 'Ready for Puck Drop' }}</strong>
@@ -84,14 +142,5 @@
     </section>
   </div>
 
-  <div class="pixel-logo-ribbon bottom-ribbon" aria-hidden="true">
-    <div class="ribbon-track ribbon-track-right">
-      @for (logo of bottomRibbon; track $index) {
-        <span class="pixel-logo-chip">
-          <img [src]="logo.logoUrl" [alt]="''" />
-          <small>{{ logo.abbreviation }}</small>
-        </span>
-      }
-    </div>
-  </div>
+
 </section>

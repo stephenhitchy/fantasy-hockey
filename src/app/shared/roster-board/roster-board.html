@@ -3,7 +3,7 @@
     <div>
       <span class="eyebrow">Fantasy Hockey</span>
       <h2>Active Roster</h2>
-      <p>Set your lineup before the next cycle begins.</p>
+      <p>Lineup changes activate at each slot’s next fair six-game boundary.</p>
     </div>
 
     <div class="roster-summary">
@@ -181,11 +181,55 @@
     </div>
   </section>
 
+  <section class="bench-section">
+    <div class="section-heading">
+      <div>
+        <h3>Bench</h3>
+        <span>Bench assets are owned but do not score until a legal cycle-boundary activation.</span>
+      </div>
+
+      <strong>{{ benchSlotCount }} Bench Slots</strong>
+    </div>
+
+    <div class="bench-grid">
+      @for (slotNumber of benchSlots; track slotNumber) {
+        @if (getBenchAsset(slotNumber); as asset) {
+          <div class="bench-slot bench-slot-filled">
+            <span class="slot-number">B{{ slotNumber }}</span>
+
+            @if (asset.assetType === 'skater') {
+              @if (asset.player.teamLogoUrl) {
+                <img class="team-logo" [src]="asset.player.teamLogoUrl" [alt]="asset.player.nhlTeamAbbreviation + ' logo'" />
+              }
+              <div class="asset-copy">
+                <strong>{{ asset.player.fullName }}</strong>
+                <span>{{ asset.position }} · {{ asset.player.nhlTeamAbbreviation }} · Bench</span>
+              </div>
+            } @else {
+              @if (asset.teamLogoUrl) {
+                <img class="team-logo" [src]="asset.teamLogoUrl" [alt]="asset.teamAbbreviation + ' logo'" />
+              }
+              <div class="asset-copy">
+                <strong>{{ asset.teamName }}</strong>
+                <span>G · {{ asset.teamAbbreviation }} · Bench</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="bench-slot">
+            <span>B{{ slotNumber }}</span>
+            <strong>Empty Bench Slot</strong>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
   <section class="ir-section">
     <div class="section-heading">
       <div>
         <h3>Injured Reserve</h3>
-        <span>Injured players can be held here between cycles.</span>
+        <span>Eligible injured skaters can be held here without changing frozen active windows.</span>
       </div>
 
       <strong>{{ irSlotCount }} IR Slots</strong>

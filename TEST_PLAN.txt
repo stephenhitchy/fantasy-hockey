@@ -1,40 +1,15 @@
-BETA HOSTING AND TEAM NAME FIX V1 TEST PLAN
-
-A. BUILD
-1. Run `npm run build` from the project root.
-2. Run `cd functions && npm run build && cd ..`.
-3. Confirm both commands finish without errors.
-
-B. LOCAL TEAM NAME
-1. Sign in with an account whose Account name is recognizable.
-2. Create a new test league.
-3. Confirm the new fantasy team name equals the Account name.
-4. Join a different league with another account.
-5. Confirm that account's team name also defaults to its Account name.
-
-C. LEAGUE-HOME RENAME
-1. Open League Home.
-2. Confirm `Your Team` and `Rename Team` are visible below the league title.
-3. Rename the team and save.
-4. Confirm the header updates immediately.
-5. Refresh the page and confirm the name remains saved.
-6. Confirm the updated name appears in My Team, standings, draft order, and matchups.
-7. Repeat at a narrow mobile width and confirm the input and buttons remain inside the screen.
-
-D. HOSTED API PROXY
-1. Deploy with:
-   `firebase deploy --only functions:nhlApiProxy,hosting:app`
-2. Open `https://cycle-puck.web.app`.
-3. Open a league whose draft/player pool needs NHL rosters.
-4. Confirm the red `Unable to load all NHL rosters` message no longer appears.
-5. Open browser DevTools > Network.
-6. Confirm requests to `/v1/roster/...` return JSON and status 200.
-7. Confirm requests to `/stats/rest/en/...` return JSON and status 200 when projections load.
-8. Refresh a nested Angular route and confirm the app still loads rather than returning 404.
-
-E. REGRESSION
-1. Confirm the daily injury report still loads.
-2. Confirm Draft Setup and Draft Room open.
-3. Confirm league members can rename only their own team.
-4. Confirm a normal manager cannot change another manager's team name.
-5. Confirm localhost `npm start` still loads NHL data through `src/proxy.conf.json`.
+1. Run npm run build and confirm it completes.
+2. Open a matchup on a phone-sized viewport.
+3. Confirm both teams appear side by side in every roster row.
+4. Confirm rows are grouped by Left Wing, Center, Right Wing, Defense, and Goalie Unit.
+5. Confirm each populated player shows:
+   - player name
+   - NHL team logo
+   - NHL team and position
+   - games played and games left
+   - current points
+   - projected points
+6. Tap a player on either side and confirm player details open.
+7. Confirm each side uses its owner's favorite-team colors.
+8. Confirm the page does not extend horizontally beyond the phone screen.
+9. Check desktop and confirm the existing full matchup board is unchanged.

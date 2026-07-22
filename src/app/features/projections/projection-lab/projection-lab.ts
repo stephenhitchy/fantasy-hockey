@@ -1,8 +1,4 @@
-import {
-  Component,
-  computed,
-  signal
-} from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -10,33 +6,24 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
 
-import {
-  DraftableAsset,
-  DraftPosition
-} from '../../../core/draft/draft.models';
+import { DraftableAsset, DraftPosition } from '../../../core/draft/draft.models';
 
 import {
   generateSharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
-  SharedProjectionSnapshotMetadata
+  SharedProjectionSnapshotMetadata,
 } from '../../../core/projection/projection-snapshot.service';
 
 import {
   loadProjectionAccuracyHistory,
   ProjectionAccuracyCycleSummary,
   ProjectionAccuracyHistory,
-  ProjectionAccuracyMetricGroup
+  ProjectionAccuracyMetricGroup,
 } from '../../../core/projection/projection-accuracy.service';
 
-import {
-  getLeagueById,
-  League
-} from '../../../core/league/league.service';
+import { getLeagueById, League } from '../../../core/league/league.service';
 
-import {
-  FantasyTeam,
-  getLeagueTeams
-} from '../../../core/team/team.service';
+import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
 type ProjectionPositionFilter = 'ALL' | DraftPosition;
 
@@ -77,6 +64,16 @@ interface ProjectionRow {
   seasonBaselineCycle: number;
   recentFormAdjustment: number;
   roleAdjustment: number;
+  scheduleStrengthAdjustment: number;
+  scheduleStrengthMultiplier: number;
+  scheduleDifficultyRating: number;
+  scheduleDifficultyLabel: string;
+  scheduleDataConfidence: number;
+  projectionHomeGames: number;
+  projectionRoadGames: number;
+  projectionBackToBackGames: number;
+  projectionRestAdvantageGames: number;
+  projectionOpponentAbbreviations: string[];
   recentThreeGamePpg: number | null;
   recentFiveGamePpg: number | null;
   recentTenGamePpg: number | null;
@@ -85,6 +82,7 @@ interface ProjectionRow {
   projectionSourceLabel: string;
   healthyProjectedCycle: number;
   expectedGamesAvailable: number;
+  expectedGamesMissed: number;
   scheduledGamesInProjectionCycle: number;
   availabilityAdjustment: number;
   availabilityLabel: string;
@@ -119,6 +117,10 @@ interface PositionSummary {
 }
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -131,7 +133,7 @@ function waitForAuthUser(): Promise<User | null> {
   selector: 'app-projection-lab',
   imports: [FormsModule, RouterLink],
   templateUrl: './projection-lab.html',
-  styleUrl: './projection-lab.css'
+  styleUrl: './projection-lab.css',
 })
 export class ProjectionLab {
   leagueId = '';
@@ -139,9 +141,7 @@ export class ProjectionLab {
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
-  snapshotMetadata = signal<
-    SharedProjectionSnapshotMetadata | null
-  >(null);
+  snapshotMetadata = signal<SharedProjectionSnapshotMetadata | null>(null);
   accuracyHistory = signal<ProjectionAccuracyHistory | null>(null);
   isCommissioner = signal(false);
 
@@ -159,58 +159,33 @@ export class ProjectionLab {
   teamCountOverride = signal<number | null>(null);
   projectedGamesPerCycle = signal(6);
 
-  readonly rosterPositions: DraftPosition[] = [
-    'LW',
-    'C',
-    'RW',
-    'D',
-    'G'
-  ];
+  readonly rosterPositions: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
 
   readonly positionRequirements: Record<DraftPosition, number> = {
     LW: 3,
     C: 3,
     RW: 3,
     D: 4,
-    G: 1
+    G: 1,
   };
 
-  readonly teamCountForReplacement = computed(() =>
-    this.teamCountOverride() ??
-    Math.max(
-      this.league()?.maxTeams ??
-        this.teams().length,
-      2
-    )
+  readonly teamCountForReplacement = computed(
+    () => this.teamCountOverride() ?? Math.max(this.league()?.maxTeams ?? this.teams().length, 2),
   );
 
   readonly totalStarterSlots = computed(() =>
-    this.rosterPositions.reduce(
-      (total, position) =>
-        total + this.getStarterCount(position),
-      0
-    )
+    this.rosterPositions.reduce((total, position) => total + this.getStarterCount(position), 0),
   );
 
-  readonly accuracySummary = computed(() =>
-    this.accuracyHistory()?.summary ?? null
-  );
+  readonly accuracySummary = computed(() => this.accuracyHistory()?.summary ?? null);
 
-  readonly accuracyPositionRows = computed(() =>
-    this.accuracyHistory()?.byPosition ?? []
-  );
+  readonly accuracyPositionRows = computed(() => this.accuracyHistory()?.byPosition ?? []);
 
-  readonly accuracyVersionRows = computed(() =>
-    this.accuracyHistory()?.byVersion ?? []
-  );
+  readonly accuracyVersionRows = computed(() => this.accuracyHistory()?.byVersion ?? []);
 
-  readonly accuracyCycleRows = computed(() =>
-    this.accuracyHistory()?.cycles ?? []
-  );
+  readonly accuracyCycleRows = computed(() => this.accuracyHistory()?.cycles ?? []);
 
-  readonly projectionRows = computed(() =>
-    this.buildProjectionRows()
-  );
+  readonly projectionRows = computed(() => this.buildProjectionRows());
 
   readonly visibleRows = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
@@ -218,11 +193,7 @@ export class ProjectionLab {
     const sortMode = this.sortMode();
 
     const rows = this.projectionRows()
-      .filter((row) =>
-        positionFilter === 'ALL'
-          ? true
-          : row.position === positionFilter
-      )
+      .filter((row) => (positionFilter === 'ALL' ? true : row.position === positionFilter))
       .filter((row) => {
         if (!search) {
           return true;
@@ -253,10 +224,8 @@ export class ProjectionLab {
 
         case 'RECENT_FORM':
           return (
-            second.recentFormAdjustment -
-              first.recentFormAdjustment ||
-            second.floorAdjustedDraftValue -
-              first.floorAdjustedDraftValue
+            second.recentFormAdjustment - first.recentFormAdjustment ||
+            second.floorAdjustedDraftValue - first.floorAdjustedDraftValue
           );
 
         case 'VALUE_RATING':
@@ -277,8 +246,7 @@ export class ProjectionLab {
           }
 
           return (
-            this.getPositionSortValue(first.position) -
-            this.getPositionSortValue(second.position)
+            this.getPositionSortValue(first.position) - this.getPositionSortValue(second.position)
           );
 
         case 'NAME':
@@ -303,42 +271,25 @@ export class ProjectionLab {
     return this.rosterPositions.map((position) => {
       const positionRows = rows
         .filter((row) => row.position === position)
-        .sort(
-          (first, second) =>
-            second.draftProjectedCycle -
-              first.draftProjectedCycle
-        );
+        .sort((first, second) => second.draftProjectedCycle - first.draftProjectedCycle);
 
       const starterSlots = this.getStarterCount(position);
       const starters = positionRows.slice(0, starterSlots);
-      const topGroup = positionRows.slice(
-        0,
-        Math.min(5, positionRows.length)
-      );
+      const topGroup = positionRows.slice(0, Math.min(5, positionRows.length));
 
       return {
         position,
         label: this.getPositionLabel(position),
         starterSlots,
-        replacementProjection:
-          positionRows[0]?.replacementProjection ?? 0,
-        replacementRating:
-          positionRows[0]?.replacementRating ?? 0,
-        starterAverage: this.average(
-          starters.map((row) => row.draftProjectedCycle)
-        ),
-        starterAverageRating: this.average(
-          starters.map((row) => row.rating)
-        ),
-        topAverage: this.average(
-          topGroup.map((row) => row.draftProjectedCycle)
-        ),
+        replacementProjection: positionRows[0]?.replacementProjection ?? 0,
+        replacementRating: positionRows[0]?.replacementRating ?? 0,
+        starterAverage: this.average(starters.map((row) => row.draftProjectedCycle)),
+        starterAverageRating: this.average(starters.map((row) => row.rating)),
+        topAverage: this.average(topGroup.map((row) => row.draftProjectedCycle)),
         topPlayerName: positionRows[0]?.name ?? '—',
-        topPlayerProjection:
-          positionRows[0]?.draftProjectedCycle ?? 0,
-        topPlayerRating:
-          positionRows[0]?.rating ?? 0,
-        availableAssets: positionRows.length
+        topPlayerProjection: positionRows[0]?.draftProjectedCycle ?? 0,
+        topPlayerRating: positionRows[0]?.rating ?? 0,
+        availableAssets: positionRows.length,
       };
     });
   });
@@ -348,62 +299,56 @@ export class ProjectionLab {
 
     const forwardAverage = this.average(
       summaries
-        .filter((summary) =>
-          ['LW', 'C', 'RW'].includes(summary.position)
-        )
-        .map((summary) => summary.starterAverage)
+        .filter((summary) => ['LW', 'C', 'RW'].includes(summary.position))
+        .map((summary) => summary.starterAverage),
     );
 
     const defenseAverage =
-      summaries.find((summary) => summary.position === 'D')
-        ?.starterAverage ?? 0;
+      summaries.find((summary) => summary.position === 'D')?.starterAverage ?? 0;
 
     const goalieAverage =
-      summaries.find((summary) => summary.position === 'G')
-        ?.starterAverage ?? 0;
+      summaries.find((summary) => summary.position === 'G')?.starterAverage ?? 0;
 
     const notes: string[] = [];
 
     if (goalieAverage > forwardAverage * 1.3) {
       notes.push(
-        'Goalie units have high raw points, but check Draft Value before nerfing them. If goalie Draft Value is low, they are probably balanced because replacement goalie units are also strong.'
+        'Goalie units have high raw points, but check Draft Value before nerfing them. If goalie Draft Value is low, they are probably balanced because replacement goalie units are also strong.',
       );
     }
 
     if (goalieAverage < forwardAverage * 0.75) {
       notes.push(
-        'Goalie units are projecting noticeably below forwards. If goalies feel too weak, goalie saves or win bonuses may need more value.'
+        'Goalie units are projecting noticeably below forwards. If goalies feel too weak, goalie saves or win bonuses may need more value.',
       );
     }
 
     if (defenseAverage < forwardAverage * 0.68) {
       notes.push(
-        'Defensemen are projecting much lower than forwards. Blocks, hits, or defense TOI may need a small bump.'
+        'Defensemen are projecting much lower than forwards. Blocks, hits, or defense TOI may need a small bump.',
       );
     }
 
     if (defenseAverage > forwardAverage * 1.05) {
       notes.push(
-        'Defensemen are projecting close to or above forwards. That may be fine, but check whether defense is becoming too safe compared with forwards.'
+        'Defensemen are projecting close to or above forwards. That may be fine, but check whether defense is becoming too safe compared with forwards.',
       );
     }
 
     if (notes.length === 0) {
       notes.push(
-        'The positional balance looks reasonable from this projection view. Use Rating for general strength and Draft Value for draft priority.'
+        'The positional balance looks reasonable from this projection view. Use Rating for general strength and Draft Value for draft priority.',
       );
     }
 
     return notes;
   });
 
-  readonly topOverallValue = computed(() =>
-    this.projectionRows()[0] ?? null
-  );
+  readonly topOverallValue = computed(() => this.projectionRows()[0] ?? null);
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.loadProjectionLab();
   }
@@ -422,7 +367,7 @@ export class ProjectionLab {
     try {
       const [league, teams] = await Promise.all([
         getLeagueById(leagueId),
-        getLeagueTeams(leagueId)
+        getLeagueTeams(leagueId),
       ]);
 
       if (!league) {
@@ -432,23 +377,14 @@ export class ProjectionLab {
 
       this.league.set(league);
       this.teams.set(teams);
-      this.isCommissioner.set(
-        league.commissionerId === user.uid
-      );
+      this.isCommissioner.set(league.commissionerId === user.uid);
 
-      this.projectedGamesPerCycle.set(
-        league.scoringRules?.requiredGamesPerCycle ?? 6
-      );
+      this.projectedGamesPerCycle.set(league.scoringRules?.requiredGamesPerCycle ?? 6);
 
-      await Promise.all([
-        this.loadPlayerPool(),
-        this.loadAccuracyHistory()
-      ]);
+      await Promise.all([this.loadPlayerPool(), this.loadAccuracyHistory()]);
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load Projection Lab.'
+        error instanceof Error ? error.message : 'Unable to load Projection Lab.',
       );
     } finally {
       this.loading.set(false);
@@ -460,14 +396,10 @@ export class ProjectionLab {
     this.accuracyError.set('');
 
     try {
-      this.accuracyHistory.set(
-        await loadProjectionAccuracyHistory(this.leagueId)
-      );
+      this.accuracyHistory.set(await loadProjectionAccuracyHistory(this.leagueId));
     } catch (error: unknown) {
       this.accuracyError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load projection accuracy history.'
+        error instanceof Error ? error.message : 'Unable to load projection accuracy history.',
       );
     } finally {
       this.accuracyLoading.set(false);
@@ -491,26 +423,18 @@ export class ProjectionLab {
       return 'accuracy-bias-neutral';
     }
 
-    return value > 0
-      ? 'accuracy-bias-under'
-      : 'accuracy-bias-over';
+    return value > 0 ? 'accuracy-bias-under' : 'accuracy-bias-over';
   }
 
-  getAccuracyCycleVersionLabel(
-    summary: ProjectionAccuracyCycleSummary
-  ): string {
+  getAccuracyCycleVersionLabel(summary: ProjectionAccuracyCycleSummary): string {
     if (summary.projectionVersions.length === 0) {
       return 'Version unknown';
     }
 
-    return summary.projectionVersions
-      .map((version) => `V${version}`)
-      .join(', ');
+    return summary.projectionVersions.map((version) => `V${version}`).join(', ');
   }
 
-  getAccuracyCycleDateLabel(
-    summary: ProjectionAccuracyCycleSummary
-  ): string {
+  getAccuracyCycleDateLabel(summary: ProjectionAccuracyCycleSummary): string {
     const value = summary.generatedAt;
 
     if (!value) {
@@ -526,13 +450,11 @@ export class ProjectionLab {
     return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
   }
 
-  getAccuracyGroupBiasLabel(
-    group: ProjectionAccuracyMetricGroup
-  ): string {
+  getAccuracyGroupBiasLabel(group: ProjectionAccuracyMetricGroup): string {
     return this.getAccuracyBiasLabel(group.meanSignedError);
   }
 
@@ -541,9 +463,7 @@ export class ProjectionLab {
     this.playerPoolError.set('');
 
     try {
-      const snapshot = await loadSharedProjectionSnapshot(
-        this.leagueId
-      );
+      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
 
       if (!snapshot) {
         if (this.isCommissioner()) {
@@ -552,7 +472,7 @@ export class ProjectionLab {
         }
 
         throw new Error(
-          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.'
+          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.',
         );
       }
 
@@ -560,9 +480,7 @@ export class ProjectionLab {
       this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.playerPoolError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load shared projections.'
+        error instanceof Error ? error.message : 'Unable to load shared projections.',
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -579,27 +497,18 @@ export class ProjectionLab {
     this.playerPoolError.set('');
 
     try {
-      const snapshot =
-        await generateSharedProjectionSnapshot({
-          leagueId: this.leagueId,
-          teamCount: Math.max(
-            this.league()?.maxTeams ??
-              this.teams().length,
-            2
-          ),
-          requiredGamesPerCycle:
-            this.league()?.scoringRules
-              ?.requiredGamesPerCycle ?? 6,
-          generationReason: 'manual'
-        });
+      const snapshot = await generateSharedProjectionSnapshot({
+        leagueId: this.leagueId,
+        teamCount: Math.max(this.league()?.maxTeams ?? this.teams().length, 2),
+        requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
+        generationReason: 'manual',
+      });
 
       this.snapshotMetadata.set(snapshot.metadata);
       this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
       this.playerPoolError.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to refresh shared projections.'
+        error instanceof Error ? error.message : 'Unable to refresh shared projections.',
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -621,17 +530,14 @@ export class ProjectionLab {
 
     return parsed.toLocaleString(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short'
+      timeStyle: 'short',
     });
   }
 
   getSnapshotCycleLabel(): string {
-    const cycleNumber =
-      this.snapshotMetadata()?.targetCycleNumber;
+    const cycleNumber = this.snapshotMetadata()?.targetCycleNumber;
 
-    return cycleNumber
-      ? `Cycle ${cycleNumber}`
-      : 'Upcoming cycle';
+    return cycleNumber ? `Cycle ${cycleNumber}` : 'Upcoming cycle';
   }
 
   getAvailabilityDescription(row: ProjectionRow): string {
@@ -642,19 +548,31 @@ export class ProjectionLab {
       : `${row.availabilityLabel} · ${games} expected`;
   }
 
+
+  getScheduleDescription(row: ProjectionRow): string {
+    const opponents = row.projectionOpponentAbbreviations.length > 0
+      ? row.projectionOpponentAbbreviations.join(', ')
+      : 'Schedule unavailable';
+    const rest = [
+      `${row.projectionHomeGames} home`,
+      `${row.projectionRoadGames} road`,
+      row.projectionBackToBackGames > 0
+        ? `${row.projectionBackToBackGames} back-to-back`
+        : null,
+      row.projectionRestAdvantageGames > 0
+        ? `${row.projectionRestAdvantageGames} rest advantage`
+        : null,
+    ].filter(Boolean).join(' · ');
+
+    return `${row.scheduleDifficultyLabel} (${row.scheduleDifficultyRating.toFixed(0)}/100) · ${row.scheduleDataConfidence.toFixed(0)}% confidence · ${rest} · ${opponents}`;
+  }
+
   setSearchTerm(value: string): void {
     this.searchTerm.set(value);
   }
 
   setPositionFilter(value: string): void {
-    const validFilters: ProjectionPositionFilter[] = [
-      'ALL',
-      'LW',
-      'C',
-      'RW',
-      'D',
-      'G'
-    ];
+    const validFilters: ProjectionPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
 
     if (validFilters.includes(value as ProjectionPositionFilter)) {
       this.positionFilter.set(value as ProjectionPositionFilter);
@@ -675,7 +593,7 @@ export class ProjectionLab {
       'PROJECTED_SEASON',
       'POSITION_RANK',
       'NAME',
-      'TEAM'
+      'TEAM',
     ];
 
     if (validSorts.includes(value as ProjectionSortMode)) {
@@ -686,57 +604,39 @@ export class ProjectionLab {
   setTeamCountOverride(value: string | number): void {
     const numericValue = Number(value);
 
-    if (
-      Number.isNaN(numericValue) ||
-      numericValue < 2
-    ) {
+    if (Number.isNaN(numericValue) || numericValue < 2) {
       this.teamCountOverride.set(null);
       return;
     }
 
-    this.teamCountOverride.set(
-      Math.min(32, Math.round(numericValue))
-    );
+    this.teamCountOverride.set(Math.min(32, Math.round(numericValue)));
   }
 
   setProjectedGamesPerCycle(value: string | number): void {
     const numericValue = Number(value);
 
-    if (
-      Number.isNaN(numericValue) ||
-      numericValue <= 0
-    ) {
+    if (Number.isNaN(numericValue) || numericValue <= 0) {
       return;
     }
 
-    this.projectedGamesPerCycle.set(
-      Math.min(10, Math.max(1, numericValue))
-    );
+    this.projectedGamesPerCycle.set(Math.min(10, Math.max(1, numericValue)));
   }
 
   clearOverrides(): void {
     this.teamCountOverride.set(null);
-    this.projectedGamesPerCycle.set(
-      this.league()?.scoringRules?.requiredGamesPerCycle ?? 6
-    );
+    this.projectedGamesPerCycle.set(this.league()?.scoringRules?.requiredGamesPerCycle ?? 6);
   }
 
   getAssetName(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.fullName
-      : `${asset.teamName} Goalie Unit`;
+    return asset.assetType === 'skater' ? asset.player.fullName : `${asset.teamName} Goalie Unit`;
   }
 
   getAssetTeamLabel(asset: DraftableAsset): string {
-    return asset.assetType === 'skater'
-      ? asset.player.nhlTeamAbbreviation
-      : asset.teamAbbreviation;
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
   }
 
   getAssetLogoUrl(asset: DraftableAsset): string | undefined {
-    return asset.assetType === 'skater'
-      ? asset.player.teamLogoUrl
-      : asset.teamLogoUrl;
+    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
   }
 
   getPositionLabel(position: DraftPosition): string {
@@ -762,11 +662,8 @@ export class ProjectionLab {
   }
 
   getRatingBasisLabel(row: ProjectionRow): string {
-    return row.position === 'G'
-      ? 'Goalie scale'
-      : 'Skater scale';
+    return row.position === 'G' ? 'Goalie scale' : 'Skater scale';
   }
-
 
   getRecentFormClass(value: number): string {
     if (value > 0.05) {
@@ -782,17 +679,11 @@ export class ProjectionLab {
 
   getRecentWindowLabel(row: ProjectionRow): string {
     const values = [
-      row.recentTenGamePpg != null
-        ? `10G ${row.recentTenGamePpg.toFixed(1)}`
-        : '',
-      row.recentTwentyGamePpg != null
-        ? `20G ${row.recentTwentyGamePpg.toFixed(1)}`
-        : ''
+      row.recentTenGamePpg != null ? `10G ${row.recentTenGamePpg.toFixed(1)}` : '',
+      row.recentTwentyGamePpg != null ? `20G ${row.recentTwentyGamePpg.toFixed(1)}` : '',
     ].filter(Boolean);
 
-    return values.length > 0
-      ? values.join(' · ')
-      : 'No recent sample';
+    return values.length > 0 ? values.join(' · ') : 'No recent sample';
   }
 
   getProjectionSourceLabel(asset: DraftableAsset): string {
@@ -835,75 +726,55 @@ export class ProjectionLab {
   getSignedDisplayNumber(value: number): string {
     const rounded = value.toFixed(1);
 
-    return value > 0
-      ? `+${rounded}`
-      : rounded;
+    return value > 0 ? `+${rounded}` : rounded;
   }
 
   getSignedRatingDisplay(value: number): string {
     const rounded = value.toFixed(1);
 
-    return value > 0
-      ? `+${rounded}`
-      : rounded;
+    return value > 0 ? `+${rounded}` : rounded;
   }
 
   getStarterCount(position: DraftPosition): number {
-    return (
-      this.teamCountForReplacement() *
-      this.positionRequirements[position]
-    );
+    return this.teamCountForReplacement() * this.positionRequirements[position];
   }
 
   getRowClass(row: ProjectionRow): string {
-  if (row.floorValueRating >= 30) {
-    return 'league-winner-value';
-  }
+    if (row.floorValueRating >= 30) {
+      return 'league-winner-value';
+    }
 
-  if (row.floorValueRating >= 22) {
-    return 'elite-value';
-  }
+    if (row.floorValueRating >= 22) {
+      return 'elite-value';
+    }
 
-  if (row.floorValueRating >= 15) {
-    return 'strong-value';
-  }
+    if (row.floorValueRating >= 15) {
+      return 'strong-value';
+    }
 
-  if (row.floorValueRating < -8) {
-    return 'low-value';
-  }
+    if (row.floorValueRating < -8) {
+      return 'low-value';
+    }
 
-  return '';
-}
+    return '';
+  }
 
   private buildProjectionRows(): ProjectionRow[] {
     const baseRows = this.playerPool().map((asset) => {
       const projectedSeason = this.getProjectedSeason(asset);
-      const projectedPpg =
-        projectedSeason > 0
-          ? projectedSeason / 82
-          : 0;
+      const projectedPpg = projectedSeason > 0 ? projectedSeason / 82 : 0;
 
       const draftProjectedCycle =
-        asset.draftProjectedCyclePoints ??
-        projectedPpg * this.projectedGamesPerCycle();
+        asset.draftProjectedCyclePoints ?? projectedPpg * this.projectedGamesPerCycle();
 
-      const draftFloorAdjustedCycle =
-        asset.draftFloorAdjustedCyclePoints ??
-        draftProjectedCycle;
+      const draftFloorAdjustedCycle = asset.draftFloorAdjustedCyclePoints ?? draftProjectedCycle;
 
-      const draftScore =
-        asset.draftScore ??
-        asset.balancedDraftValue ??
-        0;
+      const draftScore = asset.draftScore ?? asset.balancedDraftValue ?? 0;
 
       const draftValueAboveReplacement =
-        asset.draftValueAboveReplacement ??
-        asset.floorAdjustedDraftValue ??
-        0;
+        asset.draftValueAboveReplacement ?? asset.floorAdjustedDraftValue ?? 0;
 
-      const projectedCycle =
-        asset.projectedCyclePoints ??
-        draftProjectedCycle;
+      const projectedCycle = asset.projectedCyclePoints ?? draftProjectedCycle;
 
       const sourceCycleProjection = projectedCycle;
 
@@ -913,19 +784,14 @@ export class ProjectionLab {
           : sourceCycleProjection;
 
       const floorAdjustmentRatio =
-        sourceCycleProjection > 0
-          ? floorAdjustedSourceCycle / sourceCycleProjection
-          : 1;
+        sourceCycleProjection > 0 ? floorAdjustedSourceCycle / sourceCycleProjection : 1;
 
       const reliabilityRating =
-        asset.draftReliabilityRating ??
-        this.getAssetReliabilityRating(asset);
+        asset.draftReliabilityRating ?? this.getAssetReliabilityRating(asset);
 
-      const floorAdjustedCycle =
-        projectedCycle * floorAdjustmentRatio;
+      const floorAdjustedCycle = projectedCycle * floorAdjustmentRatio;
 
-      const volatilityPenalty =
-        Math.max(0, projectedCycle - floorAdjustedCycle);
+      const volatilityPenalty = Math.max(0, projectedCycle - floorAdjustedCycle);
 
       return {
         asset,
@@ -940,74 +806,54 @@ export class ProjectionLab {
         draftScore,
         draftValueAboveReplacement,
         projectedCycle,
-        cycleRank:
-          asset.cycleRank ?? 9999,
-        seasonBaselineCycle:
-          asset.seasonBaselineCyclePoints ??
-          projectedCycle,
-        recentFormAdjustment:
-          asset.recentFormAdjustment ?? 0,
-        roleAdjustment:
-          asset.roleAdjustment ?? 0,
-        recentThreeGamePpg:
-          asset.recentThreeGameFantasyPointsPerGame ??
-          null,
-        recentFiveGamePpg:
-          asset.recentFiveGameFantasyPointsPerGame ??
-          null,
-        recentTenGamePpg:
-          asset.recentTenGameFantasyPointsPerGame ??
-          null,
-        recentTwentyGamePpg:
-          asset.recentTwentyGameFantasyPointsPerGame ??
-          null,
-        projectionGamesPlayed:
-          asset.projectionGamesPlayed ?? null,
-        projectionSourceLabel:
-          this.getProjectionSourceLabel(asset),
-        healthyProjectedCycle:
-          asset.healthyProjectedCyclePoints ?? projectedCycle,
-        expectedGamesAvailable:
-          asset.expectedGamesAvailable ??
-          this.projectedGamesPerCycle(),
+        cycleRank: asset.cycleRank ?? 9999,
+        seasonBaselineCycle: asset.seasonBaselineCyclePoints ?? projectedCycle,
+        recentFormAdjustment: asset.recentFormAdjustment ?? 0,
+        roleAdjustment: asset.roleAdjustment ?? 0,
+        scheduleStrengthAdjustment: asset.scheduleStrengthAdjustment ?? 0,
+        scheduleStrengthMultiplier: asset.scheduleStrengthMultiplier ?? 1,
+        scheduleDifficultyRating: asset.scheduleDifficultyRating ?? 50,
+        scheduleDifficultyLabel: asset.scheduleDifficultyLabel ?? 'Neutral',
+        scheduleDataConfidence: asset.scheduleDataConfidence ?? 0,
+        projectionHomeGames: asset.projectionHomeGames ?? 0,
+        projectionRoadGames: asset.projectionRoadGames ?? 0,
+        projectionBackToBackGames: asset.projectionBackToBackGames ?? 0,
+        projectionRestAdvantageGames: asset.projectionRestAdvantageGames ?? 0,
+        projectionOpponentAbbreviations: asset.projectionOpponentAbbreviations ?? [],
+        recentThreeGamePpg: asset.recentThreeGameFantasyPointsPerGame ?? null,
+        recentFiveGamePpg: asset.recentFiveGameFantasyPointsPerGame ?? null,
+        recentTenGamePpg: asset.recentTenGameFantasyPointsPerGame ?? null,
+        recentTwentyGamePpg: asset.recentTwentyGameFantasyPointsPerGame ?? null,
+        projectionGamesPlayed: asset.projectionGamesPlayed ?? null,
+        projectionSourceLabel: this.getProjectionSourceLabel(asset),
+        healthyProjectedCycle: asset.healthyProjectedCyclePoints ?? projectedCycle,
+        expectedGamesAvailable: asset.expectedGamesAvailable ?? this.projectedGamesPerCycle(),
+        expectedGamesMissed: asset.expectedGamesMissed ?? 0,
         scheduledGamesInProjectionCycle:
-          asset.scheduledGamesInProjectionCycle ??
-          this.projectedGamesPerCycle(),
-        availabilityAdjustment:
-          asset.availabilityAdjustment ?? 0,
-        availabilityLabel:
-          asset.availabilityLabel ?? 'Active',
-        availabilityReturnDate:
-          asset.availabilityReturnDate ?? null,
-        actualRecentAppearances:
-          asset.actualRecentAppearances ?? 0,
-        missedRecentTeamGames:
-          asset.missedRecentTeamGames ?? 0,
-        partialWeightRecentGames:
-          asset.partialWeightRecentGames ?? 0,
+          asset.scheduledGamesInProjectionCycle ?? this.projectedGamesPerCycle(),
+        availabilityAdjustment: asset.availabilityAdjustment ?? 0,
+        availabilityLabel: asset.availabilityLabel ?? 'Active',
+        availabilityReturnDate: asset.availabilityReturnDate ?? null,
+        actualRecentAppearances: asset.actualRecentAppearances ?? 0,
+        missedRecentTeamGames: asset.missedRecentTeamGames ?? 0,
+        partialWeightRecentGames: asset.partialWeightRecentGames ?? 0,
         reliabilityRating,
         volatilityPenalty,
         floorAdjustedCycle,
-        riskLabel: this.getRiskLabel(reliabilityRating)
+        riskLabel: this.getRiskLabel(reliabilityRating),
       };
     });
 
     const topForwardCycle = Math.max(
       1,
       ...baseRows
-        .filter((row) =>
-          row.position === 'LW' ||
-          row.position === 'C' ||
-          row.position === 'RW'
-        )
-        .map((row) => row.draftProjectedCycle)
+        .filter((row) => row.position === 'LW' || row.position === 'C' || row.position === 'RW')
+        .map((row) => row.draftProjectedCycle),
     );
 
     const topGoalieCycle = Math.max(
       1,
-      ...baseRows
-        .filter((row) => row.position === 'G')
-        .map((row) => row.draftProjectedCycle)
+      ...baseRows.filter((row) => row.position === 'G').map((row) => row.draftProjectedCycle),
     );
 
     const rows: ProjectionRow[] = [];
@@ -1015,101 +861,77 @@ export class ProjectionLab {
     for (const position of this.rosterPositions) {
       const positionRows = baseRows
         .filter((row) => row.position === position)
-        .sort(
-          (first, second) =>
-            second.draftProjectedCycle -
-              first.draftProjectedCycle
-        );
+        .sort((first, second) => second.draftProjectedCycle - first.draftProjectedCycle);
 
       const replacementIndex = Math.max(
         0,
-        Math.min(
-          positionRows.length - 1,
-          this.getStarterCount(position) - 1
-        )
+        Math.min(positionRows.length - 1, this.getStarterCount(position) - 1),
       );
 
-      const replacementProjection =
-        positionRows[replacementIndex]?.draftProjectedCycle ?? 0;
+      const replacementProjection = positionRows[replacementIndex]?.draftProjectedCycle ?? 0;
 
       const floorReplacementProjection =
         positionRows[replacementIndex]?.draftFloorAdjustedCycle ?? 0;
 
-      const ratingDenominator =
-        position === 'G'
-          ? topGoalieCycle
-          : topForwardCycle;
+      const ratingDenominator = position === 'G' ? topGoalieCycle : topForwardCycle;
 
-      const replacementRating =
-        replacementProjection / ratingDenominator * 100;
+      const replacementRating = (replacementProjection / ratingDenominator) * 100;
 
-      const floorReplacementRating =
-        floorReplacementProjection / ratingDenominator * 100;
+      const floorReplacementRating = (floorReplacementProjection / ratingDenominator) * 100;
 
       positionRows.forEach((row, index) => {
-        const draftValue =
-          row.draftProjectedCycle - replacementProjection;
+        const draftValue = row.draftProjectedCycle - replacementProjection;
 
-        const floorAdjustedDraftValue =
-          row.draftFloorAdjustedCycle -
-            floorReplacementProjection;
+        const floorAdjustedDraftValue = row.draftFloorAdjustedCycle - floorReplacementProjection;
 
-        const rating =
-          row.draftProjectedCycle /
-          ratingDenominator *
-          100;
+        const rating = (row.draftProjectedCycle / ratingDenominator) * 100;
 
-        const valueRating =
-          rating - replacementRating;
+        const valueRating = rating - replacementRating;
 
         const floorValueRating =
-          row.draftFloorAdjustedCycle /
-            ratingDenominator * 100 -
-          floorReplacementRating;
+          (row.draftFloorAdjustedCycle / ratingDenominator) * 100 - floorReplacementRating;
 
         rows.push({
           ...row,
           replacementProjection,
-          draftValue:
-            row.draftValueAboveReplacement ||
-            draftValue,
+          draftValue: row.draftValueAboveReplacement || draftValue,
           reliabilityRating: row.reliabilityRating,
           volatilityPenalty: row.volatilityPenalty,
           floorAdjustedCycle: row.floorAdjustedCycle,
           seasonBaselineCycle: row.seasonBaselineCycle,
           recentFormAdjustment: row.recentFormAdjustment,
           roleAdjustment: row.roleAdjustment,
+          scheduleStrengthAdjustment: row.scheduleStrengthAdjustment,
+          scheduleStrengthMultiplier: row.scheduleStrengthMultiplier,
+          scheduleDifficultyRating: row.scheduleDifficultyRating,
+          scheduleDifficultyLabel: row.scheduleDifficultyLabel,
+          scheduleDataConfidence: row.scheduleDataConfidence,
+          projectionHomeGames: row.projectionHomeGames,
+          projectionRoadGames: row.projectionRoadGames,
+          projectionBackToBackGames: row.projectionBackToBackGames,
+          projectionRestAdvantageGames: row.projectionRestAdvantageGames,
+          projectionOpponentAbbreviations: row.projectionOpponentAbbreviations,
           recentThreeGamePpg: row.recentThreeGamePpg,
           recentFiveGamePpg: row.recentFiveGamePpg,
           recentTenGamePpg: row.recentTenGamePpg,
-          recentTwentyGamePpg:
-            row.recentTwentyGamePpg,
+          recentTwentyGamePpg: row.recentTwentyGamePpg,
           projectionGamesPlayed: row.projectionGamesPlayed,
           projectionSourceLabel: row.projectionSourceLabel,
-          floorAdjustedDraftValue:
-            row.draftScore ||
-            floorAdjustedDraftValue,
+          floorAdjustedDraftValue: row.draftScore || floorAdjustedDraftValue,
           floorValueRating,
           riskLabel: row.riskLabel,
           rating,
           replacementRating,
           valueRating,
-          positionRank:
-            row.asset.draftPositionRank ??
-            row.asset.positionRank ??
-            index + 1,
-          overallValueRank:
-            row.asset.draftRank ??
-            row.asset.balancedRank ??
-            0,
-          tier: this.getTierLabel(floorValueRating)
+          positionRank: row.asset.draftPositionRank ?? row.asset.positionRank ?? index + 1,
+          overallValueRank: row.asset.draftRank ?? row.asset.balancedRank ?? 0,
+          tier: this.getTierLabel(floorValueRating),
         });
       });
     }
 
     const rankedByValue = [...rows].sort(
-      (first, second) =>
-        second.floorAdjustedDraftValue - first.floorAdjustedDraftValue
+      (first, second) => second.floorAdjustedDraftValue - first.floorAdjustedDraftValue,
     );
 
     const rankByAssetKey = new Map<string, number>();
@@ -1117,9 +939,7 @@ export class ProjectionLab {
     rankedByValue.forEach((row, index) => {
       rankByAssetKey.set(
         row.asset.assetKey,
-        row.asset.draftRank ??
-          row.asset.balancedRank ??
-          index + 1
+        row.asset.draftRank ?? row.asset.balancedRank ?? index + 1,
       );
     });
 
@@ -1128,13 +948,10 @@ export class ProjectionLab {
         ...row,
         projectedSeason: this.round(row.projectedSeason),
         projectedPpg: this.round(row.projectedPpg),
-        draftProjectedCycle:
-          this.round(row.draftProjectedCycle),
-        draftFloorAdjustedCycle:
-          this.round(row.draftFloorAdjustedCycle),
+        draftProjectedCycle: this.round(row.draftProjectedCycle),
+        draftFloorAdjustedCycle: this.round(row.draftFloorAdjustedCycle),
         draftScore: this.round(row.draftScore),
-        draftValueAboveReplacement:
-          this.round(row.draftValueAboveReplacement),
+        draftValueAboveReplacement: this.round(row.draftValueAboveReplacement),
         projectedCycle: this.round(row.projectedCycle),
         cycleRank: row.cycleRank,
         replacementProjection: this.round(row.replacementProjection),
@@ -1145,30 +962,21 @@ export class ProjectionLab {
         seasonBaselineCycle: this.round(row.seasonBaselineCycle),
         recentFormAdjustment: this.round(row.recentFormAdjustment),
         roleAdjustment: this.round(row.roleAdjustment),
+        scheduleStrengthAdjustment: this.round(row.scheduleStrengthAdjustment),
+        scheduleStrengthMultiplier: Number(row.scheduleStrengthMultiplier.toFixed(4)),
+        scheduleDifficultyRating: this.round(row.scheduleDifficultyRating),
         recentThreeGamePpg:
-          row.recentThreeGamePpg != null
-            ? this.round(row.recentThreeGamePpg)
-            : null,
-        recentFiveGamePpg:
-          row.recentFiveGamePpg != null
-            ? this.round(row.recentFiveGamePpg)
-            : null,
-        recentTenGamePpg:
-          row.recentTenGamePpg != null
-            ? this.round(row.recentTenGamePpg)
-            : null,
+          row.recentThreeGamePpg != null ? this.round(row.recentThreeGamePpg) : null,
+        recentFiveGamePpg: row.recentFiveGamePpg != null ? this.round(row.recentFiveGamePpg) : null,
+        recentTenGamePpg: row.recentTenGamePpg != null ? this.round(row.recentTenGamePpg) : null,
         floorAdjustedDraftValue: this.round(row.floorAdjustedDraftValue),
         floorValueRating: this.round(row.floorValueRating),
         rating: this.round(row.rating),
         replacementRating: this.round(row.replacementRating),
         valueRating: this.round(row.valueRating),
-        overallValueRank:
-          rankByAssetKey.get(row.asset.assetKey) ?? 9999
+        overallValueRank: rankByAssetKey.get(row.asset.assetKey) ?? 9999,
       }))
-      .sort(
-        (first, second) =>
-          first.overallValueRank - second.overallValueRank
-      );
+      .sort((first, second) => first.overallValueRank - second.overallValueRank);
   }
 
   getRiskLabel(value: number | null | undefined): string {
@@ -1200,9 +1008,7 @@ export class ProjectionLab {
       return asset.reliabilityRating;
     }
 
-    return asset.position === 'G'
-      ? 68
-      : 60;
+    return asset.position === 'G' ? 68 : 60;
   }
 
   private getProjectedSeason(asset: DraftableAsset): number {
@@ -1211,56 +1017,48 @@ export class ProjectionLab {
     }
 
     if (typeof asset.projectedCyclePoints === 'number') {
-      const requiredGames =
-        this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+      const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
-      return (
-        asset.projectedCyclePoints /
-        requiredGames *
-        82
-      );
+      return (asset.projectedCyclePoints / requiredGames) * 82;
     }
 
     return 0;
   }
 
- private getTierLabel(valueRating: number): string {
-  if (valueRating >= 30) {
-    return 'League-Winner Value';
-  }
+  private getTierLabel(valueRating: number): string {
+    if (valueRating >= 30) {
+      return 'League-Winner Value';
+    }
 
-  if (valueRating >= 22) {
-    return 'Elite Value';
-  }
+    if (valueRating >= 22) {
+      return 'Elite Value';
+    }
 
-  if (valueRating >= 15) {
-    return 'Strong Value';
-  }
+    if (valueRating >= 15) {
+      return 'Strong Value';
+    }
 
-  if (valueRating >= 8) {
-    return 'Starter Value';
-  }
+    if (valueRating >= 8) {
+      return 'Starter Value';
+    }
 
-  if (valueRating >= 0) {
-    return 'Normal Starter';
-  }
+    if (valueRating >= 0) {
+      return 'Normal Starter';
+    }
 
-  if (valueRating >= -8) {
-    return 'Fringe Starter';
-  }
+    if (valueRating >= -8) {
+      return 'Fringe Starter';
+    }
 
-  return 'Depth';
-}
+    return 'Depth';
+  }
 
   private average(values: number[]): number {
     if (values.length === 0) {
       return 0;
     }
 
-    return this.round(
-      values.reduce((total, value) => total + value, 0) /
-      values.length
-    );
+    return this.round(values.reduce((total, value) => total + value, 0) / values.length);
   }
 
   private round(value: number): number {

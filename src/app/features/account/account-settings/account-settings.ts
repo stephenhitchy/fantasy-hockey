@@ -9,6 +9,7 @@ import { getMyLeagueSummaries, LeagueSummary } from '../../../core/league/league
 import {
   DefaultLandingPage,
   getUserProfile,
+  updateFavoriteTeam,
   updateUserAccountSettings,
   UserProfile,
 } from '../../../core/user/user.service';
@@ -27,6 +28,10 @@ interface AccountAchievement {
 }
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -47,6 +52,7 @@ export class AccountSettings {
   readonly leagueSummaries = signal<LeagueSummary[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
+  readonly savingFavoriteTeam = signal(false);
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
 
@@ -145,14 +151,60 @@ export class AccountSettings {
     }
   }
 
-  selectFavoriteTeam(team: PixelTeamTheme): void {
+  async selectFavoriteTeam(team: PixelTeamTheme): Promise<void> {
+    if (this.savingFavoriteTeam() || team.abbreviation === this.favoriteTeamAbbreviation) {
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      this.errorMessage.set('You must be logged in.');
+      return;
+    }
+
+    const previousFavoriteTeam =
+      this.profile()?.favoriteTeamAbbreviation || this.favoriteTeamAbbreviation || 'VGK';
+
     this.favoriteTeamAbbreviation = team.abbreviation;
     this.successMessage.set('');
+    this.errorMessage.set('');
+    this.savingFavoriteTeam.set(true);
+
     applyUserTheme({
       favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
       reducedMotion: this.reducedMotion,
       defaultLandingPage: this.defaultLandingPage,
     });
+
+    try {
+      await updateFavoriteTeam(user.uid, team.abbreviation);
+
+      this.profile.update((current) =>
+        current
+          ? {
+              ...current,
+              favoriteTeamAbbreviation: team.abbreviation,
+            }
+          : current,
+      );
+
+      this.successMessage.set(`${team.name} is now your saved favorite team.`);
+    } catch (error: unknown) {
+      this.favoriteTeamAbbreviation = previousFavoriteTeam;
+
+      applyUserTheme({
+        favoriteTeamAbbreviation: previousFavoriteTeam,
+        reducedMotion: this.reducedMotion,
+        defaultLandingPage: this.defaultLandingPage,
+      });
+
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to save your favorite team.',
+      );
+    } finally {
+      this.savingFavoriteTeam.set(false);
+    }
   }
 
   previewPreferenceChanges(): void {

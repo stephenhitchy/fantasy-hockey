@@ -1,8 +1,2 @@
-Package: fantasy-hockey-matchup-themed-opponent-and-mobile-fix-v1-ready-to-install
-Files included:
-- src/app/features/cycles/cycle-one/cycle-one.ts
-- src/app/features/cycles/cycle-one/cycle-one.html
-- src/app/features/cycles/cycle-one/cycle-one.css
-- INSTALL.txt
-- CHANGELOG.txt
-- MANIFEST.txt
+Package: fantasy-hockey-favorite-team-persistence-rules-fix-v2-ready-to-install
+Includes: firestore.rules plus favorite-team account/dashboard source files.

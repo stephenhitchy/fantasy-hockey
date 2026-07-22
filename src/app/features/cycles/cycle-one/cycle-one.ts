@@ -68,7 +68,11 @@ import { getNhlTeamSeasonSchedule, NHL_DRAFT_CLUBS } from '../../../core/nhl/nhl
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 import { getUserProfile } from '../../../core/user/user.service';
-import { PixelTeamTheme, getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
+import {
+  PixelTeamTheme,
+  getPixelTeamTheme,
+  hexToRgba,
+} from '../../../shared/pixel-theme/pixel-theme.data';
 
 import {
   areDeveloperToolsEnabled,
@@ -82,13 +86,20 @@ import {
 } from '../../../core/live-scoring/live-scoring.service';
 
 import {
+  advanceHistoricalReplayDay,
+  HistoricalReplayControl,
+  listenToHistoricalReplayControl,
+} from '../../../core/replay/historical-replay.service';
+
+import {
   SharedCycleScoringSnapshot,
   SharedLiveScoringControl,
 } from '../../../core/live-scoring/live-scoring.models';
 
-import { FantasyRoster, PendingRosterSlotMove } from '../../../core/team/roster.models';
-
-import { listenToFantasyRoster } from '../../../core/team/roster.service';
+import {
+  getPlayerAvailabilityForPlayer,
+  startPlayerAvailabilityListenerForLeague,
+} from '../../../core/player/player-availability.service';
 
 const CYCLE_PROJECTION_WINDOW_DAYS = 14;
 const NHL_SCHEDULE_BATCH_SIZE = 4;
@@ -116,6 +127,19 @@ interface MatchupAssetPerformanceRow {
   position: DraftPosition;
 }
 
+interface MobileMatchupPlayerPair {
+  position: DraftPosition;
+  slotIndex: number;
+  teamAPick: DraftPick | null;
+  teamBPick: DraftPick | null;
+}
+
+interface MobileMatchupPositionGroup {
+  position: DraftPosition;
+  label: string;
+  rows: MobileMatchupPlayerPair[];
+}
+
 interface CycleWindowGameMarker {
   index: number;
   gameId: number | null;
@@ -127,6 +151,10 @@ interface CycleWindowGameMarker {
 }
 
 function waitForAuthUser(): Promise<User | null> {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       unsubscribe();
@@ -157,13 +185,16 @@ export class CycleOne implements OnDestroy {
   picks = signal<DraftPick[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
   teamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
-  displayedRostersByOwner = signal<Record<string, FantasyRoster>>({});
 
   teamGameCounts = signal<Record<string, number>>({});
 
   cycleScoring = signal<CycleScoringResult | null>(null);
   sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
   liveScoringControl = signal<SharedLiveScoringControl | null>(null);
+  historicalReplayControl = signal<HistoricalReplayControl | null>(null);
+  historicalReplayAdvancing = signal(false);
+  historicalReplayMessage = signal('');
+  historicalReplayError = signal('');
   matchupView = signal<MatchupViewMode>('both');
 
   scoringLoading = signal(false);
@@ -190,6 +221,61 @@ export class CycleOne implements OnDestroy {
   projectionAccuracySaving = signal(false);
   projectionAccuracyMessage = signal('');
   projectionAccuracyError = signal('');
+
+  async advanceReplayOneDay(): Promise<void> {
+    if (this.historicalReplayAdvancing()) {
+      return;
+    }
+
+    this.historicalReplayAdvancing.set(true);
+    this.historicalReplayMessage.set('');
+    this.historicalReplayError.set('');
+
+    try {
+      const result = await advanceHistoricalReplayDay(this.leagueId);
+      this.historicalReplayMessage.set(result.message);
+    } catch (error: unknown) {
+      this.historicalReplayError.set(
+        error instanceof Error ? error.message : 'Unable to advance the historical replay.',
+      );
+    } finally {
+      this.historicalReplayAdvancing.set(false);
+    }
+  }
+
+  getHistoricalReplayDateLabel(): string {
+    const date = this.historicalReplayControl()?.simulatedDate;
+
+    if (!date) {
+      return 'Not started';
+    }
+
+    return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+
+  getHistoricalReplayStatusLabel(): string {
+    const control = this.historicalReplayControl();
+
+    if (this.historicalReplayAdvancing() || control?.status === 'advancing') {
+      return 'Processing simulated NHL day';
+    }
+
+    if (!control?.enabled) {
+      return 'Ready to begin';
+    }
+
+    if (control.status === 'error') {
+      return 'Replay needs attention';
+    }
+
+    return 'Historical replay active';
+  }
 
   isCommissioner(): boolean {
     return this.league()?.commissionerId === this.userId;
@@ -703,7 +789,7 @@ export class CycleOne implements OnDestroy {
       return `Last NHL calculation: ${new Date(snapshot.result.refreshedAt).toLocaleString()}. Live games refresh about every 10 minutes.`;
     }
 
-    return 'One commissioner browser calculates scores for the entire league. Other managers read the shared result.';
+    return 'The server checks NHL results for the entire league. Everyone reads the same shared scoring update.';
   }
 
   readonly forwardPositions: DraftPosition[] = ['LW', 'C', 'RW'];
@@ -724,8 +810,7 @@ export class CycleOne implements OnDestroy {
   private stopTeamWindowsListener: (() => void) | null = null;
   private stopSharedScoringListener: (() => void) | null = null;
   private stopLiveScoringControlListener: (() => void) | null = null;
-  private stopDisplayedRosterListeners: (() => void)[] = [];
-  private displayedRosterOwnerKey = '';
+  private stopHistoricalReplayListener: (() => void) | null = null;
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
   private effectivePicksKey: string | null = null;
@@ -739,17 +824,52 @@ export class CycleOne implements OnDestroy {
   private autoStartNextCycleAttemptKey: string | null = null;
   private projectionAccuracyAttemptKey: string | null = null;
 
+  private getCycleDisplayPickIdentity(pick: DraftPick): string {
+    return [pick.ownerId, pick.rosterSlotId ?? `${pick.asset.position}:${pick.overallPick}`].join('::');
+  }
+
+  private getActiveLineupPicks(picks: DraftPick[]): DraftPick[] {
+    return picks.filter((pick) => pick.rosterArea !== 'bench');
+  }
+
+  private buildEffectiveCyclePicks(snapshotPicks: DraftPick[], livePicks: DraftPick[]): DraftPick[] {
+    const activeSnapshotPicks = this.getActiveLineupPicks(snapshotPicks);
+
+    if (activeSnapshotPicks.length === 0) {
+      return this.getActiveLineupPicks(livePicks);
+    }
+
+    const effectiveByIdentity = new Map<string, DraftPick>();
+
+    for (const pick of activeSnapshotPicks) {
+      effectiveByIdentity.set(this.getCycleDisplayPickIdentity(pick), pick);
+    }
+
+    for (const livePick of this.getActiveLineupPicks(livePicks)) {
+      const identity = this.getCycleDisplayPickIdentity(livePick);
+
+      if (!effectiveByIdentity.has(identity)) {
+        effectiveByIdentity.set(identity, {
+          ...livePick,
+          rosterArea: livePick.rosterArea ?? 'active',
+        });
+      }
+    }
+
+    return Array.from(effectiveByIdentity.values());
+  }
+
   private refreshEffectivePicks(): void {
     const snapshotPicks = this.cycleRosterSnapshotPicks;
     const livePicks = this.liveDraftPicks;
-    const effectivePicks = snapshotPicks.length > 0 ? snapshotPicks : livePicks;
+    const effectivePicks = this.buildEffectiveCyclePicks(snapshotPicks, livePicks);
 
-    const source = snapshotPicks.length > 0 ? 'cycle-snapshot' : 'live-draft-picks';
+    const source = snapshotPicks.length > 0 ? 'cycle-snapshot-plus-pending-slots' : 'live-draft-picks';
 
     const nextKey = [
       source,
       effectivePicks
-        .map((pick) => `${pick.rosterSlotId ?? pick.overallPick}:${pick.asset.assetKey}`)
+        .map((pick) => `${this.getCycleDisplayPickIdentity(pick)}:${pick.asset.assetKey}`)
         .join('|'),
     ].join('::');
 
@@ -1305,7 +1425,7 @@ export class CycleOne implements OnDestroy {
     this.stopTeamWindowsListener?.();
     this.stopSharedScoringListener?.();
     this.stopLiveScoringControlListener?.();
-    this.stopDisplayedRosterListeners.forEach((stopListener) => stopListener());
+    this.stopHistoricalReplayListener?.();
 
     this.stopCyclesListener = null;
     this.stopCycleListener = null;
@@ -1315,8 +1435,7 @@ export class CycleOne implements OnDestroy {
     this.stopTeamWindowsListener = null;
     this.stopSharedScoringListener = null;
     this.stopLiveScoringControlListener = null;
-    this.stopDisplayedRosterListeners = [];
-    this.displayedRosterOwnerKey = '';
+    this.stopHistoricalReplayListener = null;
   }
 
   private resetPageStateForNewRoute(): void {
@@ -1336,11 +1455,14 @@ export class CycleOne implements OnDestroy {
     this.picks.set([]);
     this.playerPool.set([]);
     this.teamWindowsByOwner.set({});
-    this.displayedRostersByOwner.set({});
     this.teamGameCounts.set({});
     this.cycleScoring.set(null);
     this.sharedScoringSnapshot.set(null);
     this.liveScoringControl.set(null);
+    this.historicalReplayControl.set(null);
+    this.historicalReplayAdvancing.set(false);
+    this.historicalReplayMessage.set('');
+    this.historicalReplayError.set('');
     this.matchupView.set('both');
 
     this.scoringLoading.set(false);
@@ -1402,6 +1524,7 @@ export class CycleOne implements OnDestroy {
     this.cycleNumber = cycleNumber;
     this.matchupId = matchupId;
     this.userId = user.uid;
+    startPlayerAvailabilityListenerForLeague(leagueId);
 
     try {
       const [league, teams] = await Promise.all([
@@ -1451,6 +1574,24 @@ export class CycleOne implements OnDestroy {
         },
       );
 
+      this.stopHistoricalReplayListener = listenToHistoricalReplayControl(
+        leagueId,
+        (control) => {
+          const previousDate = this.historicalReplayControl()?.simulatedDate;
+          this.historicalReplayControl.set(control);
+
+          if (control?.status === 'error' && control.lastError) {
+            this.historicalReplayError.set(control.lastError);
+          }
+
+          if (control?.simulatedDate && control.simulatedDate !== previousDate) {
+            this.scheduleLoadStartedForCycleId = null;
+            void this.loadScheduleAdjustedProjectionData(this.cycle());
+          }
+        },
+        (error) => this.historicalReplayError.set(error.message),
+      );
+
       this.stopCyclesListener = listenToLeagueCycles(leagueId, (cycles) => {
         this.allCycles.set(cycles);
       });
@@ -1464,7 +1605,6 @@ export class CycleOne implements OnDestroy {
 
       this.stopMatchupsListener = listenToCycleMatchups(leagueId, cycleNumber, (matchups) => {
         this.matchups.set(matchups);
-        this.refreshDisplayedRosterListeners();
         void this.evaluateAutoCompleteCycleIfReady();
       });
 
@@ -1540,7 +1680,6 @@ export class CycleOne implements OnDestroy {
     void this.router.navigate(route);
   }
 
-
   private async loadOwnerFavoriteTeams(ownerIds: string[]): Promise<void> {
     const uniqueOwnerIds = [...new Set(ownerIds.filter((ownerId) => !!ownerId))];
 
@@ -1559,7 +1698,10 @@ export class CycleOne implements OnDestroy {
       unresolvedOwnerIds.map(async (ownerId) => {
         try {
           const profile = await getUserProfile(ownerId);
-          return [ownerId, profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId)] as const;
+          return [
+            ownerId,
+            profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId),
+          ] as const;
         } catch {
           return [ownerId, this.getFallbackFavoriteTeam(ownerId)] as const;
         }
@@ -1572,7 +1714,7 @@ export class CycleOne implements OnDestroy {
     });
   }
 
-  private getFallbackFavoriteTeam(ownerId: string): string {
+  private getFallbackFavoriteTeam(ownerId: string | null | undefined): string {
     if (typeof document !== 'undefined' && ownerId === this.userId) {
       return document.documentElement.dataset['favoriteTeam'] || 'VGK';
     }
@@ -1580,27 +1722,30 @@ export class CycleOne implements OnDestroy {
     return 'VGK';
   }
 
-  getOwnerTheme(ownerId: string): PixelTeamTheme {
-    return getPixelTeamTheme(this.ownerFavoriteTeams()[ownerId] || this.getFallbackFavoriteTeam(ownerId));
+  getOwnerTheme(ownerId: string | null | undefined): PixelTeamTheme {
+    const favoriteTeam = ownerId ? this.ownerFavoriteTeams()[ownerId] : '';
+
+    return getPixelTeamTheme(favoriteTeam || this.getFallbackFavoriteTeam(ownerId));
   }
 
-  getOwnerThemeStyles(ownerId: string): Record<string, string> {
+  getOwnerThemeStyles(ownerId: string | null | undefined): Record<string, string> {
     const theme = this.getOwnerTheme(ownerId);
 
     return {
       '--owner-theme-primary': theme.primaryColor,
       '--owner-theme-secondary': theme.secondaryColor,
-      '--owner-theme-highlight': theme.highlightColor,
-      '--owner-theme-outline': `color-mix(in srgb, ${theme.primaryColor} 70%, #496685)`,
-      '--owner-theme-outline-strong': `color-mix(in srgb, ${theme.primaryColor} 82%, #6f8eac)`,
-      '--owner-theme-outline-soft': `color-mix(in srgb, ${theme.primaryColor} 30%, rgba(198, 213, 228, 0.16))`,
-      '--owner-theme-subtle': `color-mix(in srgb, ${theme.primaryColor} 18%, transparent)`,
-      '--owner-theme-surface': `color-mix(in srgb, ${theme.secondaryColor} 78%, #0b1322)`,
-      '--owner-theme-surface-2': `color-mix(in srgb, ${theme.primaryColor} 12%, #101827)`,
-      '--owner-theme-chip-background': `color-mix(in srgb, ${theme.highlightColor} 85%, ${theme.primaryColor} 15%)`,
-      '--owner-theme-chip-text': `color-mix(in srgb, ${theme.secondaryColor} 88%, #0d1422 12%)`,
-      '--owner-theme-glow': `color-mix(in srgb, ${theme.primaryColor} 22%, transparent)`,
-      '--owner-theme-accent-text': `color-mix(in srgb, ${theme.highlightColor} 80%, #eff6ff)`,
+      '--owner-theme-tertiary': theme.tertiaryColor,
+      '--owner-theme-highlight': theme.accentColor,
+      '--owner-theme-outline': theme.accentColor,
+      '--owner-theme-outline-strong': theme.accentColor,
+      '--owner-theme-outline-soft': hexToRgba(theme.accentColor, 0.32),
+      '--owner-theme-subtle': hexToRgba(theme.accentColor, 0.12),
+      '--owner-theme-surface': '#101925',
+      '--owner-theme-surface-2': '#151f2b',
+      '--owner-theme-chip-background': theme.primaryColor,
+      '--owner-theme-chip-text': theme.primaryTextColor,
+      '--owner-theme-glow': hexToRgba(theme.accentColor, 0.22),
+      '--owner-theme-accent-text': '#f7f9fc',
     };
   }
 
@@ -1759,74 +1904,43 @@ export class CycleOne implements OnDestroy {
     return `No matchup was found for ${this.getCycleLabel()}.`;
   }
 
-  getCurrentCycleWindowCounts(): {
-    complete: number;
-    started: number;
-    total: number;
-  } {
-    const teamWindows = Object.values(this.teamWindowsByOwner());
-    const total = teamWindows.reduce((sum, team) => sum + team.expectedRosterSlotIds.length, 0);
-    const complete = teamWindows.reduce((sum, team) => sum + team.completedWindowCount, 0);
-    const started = teamWindows.reduce(
-      (sum, team) => sum + team.windows.filter((window) => window.status !== 'scheduled').length,
-      0,
-    );
-
-    return { complete, started, total };
-  }
-
-  getNextCycleStartedWindowCount(): number {
-    return (
-      this.allCycles().find((cycle) => cycle.cycleNumber === this.cycleNumber + 1)
-        ?.activeWindowCount ?? 0
-    );
-  }
-
-  getDisplayedQueuedMoveCount(): number {
-    return Object.values(this.displayedRostersByOwner()).reduce(
-      (sum, roster) => sum + roster.activeSlots.filter((slot) => Boolean(slot.pendingMove)).length,
-      0,
-    );
-  }
-
-  getTeamWindowProgressLabel(ownerId: string | null): string {
-    if (!ownerId) {
-      return 'Bye';
+  isAssetInjured(asset: DraftableAsset): boolean {
+    if (asset.assetType !== 'skater') {
+      return false;
     }
 
-    const teamWindows = this.teamWindowsByOwner()[ownerId];
+    const status = getPlayerAvailabilityForPlayer(asset.player).status;
 
-    if (!teamWindows) {
-      return 'Window data is initializing';
-    }
-
-    const total = teamWindows.expectedRosterSlotIds.length;
-    const complete = teamWindows.completedWindowCount;
-    const pending = Math.max(0, total - complete);
-
-    return pending === 0
-      ? `${complete}/${total} slots complete`
-      : `${complete}/${total} complete · ${pending} waiting`;
+    return ['day-to-day', 'out', 'injured-reserve', 'long-term-injured-reserve'].includes(status);
   }
 
-  getPendingSlotLabels(ownerId: string | null): string[] {
-    if (!ownerId) {
-      return [];
+  isAssetSuspended(asset: DraftableAsset): boolean {
+    return asset.assetType === 'skater' && getPlayerAvailabilityForPlayer(asset.player).status === 'suspended';
+  }
+
+  hasAssetStatusFlag(asset: DraftableAsset): boolean {
+    return this.isAssetInjured(asset) || this.isAssetSuspended(asset);
+  }
+
+  getAssetStatusFlagIcon(asset: DraftableAsset): string {
+    return this.isAssetSuspended(asset) ? '⛔' : '✚';
+  }
+
+  getAssetStatusFlagLabel(asset: DraftableAsset): string {
+    return this.isAssetSuspended(asset) ? 'Suspended player' : 'Injured player';
+  }
+
+  getAssetStatusTooltip(asset: DraftableAsset): string {
+    if (asset.assetType !== 'skater') {
+      return '';
     }
 
-    const teamWindows = this.teamWindowsByOwner()[ownerId];
+    const availability = getPlayerAvailabilityForPlayer(asset.player);
+    const detail = availability.note?.trim();
 
-    if (!teamWindows) {
-      return [];
-    }
-
-    const completedSlotIds = new Set(
-      teamWindows.windows
-        .filter((window) => window.status === 'complete')
-        .map((window) => window.rosterSlotId),
-    );
-
-    return teamWindows.expectedRosterSlotIds.filter((slotId) => !completedSlotIds.has(slotId));
+    return detail
+      ? `${availability.label}: ${detail}`
+      : availability.label;
   }
 
   getWindowForPick(pick: DraftPick): FantasyAssetCycleWindow | null {
@@ -1900,11 +2014,28 @@ export class CycleOne implements OnDestroy {
     });
   }
 
+  isFutureWindowPending(pick: DraftPick): boolean {
+    const window = this.getWindowForPick(pick);
+    return !window || window.status === 'pending';
+  }
+
+  getPendingWindowCallout(pick: DraftPick): string {
+    const window = this.getWindowForPick(pick);
+    const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
+    return `Cycle ${cycleNumber} has not started for this roster slot yet.`;
+  }
+
+  getPendingWindowTooltip(pick: DraftPick): string {
+    const window = this.getWindowForPick(pick);
+    const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
+    return `This player appears here early so you can track the whole roster. ${this.getCycleLabel()} will begin for this slot once ${this.getAssetName(pick.asset)} reaches the first scheduled NHL team game of that window.`;
+  }
+
   getWindowStatusLabel(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
 
     if (!window) {
-      return 'Window initializing';
+      return `${this.getCycleLabel()} · not started yet`;
     }
 
     if (window.status === 'complete') {
@@ -1918,60 +2049,8 @@ export class CycleOne implements OnDestroy {
     return `Cycle ${window.cycleNumber} · waiting for first game`;
   }
 
-  getPendingMoveForPick(pick: DraftPick): PendingRosterSlotMove | null {
-    if (!pick.rosterSlotId) {
-      return null;
-    }
-
-    const roster = this.displayedRostersByOwner()[pick.ownerId];
-    const slot = roster?.activeSlots.find((candidate) => candidate.slotId === pick.rosterSlotId);
-
-    return slot?.pendingMove ?? null;
-  }
-
-  getPendingMoveAssetName(move: PendingRosterSlotMove): string {
-    return move.incomingAsset.assetType === 'skater'
-      ? move.incomingAsset.player.fullName
-      : `${move.incomingAsset.teamName} Goalie Unit`;
-  }
-
   stopCardNavigation(event: Event): void {
     event.stopPropagation();
-  }
-
-  private refreshDisplayedRosterListeners(): void {
-    const matchup = this.getCurrentDisplayedMatchup();
-    const ownerIds = [matchup?.teamAOwnerId ?? null, matchup?.teamBOwnerId ?? null]
-      .filter((ownerId): ownerId is string => Boolean(ownerId))
-      .sort();
-    const ownerKey = ownerIds.join('|');
-
-    if (ownerKey === this.displayedRosterOwnerKey) {
-      return;
-    }
-
-    this.stopDisplayedRosterListeners.forEach((stopListener) => stopListener());
-    this.stopDisplayedRosterListeners = [];
-    this.displayedRosterOwnerKey = ownerKey;
-    this.displayedRostersByOwner.set({});
-
-    for (const ownerId of ownerIds) {
-      const stopListener = listenToFantasyRoster(this.leagueId, ownerId, (roster) => {
-        this.displayedRostersByOwner.update((current) => {
-          const next = { ...current };
-
-          if (roster) {
-            next[ownerId] = roster;
-          } else {
-            delete next[ownerId];
-          }
-
-          return next;
-        });
-      });
-
-      this.stopDisplayedRosterListeners.push(stopListener);
-    }
   }
 
   getTeamName(ownerId: string | null): string {
@@ -2018,6 +2097,33 @@ export class CycleOne implements OnDestroy {
 
   getTeamPicksByPosition(ownerId: string | null, position: DraftPosition): DraftPick[] {
     return this.getTeamPicks(ownerId).filter((pick) => pick.asset.position === position);
+  }
+
+  getMobileMatchupPositionGroups(matchup: FantasyMatchup): MobileMatchupPositionGroup[] {
+    const positions = [...this.forwardPositions, ...this.defensePositions, ...this.goaliePositions];
+
+    return positions
+      .map((position) => {
+        const teamAPicks = this.getTeamPicksByPosition(matchup.teamAOwnerId, position);
+        const teamBPicks = this.getTeamPicksByPosition(matchup.teamBOwnerId, position);
+        const rowCount = Math.max(teamAPicks.length, teamBPicks.length);
+
+        return {
+          position,
+          label: this.getPositionLabel(position),
+          rows: Array.from({ length: rowCount }, (_, slotIndex) => ({
+            position,
+            slotIndex,
+            teamAPick: teamAPicks[slotIndex] ?? null,
+            teamBPick: teamBPicks[slotIndex] ?? null,
+          })),
+        };
+      })
+      .filter((group) => group.rows.length > 0);
+  }
+
+  getMobileMatchupPlayerTrackKey(row: MobileMatchupPlayerPair): string {
+    return `${row.position}-${row.slotIndex}-${row.teamAPick?.overallPick ?? 'empty-a'}-${row.teamBPick?.overallPick ?? 'empty-b'}`;
   }
 
   getProjectedCycleForTeam(ownerId: string | null): number | null {
@@ -2620,6 +2726,14 @@ export class CycleOne implements OnDestroy {
   }
 
   private getProjectionWindowStartDate(): Date | null {
+    const replayDate = this.historicalReplayControl()?.enabled
+      ? this.historicalReplayControl()?.simulatedDate
+      : null;
+
+    if (replayDate) {
+      return new Date(`${replayDate}T12:00:00Z`);
+    }
+
     const historicalTestDate = getHistoricalScoringTestDate();
 
     if (historicalTestDate) {

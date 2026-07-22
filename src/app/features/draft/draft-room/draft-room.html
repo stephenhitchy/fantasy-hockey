@@ -18,21 +18,36 @@
         <p>{{ draftProgressText() }}</p>
       </div>
 
-      <div
-        class="draft-state-badge"
-        [class.state-live]="draft()?.status === 'live'"
-        [class.state-scheduled]="draft()?.status === 'scheduled'"
-        [class.state-complete]="draft()?.status === 'complete'"
-      >
-        {{
-          draft()?.status === 'live'
-            ? 'Draft Live'
-            : draft()?.status === 'complete'
-              ? 'Draft Complete'
-              : startTimeReached()
-                ? 'Updating Injuries'
-                : 'Draft Scheduled'
-        }}
+      <div class="draft-header-actions">
+        @if (draft()?.status === 'live') {
+          <button
+            type="button"
+            class="auto-draft-toggle header-auto-draft-toggle"
+            [class.enabled]="myQueue().autoDraftEnabled"
+            [class.forced-auto-draft]="myQueue().autoDraftActivatedByTimeout"
+            (click)="toggleMyAutoDraft()"
+            [disabled]="queueSaving()"
+          >
+            {{ getMyAutoDraftButtonLabel() }}
+          </button>
+        }
+
+        <div
+          class="draft-state-badge"
+          [class.state-live]="draft()?.status === 'live'"
+          [class.state-scheduled]="draft()?.status === 'scheduled'"
+          [class.state-complete]="draft()?.status === 'complete'"
+        >
+          {{
+            draft()?.status === 'live'
+              ? 'Draft Live'
+              : draft()?.status === 'complete'
+                ? 'Draft Complete'
+                : startTimeReached()
+                  ? 'Updating Injuries'
+                  : 'Draft Scheduled'
+          }}
+        </div>
       </div>
     </header>
 
@@ -101,7 +116,7 @@
         <span class="eyebrow">Draft Complete</span>
         <h2>All picks are in.</h2>
         <p>
-          Every team has completed its 14 active roster selections.
+          Every team has completed 14 active selections and 3 bench selections.
         </p>
       </section>
     } @else {
@@ -110,13 +125,8 @@
         [class.sync-success]="injurySyncState()?.status === 'success'"
         [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
       >
-        <div>
-          <span class="eyebrow">Shared Injury Report</span>
-          <strong>{{ getDraftInjurySyncStatusLabel() }}</strong>
-        </div>
-
-        <p>{{ getDraftInjurySyncDescription() }}</p>
-        <small>{{ getDraftInjurySyncTimeLabel() }}</small>
+        <strong>Injury Report</strong>
+        <span>{{ getDraftInjurySyncTimeLabel() }}</span>
       </section>
 
       <section
@@ -181,6 +191,98 @@
             <span>
               {{ draft()?.pickSeconds ?? 60 }} seconds per pick
             </span>
+          }
+        </div>
+      </section>
+
+      <section class="draft-roster-needs" aria-label="Your draft roster needs">
+        <div class="draft-roster-needs-heading">
+          <div>
+            <span class="eyebrow">Your Roster</span>
+            <strong>Starter and Bench Availability</strong>
+          </div>
+          <span class="bench-need-pill" [class.bench-full]="getOpenBenchSlotCount(userId) === 0">
+            Bench {{ getMyBenchCount() }}/{{ getBenchRequirement() }}
+          </span>
+        </div>
+
+        <div class="draft-roster-needs-track">
+          @for (position of rosterPositions; track position) {
+            <button
+              type="button"
+              class="draft-roster-need"
+              [class.need-open]="getRosterNeedClass(position) === 'need-open'"
+              [class.need-bench]="getRosterNeedClass(position) === 'need-bench'"
+              [class.need-full]="getRosterNeedClass(position) === 'need-full'"
+              (click)="positionFilter.set(position)"
+            >
+              <strong>{{ position }}</strong>
+              <span>{{ getRosterNeedLabel(position) }}</span>
+            </button>
+          }
+        </div>
+      </section>
+
+      <section class="draft-pick-track-card">
+        <div class="draft-pick-track-heading">
+          <div>
+            <span class="eyebrow">Draft Order</span>
+            <h2>Recent & Upcoming Picks</h2>
+          </div>
+          <span>Swipe or scroll</span>
+        </div>
+
+        <div
+          #draftTimelineScroller
+          class="draft-pick-track"
+          aria-label="Recent and upcoming draft picks"
+        >
+          @for (entry of draftTimeline(); track entry.preview.overallPick) {
+            <article
+              class="draft-pick-track-item"
+              [class.completed-pick]="!!entry.pick"
+              [class.current-pick]="entry.preview.overallPick === currentPick()?.overallPick"
+              [attr.data-pick-number]="entry.preview.overallPick"
+            >
+              <span class="draft-pick-number">#{{ entry.preview.overallPick }}</span>
+
+              @if (entry.pick; as completedPick) {
+                @if (getTimelineLogoUrl(completedPick); as logoUrl) {
+                  <img
+                    class="draft-pick-logo"
+                    [src]="logoUrl"
+                    [alt]="getAssetTeamLabel(completedPick.asset) + ' logo'"
+                    loading="lazy"
+                  />
+                } @else {
+                  <span class="draft-pick-logo-fallback">
+                    {{ getAssetTeamLabel(completedPick.asset) }}
+                  </span>
+                }
+
+                <div class="draft-pick-track-copy">
+                  <strong>{{ getAssetName(completedPick.asset) }}</strong>
+                  <small>
+                    {{ completedPick.asset.position }}
+                    ·
+                    {{ getAssetTeamLabel(completedPick.asset) }}
+                  </small>
+                </div>
+              } @else {
+                <span class="upcoming-pick-marker" aria-hidden="true">⌛</span>
+
+                <div class="draft-pick-track-copy">
+                  <strong>{{ getTeamName(entry.preview.ownerId) }}</strong>
+                  <small>
+                    {{
+                      entry.preview.overallPick === currentPick()?.overallPick
+                        ? 'On the clock'
+                        : 'Upcoming pick'
+                    }}
+                  </small>
+                </div>
+              }
+            </article>
           }
         </div>
       </section>
@@ -487,27 +589,15 @@
                 <span class="eyebrow">Your Draft List</span>
                 <h2>My Queue</h2>
               </div>
-
-              <button
-                type="button"
-                class="auto-draft-toggle"
-                [class.enabled]="myQueue().autoDraftEnabled"
-                (click)="toggleMyAutoDraft()"
-                [disabled]="queueSaving()"
-              >
-                {{
-                  myQueue().autoDraftEnabled
-                    ? 'Auto-Draft On'
-                    : 'Auto-Draft Off'
-                }}
-              </button>
             </div>
 
             <p class="queue-help">
-              Other managers cannot see this list. The commissioner can access it
-              only to process automatic picks. Auto-draft stays enabled for future
-              turns until you switch it off. It uses the first eligible queued
-              asset, then the best balanced-value asset available.
+              Other managers cannot see this list. Auto-draft fills every starting
+              roster spot before selecting any bench player. It then builds balanced
+              bench coverage with one forward, one defenseman, and one goalie unit,
+              while still honoring the first eligible player in your queue. Two
+              consecutive expired turns automatically switch auto-draft on until you
+              turn it off with the button at the top of the page.
             </p>
 
             @if (queueAssets().length === 0) {
@@ -572,9 +662,10 @@
         <div class="drafted-position-header">
           <strong>{{ position }}</strong>
           <span>
-            {{ getMyPositionCount(position) }}
-            /
-            {{ getPositionRequirement(position) }}
+            Active {{ getMyStarterPositionCount(position) }} / {{ getPositionRequirement(position) }}
+            @if (getMyBenchPositionCount(position) > 0) {
+              · +{{ getMyBenchPositionCount(position) }} bench
+            }
           </span>
         </div>
 
@@ -635,6 +726,9 @@
       <span>
         {{ getAssetTeamLabel(pick.asset) }}
         · Pick #{{ pick.overallPick }}
+        @if (isBenchDraftPick(pick)) {
+          · Bench
+        }
       </span>
     </div>
 
@@ -665,7 +759,7 @@
   </small>
 
   <small>
-    Rating:
+    {{ getAssetRatingLabel(pick.asset) }}:
     {{ getAssetRatingDisplay(pick.asset) }}
   </small>
 
@@ -724,50 +818,6 @@
   </div>
 </section>
 
-          <section class="sidebar-card">
-            <span class="eyebrow">Up Next</span>
-            <h2>Upcoming Picks</h2>
-
-            <div class="upcoming-list">
-              @for (pick of upcomingPicks(); track pick.overallPick) {
-                <div
-                  class="upcoming-row"
-                  [class.current-upcoming]="pick.overallPick === currentPick()?.overallPick"
-                >
-                  <span>#{{ pick.overallPick }}</span>
-                  <strong>{{ getTeamName(pick.ownerId) }}</strong>
-                </div>
-              }
-            </div>
-          </section>
-
-          <section class="sidebar-card">
-            <span class="eyebrow">Recent Activity</span>
-            <h2>Recent Picks</h2>
-
-            @if (recentPicks().length === 0) {
-              <p class="empty-sidebar-copy">
-                No picks have been made yet.
-              </p>
-            } @else {
-              <div class="recent-picks-list">
-                @for (pick of recentPicks(); track pick.overallPick) {
-                  <div class="recent-pick-row">
-                    <span>#{{ pick.overallPick }}</span>
-
-                    <div>
-                      <strong>{{ getAssetName(pick.asset) }}</strong>
-                      <small>
-                        {{ getTeamName(pick.ownerId) }}
-                        ·
-                        {{ pick.asset.position }}{{ getPickSelectionLabel(pick) }}
-                      </small>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-          </section>
         </aside>
       </section>
     }

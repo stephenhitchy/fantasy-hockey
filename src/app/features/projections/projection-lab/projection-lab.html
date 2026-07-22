@@ -480,6 +480,7 @@
               <th>Baseline</th>
               <th>Recent Form</th>
               <th>Role</th>
+              <th>Schedule</th>
               <th>10 / 20 Game PPG</th>
               <th>Floor Cycle</th>
               <th>Reliability</th>
@@ -582,6 +583,17 @@
                   >
                     {{ getSignedDisplayNumber(row.roleAdjustment) }}
                   </span>
+                </td>
+
+                <td>
+                  <span
+                    [class]="'form-adjustment ' + getRecentFormClass(row.scheduleStrengthAdjustment)"
+                  >
+                    {{ getSignedDisplayNumber(row.scheduleStrengthAdjustment) }}
+                  </span>
+                  <small class="rating-basis">
+                    {{ getScheduleDescription(row) }}
+                  </small>
                 </td>
 
                 <td>

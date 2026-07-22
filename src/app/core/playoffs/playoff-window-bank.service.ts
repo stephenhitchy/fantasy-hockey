@@ -16,7 +16,7 @@ import {
   ensureWindowProjectionBundle,
   FrozenWindowProjectionFields,
 } from '../projection/window-projection.service';
-import { FantasyRoster, RosterAsset } from '../team/roster.models';
+import { FantasyRoster, PendingRosterSlotMove, RosterAsset } from '../team/roster.models';
 import { normalizeFantasyRoster } from '../team/roster.service';
 import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scoring.service';
 import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
@@ -265,6 +265,16 @@ function projectionFields(asset: DraftableAsset | RosterAsset): DraftProjection 
     seasonBaselineCyclePoints: projection.seasonBaselineCyclePoints ?? null,
     recentFormAdjustment: projection.recentFormAdjustment ?? null,
     roleAdjustment: projection.roleAdjustment ?? null,
+    scheduleStrengthAdjustment: projection.scheduleStrengthAdjustment ?? null,
+    scheduleStrengthMultiplier: projection.scheduleStrengthMultiplier ?? null,
+    scheduleDifficultyRating: projection.scheduleDifficultyRating ?? null,
+    scheduleDifficultyLabel: projection.scheduleDifficultyLabel ?? null,
+    scheduleDataConfidence: projection.scheduleDataConfidence ?? null,
+    projectionHomeGames: projection.projectionHomeGames ?? null,
+    projectionRoadGames: projection.projectionRoadGames ?? null,
+    projectionBackToBackGames: projection.projectionBackToBackGames ?? null,
+    projectionRestAdvantageGames: projection.projectionRestAdvantageGames ?? null,
+    projectionOpponentAbbreviations: projection.projectionOpponentAbbreviations ?? null,
     projectionDataSeason: projection.projectionDataSeason ?? null,
     projectionDataSource: projection.projectionDataSource ?? null,
     projectionGamesPlayed: projection.projectionGamesPlayed ?? null,
@@ -299,6 +309,7 @@ function projectionFields(asset: DraftableAsset | RosterAsset): DraftProjection 
     healthyProjectedCyclePoints: projection.healthyProjectedCyclePoints ?? null,
     scheduledGamesInProjectionCycle: projection.scheduledGamesInProjectionCycle ?? null,
     expectedGamesAvailable: projection.expectedGamesAvailable ?? null,
+    expectedGamesMissed: projection.expectedGamesMissed ?? null,
     availabilityAdjustment: projection.availabilityAdjustment ?? null,
     availabilityAdjustedCyclePoints: projection.availabilityAdjustedCyclePoints ?? null,
     availabilityStatus: projection.availabilityStatus ?? null,
@@ -741,6 +752,31 @@ export async function ensureNextPlayoffBankWindows(input: {
   }
 }
 
+function getPendingMoveRequestedCycleNumber(
+  pendingMove: PendingRosterSlotMove | null | undefined,
+): number | null {
+  const requestedCycleNumber = pendingMove?.requestedEffectiveCycleNumber;
+
+  return typeof requestedCycleNumber === 'number' &&
+    Number.isFinite(requestedCycleNumber) &&
+    requestedCycleNumber > 0
+    ? Math.floor(requestedCycleNumber)
+    : null;
+}
+
+function canActivatePendingMoveInCycle(
+  pendingMove: PendingRosterSlotMove | null | undefined,
+  cycleNumber: number,
+): boolean {
+  if (!pendingMove) {
+    return false;
+  }
+
+  const requestedCycleNumber = getPendingMoveRequestedCycleNumber(pendingMove);
+
+  return requestedCycleNumber === null || cycleNumber >= requestedCycleNumber;
+}
+
 async function createNextPlayoffBankWindow(
   leagueId: string,
   playoffs: FantasyPlayoffs,
@@ -780,7 +816,10 @@ async function createNextPlayoffBankWindow(
 
     for (const [slotIndex, slot] of roster.activeSlots.entries()) {
       const outgoingAsset = slot.asset;
-      const incomingAsset = slot.pendingMove?.incomingAsset ?? outgoingAsset;
+      const pendingMoveReady = canActivatePendingMoveInCycle(slot.pendingMove, sourceCycleNumber);
+      const incomingAsset = pendingMoveReady
+        ? (slot.pendingMove?.incomingAsset ?? outgoingAsset)
+        : outgoingAsset;
 
       if (!incomingAsset) {
         continue;
@@ -808,12 +847,38 @@ async function createNextPlayoffBankWindow(
 
       picks.push(pick);
 
-      if (slot.pendingMove) {
+      if (slot.pendingMove && pendingMoveReady) {
         const pendingMove = slot.pendingMove;
-        slot.asset = pendingMove.incomingAsset;
+        const sourceBenchSlotId = pendingMove.sourceBenchSlotId ?? null;
+
+        if (sourceBenchSlotId) {
+          const benchSlotIndex = roster.benchSlots.findIndex(
+            (benchSlot) => benchSlot.slotId === sourceBenchSlotId,
+          );
+
+          if (benchSlotIndex === -1) {
+            throw new Error(
+              `Bench slot ${sourceBenchSlotId} was not found while opening playoff window ${windowNumber}.`,
+            );
+          }
+
+          const benchSlot = roster.benchSlots[benchSlotIndex];
+          if (getRosterAssetKey(benchSlot.asset) !== incomingAssetKey) {
+            throw new Error('The reserved bench asset changed before its playoff activation.');
+          }
+
+          roster.benchSlots[benchSlotIndex] = {
+            ...benchSlot,
+            asset: outgoingAsset
+              ? { ...outgoingAsset, rosterStatus: 'benched' }
+              : null,
+          };
+        }
+
+        slot.asset = { ...pendingMove.incomingAsset, rosterStatus: 'active' };
         slot.pendingMove = null;
 
-        if (outgoingAsset) {
+        if (!sourceBenchSlotId && outgoingAsset) {
           const outgoingAssetKey = getRosterAssetKey(outgoingAsset);
 
           if (outgoingAssetKey && outgoingAssetKey !== incomingAssetKey) {
@@ -844,11 +909,12 @@ async function createNextPlayoffBankWindow(
         }
 
         transaction.set(doc(getTransactionsRef(leagueId)), {
-          type: 'slot-move-activated',
+          type: sourceBenchSlotId ? 'active-bench-swap-activated' : 'slot-move-activated',
           ownerId,
           addedAsset: rosterAssetToDraftableAsset(incomingAsset, sourceCycleNumber, null, null),
           droppedAsset: outgoingAsset,
-          waiverId: outgoingAsset ? getRosterAssetKey(outgoingAsset) : null,
+          waiverId: !sourceBenchSlotId && outgoingAsset ? getRosterAssetKey(outgoingAsset) : null,
+          benchSlotId: sourceBenchSlotId,
           rosterSlotId: slot.slotId,
           targetSlotId: slot.slotId,
           queuedMoveId: pendingMove.id,
@@ -889,6 +955,7 @@ async function createNextPlayoffBankWindow(
       {
         schemaVersion: roster.schemaVersion,
         activeSlots: roster.activeSlots,
+        benchSlots: roster.benchSlots,
         irSlots: roster.irSlots,
         updatedAt: serverTimestamp(),
       },

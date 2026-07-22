@@ -42,3 +42,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Firebase local and generated files
+.firebase/
+functions/node_modules/
+functions/lib/

@@ -83,6 +83,10 @@ export interface PlayerAvailabilitySyncState {
   status: 'running' | 'success' | 'error';
   lastAttemptAt: string;
   lastSuccessfulSyncAt: string;
+
+  /** Lease deadline for an in-progress refresh. Used to recover stale jobs. */
+  leaseExpiresAt?: string;
+
   updatedBy: string;
   fetchedCount: number;
   matchedCount: number;
