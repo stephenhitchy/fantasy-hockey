@@ -812,6 +812,38 @@ service cloud.firestore {
         validUserProfileUpdate();
 
       allow delete: if false;
+
+      match /matchupScoreViews/{viewId} {
+        function validScoreViewWrite() {
+          let data = request.resource.data;
+
+          return data.keys().hasOnly([
+              'schemaVersion',
+              'userId',
+              'leagueId',
+              'cycleNumber',
+              'scores',
+              'observedAtIso',
+              'updatedAt'
+            ]) &&
+            data.schemaVersion == 1 &&
+            data.userId == currentUserId() &&
+            data.leagueId is string &&
+            data.leagueId.size() > 0 &&
+            data.cycleNumber is int &&
+            data.cycleNumber > 0 &&
+            data.scores is map &&
+            data.observedAtIso is string &&
+            data.updatedAt == request.time;
+        }
+
+        allow get: if signedIn() && userId == currentUserId();
+        allow list: if false;
+        allow create, update: if signedIn() &&
+          userId == currentUserId() &&
+          validScoreViewWrite();
+        allow delete: if signedIn() && userId == currentUserId();
+      }
     }
 
     match /leagueInvites/{inviteCode} {

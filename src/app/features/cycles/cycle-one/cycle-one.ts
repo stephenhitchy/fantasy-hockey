@@ -97,6 +97,11 @@ import {
 } from '../../../core/live-scoring/live-scoring.models';
 
 import {
+  getMatchupScoreViewState,
+  saveMatchupScoreViewState,
+} from '../../../core/live-scoring/matchup-score-view.service';
+
+import {
   getPlayerAvailabilityForPlayer,
   startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
@@ -150,6 +155,18 @@ interface CycleWindowGameMarker {
   title: string;
 }
 
+interface ScoreDeltaAnimation {
+  id: number;
+  delta: number;
+  direction: 'gain' | 'loss';
+}
+
+interface PendingScoreDelta {
+  delta: number;
+  rosterOrder: number;
+  targetScore: number;
+}
+
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
     return Promise.resolve(auth.currentUser);
@@ -196,6 +213,7 @@ export class CycleOne implements OnDestroy {
   historicalReplayMessage = signal('');
   historicalReplayError = signal('');
   matchupView = signal<MatchupViewMode>('both');
+  scoreDeltaAnimations = signal<Record<string, ScoreDeltaAnimation>>({});
 
   scoringLoading = signal(false);
   scoringError = signal('');
@@ -823,6 +841,18 @@ export class CycleOne implements OnDestroy {
   private autoCompleteAttemptKey: string | null = null;
   private autoStartNextCycleAttemptKey: string | null = null;
   private projectionAccuracyAttemptKey: string | null = null;
+  private readonly scoreDeltaAnimationDurationMs = 3200;
+  private readonly scoreDeltaCascadeDelayMs = 500;
+  private scoreDeltaAnimationId = 0;
+  private scoreDeltaTimers = new Set<ReturnType<typeof setTimeout>>();
+  private pendingScoreDeltas = new Map<string, PendingScoreDelta>();
+  private scheduledScoreDeltaAssetKeys = new Set<string>();
+  private scoreDeltaVisibilityTimer: ReturnType<typeof setTimeout> | null = null;
+  private observedScoreBaselineLoaded = false;
+  private observedScoreBaselineExists = false;
+  private observedScoreBaselineInitialized = false;
+  private observedScoreBaseline: Record<string, number> = {};
+  private observedScoreSaveChain: Promise<void> = Promise.resolve();
 
   private getCycleDisplayPickIdentity(pick: DraftPick): string {
     return [pick.ownerId, pick.rosterSlotId ?? `${pick.asset.position}:${pick.overallPick}`].join('::');
@@ -937,6 +967,316 @@ export class CycleOne implements OnDestroy {
     }
   }
 
+  private getCurrentUserScoreEntries(result: CycleScoringResult): Array<{
+    pick: DraftPick;
+    rosterOrder: number;
+    score: number;
+  }> {
+    return this.getTeamPicks(this.userId).map((pick, rosterOrder) => ({
+      pick,
+      rosterOrder,
+      score: Number(
+        (result.assetScores[pick.asset.assetKey]?.currentScore ?? 0).toFixed(1),
+      ),
+    }));
+  }
+
+  private queuePendingScoreDelta(input: {
+    assetKey: string;
+    delta: number;
+    rosterOrder: number;
+    targetScore: number;
+  }): void {
+    const existing = this.pendingScoreDeltas.get(input.assetKey);
+    const combinedDelta = Number(((existing?.delta ?? 0) + input.delta).toFixed(1));
+
+    if (Math.abs(combinedDelta) < 0.1) {
+      this.pendingScoreDeltas.delete(input.assetKey);
+      return;
+    }
+
+    this.pendingScoreDeltas.set(input.assetKey, {
+      delta: combinedDelta,
+      rosterOrder: Math.min(existing?.rosterOrder ?? input.rosterOrder, input.rosterOrder),
+      targetScore: input.targetScore,
+    });
+  }
+
+  private persistObservedScoreBaseline(): void {
+    if (!this.userId || !this.leagueId || !this.observedScoreBaselineLoaded) {
+      return;
+    }
+
+    const payload = {
+      userId: this.userId,
+      leagueId: this.leagueId,
+      cycleNumber: this.cycleNumber,
+      scores: { ...this.observedScoreBaseline },
+    };
+
+    this.observedScoreSaveChain = this.observedScoreSaveChain
+      .catch(() => undefined)
+      .then(() => saveMatchupScoreViewState(payload))
+      .catch((error: unknown) => {
+        console.warn('Unable to persist matchup score-view state.', error);
+      });
+  }
+
+  private markScoreDeltaObserved(assetKey: string, targetScore: number): void {
+    this.observedScoreBaseline[assetKey] = Number(targetScore.toFixed(1));
+    this.observedScoreBaselineExists = true;
+    this.persistObservedScoreBaseline();
+  }
+
+  private initializeObservedScoreBaseline(nextResult: CycleScoringResult): boolean {
+    if (
+      this.observedScoreBaselineInitialized ||
+      !this.observedScoreBaselineLoaded ||
+      !this.userId
+    ) {
+      return false;
+    }
+
+    const scoreEntries = this.getCurrentUserScoreEntries(nextResult);
+
+    if (scoreEntries.length === 0) {
+      return false;
+    }
+
+    this.observedScoreBaselineInitialized = true;
+    let baselineChanged = false;
+
+    if (!this.observedScoreBaselineExists) {
+      this.observedScoreBaseline = Object.fromEntries(
+        scoreEntries.map(({ pick, score }) => [pick.asset.assetKey, score]),
+      );
+      this.observedScoreBaselineExists = true;
+      this.persistObservedScoreBaseline();
+      return true;
+    }
+
+    for (const { pick, rosterOrder, score } of scoreEntries) {
+      const assetKey = pick.asset.assetKey;
+      const observedScore = this.observedScoreBaseline[assetKey];
+
+      if (typeof observedScore !== 'number' || !Number.isFinite(observedScore)) {
+        this.observedScoreBaseline[assetKey] = score;
+        baselineChanged = true;
+        continue;
+      }
+
+      const delta = Number((score - observedScore).toFixed(1));
+
+      if (Math.abs(delta) >= 0.1) {
+        this.queuePendingScoreDelta({
+          assetKey,
+          delta,
+          rosterOrder,
+          targetScore: score,
+        });
+      }
+    }
+
+    if (baselineChanged) {
+      this.persistObservedScoreBaseline();
+    }
+
+    if (this.pendingScoreDeltas.size > 0) {
+      this.queueScoreDeltaVisibilityCheck();
+    }
+
+    return true;
+  }
+
+  private clearScoreDeltaTimers(): void {
+    for (const timer of this.scoreDeltaTimers) {
+      clearTimeout(timer);
+    }
+
+    if (this.scoreDeltaVisibilityTimer) {
+      clearTimeout(this.scoreDeltaVisibilityTimer);
+      this.scoreDeltaVisibilityTimer = null;
+    }
+
+    this.scoreDeltaTimers.clear();
+    this.pendingScoreDeltas.clear();
+    this.scheduledScoreDeltaAssetKeys.clear();
+    this.scoreDeltaAnimations.set({});
+  }
+
+  private isScoreDeltaTargetVisible(assetKey: string): boolean {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return false;
+    }
+
+    if (document.visibilityState !== 'visible') {
+      return false;
+    }
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-score-asset-key]'),
+    ).filter((element) => element.dataset['scoreAssetKey'] === assetKey);
+
+    return candidates.some((element) => {
+      const style = window.getComputedStyle(element);
+
+      if (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity) === 0
+      ) {
+        return false;
+      }
+
+      const rect = element.getBoundingClientRect();
+
+      if (rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+
+      const visibleWidth = Math.max(
+        0,
+        Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0),
+      );
+      const visibleHeight = Math.max(
+        0,
+        Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0),
+      );
+      const visibleArea = visibleWidth * visibleHeight;
+      const totalArea = rect.width * rect.height;
+
+      return totalArea > 0 && visibleArea / totalArea >= 0.55;
+    });
+  }
+
+  private queueScoreDeltaVisibilityCheck(delayMs = 120): void {
+    if (
+      this.scoreDeltaVisibilityTimer ||
+      (this.pendingScoreDeltas.size === 0 && this.scheduledScoreDeltaAssetKeys.size === 0)
+    ) {
+      return;
+    }
+
+    this.scoreDeltaVisibilityTimer = setTimeout(() => {
+      this.scoreDeltaVisibilityTimer = null;
+      this.processVisibleScoreDeltaQueue();
+
+      if (this.pendingScoreDeltas.size > 0 || this.scheduledScoreDeltaAssetKeys.size > 0) {
+        this.queueScoreDeltaVisibilityCheck(280);
+      }
+    }, delayMs);
+  }
+
+  private processVisibleScoreDeltaQueue(): void {
+    const visiblePending = Array.from(this.pendingScoreDeltas.entries())
+      .filter(
+        ([assetKey]) =>
+          !this.scheduledScoreDeltaAssetKeys.has(assetKey) &&
+          !this.scoreDeltaAnimations()[assetKey] &&
+          this.isScoreDeltaTargetVisible(assetKey),
+      )
+      .sort(([, first], [, second]) => first.rosterOrder - second.rosterOrder);
+
+    visiblePending.forEach(([assetKey], index) => {
+      this.scheduledScoreDeltaAssetKeys.add(assetKey);
+
+      const startTimer = setTimeout(() => {
+        this.scoreDeltaTimers.delete(startTimer);
+        this.scheduledScoreDeltaAssetKeys.delete(assetKey);
+
+        const pending = this.pendingScoreDeltas.get(assetKey);
+
+        if (!pending) {
+          return;
+        }
+
+        if (!this.isScoreDeltaTargetVisible(assetKey)) {
+          this.queueScoreDeltaVisibilityCheck();
+          return;
+        }
+
+        this.pendingScoreDeltas.delete(assetKey);
+        this.markScoreDeltaObserved(assetKey, pending.targetScore);
+
+        const animation: ScoreDeltaAnimation = {
+          id: ++this.scoreDeltaAnimationId,
+          delta: pending.delta,
+          direction: pending.delta >= 0 ? 'gain' : 'loss',
+        };
+
+        this.scoreDeltaAnimations.update((current) => ({
+          ...current,
+          [assetKey]: animation,
+        }));
+
+        const cleanupTimer = setTimeout(() => {
+          this.scoreDeltaAnimations.update((current) => {
+            if (current[assetKey]?.id !== animation.id) {
+              return current;
+            }
+
+            const next = { ...current };
+            delete next[assetKey];
+            return next;
+          });
+          this.scoreDeltaTimers.delete(cleanupTimer);
+          this.queueScoreDeltaVisibilityCheck();
+        }, this.scoreDeltaAnimationDurationMs);
+
+        this.scoreDeltaTimers.add(cleanupTimer);
+      }, index * this.scoreDeltaCascadeDelayMs);
+
+      this.scoreDeltaTimers.add(startTimer);
+    });
+  }
+
+  private scheduleScoreDeltaAnimations(
+    previousResult: CycleScoringResult | null,
+    nextResult: CycleScoringResult,
+  ): void {
+    const initializedFromPersistedState = this.initializeObservedScoreBaseline(nextResult);
+
+    if (initializedFromPersistedState || !previousResult || !this.userId) {
+      return;
+    }
+
+    const changedPicks = this.getCurrentUserScoreEntries(nextResult)
+      .map(({ pick, rosterOrder, score: nextScore }) => {
+        const previousScore = Number(
+          (previousResult.assetScores[pick.asset.assetKey]?.currentScore ?? 0).toFixed(1),
+        );
+        const delta = Number((nextScore - previousScore).toFixed(1));
+
+        return { pick, delta, rosterOrder, nextScore };
+      })
+      .filter(({ delta }) => Math.abs(delta) >= 0.1);
+
+    if (changedPicks.length === 0) {
+      return;
+    }
+
+    for (const { pick, delta, rosterOrder, nextScore } of changedPicks) {
+      this.queuePendingScoreDelta({
+        assetKey: pick.asset.assetKey,
+        delta,
+        rosterOrder,
+        targetScore: nextScore,
+      });
+    }
+
+    this.queueScoreDeltaVisibilityCheck();
+  }
+
+  getScoreDeltaAnimation(asset: DraftableAsset): ScoreDeltaAnimation | null {
+    return this.scoreDeltaAnimations()[asset.assetKey] ?? null;
+  }
+
+  getScoreDeltaLabel(animation: ScoreDeltaAnimation): string {
+    return `${animation.delta > 0 ? '+' : ''}${animation.delta.toFixed(1)}`;
+  }
+
   private async applySharedScoringSnapshot(snapshot: SharedCycleScoringSnapshot): Promise<void> {
     if (snapshot.cycleNumber !== this.cycleNumber) {
       return;
@@ -945,7 +1285,9 @@ export class CycleOne implements OnDestroy {
     const cycle = this.cycle();
     const picks = this.picks();
     const result = snapshot.result;
+    const previousResult = this.cycleScoring();
 
+    this.scheduleScoreDeltaAnimations(previousResult, result);
     this.sharedScoringSnapshot.set(snapshot);
     this.cycleScoring.set(result);
     this.scoringLoading.set(false);
@@ -1413,6 +1755,7 @@ export class CycleOne implements OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
+    this.clearScoreDeltaTimers();
     this.stopLiveListeners();
   }
 
@@ -1440,6 +1783,7 @@ export class CycleOne implements OnDestroy {
 
   private resetPageStateForNewRoute(): void {
     this.stopLiveListeners();
+    this.clearScoreDeltaTimers();
 
     this.matchupId = null;
     this.liveDraftPicks = [];
@@ -1464,6 +1808,11 @@ export class CycleOne implements OnDestroy {
     this.historicalReplayMessage.set('');
     this.historicalReplayError.set('');
     this.matchupView.set('both');
+    this.observedScoreBaselineLoaded = false;
+    this.observedScoreBaselineExists = false;
+    this.observedScoreBaselineInitialized = false;
+    this.observedScoreBaseline = {};
+    this.observedScoreSaveChain = Promise.resolve();
 
     this.scoringLoading.set(false);
     this.scoringError.set('');
@@ -1527,14 +1876,19 @@ export class CycleOne implements OnDestroy {
     startPlayerAvailabilityListenerForLeague(leagueId);
 
     try {
-      const [league, teams] = await Promise.all([
+      const [league, teams, scoreViewState] = await Promise.all([
         getLeagueById(leagueId),
         getLeagueTeams(leagueId),
+        getMatchupScoreViewState(user.uid, leagueId, cycleNumber),
       ]);
 
       if (requestId !== this.pageLoadRequestId) {
         return;
       }
+
+      this.observedScoreBaselineLoaded = true;
+      this.observedScoreBaselineExists = Boolean(scoreViewState);
+      this.observedScoreBaseline = { ...(scoreViewState?.scores ?? {}) };
 
       if (!league) {
         this.errorMessage.set('League not found.');

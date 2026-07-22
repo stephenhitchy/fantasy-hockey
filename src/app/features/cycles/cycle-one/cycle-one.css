@@ -540,6 +540,104 @@
   text-transform: uppercase;
 }
 
+.current-score-cell {
+  position: relative;
+  overflow: visible;
+}
+
+.fantasy-player-score-stack .score-delta-pop,
+.mobile-h2h-player-scores .score-delta-pop {
+  position: absolute;
+  z-index: 6;
+  top: 50%;
+  right: calc(100% + 5px);
+  display: inline-flex;
+  min-width: 42px;
+  min-height: 21px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 3px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  opacity: 0;
+  font-size: 9px;
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.78);
+  animation: score-delta-cascade 3.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.score-delta-gain {
+  background: rgba(28, 96, 58, 0.96);
+  color: #9ff5bf;
+  box-shadow: 0 5px 14px rgba(4, 32, 17, 0.42);
+}
+
+.score-delta-loss {
+  background: rgba(112, 37, 48, 0.96);
+  color: #ffb5bd;
+  box-shadow: 0 5px 14px rgba(42, 5, 11, 0.42);
+}
+
+.current-score-cell.score-change-active {
+  animation: score-cell-pulse 1.35s ease-out both;
+}
+
+.mobile-h2h-player-scores .current-score-cell {
+  position: relative;
+}
+
+.mobile-h2h-player-scores .score-delta-pop {
+  top: -5px;
+  right: 0;
+  transform: translateY(-100%) scale(0.78);
+}
+
+@keyframes score-delta-cascade {
+  0% {
+    opacity: 0;
+    transform: translateY(calc(-50% + 7px)) scale(0.78);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.08);
+  }
+  25%,
+  82% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(calc(-50% - 9px)) scale(0.92);
+  }
+}
+
+@keyframes score-cell-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(152, 245, 189, 0);
+  }
+  35% {
+    box-shadow: 0 0 0 2px rgba(152, 245, 189, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(152, 245, 189, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fantasy-player-score-stack .score-delta-pop,
+  .mobile-h2h-player-scores .score-delta-pop,
+  .current-score-cell.score-change-active {
+    animation-duration: 0.01ms;
+  }
+}
+
 .position-total-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

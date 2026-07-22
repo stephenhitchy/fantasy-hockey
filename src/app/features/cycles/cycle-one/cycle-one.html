@@ -719,7 +719,18 @@
                                 </div>
 
                                 <div class="mobile-h2h-player-scores">
-                                  <span>Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong></span>
+                                  <span class="current-score-cell" [class.score-change-active]="getScoreDeltaAnimation(pick.asset)" [attr.data-score-asset-key]="pick.asset.assetKey">
+                                    Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                                    @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                      <small
+                                        class="score-delta-pop"
+                                        [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                        [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                      >
+                                        {{ getScoreDeltaLabel(scoreUpdate) }}
+                                      </small>
+                                    }
+                                  </span>
                                   <span>Proj <strong>{{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}</strong></span>
                                 </div>
                               </article>
@@ -762,7 +773,18 @@
                                 </div>
 
                                 <div class="mobile-h2h-player-scores">
-                                  <span>Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong></span>
+                                  <span class="current-score-cell" [class.score-change-active]="getScoreDeltaAnimation(pick.asset)" [attr.data-score-asset-key]="pick.asset.assetKey">
+                                    Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                                    @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                      <small
+                                        class="score-delta-pop"
+                                        [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                        [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                      >
+                                        {{ getScoreDeltaLabel(scoreUpdate) }}
+                                      </small>
+                                    }
+                                  </span>
                                   <span>Proj <strong>{{ getProjectionDisplay(getBestCycleProjection(pick.asset)) }}</strong></span>
                                 </div>
                               </article>
@@ -913,7 +935,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -922,6 +948,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
@@ -1060,7 +1095,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -1069,6 +1108,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
@@ -1205,7 +1253,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -1214,6 +1266,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
@@ -1406,7 +1467,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -1415,6 +1480,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
@@ -1553,7 +1627,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -1562,6 +1640,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
@@ -1698,7 +1785,11 @@
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
-                                      <div>
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
                                         <strong>
                                           {{
                                             getProjectionDisplay(
@@ -1707,6 +1798,15 @@
                                           }}
                                         </strong>
                                         <span>Cur</span>
+                                        @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
                                       </div>
 
                                       <div>
