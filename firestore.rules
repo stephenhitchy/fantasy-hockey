@@ -771,8 +771,29 @@ service cloud.firestore {
           ];
       }
 
+      function validTeamIdentityVariant(data) {
+        return !data.keys().hasAny(['favoriteTeamVariantId']) ||
+          (data.favoriteTeamVariantId is string &&
+            data.favoriteTeamVariantId.size() >= 1 &&
+            data.favoriteTeamVariantId.size() <= 80);
+      }
+
+      function validTeamIdentityUnlocks(data) {
+        return !data.keys().hasAny(['teamIdentityUnlocks']) ||
+          (data.teamIdentityUnlocks is list &&
+            data.teamIdentityUnlocks.size() <= 4 &&
+            data.teamIdentityUnlocks.hasOnly([
+              'first-line-change',
+              'commissioner-mode',
+              'league-explorer',
+              'crowded-schedule'
+            ]));
+      }
+
       function validUserPreferences(data) {
         return validFavoriteTeam(data) &&
+          validTeamIdentityVariant(data) &&
+          validTeamIdentityUnlocks(data) &&
           (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
           (!data.keys().hasAny(['defaultLandingPage']) ||
             data.defaultLandingPage in ['dashboard', 'lastLeague']) &&
@@ -790,6 +811,8 @@ service cloud.firestore {
         return changedFields.hasOnly([
             'username',
             'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'teamIdentityUnlocks',
             'reducedMotion',
             'defaultLandingPage',
             'backgroundTheme',

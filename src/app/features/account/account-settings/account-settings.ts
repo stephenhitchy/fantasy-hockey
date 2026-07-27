@@ -12,22 +12,37 @@ import {
   DefaultLandingPage,
   getUserProfile,
   updateFavoriteTeam,
+  updateTeamIdentityUnlocks,
   updateUserAccountSettings,
   UserProfile,
 } from '../../../core/user/user.service';
 import { applyUserTheme } from '../../../core/user/user-theme.service';
 import {
+  DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+  getNhlLogoUrl,
   getPixelTeamTheme,
+  getTeamIdentityVariants,
   NHL_PIXEL_TEAMS,
   PixelTeamTheme,
+  TEAM_IDENTITY_UNLOCK_DETAILS,
+  TeamIdentityUnlockRequirement,
 } from '../../../shared/pixel-theme/pixel-theme.data';
 
 interface AccountAchievement {
   icon: string;
   title: string;
   description: string;
+  reward: string;
+  unlockRequirement: TeamIdentityUnlockRequirement;
   unlocked: boolean;
 }
+
+const IDENTITY_UNLOCK_ORDER: Exclude<TeamIdentityUnlockRequirement, 'default'>[] = [
+  'first-line-change',
+  'commissioner-mode',
+  'league-explorer',
+  'crowded-schedule',
+];
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
@@ -60,9 +75,13 @@ export class AccountSettings {
   readonly emailVerified = signal(false);
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
+  readonly unlockedIdentityRequirements = signal<
+    Exclude<TeamIdentityUnlockRequirement, 'default'>[]
+  >([]);
 
   username = '';
   favoriteTeamAbbreviation = 'VGK';
+  favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
   reducedMotion = false;
   defaultLandingPage: DefaultLandingPage = 'dashboard';
   injuryEmailEnabled = false;
@@ -77,7 +96,14 @@ export class AccountSettings {
   ];
 
   selectedTeam(): PixelTeamTheme {
-    return getPixelTeamTheme(this.favoriteTeamAbbreviation);
+    return getPixelTeamTheme(
+      this.favoriteTeamAbbreviation,
+      this.favoriteTeamVariantId,
+    );
+  }
+
+  availableTeamVariants(): PixelTeamTheme[] {
+    return getTeamIdentityVariants(this.favoriteTeamAbbreviation);
   }
 
   managerInitials(): string {
@@ -98,30 +124,10 @@ export class AccountSettings {
   );
 
   readonly achievements = computed<AccountAchievement[]>(() => [
-    {
-      icon: 'rat',
-      title: 'First Line Change',
-      description: 'Join your first fantasy hockey league.',
-      unlocked: this.leagueCount() >= 1,
-    },
-    {
-      icon: 'draft',
-      title: 'Commissioner Mode',
-      description: 'Create or manage a league.',
-      unlocked: this.commissionerLeagueCount() >= 1,
-    },
-    {
-      icon: 'arena',
-      title: 'League Explorer',
-      description: 'Compete in three different leagues.',
-      unlocked: this.leagueCount() >= 3,
-    },
-    {
-      icon: 'league',
-      title: 'Crowded Schedule',
-      description: 'Face at least ten fantasy opponents.',
-      unlocked: this.opponentCount() >= 10,
-    },
+    this.buildAchievement('rat', 'first-line-change'),
+    this.buildAchievement('draft', 'commissioner-mode'),
+    this.buildAchievement('arena', 'league-explorer'),
+    this.buildAchievement('league', 'crowded-schedule'),
   ]);
 
   constructor(private router: Router) {
@@ -145,7 +151,6 @@ export class AccountSettings {
         getMyLeagueSummaries(),
       ]);
 
-      this.profile.set(profile);
       this.leagueSummaries.set(summaries);
       this.username = profile?.username ?? '';
       this.favoriteTeamAbbreviation = profile?.favoriteTeamAbbreviation || 'VGK';
@@ -155,8 +160,59 @@ export class AccountSettings {
       this.injuryEmailEnabled = profile?.injuryEmailEnabled === true;
       this.backgroundTheme = profile?.backgroundTheme || 'rink-dark';
 
+      const savedUnlocks = this.normalizeIdentityUnlocks(profile?.teamIdentityUnlocks);
+      const earnedUnlocks = this.getEarnedIdentityUnlocks(summaries);
+      const mergedUnlocks = this.mergeIdentityUnlocks(savedUnlocks, earnedUnlocks);
+      this.unlockedIdentityRequirements.set(mergedUnlocks);
+
+      const requestedVariant = getPixelTeamTheme(
+        this.favoriteTeamAbbreviation,
+        profile?.favoriteTeamVariantId,
+      );
+      const selectedVariant = this.isUnlockRequirementUnlocked(
+        requestedVariant.unlockRequirement,
+        mergedUnlocks,
+      )
+        ? requestedVariant
+        : getPixelTeamTheme(
+            this.favoriteTeamAbbreviation,
+            DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+          );
+      this.favoriteTeamVariantId = selectedVariant.variantId;
+
+      const normalizedProfile: UserProfile | null = profile
+        ? {
+            ...profile,
+            favoriteTeamVariantId: this.favoriteTeamVariantId,
+            teamIdentityUnlocks: mergedUnlocks,
+          }
+        : profile;
+      this.profile.set(normalizedProfile);
+
+      const persistenceTasks: Promise<void>[] = [];
+      if (!this.sameIdentityUnlocks(savedUnlocks, mergedUnlocks)) {
+        persistenceTasks.push(updateTeamIdentityUnlocks(user.uid, mergedUnlocks));
+      }
+      if (
+        profile?.favoriteTeamVariantId &&
+        profile.favoriteTeamVariantId !== this.favoriteTeamVariantId
+      ) {
+        persistenceTasks.push(
+          updateFavoriteTeam(
+            user.uid,
+            this.favoriteTeamAbbreviation,
+            this.favoriteTeamVariantId,
+          ),
+        );
+      }
+      if (persistenceTasks.length > 0) {
+        await Promise.all(persistenceTasks);
+      }
+
       applyUserTheme({
         favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+        favoriteTeamVariantId: this.favoriteTeamVariantId,
+        teamIdentityUnlocks: this.unlockedIdentityRequirements(),
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
         backgroundTheme: this.backgroundTheme,
@@ -175,62 +231,206 @@ export class AccountSettings {
       return;
     }
 
+    const previousTeam = this.favoriteTeamAbbreviation;
+    const previousVariant = this.favoriteTeamVariantId;
+
+    this.favoriteTeamAbbreviation = team.abbreviation;
+    this.favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+
+    await this.saveFavoriteTeamIdentity(
+      previousTeam,
+      previousVariant,
+      `${team.name} is now your saved favorite team. Choose a logo and color version below.`,
+    );
+  }
+
+  async selectTeamVariant(variant: PixelTeamTheme): Promise<void> {
+    if (!this.isTeamVariantUnlocked(variant)) {
+      const unlock = TEAM_IDENTITY_UNLOCK_DETAILS[variant.unlockRequirement];
+      this.successMessage.set('');
+      this.errorMessage.set(
+        `${variant.variantLabel} unlocks with ${unlock.challengeTitle}: ${unlock.description}`,
+      );
+      return;
+    }
+
+    if (
+      this.savingFavoriteTeam() ||
+      variant.abbreviation !== this.favoriteTeamAbbreviation ||
+      variant.variantId === this.favoriteTeamVariantId
+    ) {
+      return;
+    }
+
+    const previousTeam = this.favoriteTeamAbbreviation;
+    const previousVariant = this.favoriteTeamVariantId;
+    this.favoriteTeamVariantId = variant.variantId;
+
+    await this.saveFavoriteTeamIdentity(
+      previousTeam,
+      previousVariant,
+      `${variant.variantLabel} is now your active ${variant.name} identity.`,
+    );
+  }
+
+  private async saveFavoriteTeamIdentity(
+    previousTeam: string,
+    previousVariant: string,
+    successMessage: string,
+  ): Promise<void> {
     const user = auth.currentUser;
 
     if (!user) {
+      this.favoriteTeamAbbreviation = previousTeam;
+      this.favoriteTeamVariantId = previousVariant;
       this.errorMessage.set('You must be logged in.');
       return;
     }
 
-    const previousFavoriteTeam =
-      this.profile()?.favoriteTeamAbbreviation || this.favoriteTeamAbbreviation || 'VGK';
-
-    this.favoriteTeamAbbreviation = team.abbreviation;
     this.successMessage.set('');
     this.errorMessage.set('');
     this.savingFavoriteTeam.set(true);
-
-    applyUserTheme({
-      favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
-      reducedMotion: this.reducedMotion,
-      defaultLandingPage: this.defaultLandingPage,
-      backgroundTheme: this.backgroundTheme,
-    });
+    this.previewPreferenceChanges();
 
     try {
-      await updateFavoriteTeam(user.uid, team.abbreviation);
+      await updateFavoriteTeam(
+        user.uid,
+        this.favoriteTeamAbbreviation,
+        this.favoriteTeamVariantId,
+      );
 
       this.profile.update((current) =>
         current
           ? {
               ...current,
-              favoriteTeamAbbreviation: team.abbreviation,
+              favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+              favoriteTeamVariantId: this.favoriteTeamVariantId,
             }
           : current,
       );
 
-      this.successMessage.set(`${team.name} is now your saved favorite team.`);
+      this.successMessage.set(successMessage);
     } catch (error: unknown) {
-      this.favoriteTeamAbbreviation = previousFavoriteTeam;
-
-      applyUserTheme({
-        favoriteTeamAbbreviation: previousFavoriteTeam,
-        reducedMotion: this.reducedMotion,
-        defaultLandingPage: this.defaultLandingPage,
-        backgroundTheme: this.backgroundTheme,
-      });
-
+      this.favoriteTeamAbbreviation = previousTeam;
+      this.favoriteTeamVariantId = previousVariant;
+      this.previewPreferenceChanges();
       this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to save your favorite team.',
+        error instanceof Error ? error.message : 'Unable to save your team identity.',
       );
     } finally {
       this.savingFavoriteTeam.set(false);
     }
   }
 
+  isTeamVariantUnlocked(variant: PixelTeamTheme): boolean {
+    return this.isUnlockRequirementUnlocked(
+      variant.unlockRequirement,
+      this.unlockedIdentityRequirements(),
+    );
+  }
+
+  teamVariantUnlockLabel(variant: PixelTeamTheme): string {
+    if (this.isTeamVariantUnlocked(variant)) {
+      return variant.unlockRequirement === 'default' ? 'Included' : 'Unlocked';
+    }
+
+    return `Locked · ${TEAM_IDENTITY_UNLOCK_DETAILS[variant.unlockRequirement].challengeTitle}`;
+  }
+
+  handleTeamLogoError(event: Event, abbreviation: string): void {
+    const image = event.target as HTMLImageElement | null;
+    const fallbackUrl = getNhlLogoUrl(abbreviation);
+
+    if (!image || image.src === fallbackUrl) {
+      return;
+    }
+
+    image.onerror = null;
+    image.src = fallbackUrl;
+  }
+
+  private buildAchievement(
+    icon: string,
+    unlockRequirement: Exclude<TeamIdentityUnlockRequirement, 'default'>,
+  ): AccountAchievement {
+    const details = TEAM_IDENTITY_UNLOCK_DETAILS[unlockRequirement];
+
+    return {
+      icon,
+      title: details.challengeTitle,
+      description: details.description,
+      reward: details.rewardLabel,
+      unlockRequirement,
+      unlocked: this.isUnlockRequirementUnlocked(
+        unlockRequirement,
+        this.unlockedIdentityRequirements(),
+      ),
+    };
+  }
+
+  private getEarnedIdentityUnlocks(
+    summaries: LeagueSummary[],
+  ): Exclude<TeamIdentityUnlockRequirement, 'default'>[] {
+    const leagueCount = summaries.length;
+    const commissionerLeagueCount = summaries.filter((league) => league.isCommissioner).length;
+    const opponentCount = summaries.reduce(
+      (sum, league) => sum + Math.max(0, league.teamCount - 1),
+      0,
+    );
+    const earned: Exclude<TeamIdentityUnlockRequirement, 'default'>[] = [];
+
+    if (leagueCount >= 1) {
+      earned.push('first-line-change');
+    }
+    if (commissionerLeagueCount >= 1) {
+      earned.push('commissioner-mode');
+    }
+    if (leagueCount >= 3) {
+      earned.push('league-explorer');
+    }
+    if (opponentCount >= 10) {
+      earned.push('crowded-schedule');
+    }
+
+    return earned;
+  }
+
+  private normalizeIdentityUnlocks(
+    unlocks: TeamIdentityUnlockRequirement[] | null | undefined,
+  ): Exclude<TeamIdentityUnlockRequirement, 'default'>[] {
+    const saved = new Set(unlocks ?? []);
+
+    return IDENTITY_UNLOCK_ORDER.filter((requirement) => saved.has(requirement));
+  }
+
+  private mergeIdentityUnlocks(
+    first: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
+    second: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
+  ): Exclude<TeamIdentityUnlockRequirement, 'default'>[] {
+    const merged = new Set<TeamIdentityUnlockRequirement>([...first, ...second]);
+
+    return IDENTITY_UNLOCK_ORDER.filter((requirement) => merged.has(requirement));
+  }
+
+  private sameIdentityUnlocks(
+    first: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
+    second: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
+  ): boolean {
+    return first.length === second.length && first.every((value, index) => value === second[index]);
+  }
+
+  private isUnlockRequirementUnlocked(
+    requirement: TeamIdentityUnlockRequirement,
+    unlocked: TeamIdentityUnlockRequirement[],
+  ): boolean {
+    return requirement === 'default' || unlocked.includes(requirement);
+  }
+
   previewPreferenceChanges(): void {
     applyUserTheme({
       favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+      favoriteTeamVariantId: this.favoriteTeamVariantId,
+      teamIdentityUnlocks: this.unlockedIdentityRequirements(),
       reducedMotion: this.reducedMotion,
       defaultLandingPage: this.defaultLandingPage,
       backgroundTheme: this.backgroundTheme,
@@ -260,6 +460,8 @@ export class AccountSettings {
       await updateUserAccountSettings(user.uid, {
         username: normalizedUsername,
         favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+        favoriteTeamVariantId: this.favoriteTeamVariantId,
+        teamIdentityUnlocks: this.unlockedIdentityRequirements(),
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
         backgroundTheme: this.backgroundTheme,
@@ -272,6 +474,8 @@ export class AccountSettings {
               ...current,
               username: normalizedUsername,
               favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+              favoriteTeamVariantId: this.favoriteTeamVariantId,
+              teamIdentityUnlocks: this.unlockedIdentityRequirements(),
               reducedMotion: this.reducedMotion,
               defaultLandingPage: this.defaultLandingPage,
               backgroundTheme: this.backgroundTheme,

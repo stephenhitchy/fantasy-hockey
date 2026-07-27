@@ -190,6 +190,7 @@ export class Auth {
       {
         ...loadStoredUserTheme(),
         favoriteTeamAbbreviation: team.abbreviation,
+        favoriteTeamVariantId: 'current-home',
       },
       { persist: false },
     );

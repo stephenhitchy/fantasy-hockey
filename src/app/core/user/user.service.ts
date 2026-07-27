@@ -1,5 +1,6 @@
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import type { TeamIdentityUnlockRequirement } from '../../shared/pixel-theme/pixel-theme.data';
 
 export type DefaultLandingPage = 'dashboard' | 'lastLeague';
 export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-ice';
@@ -10,6 +11,8 @@ export interface UserProfile {
   username: string;
   createdAt?: unknown;
   favoriteTeamAbbreviation?: string;
+  favoriteTeamVariantId?: string;
+  teamIdentityUnlocks?: TeamIdentityUnlockRequirement[];
   reducedMotion?: boolean;
   defaultLandingPage?: DefaultLandingPage;
   backgroundTheme?: BackgroundTheme;
@@ -21,6 +24,8 @@ export interface UserProfile {
 export interface UserAccountSettingsUpdate {
   username: string;
   favoriteTeamAbbreviation: string;
+  favoriteTeamVariantId: string;
+  teamIdentityUnlocks: TeamIdentityUnlockRequirement[];
   reducedMotion: boolean;
   defaultLandingPage: DefaultLandingPage;
   backgroundTheme: BackgroundTheme;
@@ -49,11 +54,25 @@ export async function updateUsername(uid: string, username: string): Promise<voi
 export async function updateFavoriteTeam(
   uid: string,
   favoriteTeamAbbreviation: string,
+  favoriteTeamVariantId: string,
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
 
   await updateDoc(userRef, {
     favoriteTeamAbbreviation,
+    favoriteTeamVariantId,
+  });
+}
+
+
+export async function updateTeamIdentityUnlocks(
+  uid: string,
+  teamIdentityUnlocks: TeamIdentityUnlockRequirement[],
+): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+
+  await updateDoc(userRef, {
+    teamIdentityUnlocks,
   });
 }
 
@@ -66,6 +85,8 @@ export async function updateUserAccountSettings(
   await updateDoc(userRef, {
     username: settings.username,
     favoriteTeamAbbreviation: settings.favoriteTeamAbbreviation,
+    favoriteTeamVariantId: settings.favoriteTeamVariantId,
+    teamIdentityUnlocks: settings.teamIdentityUnlocks,
     reducedMotion: settings.reducedMotion,
     defaultLandingPage: settings.defaultLandingPage,
     backgroundTheme: settings.backgroundTheme,

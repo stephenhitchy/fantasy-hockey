@@ -1,7 +1,9 @@
 import type { UserProfile } from './user.service';
 import {
+  DEFAULT_TEAM_IDENTITY_VARIANT_ID,
   getPixelTeamTheme,
   hexToRgba,
+  TeamIdentityUnlockRequirement,
 } from '../../shared/pixel-theme/pixel-theme.data';
 
 const THEME_STORAGE_KEY = 'fantasy-hockey-user-theme';
@@ -11,6 +13,8 @@ export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-i
 
 export interface StoredUserTheme {
   favoriteTeamAbbreviation: string;
+  favoriteTeamVariantId: string;
+  teamIdentityUnlocks: TeamIdentityUnlockRequirement[];
   reducedMotion: boolean;
   defaultLandingPage: 'dashboard' | 'lastLeague';
   backgroundTheme: BackgroundTheme;
@@ -29,6 +33,8 @@ export function applyUserTheme(
   options: ApplyUserThemeOptions = {},
 ): void {
   const favoriteTeamAbbreviation = theme?.favoriteTeamAbbreviation || 'VGK';
+  const requestedVariantId =
+    theme?.favoriteTeamVariantId || DEFAULT_TEAM_IDENTITY_VARIANT_ID;
   const reducedMotion = Boolean(theme?.reducedMotion);
   const defaultLandingPage =
     theme?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard';
@@ -38,7 +44,21 @@ export function applyUserTheme(
     theme?.backgroundTheme === 'light-ice'
       ? theme.backgroundTheme
       : 'rink-dark';
-  const team = getPixelTeamTheme(favoriteTeamAbbreviation);
+  const identityUnlocks = Array.isArray(theme?.teamIdentityUnlocks)
+    ? theme.teamIdentityUnlocks.filter(
+        (value): value is TeamIdentityUnlockRequirement =>
+          value === 'first-line-change' ||
+          value === 'commissioner-mode' ||
+          value === 'league-explorer' ||
+          value === 'crowded-schedule',
+      )
+    : [];
+  const requestedTeam = getPixelTeamTheme(favoriteTeamAbbreviation, requestedVariantId);
+  const team =
+    requestedTeam.unlockRequirement === 'default' ||
+    identityUnlocks.includes(requestedTeam.unlockRequirement)
+      ? requestedTeam
+      : getPixelTeamTheme(favoriteTeamAbbreviation, DEFAULT_TEAM_IDENTITY_VARIANT_ID);
   const root = getDocumentRoot();
 
   if (root) {
@@ -59,6 +79,7 @@ export function applyUserTheme(
     root.style.setProperty('--user-team-secondary-wash', hexToRgba(team.secondaryColor, 0.12));
     root.style.setProperty('--user-team-tertiary-wash', hexToRgba(team.tertiaryColor, 0.12));
     root.dataset['favoriteTeam'] = team.abbreviation;
+    root.dataset['favoriteTeamVariant'] = team.variantId;
     root.dataset['reducedMotion'] = reducedMotion ? 'true' : 'false';
     root.dataset['backgroundTheme'] = backgroundTheme;
   }
@@ -66,6 +87,8 @@ export function applyUserTheme(
   if (options.persist !== false && typeof localStorage !== 'undefined') {
     const stored: StoredUserTheme = {
       favoriteTeamAbbreviation: team.abbreviation,
+      favoriteTeamVariantId: team.variantId,
+      teamIdentityUnlocks: identityUnlocks,
       reducedMotion,
       defaultLandingPage,
       backgroundTheme,
@@ -79,6 +102,8 @@ export function loadStoredUserTheme(): StoredUserTheme {
   if (typeof localStorage === 'undefined') {
     return {
       favoriteTeamAbbreviation: 'VGK',
+      favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+      teamIdentityUnlocks: [],
       reducedMotion: false,
       defaultLandingPage: 'dashboard',
       backgroundTheme: 'rink-dark',
@@ -88,9 +113,33 @@ export function loadStoredUserTheme(): StoredUserTheme {
   try {
     const raw = localStorage.getItem(THEME_STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Partial<StoredUserTheme>) : null;
+    const normalizedTeam = getPixelTeamTheme(
+      parsed?.favoriteTeamAbbreviation || 'VGK',
+      parsed?.favoriteTeamVariantId || DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+    );
+
+    const teamIdentityUnlocks = Array.isArray(parsed?.teamIdentityUnlocks)
+      ? parsed.teamIdentityUnlocks.filter(
+          (value): value is TeamIdentityUnlockRequirement =>
+            value === 'first-line-change' ||
+            value === 'commissioner-mode' ||
+            value === 'league-explorer' ||
+            value === 'crowded-schedule',
+        )
+      : [];
+    const unlockedTeam =
+      normalizedTeam.unlockRequirement === 'default' ||
+      teamIdentityUnlocks.includes(normalizedTeam.unlockRequirement)
+        ? normalizedTeam
+        : getPixelTeamTheme(
+            normalizedTeam.abbreviation,
+            DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+          );
 
     return {
-      favoriteTeamAbbreviation: parsed?.favoriteTeamAbbreviation || 'VGK',
+      favoriteTeamAbbreviation: unlockedTeam.abbreviation,
+      favoriteTeamVariantId: unlockedTeam.variantId,
+      teamIdentityUnlocks,
       reducedMotion: Boolean(parsed?.reducedMotion),
       defaultLandingPage: parsed?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard',
       backgroundTheme:
@@ -103,6 +152,8 @@ export function loadStoredUserTheme(): StoredUserTheme {
   } catch {
     return {
       favoriteTeamAbbreviation: 'VGK',
+      favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+      teamIdentityUnlocks: [],
       reducedMotion: false,
       defaultLandingPage: 'dashboard',
       backgroundTheme: 'rink-dark',

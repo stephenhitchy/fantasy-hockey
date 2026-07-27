@@ -164,6 +164,11 @@ interface ScoreDeltaAnimation {
   presentation: 'my-team' | 'opponent';
 }
 
+interface OwnerTeamIdentity {
+  abbreviation: string;
+  variantId: string;
+}
+
 interface PendingScoreDelta {
   delta: number;
   rosterOrder: number;
@@ -199,7 +204,7 @@ export class CycleOne implements OnDestroy {
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
-  ownerFavoriteTeams = signal<Record<string, string>>({});
+  ownerFavoriteTeams = signal<Record<string, OwnerTeamIdentity>>({});
   allCycles = signal<FantasyCycle[]>([]);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
@@ -2120,10 +2125,21 @@ export class CycleOne implements OnDestroy {
           const profile = await getUserProfile(ownerId);
           return [
             ownerId,
-            profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId),
+            {
+              abbreviation:
+                profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId),
+              variantId:
+                profile?.favoriteTeamVariantId || this.getFallbackFavoriteTeamVariant(ownerId),
+            },
           ] as const;
         } catch {
-          return [ownerId, this.getFallbackFavoriteTeam(ownerId)] as const;
+          return [
+            ownerId,
+            {
+              abbreviation: this.getFallbackFavoriteTeam(ownerId),
+              variantId: this.getFallbackFavoriteTeamVariant(ownerId),
+            },
+          ] as const;
         }
       }),
     );
@@ -2142,10 +2158,21 @@ export class CycleOne implements OnDestroy {
     return 'VGK';
   }
 
-  getOwnerTheme(ownerId: string | null | undefined): PixelTeamTheme {
-    const favoriteTeam = ownerId ? this.ownerFavoriteTeams()[ownerId] : '';
+  private getFallbackFavoriteTeamVariant(ownerId: string | null | undefined): string {
+    if (typeof document !== 'undefined' && ownerId === this.userId) {
+      return document.documentElement.dataset['favoriteTeamVariant'] || 'current-home';
+    }
 
-    return getPixelTeamTheme(favoriteTeam || this.getFallbackFavoriteTeam(ownerId));
+    return 'current-home';
+  }
+
+  getOwnerTheme(ownerId: string | null | undefined): PixelTeamTheme {
+    const identity = ownerId ? this.ownerFavoriteTeams()[ownerId] : null;
+
+    return getPixelTeamTheme(
+      identity?.abbreviation || this.getFallbackFavoriteTeam(ownerId),
+      identity?.variantId || this.getFallbackFavoriteTeamVariant(ownerId),
+    );
   }
 
   getOwnerThemeStyles(ownerId: string | null | undefined): Record<string, string> {

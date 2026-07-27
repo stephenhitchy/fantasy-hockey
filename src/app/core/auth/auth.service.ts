@@ -30,6 +30,8 @@ export async function registerUser(
     username,
     createdAt: new Date(),
     favoriteTeamAbbreviation,
+    favoriteTeamVariantId: 'current-home',
+    teamIdentityUnlocks: [],
     reducedMotion: false,
     defaultLandingPage: 'dashboard',
     backgroundTheme: 'rink-dark',

@@ -10,7 +10,8 @@
     "build:all": "npm run build && npm --prefix functions run build",
     "deploy:production": "npm run build:all && firebase deploy --only firestore:rules,firestore:indexes,functions,hosting:app",
     "deploy:season-ready": "npm run build:all && firebase deploy --only firestore:rules,firestore:indexes,functions,hosting:app",
-    "repair:functions": "npm --prefix functions run repair:dependencies"
+    "repair:functions": "npm --prefix functions run repair:dependencies",
+    "validate:team-logos": "node scripts/validate-team-logo-urls.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

@@ -91,8 +91,11 @@ export class Dashboard {
   readonly favoriteTeam = computed(() => {
     const storedTheme = loadStoredUserTheme();
 
+    const profile = this.profile();
+
     return getPixelTeamTheme(
-      this.profile()?.favoriteTeamAbbreviation || storedTheme.favoriteTeamAbbreviation,
+      profile?.favoriteTeamAbbreviation || storedTheme.favoriteTeamAbbreviation,
+      profile?.favoriteTeamVariantId || storedTheme.favoriteTeamVariantId,
     );
   });
 
@@ -223,6 +226,8 @@ export class Dashboard {
           email: profile.email,
           username: profile.username,
           favoriteTeamAbbreviation: profile.favoriteTeamAbbreviation,
+          favoriteTeamVariantId: profile.favoriteTeamVariantId,
+          teamIdentityUnlocks: profile.teamIdentityUnlocks,
           reducedMotion: profile.reducedMotion,
           defaultLandingPage: profile.defaultLandingPage,
         }

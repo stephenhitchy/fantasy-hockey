@@ -50,11 +50,13 @@
               class="account-ref-team-logo"
               [src]="selectedTeam().logoUrl"
               [alt]="''"
+              (error)="handleTeamLogoError($event, selectedTeam().abbreviation)"
             />
           </div>
 
           <strong>{{ selectedTeam().name }}</strong>
-          <small>Your locker-room referee follows your saved favorite team.</small>
+          <span class="hero-variant-label">{{ selectedTeam().variantLabel }}</span>
+          <small>Your locker-room referee follows your saved team identity.</small>
         </div>
       </header>
 
@@ -100,7 +102,9 @@
               <h2>Favorite Team</h2>
             </div>
 
-            <span class="selected-team-badge">{{ selectedTeam().abbreviation }}</span>
+            <span class="selected-team-badge">
+              {{ selectedTeam().abbreviation }} · {{ selectedTeam().variantShortLabel }}
+            </span>
           </div>
 
           <p class="panel-description">
@@ -118,11 +122,75 @@
                 [disabled]="savingFavoriteTeam()"
                 (click)="selectFavoriteTeam(team)"
               >
-                <img [src]="team.logoUrl" [alt]="team.name + ' logo'" />
+                <img
+                  [src]="team.logoUrl"
+                  [alt]="team.name + ' logo'"
+                  (error)="handleTeamLogoError($event, team.abbreviation)"
+                />
                 <span>{{ team.abbreviation }}</span>
               </button>
             }
           </div>
+
+          <section class="team-identity-picker" aria-labelledby="team-identity-title">
+            <div class="team-identity-heading">
+              <div>
+                <span class="eyebrow">Logo & Color Version</span>
+                <h3 id="team-identity-title">Choose Your {{ selectedTeam().name }} Look</h3>
+              </div>
+
+              <span class="identity-count">{{ availableTeamVariants().length }} options</span>
+            </div>
+
+            <p class="team-identity-description">
+              Every club now has home, away, retro, alternate, and special identities. Challenge
+              rewards unlock the matching identity tier for all NHL teams at once.
+            </p>
+
+            <div class="team-variant-grid" role="list" aria-label="Choose a team logo and color version">
+              @for (variant of availableTeamVariants(); track variant.variantId) {
+                <button
+                  type="button"
+                  class="team-variant-card"
+                  [class.selected]="variant.variantId === favoriteTeamVariantId"
+                  [class.locked]="!isTeamVariantUnlocked(variant)"
+                  [attr.aria-pressed]="variant.variantId === favoriteTeamVariantId"
+                  [attr.aria-disabled]="!isTeamVariantUnlocked(variant)"
+                  [disabled]="savingFavoriteTeam()"
+                  (click)="selectTeamVariant(variant)"
+                >
+                  <span class="variant-logo-stage">
+                    <img
+                      [src]="variant.logoUrl"
+                      [alt]="variant.name + ' ' + variant.variantLabel + ' logo'"
+                      (error)="handleTeamLogoError($event, variant.abbreviation)"
+                    />
+                    @if (!isTeamVariantUnlocked(variant)) {
+                      <span class="variant-lock-mark" aria-hidden="true">LOCKED</span>
+                    }
+                  </span>
+
+                  <span class="variant-card-copy">
+                    <span class="variant-card-title-row">
+                      <strong>{{ variant.variantLabel }}</strong>
+                      <small>{{ variant.eraLabel || 'Team identity' }}</small>
+                    </span>
+                    <span class="variant-description">{{ variant.variantDescription }}</span>
+                    <span class="variant-card-footer">
+                      <span class="variant-color-row" aria-label="Theme color preview">
+                        <span [style.background]="variant.primaryColor"></span>
+                        <span [style.background]="variant.secondaryColor"></span>
+                        <span [style.background]="variant.tertiaryColor"></span>
+                      </span>
+                      <span class="variant-unlock-status" [class.unlocked]="isTeamVariantUnlocked(variant)">
+                        {{ teamVariantUnlockLabel(variant) }}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
 
           <p class="favorite-team-save-status" role="status" aria-live="polite">
             @if (savingFavoriteTeam()) {
@@ -315,6 +383,7 @@
                 <div>
                   <strong>{{ achievement.title }}</strong>
                   <small>{{ achievement.description }}</small>
+                  <small class="achievement-reward">Reward: {{ achievement.reward }}</small>
                 </div>
                 <span class="achievement-status">
                   {{ achievement.unlocked ? 'Unlocked' : 'Locked' }}

@@ -1298,11 +1298,17 @@ export class TeamSettings implements OnDestroy {
   }
 
   getFavoriteTeamLogoUrl(): string {
-    return getPixelTeamTheme(this.profile()?.favoriteTeamAbbreviation).logoUrl;
+    return getPixelTeamTheme(
+      this.profile()?.favoriteTeamAbbreviation,
+      this.profile()?.favoriteTeamVariantId,
+    ).logoUrl;
   }
 
   getFavoriteTeamName(): string {
-    return getPixelTeamTheme(this.profile()?.favoriteTeamAbbreviation).name;
+    return getPixelTeamTheme(
+      this.profile()?.favoriteTeamAbbreviation,
+      this.profile()?.favoriteTeamVariantId,
+    ).name;
   }
 
   getLeagueRankLabel(): string {
