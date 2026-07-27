@@ -21,7 +21,8 @@ export type PlayerAvailabilityDatabaseSource =
 export type PlayerAvailabilitySyncTrigger =
   | 'daily-visit'
   | 'draft-start'
-  | 'commissioner-browser';
+  | 'commissioner-browser'
+  | 'scheduled-server';
 
 export interface PlayerAvailabilityOverride {
   /** Prefer playerId whenever it is available. */

@@ -383,3 +383,28 @@
     font-size: 18px;
   }
 }
+
+.brand-mark,
+.mobile-brand-mark {
+  overflow: hidden;
+}
+
+.brand-mark-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.mobile-brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+}
+
+.nav-icon {
+  display: inline-block;
+}

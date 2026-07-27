@@ -69,7 +69,7 @@
         [class.mode-live]="current.scoringMode === 'live'"
         [class.mode-historical]="current.scoringMode === 'historical'"
       >
-        <span aria-hidden="true">{{ current.scoringMode === 'live' ? '🟢' : '🧪' }}</span>
+        <span class="pixel-icon icon-lg" [class.icon-live]="current.scoringMode === 'live'" [class.icon-lab]="current.scoringMode !== 'live'" aria-hidden="true"></span>
         <div>
           <strong>
             {{
@@ -276,7 +276,7 @@
 
         <div class="recovery-grid">
           <article>
-            <span aria-hidden="true">📡</span>
+            <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
             <div>
               <strong>Retry shared scoring</strong>
               <p>
@@ -294,7 +294,7 @@
           </article>
 
           <article>
-            <span aria-hidden="true">🔓</span>
+            <span class="pixel-icon icon-unlock icon-sm" aria-hidden="true"></span>
             <div>
               <strong>Clear expired or errored lease</strong>
               <p>A healthy active scorer cannot be interrupted by this control.</p>
@@ -310,7 +310,7 @@
           </article>
 
           <article>
-            <span aria-hidden="true">🩹</span>
+            <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
             <div>
               <strong>Retry injury synchronization</strong>
               <p>Runs the shared global player-availability refresh once.</p>
@@ -326,7 +326,7 @@
           </article>
 
           <article>
-            <span aria-hidden="true">📈</span>
+            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
             <div>
               <strong>Regenerate one projection target</strong>
               <p>Creates a fresh, healthy shared snapshot for an exact six-game cycle target.</p>

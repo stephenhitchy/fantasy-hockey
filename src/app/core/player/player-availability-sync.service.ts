@@ -36,8 +36,7 @@ import {
   PlayerAvailabilitySyncTrigger
 } from './player-availability.models';
 
-const ESPN_NHL_INJURIES_URL =
-  'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries';
+const ESPN_NHL_INJURIES_URL = '/espn/injuries';
 
 const MAX_NOTE_LENGTH = 500;
 const GLOBAL_REFRESH_LEASE_MINUTES = 10;
@@ -606,7 +605,8 @@ function normalizeSyncState(
     trigger:
       data['trigger'] === 'daily-visit' ||
       data['trigger'] === 'draft-start' ||
-      data['trigger'] === 'commissioner-browser'
+      data['trigger'] === 'commissioner-browser' ||
+      data['trigger'] === 'scheduled-server'
         ? data['trigger']
         : undefined,
     dailyKey: asString(data['dailyKey']) || undefined,

@@ -608,6 +608,10 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
     clockUpdatedBy: data.clockUpdatedBy ?? null,
     clockUpdatedAt: data.clockUpdatedAt,
     lastPickId: data.lastPickId ?? null,
+    serverDraftProjectionSnapshotId:
+      typeof data.serverDraftProjectionSnapshotId === 'string'
+        ? data.serverDraftProjectionSnapshotId
+        : null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
     startedAt: data.startedAt,
@@ -635,6 +639,7 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     pausedRemainingSeconds: null,
     clockUpdatedBy: null,
     lastPickId: null,
+    serverDraftProjectionSnapshotId: null,
   };
 }
 
@@ -869,6 +874,10 @@ export async function saveFantasyDraft(leagueId: string, draft: FantasyDraft): P
         draft.status === 'live' ? (draft.pausedRemainingSeconds ?? null) : null,
       clockUpdatedBy: draft.clockUpdatedBy ?? null,
       lastPickId: draft.lastPickId ?? null,
+      serverDraftProjectionSnapshotId:
+        draft.status === 'live'
+          ? (draft.serverDraftProjectionSnapshotId ?? null)
+          : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true },

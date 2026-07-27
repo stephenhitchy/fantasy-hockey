@@ -1,2 +1,0 @@
-The Angular project containing these files completed npm run build successfully on 2026-07-20.
-The Firestore rules file was checked for balanced braces, parentheses, and brackets.

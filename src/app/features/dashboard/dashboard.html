@@ -1,6 +1,6 @@
 @if (loading()) {
   <section class="dashboard-state" aria-live="polite">
-    <span class="state-icon" aria-hidden="true">🏒</span>
+    <span class="state-icon pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
     <strong>Loading your leagues...</strong>
   </section>
 } @else {
@@ -14,12 +14,12 @@
 
           <div class="quick-actions" aria-label="League actions">
             <a class="primary-action" routerLink="/leagues/create">
-              <span aria-hidden="true">＋</span>
+              <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
               Create League
             </a>
 
             <a class="secondary-action" routerLink="/leagues/join">
-              <span aria-hidden="true">⇥</span>
+              <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
               Join League
             </a>
           </div>
@@ -36,6 +36,16 @@
         >
           <span class="eyebrow">Favorite Team Crew</span>
           <strong>{{ favoriteTeam().name }}</strong>
+          <div class="favorite-team-logo-panel" aria-hidden="true">
+            <img
+              class="favorite-team-logo-display"
+              [src]="favoriteTeam().logoUrl"
+              [alt]="''"
+              width="160"
+              height="160"
+              decoding="async"
+            />
+          </div>
           <div class="mini-scoreboard">
             <div>
               <span>Leagues</span><strong>{{ leagueSummaries().length }}</strong>
@@ -57,7 +67,7 @@
             </div>
           </div>
           <small class="mascot-team-copy">
-            Select your rink attendant to change your favorite team.
+            Open your profile to change your favorite team and your arena background.
           </small>
         </a>
       </header>
@@ -107,7 +117,7 @@
           </div>
         } @else if (leagueSummaries().length === 0) {
           <article class="empty-state">
-            <span class="empty-icon" aria-hidden="true">🏟️</span>
+            <span class="empty-icon pixel-icon icon-arena icon-xl" aria-hidden="true"></span>
             <h3>Your locker room is empty</h3>
             <p>Create a league or join one with an invite code.</p>
 
@@ -122,7 +132,7 @@
               <article class="league-card">
                 <div class="league-card-top">
                   <div class="league-identity">
-                    <span class="league-icon" aria-hidden="true">🏆</span>
+                    <span class="league-icon pixel-icon icon-league icon-lg" aria-hidden="true"></span>
 
                     <div>
                       <h3>{{ league.leagueName }}</h3>
@@ -158,7 +168,7 @@
                     [routerLink]="['/leagues', league.leagueId, 'team']"
                     aria-label="Open my team"
                   >
-                    👕
+                    <span class="pixel-icon icon-team icon-sm" aria-hidden="true"></span>
                   </a>
                 </div>
               </article>

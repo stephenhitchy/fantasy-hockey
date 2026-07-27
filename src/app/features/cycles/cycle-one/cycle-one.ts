@@ -105,6 +105,7 @@ import {
   getPlayerAvailabilityForPlayer,
   startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
+import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
 
 const CYCLE_PROJECTION_WINDOW_DAYS = 14;
 const NHL_SCHEDULE_BATCH_SIZE = 4;
@@ -159,12 +160,15 @@ interface ScoreDeltaAnimation {
   id: number;
   delta: number;
   direction: 'gain' | 'loss';
+  ownerId: string;
+  presentation: 'my-team' | 'opponent';
 }
 
 interface PendingScoreDelta {
   delta: number;
   rosterOrder: number;
   targetScore: number;
+  ownerId: string;
 }
 
 function waitForAuthUser(): Promise<User | null> {
@@ -239,6 +243,33 @@ export class CycleOne implements OnDestroy {
   projectionAccuracySaving = signal(false);
   projectionAccuracyMessage = signal('');
   projectionAccuracyError = signal('');
+
+  testInjuryEmailSending = signal(false);
+  testInjuryEmailMessage = signal('');
+  testInjuryEmailError = signal('');
+
+  async sendTestInjuryEmailPreview(): Promise<void> {
+    if (this.testInjuryEmailSending()) {
+      return;
+    }
+
+    this.testInjuryEmailSending.set(true);
+    this.testInjuryEmailMessage.set('');
+    this.testInjuryEmailError.set('');
+
+    try {
+      const result = await requestTestInjuryEmail(this.leagueId);
+      this.testInjuryEmailMessage.set(result.message);
+    } catch (error: unknown) {
+      this.testInjuryEmailError.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to send the test injury notification.',
+      );
+    } finally {
+      this.testInjuryEmailSending.set(false);
+    }
+  }
 
   async advanceReplayOneDay(): Promise<void> {
     if (this.historicalReplayAdvancing()) {
@@ -967,18 +998,34 @@ export class CycleOne implements OnDestroy {
     }
   }
 
-  private getCurrentUserScoreEntries(result: CycleScoringResult): Array<{
+  private getDisplayedMatchupScoreEntries(result: CycleScoringResult): Array<{
     pick: DraftPick;
     rosterOrder: number;
     score: number;
+    ownerId: string;
   }> {
-    return this.getTeamPicks(this.userId).map((pick, rosterOrder) => ({
-      pick,
-      rosterOrder,
-      score: Number(
-        (result.assetScores[pick.asset.assetKey]?.currentScore ?? 0).toFixed(1),
-      ),
-    }));
+    const matchup = this.getCurrentDisplayedMatchup();
+
+    if (!matchup) {
+      return [];
+    }
+
+    const ownerIds = [matchup.teamAOwnerId, matchup.teamBOwnerId].filter(
+      (ownerId): ownerId is string => Boolean(ownerId),
+    );
+
+    return ownerIds.flatMap((ownerId, teamIndex) =>
+      this.getTeamPicks(ownerId).map((pick, rosterOrder) => ({
+        pick,
+        ownerId,
+        // Keep each roster in its normal order while alternating equally placed
+        // players from the two sides when several updates arrive together.
+        rosterOrder: rosterOrder * ownerIds.length + teamIndex,
+        score: Number(
+          (result.assetScores[pick.asset.assetKey]?.currentScore ?? 0).toFixed(1),
+        ),
+      })),
+    );
   }
 
   private queuePendingScoreDelta(input: {
@@ -986,6 +1033,7 @@ export class CycleOne implements OnDestroy {
     delta: number;
     rosterOrder: number;
     targetScore: number;
+    ownerId: string;
   }): void {
     const existing = this.pendingScoreDeltas.get(input.assetKey);
     const combinedDelta = Number(((existing?.delta ?? 0) + input.delta).toFixed(1));
@@ -999,6 +1047,7 @@ export class CycleOne implements OnDestroy {
       delta: combinedDelta,
       rosterOrder: Math.min(existing?.rosterOrder ?? input.rosterOrder, input.rosterOrder),
       targetScore: input.targetScore,
+      ownerId: input.ownerId,
     });
   }
 
@@ -1037,7 +1086,7 @@ export class CycleOne implements OnDestroy {
       return false;
     }
 
-    const scoreEntries = this.getCurrentUserScoreEntries(nextResult);
+    const scoreEntries = this.getDisplayedMatchupScoreEntries(nextResult);
 
     if (scoreEntries.length === 0) {
       return false;
@@ -1055,7 +1104,7 @@ export class CycleOne implements OnDestroy {
       return true;
     }
 
-    for (const { pick, rosterOrder, score } of scoreEntries) {
+    for (const { pick, ownerId, rosterOrder, score } of scoreEntries) {
       const assetKey = pick.asset.assetKey;
       const observedScore = this.observedScoreBaseline[assetKey];
 
@@ -1073,6 +1122,7 @@ export class CycleOne implements OnDestroy {
           delta,
           rosterOrder,
           targetScore: score,
+          ownerId,
         });
       }
     }
@@ -1204,6 +1254,8 @@ export class CycleOne implements OnDestroy {
           id: ++this.scoreDeltaAnimationId,
           delta: pending.delta,
           direction: pending.delta >= 0 ? 'gain' : 'loss',
+          ownerId: pending.ownerId,
+          presentation: pending.ownerId === this.userId ? 'my-team' : 'opponent',
         };
 
         this.scoreDeltaAnimations.update((current) => ({
@@ -1242,14 +1294,14 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    const changedPicks = this.getCurrentUserScoreEntries(nextResult)
-      .map(({ pick, rosterOrder, score: nextScore }) => {
+    const changedPicks = this.getDisplayedMatchupScoreEntries(nextResult)
+      .map(({ pick, ownerId, rosterOrder, score: nextScore }) => {
         const previousScore = Number(
           (previousResult.assetScores[pick.asset.assetKey]?.currentScore ?? 0).toFixed(1),
         );
         const delta = Number((nextScore - previousScore).toFixed(1));
 
-        return { pick, delta, rosterOrder, nextScore };
+        return { pick, ownerId, delta, rosterOrder, nextScore };
       })
       .filter(({ delta }) => Math.abs(delta) >= 0.1);
 
@@ -1257,12 +1309,13 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    for (const { pick, delta, rosterOrder, nextScore } of changedPicks) {
+    for (const { pick, ownerId, delta, rosterOrder, nextScore } of changedPicks) {
       this.queuePendingScoreDelta({
         assetKey: pick.asset.assetKey,
         delta,
         rosterOrder,
         targetScore: nextScore,
+        ownerId,
       });
     }
 
@@ -1271,6 +1324,12 @@ export class CycleOne implements OnDestroy {
 
   getScoreDeltaAnimation(asset: DraftableAsset): ScoreDeltaAnimation | null {
     return this.scoreDeltaAnimations()[asset.assetKey] ?? null;
+  }
+
+  isOpponentScoreGainAnimation(asset: DraftableAsset): boolean {
+    const animation = this.getScoreDeltaAnimation(asset);
+
+    return animation?.presentation === 'opponent' && animation.direction === 'gain';
   }
 
   getScoreDeltaLabel(animation: ScoreDeltaAnimation): string {
@@ -1959,6 +2018,13 @@ export class CycleOne implements OnDestroy {
 
       this.stopMatchupsListener = listenToCycleMatchups(leagueId, cycleNumber, (matchups) => {
         this.matchups.set(matchups);
+
+        const scoringResult = this.cycleScoring();
+
+        if (scoringResult) {
+          this.initializeObservedScoreBaseline(scoringResult);
+        }
+
         void this.evaluateAutoCompleteCycleIfReady();
       });
 

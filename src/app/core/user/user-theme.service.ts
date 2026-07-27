@@ -7,10 +7,13 @@ import {
 const THEME_STORAGE_KEY = 'fantasy-hockey-user-theme';
 const LAST_LEAGUE_STORAGE_KEY = 'fantasy-hockey-last-league';
 
+export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-ice';
+
 export interface StoredUserTheme {
   favoriteTeamAbbreviation: string;
   reducedMotion: boolean;
   defaultLandingPage: 'dashboard' | 'lastLeague';
+  backgroundTheme: BackgroundTheme;
 }
 
 export interface ApplyUserThemeOptions {
@@ -29,6 +32,12 @@ export function applyUserTheme(
   const reducedMotion = Boolean(theme?.reducedMotion);
   const defaultLandingPage =
     theme?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard';
+  const backgroundTheme =
+    theme?.backgroundTheme === 'oled-black' ||
+    theme?.backgroundTheme === 'ice-gray' ||
+    theme?.backgroundTheme === 'light-ice'
+      ? theme.backgroundTheme
+      : 'rink-dark';
   const team = getPixelTeamTheme(favoriteTeamAbbreviation);
   const root = getDocumentRoot();
 
@@ -51,6 +60,7 @@ export function applyUserTheme(
     root.style.setProperty('--user-team-tertiary-wash', hexToRgba(team.tertiaryColor, 0.12));
     root.dataset['favoriteTeam'] = team.abbreviation;
     root.dataset['reducedMotion'] = reducedMotion ? 'true' : 'false';
+    root.dataset['backgroundTheme'] = backgroundTheme;
   }
 
   if (options.persist !== false && typeof localStorage !== 'undefined') {
@@ -58,6 +68,7 @@ export function applyUserTheme(
       favoriteTeamAbbreviation: team.abbreviation,
       reducedMotion,
       defaultLandingPage,
+      backgroundTheme,
     };
 
     localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(stored));
@@ -70,6 +81,7 @@ export function loadStoredUserTheme(): StoredUserTheme {
       favoriteTeamAbbreviation: 'VGK',
       reducedMotion: false,
       defaultLandingPage: 'dashboard',
+      backgroundTheme: 'rink-dark',
     };
   }
 
@@ -81,12 +93,19 @@ export function loadStoredUserTheme(): StoredUserTheme {
       favoriteTeamAbbreviation: parsed?.favoriteTeamAbbreviation || 'VGK',
       reducedMotion: Boolean(parsed?.reducedMotion),
       defaultLandingPage: parsed?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard',
+      backgroundTheme:
+        parsed?.backgroundTheme === 'oled-black' ||
+        parsed?.backgroundTheme === 'ice-gray' ||
+        parsed?.backgroundTheme === 'light-ice'
+          ? parsed.backgroundTheme
+          : 'rink-dark',
     };
   } catch {
     return {
       favoriteTeamAbbreviation: 'VGK',
       reducedMotion: false,
       defaultLandingPage: 'dashboard',
+      backgroundTheme: 'rink-dark',
     };
   }
 }

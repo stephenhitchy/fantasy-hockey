@@ -2,6 +2,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export type DefaultLandingPage = 'dashboard' | 'lastLeague';
+export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-ice';
 
 export interface UserProfile {
   uid: string;
@@ -11,6 +12,10 @@ export interface UserProfile {
   favoriteTeamAbbreviation?: string;
   reducedMotion?: boolean;
   defaultLandingPage?: DefaultLandingPage;
+  backgroundTheme?: BackgroundTheme;
+  injuryEmailEnabled?: boolean;
+  welcomeEmailSentAt?: unknown;
+  lastVerificationEmailSentAt?: unknown;
 }
 
 export interface UserAccountSettingsUpdate {
@@ -18,6 +23,8 @@ export interface UserAccountSettingsUpdate {
   favoriteTeamAbbreviation: string;
   reducedMotion: boolean;
   defaultLandingPage: DefaultLandingPage;
+  backgroundTheme: BackgroundTheme;
+  injuryEmailEnabled: boolean;
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -38,7 +45,6 @@ export async function updateUsername(uid: string, username: string): Promise<voi
     username,
   });
 }
-
 
 export async function updateFavoriteTeam(
   uid: string,
@@ -62,5 +68,7 @@ export async function updateUserAccountSettings(
     favoriteTeamAbbreviation: settings.favoriteTeamAbbreviation,
     reducedMotion: settings.reducedMotion,
     defaultLandingPage: settings.defaultLandingPage,
+    backgroundTheme: settings.backgroundTheme,
+    injuryEmailEnabled: settings.injuryEmailEnabled,
   });
 }

@@ -9,6 +9,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import {
   advanceCompletedRegularSeasonAssetWindows,
@@ -694,6 +695,7 @@ async function claimLeagueAutomationLease(
   leagueId: string,
   workerId: string,
   force: boolean,
+  trigger: 'scheduled' | 'draft-complete' | 'season-start' | 'historical-replay',
 ): Promise<LeaseClaimResult> {
   const controlRef = getControlRef(leagueId);
   const now = Date.now();
@@ -745,8 +747,8 @@ async function claimLeagueAutomationLease(
           now + SERVER_LEASE_MILLISECONDS,
         ),
         lastRefreshStartedAt: FieldValue.serverTimestamp(),
-        lastRefreshReason: 'scheduled',
-        serverTrigger: force ? 'draft-complete' : 'scheduled',
+        lastRefreshReason: trigger,
+        serverTrigger: trigger,
         lastError: '',
         updatedAt: FieldValue.serverTimestamp(),
         ...(!snapshot.exists
@@ -1046,7 +1048,8 @@ async function ensureCycleOneStarted(
   await db.doc(`leagues/${leagueId}/draft/current`).set(
     {
       cycleOneStartedAt: FieldValue.serverTimestamp(),
-      cycleOneStartSource: 'server-draft-complete',
+      cycleOneStartSource: 'server-after-draft',
+      cycleOneStartStatus: 'started',
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
@@ -1058,7 +1061,7 @@ async function ensureCycleOneStarted(
 async function runLeagueAutomation(
   leagueId: string,
   force: boolean,
-  trigger: 'scheduled' | 'draft-complete' | 'historical-replay',
+  trigger: 'scheduled' | 'draft-complete' | 'season-start' | 'historical-replay',
 ): Promise<LeagueAutomationResult> {
   const startedAt = Date.now();
   const workerId = `${SERVER_WORKER_PREFIX}${randomUUID()}`;
@@ -1066,6 +1069,7 @@ async function runLeagueAutomation(
     leagueId,
     workerId,
     force,
+    trigger,
   );
 
   if (!lease.claimed) {
@@ -1096,7 +1100,10 @@ async function runLeagueAutomation(
     }
 
     const teams = await getLeagueTeams(leagueId);
-    cycleOneCreated = await ensureCycleOneStarted(leagueId, teams);
+    cycleOneCreated = await ensureCycleOneStarted(
+      leagueId,
+      teams,
+    );
     replayControl = await getHistoricalReplayControl(leagueId);
     const liveSeason = getNhlSeasonForDate(new Date());
     const dataSeason = replayControl?.sourceSeason ?? liveSeason;
@@ -1298,37 +1305,16 @@ async function runLeagueAutomation(
 }
 
 async function getCompletedDraftLeagueIds(): Promise<string[]> {
-  const leagueSnapshot = await db.collection('leagues').get();
-  const leagueIds: string[] = [];
-  const batchSize = 100;
+  const draftSnapshot = await db.collectionGroup('draft')
+    .where('status', '==', 'complete')
+    .get();
 
-  for (
-    let index = 0;
-    index < leagueSnapshot.docs.length;
-    index += batchSize
-  ) {
-    const leagueDocuments = leagueSnapshot.docs.slice(
-      index,
-      index + batchSize,
-    );
-    const draftReferences = leagueDocuments.map((leagueDocument) =>
-      leagueDocument.ref.collection('draft').doc('current')
-    );
-    const draftSnapshots = draftReferences.length > 0
-      ? await db.getAll(...draftReferences)
-      : [];
-
-    draftSnapshots.forEach((draftSnapshot, draftIndex) => {
-      if (
-        draftSnapshot.exists &&
-        draftSnapshot.data()?.['status'] === 'complete'
-      ) {
-        leagueIds.push(leagueDocuments[draftIndex].id);
-      }
-    });
-  }
-
-  return leagueIds.sort();
+  return [...new Set(
+    draftSnapshot.docs
+      .filter((document) => document.id === 'current')
+      .map((document) => document.ref.parent.parent?.id ?? '')
+      .filter(Boolean),
+  )].sort();
 }
 
 async function mapWithConcurrency<T>(
@@ -1424,6 +1410,83 @@ export const runScheduledLeagueAutomation = onSchedule(
   },
 );
 
+
+async function getCompletedDraftLeagueIdsWithoutCycleOne(): Promise<string[]> {
+  const completedDraftLeagueIds = await getCompletedDraftLeagueIds();
+  const cycleReferences = completedDraftLeagueIds.map((leagueId) =>
+    db.doc(`leagues/${leagueId}/cycles/cycle-1`),
+  );
+  const cycleSnapshots = cycleReferences.length > 0
+    ? await db.getAll(...cycleReferences)
+    : [];
+
+  return completedDraftLeagueIds.filter(
+    (_leagueId, index) => !cycleSnapshots[index]?.exists,
+  );
+}
+
+export const runSeasonStartAutomation = onSchedule(
+  {
+    schedule: '* * * * *',
+    timeZone: 'America/Los_Angeles',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    // This worker is now a recovery sweep rather than a calendar gate.
+    // The draft-complete Firestore trigger starts Cycle 1 immediately; this
+    // minute-by-minute pass repairs any league whose trigger was interrupted.
+    const leagueIds = await getCompletedDraftLeagueIdsWithoutCycleOne();
+    const results = await mapWithConcurrency(
+      leagueIds,
+      (leagueId) => runLeagueAutomation(
+        leagueId,
+        true,
+        'season-start',
+      ),
+    );
+    const failures = results.filter((result) => result.status === 'rejected');
+    const completed = results.filter(
+      (result) => result.status === 'fulfilled' && result.value.cycleOneCreated,
+    ).length;
+
+    await db.doc('appData/seasonAutomation').set(
+      {
+        schemaVersion: 2,
+        enabled: true,
+        mode: 'immediate-after-draft',
+        status: failures.length > 0 ? 'partial-error' : 'active',
+        pendingLeagueCount: failures.length,
+        processedLeagueCount: leagueIds.length,
+        startedCycleCount: completed,
+        failedLeagueCount: failures.length,
+        lastRunAt: FieldValue.serverTimestamp(),
+        ...(failures.length === 0
+          ? {
+              lastSuccessfulRunAt: FieldValue.serverTimestamp(),
+              lastError: '',
+              message: leagueIds.length > 0
+                ? `Recovered Cycle 1 for ${completed} completed-draft league(s).`
+                : 'No completed drafts are waiting for Cycle 1.',
+            }
+          : {
+              lastError: `${failures.length} automatic Cycle 1 recovery run(s) failed.`,
+              message: `${failures.length} automatic Cycle 1 recovery run(s) failed.`,
+            }),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    for (const failure of failures) {
+      console.error('An automatic Cycle 1 recovery run failed.', failure.reason);
+    }
+  },
+);
+
 export const initializeSeasonAfterDraft = onDocumentWritten(
   {
     document: 'leagues/{leagueId}/draft/current',
@@ -1457,6 +1520,7 @@ export const advanceHistoricalReplayDay = onCall(
     region: FUNCTION_REGION,
     timeoutSeconds: 540,
     memory: '1GiB',
+    cors: TRUSTED_WEB_ORIGINS,
   },
   async (request) => {
     const userId = request.auth?.uid;

@@ -336,6 +336,40 @@ export class DraftSetup implements OnDestroy {
 
     try {
       const existingDraft = this.draft();
+      let preparedAssetCount: number | null = null;
+
+      if (scheduledStartDate) {
+        this.successMessage.set(
+          'Building verified Projection V8 rankings before the schedule is saved…',
+        );
+
+        try {
+          const snapshot = await generateSharedProjectionSnapshot({
+            leagueId: this.leagueId,
+            teamCount: Math.max(this.teams().length, 2),
+            requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
+            generationReason: 'draft-setup',
+          });
+
+          if (
+            snapshot.metadata.status !== 'ready' ||
+            snapshot.metadata.generationReason === 'server-emergency' ||
+            snapshot.assets.length === 0
+          ) {
+            throw new Error('The verified ranking snapshot was incomplete.');
+          }
+
+          preparedAssetCount = snapshot.metadata.assetCount;
+        } catch (projectionError: unknown) {
+          const detail = projectionError instanceof Error
+            ? projectionError.message
+            : 'The projection build did not finish.';
+
+          throw new Error(
+            `The draft was not scheduled because verified Projection V8 rankings could not be prepared. ${detail} Your previous saved draft settings were left unchanged.`,
+          );
+        }
+      }
 
       const draftToSave: FantasyDraft = {
         ...(existingDraft ?? createDefaultFantasyDraft(order)),
@@ -356,40 +390,23 @@ export class DraftSetup implements OnDestroy {
         pausedRemainingSeconds: null,
         clockUpdatedBy: null,
         lastPickId: existingDraft?.lastPickId ?? null,
+        serverDraftProjectionSnapshotId: null,
       };
 
       await saveFantasyDraft(this.leagueId, draftToSave);
-
       this.draft.set(draftToSave);
 
       if (scheduledStartDate) {
-        this.successMessage.set('Draft settings saved. Preparing an initial shared ranking now.');
-
-        try {
-          const snapshot = await generateSharedProjectionSnapshot({
-            leagueId: this.leagueId,
-            teamCount: Math.max(this.league()?.maxTeams ?? this.teams().length, 2),
-            requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
-            generationReason: 'draft-setup',
-          });
-
-          this.successMessage.set(
-            `Draft settings saved and ${snapshot.metadata.assetCount} shared projections prepared. They will refresh again ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the draft when the commissioner has the Draft Room open.`,
-          );
-        } catch (projectionError: unknown) {
-          this.successMessage.set('Draft settings were saved.');
-
-          this.projectionPreparationWarning.set(
-            projectionError instanceof Error
-              ? `The initial shared projection build did not finish: ${projectionError.message} The Draft Room will retry before the scheduled start.`
-              : 'The initial shared projection build did not finish. The Draft Room will retry before the scheduled start.',
-          );
-        }
+        this.successMessage.set(
+          `Draft settings saved with ${preparedAssetCount ?? 0} verified shared projections. The server can open and complete the draft even when every browser is closed.`,
+        );
       } else {
         this.successMessage.set('Draft order saved. No start time is scheduled yet.');
       }
     } catch (error: unknown) {
-      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to save draft setup.');
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to save the draft settings.',
+      );
     } finally {
       this.saving.set(false);
     }

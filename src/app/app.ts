@@ -49,7 +49,7 @@ function scheduleAfterPaint(task: () => void, delayMilliseconds: number): () => 
   styleUrl: './app.css',
 })
 export class App implements OnDestroy {
-  protected readonly title = signal('fantasy-hockey');
+  protected readonly title = signal('RinkRat Fantasy');
 
   private readonly routeSubscription: Subscription;
   private stopAuthThemeListener: (() => void) | null = null;

@@ -907,7 +907,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.draft()?.status === 'complete') {
-      return 'Ready';
+      return 'Preparing';
     }
 
     return 'Locked';
@@ -927,7 +927,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.draft()?.status === 'complete') {
-      return 'The draft is complete. The commissioner can now start the first fantasy cycle.';
+      return 'The draft is complete. The server is creating Cycle 1 and the opening matchups automatically.';
     }
 
     return 'Finish the draft before starting the fantasy season.';

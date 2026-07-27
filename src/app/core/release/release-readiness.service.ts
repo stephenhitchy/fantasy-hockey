@@ -1,6 +1,7 @@
-import { Timestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 import { getScoringRuntimeState } from '../cycle/cycle-runtime.config';
+import { db } from '../firebase';
 import { getActiveLeagueCycles, getLatestCycle } from '../cycle/cycle.service';
 import { getFantasyDraft } from '../draft/draft.service';
 import { getLeagueById } from '../league/league.service';
@@ -79,6 +80,45 @@ function createCheck(
   };
 }
 
+
+async function loadAutomationDocument(documentId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const snapshot = await getDoc(doc(db, 'appData', documentId));
+    return snapshot.exists() ? snapshot.data() : null;
+  } catch {
+    return null;
+  }
+}
+
+function timestampAgeMinutes(value: unknown, now = Date.now()): number | null {
+  const iso = toIso(value);
+
+  if (!iso) {
+    return null;
+  }
+
+  const milliseconds = Date.parse(iso);
+  return Number.isFinite(milliseconds)
+    ? Math.max(0, (now - milliseconds) / 60_000)
+    : null;
+}
+
+function formatAgeMinutes(ageMinutes: number | null): string {
+  if (ageMinutes === null) {
+    return 'not recorded';
+  }
+
+  if (ageMinutes < 2) {
+    return 'less than 2 minutes ago';
+  }
+
+  if (ageMinutes < 120) {
+    return `${Math.round(ageMinutes)} minutes ago`;
+  }
+
+  return `${Math.round(ageMinutes / 60)} hours ago`;
+}
+
 export async function loadReleaseReadinessSnapshot(
   leagueId: string,
 ): Promise<ReleaseReadinessSnapshot> {
@@ -93,6 +133,11 @@ export async function loadReleaseReadinessSnapshot(
     injurySync,
     liveScoring,
     playoffs,
+    draftAutomation,
+    leagueAutomation,
+    injuryAutomation,
+    injuryEmailAutomation,
+    seasonAutomation,
   ] = await Promise.all([
     getLeagueById(leagueId),
     getLeagueTeams(leagueId),
@@ -103,6 +148,11 @@ export async function loadReleaseReadinessSnapshot(
     getPlayerAvailabilitySyncState(leagueId),
     getSharedLiveScoringControlOnce(leagueId),
     getFantasyPlayoffs(leagueId),
+    loadAutomationDocument('draftAutomation'),
+    loadAutomationDocument('leagueAutomation'),
+    loadAutomationDocument('injuryAutomation'),
+    loadAutomationDocument('injuryEmailAutomation'),
+    loadAutomationDocument('seasonAutomation'),
   ]);
 
   if (!league) {
@@ -202,6 +252,65 @@ export async function loadReleaseReadinessSnapshot(
     ),
   );
 
+
+  const draftAutomationAge = timestampAgeMinutes(draftAutomation?.['lastRunAt']);
+  const draftAutomationFailedCount =
+    typeof draftAutomation?.['failedDraftCount'] === 'number'
+      ? draftAutomation['failedDraftCount']
+      : 0;
+  checks.push(
+    createCheck(
+      'server-draft-automation',
+      'league',
+      'Server-controlled draft automation',
+      !draftAutomation
+        ? 'The scheduled draft worker has not recorded a run yet.'
+        : `${String(draftAutomation['status'] ?? 'unknown')}; last run ${formatAgeMinutes(draftAutomationAge)}; ${draftAutomationFailedCount} failed draft(s).`,
+      !draftAutomation
+        ? 'warning'
+        : draftAutomationFailedCount > 0 || draftAutomation['status'] === 'partial-error'
+          ? 'fail'
+          : draftAutomationAge !== null && draftAutomationAge <= 5
+            ? 'pass'
+            : 'warning',
+      true,
+    ),
+  );
+
+  const cycleOneExists = (latestCycle?.cycleNumber ?? 0) >= 1;
+  const cycleStartMode = typeof seasonAutomation?.['mode'] === 'string'
+    ? seasonAutomation['mode']
+    : '';
+  const cycleStartAge = timestampAgeMinutes(seasonAutomation?.['lastRunAt']);
+  const cycleStartFailures =
+    typeof seasonAutomation?.['failedLeagueCount'] === 'number'
+      ? seasonAutomation['failedLeagueCount']
+      : 0;
+  checks.push(
+    createCheck(
+      'automatic-cycle-one',
+      'league',
+      'Automatic Cycle 1 after the draft',
+      cycleOneExists
+        ? 'Cycle 1 exists and no commissioner start action is required.'
+        : draft?.status === 'complete'
+          ? `The draft is complete and Cycle 1 is still being prepared. Recovery worker last ran ${formatAgeMinutes(cycleStartAge)}.`
+          : cycleStartMode === 'immediate-after-draft'
+            ? 'The server is ready to create Cycle 1 immediately when the draft completes.'
+            : 'The automatic Cycle 1 recovery worker has not reported its updated mode yet.',
+      cycleOneExists
+        ? 'pass'
+        : draft?.status === 'complete'
+          ? cycleStartFailures > 0 || (cycleStartAge !== null && cycleStartAge > 3)
+            ? 'fail'
+            : 'warning'
+          : cycleStartMode === 'immediate-after-draft'
+            ? 'pass'
+            : 'warning',
+      true,
+    ),
+  );
+
   const cycleSchemaHealthy = activeCycles.every(
     (cycle) =>
       (cycle.windowSchemaVersion ?? 0) >= 1 && (cycle.matchupCompletionSchemaVersion ?? 0) >= 1,
@@ -239,6 +348,30 @@ export async function loadReleaseReadinessSnapshot(
     ),
   );
 
+  const leagueAutomationAge = timestampAgeMinutes(leagueAutomation?.['lastRunAt']);
+  const leagueAutomationFailures =
+    typeof leagueAutomation?.['failedLeagueCount'] === 'number'
+      ? leagueAutomation['failedLeagueCount']
+      : 0;
+  checks.push(
+    createCheck(
+      'server-league-automation',
+      'scoring',
+      'Scheduled season and scoring automation',
+      !leagueAutomation
+        ? 'The ten-minute league automation worker has not recorded a run yet.'
+        : `${String(leagueAutomation['status'] ?? 'unknown')}; last run ${formatAgeMinutes(leagueAutomationAge)}; ${leagueAutomationFailures} failed league(s).`,
+      !leagueAutomation
+        ? 'warning'
+        : leagueAutomationFailures > 0 || leagueAutomation['status'] === 'partial-error'
+          ? 'fail'
+          : leagueAutomationAge !== null && leagueAutomationAge <= 25
+            ? 'pass'
+            : 'warning',
+      true,
+    ),
+  );
+
   checks.push(
     createCheck(
       'projection-status',
@@ -246,11 +379,13 @@ export async function loadReleaseReadinessSnapshot(
       'Shared projection snapshot is healthy',
       !projection
         ? 'No shared projection metadata is available.'
-        : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}.`,
+        : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}.`,
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
         projection.assetCount > 0
-        ? 'pass'
+        ? projection.generationReason === 'server-emergency'
+          ? 'warning'
+          : 'pass'
         : projection?.status === 'error'
           ? 'fail'
           : 'warning',
@@ -271,6 +406,61 @@ export async function loadReleaseReadinessSnapshot(
         : injurySync?.status === 'error'
           ? 'fail'
           : 'warning',
+      true,
+    ),
+  );
+
+
+  const injuryAutomationAge = timestampAgeMinutes(
+    injuryAutomation?.['lastSuccessfulRunAt'] ?? injuryAutomation?.['lastRunAt'],
+  );
+  const activeInjurySeason = injuryAutomation?.['activeSeason'] !== false;
+  const injuryFreshnessLimitMinutes = activeInjurySeason ? 8 * 60 : 26 * 60;
+  checks.push(
+    createCheck(
+      'scheduled-injury-refresh',
+      'injury',
+      'Scheduled global injury refresh',
+      !injuryAutomation
+        ? 'The server injury scheduler has not recorded a run yet.'
+        : `${String(injuryAutomation['status'] ?? 'unknown')}; last successful run ${formatAgeMinutes(injuryAutomationAge)}.`,
+      !injuryAutomation
+        ? 'warning'
+        : injuryAutomation['status'] === 'error'
+          ? 'fail'
+          : injuryAutomationAge !== null && injuryAutomationAge <= injuryFreshnessLimitMinutes
+            ? 'pass'
+            : 'warning',
+      true,
+    ),
+  );
+
+  const injuryEmailAge = timestampAgeMinutes(
+    injuryEmailAutomation?.['lastSuccessfulRunAt'] ?? injuryEmailAutomation?.['lastRunAt'],
+  );
+  const failedOwnerBatches =
+    typeof injuryEmailAutomation?.['failedOwnerBatchCount'] === 'number'
+      ? injuryEmailAutomation['failedOwnerBatchCount']
+      : 0;
+  const pendingEmailCount =
+    typeof injuryEmailAutomation?.['pendingQueueCount'] === 'number'
+      ? injuryEmailAutomation['pendingQueueCount']
+      : 0;
+  checks.push(
+    createCheck(
+      'injury-email-worker',
+      'injury',
+      'Injury email queue worker',
+      !injuryEmailAutomation
+        ? 'The five-minute injury email worker has not recorded a run yet.'
+        : `${String(injuryEmailAutomation['status'] ?? 'unknown')}; last run ${formatAgeMinutes(injuryEmailAge)}; ${pendingEmailCount} pending alert(s).`,
+      !injuryEmailAutomation
+        ? 'warning'
+        : failedOwnerBatches > 0 || injuryEmailAutomation['status'] === 'error'
+          ? 'fail'
+          : injuryEmailAge !== null && injuryEmailAge <= 15
+            ? 'pass'
+            : 'warning',
       true,
     ),
   );

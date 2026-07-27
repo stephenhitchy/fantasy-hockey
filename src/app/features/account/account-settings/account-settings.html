@@ -1,6 +1,6 @@
 @if (loading()) {
   <section class="account-loading" aria-live="polite">
-    <span aria-hidden="true">🏒</span>
+    <span class="pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
     <strong>Opening your locker...</strong>
   </section>
 } @else {
@@ -11,7 +11,7 @@
     <section class="account-content">
       <header class="profile-hero">
         <div class="profile-avatar-wrap">
-          <div class="profile-avatar">{{ managerInitials() }}</div>
+          <div class="profile-avatar"><img class="profile-avatar-image" src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot logo" /></div>
           <span class="online-pixel" title="Manager profile active"></span>
         </div>
 
@@ -22,6 +22,9 @@
 
           <div class="identity-chips">
             <span>Member since {{ formatMemberSince() }}</span>
+            <span [class.email-unverified-chip]="!emailVerified()">
+              {{ emailVerified() ? 'Email Verified' : 'Email Not Verified' }}
+            </span>
             @if (commissionerLeagueCount() > 0) {
               <span class="commissioner-chip">Commissioner</span>
             }
@@ -164,6 +167,127 @@
             </select>
           </label>
 
+          <section class="background-panel" aria-labelledby="background-theme-title">
+            <div class="panel-heading compact">
+              <div>
+                <span class="eyebrow">Arena Theme</span>
+                <h3 id="background-theme-title">Background Style</h3>
+              </div>
+            </div>
+
+            <p class="panel-description">
+              Pick the neutral arena backdrop that works best with every NHL accent color.
+            </p>
+
+            <div class="background-option-grid" role="list" aria-label="Choose a background theme">
+              @for (option of backgroundOptions; track option.value) {
+                <button
+                  type="button"
+                  class="background-option"
+                  [class.selected]="option.value === backgroundTheme"
+                  [attr.aria-pressed]="option.value === backgroundTheme"
+                  (click)="backgroundTheme = option.value; previewPreferenceChanges()"
+                >
+                  <span class="background-swatch" [attr.data-theme]="option.value"></span>
+                  <span class="background-option-copy">
+                    <strong>{{ option.title }}</strong>
+                    <small>{{ option.description }}</small>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+
+          <section class="email-preferences" aria-labelledby="email-preferences-title">
+            <div class="email-preferences-heading">
+              <div>
+                <span class="eyebrow">Email Notifications</span>
+                <h3 id="email-preferences-title">Roster Alerts</h3>
+              </div>
+
+              <span class="verification-badge" [class.verified]="emailVerified()">
+                {{ emailVerified() ? 'Verified' : 'Verification Required' }}
+              </span>
+            </div>
+
+            <div class="email-feature-callout" [class.inactive]="!emailVerified() && !injuryEmailEnabled">
+              <div class="email-feature-icon-wrap" aria-hidden="true">
+                <span class="pixel-icon icon-mail icon-lg"></span>
+              </div>
+
+              <div class="email-feature-copy">
+                <div class="email-feature-title-row">
+                  <strong>Email Injury Alerts</strong>
+                  <span class="email-feature-status"
+                    [class.enabled]="emailVerified() && injuryEmailEnabled"
+                    [class.available]="emailVerified() && !injuryEmailEnabled"
+                    [class.locked]="!emailVerified()"
+                  >
+                    {{
+                      !emailVerified()
+                        ? 'Verify to unlock'
+                        : injuryEmailEnabled
+                          ? 'Enabled'
+                          : 'Available · Off'
+                    }}
+                  </span>
+                </div>
+
+                <p>
+                  Get an email when an active roster player becomes unavailable and may need a substitution.
+                  Alerts are optional, off by default, and bundled after games so they do not feel spammy.
+                </p>
+              </div>
+            </div>
+
+            @if (!emailVerified()) {
+              <p class="email-verification-copy">
+                Verify {{ profile()?.email }} before enabling injury alerts. This prevents alerts
+                from being sent to a mistyped or unowned address.
+              </p>
+
+              <div class="verification-actions">
+                <button
+                  type="button"
+                  class="verification-button"
+                  (click)="sendVerificationEmail()"
+                  [disabled]="sendingVerification() || refreshingVerification()"
+                >
+                  {{ sendingVerification() ? 'Sending...' : 'Send Verification Email' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="verification-button secondary"
+                  (click)="refreshVerificationStatus()"
+                  [disabled]="sendingVerification() || refreshingVerification()"
+                >
+                  {{ refreshingVerification() ? 'Checking...' : 'I Verified — Check Again' }}
+                </button>
+              </div>
+            }
+
+            <label class="toggle-row notification-toggle" [class.disabled]="!emailVerified()">
+              <span>
+                <strong class="toggle-title-with-icon">
+                  <span class="pixel-icon icon-mail icon-sm" aria-hidden="true"></span>
+                  <span>Injury Email Alerts</span>
+                </strong>
+                <small>
+                  Email me when an active roster player becomes unavailable and may need a
+                  substitution. Alerts are off by default and can be disabled anytime.
+                </small>
+              </span>
+
+              <input
+                type="checkbox"
+                [(ngModel)]="injuryEmailEnabled"
+                (change)="onInjuryEmailPreferenceChange()"
+                [disabled]="!emailVerified()"
+              />
+            </label>
+          </section>
+
           <button
             type="button"
             class="save-profile-button"
@@ -187,7 +311,7 @@
           <div class="achievement-grid">
             @for (achievement of achievements(); track achievement.title) {
               <article [class.unlocked]="achievement.unlocked">
-                <span class="achievement-icon" aria-hidden="true">{{ achievement.icon }}</span>
+                <span [class]="'pixel-icon achievement-icon icon-lg icon-' + achievement.icon" aria-hidden="true"></span>
                 <div>
                   <strong>{{ achievement.title }}</strong>
                   <small>{{ achievement.description }}</small>
@@ -210,24 +334,24 @@
 
           <nav class="account-quick-links" aria-label="Account shortcuts">
             <a routerLink="/dashboard">
-              <span aria-hidden="true">⌂</span>
+              <span class="pixel-icon icon-home icon-sm" aria-hidden="true"></span>
               <div><strong>My Leagues</strong><small>Return to the arena lobby.</small></div>
             </a>
 
             <a routerLink="/leagues/create">
-              <span aria-hidden="true">＋</span>
+              <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
               <div><strong>Create League</strong><small>Open a new commissioner room.</small></div>
             </a>
 
             <a routerLink="/leagues/join">
-              <span aria-hidden="true">⇥</span>
+              <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
               <div>
                 <strong>Join League</strong><small>Enter a commissioner invite code.</small>
               </div>
             </a>
 
             <button type="button" class="sign-out-button" (click)="signOut()">
-              <span aria-hidden="true">↪</span>
+              <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
               <div><strong>Sign Out</strong><small>Leave the locker room safely.</small></div>
             </button>
           </nav>

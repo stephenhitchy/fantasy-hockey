@@ -1,6 +1,0 @@
-- Scoring Rules V3 preserves forward scoring, stabilizes defense through TOI/blocks/hits, and replaces goalie save-percentage tiers with a continuous baseline-relative quality curve.
-- Favorite-team selection saves immediately to the signed-in user's Firestore profile.
-- Dashboard mascot card links to account settings.
-- User update rules allow only username, favorite team, reduced motion, and landing page preferences.
-- Username validation runs only when username itself changes.
-- Signed-in users may get an individual profile document for matchup theme lookup; collection listing remains denied.

@@ -7,12 +7,6 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../../../core/firebase';
 
 import {
-  type AutoDraftBenchRole,
-  getAutoDraftBenchRole,
-  isAutomaticDraftCandidateAllowed,
-} from '../../../core/draft/auto-draft-strategy';
-
-import {
   DraftableAsset,
   DraftPick,
   DraftPickPreview,
@@ -34,7 +28,6 @@ import {
   listenToDraftQueue,
   listenToDraftQueues,
   listenToFantasyDraft,
-  makeAutomaticDraftPick,
   makeDraftPick,
   pauseDraftClock,
   resumeDraftClock,
@@ -47,6 +40,7 @@ import {
   generateSharedProjectionSnapshot,
   isSharedProjectionSnapshotFreshForDraft,
   loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotById,
   loadSharedProjectionSnapshotMetadata,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
   SHARED_PROJECTION_VERSION,
@@ -137,7 +131,6 @@ export class DraftRoom implements OnDestroy {
   isCommissioner = signal(false);
   draftInjurySyncInProgress = signal(false);
   queueSaving = signal(false);
-  autoPickInProgress = signal(false);
   clockActionInProgress = signal(false);
   sharedProjectionRepairInProgress = signal(false);
   preDraftPreparationInProgress = signal(false);
@@ -150,7 +143,6 @@ export class DraftRoom implements OnDestroy {
   playerPoolError = signal('');
   draftInjurySyncMessage = signal('');
   draftInjurySyncWarning = signal('');
-  autoPickMessage = signal('');
 
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
@@ -575,7 +567,6 @@ export class DraftRoom implements OnDestroy {
   private activationFailureCount = 0;
   private activationRetryNotBefore = 0;
   private preDraftPreparationAttemptKey = '';
-  private lastAutoPickAttemptKey = '';
   private lastObservedDraftStatus: FantasyDraft['status'] | null = null;
 
   private readonly clockTimer = setInterval(() => {
@@ -584,7 +575,6 @@ export class DraftRoom implements OnDestroy {
     }
 
     this.now.set(Date.now());
-    void this.maybeHandleAutomaticPick();
   }, 1000);
 
   private readonly scheduledDraftCheckTimer = setInterval(() => {
@@ -924,7 +914,10 @@ export class DraftRoom implements OnDestroy {
     this.playerPoolError.set('');
 
     try {
-      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
+      const pinnedSnapshotId = this.draft()?.serverDraftProjectionSnapshotId;
+      const snapshot = pinnedSnapshotId
+        ? await loadSharedProjectionSnapshotById(this.leagueId, pinnedSnapshotId)
+        : await loadSharedProjectionSnapshot(this.leagueId);
 
       if (this.destroyed) {
         return;
@@ -934,6 +927,13 @@ export class DraftRoom implements OnDestroy {
         this.playerPool.set([]);
         throw new Error(
           'Shared projections are not ready. The commissioner must refresh them before the draft can use rankings or auto-draft.',
+        );
+      }
+
+      if (snapshot.metadata.generationReason === 'server-emergency') {
+        this.playerPool.set([]);
+        throw new Error(
+          'The saved player pool contains temporary emergency rankings and cannot be used for this draft. The commissioner must return to Draft Setup and save the schedule again to build verified Projection V8 rankings.',
         );
       }
 
@@ -994,7 +994,7 @@ export class DraftRoom implements OnDestroy {
 
     return this.isCommissioner()
       ? `The injury report and shared rankings begin preloading ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`
-      : 'Waiting for the commissioner to refresh the shared injury report and open the draft.';
+      : 'The server will open the draft automatically at the scheduled time.';
   }
 
   getDraftInjurySyncTimeLabel(): string {
@@ -1017,7 +1017,7 @@ export class DraftRoom implements OnDestroy {
   }
 
   private getProjectionTeamCount(): number {
-    return Math.max(this.league()?.maxTeams ?? this.teams().length, 2);
+    return Math.max(this.teams().length, 2);
   }
 
   private getRequiredGamesPerCycle(): number {
@@ -1071,7 +1071,7 @@ export class DraftRoom implements OnDestroy {
     }
 
     return this.isCommissioner()
-      ? `Keep this Draft Room open. The injury refresh and shared projection build will begin automatically ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`
+      ? `The server will open the draft automatically at the scheduled time. This page may stay closed.`
       : 'The app will check the shared daily injury report and prepare one league ranking before the scheduled start.';
   }
 
@@ -1419,7 +1419,7 @@ export class DraftRoom implements OnDestroy {
 
     if (!this.isCommissioner()) {
       this.draftInjurySyncMessage.set(
-        'Waiting for the commissioner to finish the shared pre-draft preparation and open the draft.',
+        'The server is waiting for the scheduled start and will open the draft automatically.',
       );
       return;
     }
@@ -1626,7 +1626,7 @@ export class DraftRoom implements OnDestroy {
       this.successMessage.set(
         draft.clockStatus === 'running'
           ? 'Shared projections were rebuilt. The clock was paused so the commissioner can confirm the player pool before resuming.'
-          : 'Shared projections were rebuilt. The first manager can start the clock when ready.',
+          : 'Shared projections were rebuilt. The server will start the clock automatically.',
       );
     } catch (error: unknown) {
       this.playerPoolError.set(
@@ -1751,180 +1751,6 @@ export class DraftRoom implements OnDestroy {
       );
     } finally {
       this.queueSaving.set(false);
-    }
-  }
-
-  private isAssetEligibleForOwner(asset: DraftableAsset, ownerId: string): boolean {
-    const draft = this.draft();
-
-    if (!draft || draft.draftedAssetKeys.includes(asset.assetKey)) {
-      return false;
-    }
-
-    return this.getDraftDestinationForAsset(ownerId, asset) !== null;
-  }
-
-  private ownerNeedsAnyStartingPosition(ownerId: string): boolean {
-    return this.rosterPositions.some(
-      (position) => !this.isStartingPositionFilled(ownerId, position),
-    );
-  }
-
-  private getOwnerBenchRoles(ownerId: string): Set<AutoDraftBenchRole> {
-    return new Set(
-      this.picks()
-        .filter((pick) => pick.ownerId === ownerId && this.isBenchDraftPick(pick))
-        .map((pick) => getAutoDraftBenchRole(pick.asset.position)),
-    );
-  }
-
-  private isAutomaticCandidateForCurrentRosterPhase(
-    ownerId: string,
-    asset: DraftableAsset,
-    needsStarter: boolean,
-    benchRoles: ReadonlySet<AutoDraftBenchRole>,
-  ): boolean {
-    return isAutomaticDraftCandidateAllowed({
-      hasOpenStartingSlot: needsStarter,
-      destination: this.getDraftDestinationForAsset(ownerId, asset),
-      assetPosition: asset.position,
-      existingBenchRoles: benchRoles,
-    });
-  }
-
-  private getAutomaticDraftCandidate(ownerId: string): {
-    asset: DraftableAsset;
-    selectionType: 'queue' | 'automatic';
-  } | null {
-    const queue = this.getQueueForOwner(ownerId);
-    const needsStarter = this.ownerNeedsAnyStartingPosition(ownerId);
-    const benchRoles = this.getOwnerBenchRoles(ownerId);
-    const assetsByKey = new Map<string, DraftableAsset>(
-      this.playerPool().map((asset): [string, DraftableAsset] => [asset.assetKey, asset]),
-    );
-    const queuedCandidate = queue.assetKeys
-      .map((assetKey) => assetsByKey.get(assetKey))
-      .filter((asset): asset is DraftableAsset => !!asset)
-      .find(
-        (asset) =>
-          this.isAssetEligibleForOwner(asset, ownerId) &&
-          this.isAutomaticCandidateForCurrentRosterPhase(
-            ownerId,
-            asset,
-            needsStarter,
-            benchRoles,
-          ),
-      );
-
-    if (queuedCandidate) {
-      return { asset: queuedCandidate, selectionType: 'queue' };
-    }
-
-    const automaticCandidate = this.playerPool()
-      .filter(
-        (asset) =>
-          this.isAssetEligibleForOwner(asset, ownerId) &&
-          this.isAutomaticCandidateForCurrentRosterPhase(
-            ownerId,
-            asset,
-            needsStarter,
-            benchRoles,
-          ),
-      )
-      .sort((first, second) => this.compareDraftValueThenProjection(first, second))[0];
-
-    return automaticCandidate
-      ? { asset: automaticCandidate, selectionType: 'automatic' }
-      : null;
-  }
-
-  private async maybeHandleAutomaticPick(): Promise<void> {
-    const draft = this.draft();
-    const currentPick = this.currentPick();
-
-    if (
-      !this.isCommissioner() ||
-      !draft ||
-      draft.status !== 'live' ||
-      draft.clockStatus !== 'running' ||
-      !currentPick ||
-      this.autoPickInProgress() ||
-      this.playerPoolLoading() ||
-      this.playerPool().length === 0
-    ) {
-      return;
-    }
-
-    const ownerQueue = this.getQueueForOwner(currentPick.ownerId);
-
-    const timerExpired = isDraftClockExpired(draft, new Date(this.now()));
-
-    if (!timerExpired && !ownerQueue.autoDraftEnabled) {
-      return;
-    }
-
-    const reason = ownerQueue.autoDraftEnabled ? 'manager-auto-mode' : 'timer-expired';
-
-    const attemptKey = [currentPick.overallPick, currentPick.ownerId, reason].join(':');
-
-    if (this.lastAutoPickAttemptKey === attemptKey) {
-      return;
-    }
-
-    this.lastAutoPickAttemptKey = attemptKey;
-    this.autoPickInProgress.set(true);
-    this.errorMessage.set('');
-
-    try {
-      const candidate = this.getAutomaticDraftCandidate(currentPick.ownerId);
-
-      if (!candidate) {
-        await pauseDraftClock(this.leagueId, this.userId);
-
-        throw new Error(
-          'No eligible auto-draft asset could be found. The draft clock was paused for commissioner review.',
-        );
-      }
-
-      const pick = await makeAutomaticDraftPick(
-        this.leagueId,
-        this.userId,
-        currentPick.ownerId,
-        candidate.asset,
-        candidate.selectionType,
-        reason,
-      );
-
-      const autoDraftWasForcedOn =
-        reason === 'timer-expired' && ownerQueue.consecutiveClockExpirations >= 1;
-
-      this.autoPickMessage.set(
-        `${this.getTeamName(pick.ownerId)} auto-drafted ${this.getAssetName(pick.asset)} at pick #${pick.overallPick}.${
-          autoDraftWasForcedOn
-            ? ' Auto-draft is now enabled after two consecutive expired turns.'
-            : ''
-        }`,
-      );
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to process the automatic draft pick.';
-
-      const staleAttempt =
-        message.includes('no longer on the clock') ||
-        message.includes('already been drafted') ||
-        message.includes('timer has not expired');
-
-      if (!staleAttempt) {
-        this.errorMessage.set(message);
-      }
-
-      setTimeout(() => {
-        if (this.lastAutoPickAttemptKey === attemptKey) {
-          this.lastAutoPickAttemptKey = '';
-        }
-      }, 3000);
-    } finally {
-      this.autoPickInProgress.set(false);
     }
   }
 

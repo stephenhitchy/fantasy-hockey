@@ -70,7 +70,8 @@ export type SharedProjectionGenerationReason =
   | 'pre-draft'
   | 'draft-start-fallback'
   | 'cycle-refresh'
-  | 'window-boundary';
+  | 'window-boundary'
+  | 'server-emergency';
 
 export interface SharedProjectionSnapshotMetadata {
   snapshotId: string;
@@ -759,6 +760,13 @@ export function loadSharedProjectionSnapshot(
   leagueId: string,
 ): Promise<SharedProjectionSnapshot | null> {
   return loadProjectionSnapshotAtPointer(leagueId, SNAPSHOT_POINTER_ID);
+}
+
+export function loadSharedProjectionSnapshotById(
+  leagueId: string,
+  snapshotId: string,
+): Promise<SharedProjectionSnapshot | null> {
+  return loadProjectionSnapshotAtPointer(leagueId, snapshotId);
 }
 
 export function loadSharedProjectionSnapshotForCycle(

@@ -7,7 +7,7 @@
     <header class="league-header">
       <div>
         <span class="eyebrow">Fantasy Hockey League</span>
-        <h1>🏒 {{ league()?.name }}</h1>
+        <h1><span class="pixel-icon icon-rat icon-lg" aria-hidden="true"></span> {{ league()?.name }}</h1>
         <p>
           Cycle Matchups ·
           {{ teams().length }} / {{ league()?.maxTeams }} Teams
@@ -119,7 +119,7 @@
       "
       aria-live="polite"
     >
-      <span class="daily-injury-icon" aria-hidden="true">🩹</span>
+      <span class="daily-injury-icon pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
 
       <div class="daily-injury-copy">
         <span class="draft-section-eyebrow">Daily Injury Report</span>
@@ -233,7 +233,7 @@
 
       <div class="quick-actions-grid primary-actions-grid">
         <a class="hub-action" [routerLink]="['/leagues', leagueId, 'team']">
-          <span class="hub-action-icon" aria-hidden="true">👕</span>
+          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Team</strong>
             <span>Roster, IR, waivers, and moves.</span>
@@ -241,7 +241,7 @@
         </a>
 
         <a class="hub-action" [routerLink]="getCurrentOwnerMatchupLink()">
-          <span class="hub-action-icon" aria-hidden="true">⚔️</span>
+          <span class="hub-action-icon pixel-icon icon-matchup icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Matchup</strong>
             <span>Open your earliest unfinished matchup.</span>
@@ -249,7 +249,7 @@
         </a>
 
         <a class="hub-action" [routerLink]="['/leagues', leagueId, 'free-agents']">
-          <span class="hub-action-icon" aria-hidden="true">🔎</span>
+          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Players</strong>
             <span>Browse free agents and availability.</span>
@@ -257,7 +257,7 @@
         </a>
 
         <a class="hub-action" [routerLink]="['/leagues', leagueId, 'standings']">
-          <span class="hub-action-icon" aria-hidden="true">🏆</span>
+          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Standings</strong>
             <span>Records, points, and league rank.</span>
@@ -265,7 +265,7 @@
         </a>
 
         <a class="hub-action" [routerLink]="['/leagues', leagueId, 'leaders']">
-          <span class="hub-action-icon" aria-hidden="true">⭐</span>
+          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Point Leaders</strong>
             <span>Top forwards, defensemen, and goalie units.</span>
@@ -273,7 +273,7 @@
         </a>
 
         <a class="hub-action" [routerLink]="['/leagues', leagueId, 'playoffs']">
-          <span class="hub-action-icon" aria-hidden="true">🥅</span>
+          <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Playoffs</strong>
             <span>Projected seeds, bracket, and final placements.</span>
@@ -282,7 +282,7 @@
 
         @if (draft()?.status !== 'complete') {
           <a class="hub-action hub-action-highlight" [routerLink]="['/leagues', leagueId, 'draft']">
-            <span class="hub-action-icon" aria-hidden="true">🧢</span>
+            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
             <span class="hub-action-copy">
               <strong>Draft Room</strong>
               <span>Enter or review the league draft.</span>
@@ -314,7 +314,7 @@
           </a>
 
           <a class="tool-link" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
-            <span aria-hidden="true">🗓</span>
+            <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Full Schedule</strong>
               <small>Round-robin schedule and history</small>
@@ -322,7 +322,7 @@
           </a>
 
           <a class="tool-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
-            <span aria-hidden="true">🏆</span>
+            <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Playoff Bracket</strong>
               <small>Seeds, rounds, consolation, and placements</small>
@@ -330,7 +330,7 @@
           </a>
 
           <a class="tool-link" [routerLink]="['/leagues', leagueId, 'projections']">
-            <span aria-hidden="true">📈</span>
+            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Projection Lab</strong>
               <small>Ratings and reliability checks</small>
@@ -339,7 +339,7 @@
 
           @if (isCommissioner()) {
             <a class="tool-link" [routerLink]="['/leagues', leagueId, 'player-availability']">
-              <span aria-hidden="true">🩹</span>
+              <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Player Availability</strong>
                 <small>Injury statuses and IR eligibility</small>
@@ -347,7 +347,7 @@
             </a>
 
             <a class="tool-link" [routerLink]="['/leagues', leagueId, 'live-scoring']">
-              <span aria-hidden="true">📡</span>
+              <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Scoring Diagnostics</strong>
                 <small>Worker lease, snapshots, and write checks</small>
@@ -355,7 +355,7 @@
             </a>
 
             <a class="tool-link" [routerLink]="['/leagues', leagueId, 'release-readiness']">
-              <span aria-hidden="true">✅</span>
+              <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Release Readiness</strong>
                 <small>Full-season validation and safe recovery</small>
@@ -532,7 +532,7 @@
       aria-labelledby="draft-live-title"
     >
       <section class="draft-live-modal">
-        <span class="draft-live-icon">🏒</span>
+        <span class="draft-live-icon pixel-icon icon-rat icon-lg" aria-hidden="true"></span>
         <span class="draft-live-eyebrow">Draft Is Live</span>
 
         <h2 id="draft-live-title">It is time to make your picks.</h2>

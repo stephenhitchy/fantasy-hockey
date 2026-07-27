@@ -55,7 +55,7 @@
 
     @if (isPlayoffsComplete()) {
       <section class="champion-card">
-        <span class="champion-icon" aria-hidden="true">🏆</span>
+        <span class="champion-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
         <div>
           <span class="eyebrow">League Champion</span>
           <h2>{{ getChampionName() }}</h2>
@@ -329,7 +329,7 @@
                   <span>Regular-season seed #{{ placement.seed }}</span>
                 </div>
                 @if (placement.place === 1) {
-                  <span class="placement-icon" aria-label="Champion">🏆</span>
+                  <span class="placement-icon pixel-icon icon-standings icon-sm" aria-label="Champion"></span>
                 } @else if (placement.place === 2) {
                   <span class="placement-icon" aria-label="Runner-up">🥈</span>
                 } @else if (placement.place === 3) {

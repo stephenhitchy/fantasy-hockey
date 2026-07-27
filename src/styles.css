@@ -1,23 +1,24 @@
 /* Global visual refresh foundation */
 :root {
   color-scheme: dark;
-  --page-bg: #0d1723;
-  --page-bg-secondary: #142131;
-  --surface-1: #182536;
-  --surface-2: #1d2c3d;
-  --surface-3: #233548;
-  --border-soft: #3a4d61;
-  --border-strong: #58718a;
-  --text-primary: #f7f9fc;
-  --text-secondary: #c2cfdb;
-  --text-muted: #94a6b8;
-  --accent-blue: #55b3ff;
-  --accent-cyan: #7ae6ff;
-  --accent-green: #64d9a3;
-  --accent-yellow: #f8d86b;
-  --accent-red: #ff8a8a;
-  --shadow-deep: 0 22px 55px rgba(1, 6, 15, 0.45);
-  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --page-bg: #0e1116;
+  --page-bg-secondary: #141922;
+  --page-bg-tertiary: #1a212b;
+  --surface-1: #171c23;
+  --surface-2: #202731;
+  --surface-3: #262f3b;
+  --border-soft: #323b47;
+  --border-strong: #495666;
+  --text-primary: #f4f1e8;
+  --text-secondary: #aab3bf;
+  --text-muted: #8591a0;
+  --accent-blue: #5fa3ff;
+  --accent-cyan: #85dce6;
+  --accent-green: #62c98e;
+  --accent-yellow: #e1b649;
+  --accent-red: #d64545;
+  --shadow-deep: 0 22px 55px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.34);
   --user-team-primary: #b9975b;
   --user-team-secondary: #333f42;
   --user-team-tertiary: #c8102e;
@@ -36,7 +37,67 @@
   --user-team-tertiary-wash: rgba(200, 16, 46, 0.12);
 }
 
+html[data-background-theme='rink-dark'] {
+  --page-bg: #0e1116;
+  --page-bg-secondary: #141922;
+  --page-bg-tertiary: #1a212b;
+  --surface-1: #171c23;
+  --surface-2: #202731;
+  --surface-3: #262f3b;
+  --border-soft: #323b47;
+  --border-strong: #495666;
+  --text-primary: #f4f1e8;
+  --text-secondary: #aab3bf;
+  --text-muted: #8591a0;
+}
+
+html[data-background-theme='oled-black'] {
+  --page-bg: #050607;
+  --page-bg-secondary: #0b0d10;
+  --page-bg-tertiary: #12151a;
+  --surface-1: #0d1014;
+  --surface-2: #141920;
+  --surface-3: #1b222b;
+  --border-soft: #29313b;
+  --border-strong: #404b57;
+  --text-primary: #f6f5f0;
+  --text-secondary: #adb6c0;
+  --text-muted: #8793a0;
+}
+
+html[data-background-theme='ice-gray'] {
+  --page-bg: #15181d;
+  --page-bg-secondary: #1c2128;
+  --page-bg-tertiary: #252c35;
+  --surface-1: #1f252d;
+  --surface-2: #282f39;
+  --surface-3: #313947;
+  --border-soft: #424d5b;
+  --border-strong: #576779;
+  --text-primary: #f4f6f8;
+  --text-secondary: #c0cad5;
+  --text-muted: #99a7b5;
+}
+
+html[data-background-theme='light-ice'] {
+  color-scheme: light;
+  --page-bg: #dfe5eb;
+  --page-bg-secondary: #e9edf2;
+  --page-bg-tertiary: #f3f6f9;
+  --surface-1: #f8fafc;
+  --surface-2: #eef3f7;
+  --surface-3: #e3e9ef;
+  --border-soft: #aab6c2;
+  --border-strong: #7d8b98;
+  --text-primary: #18202a;
+  --text-secondary: #394757;
+  --text-muted: #5e6e7e;
+  --shadow-deep: 0 22px 50px rgba(31, 45, 62, 0.16);
+  --shadow-card: 0 14px 28px rgba(31, 45, 62, 0.14);
+}
+
 html {
+
   min-height: 100%;
   background: var(--page-bg);
 }
@@ -46,6 +107,7 @@ body {
   min-height: 100vh;
   background: var(--page-bg);
   color: var(--text-primary);
+  transition: background 0.22s ease, color 0.22s ease;
   font-family:
     Inter,
     ui-sans-serif,
@@ -1511,4 +1573,195 @@ app-cycle-one .historical-replay-safety-note {
   app-cycle-one .historical-replay-actions {
     display: grid;
   }
+}
+
+
+/* Pixel icon system */
+.pixel-icon {
+  --pixel-icon-size: 1.125rem;
+  --pixel-icon-image: none;
+  display: inline-grid;
+  width: var(--pixel-icon-size);
+  height: var(--pixel-icon-size);
+  min-width: var(--pixel-icon-size);
+  min-height: var(--pixel-icon-size);
+  flex: 0 0 var(--pixel-icon-size);
+  place-items: center;
+  vertical-align: middle;
+}
+
+.pixel-icon::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: center / contain no-repeat var(--pixel-icon-image);
+  image-rendering: pixelated;
+}
+
+.pixel-icon.icon-sm {
+  --pixel-icon-size: 1rem;
+}
+
+.pixel-icon.icon-lg {
+  --pixel-icon-size: 1.5rem;
+}
+
+.pixel-icon.icon-xl {
+  --pixel-icon-size: 2.125rem;
+}
+
+.icon-home { --pixel-icon-image: url('/assets/pixel-icons/home.svg'); }
+.icon-league { --pixel-icon-image: url('/assets/pixel-icons/league.svg'); }
+.icon-team { --pixel-icon-image: url('/assets/pixel-icons/team.png'); }
+.icon-players { --pixel-icon-image: url('/assets/pixel-icons/players.svg'); }
+.icon-create { --pixel-icon-image: url('/assets/pixel-icons/create.svg'); }
+.icon-join { --pixel-icon-image: url('/assets/pixel-icons/join.svg'); }
+.icon-account { --pixel-icon-image: url('/assets/pixel-icons/account.svg'); }
+.icon-more { --pixel-icon-image: url('/assets/pixel-icons/more.svg'); }
+.icon-draft { --pixel-icon-image: url('/assets/pixel-icons/draft.svg'); }
+.icon-standings { --pixel-icon-image: url('/assets/pixel-icons/standings.svg'); }
+.icon-leaders { --pixel-icon-image: url('/assets/pixel-icons/leaders.svg'); }
+.icon-playoffs { --pixel-icon-image: url('/assets/pixel-icons/playoffs.svg'); }
+.icon-schedule { --pixel-icon-image: url('/assets/pixel-icons/schedule.svg'); }
+.icon-projections { --pixel-icon-image: url('/assets/pixel-icons/projections.svg'); }
+.icon-loading { --pixel-icon-image: url('/assets/pixel-icons/loading.svg'); }
+.icon-arena { --pixel-icon-image: url('/assets/pixel-icons/arena.svg'); }
+.icon-warning { --pixel-icon-image: url('/assets/pixel-icons/warning.svg'); }
+.icon-shield { --pixel-icon-image: url('/assets/pixel-icons/shield.svg'); }
+.icon-lab { --pixel-icon-image: url('/assets/pixel-icons/lab.svg'); }
+.icon-crest { --pixel-icon-image: url('/assets/pixel-icons/crest.svg'); }
+.icon-mail { --pixel-icon-image: url('/assets/pixel-icons/mail.svg'); }
+.icon-whistle { --pixel-icon-image: url('/assets/pixel-icons/whistle.svg'); }
+.icon-rat { --pixel-icon-image: url('/assets/pixel-icons/rat.svg'); }
+.icon-matchup { --pixel-icon-image: url('/assets/pixel-icons/matchup.svg'); }
+.icon-injury { --pixel-icon-image: url('/assets/pixel-icons/injury.svg'); }
+.icon-unlock { --pixel-icon-image: url('/assets/pixel-icons/unlock.svg'); }
+.icon-signal { --pixel-icon-image: url('/assets/pixel-icons/signal.svg'); }
+.icon-live { --pixel-icon-image: url('/assets/pixel-icons/live.svg'); }
+.icon-rename { --pixel-icon-image: url('/assets/pixel-icons/rename.svg'); }
+
+.brand-mascot-image,
+.brand-mark-image {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* Global neutral rink theme overrides */
+body :where(
+  .desktop-navbar,
+  .mobile-topbar,
+  .mobile-bottom-nav,
+  .mobile-menu-panel,
+  .runtime-warning,
+  .pixel-logo-ribbon,
+  .global-team-logo-chip,
+  .hero-copy,
+  .dashboard-mascot-card,
+  .league-card,
+  .empty-state,
+  .error-card,
+  .auth-hero-copy,
+  .pixel-auth-card,
+  .pixel-referee-zone,
+  .profile-hero,
+  .account-panel,
+  .manager-stats article,
+  .favorite-team-hero,
+  .background-panel,
+  .league-header,
+  .league-info-card,
+  .draft-status-card,
+  .quick-actions-card,
+  .cycle-status-card,
+  .invite-card,
+  .team-card,
+  .matchup-card,
+  .cycle-header,
+  .shared-scoring-status-card,
+  .cycle-transparency-card,
+  .my-matchup-card,
+  .matchup-detail-card,
+  .team-summary-row,
+  .fantasy-player-card,
+  .summary-card,
+  .requirements-card,
+  .schedule-card,
+  .order-card,
+  .preview-card,
+  .round-card,
+  .team-hero-card,
+  .current-matchup-card,
+  .roster-slot-card,
+  .ir-slot-card,
+  .transaction-card,
+  .my-team-score-card,
+  .free-agent-list-card,
+  .move-builder-card,
+  .pending-moves-card,
+  .waiver-queue-card,
+  .selected-summary-card,
+  .drop-panel-card,
+  .draft-room-header,
+  .player-pool-panel,
+  .sidebar-card,
+  .roster-card,
+  .turn-card,
+  .scheduled-card,
+  .champion-card,
+  .placements-card,
+  .qualifier-card,
+  .seed-card,
+  .placement-seed-card,
+  .standings-card,
+  .league-actions-card,
+  .projection-accuracy-card,
+  .projection-table-card,
+  .lab-control-card,
+  .balance-card,
+  .rating-explainer-card,
+  .shared-snapshot-card
+) {
+  background: var(--surface-1) !important;
+  box-shadow: var(--shadow-card) !important;
+  color: var(--text-primary) !important;
+}
+
+body :where(
+  .pixel-auth-page,
+  .pixel-dashboard-page,
+  .account-locker-page,
+  .cycle-page,
+  .team-settings-page,
+  .free-agents-page,
+  .league-page,
+  .draft-room-page,
+  .projection-lab-page,
+  .playoff-bracket-page
+) {
+  background: linear-gradient(180deg, var(--page-bg-secondary), var(--page-bg)) !important;
+  color: var(--text-primary) !important;
+}
+
+
+.hub-action-icon.pixel-icon::before,
+.league-icon.pixel-icon::before,
+.state-icon.pixel-icon::before,
+.empty-icon.pixel-icon::before,
+.daily-injury-icon.pixel-icon::before,
+.champion-icon.pixel-icon::before,
+.placement-icon.pixel-icon::before,
+.brand-mark.pixel-icon::before,
+.nav-icon.pixel-icon::before {
+  width: 78%;
+  height: 78%;
+}
+
+.mobile-bottom-nav .pixel-icon::before,
+.mobile-menu-panel .pixel-icon::before,
+.quick-actions .pixel-icon::before,
+.league-actions .pixel-icon::before,
+.empty-actions .pixel-icon::before {
+  width: 100%;
+  height: 100%;
 }

@@ -9,7 +9,7 @@
     role="status"
     aria-live="polite"
   >
-    <span aria-hidden="true">{{ scoringRuntime.historicalModeBlocked ? '🛡️' : '🧪' }}</span>
+    <span class="pixel-icon icon-lg" [class.icon-shield]="scoringRuntime.historicalModeBlocked" [class.icon-lab]="!scoringRuntime.historicalModeBlocked" aria-hidden="true"></span>
     <div>
       <strong>
         {{

@@ -47,3 +47,7 @@ Thumbs.db
 .firebase/
 functions/node_modules/
 functions/lib/
+
+# Firebase Functions environment configuration
+functions/.env*
+!functions/.env.example

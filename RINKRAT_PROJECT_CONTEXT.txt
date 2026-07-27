@@ -1,0 +1,411 @@
+RINKRAT FANTASY — CONSOLIDATED PROJECT CONTEXT
+Last consolidated: July 2026
+
+PURPOSE OF THIS FILE
+--------------------
+This is the single handoff/reference file for the RinkRat Fantasy project. It replaces the many old INSTALL, REPORT, MANIFEST, NOTES, DEPLOY_COMMANDS, checklist, and revision files that previously cluttered the project root. A new ChatGPT conversation should read this file before changing the project.
+
+PROJECT IDENTITY
+----------------
+Application: RinkRat Fantasy
+Repository/local path: /Users/StephenH/Documents/Programming/fantasy-hockey
+Frontend: Angular 22 standalone application
+Backend: Firebase Authentication, Firestore, Firebase Hosting, Cloud Functions v2, Cloud Scheduler, and Cloud Tasks
+Firebase project: nhl-fantasy-app-ab673
+Firebase Hosting target: app
+Firebase Hosting site ID: cycle-puck
+Public domain: https://rinkratfantasy.com
+Optional redirect domain: https://www.rinkratfantasy.com
+Primary Functions region: us-central1
+Known working Node version: 22.23.1
+Root Node requirement: >=22.22.3 and <23
+
+EMAIL CONFIGURATION
+-------------------
+Provider: Resend
+Sender name: RinkRat Fantasy
+Sender address: notifications@rinkratfantasy.com
+Reply-to/support: support@rinkratfantasy.com
+Secret name: RESEND_API_KEY
+Non-secret Functions environment file: functions/.env.nhl-fantasy-app-ab673
+Expected values:
+  APP_BASE_URL=https://rinkratfantasy.com
+  EMAIL_FROM_NAME=RinkRat Fantasy
+  EMAIL_FROM_ADDRESS=notifications@rinkratfantasy.com
+  EMAIL_REPLY_TO=support@rinkratfantasy.com
+Never place the Resend API key in source code, Angular environment files, Firestore, or this text file.
+
+STANDARD LOCAL COMMANDS
+-----------------------
+Use these from the project root:
+
+  cd /Users/StephenH/Documents/Programming/fantasy-hockey
+  nvm use 22.23.1
+
+Install frontend dependencies:
+  npm ci
+
+Build frontend only:
+  npm run build
+
+Build frontend and Functions:
+  npm run build:all
+
+Repair Functions dependencies manually:
+  npm run repair:functions
+
+Build Functions only:
+  npm --prefix functions run build
+
+The Functions build now checks for firebase-admin, firebase-functions, @types/node, and TypeScript before compiling. If functions/node_modules is missing or incomplete, it automatically runs npm ci inside functions. This prevents the recurring wall of TypeScript errors such as “Cannot find module firebase-admin,” “Cannot find name process,” and “Cannot find name Buffer.”
+
+Full deployment:
+  firebase use nhl-fantasy-app-ab673
+  firebase deploy --only firestore:rules,firestore:indexes,functions,hosting:app
+
+Frontend-only deployment:
+  npm run build
+  firebase deploy --only hosting:app
+
+Functions-only deployment:
+  npm --prefix functions run build
+  firebase deploy --only functions
+
+Important: do not run npm audit fix --force casually. It may introduce breaking dependency upgrades. The current audit warnings do not block builds or deployment by themselves.
+
+CRITICAL FANTASY ARCHITECTURE
+-----------------------------
+The most important rule is that fantasy cycles are asynchronous at the persistent roster-slot/player-window level. Do not redesign the app around one league-wide cycle start or end timestamp.
+
+Each active roster slot owns an immutable six-NHL-game window. NHL schedules differ, so different assets finish their windows on different dates. When an asset plays its seventh scheduled NHL team game, that game belongs to the next window even if other assets are still completing their previous windows. Several cycle numbers may therefore be active at the same time across one fantasy team.
+
+All future scoring, projections, queued roster moves, standings, playoffs, recovery logic, and Firestore optimization must preserve this model. Use immutable per-slot windows plus the shared NHL game-result ledger. Never discard already-played games simply because a matchup destination was not known yet.
+
+ROSTER CONFIGURATION
+--------------------
+Starting roster:
+  3 LW
+  3 C
+  3 RW
+  4 D
+  1 team-based goalie unit
+Bench: 3 flexible slots
+IR: 3 slots
+Starting roster size: 14
+Total roster capacity including bench and IR: 20
+
+The goalie asset represents the NHL team goalie unit, not one individual goalie.
+
+SCORING V3
+----------
+Every roster-slot window contains six NHL team games.
+
+Forward scoring per NHL game:
+  Goals: first 6, second 4, additional 2.5
+  Primary assists: first 5, second 3.5, additional 2.5
+  Secondary assists: first 2.5, second 1.5, additional 0.5
+  Shot on goal: 0.75
+  Hit: 0.45
+  Blocked shot: 0.75
+  Power-play point bonus: 1.25
+  Short-handed point bonus: 3
+  Game-winning goal: 2
+  Overtime goal: 2
+  TOI multiplier: 0.2
+
+Defense scoring per NHL game:
+  Goals: first 4.5, second 2.75, additional 1.5
+  Primary assists: first 4, second 2.75, additional 1.5
+  Secondary assists: first 1.75, second 1, additional 0.4
+  Shot on goal: 0.4
+  Hit: 0.55
+  Blocked shot: 1.05
+  Power-play point bonus: 0.85
+  Short-handed point bonus: 2
+  Game-winning goal: 2
+  Overtime goal: 2
+  Defense TOI multiplier is adaptive with base 0.27, plus/minus modifier 0.015, floor 0.24, and ceiling 0.31.
+
+Goalie-unit scoring per NHL game:
+  Participation base: 3
+  Save: 0.27
+  Win: 3.5
+  Shutout: 4
+  Continuous save-percentage quality model with baseline 0.900
+  Save-percentage quality is clamped from -3 to 10
+  Maximum goalie-unit fantasy points per NHL game: 28
+
+Scoring rules are frozen in league/cycle records so completed games remain reproducible.
+
+PROJECTION ENGINE
+-----------------
+Current shared projection version: Projection V8.
+Projection snapshots are shared and stored in Firestore. Per-slot window projections are frozen when the window begins.
+
+Drafts must use a verified Projection V8 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
+
+A valid draft projection must:
+  use Projection V8;
+  not have generationReason “server-emergency”;
+  contain a healthy asset pool;
+  be generated for the actual number of participating fantasy teams;
+  remain available through the draft.
+
+If the current projection pointer is bad but a healthy recent V8 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
+
+DRAFT SYSTEM
+------------
+Draft type: snake draft.
+The system supports manual picks, queues, auto-draft, timeouts, consecutive-timeout auto-mode, bench filling, and position constraints.
+
+Server-controlled behavior:
+  runScheduledDraftAutomation checks drafts on a schedule.
+  continueServerDraftAutomation reacts to draft document changes.
+  processAutoDraftQueueChange reacts when a manager enables auto-draft.
+  processDraftClockDeadline is a Cloud Tasks worker for an exact individual pick deadline.
+
+Important draft safeguards:
+  One per-league server lease prevents several workers from processing the same draft simultaneously.
+  Temporary Firestore transaction contention is retried.
+  Every pick clock receives its own exact Cloud Task.
+  A deadline task may make no more than one automatic pick.
+  Duplicate or stale tasks verify league ID, pick number, and clock timestamp before acting.
+  Auto-picks are paced rather than allowing one worker to make most of the draft in a single burst.
+  The minute scheduler remains a recovery mechanism if a task is interrupted.
+  Snake-turn consecutive picks must remain valid.
+
+Previous bugs that must not return:
+  Firestore error 10 ABORTED caused by several workers contending for the same draft.
+  Clock stuck at 0:00 because no exact deadline job existed.
+  A single invocation making up to 24 picks and making the draft appear to jump ahead.
+  Server emergency rankings placing elite players such as Connor McDavid near 49 projected points.
+
+CYCLE 1 START BEHAVIOR
+----------------------
+Cycle 1 starts automatically as soon as a draft changes to status complete. The commissioner does not press a Start Cycle button.
+
+initializeSeasonAfterDraft is the immediate Firestore trigger.
+runSeasonStartAutomation now runs every minute as a recovery sweep, not as a September calendar gate. It finds completed drafts missing cycle-1 and repairs them.
+runScheduledLeagueAutomation continues scoring, cycle progression, standings, and playoff work.
+
+The project still contains default season metadata for 2026-27 and September 29, 2026 at 2:00 p.m. Pacific, but that date must not block Cycle 1 after a completed draft. It remains useful as season metadata and for historical/live configuration.
+
+SERVER AUTOMATION FUNCTIONS
+---------------------------
+Critical deployed Functions include:
+  runScheduledDraftAutomation
+  processDraftClockDeadline
+  continueServerDraftAutomation
+  processAutoDraftQueueChange
+  initializeSeasonAfterDraft
+  runSeasonStartAutomation
+  runScheduledLeagueAutomation
+  refreshGlobalPlayerAvailabilityScheduled
+  refreshDailyPlayerAvailability
+  processQueuedInjuryEmails
+  sendInjuryEmailsOnGlobalAvailabilityChange
+  sendInjuryEmailOnAvailabilityChange
+  sendTestInjuryEmail
+  sendWelcomeEmailOnProfileCreated
+  requestPasswordResetEmail
+  resendVerificationEmail
+  applyImmediateRosterMove
+  nhlApiProxy
+  advanceHistoricalReplayDay
+
+Release Readiness surfaces automation health for commissioners. Scheduled workers write health/status documents under appData.
+
+INJURY DATA AND EMAIL ALERTS
+----------------------------
+The browser uses same-origin API routes. NHL API routes use /v1 and /stats. ESPN injury data uses /espn/injuries through the server-side proxy; the browser should not contact ESPN directly.
+
+The global player-availability report refreshes server-side. Browser refresh remains an emergency/manual fallback.
+
+Injury email alerts are optional, disabled by default, and require a verified email address. Actionable states include Out, IR, LTIR, Suspended, and Personal Leave.
+
+Availability changes create server-only queue records. processQueuedInjuryEmails runs every five minutes. Messages are batched so nearby alerts for the same owner can be sent together rather than spamming one email per player.
+
+Before sending, the server rechecks that:
+  the owner still has alerts enabled;
+  the authentication email remains verified;
+  the player is still unavailable after league override rules;
+  the player remains in an active roster slot;
+  no replacement is already queued for that slot;
+  the independent slot window still has games remaining;
+  the regular-season or playoff window remains actionable.
+
+If the player is in a live NHL game, the alert waits until the game is no longer live, followed by a 15-minute hold. Otherwise it uses a 15-minute hold. Delivery is normally within about five minutes after the hold expires.
+
+The commissioner test email is only a format preview. It sends to the verified commissioner and uses the fictional players Riley Rinkrat and Casey Crease. It does not modify real rosters or queue records.
+
+ADD/DROP, BENCH, AND IR
+-----------------------
+Roster changes are evaluated against the persistent slot windows, not a global league cycle timestamp.
+
+A roster move may occur immediately when neither involved asset has played a game in its current relevant window. Once either side has begun its window, the move may be queued for the correct next boundary. The UI must explain which player/window delays the transaction.
+
+Moving to IR is only offered when the player is eligible. Injury and suspension indicators appear consistently on My Team, Matchup, and Add/Drop views.
+
+Queued moves and injury replacement logic must preserve the already-counted games in each immutable window.
+
+PLAYOFFS
+--------
+The app reserves 13 complete fantasy periods, corresponding to the first 78 scheduled NHL games for each NHL team. Regular-season length adjusts to make room for playoffs.
+
+2-3 fantasy teams:
+  12 regular cycles, 1 championship cycle.
+
+4-7 fantasy teams:
+  11 regular cycles, 2 playoff cycles.
+  Semifinals: 1 vs 4 and 2 vs 3.
+
+8-12 fantasy teams:
+  10 regular cycles, 3 playoff cycles.
+  Seeds 1 and 2 receive byes.
+  Opening round: 3 vs 6 and 4 vs 5.
+
+Tied playoff matchups advance the higher seed. The bracket does not reseed. Non-title teams continue classification/consolation games so all teams receive a final placement.
+
+Playoff rounds preserve the asynchronous window philosophy. Assets may begin and accumulate games before the fantasy opponent or bracket destination is known. After the prior round resolves, those games must be backfilled into the championship, third-place, fifth-place, or consolation matchup. Do not discard them or force the player to wait.
+
+STANDINGS AND MATCHUP COMPLETION
+-------------------------------
+A fantasy matchup finalizes only after the relevant independent roster-slot windows complete. Standings are applied once. Regular-season standings freeze when playoffs begin.
+
+Seeding order:
+  1. Win percentage, counting a tie as half a win
+  2. Points For
+  3. Point differential
+  4. Total wins
+  5. Stable team-name/owner fallback
+
+LIVE SCORING AND PERFORMANCE
+----------------------------
+The server owns live scoring and league automation. The target cadence is roughly every ten minutes. Shared control documents and leases prevent duplicate work. Unchanged snapshots should not be rewritten.
+
+Mobile performance is a priority. Avoid adding high-frequency listeners or repeated league-wide reads. Injury data is shared globally rather than fetched independently per league. The scoring/game ledger should be reused across leagues.
+
+BRANDING AND UI
+---------------
+The site uses a pixel-art hockey theme with the masked RinkRat mascot and a clearer pixel jersey icon. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
+
+Favorite NHL team colors are identity accents rather than whole-page backgrounds. The app uses a neutral readable canvas and chooses black/white foregrounds based on contrast.
+
+Background presets:
+  Rink Dark
+  OLED Black
+  Ice Gray
+  Light Ice
+
+The favorite team is selected during profile creation and saved to the user profile. Existing profiles without a favorite team fall back to Vegas.
+
+Important UX direction:
+  Mobile is as important as desktop.
+  Keep status colors clear: upcoming yellow, played green, missed red.
+  Keep cycle numbers centered and readable.
+  Reduce low-use buttons and dense explanations.
+  Do not restore obsolete commissioner Start Cycle controls.
+  Account Settings contains the discoverable Email Injury Alerts callout and email icon.
+
+PRODUCTION SAFETY
+-----------------
+Production runtime configuration is live-only and hides developer controls. Historical replay tools are for development/testing and should not appear in a normal production build.
+
+The full-season simulator is deterministic and should not make NHL requests or Firestore writes. It is regression coverage for roster size, 11-cycle four-team seasons, six-game windows, 7-vs-4 asynchronous advancement, queued moves, immutable projections, scoring leases, standings, and playoff routing.
+
+The Release Readiness page reads existing league and app health. It classifies checks as pass, warning, or fail. A warning immediately after deploying a new scheduled worker can be normal until the first execution.
+
+KNOWN NON-BLOCKING BUILD OUTPUT
+-------------------------------
+The Angular production build may warn that src/app/features/cycles/cycle-one/cycle-one.css exceeds its configured style budget by several kilobytes. This is currently a warning, not a failed build.
+
+npm audit may report low, moderate, or high dependency vulnerabilities. Do not use npm audit fix --force without reviewing the dependency changes.
+
+FUNCTIONS DEPENDENCY RECOVERY
+-----------------------------
+The repeated 100+ TypeScript error pattern is not 100 separate source problems. It means the Functions dependency tree is missing or incomplete. Typical errors include:
+  Cannot find module firebase-admin/firestore
+  Cannot find module firebase-functions/v2/https
+  Cannot find name node:crypto
+  Cannot find name process
+  Cannot find name Buffer
+  FirebaseFirestore namespace missing
+  Many implicit-any or unknown errors caused by missing imported types
+
+Current prevention:
+  functions/package.json has a prebuild dependency check.
+  functions/scripts/ensure-dependencies.cjs checks the required packages.
+  If they are missing, npm ci runs automatically before tsc.
+
+Manual recovery remains:
+  rm -rf functions/node_modules
+  npm --prefix functions ci
+  npm --prefix functions run build
+
+IMPORTANT SOURCE FILE MAP
+-------------------------
+Frontend:
+  src/app/features/draft/draft-room/ — draft UI
+  src/app/features/draft/draft-setup/ — draft schedule and projection preparation
+  src/app/features/cycles/cycle-one/ — cycle/matchup UI
+  src/app/features/leagues/league-detail/ — league home and navigation
+  src/app/features/account/account-settings/ — profile, themes, and email-alert preference
+  src/app/core/release/release-readiness.service.ts — health/readiness checks
+  src/styles.css — global visual tokens and shared styling
+
+Functions:
+  functions/src/draft-automation.ts — scheduled draft opening, leases, Cloud Tasks deadlines, auto-picks
+  functions/src/league-automation.ts — Cycle 1 creation, scoring/cycle progression, recovery, playoffs
+  functions/src/email-notifications.ts — account emails, injury queue, Resend delivery, test preview
+  functions/src/index.ts — API proxy and global injury refresh
+  functions/src/roster-moves.ts — immediate/queued roster move server logic
+  functions/src/season-config.ts — season metadata/defaults
+  functions/src/shared/core/ — shared scoring, projection, roster, cycle, playoff, and Firebase compatibility logic
+
+Firestore and deployment:
+  firestore.rules
+  firestore.indexes.json
+  firebase.json
+  .firebaserc
+  functions/package.json
+  functions/package-lock.json
+  functions/.env.nhl-fantasy-app-ab673
+
+TROUBLESHOOTING COMMANDS
+------------------------
+List deployed Functions:
+  firebase functions:list
+
+Selected logs:
+  firebase functions:log --only runScheduledDraftAutomation
+  firebase functions:log --only processDraftClockDeadline
+  firebase functions:log --only continueServerDraftAutomation
+  firebase functions:log --only runSeasonStartAutomation
+  firebase functions:log --only runScheduledLeagueAutomation
+  firebase functions:log --only refreshGlobalPlayerAvailabilityScheduled
+  firebase functions:log --only processQueuedInjuryEmails
+
+Confirm Resend secret exists without printing its value:
+  firebase functions:secrets:get RESEND_API_KEY
+
+Verify same-origin API routes after deployment:
+  curl -I https://rinkratfantasy.com
+  curl -sS https://rinkratfantasy.com/v1/roster/VGK/current | head
+  curl -sS https://rinkratfantasy.com/espn/injuries | head
+
+CURRENT HANDOFF STATUS
+----------------------
+The project includes:
+  server-controlled draft opening and exact deadline tasks;
+  per-league draft automation leases;
+  verified Projection V8 draft rankings with a frozen snapshot;
+  automatic Cycle 1 creation immediately after draft completion;
+  minute-by-minute Cycle 1 recovery;
+  scheduled scoring/cycle/playoff automation;
+  server-side global injury refresh;
+  queued and batched injury emails through Resend;
+  Release Readiness health checks;
+  RinkRat branding, favorite-team accents, and neutral background themes;
+  automatic Functions dependency repair before TypeScript compilation.
+
+When beginning work in a new chat, provide the current full project ZIP and tell the assistant to read RINKRAT_PROJECT_CONTEXT.txt first. The ZIP is the source of truth if this file and implementation ever disagree.

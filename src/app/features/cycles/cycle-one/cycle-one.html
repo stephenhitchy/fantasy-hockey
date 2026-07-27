@@ -344,6 +344,39 @@
             }
           </section>
 
+          <section class="test-injury-email-control" aria-labelledby="test-injury-email-heading">
+            <div>
+              <span class="eyebrow">Email Preview</span>
+              <h3 id="test-injury-email-heading">Send myself a test injury alert</h3>
+              <p>
+                Sends a clearly labeled sample of the consolidated injury email to the verified
+                email address on the account that clicks this button. It does not change any roster,
+                injury status, queue record, or notification preference.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="test-injury-email-button"
+              (click)="sendTestInjuryEmailPreview()"
+              [disabled]="testInjuryEmailSending()"
+            >
+              {{ testInjuryEmailSending() ? 'Sending Preview...' : 'Send Test Injury Email' }}
+            </button>
+
+            @if (testInjuryEmailMessage()) {
+              <small class="score-sync-success" role="status" aria-live="polite">
+                {{ testInjuryEmailMessage() }}
+              </small>
+            }
+
+            @if (testInjuryEmailError()) {
+              <small class="schedule-warning" role="alert">
+                {{ testInjuryEmailError() }}
+              </small>
+            }
+          </section>
+
           <div class="score-sync-actions">
             <button
               type="button"
@@ -478,9 +511,12 @@
     }
 
     @if (!cycle()) {
-      <section class="empty-cycle-card">
-        <h2>{{ getCycleLabel() }} has not started yet.</h2>
-        <p>Once the commissioner starts {{ getCycleLabel() }}, every matchup will appear here.</p>
+      <section class="empty-cycle-card" aria-live="polite">
+        <h2>{{ getCycleLabel() }} is being prepared automatically.</h2>
+        <p>
+          The server opens each matchup period when the league reaches it. No commissioner action
+          is required, and this page will update as soon as the matchups are ready.
+        </p>
       </section>
     } @else {
       <section class="matchups-section">
@@ -719,12 +755,18 @@
                                 </div>
 
                                 <div class="mobile-h2h-player-scores">
-                                  <span class="current-score-cell" [class.score-change-active]="getScoreDeltaAnimation(pick.asset)" [attr.data-score-asset-key]="pick.asset.assetKey">
+                                  <span
+                                    class="current-score-cell"
+                                    [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                    [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
+                                    [attr.data-score-asset-key]="pick.asset.assetKey"
+                                  >
                                     Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong>
                                     @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
                                       <small
                                         class="score-delta-pop"
                                         [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                        [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                         [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                       >
                                         {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -773,12 +815,18 @@
                                 </div>
 
                                 <div class="mobile-h2h-player-scores">
-                                  <span class="current-score-cell" [class.score-change-active]="getScoreDeltaAnimation(pick.asset)" [attr.data-score-asset-key]="pick.asset.assetKey">
+                                  <span
+                                    class="current-score-cell"
+                                    [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                    [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
+                                    [attr.data-score-asset-key]="pick.asset.assetKey"
+                                  >
                                     Cur <strong>{{ getProjectionDisplay(getAssetCurrentCycleScore(pick.asset)) }}</strong>
                                     @if (getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
                                       <small
                                         class="score-delta-pop"
                                         [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                        [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                         [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                       >
                                         {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -938,6 +986,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -952,6 +1001,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -1098,6 +1148,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -1112,6 +1163,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -1256,6 +1308,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -1270,6 +1323,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -1470,6 +1524,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -1484,6 +1539,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -1630,6 +1686,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -1644,6 +1701,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}
@@ -1788,6 +1846,7 @@
                                       <div
                                         class="current-score-cell"
                                         [class.score-change-active]="getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="isOpponentScoreGainAnimation(pick.asset)"
                                         [attr.data-score-asset-key]="pick.asset.assetKey"
                                       >
                                         <strong>
@@ -1802,6 +1861,7 @@
                                           <small
                                             class="score-delta-pop"
                                             [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
                                             [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
                                           >
                                             {{ getScoreDeltaLabel(scoreUpdate) }}

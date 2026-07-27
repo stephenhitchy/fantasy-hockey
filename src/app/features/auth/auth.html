@@ -20,7 +20,7 @@
 
   <div class="pixel-auth-stage">
     <section class="auth-hero-copy">
-      <span class="eyebrow">Fantasy Hockey</span>
+      <div class="auth-brand-lockup"><img class="auth-brand-mark" src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot" /><span class="eyebrow">RinkRat Fantasy</span></div>
       <h1>{{ pageTitle() }}</h1>
       <p>{{ pageSubtitle() }}</p>
 
@@ -33,10 +33,8 @@
 
     <section class="pixel-auth-card">
       <div class="card-header">
-        <span class="card-label">{{
-          isRegistering() ? 'New Manager Setup' : 'Manager Login'
-        }}</span>
-        <strong>{{ isRegistering() ? 'Create Account' : 'Welcome Back' }}</strong>
+        <span class="card-label">{{ cardLabel() }}</span>
+        <strong>{{ cardTitle() }}</strong>
       </div>
 
       <div class="card-body">
@@ -88,23 +86,47 @@
           <input [(ngModel)]="email" placeholder="manager@example.com" type="email" />
         </label>
 
-        <label class="form-field">
-          <span>Password</span>
-          <input [(ngModel)]="password" placeholder="Enter your password" type="password" />
-        </label>
+        @if (!isResettingPassword()) {
+          <label class="form-field">
+            <span>Password</span>
+            <input [(ngModel)]="password" placeholder="Enter your password" type="password" />
+          </label>
+        }
 
         <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
           {{ submitLabel() }}
         </button>
 
-        <button
-          type="button"
-          class="secondary-switch"
-          (click)="toggleMode()"
-          [disabled]="loading()"
-        >
-          {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
-        </button>
+        @if (isResettingPassword()) {
+          <button
+            type="button"
+            class="secondary-switch"
+            (click)="returnToLogin()"
+            [disabled]="loading()"
+          >
+            Return to login
+          </button>
+        } @else {
+          @if (!isRegistering()) {
+            <button
+              type="button"
+              class="forgot-password-button"
+              (click)="beginPasswordReset()"
+              [disabled]="loading()"
+            >
+              Forgot password?
+            </button>
+          }
+
+          <button
+            type="button"
+            class="secondary-switch"
+            (click)="toggleMode()"
+            [disabled]="loading()"
+          >
+            {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
+          </button>
+        }
 
         @if (errorMessage()) {
           <p class="status-message error">{{ errorMessage() }}</p>

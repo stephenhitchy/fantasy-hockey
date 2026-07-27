@@ -8,5 +8,13 @@
     "target": "https://api.nhle.com",
     "secure": true,
     "changeOrigin": true
+  },
+  "/espn/injuries": {
+    "target": "https://site.api.espn.com",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/espn/injuries$": "/apis/site/v2/sports/hockey/nhl/injuries"
+    }
   }
 }

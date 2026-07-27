@@ -775,7 +775,11 @@ service cloud.firestore {
         return validFavoriteTeam(data) &&
           (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
           (!data.keys().hasAny(['defaultLandingPage']) ||
-            data.defaultLandingPage in ['dashboard', 'lastLeague']);
+            data.defaultLandingPage in ['dashboard', 'lastLeague']) &&
+          (!data.keys().hasAny(['backgroundTheme']) ||
+            data.backgroundTheme in ['rink-dark', 'oled-black', 'ice-gray', 'light-ice']) &&
+          (!data.keys().hasAny(['injuryEmailEnabled']) ||
+            data.injuryEmailEnabled is bool);
       }
 
       function validUserProfileUpdate() {
@@ -787,7 +791,9 @@ service cloud.firestore {
             'username',
             'favoriteTeamAbbreviation',
             'reducedMotion',
-            'defaultLandingPage'
+            'defaultLandingPage',
+            'backgroundTheme',
+            'injuryEmailEnabled'
           ]) &&
           (!changedFields.hasAny(['username']) ||
             validUsername(request.resource.data.username)) &&
@@ -865,6 +871,32 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update: if validGlobalPlayerAvailabilityWrite();
       allow delete: if false;
+    }
+
+
+    match /appData/draftAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/leagueAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/injuryAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/injuryEmailAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/seasonAutomation {
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     match /leagues/{leagueId} {

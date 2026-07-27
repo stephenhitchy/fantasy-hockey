@@ -578,6 +578,19 @@
   box-shadow: 0 5px 14px rgba(4, 32, 17, 0.42);
 }
 
+.score-delta-gain.score-delta-opponent {
+  border-color: var(--owner-theme-highlight, currentColor);
+  background: linear-gradient(
+    135deg,
+    var(--owner-theme-primary, #24344c),
+    var(--owner-theme-secondary, #405778)
+  );
+  color: var(--owner-theme-chip-text, #ffffff);
+  box-shadow:
+    0 5px 14px rgba(3, 9, 18, 0.5),
+    0 0 0 1px var(--owner-theme-outline-soft, rgba(255, 255, 255, 0.18));
+}
+
 .score-delta-loss {
   background: rgba(112, 37, 48, 0.96);
   color: #ffb5bd;
@@ -585,7 +598,15 @@
 }
 
 .current-score-cell.score-change-active {
+  --score-change-pulse-color: rgba(152, 245, 189, 0.4);
   animation: score-cell-pulse 1.35s ease-out both;
+}
+
+.current-score-cell.score-change-active.score-change-opponent {
+  --score-change-pulse-color: var(
+    --owner-theme-outline-soft,
+    rgba(255, 255, 255, 0.32)
+  );
 }
 
 .mobile-h2h-player-scores .current-score-cell {
@@ -620,13 +641,13 @@
 
 @keyframes score-cell-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(152, 245, 189, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
   35% {
-    box-shadow: 0 0 0 2px rgba(152, 245, 189, 0.4);
+    box-shadow: 0 0 0 2px var(--score-change-pulse-color);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(152, 245, 189, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
@@ -2571,5 +2592,60 @@
   .matchup-heading-statuses {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+
+.test-injury-email-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(158, 216, 255, 0.28);
+  background: rgba(11, 29, 47, 0.72);
+}
+
+.test-injury-email-control h3 {
+  margin: 4px 0 6px;
+}
+
+.test-injury-email-control p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--text-muted, #a9bbcc);
+}
+
+.test-injury-email-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 2px solid #9ed8ff;
+  background: #24558a;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.test-injury-email-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.test-injury-email-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.test-injury-email-control > small {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .test-injury-email-control {
+    grid-template-columns: 1fr;
+  }
+
+  .test-injury-email-button {
+    width: 100%;
   }
 }

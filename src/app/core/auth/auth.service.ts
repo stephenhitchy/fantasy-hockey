@@ -32,6 +32,8 @@ export async function registerUser(
     favoriteTeamAbbreviation,
     reducedMotion: false,
     defaultLandingPage: 'dashboard',
+    backgroundTheme: 'rink-dark',
+    injuryEmailEnabled: false,
   });
 
   return user;

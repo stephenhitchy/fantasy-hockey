@@ -6,10 +6,10 @@
     <a
       routerLink="/dashboard"
       class="brand"
-      aria-label="Fantasy Hockey dashboard"
+      aria-label="RinkRat Fantasy dashboard"
     >
-      <span class="brand-mark" aria-hidden="true">🏒</span>
-      <span>Fantasy Hockey</span>
+      <span class="brand-mark" aria-hidden="true"><img class="brand-mark-image" src="/assets/branding/rinkrat-headshot.png" alt="" /></span>
+      <span>RinkRat Fantasy</span>
     </a>
 
     <div class="desktop-links">
@@ -65,10 +65,10 @@
     <a
       routerLink="/dashboard"
       class="mobile-brand"
-      aria-label="Fantasy Hockey dashboard"
+      aria-label="RinkRat Fantasy dashboard"
     >
-      <span aria-hidden="true">🏒</span>
-      <strong>Fantasy Hockey</strong>
+      <span class="mobile-brand-mark" aria-hidden="true"><img class="brand-mark-image" src="/assets/branding/rinkrat-headshot.png" alt="" /></span>
+      <strong>RinkRat Fantasy</strong>
     </a>
 
     <button
@@ -78,7 +78,7 @@
       [attr.aria-expanded]="moreOpen()"
       (click)="toggleMore()"
     >
-      <span aria-hidden="true">•••</span>
+      <span class="pixel-icon icon-more icon-sm" aria-hidden="true"></span>
     </button>
   </div>
 </header>
@@ -91,7 +91,7 @@
     routerLink="/dashboard"
     [class.active]="isExactRoute('/dashboard')"
   >
-    <span class="nav-icon" aria-hidden="true">⌂</span>
+    <span class="nav-icon pixel-icon icon-home" aria-hidden="true"></span>
     <span>Home</span>
   </a>
 
@@ -100,7 +100,7 @@
       [routerLink]="['/leagues', activeLeagueId]"
       [class.active]="isLeagueHomeActive()"
     >
-      <span class="nav-icon" aria-hidden="true">🏠</span>
+      <span class="nav-icon pixel-icon icon-league" aria-hidden="true"></span>
       <span>League</span>
     </a>
 
@@ -108,7 +108,7 @@
       [routerLink]="['/leagues', activeLeagueId, 'team']"
       [class.active]="isLeagueSectionActive('team')"
     >
-      <span class="nav-icon" aria-hidden="true">👕</span>
+      <span class="nav-icon pixel-icon icon-team" aria-hidden="true"></span>
       <span>Team</span>
     </a>
 
@@ -116,7 +116,7 @@
       [routerLink]="['/leagues', activeLeagueId, 'free-agents']"
       [class.active]="isLeagueSectionActive('free-agents')"
     >
-      <span class="nav-icon" aria-hidden="true">🔎</span>
+      <span class="nav-icon pixel-icon icon-players" aria-hidden="true"></span>
       <span>Players</span>
     </a>
   } @else {
@@ -124,7 +124,7 @@
       routerLink="/leagues/create"
       [class.active]="isExactRoute('/leagues/create')"
     >
-      <span class="nav-icon" aria-hidden="true">＋</span>
+      <span class="nav-icon pixel-icon icon-create" aria-hidden="true"></span>
       <span>Create</span>
     </a>
 
@@ -132,7 +132,7 @@
       routerLink="/leagues/join"
       [class.active]="isExactRoute('/leagues/join')"
     >
-      <span class="nav-icon" aria-hidden="true">⇥</span>
+      <span class="nav-icon pixel-icon icon-join" aria-hidden="true"></span>
       <span>Join</span>
     </a>
 
@@ -140,7 +140,7 @@
       routerLink="/account/settings"
       [class.active]="isExactRoute('/account/settings')"
     >
-      <span class="nav-icon" aria-hidden="true">⚙</span>
+      <span class="nav-icon pixel-icon icon-account" aria-hidden="true"></span>
       <span>Account</span>
     </a>
   }
@@ -152,7 +152,7 @@
     aria-controls="mobile-more-menu"
     (click)="toggleMore()"
   >
-    <span class="nav-icon" aria-hidden="true">•••</span>
+    <span class="nav-icon pixel-icon icon-more" aria-hidden="true"></span>
     <span>More</span>
   </button>
 </nav>
@@ -194,7 +194,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'draft']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">🧢</span>
+            <span class="pixel-icon icon-draft icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Draft Room</strong>
               <small>Draft status and live picks</small>
@@ -205,7 +205,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'standings']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">🏆</span>
+            <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Standings</strong>
               <small>Records and league ranking</small>
@@ -216,7 +216,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'leaders']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">⭐</span>
+            <span class="pixel-icon icon-leaders icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Point Leaders</strong>
               <small>Forwards, defensemen, and goalie units</small>
@@ -227,7 +227,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'playoffs']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">🥅</span>
+            <span class="pixel-icon icon-playoffs icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Playoffs</strong>
               <small>Seeds, bracket, and placements</small>
@@ -238,7 +238,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'cycles', 'schedule-preview']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">🗓</span>
+            <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Schedule</strong>
               <small>Cycle matchups and history</small>
@@ -249,7 +249,7 @@
             [routerLink]="['/leagues', activeLeagueId, 'projections']"
             (click)="closeMore()"
           >
-            <span aria-hidden="true">📈</span>
+            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Projection Lab</strong>
               <small>Ratings and draft values</small>
@@ -265,7 +265,7 @@
           routerLink="/leagues/create"
           (click)="closeMore()"
         >
-          <span aria-hidden="true">＋</span>
+          <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
           <span>
             <strong>Create League</strong>
             <small>Start a new competition</small>
@@ -276,7 +276,7 @@
           routerLink="/leagues/join"
           (click)="closeMore()"
         >
-          <span aria-hidden="true">⇥</span>
+          <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
           <span>
             <strong>Join League</strong>
             <small>Enter an invite code</small>
@@ -287,7 +287,7 @@
           routerLink="/account/settings"
           (click)="closeMore()"
         >
-          <span aria-hidden="true">⚙</span>
+          <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
           <span>
             <strong>Account Settings</strong>
             <small>Profile and preferences</small>

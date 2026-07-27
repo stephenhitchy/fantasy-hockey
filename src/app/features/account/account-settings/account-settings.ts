@@ -5,8 +5,10 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
+import { requestVerificationEmail } from '../../../core/notifications/email-notification.service';
 import { getMyLeagueSummaries, LeagueSummary } from '../../../core/league/league.service';
 import {
+  BackgroundTheme,
   DefaultLandingPage,
   getUserProfile,
   updateFavoriteTeam,
@@ -53,6 +55,9 @@ export class AccountSettings {
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly savingFavoriteTeam = signal(false);
+  readonly sendingVerification = signal(false);
+  readonly refreshingVerification = signal(false);
+  readonly emailVerified = signal(false);
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
 
@@ -60,8 +65,16 @@ export class AccountSettings {
   favoriteTeamAbbreviation = 'VGK';
   reducedMotion = false;
   defaultLandingPage: DefaultLandingPage = 'dashboard';
+  injuryEmailEnabled = false;
+  backgroundTheme: BackgroundTheme = 'rink-dark';
 
   readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
+  readonly backgroundOptions: { value: BackgroundTheme; title: string; description: string }[] = [
+    { value: 'rink-dark', title: 'Rink Dark', description: 'Neutral graphite with classic arena contrast.' },
+    { value: 'oled-black', title: 'OLED Black', description: 'Deep black surfaces for a sharper, high-contrast look.' },
+    { value: 'ice-gray', title: 'Ice Gray', description: 'Cool gray panels with a slightly brighter rink feel.' },
+    { value: 'light-ice', title: 'Light Ice', description: 'Bright ice background with darker text and accents.' },
+  ];
 
   selectedTeam(): PixelTeamTheme {
     return getPixelTeamTheme(this.favoriteTeamAbbreviation);
@@ -86,25 +99,25 @@ export class AccountSettings {
 
   readonly achievements = computed<AccountAchievement[]>(() => [
     {
-      icon: '🏒',
+      icon: 'rat',
       title: 'First Line Change',
       description: 'Join your first fantasy hockey league.',
       unlocked: this.leagueCount() >= 1,
     },
     {
-      icon: '📋',
+      icon: 'draft',
       title: 'Commissioner Mode',
       description: 'Create or manage a league.',
       unlocked: this.commissionerLeagueCount() >= 1,
     },
     {
-      icon: '🏟️',
+      icon: 'arena',
       title: 'League Explorer',
       description: 'Compete in three different leagues.',
       unlocked: this.leagueCount() >= 3,
     },
     {
-      icon: '⚔️',
+      icon: 'league',
       title: 'Crowded Schedule',
       description: 'Face at least ten fantasy opponents.',
       unlocked: this.opponentCount() >= 10,
@@ -124,6 +137,9 @@ export class AccountSettings {
     }
 
     try {
+      await user.reload();
+      this.emailVerified.set(user.emailVerified);
+
       const [profile, summaries] = await Promise.all([
         getUserProfile(user.uid),
         getMyLeagueSummaries(),
@@ -136,11 +152,14 @@ export class AccountSettings {
       this.reducedMotion = Boolean(profile?.reducedMotion);
       this.defaultLandingPage =
         profile?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard';
+      this.injuryEmailEnabled = profile?.injuryEmailEnabled === true;
+      this.backgroundTheme = profile?.backgroundTheme || 'rink-dark';
 
       applyUserTheme({
         favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
+        backgroundTheme: this.backgroundTheme,
       });
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -175,6 +194,7 @@ export class AccountSettings {
       favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
       reducedMotion: this.reducedMotion,
       defaultLandingPage: this.defaultLandingPage,
+      backgroundTheme: this.backgroundTheme,
     });
 
     try {
@@ -197,6 +217,7 @@ export class AccountSettings {
         favoriteTeamAbbreviation: previousFavoriteTeam,
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
+        backgroundTheme: this.backgroundTheme,
       });
 
       this.errorMessage.set(
@@ -212,6 +233,7 @@ export class AccountSettings {
       favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
       reducedMotion: this.reducedMotion,
       defaultLandingPage: this.defaultLandingPage,
+      backgroundTheme: this.backgroundTheme,
     });
   }
 
@@ -240,6 +262,8 @@ export class AccountSettings {
         favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
+        backgroundTheme: this.backgroundTheme,
+        injuryEmailEnabled: this.emailVerified() && this.injuryEmailEnabled,
       });
 
       this.profile.update((current) =>
@@ -250,6 +274,8 @@ export class AccountSettings {
               favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
               reducedMotion: this.reducedMotion,
               defaultLandingPage: this.defaultLandingPage,
+              backgroundTheme: this.backgroundTheme,
+              injuryEmailEnabled: this.emailVerified() && this.injuryEmailEnabled,
             }
           : current,
       );
@@ -262,6 +288,76 @@ export class AccountSettings {
       );
     } finally {
       this.saving.set(false);
+    }
+  }
+
+  async sendVerificationEmail(): Promise<void> {
+    if (this.sendingVerification()) {
+      return;
+    }
+
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.sendingVerification.set(true);
+
+    try {
+      const result = await requestVerificationEmail();
+
+      if (result.alreadyVerified) {
+        this.emailVerified.set(true);
+        this.successMessage.set('Your email address is already verified.');
+        return;
+      }
+
+      this.successMessage.set(
+        'Verification email sent. Check your inbox and spam folder, then return here to refresh your status.',
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to send a verification email.',
+      );
+    } finally {
+      this.sendingVerification.set(false);
+    }
+  }
+
+  async refreshVerificationStatus(): Promise<void> {
+    const user = auth.currentUser;
+
+    if (!user || this.refreshingVerification()) {
+      return;
+    }
+
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.refreshingVerification.set(true);
+
+    try {
+      await user.reload();
+      this.emailVerified.set(user.emailVerified);
+
+      if (user.emailVerified) {
+        this.successMessage.set(
+          'Email verified. You can now enable injury notification emails.',
+        );
+      } else {
+        this.errorMessage.set(
+          'Your email is not verified yet. Open the verification link, then try again.',
+        );
+      }
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to refresh verification status.',
+      );
+    } finally {
+      this.refreshingVerification.set(false);
+    }
+  }
+
+  onInjuryEmailPreferenceChange(): void {
+    if (!this.emailVerified()) {
+      this.injuryEmailEnabled = false;
+      this.errorMessage.set('Verify your email before enabling injury alerts.');
     }
   }
 

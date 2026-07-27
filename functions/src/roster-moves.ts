@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
+import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { DraftableAsset } from './shared/core/draft/draft.models';
 import {
   FantasyRoster,
@@ -482,6 +483,7 @@ export const applyImmediateRosterMove = onCall(
     region: FUNCTION_REGION,
     timeoutSeconds: 60,
     memory: '512MiB',
+    cors: TRUSTED_WEB_ORIGINS,
   },
   async (request) => {
     const ownerId = request.auth?.uid;

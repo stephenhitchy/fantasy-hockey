@@ -65,6 +65,7 @@
 .auth-hero-copy,
 .pixel-auth-card,
 .pixel-referee-zone {
+  justify-content: center;
   border: 2px solid #2a394a;
   background: #182536;
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.34);
@@ -81,6 +82,7 @@
 }
 
 .pixel-referee-zone {
+  justify-content: center;
   border-top: 4px solid var(--user-team-secondary);
 }
 
@@ -88,7 +90,7 @@
 .card-label,
 .referee-caption span {
   display: block;
-  color: #b7c4d2;
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.18em;
@@ -97,7 +99,7 @@
 
 .auth-hero-copy h1 {
   margin: 12px 0 10px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-size: clamp(40px, 4vw, 56px);
   line-height: 0.96;
   letter-spacing: -0.04em;
@@ -105,7 +107,7 @@
 
 .auth-hero-copy p {
   margin: 0;
-  color: #b7c4d2;
+  color: var(--text-secondary);
   font-size: 16px;
   line-height: 1.65;
 }
@@ -140,7 +142,7 @@
 .card-header strong {
   display: block;
   margin-top: 7px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-size: 28px;
   line-height: 1.04;
 }
@@ -229,7 +231,7 @@
   padding: 6px 9px 8px;
   border: 2px solid var(--user-team-accent);
   background: #1d2c3d;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .selected-team-preview::after {
@@ -327,7 +329,7 @@
 .secondary-switch {
   border: 2px solid #3b4e62;
   background: #172230;
-  color: #edf2f7;
+  color: var(--text-primary);
 }
 
 .primary-submit:disabled,
@@ -358,6 +360,7 @@
 }
 
 .pixel-referee-zone {
+  justify-content: center;
   display: grid;
   gap: 18px;
   padding: 22px;
@@ -367,7 +370,7 @@
 .referee-caption strong {
   display: block;
   margin-top: 6px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-size: 20px;
 }
 
@@ -508,7 +511,7 @@
 }
 
 .pixel-logo-chip small {
-  color: #edf2f7;
+  color: var(--text-primary);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -521,6 +524,7 @@
   }
 
   .pixel-referee-zone {
+  justify-content: center;
     justify-self: center;
     width: min(100%, 320px);
   }
@@ -539,6 +543,7 @@
   .auth-hero-copy,
   .pixel-auth-card,
   .pixel-referee-zone {
+  justify-content: center;
     padding: 20px;
   }
 
@@ -583,4 +588,53 @@
   .pixel-referee-zone.celebrate .cup {
     animation: none !important;
   }
+}
+
+.forgot-password-button {
+  justify-self: center;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: #9ed8ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.forgot-password-button:hover:not(:disabled),
+.forgot-password-button:focus-visible {
+  color: var(--text-primary);
+}
+
+.forgot-password-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.auth-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-brand-mark {
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+
+
+.auth-hero-copy p,
+.referee-caption span,
+.pixel-auth-card p,
+.auth-form-copy,
+.auth-form-copy small {
+  color: var(--text-secondary);
 }

@@ -15,6 +15,9 @@ import {
   onCall,
   onRequest
 } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+
+import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 initializeApp();
 
@@ -26,6 +29,7 @@ const ESPN_NHL_INJURIES_URL =
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 const NHL_WEB_API_ORIGIN = 'https://api-web.nhle.com';
 const NHL_STATS_API_ORIGIN = 'https://api.nhle.com';
+const ESPN_API_ORIGIN = 'https://site.api.espn.com';
 const NHL_PROXY_TIMEOUT_MS = 18_000;
 const NHL_PROXY_MAX_ATTEMPTS = 2;
 const NHL_PROXY_MAX_CACHE_ENTRIES = 40;
@@ -46,18 +50,26 @@ const NHL_PROXY_PATH_PATTERNS = [
   /^\/v1\/gamecenter\/\d+\/(boxscore|play-by-play)$/,
   /^\/v1\/roster\/[a-z]{3}\/(current|\d{8})$/,
   /^\/stats\/rest\/en\/skater\/(summary|realtime)$/,
-  /^\/stats\/rest\/en\/goalie\/summary$/
+  /^\/stats\/rest\/en\/goalie\/summary$/,
+  /^\/espn\/injuries$/
 ] as const;
 
 function getNhlProxyTarget(originalUrl: string): URL | null {
   const requestUrl = new URL(
     originalUrl,
-    'https://cycle-puck-proxy.local'
+    'https://rinkrat-fantasy-proxy.local'
   );
   const path = requestUrl.pathname;
 
   if (!NHL_PROXY_PATH_PATTERNS.some((pattern) => pattern.test(path))) {
     return null;
+  }
+
+  if (path === '/espn/injuries') {
+    return new URL(
+      '/apis/site/v2/sports/hockey/nhl/injuries',
+      ESPN_API_ORIGIN
+    );
   }
 
   const origin = path.startsWith('/v1/')
@@ -70,6 +82,10 @@ function getNhlProxyTarget(originalUrl: string): URL | null {
 function getNhlProxyCacheControl(path: string): string {
   if (path.includes('/gamecenter/')) {
     return 'public, max-age=8, s-maxage=12';
+  }
+
+  if (path === '/apis/site/v2/sports/hockey/nhl/injuries') {
+    return 'public, max-age=300, s-maxage=900';
   }
 
   if (path.includes('/club-schedule-season/')) {
@@ -88,6 +104,10 @@ function getNhlProxyFreshCacheMilliseconds(path: string): number {
     return 8_000;
   }
 
+  if (path === '/apis/site/v2/sports/hockey/nhl/injuries') {
+    return 15 * 60 * 1000;
+  }
+
   if (path.includes('/club-schedule-season/')) {
     return 5 * 60 * 1000;
   }
@@ -103,6 +123,10 @@ function getNhlProxyStaleCacheMilliseconds(path: string): number {
   // Never serve stale live boxscores or play-by-play into the scoring engine.
   if (path.includes('/gamecenter/')) {
     return 0;
+  }
+
+  if (path === '/apis/site/v2/sports/hockey/nhl/injuries') {
+    return 6 * 60 * 60 * 1000;
   }
 
   if (path.includes('/club-schedule-season/')) {
@@ -127,7 +151,7 @@ async function fetchNhlProxyUpstream(target: URL): Promise<Response> {
       const upstreamResponse = await fetch(target, {
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'cycle-puck/1.0'
+          'User-Agent': 'rinkrat-fantasy/1.0'
         },
         signal: controller.signal
       });
@@ -961,11 +985,17 @@ async function claimDailyRefresh(
     `leagues/${leagueId}/playerAvailabilitySync/current`
   );
 
+  const globalRef = db.doc('appData/playerAvailability');
+
   return db.runTransaction(async (transaction) => {
-    const lockSnapshot = await transaction.get(lockRef);
-    const syncSnapshot = await transaction.get(syncRef);
+    const [lockSnapshot, syncSnapshot, globalSnapshot] = await Promise.all([
+      transaction.get(lockRef),
+      transaction.get(syncRef),
+      transaction.get(globalRef)
+    ]);
     const lockData = lockSnapshot.data() ?? {};
     const syncData = syncSnapshot.data() ?? {};
+    const globalData = globalSnapshot.data() ?? {};
 
     const lastDailySyncKey =
       asString(syncData['lastDailySyncKey']);
@@ -980,6 +1010,94 @@ async function claimDailyRefresh(
         syncData['lastSuccessfulSyncAt'],
         dailyKey
       );
+
+    const globalSuccessToday =
+      globalData['status'] === 'success' &&
+      (
+        asString(globalData['lastDailySyncKey']) === dailyKey ||
+        isTimestampOnDailyKey(globalData['lastDailySuccessfulSyncAt'], dailyKey) ||
+        isTimestampOnDailyKey(globalData['lastSuccessfulSyncAt'], dailyKey)
+      );
+
+    if (!existingSuccessToday && globalSuccessToday) {
+      const completedDate =
+        getTimestampDate(globalData['lastDailySuccessfulSyncAt']) ??
+        getTimestampDate(globalData['lastSuccessfulSyncAt']) ??
+        new Date();
+      const completedAt = completedDate.toISOString();
+      const message =
+        asString(globalData['message']) ||
+        'Today’s shared injury report was refreshed automatically by the server.';
+
+      transaction.set(
+        lockRef,
+        {
+          status: 'success',
+          dailyKey,
+          completedAt: Timestamp.fromDate(completedDate),
+          requestedBy: userId,
+          source: 'scheduled-server',
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      transaction.set(
+        syncRef,
+        {
+          source: 'ESPN',
+          status: 'success',
+          trigger: 'scheduled-server',
+          dailyKey,
+          lastDailySyncKey: dailyKey,
+          lastAttemptAt:
+            globalData['lastAttemptAt'] ?? Timestamp.fromDate(completedDate),
+          lastSuccessfulSyncAt: Timestamp.fromDate(completedDate),
+          lastDailySuccessfulSyncAt: Timestamp.fromDate(completedDate),
+          updatedBy: 'server:scheduled-injury-refresh',
+          fetchedCount:
+            typeof globalData['fetchedCount'] === 'number'
+              ? globalData['fetchedCount']
+              : 0,
+          matchedCount:
+            typeof globalData['matchedCount'] === 'number'
+              ? globalData['matchedCount']
+              : 0,
+          unmatchedCount:
+            typeof globalData['unmatchedCount'] === 'number'
+              ? globalData['unmatchedCount']
+              : 0,
+          syncedRecordCount:
+            typeof globalData['syncedRecordCount'] === 'number'
+              ? globalData['syncedRecordCount']
+              : 0,
+          clearedRecordCount:
+            typeof globalData['clearedRecordCount'] === 'number'
+              ? globalData['clearedRecordCount']
+              : 0,
+          preservedManualOverrideCount: 0,
+          skippedGoalieCount:
+            typeof globalData['skippedGoalieCount'] === 'number'
+              ? globalData['skippedGoalieCount']
+              : 0,
+          message,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return {
+        status: 'already-current',
+        syncData: {
+          ...globalData,
+          trigger: 'scheduled-server',
+          dailyKey,
+          lastDailySyncKey: dailyKey,
+          message
+        },
+        completedAt
+      };
+    }
 
     if (existingSuccessToday) {
       const completedAt =
@@ -1159,7 +1277,7 @@ export const nhlApiProxy = onRequest(
         .status(cached.status)
         .set('Content-Type', cached.contentType)
         .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
-        .set('X-Cycle-Puck-Proxy-Cache', 'fresh')
+        .set('X-RinkRat-Proxy-Cache', 'fresh')
         .set('X-Content-Type-Options', 'nosniff')
         .send(cached.body);
       return;
@@ -1179,7 +1297,7 @@ export const nhlApiProxy = onRequest(
           .set('Content-Type', cached.contentType)
           .set('Cache-Control', 'private, no-cache')
           .set('Warning', '110 - Response is stale because the NHL service was unavailable')
-          .set('X-Cycle-Puck-Proxy-Cache', 'stale')
+          .set('X-RinkRat-Proxy-Cache', 'stale')
           .set('X-Content-Type-Options', 'nosniff')
           .send(cached.body);
         return;
@@ -1204,7 +1322,7 @@ export const nhlApiProxy = onRequest(
         .status(upstreamResponse.status)
         .set('Content-Type', contentType)
         .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
-        .set('X-Cycle-Puck-Proxy-Cache', 'miss')
+        .set('X-RinkRat-Proxy-Cache', 'miss')
         .set('X-Content-Type-Options', 'nosniff')
         .send(responseBody);
     } catch (error: unknown) {
@@ -1217,7 +1335,7 @@ export const nhlApiProxy = onRequest(
           .set('Content-Type', cached.contentType)
           .set('Cache-Control', 'private, no-cache')
           .set('Warning', '110 - Response is stale because the NHL service was unavailable')
-          .set('X-Cycle-Puck-Proxy-Cache', 'stale')
+          .set('X-RinkRat-Proxy-Cache', 'stale')
           .set('X-Content-Type-Options', 'nosniff')
           .send(cached.body);
         return;
@@ -1239,6 +1357,302 @@ export const nhlApiProxy = onRequest(
   }
 );
 
+
+function isInjurySeasonActive(date = new Date()): boolean {
+  const month = date.getUTCMonth();
+  // September through June is the active NHL season / playoff window.
+  return month >= 8 || month <= 5;
+}
+
+function normalizeGlobalAvailabilityRecords(
+  data: DocumentData | undefined
+): Map<number, DocumentData> {
+  const records = new Map<number, DocumentData>();
+  const source = Array.isArray(data?.['records'])
+    ? data?.['records'] as unknown[]
+    : [];
+
+  for (const entry of source) {
+    const record = asRecord(entry);
+    const playerId = record['playerId'];
+
+    if (typeof playerId === 'number' && Number.isFinite(playerId)) {
+      records.set(playerId, record);
+    }
+  }
+
+  return records;
+}
+
+function serializeScheduledGlobalAvailabilityRecord(
+  match: MatchedInjury,
+  syncedAt: string
+): DocumentData {
+  return {
+    playerId: match.player.id,
+    playerName: match.player.fullName,
+    status: match.injury.normalizedStatus,
+    note: buildAvailabilityNote(match.injury),
+    irEligible: isPlayerIrEligible(match.injury.normalizedStatus),
+    updatedAt: syncedAt,
+    updatedBy: 'server:scheduled-injury-refresh',
+    source: 'espn',
+    leagueId: 'global',
+    externalSource: 'ESPN',
+    externalStatus:
+      match.injury.rawStatus ||
+      match.injury.fantasyStatus ||
+      match.injury.injuryType ||
+      'Unknown',
+    externalReturnDate: match.injury.returnDate || '',
+    externalInjuryDate: match.injury.injuryDate || '',
+    externalTeamName: match.injury.teamName || '',
+    syncedAt
+  };
+}
+
+async function runScheduledGlobalInjuryRefresh(): Promise<void> {
+  const reference = db.doc('appData/playerAvailability');
+  const now = new Date();
+  const nowMilliseconds = now.getTime();
+  const dailyKey = getUtcDailyKey(now);
+  const activeSeason = isInjurySeasonActive(now);
+  const claimId = randomUUID();
+  const claim = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const data = snapshot.exists ? snapshot.data() : {};
+    const lastSuccessful = getTimestampDate(data?.['lastSuccessfulSyncAt']);
+    const leaseExpires = getTimestampDate(data?.['leaseExpiresAt']);
+    const minimumIntervalMilliseconds = activeSeason
+      ? 5 * 60 * 60 * 1000
+      : 23 * 60 * 60 * 1000;
+
+    if (
+      lastSuccessful &&
+      nowMilliseconds - lastSuccessful.getTime() < minimumIntervalMilliseconds
+    ) {
+      return {
+        claimed: false,
+        reason: activeSeason ? 'recent-season-refresh' : 'recent-offseason-refresh'
+      };
+    }
+
+    if (
+      data?.['status'] === 'running' &&
+      leaseExpires &&
+      leaseExpires.getTime() > nowMilliseconds
+    ) {
+      return {
+        claimed: false,
+        reason: 'lease-active'
+      };
+    }
+
+    transaction.set(
+      reference,
+      {
+        source: 'ESPN',
+        status: 'running',
+        trigger: 'scheduled-server',
+        dailyKey,
+        refreshAttemptId: claimId,
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        leaseExpiresAt: Timestamp.fromMillis(nowMilliseconds + 10 * 60 * 1000),
+        updatedBy: 'server:scheduled-injury-refresh',
+        message: 'The server is refreshing the shared NHL injury report.'
+      },
+      { merge: true }
+    );
+
+    return {
+      claimed: true,
+      reason: 'claimed'
+    };
+  });
+
+  if (!claim.claimed) {
+    await db.doc('appData/injuryAutomation').set(
+      {
+        schemaVersion: 1,
+        status: 'healthy',
+        lastRunResult: claim.reason,
+        activeSeason,
+        lastRunAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+    return;
+  }
+
+  try {
+    const [players, espnPayload] = await Promise.all([
+      loadCurrentNhlSkaters(),
+      fetchJson(ESPN_NHL_INJURIES_URL)
+    ]);
+    const parsed = parseEspnInjuries(espnPayload);
+
+    if (parsed.entries.length === 0) {
+      throw new Error(
+        'ESPN returned no NHL injury entries, so the previous shared report was preserved.'
+      );
+    }
+
+    const matchResult = matchInjuriesToPlayers(parsed.entries, players);
+    const snapshot = await reference.get();
+    const previousRecords = normalizeGlobalAvailabilityRecords(snapshot.data());
+    const syncedAt = new Date().toISOString();
+    const nextRecords = new Map<number, DocumentData>();
+
+    for (const match of matchResult.matches) {
+      nextRecords.set(
+        match.player.id,
+        serializeScheduledGlobalAvailabilityRecord(match, syncedAt)
+      );
+    }
+
+    const feedLooksCompleteEnoughToClear =
+      parsed.teamEntryCount >= 10 || parsed.entries.length >= 20;
+
+    if (!feedLooksCompleteEnoughToClear) {
+      for (const [playerId, record] of previousRecords) {
+        if (!nextRecords.has(playerId)) {
+          nextRecords.set(playerId, record);
+        }
+      }
+    }
+
+    const clearedRecordCount = feedLooksCompleteEnoughToClear
+      ? [...previousRecords.keys()].filter((playerId) => !nextRecords.has(playerId)).length
+      : 0;
+    const unmatchedCount = matchResult.unmatchedNames.length;
+    const messageParts = [
+      `Matched ${matchResult.matches.length} injured skaters from ${parsed.entries.length} ESPN entries.`,
+      'Saved one shared report for every league and account.'
+    ];
+
+    if (clearedRecordCount > 0) {
+      messageParts.push(
+        `Removed ${clearedRecordCount} players no longer listed by ESPN.`
+      );
+    }
+
+    if (!feedLooksCompleteEnoughToClear) {
+      messageParts.push(
+        'The ESPN feed looked sparse, so older automatic records were preserved.'
+      );
+    }
+
+    if (unmatchedCount > 0) {
+      messageParts.push(
+        `${unmatchedCount} names could not be matched to current NHL rosters.`
+      );
+    }
+
+    const message = messageParts.join(' ').slice(0, 500);
+
+    await Promise.all([
+      reference.set(
+        {
+          source: 'ESPN',
+          status: 'success',
+          trigger: 'scheduled-server',
+          dailyKey,
+          lastDailySyncKey: dailyKey,
+          refreshAttemptId: claimId,
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          lastSuccessfulSyncAt: FieldValue.serverTimestamp(),
+          lastDailySuccessfulSyncAt: FieldValue.serverTimestamp(),
+          leaseExpiresAt: null,
+          updatedBy: 'server:scheduled-injury-refresh',
+          fetchedCount: parsed.entries.length,
+          matchedCount: matchResult.matches.length,
+          unmatchedCount,
+          syncedRecordCount: nextRecords.size,
+          clearedRecordCount,
+          preservedManualOverrideCount: 0,
+          skippedGoalieCount: matchResult.skippedGoalieCount,
+          records: [...nextRecords.values()]
+            .sort((first, second) =>
+              (first['playerId'] as number) - (second['playerId'] as number)
+            ),
+          message
+        },
+        { merge: true }
+      ),
+      db.doc('appData/injuryAutomation').set(
+        {
+          schemaVersion: 1,
+          status: 'healthy',
+          activeSeason,
+          fetchedCount: parsed.entries.length,
+          matchedCount: matchResult.matches.length,
+          unmatchedCount,
+          syncedRecordCount: nextRecords.size,
+          clearedRecordCount,
+          lastRunResult: 'success',
+          lastRunAt: FieldValue.serverTimestamp(),
+          lastSuccessfulRunAt: FieldValue.serverTimestamp(),
+          message,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      )
+    ]);
+  } catch (error: unknown) {
+    const message = (
+      error instanceof Error
+        ? error.message
+        : 'Scheduled NHL injury refresh failed.'
+    ).slice(0, 500);
+
+    await Promise.all([
+      reference.set(
+        {
+          source: 'ESPN',
+          status: 'error',
+          trigger: 'scheduled-server',
+          dailyKey,
+          refreshAttemptId: claimId,
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          leaseExpiresAt: null,
+          updatedBy: 'server:scheduled-injury-refresh',
+          message
+        },
+        { merge: true }
+      ),
+      db.doc('appData/injuryAutomation').set(
+        {
+          schemaVersion: 1,
+          status: 'error',
+          activeSeason,
+          lastRunResult: 'error',
+          lastRunAt: FieldValue.serverTimestamp(),
+          lastError: message,
+          message,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      )
+    ]);
+
+    throw error;
+  }
+}
+
+export const refreshGlobalPlayerAvailabilityScheduled = onSchedule(
+  {
+    schedule: 'every 6 hours',
+    timeZone: 'America/Los_Angeles',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    maxInstances: 1,
+    retryCount: 1
+  },
+  async () => runScheduledGlobalInjuryRefresh()
+);
+
 export const refreshDailyPlayerAvailability = onCall(
   {
     region: FUNCTION_REGION,
@@ -1246,7 +1660,7 @@ export const refreshDailyPlayerAvailability = onCall(
     memory: '512MiB',
     maxInstances: 4,
     concurrency: 10,
-    cors: true,
+    cors: TRUSTED_WEB_ORIGINS,
     invoker: 'public'
   },
   async (request): Promise<DailyRefreshResult> => {
@@ -1597,6 +2011,24 @@ export {
   advanceHistoricalReplayDay,
   initializeSeasonAfterDraft,
   runScheduledLeagueAutomation,
+  runSeasonStartAutomation,
 } from './league-automation';
 
+export {
+  continueServerDraftAutomation,
+  processAutoDraftQueueChange,
+  processDraftClockDeadline,
+  runScheduledDraftAutomation,
+} from './draft-automation';
+
 export { applyImmediateRosterMove } from './roster-moves';
+
+export {
+  processQueuedInjuryEmails,
+  requestPasswordResetEmail,
+  resendVerificationEmail,
+  sendInjuryEmailOnAvailabilityChange,
+  sendInjuryEmailsOnGlobalAvailabilityChange,
+  sendTestInjuryEmail,
+  sendWelcomeEmailOnProfileCreated,
+} from './email-notifications';

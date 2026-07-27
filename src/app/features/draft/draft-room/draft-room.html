@@ -63,12 +63,6 @@
       </p>
     }
 
-    @if (autoPickMessage()) {
-      <p class="message auto-pick-message">
-        {{ autoPickMessage() }}
-      </p>
-    }
-
     @if (!draft()) {
       <section class="waiting-card">
         <h2>Draft Setup Needed</h2>
@@ -169,7 +163,7 @@
               </button>
             } @else {
               <span>
-                Waiting for the first manager to start the clock
+                Waiting for the server to start the clock
               </span>
             }
           } @else if (isCommissioner()) {
