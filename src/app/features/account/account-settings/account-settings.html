@@ -11,7 +11,16 @@
     <section class="account-content">
       <header class="profile-hero">
         <div class="profile-avatar-wrap">
-          <div class="profile-avatar"><img class="profile-avatar-image" src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot logo" /></div>
+          <div class="profile-avatar">
+            <img
+              class="profile-avatar-image"
+              [src]="selectedTeam().logoUrl"
+              [alt]="selectedTeam().name + ' logo'"
+              width="512"
+              height="512"
+              decoding="async"
+            />
+          </div>
           <span class="online-pixel" title="Manager profile active"></span>
         </div>
 

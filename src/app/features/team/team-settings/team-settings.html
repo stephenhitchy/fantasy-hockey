@@ -13,10 +13,10 @@
 
     <header class="team-hero-card">
       <div class="manager-identity">
-        <img
-          class="favorite-team-logo"
-          src="/assets/branding/rinkrat-headshot.png"
-          alt="RinkRat Fantasy logo"
+        <app-manager-avatar
+          [profileIconId]="getTeamProfileIconId(team()?.ownerId)"
+          [label]="getManagerName()"
+          size="lg"
         />
 
         <div class="manager-identity-copy">

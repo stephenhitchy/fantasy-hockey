@@ -8,8 +8,13 @@
     <section class="dashboard">
       <header class="dashboard-header">
         <div class="hero-copy">
-          <span class="eyebrow">Arena Lobby</span>
-          <h1>Welcome back, {{ displayName() }}</h1>
+          <div class="dashboard-welcome-row">
+            <div>
+              <span class="eyebrow">Arena Lobby</span>
+              <h1>Welcome back, {{ displayName() }}</h1>
+            </div>
+          </div>
+
           <p>Pick a league, manage your roster, and get straight to the action.</p>
 
           <div class="quick-actions" aria-label="League actions">
@@ -132,7 +137,9 @@
               <article class="league-card">
                 <div class="league-card-top">
                   <div class="league-identity">
-                    <span class="league-icon pixel-icon icon-league icon-lg" aria-hidden="true"></span>
+                    <span class="league-icon" aria-hidden="true">
+                      <img [src]="getLeagueLogoPath(league)" alt="" decoding="async" />
+                    </span>
 
                     <div>
                       <h3>{{ league.leagueName }}</h3>

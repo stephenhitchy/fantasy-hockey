@@ -216,9 +216,12 @@
                 {{ index + 1 }}
               </div>
 
-              <div class="team-order-copy">
-                <strong>{{ getTeamName(ownerId) }}</strong>
+              <div class="team-order-copy manager-name-stack">
+                <app-manager-avatar [profileIconId]="getTeamProfileIconId(ownerId)" [label]="getTeamManagerLabel(ownerId)" size="sm" />
+                <div>
+                  <strong>{{ getTeamName(ownerId) }}</strong>
                 <span>Round 1 Pick {{ index + 1 }}</span>
+                </div>
               </div>
 
               <div class="move-buttons">
@@ -278,7 +281,10 @@
               @for (pick of round.picks; track pick.overallPick) {
                 <li>
                   <span>#{{ pick.overallPick }}</span>
-                  <strong>{{ getTeamName(pick.ownerId) }}</strong>
+                  <span class="manager-name-with-avatar">
+                    <app-manager-avatar [profileIconId]="getTeamProfileIconId(pick.ownerId)" [label]="getTeamManagerLabel(pick.ownerId)" size="xs" />
+                    <strong>{{ getTeamName(pick.ownerId) }}</strong>
+                  </span>
                 </li>
               }
             </ol>

@@ -6,6 +6,8 @@ import { collection, getDocs } from 'firebase/firestore';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth, db } from '../../../core/firebase';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
@@ -88,7 +90,7 @@ function getNullableString(value: unknown): string | null {
 
 @Component({
   selector: 'app-league-standings',
-  imports: [RouterLink],
+  imports: [RouterLink, ManagerAvatar],
   templateUrl: './league-standings.html',
   styleUrl: './league-standings.css',
 })
@@ -432,4 +434,19 @@ export class LeagueStandings {
       }),
     );
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

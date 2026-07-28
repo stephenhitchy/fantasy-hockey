@@ -134,7 +134,10 @@
                   [class.preview-loser-team]="isPreviewLoser(cycle.cycleNumber, matchup, selectedOwnerId())"
                 >
                   <div class="schedule-team-title-line">
-                    <strong>{{ getTeamName(selectedOwnerId()) }}</strong>
+                    <span class="manager-name-with-avatar">
+                      <app-manager-avatar [profileIconId]="getTeamProfileIconId(selectedOwnerId())" [label]="getTeamManagerLabel(selectedOwnerId())" size="xs" />
+                      <strong>{{ getTeamName(selectedOwnerId()) }}</strong>
+                    </span>
 
                     @if (getSelectedTeamResultLabel(cycle.cycleNumber, matchup)) {
                       <em
@@ -171,7 +174,10 @@
                   [class.preview-loser-team]="isPreviewLoser(cycle.cycleNumber, matchup, getOpponentOwnerId(matchup))"
                 >
                   <div class="schedule-team-title-line">
-                    <strong>{{ getTeamName(getOpponentOwnerId(matchup)) }}</strong>
+                    <span class="manager-name-with-avatar">
+                      <app-manager-avatar [profileIconId]="getTeamProfileIconId(getOpponentOwnerId(matchup))" [label]="getTeamManagerLabel(getOpponentOwnerId(matchup))" size="xs" />
+                      <strong>{{ getTeamName(getOpponentOwnerId(matchup)) }}</strong>
+                    </span>
 
                     @if (getOpponentResultLabel(cycle.cycleNumber, matchup)) {
                       <em

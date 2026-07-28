@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
@@ -106,7 +108,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })
@@ -2224,4 +2226,19 @@ export class TeamSettings implements OnDestroy {
 
     return playerRecord?.id ?? playerRecord?.playerId ?? playerRecord?.nhlPlayerId ?? null;
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

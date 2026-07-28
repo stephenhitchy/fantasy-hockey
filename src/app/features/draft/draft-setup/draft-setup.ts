@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
 import {
@@ -51,7 +53,7 @@ interface DraftRoundPreview {
 
 @Component({
   selector: 'app-draft-setup',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-setup.html',
   styleUrl: './draft-setup.css',
 })
@@ -439,4 +441,19 @@ export class DraftSetup implements OnDestroy {
       [pad(date.getHours()), pad(date.getMinutes())].join(':')
     );
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

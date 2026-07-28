@@ -33,8 +33,10 @@ export class JoinLeague {
 
       const profile = await getUserProfile(user.uid);
       const username = profile?.username || user.email || 'Unknown User';
-
-      const leagueId = await joinLeagueByInviteCode(this.inviteCode, username);
+      const leagueId = await joinLeagueByInviteCode(
+        this.inviteCode,
+        username,
+      );
       await this.router.navigate(['/leagues', leagueId]);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to join the league right now.');

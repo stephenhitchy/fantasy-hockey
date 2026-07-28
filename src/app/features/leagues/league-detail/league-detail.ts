@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
@@ -40,11 +42,22 @@ import {
 
 import { PlayerAvailabilitySyncState } from '../../../core/player/player-availability.models';
 
-import { getLeagueById, League } from '../../../core/league/league.service';
+import {
+  getLeagueById,
+  League,
+  updateLeagueProfileIcon,
+} from '../../../core/league/league.service';
 
 import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/team/team.service';
 
 import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
+import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
+import {
+  getProfileIconsForCategory,
+  PROFILE_ICON_CATEGORIES,
+  type ProfileIconCategoryId,
+  type ProfileIconOption,
+} from '../../../shared/profile-icon/profile-icon.data';
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
@@ -61,7 +74,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })
@@ -97,6 +110,12 @@ export class LeagueDetail implements OnDestroy {
   renameTeamSaving = signal(false);
   renameTeamMessage = signal('');
   renameTeamError = signal('');
+  profileIconPickerOpen = signal(false);
+  profileIconSaving = signal(false);
+  profileIconMessage = signal('');
+  profileIconError = signal('');
+
+  readonly profileIconCategories = PROFILE_ICON_CATEGORIES;
 
   readonly now = signal(Date.now());
 
@@ -130,6 +149,14 @@ export class LeagueDetail implements OnDestroy {
     () => this.teams().find((team) => team.ownerId === this.userId) ?? null,
   );
 
+  readonly selectedLeagueProfileIconId = computed(() =>
+    getFantasyTeamProfileIconId(this.myTeam()),
+  );
+
+  profileIconsForCategory(categoryId: ProfileIconCategoryId): readonly ProfileIconOption[] {
+    return getProfileIconsForCategory(categoryId);
+  }
+
   readonly sortedTeams = computed(() =>
     [...this.teams()].sort((first, second) => {
       const firstWinPercentage = this.getWinPercentageValue(first);
@@ -151,6 +178,15 @@ export class LeagueDetail implements OnDestroy {
   );
 
   readonly currentCycleNumber = computed(() => this.cycle()?.cycleNumber ?? 1);
+
+  readonly leagueLogoPath = computed(() => {
+    const currentLeague = this.league();
+
+    return getLeagueLogoAssetPath(
+      currentLeague?.leagueLogoId,
+      currentLeague?.leagueLogoPaletteId,
+    );
+  });
 
   readonly currentCycleLabel = computed(() => {
     const cycle = this.cycle();
@@ -362,7 +398,60 @@ export class LeagueDetail implements OnDestroy {
     }
   }
 
+  openProfileIconPicker(): void {
+    this.renameTeamOpen.set(false);
+    this.profileIconMessage.set('');
+    this.profileIconError.set('');
+    this.profileIconPickerOpen.set(true);
+  }
+
+  closeProfileIconPicker(): void {
+    if (this.profileIconSaving()) {
+      return;
+    }
+
+    this.profileIconPickerOpen.set(false);
+    this.profileIconError.set('');
+  }
+
+  async selectLeagueProfileIcon(icon: ProfileIconOption): Promise<void> {
+    if (this.profileIconSaving() || icon.id === this.selectedLeagueProfileIconId()) {
+      return;
+    }
+
+    if (!this.leagueId || !this.userId) {
+      this.profileIconError.set('Your league account is still loading.');
+      return;
+    }
+
+    this.profileIconMessage.set('');
+    this.profileIconError.set('');
+    this.profileIconSaving.set(true);
+
+    try {
+      await updateLeagueProfileIcon(this.leagueId, icon.id);
+      this.teams.update((teams) =>
+        teams.map((team) =>
+          team.ownerId === this.userId ? { ...team, profileIconId: icon.id } : team,
+        ),
+      );
+      this.profileIconMessage.set(`${icon.label} is now your icon in this league.`);
+      this.profileIconPickerOpen.set(false);
+
+      setTimeout(() => {
+        this.profileIconMessage.set('');
+      }, 2600);
+    } catch (error: unknown) {
+      this.profileIconError.set(
+        error instanceof Error ? error.message : 'Unable to update your league icon.',
+      );
+    } finally {
+      this.profileIconSaving.set(false);
+    }
+  }
+
   openRenameTeam(): void {
+    this.profileIconPickerOpen.set(false);
     this.teamNameDraft = this.myTeam()?.teamName ?? '';
     this.renameTeamMessage.set('');
     this.renameTeamError.set('');
@@ -1102,4 +1191,19 @@ export class LeagueDetail implements OnDestroy {
       void this.enterDraftRoom();
     }, 2500);
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

@@ -63,7 +63,7 @@ export class App implements OnDestroy {
       this.cancelProfileRefresh?.();
       this.cancelProfileRefresh = null;
 
-      if (!user || !this.activeLeagueId) {
+      if (!user) {
         return;
       }
 
@@ -107,11 +107,26 @@ export class App implements OnDestroy {
 
   private async refreshProfileTheme(userId: string): Promise<void> {
     try {
-      const { getUserProfile } = await import('./core/user/user.service');
+      const [
+        { getUserProfile },
+        { ensureLeagueProfileIcon, syncManagerNameForLeague },
+      ] = await Promise.all([
+        import('./core/user/user.service'),
+        import('./core/league/league.service'),
+      ]);
       const profile = await getUserProfile(userId);
 
       if (profile) {
         applyUserTheme(profile);
+      }
+
+      if (this.activeLeagueId) {
+        await Promise.all([
+          ensureLeagueProfileIcon(this.activeLeagueId),
+          profile?.username
+            ? syncManagerNameForLeague(this.activeLeagueId, profile.username)
+            : Promise.resolve(),
+        ]);
       }
     } catch (error: unknown) {
       console.warn('Unable to refresh the saved user theme.', error);

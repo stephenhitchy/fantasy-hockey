@@ -64,7 +64,6 @@ export async function updateFavoriteTeam(
   });
 }
 
-
 export async function updateTeamIdentityUnlocks(
   uid: string,
   teamIdentityUnlocks: TeamIdentityUnlockRequirement[],

@@ -92,7 +92,7 @@
               <article class="seed-card qualifier-card">
                 <span class="seed-number">#{{ seed.seed }}</span>
                 <div>
-                  <strong>{{ seed.teamName }}</strong>
+                  <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                   <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
                   <small>Would open in the championship bracket.</small>
                 </div>
@@ -116,7 +116,7 @@
                 <article class="seed-card placement-seed-card">
                   <span class="seed-number">#{{ seed.seed }}</span>
                   <div>
-                    <strong>{{ seed.teamName }}</strong>
+                    <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                     <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
                     <small>Would open in the placement bracket.</small>
                   </div>
@@ -156,7 +156,7 @@
               <article class="seed-card qualifier-card">
                 <span class="seed-number">#{{ seed.seed }}</span>
                 <div>
-                  <strong>{{ seed.teamName }}</strong>
+                  <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                   <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
                   <small>{{ getSeedProgressLabel(seed.ownerId, seed.seed) }}</small>
                 </div>
@@ -180,7 +180,7 @@
                 <article class="seed-card placement-seed-card">
                   <span class="seed-number">#{{ seed.seed }}</span>
                   <div>
-                    <strong>{{ seed.teamName }}</strong>
+                    <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                     <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
                     <small>{{ getSeedProgressLabel(seed.ownerId, seed.seed) }}</small>
                   </div>
@@ -263,7 +263,7 @@
                             {{ matchup.teamASeed ? '#' + matchup.teamASeed : '—' }}
                           </span>
                           <div class="bracket-team-copy">
-                            <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                            <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="xs" /><strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong></span>
                             <small>{{ getTeamWindowLabel(matchup, 'A') }}</small>
                           </div>
                           <span class="score">{{ getScoreLabel(matchup.teamAScore) }}</span>
@@ -277,7 +277,7 @@
                             {{ matchup.teamBSeed ? '#' + matchup.teamBSeed : '—' }}
                           </span>
                           <div class="bracket-team-copy">
-                            <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                            <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="xs" /><strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong></span>
                             <small>{{ getTeamWindowLabel(matchup, 'B') }}</small>
                           </div>
                           <span class="score">{{ getScoreLabel(matchup.teamBScore) }}</span>
@@ -325,7 +325,7 @@
               <article [class.podium-place]="placement.place <= 3">
                 <span class="place-number">{{ placement.place }}</span>
                 <div>
-                  <strong>{{ placement.teamName }}</strong>
+                  <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(placement.ownerId)" [label]="getTeamManagerLabel(placement.ownerId)" size="xs" /><strong>{{ placement.teamName }}</strong></span>
                   <span>Regular-season seed #{{ placement.seed }}</span>
                 </div>
                 @if (placement.place === 1) {

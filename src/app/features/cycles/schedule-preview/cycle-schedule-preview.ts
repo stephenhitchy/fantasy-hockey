@@ -4,6 +4,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
@@ -44,7 +46,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-schedule-preview',
-  imports: [RouterLink],
+  imports: [RouterLink, ManagerAvatar],
   templateUrl: './cycle-schedule-preview.html',
   styleUrl: './cycle-schedule-preview.css',
 })
@@ -492,4 +494,19 @@ export class CycleSchedulePreview implements OnDestroy {
 
     return null;
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

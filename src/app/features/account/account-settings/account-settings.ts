@@ -6,7 +6,11 @@ import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
 import { requestVerificationEmail } from '../../../core/notifications/email-notification.service';
-import { getMyLeagueSummaries, LeagueSummary } from '../../../core/league/league.service';
+import {
+  getMyLeagueSummaries,
+  LeagueSummary,
+  syncManagerNameAcrossLeagues,
+} from '../../../core/league/league.service';
 import {
   BackgroundTheme,
   DefaultLandingPage,
@@ -27,7 +31,6 @@ import {
   TEAM_IDENTITY_UNLOCK_DETAILS,
   TeamIdentityUnlockRequirement,
 } from '../../../shared/pixel-theme/pixel-theme.data';
-
 interface AccountAchievement {
   icon: string;
   title: string;
@@ -94,6 +97,7 @@ export class AccountSettings {
     { value: 'ice-gray', title: 'Ice Gray', description: 'Cool gray panels with a slightly brighter rink feel.' },
     { value: 'light-ice', title: 'Light Ice', description: 'Bright ice background with darker text and accents.' },
   ];
+
 
   selectedTeam(): PixelTeamTheme {
     return getPixelTeamTheme(
@@ -467,6 +471,8 @@ export class AccountSettings {
         backgroundTheme: this.backgroundTheme,
         injuryEmailEnabled: this.emailVerified() && this.injuryEmailEnabled,
       });
+
+      await syncManagerNameAcrossLeagues(normalizedUsername);
 
       this.profile.update((current) =>
         current

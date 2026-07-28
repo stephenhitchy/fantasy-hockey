@@ -19,10 +19,27 @@ import {
 } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
 import { createEmptyFantasyRoster, getFantasyRosterRef } from '../team/roster.service';
+import {
+  DEFAULT_LEAGUE_LOGO_ID,
+  DEFAULT_LEAGUE_LOGO_PALETTE_ID,
+  LeagueLogoId,
+  LeagueLogoPaletteId,
+  normalizeLeagueLogoId,
+  normalizeLeagueLogoPaletteId,
+} from '../../shared/league-logo/league-logo.data';
+import {
+  getProfileIcon,
+  getRandomProfileIconId,
+  getSeededProfileIconId,
+  isProfileIconId,
+  ProfileIconId,
+} from '../../shared/profile-icon/profile-icon.data';
 
 export interface League {
   id: string;
   name: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
   commissionerId: string;
   inviteCode: string;
   maxTeams: number;
@@ -30,6 +47,16 @@ export interface League {
   scoringRules: ScoringRules;
   scoringRulesVersion?: number;
   createdAt?: unknown;
+}
+
+export interface LeagueMember {
+  uid: string;
+  leagueId: string;
+  username: string;
+  profileIconId?: ProfileIconId;
+  role: 'commissioner' | 'member';
+  inviteCodeUsed: string | null;
+  joinedAt?: unknown;
 }
 
 export interface LeagueInvite {
@@ -44,6 +71,8 @@ export interface LeagueInvite {
 export interface LeagueSummary {
   leagueId: string;
   leagueName: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
   inviteCode: string;
   myTeamName: string;
   teamCount: number;
@@ -157,6 +186,8 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
   return {
     id: league.id ?? '',
     name: league.name ?? '',
+    leagueLogoId: normalizeLeagueLogoId(league.leagueLogoId),
+    leagueLogoPaletteId: normalizeLeagueLogoPaletteId(league.leagueLogoPaletteId),
     commissionerId: league.commissionerId ?? '',
     inviteCode: league.inviteCode ?? '',
     maxTeams: typeof league.maxTeams === 'number' ? league.maxTeams : 2,
@@ -210,11 +241,19 @@ function getLeagueTeamRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'teams', ownerId);
 }
 
-function getNewTeamDocument(ownerId: string, defaultTeamName: string) {
+function getNewTeamDocument(
+  ownerId: string,
+  defaultTeamName: string,
+  profileIconId: ProfileIconId,
+) {
+  const managerName = normalizeUsername(defaultTeamName);
+
   return {
     id: ownerId,
     ownerId,
-    teamName: normalizeUsername(defaultTeamName),
+    teamName: managerName,
+    managerName,
+    profileIconId: getProfileIcon(profileIconId).id,
     logo: '',
     wins: 0,
     losses: 0,
@@ -305,6 +344,8 @@ export async function createLeague(
   name: string,
   maxTeams: number,
   username: string,
+  leagueLogoId: LeagueLogoId = DEFAULT_LEAGUE_LOGO_ID,
+  leagueLogoPaletteId: LeagueLogoPaletteId = DEFAULT_LEAGUE_LOGO_PALETTE_ID,
 ): Promise<string> {
   const user = auth.currentUser;
 
@@ -329,10 +370,13 @@ export async function createLeague(
   const teamRef = getLeagueTeamRef(leagueRef.id, user.uid);
   const rosterRef = getFantasyRosterRef(leagueRef.id, user.uid);
   const normalizedUsername = normalizeUsername(username);
+  const normalizedProfileIconId = getRandomProfileIconId();
 
   const league: League = {
     id: leagueRef.id,
     name: trimmedName,
+    leagueLogoId: normalizeLeagueLogoId(leagueLogoId),
+    leagueLogoPaletteId: normalizeLeagueLogoPaletteId(leagueLogoPaletteId),
     commissionerId: user.uid,
     inviteCode,
     maxTeams,
@@ -361,12 +405,16 @@ export async function createLeague(
     uid: user.uid,
     leagueId: leagueRef.id,
     username: normalizedUsername,
+    profileIconId: normalizedProfileIconId,
     role: 'commissioner',
     inviteCodeUsed: null,
     joinedAt: serverTimestamp(),
   });
 
-  batch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
+  batch.set(
+    teamRef,
+    getNewTeamDocument(user.uid, normalizedUsername, normalizedProfileIconId),
+  );
   batch.set(rosterRef, getNewRosterDocument());
 
   await batch.commit();
@@ -440,6 +488,8 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
       return {
         leagueId: league.id,
         leagueName: league.name,
+        leagueLogoId: league.leagueLogoId,
+        leagueLogoPaletteId: league.leagueLogoPaletteId,
         inviteCode: league.inviteCode,
         myTeamName: myTeam?.teamName ?? 'Unnamed Team',
         teamCount: teams.length,
@@ -500,10 +550,6 @@ export async function joinLeagueByInviteCode(
   const teamRef = getLeagueTeamRef(leagueId, user.uid);
   const rosterRef = getFantasyRosterRef(leagueId, user.uid);
   const normalizedUsername = normalizeUsername(username);
-
-  // A user may always check their own membership document. If it exists,
-  // they already belong to the league and can safely read the league-owned
-  // documents needed to repair any legacy partial setup.
   const existingMemberSnapshot = await getDoc(memberRef);
 
   if (existingMemberSnapshot.exists()) {
@@ -523,11 +569,64 @@ export async function joinLeagueByInviteCode(
       throw new Error('This invite code does not match the league.');
     }
 
+    const existingMember = existingMemberSnapshot.data() as Partial<LeagueMember>;
+    const existingTeam = existingTeamSnapshot.exists()
+      ? (existingTeamSnapshot.data() as Partial<{
+          managerName: string;
+          profileIconId: ProfileIconId;
+        }>)
+      : null;
+    const resolvedProfileIconId = isProfileIconId(existingTeam?.profileIconId)
+      ? existingTeam.profileIconId
+      : isProfileIconId(existingMember.profileIconId)
+        ? existingMember.profileIconId
+        : getRandomProfileIconId();
+
     const repairBatch = writeBatch(db);
     let repairNeeded = false;
 
     if (!existingTeamSnapshot.exists()) {
-      repairBatch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
+      repairBatch.set(
+        teamRef,
+        getNewTeamDocument(user.uid, normalizedUsername, resolvedProfileIconId),
+      );
+      repairNeeded = true;
+    } else {
+      const teamPatch: Record<string, unknown> = {};
+
+      if (existingTeam?.managerName !== normalizedUsername) {
+        teamPatch['managerName'] = normalizedUsername;
+      }
+
+      if (existingTeam?.profileIconId !== resolvedProfileIconId) {
+        teamPatch['profileIconId'] = resolvedProfileIconId;
+      }
+
+      if (Object.keys(teamPatch).length > 0) {
+        repairBatch.set(
+          teamRef,
+          {
+            ...teamPatch,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        repairNeeded = true;
+      }
+    }
+
+    if (
+      existingMember.username !== normalizedUsername ||
+      existingMember.profileIconId !== resolvedProfileIconId
+    ) {
+      repairBatch.set(
+        memberRef,
+        {
+          username: normalizedUsername,
+          profileIconId: resolvedProfileIconId,
+        },
+        { merge: true },
+      );
       repairNeeded = true;
     }
 
@@ -543,24 +642,187 @@ export async function joinLeagueByInviteCode(
     return leagueId;
   }
 
-  // New joins are atomic: membership, team, and roster are created together.
-  // The security rules validate the invite and confirm the league exists.
-  // If any write is rejected, none of these documents are created.
+  // A new league membership gets its own random identity. The icon is stored
+  // on the league member/team documents and is independent from every other
+  // league this account belongs to.
+  const profileIconId = getRandomProfileIconId();
   const joinBatch = writeBatch(db);
 
   joinBatch.set(memberRef, {
     uid: user.uid,
     leagueId,
     username: normalizedUsername,
+    profileIconId,
     role: 'member',
     inviteCodeUsed: normalizedInviteCode,
     joinedAt: serverTimestamp(),
   });
 
-  joinBatch.set(teamRef, getNewTeamDocument(user.uid, normalizedUsername));
+  joinBatch.set(
+    teamRef,
+    getNewTeamDocument(user.uid, normalizedUsername, profileIconId),
+  );
   joinBatch.set(rosterRef, getNewRosterDocument());
 
   await joinBatch.commit();
 
   return leagueId;
+}
+
+export async function ensureLeagueProfileIcon(
+  leagueId: string,
+): Promise<ProfileIconId> {
+  const user = auth.currentUser;
+
+  if (!user || !leagueId) {
+    throw new Error('Your league account is still loading.');
+  }
+
+  const memberRef = getLeagueMemberRef(leagueId, user.uid);
+  const teamRef = getLeagueTeamRef(leagueId, user.uid);
+  const [memberSnapshot, teamSnapshot] = await Promise.all([
+    getDoc(memberRef),
+    getDoc(teamRef),
+  ]);
+
+  const memberData = memberSnapshot.exists()
+    ? (memberSnapshot.data() as Partial<LeagueMember>)
+    : null;
+  const teamData = teamSnapshot.exists()
+    ? (teamSnapshot.data() as Partial<{ profileIconId: ProfileIconId }>)
+    : null;
+  const resolvedProfileIconId = isProfileIconId(teamData?.profileIconId)
+    ? teamData.profileIconId
+    : isProfileIconId(memberData?.profileIconId)
+      ? memberData.profileIconId
+      : getRandomProfileIconId();
+
+  if (
+    memberData?.profileIconId === resolvedProfileIconId &&
+    teamData?.profileIconId === resolvedProfileIconId
+  ) {
+    return resolvedProfileIconId;
+  }
+
+  const batch = writeBatch(db);
+
+  batch.set(
+    memberRef,
+    { profileIconId: resolvedProfileIconId },
+    { merge: true },
+  );
+  batch.set(
+    teamRef,
+    {
+      profileIconId: resolvedProfileIconId,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
+
+  return resolvedProfileIconId;
+}
+
+export async function syncManagerNameForLeague(
+  leagueId: string,
+  username: string,
+): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user || !leagueId) {
+    return;
+  }
+
+  const normalizedUsername = normalizeUsername(username);
+  const batch = writeBatch(db);
+
+  batch.set(
+    getLeagueMemberRef(leagueId, user.uid),
+    { username: normalizedUsername },
+    { merge: true },
+  );
+
+  batch.set(
+    getLeagueTeamRef(leagueId, user.uid),
+    {
+      managerName: normalizedUsername,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
+}
+
+export async function syncManagerNameAcrossLeagues(username: string): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return;
+  }
+
+  const normalizedUsername = normalizeUsername(username);
+  const leagues = await getMyLeagues();
+
+  for (let startIndex = 0; startIndex < leagues.length; startIndex += 200) {
+    const batch = writeBatch(db);
+    const leagueChunk = leagues.slice(startIndex, startIndex + 200);
+
+    for (const league of leagueChunk) {
+      batch.set(
+        getLeagueMemberRef(league.id, user.uid),
+        { username: normalizedUsername },
+        { merge: true },
+      );
+      batch.set(
+        getLeagueTeamRef(league.id, user.uid),
+        {
+          managerName: normalizedUsername,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    await batch.commit();
+  }
+}
+
+export async function updateLeagueProfileIcon(
+  leagueId: string,
+  profileIconId: ProfileIconId,
+): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user || !leagueId) {
+    throw new Error('Your league account is still loading.');
+  }
+
+  const normalizedProfileIconId = getProfileIcon(profileIconId).id;
+  const batch = writeBatch(db);
+
+  batch.set(
+    getLeagueMemberRef(leagueId, user.uid),
+    { profileIconId: normalizedProfileIconId },
+    { merge: true },
+  );
+  batch.set(
+    getLeagueTeamRef(leagueId, user.uid),
+    {
+      profileIconId: normalizedProfileIconId,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
+}
+
+export function getLeagueIdentityProfileIconId(
+  ownerId: string,
+  storedProfileIconId?: string | null,
+): ProfileIconId {
+  return getProfileIcon(storedProfileIconId ?? getSeededProfileIconId(ownerId)).id;
 }

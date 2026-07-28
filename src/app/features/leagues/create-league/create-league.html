@@ -8,6 +8,7 @@
       <ul>
         <li>Set your league name.</li>
         <li>Choose how many managers will compete.</li>
+        <li>Pick a custom pixel-art league emblem.</li>
         <li>Share the invite code after the league is created.</li>
       </ul>
 
@@ -34,6 +35,64 @@
         </select>
       </label>
 
+      <fieldset class="logo-picker-fieldset">
+        <legend>League Emblem</legend>
+        <p>Choose the shape that will represent this league.</p>
+
+        <div class="logo-option-grid">
+          @for (option of logoOptions; track option.id) {
+            <button
+              type="button"
+              class="logo-option"
+              [class.selected]="selectedLogoId() === option.id"
+              [attr.aria-pressed]="selectedLogoId() === option.id"
+              [attr.aria-label]="'Select ' + option.name + ' league logo'"
+              (click)="selectLogo(option.id)"
+            >
+              <img
+                [src]="getLogoPath(option.id)"
+                [alt]="option.name"
+                loading="lazy"
+                decoding="async"
+              />
+              <span>{{ option.name }}</span>
+            </button>
+          }
+        </div>
+      </fieldset>
+
+      <fieldset class="logo-picker-fieldset palette-fieldset">
+        <legend>Color Variant</legend>
+        <p>Every emblem is available in all eight color sets.</p>
+
+        <div class="palette-option-grid">
+          @for (palette of paletteOptions; track palette.id) {
+            <button
+              type="button"
+              class="palette-option"
+              [class.selected]="selectedPaletteId() === palette.id"
+              [attr.aria-pressed]="selectedPaletteId() === palette.id"
+              [attr.aria-label]="'Select ' + palette.name + ' colors'"
+              (click)="selectPalette(palette.id)"
+            >
+              <img
+                [src]="getPalettePreviewPath(palette.id)"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+              />
+              <span>{{ palette.name }}</span>
+              <span class="palette-swatches" aria-hidden="true">
+                <i [style.background]="palette.primary"></i>
+                <i [style.background]="palette.secondary"></i>
+                <i [style.background]="palette.accent"></i>
+              </span>
+            </button>
+          }
+        </div>
+      </fieldset>
+
       <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
         {{ loading() ? 'Creating League...' : 'Create League' }}
       </button>
@@ -43,12 +102,17 @@
       }
     </section>
 
-    <section class="pixel-mascot-card" aria-hidden="true">
+    <section class="pixel-mascot-card league-logo-preview" aria-label="League logo preview">
       <div class="mascot-scoreboard">
-        <span>League Builder</span>
-        <strong>Ready to Draft</strong>
+        <span>League Preview</span>
+        <strong>{{ name.trim() || 'Your League' }}</strong>
       </div>
-      <div class="mini-ref"></div>
+
+      <div class="preview-logo-frame">
+        <img [src]="selectedLogoPath()" alt="Selected league emblem" decoding="async" />
+      </div>
+
+      <p>{{ selectedLogoOption().description }}</p>
     </section>
   </div>
 

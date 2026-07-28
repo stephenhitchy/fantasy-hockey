@@ -137,13 +137,16 @@
                   </td>
 
                   <td>
-                    <div class="team-cell">
-                      <strong>{{ row.teamName }}</strong>
+                    <div class="team-cell manager-name-stack">
+                      <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="sm" />
+                      <div>
+                        <strong>{{ row.teamName }}</strong>
                       @if (row.ownerId === userId) {
                         <span>Your Team</span>
                       } @else if (isPlayoffQualifier(row)) {
                         <span>Playoff Position</span>
                       }
+                      </div>
                     </div>
                   </td>
 

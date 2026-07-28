@@ -77,7 +77,8 @@
             <header>
               <div>
                 <span class="eyebrow">{{ matchup.id }}</span>
-                <h2>
+                <h2 class="manager-name-with-avatar">
+                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
                   {{ getTeamName(matchup.teamAOwnerId) }}
                   @if (matchup.teamBOwnerId) {
                     <span>vs</span>
@@ -100,9 +101,12 @@
                 [class.overview-loser-team]="isLoser(matchup, matchup.teamAOwnerId)"
               >
                 <div class="overview-team-title-row">
-                  <div>
-                    <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                  <div class="manager-name-stack">
+                    <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
+                    <div>
+                      <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
                     <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                    </div>
                   </div>
 
                   @if (getResultLabel(matchup, matchup.teamAOwnerId)) {
@@ -137,9 +141,12 @@
                   [class.overview-loser-team]="isLoser(matchup, matchup.teamBOwnerId)"
                 >
                   <div class="overview-team-title-row">
-                    <div>
-                      <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                    <div class="manager-name-stack">
+                      <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
+                      <div>
+                        <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
                       <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                      </div>
                     </div>
 
                     @if (getResultLabel(matchup, matchup.teamBOwnerId)) {

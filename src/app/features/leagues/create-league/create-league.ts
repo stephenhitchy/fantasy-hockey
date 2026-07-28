@@ -4,6 +4,15 @@ import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { createLeague } from '../../../core/league/league.service';
 import { getUserProfile } from '../../../core/user/user.service';
+import {
+  DEFAULT_LEAGUE_LOGO_ID,
+  DEFAULT_LEAGUE_LOGO_PALETTE_ID,
+  getLeagueLogoAssetPath,
+  LEAGUE_LOGO_OPTIONS,
+  LEAGUE_LOGO_PALETTE_OPTIONS,
+  LeagueLogoId,
+  LeagueLogoPaletteId,
+} from '../../../shared/league-logo/league-logo.data';
 
 @Component({
   selector: 'app-create-league',
@@ -15,10 +24,22 @@ import { getUserProfile } from '../../../core/user/user.service';
 export class CreateLeague {
   name = '';
   maxTeams = 6;
+  selectedLogoId = signal<LeagueLogoId>(DEFAULT_LEAGUE_LOGO_ID);
+  selectedPaletteId = signal<LeagueLogoPaletteId>(DEFAULT_LEAGUE_LOGO_PALETTE_ID);
   errorMessage = signal('');
   loading = signal(false);
 
   readonly teamOptions = computed(() => Array.from({ length: 11 }, (_, index) => index + 2));
+  readonly logoOptions = LEAGUE_LOGO_OPTIONS;
+  readonly paletteOptions = LEAGUE_LOGO_PALETTE_OPTIONS;
+  readonly selectedLogoPath = computed(() =>
+    getLeagueLogoAssetPath(this.selectedLogoId(), this.selectedPaletteId()),
+  );
+  readonly selectedLogoOption = computed(
+    () =>
+      this.logoOptions.find((option) => option.id === this.selectedLogoId()) ??
+      this.logoOptions[0]!,
+  );
 
   constructor(private router: Router) {}
 
@@ -35,13 +56,34 @@ export class CreateLeague {
 
       const profile = await getUserProfile(user.uid);
       const username = profile?.username || user.email || 'Unknown User';
-
-      await createLeague(this.name, this.maxTeams, username);
+      await createLeague(
+        this.name,
+        this.maxTeams,
+        username,
+        this.selectedLogoId(),
+        this.selectedPaletteId(),
+      );
       await this.router.navigate(['/dashboard']);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to create the league right now.');
     } finally {
       this.loading.set(false);
     }
+  }
+
+  selectLogo(logoId: LeagueLogoId): void {
+    this.selectedLogoId.set(logoId);
+  }
+
+  selectPalette(paletteId: LeagueLogoPaletteId): void {
+    this.selectedPaletteId.set(paletteId);
+  }
+
+  getLogoPath(logoId: LeagueLogoId): string {
+    return getLeagueLogoAssetPath(logoId, this.selectedPaletteId());
+  }
+
+  getPalettePreviewPath(paletteId: LeagueLogoPaletteId): string {
+    return getLeagueLogoAssetPath(this.selectedLogoId(), paletteId);
   }
 }

@@ -265,8 +265,10 @@
               } @else {
                 <span class="upcoming-pick-marker" aria-hidden="true">⌛</span>
 
-                <div class="draft-pick-track-copy">
-                  <strong>{{ getTeamName(entry.preview.ownerId) }}</strong>
+                <div class="draft-pick-track-copy manager-name-stack">
+                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(entry.preview.ownerId)" [label]="getTeamManagerLabel(entry.preview.ownerId)" size="xs" />
+                  <div>
+                    <strong>{{ getTeamName(entry.preview.ownerId) }}</strong>
                   <small>
                     {{
                       entry.preview.overallPick === currentPick()?.overallPick
@@ -274,6 +276,7 @@
                         : 'Upcoming pick'
                     }}
                   </small>
+                  </div>
                 </div>
               }
             </article>
@@ -534,9 +537,10 @@
               <h2>Pick #{{ pick.overallPick }}</h2>
               <p>Round {{ pick.round }} · Pick {{ pick.pickInRound }}</p>
 
-              <strong class="current-team-name">
-                {{ getTeamName(pick.ownerId) }}
-              </strong>
+              <span class="current-team-name manager-name-with-avatar">
+                <app-manager-avatar [profileIconId]="getTeamProfileIconId(pick.ownerId)" [label]="getTeamManagerLabel(pick.ownerId)" size="sm" />
+                <strong>{{ getTeamName(pick.ownerId) }}</strong>
+              </span>
 
               @if (isMyTurn()) {
                 <span class="your-turn-message">

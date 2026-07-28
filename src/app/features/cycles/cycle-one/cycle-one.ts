@@ -5,6 +5,8 @@ import {
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 
 import { saveProjectionAccuracyForCycle } from '../../../core/projection/projection-accuracy.service';
@@ -191,7 +193,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-one',
-  imports: [RouterLink, NgStyle],
+  imports: [RouterLink, NgStyle, ManagerAvatar],
   templateUrl: './cycle-one.html',
   styleUrl: './cycle-one.css',
 })
@@ -3286,4 +3288,19 @@ export class CycleOne implements OnDestroy {
       setTimeout(resolve, milliseconds);
     });
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

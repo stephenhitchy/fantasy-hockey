@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
 import {
@@ -106,7 +108,7 @@ interface DraftTimelineEntry {
 
 @Component({
   selector: 'app-draft-room',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-room.html',
   styleUrl: './draft-room.css',
 })
@@ -2189,4 +2191,19 @@ export class DraftRoom implements OnDestroy {
 
     return `${hours}h ${minutes}m ${seconds}s remaining`;
   }
+
+  getTeamProfileIconId(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return getFantasyTeamProfileIconId(team);
+  }
+
+  getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const team = ownerId
+      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
+      : null;
+    return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
 }

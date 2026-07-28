@@ -11,7 +11,7 @@
         aria-live="polite"
       >
         <article class="mobile-score-team mobile-score-team-a" [ngStyle]="getOwnerThemeStyles(mobileMatchup.teamAOwnerId)">
-          <span>{{ getTeamName(mobileMatchup.teamAOwnerId) }}</span>
+          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(mobileMatchup.teamAOwnerId)" [label]="getTeamManagerLabel(mobileMatchup.teamAOwnerId)" size="xs" /><span>{{ getTeamName(mobileMatchup.teamAOwnerId) }}</span></span>
           <strong>
             {{
               getProjectionDisplay(
@@ -31,7 +31,7 @@
         </div>
 
         <article class="mobile-score-team mobile-score-team-b" [ngStyle]="getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">
-          <span>{{ getTeamName(mobileMatchup.teamBOwnerId) }}</span>
+          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(mobileMatchup.teamBOwnerId)" [label]="getTeamManagerLabel(mobileMatchup.teamBOwnerId)" size="xs" /><span>{{ getTeamName(mobileMatchup.teamBOwnerId) }}</span></span>
           <strong>
             {{
               getProjectionDisplay(
@@ -662,9 +662,12 @@
                         [alt]="getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
                       />
 
-                      <div>
-                        <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
-                        <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                      <div class="manager-name-stack">
+                        <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
+                        <div>
+                          <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                          <span>{{ getTeamRecord(matchup.teamAOwnerId) }}</span>
+                        </div>
                       </div>
 
                       <dl>
@@ -693,9 +696,12 @@
                         [alt]="getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
                       />
 
-                      <div>
-                        <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
-                        <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                      <div class="manager-name-stack">
+                        <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
+                        <div>
+                          <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                          <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                        </div>
                       </div>
 
                       <dl>
@@ -858,8 +864,9 @@
                     >
                       <div class="team-summary-row">
                         <div>
-                          <h3>
-                            {{ getTeamName(matchup.teamAOwnerId) }}
+                          <h3 class="manager-name-with-avatar">
+                            <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
+                            <span>{{ getTeamName(matchup.teamAOwnerId) }}</span>
 
                             @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
                               <span
@@ -1396,8 +1403,9 @@
                     >
                       <div class="team-summary-row">
                         <div>
-                          <h3>
-                            {{ getTeamName(matchup.teamBOwnerId) }}
+                          <h3 class="manager-name-with-avatar">
+                            <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
+                            <span>{{ getTeamName(matchup.teamBOwnerId) }}</span>
 
                             @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
                               <span

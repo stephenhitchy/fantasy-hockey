@@ -109,6 +109,18 @@ service cloud.firestore {
         username.size() <= 40;
     }
 
+    function validProfileIconId(profileIconId) {
+      return profileIconId in [
+          'emerald-visor', 'red-line-rat', 'purple-sniper', 'teal-captain', 'whiteout-goalie',
+          'crease-split', 'blue-line-blaster', 'open-ice-hit', 'masked-veteran', 'water-break',
+          'jersey-neon-diamond', 'jersey-arcade-viper', 'jersey-red-chevron', 'jersey-royal-crest', 'jersey-forest-cross',
+          'jersey-speed-stripes', 'jersey-north-star', 'jersey-emerald-starburst', 'jersey-pine-star', 'jersey-violet-crystal',
+          'jersey-ice-orbit', 'jersey-wing-rush', 'jersey-blue-compass', 'jersey-frost-vortex', 'jersey-teal-tide',
+          'hockey-referee', 'hockey-ice-resurfacer', 'hockey-goalie-mask', 'hockey-skates', 'hockey-crossed-sticks',
+          'hockey-visor-helmet', 'hockey-goal-light', 'hockey-goalie-gear', 'hockey-championship-cup', 'hockey-bench-gear'
+      ];
+    }
+
     function validLeagueName(name) {
       return name is string &&
         name.size() >= 1 &&
@@ -150,6 +162,7 @@ service cloud.firestore {
         data.uid == currentUserId() &&
         data.leagueId == leagueId &&
         validUsername(data.username) &&
+        validProfileIconId(data.profileIconId) &&
         (
           (
             data.role == 'commissioner' &&
@@ -177,6 +190,8 @@ service cloud.firestore {
         data.id == currentUserId() &&
         data.ownerId == currentUserId() &&
         validTeamName(data.teamName) &&
+        validUsername(data.managerName) &&
+        validProfileIconId(data.profileIconId) &&
         data.logo is string &&
         data.wins == 0 &&
         data.losses == 0 &&
@@ -191,8 +206,12 @@ service cloud.firestore {
       return request.resource.data
           .diff(resource.data)
           .affectedKeys()
-          .hasOnly(['teamName', 'logo', 'updatedAt']) &&
+          .hasOnly(['teamName', 'managerName', 'profileIconId', 'logo', 'updatedAt']) &&
         validTeamName(request.resource.data.teamName) &&
+        (!request.resource.data.keys().hasAny(['managerName']) ||
+          validUsername(request.resource.data.managerName)) &&
+        (!request.resource.data.keys().hasAny(['profileIconId']) ||
+          validProfileIconId(request.resource.data.profileIconId)) &&
         request.resource.data.logo is string;
     }
 
@@ -790,10 +809,16 @@ service cloud.firestore {
             ]));
       }
 
+      function validProfileIcon(data) {
+        return !data.keys().hasAny(['profileIconId']) ||
+          validProfileIconId(data.profileIconId);
+      }
+
       function validUserPreferences(data) {
         return validFavoriteTeam(data) &&
           validTeamIdentityVariant(data) &&
           validTeamIdentityUnlocks(data) &&
+          validProfileIcon(data) &&
           (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
           (!data.keys().hasAny(['defaultLandingPage']) ||
             data.defaultLandingPage in ['dashboard', 'lastLeague']) &&
@@ -949,8 +974,10 @@ service cloud.firestore {
             request.resource.data
               .diff(resource.data)
               .affectedKeys()
-              .hasOnly(['username']) &&
-            validUsername(request.resource.data.username)
+              .hasOnly(['username', 'profileIconId']) &&
+            validUsername(request.resource.data.username) &&
+            (!request.resource.data.keys().hasAny(['profileIconId']) ||
+              validProfileIconId(request.resource.data.profileIconId))
           );
 
         allow delete: if isLeagueCommissioner(leagueId);

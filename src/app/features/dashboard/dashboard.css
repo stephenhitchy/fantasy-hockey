@@ -249,6 +249,14 @@
   background: var(--surface-2);
   font-size: 22px;
 }
+
+.league-icon img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.34));
+}
 .league-identity div {
   min-width: 0;
 }
@@ -622,4 +630,31 @@
 .empty-state p,
 .refreshing-badge {
   color: var(--text-secondary);
+}
+
+.dashboard-welcome-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-welcome-row > div {
+  min-width: 0;
+}
+
+
+@media (max-width: 560px) {
+  .dashboard-welcome-row {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .dashboard-welcome-row .eyebrow {
+    margin-bottom: 5px;
+  }
+
+  .dashboard-welcome-row h1 {
+    font-size: 29px;
+  }
 }

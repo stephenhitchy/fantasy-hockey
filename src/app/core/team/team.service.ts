@@ -13,11 +13,18 @@ import {
 
 import { db } from '../firebase';
 import { getOrCreateFantasyRoster } from './roster.service';
+import {
+  getProfileIcon,
+  getSeededProfileIconId,
+  ProfileIconId,
+} from '../../shared/profile-icon/profile-icon.data';
 
 export interface FantasyTeam {
   id: string;
   ownerId: string;
   teamName: string;
+  managerName?: string;
+  profileIconId?: ProfileIconId;
   logo: string;
   wins: number;
   losses: number;
@@ -33,7 +40,8 @@ export interface FantasyTeam {
 export async function createFantasyTeam(
   leagueId: string,
   ownerId: string,
-  defaultTeamName = 'Unnamed Team'
+  defaultTeamName = 'Unnamed Team',
+  profileIconId?: ProfileIconId,
 ): Promise<void> {
   const teamRef = doc(db, 'leagues', leagueId, 'teams', ownerId);
   const existingTeam = await getDoc(teamRef);
@@ -43,6 +51,10 @@ export async function createFantasyTeam(
       id: ownerId,
       ownerId,
       teamName: defaultTeamName.trim() || 'Unnamed Team',
+      managerName: defaultTeamName.trim() || 'Unnamed Team',
+      profileIconId: getProfileIcon(
+        profileIconId ?? getSeededProfileIconId(ownerId),
+      ).id,
       logo: '',
       wins: 0,
       losses: 0,
@@ -130,4 +142,12 @@ export function listenToLeagueTeams(
       );
     }
   );
+}
+
+
+export function getFantasyTeamProfileIconId(
+  team: Pick<FantasyTeam, 'ownerId' | 'profileIconId'> | null | undefined,
+): ProfileIconId {
+  const ownerId = team?.ownerId ?? 'rinkrat-manager';
+  return getProfileIcon(team?.profileIconId ?? getSeededProfileIconId(ownerId)).id;
 }

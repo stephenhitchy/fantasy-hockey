@@ -6,6 +6,7 @@ import { auth } from '../../core/firebase-auth';
 import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
 import { getUserProfile, UserProfile } from '../../core/user/user.service';
 import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.service';
+import { getLeagueLogoAssetPath } from '../../shared/league-logo/league-logo.data';
 import { getPixelTeamTheme } from '../../shared/pixel-theme/pixel-theme.data';
 
 interface DashboardCache {
@@ -15,7 +16,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 1;
+const DASHBOARD_CACHE_VERSION = 3;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 function waitForAuthUser(): Promise<User | null> {
@@ -146,11 +147,24 @@ export class Dashboard {
     const cached = readDashboardCache(user.uid);
 
     if (cached) {
-      this.profile.set(cached.profile);
+      const storedTheme = loadStoredUserTheme();
+      const cachedProfile = cached.profile
+        ? {
+            ...cached.profile,
+            favoriteTeamAbbreviation: storedTheme.favoriteTeamAbbreviation,
+            favoriteTeamVariantId: storedTheme.favoriteTeamVariantId,
+            teamIdentityUnlocks: storedTheme.teamIdentityUnlocks,
+            reducedMotion: storedTheme.reducedMotion,
+            defaultLandingPage: storedTheme.defaultLandingPage,
+            backgroundTheme: storedTheme.backgroundTheme,
+          }
+        : null;
+
+      this.profile.set(cachedProfile);
       this.leagueSummaries.set(cached.leagueSummaries);
 
-      if (cached.profile) {
-        applyUserTheme(cached.profile);
+      if (cachedProfile) {
+        applyUserTheme(cachedProfile);
       }
     }
 
@@ -230,6 +244,7 @@ export class Dashboard {
           teamIdentityUnlocks: profile.teamIdentityUnlocks,
           reducedMotion: profile.reducedMotion,
           defaultLandingPage: profile.defaultLandingPage,
+          backgroundTheme: profile.backgroundTheme,
         }
       : null;
 
@@ -239,5 +254,9 @@ export class Dashboard {
       leagueSummaries: this.leagueSummaries(),
       cachedAt: Date.now(),
     });
+  }
+
+  getLeagueLogoPath(league: LeagueSummary): string {
+    return getLeagueLogoAssetPath(league.leagueLogoId, league.leagueLogoPaletteId);
   }
 }

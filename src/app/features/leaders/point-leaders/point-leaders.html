@@ -123,7 +123,10 @@
                 </div>
               </div>
 
-              <span class="leader-owner">{{ getFantasyTeamName(row.ownerId) }}</span>
+              <span class="leader-owner manager-name-with-avatar">
+                <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="xs" />
+                <span>{{ getFantasyTeamName(row.ownerId) }}</span>
+              </span>
               <strong class="leader-points">{{ getPointsLabel(row.totalPoints) }}</strong>
               <span class="leader-ppg">{{ getPointsPerGameLabel(row) }}</span>
               <span class="leader-games" [attr.title]="getGamesTitle(row)">{{ getGamesLabel(row) }}</span>

@@ -80,6 +80,7 @@ export function applyUserTheme(
     root.style.setProperty('--user-team-tertiary-wash', hexToRgba(team.tertiaryColor, 0.12));
     root.dataset['favoriteTeam'] = team.abbreviation;
     root.dataset['favoriteTeamVariant'] = team.variantId;
+    delete root.dataset['profileIcon'];
     root.dataset['reducedMotion'] = reducedMotion ? 'true' : 'false';
     root.dataset['backgroundTheme'] = backgroundTheme;
   }
@@ -99,15 +100,17 @@ export function applyUserTheme(
 }
 
 export function loadStoredUserTheme(): StoredUserTheme {
+  const fallback: StoredUserTheme = {
+    favoriteTeamAbbreviation: 'VGK',
+    favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+    teamIdentityUnlocks: [],
+    reducedMotion: false,
+    defaultLandingPage: 'dashboard',
+    backgroundTheme: 'rink-dark',
+  };
+
   if (typeof localStorage === 'undefined') {
-    return {
-      favoriteTeamAbbreviation: 'VGK',
-      favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
-      teamIdentityUnlocks: [],
-      reducedMotion: false,
-      defaultLandingPage: 'dashboard',
-      backgroundTheme: 'rink-dark',
-    };
+    return fallback;
   }
 
   try {
@@ -150,14 +153,7 @@ export function loadStoredUserTheme(): StoredUserTheme {
           : 'rink-dark',
     };
   } catch {
-    return {
-      favoriteTeamAbbreviation: 'VGK',
-      favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
-      teamIdentityUnlocks: [],
-      reducedMotion: false,
-      defaultLandingPage: 'dashboard',
-      backgroundTheme: 'rink-dark',
-    };
+    return fallback;
   }
 }
 

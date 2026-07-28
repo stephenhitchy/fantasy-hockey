@@ -7,7 +7,12 @@
     <header class="league-header">
       <div>
         <span class="eyebrow">Fantasy Hockey League</span>
-        <h1><span class="pixel-icon icon-rat icon-lg" aria-hidden="true"></span> {{ league()?.name }}</h1>
+        <h1>
+          <span class="league-title-logo" aria-hidden="true">
+            <img [src]="leagueLogoPath()" alt="" decoding="async" />
+          </span>
+          <span>{{ league()?.name }}</span>
+        </h1>
         <p>
           Cycle Matchups ·
           {{ teams().length }} / {{ league()?.maxTeams }} Teams
@@ -15,20 +20,91 @@
 
         @if (myTeam(); as currentTeam) {
           <div class="my-team-identity">
-            <div>
-              <span>Your Team</span>
-              <strong>{{ currentTeam.teamName }}</strong>
+            <div class="manager-name-stack">
+              <app-manager-avatar [profileIconId]="getTeamProfileIconId(currentTeam.ownerId)" [label]="getTeamManagerLabel(currentTeam.ownerId)" size="md" />
+              <div>
+                <span>Your Team</span>
+                <strong>{{ currentTeam.teamName }}</strong>
+              </div>
             </div>
 
-            <button
-              type="button"
-              class="rename-team-trigger"
-              (click)="openRenameTeam()"
-              [attr.aria-expanded]="renameTeamOpen()"
-            >
-              ✎ Rename Team
-            </button>
+            <div class="my-team-identity-actions">
+              <button
+                type="button"
+                class="change-profile-icon-trigger"
+                (click)="openProfileIconPicker()"
+                [attr.aria-expanded]="profileIconPickerOpen()"
+              >
+                Change Profile Pic
+              </button>
+
+              <button
+                type="button"
+                class="rename-team-trigger"
+                (click)="openRenameTeam()"
+                [attr.aria-expanded]="renameTeamOpen()"
+              >
+                ✎ Rename Team
+              </button>
+            </div>
           </div>
+
+          @if (profileIconPickerOpen()) {
+            <section class="league-profile-icon-panel" aria-labelledby="league-profile-icon-title">
+              <div class="league-profile-icon-heading">
+                <div>
+                  <span class="eyebrow">This League Only</span>
+                  <h2 id="league-profile-icon-title">Choose Your League Profile Picture</h2>
+                  <p>Your selection is unique to {{ league()?.name }} and will not change your other leagues.</p>
+                </div>
+
+                <button
+                  type="button"
+                  class="close-profile-icon-picker"
+                  (click)="closeProfileIconPicker()"
+                  [disabled]="profileIconSaving()"
+                  aria-label="Close profile icon picker"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div class="league-profile-icon-categories">
+                @for (category of profileIconCategories; track category.id) {
+                  <section class="league-profile-icon-category" [attr.aria-labelledby]="'league-icon-category-' + category.id">
+                    <div class="league-profile-icon-category-heading">
+                      <div>
+                        <span class="eyebrow">{{ category.eyebrow }}</span>
+                        <h3 [id]="'league-icon-category-' + category.id">{{ category.label }}</h3>
+                      </div>
+                      <span>{{ profileIconsForCategory(category.id).length }}</span>
+                    </div>
+
+                    <div class="league-profile-icon-grid" role="list" [attr.aria-label]="category.label + ' icons'">
+                      @for (icon of profileIconsForCategory(category.id); track icon.id) {
+                        <button
+                          type="button"
+                          class="league-profile-icon-option"
+                          [class.selected]="icon.id === selectedLeagueProfileIconId()"
+                          [attr.aria-pressed]="icon.id === selectedLeagueProfileIconId()"
+                          [title]="icon.label"
+                          [disabled]="profileIconSaving()"
+                          (click)="selectLeagueProfileIcon(icon)"
+                        >
+                          <img [src]="icon.assetPath" [alt]="icon.alt" width="512" height="512" loading="lazy" decoding="async" />
+                          <span>{{ icon.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
+
+              @if (profileIconError()) {
+                <small class="profile-icon-picker-error" role="alert">{{ profileIconError() }}</small>
+              }
+            </section>
+          }
 
           @if (renameTeamOpen()) {
             <div class="rename-team-panel" aria-label="Rename your fantasy team">
@@ -75,6 +151,12 @@
           @if (renameTeamMessage()) {
             <small class="rename-team-success" aria-live="polite">
               {{ renameTeamMessage() }}
+            </small>
+          }
+
+          @if (profileIconMessage()) {
+            <small class="rename-team-success" aria-live="polite">
+              {{ profileIconMessage() }}
             </small>
           }
         }
@@ -416,14 +498,20 @@
               </header>
 
               <div class="matchup-team-row">
-                <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                <span class="manager-name-with-avatar">
+                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="xs" />
+                  <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
+                </span>
                 <span>{{ getDisplayNumber(matchup.teamAScore) }}</span>
               </div>
 
               <div class="matchup-vs">vs</div>
 
               <div class="matchup-team-row">
-                <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                <span class="manager-name-with-avatar">
+                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="xs" />
+                  <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
+                </span>
                 <span>{{ getDisplayNumber(matchup.teamBScore) }}</span>
               </div>
             </article>
@@ -488,7 +576,10 @@
         @for (team of sortedTeams(); track team.id) {
           <article class="team-card">
             <div class="team-card-heading">
-              <h3>{{ team.teamName }}</h3>
+              <span class="manager-name-with-avatar">
+                <app-manager-avatar [profileIconId]="getTeamProfileIconId(team.ownerId)" [label]="getTeamManagerLabel(team.ownerId)" size="sm" />
+                <h3>{{ team.teamName }}</h3>
+              </span>
               <span>{{ getWinPercentage(team) }}</span>
             </div>
 

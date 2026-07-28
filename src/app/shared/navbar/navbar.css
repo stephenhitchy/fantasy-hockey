@@ -408,3 +408,9 @@
 .nav-icon {
   display: inline-block;
 }
+
+.account-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
