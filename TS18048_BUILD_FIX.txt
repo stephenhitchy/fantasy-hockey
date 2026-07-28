@@ -1,0 +1,7 @@
+RinkRat TS18048 build fix
+
+Corrects three strict-null TypeScript errors in:
+src/app/core/draft/draft-player-pool.service.ts
+
+The checks now safely treat an undefined gamesPlayed value as 0:
+(currentStats.gamesPlayed ?? 0) > 0

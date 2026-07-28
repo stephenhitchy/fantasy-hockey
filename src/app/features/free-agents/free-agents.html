@@ -99,7 +99,7 @@
           </button>
         </div>
 
-        <div class="filter-row">
+        <div class="filter-row decision-filter-row">
           <label>
             Search
             <input
@@ -119,6 +119,22 @@
               }
             </select>
           </label>
+
+          <label>
+            Sort by
+            <select [ngModel]="sortMode()" (ngModelChange)="setSortMode($event)">
+              @for (option of sortOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="cycle-dot-legend" aria-label="Cycle game marker legend">
+          <strong>Current six-game block:</strong>
+          <span><i class="cycle-game-marker cycle-marker-played"></i> Played</span>
+          <span><i class="cycle-game-marker cycle-marker-missed"></i> Missed</span>
+          <span><i class="cycle-game-marker cycle-marker-upcoming"></i> Upcoming</span>
         </div>
 
         <div class="pool-count-row">
@@ -143,86 +159,181 @@
 
             <div class="asset-list waiver-list">
               @for (waiver of availableWaivers(); track waiver.id) {
-                <article class="asset-row waiver-row" [class.suspended-asset-row]="isPlayerAvailabilitySuspended(waiver.asset)">
-                  @if (getAssetLogoUrl(waiver.asset); as logoUrl) {
-                    <img [src]="logoUrl" [alt]="getAssetTeamLabel(waiver.asset) + ' logo'" />
-                  }
+                <article
+                  class="asset-row decision-asset-card waiver-row"
+                  [class.suspended-asset-row]="isPlayerAvailabilitySuspended(waiver.asset)"
+                >
+                  <div class="asset-identity-block">
+                    @if (getAssetLogoUrl(waiver.asset); as logoUrl) {
+                      <img [src]="logoUrl" [alt]="getAssetTeamLabel(waiver.asset) + ' logo'" />
+                    }
 
-                  <div class="asset-main">
-                    <strong>{{ getAssetName(waiver.asset) }}</strong>
-                    <span>
-                      {{ getAssetTeamLabel(waiver.asset) }} · {{ waiver.asset.position }} ·
-                      {{ getWaiverDroppedByLabel(waiver) }}
-                    </span>
+                    <div class="asset-main">
+                      <strong>{{ getAssetName(waiver.asset) }}</strong>
+                      <span>
+                        {{ getAssetTeamLabel(waiver.asset) }} · {{ waiver.asset.position }} ·
+                        {{ getWaiverDroppedByLabel(waiver) }}
+                      </span>
 
-                    @if (shouldShowPlayerAvailabilityBadge(waiver.asset)) {
-                      <div
-                        class="player-availability-row"
-                        [attr.title]="
-                          getPlayerAvailabilityNote(waiver.asset) ||
-                          getPlayerAvailabilityLabel(waiver.asset)
-                        "
-                      >
-                        <span
-                          [class]="
-                            'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)
-                          "
-                        >
+                      @if (shouldShowPlayerAvailabilityBadge(waiver.asset)) {
+                        <div class="player-availability-row">
                           <span
-                            class="player-status-tooltip availability-symbol"
-                            role="img"
-                            tabindex="0"
-                            [attr.aria-label]="getPlayerAvailabilityTooltip(waiver.asset)"
-                            [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(waiver.asset)"
-                            [attr.title]="getPlayerAvailabilityTooltip(waiver.asset)"
-                          >{{ getPlayerAvailabilityIcon(waiver.asset) }}</span>
-                          {{ getPlayerAvailabilityLabel(waiver.asset) }}
-                        </span>
-                        @if (isPlayerAvailabilityIrEligible(waiver.asset)) {
-                          <small class="ir-eligible-copy">IR eligible</small>
+                            [class]="
+                              'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)
+                            "
+                          >
+                            <span
+                              class="player-status-tooltip availability-symbol"
+                              role="img"
+                              tabindex="0"
+                              [attr.aria-label]="getPlayerAvailabilityTooltip(waiver.asset)"
+                              [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(waiver.asset)"
+                              [attr.title]="getPlayerAvailabilityTooltip(waiver.asset)"
+                            >{{ getPlayerAvailabilityIcon(waiver.asset) }}</span>
+                            {{ getPlayerAvailabilityLabel(waiver.asset) }}
+                          </span>
+                          @if (isPlayerAvailabilityIrEligible(waiver.asset)) {
+                            <small class="ir-eligible-copy">IR eligible</small>
+                          }
+                        </div>
+                      }
+
+                      <em>{{ getWaiverClaimLabel(waiver) }} · {{ getWaiverPriorityLabel() }}</em>
+                    </div>
+                  </div>
+
+                  <div class="cycle-decision-block">
+                    <div class="cycle-decision-heading">
+                      <span>Current block</span>
+                      <strong>
+                        {{ getCurrentTeamCycleNumber(waiver.asset) ? 'Cycle ' + getCurrentTeamCycleNumber(waiver.asset) : 'Cycle —' }}
+                      </strong>
+                    </div>
+                    <div class="cycle-marker-row" aria-label="Current six-game cycle status">
+                      @for (dotIndex of cycleDotSlots; track dotIndex) {
+                        @if (getCurrentCycleMarker(waiver.asset, dotIndex); as marker) {
+                          <span
+                            [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                            [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                            [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
+                          >{{ dotIndex + 1 }}</span>
+                        } @else {
+                          <span
+                            class="cycle-game-marker cycle-marker-unavailable"
+                            [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
+                          >{{ dotIndex + 1 }}</span>
                         }
-                      </div>
-                    }
-
-                    <em>{{ getWaiverClaimLabel(waiver) }} · {{ getWaiverPriorityLabel() }}</em>
+                      }
+                    </div>
+                    <small>{{ getCycleProgressLabel(waiver.asset) }}</small>
                   </div>
 
-                  <div class="asset-projection">
-                    <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
-                    <span>Projection</span>
+                  <div class="decision-metric-grid">
+                    <div>
+                      <span>Season points</span>
+                      <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }}</strong>
+                    </div>
+                    <div>
+                      <span>Rest estimate</span>
+                      <strong>{{ getDisplayNumber(getRestOfSeasonProjection(waiver.asset)) }}</strong>
+                    </div>
+                    <div>
+                      <span>Next cycle</span>
+                      <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
+                    </div>
+                    <div>
+                      <span>Estimated final</span>
+                      <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(waiver.asset)) }}</strong>
+                    </div>
+                  </div>
+
+                  <div class="decision-action-column">
+                    <span [class]="'performance-pill ' + getPerformanceClass(waiver.asset)">
+                      {{ getPerformanceLabel(waiver.asset) }}
+                    </span>
                     @if (getCycleRank(waiver.asset); as cycleRank) {
-                      <small class="projection-rank-pill">Rank #{{ cycleRank }}</small>
+                      <small class="projection-rank-pill">Next-cycle rank #{{ cycleRank }}</small>
                     }
-                  </div>
-
-                  <div class="waiver-action-stack">
-                    <button
-                      type="button"
-                      class="claim-button"
-                      (click)="selectWaiver(waiver)"
-                      [disabled]="
-                        draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId
-                      "
-                    >
-                      {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : 'Choose Slot' }}
-                    </button>
-
-                    @if (isCommissioner()) {
+                    <div class="waiver-action-stack">
                       <button
                         type="button"
-                        class="process-waiver-button"
-                        (click)="processLeagueWaiver(waiver)"
-                        [disabled]="moving()"
+                        class="claim-button"
+                        (click)="selectWaiver(waiver)"
+                        [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId"
                       >
-                        Process
+                        {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : 'Choose Slot' }}
                       </button>
-                    }
+
+                      @if (isCommissioner()) {
+                        <button
+                          type="button"
+                          class="process-waiver-button"
+                          (click)="processLeagueWaiver(waiver)"
+                          [disabled]="moving()"
+                        >
+                          Process
+                        </button>
+                      }
+                    </div>
                   </div>
+
+                  <details class="decision-details">
+                    <summary>View decision details</summary>
+                    <div class="decision-detail-grid">
+                      <section>
+                        <span class="detail-label">Projection context</span>
+                        <strong>{{ getReliabilityLabel(waiver.asset) }}</strong>
+                        <p>{{ getScheduleOutlookLabel(waiver.asset) }}</p>
+                        <p>{{ getExpectedAvailabilityLabel(waiver.asset) }}</p>
+                        <p>{{ getProjectionSourceLabel(waiver.asset) }}</p>
+                      </section>
+                      <section>
+                        <span class="detail-label">Fantasy pace per appearance</span>
+                        <div class="pace-grid">
+                          <span>Season <strong>{{ getSeasonFantasyPointsPerGame(waiver.asset) }}</strong></span>
+                          <span>Last 3 <strong>{{ getRecentPaceLabel(waiver.asset, 3) }}</strong></span>
+                          <span>Last 5 <strong>{{ getRecentPaceLabel(waiver.asset, 5) }}</strong></span>
+                          <span>Last 10 <strong>{{ getRecentPaceLabel(waiver.asset, 10) }}</strong></span>
+                          <span>Last 20 <strong>{{ getRecentPaceLabel(waiver.asset, 20) }}</strong></span>
+                        </div>
+                        <p>{{ getSeasonGamesLabel(waiver.asset) }}</p>
+                      </section>
+                      <section>
+                        <span class="detail-label">Projection performance</span>
+                        <strong [class]="getPerformanceClass(waiver.asset)">{{ getPerformanceLabel(waiver.asset) }}</strong>
+                        <p>{{ getPerformanceDetail(waiver.asset) }}</p>
+                        <p>{{ getRecentFormLabel(waiver.asset) }}</p>
+                      </section>
+                    </div>
+
+                    <div class="stat-breakdown-heading">
+                      <div>
+                        <span class="detail-label">Current-season point breakdown</span>
+                        <strong>How the fantasy total was built</strong>
+                      </div>
+                      <small>{{ getStatBreakdownNote(waiver.asset) }}</small>
+                    </div>
+
+                    @if (getStatBreakdown(waiver.asset).length > 0) {
+                      <div class="stat-breakdown-grid">
+                        @for (item of getStatBreakdown(waiver.asset); track item.key) {
+                          <div class="stat-breakdown-item" [attr.title]="item.note || item.label">
+                            <span>{{ item.label }}</span>
+                            <small>{{ getBreakdownStatLabel(item) }}</small>
+                            <strong>{{ item.fantasyPoints >= 0 ? '+' : '' }}{{ item.fantasyPoints.toFixed(1) }} pts</strong>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season breakdown and cycle dots.</p>
+                    }
+                  </details>
                 </article>
               }
             </div>
           </section>
         }
+
 
         @if (playerPoolLoading()) {
           <div class="empty-card">Loading NHL player pool...</div>
@@ -233,67 +344,161 @@
         } @else {
           <div class="asset-list">
             @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
-              <article class="asset-row" [class.suspended-asset-row]="isPlayerAvailabilitySuspended(asset)">
-                @if (getAssetLogoUrl(asset); as logoUrl) {
-                  <img [src]="logoUrl" [alt]="getAssetTeamLabel(asset) + ' logo'" />
-                }
+              <article
+                class="asset-row decision-asset-card"
+                [class.suspended-asset-row]="isPlayerAvailabilitySuspended(asset)"
+              >
+                <div class="asset-identity-block">
+                  @if (getAssetLogoUrl(asset); as logoUrl) {
+                    <img [src]="logoUrl" [alt]="getAssetTeamLabel(asset) + ' logo'" />
+                  }
 
-                <div class="asset-main">
-                  <strong>{{ getAssetName(asset) }}</strong>
-                  <span>{{ getAssetTeamLabel(asset) }} · {{ asset.position }}</span>
+                  <div class="asset-main">
+                    <strong>{{ getAssetName(asset) }}</strong>
+                    <span>{{ getAssetTeamLabel(asset) }} · {{ asset.position }}</span>
 
-                  @if (shouldShowPlayerAvailabilityBadge(asset)) {
-                    <div
-                      class="player-availability-row"
-                      [attr.title]="
-                        getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)
-                      "
-                    >
-                      <span
-                        [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
-                      >
+                    @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                      <div class="player-availability-row">
+                        <span [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)">
+                          <span
+                            class="player-status-tooltip availability-symbol"
+                            role="img"
+                            tabindex="0"
+                            [attr.aria-label]="getPlayerAvailabilityTooltip(asset)"
+                            [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(asset)"
+                            [attr.title]="getPlayerAvailabilityTooltip(asset)"
+                          >{{ getPlayerAvailabilityIcon(asset) }}</span>
+                          {{ getPlayerAvailabilityLabel(asset) }}
+                        </span>
+                        @if (isPlayerAvailabilityIrEligible(asset)) {
+                          <small class="ir-eligible-copy">IR eligible</small>
+                        }
+                        @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
+                          <small class="player-availability-note">{{ availabilityNote }}</small>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="cycle-decision-block">
+                  <div class="cycle-decision-heading">
+                    <span>Current block</span>
+                    <strong>
+                      {{ getCurrentTeamCycleNumber(asset) ? 'Cycle ' + getCurrentTeamCycleNumber(asset) : 'Cycle —' }}
+                    </strong>
+                  </div>
+                  <div class="cycle-marker-row" aria-label="Current six-game cycle status">
+                    @for (dotIndex of cycleDotSlots; track dotIndex) {
+                      @if (getCurrentCycleMarker(asset, dotIndex); as marker) {
                         <span
-                          class="player-status-tooltip availability-symbol"
-                          role="img"
-                          tabindex="0"
-                          [attr.aria-label]="getPlayerAvailabilityTooltip(asset)"
-                          [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(asset)"
-                          [attr.title]="getPlayerAvailabilityTooltip(asset)"
-                        >{{ getPlayerAvailabilityIcon(asset) }}</span>
-                        {{ getPlayerAvailabilityLabel(asset) }}
-                      </span>
-                      @if (isPlayerAvailabilityIrEligible(asset)) {
-                        <small class="ir-eligible-copy">IR eligible</small>
+                          [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                          [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                          [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
+                        >{{ dotIndex + 1 }}</span>
+                      } @else {
+                        <span
+                          class="cycle-game-marker cycle-marker-unavailable"
+                          [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
+                        >{{ dotIndex + 1 }}</span>
                       }
-                      @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
-                        <small class="player-availability-note">{{ availabilityNote }}</small>
+                    }
+                  </div>
+                  <small>{{ getCycleProgressLabel(asset) }}</small>
+                </div>
+
+                <div class="decision-metric-grid">
+                  <div>
+                    <span>Season points</span>
+                    <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }}</strong>
+                  </div>
+                  <div>
+                    <span>Rest estimate</span>
+                    <strong>{{ getDisplayNumber(getRestOfSeasonProjection(asset)) }}</strong>
+                  </div>
+                  <div>
+                    <span>Next cycle</span>
+                    <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
+                  </div>
+                  <div>
+                    <span>Estimated final</span>
+                    <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(asset)) }}</strong>
+                  </div>
+                </div>
+
+                <div class="decision-action-column">
+                  <span [class]="'performance-pill ' + getPerformanceClass(asset)">
+                    {{ getPerformanceLabel(asset) }}
+                  </span>
+                  @if (getCycleRank(asset); as cycleRank) {
+                    <small class="projection-rank-pill">Next-cycle rank #{{ cycleRank }}</small>
+                  }
+                  <button
+                    type="button"
+                    class="choose-slot-button"
+                    (click)="selectAddAsset(asset)"
+                    [disabled]="draft()?.status !== 'complete'"
+                  >
+                    Choose Slot
+                  </button>
+                </div>
+
+                <details class="decision-details">
+                  <summary>View decision details</summary>
+                  <div class="decision-detail-grid">
+                    <section>
+                      <span class="detail-label">Projection context</span>
+                      <strong>{{ getReliabilityLabel(asset) }}</strong>
+                      <p>{{ getScheduleOutlookLabel(asset) }}</p>
+                      <p>{{ getExpectedAvailabilityLabel(asset) }}</p>
+                      <p>{{ getProjectionSourceLabel(asset) }}</p>
+                    </section>
+                    <section>
+                      <span class="detail-label">Fantasy pace per appearance</span>
+                      <div class="pace-grid">
+                        <span>Season <strong>{{ getSeasonFantasyPointsPerGame(asset) }}</strong></span>
+                        <span>Last 3 <strong>{{ getRecentPaceLabel(asset, 3) }}</strong></span>
+                        <span>Last 5 <strong>{{ getRecentPaceLabel(asset, 5) }}</strong></span>
+                        <span>Last 10 <strong>{{ getRecentPaceLabel(asset, 10) }}</strong></span>
+                        <span>Last 20 <strong>{{ getRecentPaceLabel(asset, 20) }}</strong></span>
+                      </div>
+                      <p>{{ getSeasonGamesLabel(asset) }}</p>
+                    </section>
+                    <section>
+                      <span class="detail-label">Projection performance</span>
+                      <strong [class]="getPerformanceClass(asset)">{{ getPerformanceLabel(asset) }}</strong>
+                      <p>{{ getPerformanceDetail(asset) }}</p>
+                      <p>{{ getRecentFormLabel(asset) }}</p>
+                    </section>
+                  </div>
+
+                  <div class="stat-breakdown-heading">
+                    <div>
+                      <span class="detail-label">Current-season point breakdown</span>
+                      <strong>How the fantasy total was built</strong>
+                    </div>
+                    <small>{{ getStatBreakdownNote(asset) }}</small>
+                  </div>
+
+                  @if (getStatBreakdown(asset).length > 0) {
+                    <div class="stat-breakdown-grid">
+                      @for (item of getStatBreakdown(asset); track item.key) {
+                        <div class="stat-breakdown-item" [attr.title]="item.note || item.label">
+                          <span>{{ item.label }}</span>
+                          <small>{{ getBreakdownStatLabel(item) }}</small>
+                          <strong>{{ item.fantasyPoints >= 0 ? '+' : '' }}{{ item.fantasyPoints.toFixed(1) }} pts</strong>
+                        </div>
                       }
                     </div>
+                  } @else {
+                    <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season breakdown and cycle dots.</p>
                   }
-                </div>
-
-                <div class="asset-projection">
-                  <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
-                  <span>Projection</span>
-                  @if (getCycleRank(asset); as cycleRank) {
-                    <small class="projection-rank-pill">Rank #{{ cycleRank }}</small>
-                  }
-                  <small [class]="'recent-form-pill ' + getRecentFormClass(asset)">
-                    {{ getRecentFormLabel(asset) }}
-                  </small>
-                </div>
-
-                <button
-                  type="button"
-                  (click)="selectAddAsset(asset)"
-                  [disabled]="draft()?.status !== 'complete'"
-                >
-                  Choose Slot
-                </button>
+                </details>
               </article>
             }
           </div>
         }
+
       </section>
     } @else {
       @if (selectedAddAsset(); as addAsset) {
@@ -343,6 +548,82 @@
               <strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong>
               <span>Cycle Rank</span>
             </div>
+          </section>
+          <section class="selected-decision-overview">
+            <div class="cycle-decision-block">
+              <div class="cycle-decision-heading">
+                <span>Incoming player block</span>
+                <strong>
+                  {{ getCurrentTeamCycleNumber(addAsset) ? 'Cycle ' + getCurrentTeamCycleNumber(addAsset) : 'Cycle —' }}
+                </strong>
+              </div>
+              <div class="cycle-marker-row" aria-label="Selected player current six-game cycle status">
+                @for (dotIndex of cycleDotSlots; track dotIndex) {
+                  @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
+                    <span
+                      [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                      [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                    >{{ dotIndex + 1 }}</span>
+                  } @else {
+                    <span class="cycle-game-marker cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                  }
+                }
+              </div>
+              <small>{{ getCycleProgressLabel(addAsset) }}</small>
+            </div>
+
+            <div class="decision-metric-grid">
+              <div><span>Season points</span><strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></div>
+              <div><span>Rest estimate</span><strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></div>
+              <div><span>Next cycle</span><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></div>
+              <div><span>Estimated final</span><strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(addAsset)) }}</strong></div>
+            </div>
+
+            <div class="selected-performance-column">
+              <span [class]="'performance-pill ' + getPerformanceClass(addAsset)">{{ getPerformanceLabel(addAsset) }}</span>
+              <small>{{ getReliabilityLabel(addAsset) }}</small>
+              <small>{{ getScheduleOutlookLabel(addAsset) }}</small>
+            </div>
+
+            <details class="decision-details selected-decision-details">
+              <summary>Review full player breakdown</summary>
+              <div class="decision-detail-grid">
+                <section>
+                  <span class="detail-label">Availability</span>
+                  <strong>{{ getExpectedAvailabilityLabel(addAsset) }}</strong>
+                  <p>{{ getSeasonGamesLabel(addAsset) }}</p>
+                  <p>{{ getProjectionSourceLabel(addAsset) }}</p>
+                </section>
+                <section>
+                  <span class="detail-label">Fantasy pace per appearance</span>
+                  <div class="pace-grid">
+                    <span>Season <strong>{{ getSeasonFantasyPointsPerGame(addAsset) }}</strong></span>
+                    <span>Last 3 <strong>{{ getRecentPaceLabel(addAsset, 3) }}</strong></span>
+                    <span>Last 5 <strong>{{ getRecentPaceLabel(addAsset, 5) }}</strong></span>
+                    <span>Last 10 <strong>{{ getRecentPaceLabel(addAsset, 10) }}</strong></span>
+                    <span>Last 20 <strong>{{ getRecentPaceLabel(addAsset, 20) }}</strong></span>
+                  </div>
+                </section>
+                <section>
+                  <span class="detail-label">Projection performance</span>
+                  <strong [class]="getPerformanceClass(addAsset)">{{ getPerformanceLabel(addAsset) }}</strong>
+                  <p>{{ getPerformanceDetail(addAsset) }}</p>
+                  <p>{{ getRecentFormLabel(addAsset) }}</p>
+                </section>
+              </div>
+
+              @if (getStatBreakdown(addAsset).length > 0) {
+                <div class="stat-breakdown-grid">
+                  @for (item of getStatBreakdown(addAsset); track item.key) {
+                    <div class="stat-breakdown-item" [attr.title]="item.note || item.label">
+                      <span>{{ item.label }}</span>
+                      <small>{{ getBreakdownStatLabel(item) }}</small>
+                      <strong>{{ item.fantasyPoints >= 0 ? '+' : '' }}{{ item.fantasyPoints.toFixed(1) }} pts</strong>
+                    </div>
+                  }
+                </div>
+              }
+            </details>
           </section>
 
           <section [class]="'eligibility-card ' + getSelectedAssetCycleClass()">
@@ -420,6 +701,22 @@
                     </div>
                   </div>
 
+                  @if (getDropCandidateProjectionAsset(candidate); as candidateProjection) {
+                    <div class="slot-choice-decision-metrics">
+                      <span>
+                        Season
+                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(candidateProjection)) }}</strong>
+                      </span>
+                      <span>
+                        Next cycle
+                        <strong>{{ getDisplayNumber(getProjectedCyclePoints(candidateProjection)) }}</strong>
+                      </span>
+                      <span [class]="getPerformanceClass(candidateProjection)">
+                        {{ getPerformanceLabel(candidateProjection) }}
+                      </span>
+                    </div>
+                  }
+
                   <div class="slot-window-progress">
                     <span>{{ getCandidateWindowLabel(candidate) }}</span>
                     <strong>{{ getCandidateActivationLabel(candidate) }}</strong>
@@ -432,6 +729,99 @@
                 </button>
               }
             </div>
+
+            @if (selectedDropCandidate(); as selectedCandidate) {
+              <section class="move-comparison-panel">
+                <div class="move-comparison-heading">
+                  <div>
+                    <span class="eyebrow">Add / Drop Comparison</span>
+                    <h3>What this move changes</h3>
+                  </div>
+                  <div class="move-delta-summary">
+                    <strong>{{ getMoveProjectionDeltaLabel('NEXT_CYCLE') }}</strong>
+                    <span>{{ getMoveProjectionDeltaLabel('REST_OF_SEASON') }}</span>
+                  </div>
+                </div>
+
+                <div class="move-comparison-grid">
+                  <article class="comparison-player-card comparison-incoming">
+                    <span class="comparison-role">Incoming</span>
+                    <strong>{{ getAssetName(addAsset) }}</strong>
+                    <small>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</small>
+                    <div class="comparison-metrics">
+                      <span>Season <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></span>
+                      <span>Rest <strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></span>
+                      <span>Next <strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></span>
+                      <span>Final <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(addAsset)) }}</strong></span>
+                    </div>
+                    <span [class]="'performance-pill ' + getPerformanceClass(addAsset)">{{ getPerformanceLabel(addAsset) }}</span>
+                  </article>
+
+                  @if (getDropCandidateProjectionAsset(selectedCandidate); as outgoingAsset) {
+                    <article class="comparison-player-card comparison-outgoing">
+                      <span class="comparison-role">Outgoing</span>
+                      <strong>{{ getAssetName(outgoingAsset) }}</strong>
+                      <small>{{ getAssetTeamLabel(outgoingAsset) }} · {{ outgoingAsset.position }}</small>
+                      <div class="comparison-metrics">
+                        <span>Season <strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoingAsset)) }}</strong></span>
+                        <span>Rest <strong>{{ getDisplayNumber(getRestOfSeasonProjection(outgoingAsset)) }}</strong></span>
+                        <span>Next <strong>{{ getDisplayNumber(getProjectedCyclePoints(outgoingAsset)) }}</strong></span>
+                        <span>Final <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(outgoingAsset)) }}</strong></span>
+                      </div>
+                      <span [class]="'performance-pill ' + getPerformanceClass(outgoingAsset)">{{ getPerformanceLabel(outgoingAsset) }}</span>
+                    </article>
+                  } @else {
+                    <article class="comparison-player-card comparison-open-slot">
+                      <span class="comparison-role">Outgoing</span>
+                      <strong>Open roster slot</strong>
+                      <small>No player or projection is being removed.</small>
+                    </article>
+                  }
+                </div>
+
+                @if (getDropCandidateProjectionAsset(selectedCandidate); as outgoingAsset) {
+                  <details class="decision-details outgoing-decision-details">
+                    <summary>Review outgoing player breakdown</summary>
+                    <div class="decision-detail-grid">
+                      <section>
+                        <span class="detail-label">Projection context</span>
+                        <strong>{{ getReliabilityLabel(outgoingAsset) }}</strong>
+                        <p>{{ getScheduleOutlookLabel(outgoingAsset) }}</p>
+                        <p>{{ getExpectedAvailabilityLabel(outgoingAsset) }}</p>
+                      </section>
+                      <section>
+                        <span class="detail-label">Fantasy pace per appearance</span>
+                        <div class="pace-grid">
+                          <span>Season <strong>{{ getSeasonFantasyPointsPerGame(outgoingAsset) }}</strong></span>
+                          <span>Last 3 <strong>{{ getRecentPaceLabel(outgoingAsset, 3) }}</strong></span>
+                          <span>Last 5 <strong>{{ getRecentPaceLabel(outgoingAsset, 5) }}</strong></span>
+                          <span>Last 10 <strong>{{ getRecentPaceLabel(outgoingAsset, 10) }}</strong></span>
+                          <span>Last 20 <strong>{{ getRecentPaceLabel(outgoingAsset, 20) }}</strong></span>
+                        </div>
+                      </section>
+                      <section>
+                        <span class="detail-label">Projection performance</span>
+                        <strong [class]="getPerformanceClass(outgoingAsset)">{{ getPerformanceLabel(outgoingAsset) }}</strong>
+                        <p>{{ getPerformanceDetail(outgoingAsset) }}</p>
+                        <p>{{ getSeasonGamesLabel(outgoingAsset) }}</p>
+                      </section>
+                    </div>
+
+                    @if (getStatBreakdown(outgoingAsset).length > 0) {
+                      <div class="stat-breakdown-grid">
+                        @for (item of getStatBreakdown(outgoingAsset); track item.key) {
+                          <div class="stat-breakdown-item" [attr.title]="item.note || item.label">
+                            <span>{{ item.label }}</span>
+                            <small>{{ getBreakdownStatLabel(item) }}</small>
+                            <strong>{{ item.fantasyPoints >= 0 ? '+' : '' }}{{ item.fantasyPoints.toFixed(1) }} pts</strong>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </details>
+                }
+              </section>
+            }
           }
 
           <section class="mobile-confirm-dock">

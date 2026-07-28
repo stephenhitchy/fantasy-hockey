@@ -19,7 +19,7 @@ import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
 
 import { getPlayerAvailabilityRecordsForLeague } from '../player/player-availability.service';
 
-export const SHARED_PROJECTION_VERSION = 8;
+export const SHARED_PROJECTION_VERSION = 9;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;

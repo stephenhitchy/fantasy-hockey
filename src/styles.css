@@ -2115,3 +2115,17 @@ app-cycle-one .cycle-page .team-matchup-panel .team-summary-row {
   app-cycle-one .mobile-team-theme-meta .team-color-strip { width: 100%; margin-top: 0; }
 }
 
+
+/* Keep the NHL logo ribbon intentionally dark in every page theme.
+ * Light Ice previously recolored these chips to the same pale surface as the
+ * fixed white abbreviation text, which made team labels disappear.
+ */
+body .global-team-ribbon .global-team-logo-chip {
+  border-color: #30465c !important;
+  background: #1b2a3a !important;
+  color: #f4f8fd !important;
+}
+
+body .global-team-ribbon .global-team-logo-chip small {
+  color: #f4f8fd !important;
+}

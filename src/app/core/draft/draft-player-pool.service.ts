@@ -21,7 +21,9 @@ import { calculateGoalieSaveQualityPoints } from '../scoring/scoring-engine';
 
 import {
   DraftableAsset,
-  DraftPosition
+  DraftPosition,
+  ProjectionCycleGameMarker,
+  ProjectionStatBreakdownItem
 } from './draft.models';
 
 import {
@@ -1473,6 +1475,684 @@ function isFinalTeamGame(game: NhlTeamSeasonGame): boolean {
     game.gameState === 'OFF' ||
     game.gameState === 'FINAL' ||
     hasFinalScores
+  );
+}
+
+
+interface SeasonDecisionMetrics {
+  currentSeasonFantasyPoints: number | null;
+  projectedRestOfSeasonPoints: number | null;
+  projectedFinalSeasonPoints: number | null;
+  expectedFantasyPointsToDate: number | null;
+  performanceVsProjectionPoints: number | null;
+  performanceVsProjectionPercent: number | null;
+  seasonTeamGamesPlayed: number | null;
+  seasonGamesRemaining: number | null;
+}
+
+function getRegularSeasonGames(
+  schedule: NhlTeamSeasonGame[]
+): NhlTeamSeasonGame[] {
+  return schedule
+    .filter((game) => game.gameType === 2)
+    .sort((first, second) =>
+      first.gameDate.localeCompare(second.gameDate) ||
+      first.id - second.id
+    );
+}
+
+function getCurrentTeamCycleDecisionData(input: {
+  teamAbbreviation: string;
+  schedule: NhlTeamSeasonGame[];
+  requiredGamesPerCycle: number;
+  appearedGameIds?: ReadonlySet<number>;
+  goalieUnit?: boolean;
+}): {
+  currentTeamCycleNumber: number | null;
+  currentTeamCycleGames: ProjectionCycleGameMarker[];
+} {
+  const requiredGamesPerCycle = Math.max(
+    1,
+    Math.floor(input.requiredGamesPerCycle)
+  );
+  const schedule = getRegularSeasonGames(input.schedule);
+
+  if (schedule.length === 0) {
+    return {
+      currentTeamCycleNumber: null,
+      currentTeamCycleGames: []
+    };
+  }
+
+  const totalCycleCount = Math.max(
+    1,
+    Math.ceil(schedule.length / requiredGamesPerCycle)
+  );
+  let currentCycleNumber = totalCycleCount;
+  let currentCycleGames = schedule.slice(
+    (totalCycleCount - 1) * requiredGamesPerCycle,
+    totalCycleCount * requiredGamesPerCycle
+  );
+
+  for (
+    let cycleIndex = 0;
+    cycleIndex < totalCycleCount;
+    cycleIndex += 1
+  ) {
+    const cycleGames = schedule.slice(
+      cycleIndex * requiredGamesPerCycle,
+      (cycleIndex + 1) * requiredGamesPerCycle
+    );
+
+    if (!cycleGames.every(isFinalTeamGame)) {
+      currentCycleNumber = cycleIndex + 1;
+      currentCycleGames = cycleGames;
+      break;
+    }
+
+    if (cycleIndex === totalCycleCount - 1) {
+      currentCycleNumber = cycleIndex + 2;
+      currentCycleGames = [];
+    }
+  }
+
+  const markers = currentCycleGames.map((game) => {
+    const isHome =
+      game.homeTeam.abbrev === input.teamAbbreviation;
+    const opponentAbbreviation = isHome
+      ? game.awayTeam.abbrev
+      : game.homeTeam.abbrev;
+    let status: ProjectionCycleGameMarker['status'] =
+      'upcoming';
+
+    if (isFinalTeamGame(game)) {
+      status = input.goalieUnit ||
+        input.appearedGameIds?.has(game.id)
+        ? 'played'
+        : 'missed';
+    }
+
+    return {
+      gameId: game.id,
+      gameDate: game.gameDate,
+      opponentAbbreviation,
+      venue: isHome ? 'home' : 'away',
+      status
+    } satisfies ProjectionCycleGameMarker;
+  });
+
+  return {
+    currentTeamCycleNumber: currentCycleNumber,
+    currentTeamCycleGames: markers
+  };
+}
+
+function buildSeasonDecisionMetrics(input: {
+  currentSeasonFantasyPoints: number | null;
+  projectedSeasonPoints: number | null;
+  draftProjectedSeasonPoints: number | null;
+  teamSchedule: NhlTeamSeasonGame[];
+  fallbackGamesPlayed: number | null;
+}): SeasonDecisionMetrics {
+  const regularSeasonGames = getRegularSeasonGames(
+    input.teamSchedule
+  );
+  const seasonLength = regularSeasonGames.length > 0
+    ? regularSeasonGames.length
+    : 82;
+  const teamGamesPlayed = regularSeasonGames.length > 0
+    ? regularSeasonGames.filter(isFinalTeamGame).length
+    : Math.max(0, input.fallbackGamesPlayed ?? 0);
+  const seasonGamesRemaining = Math.max(
+    0,
+    seasonLength - teamGamesPlayed
+  );
+  const currentSeasonFantasyPoints =
+    typeof input.currentSeasonFantasyPoints === 'number'
+      ? input.currentSeasonFantasyPoints
+      : null;
+  const currentOutlook =
+    input.projectedSeasonPoints ??
+    input.draftProjectedSeasonPoints;
+  const baselineOutlook =
+    input.draftProjectedSeasonPoints ??
+    input.projectedSeasonPoints;
+  const projectedRestOfSeasonPoints =
+    typeof currentOutlook === 'number'
+      ? currentOutlook /
+        Math.max(1, seasonLength) *
+        seasonGamesRemaining
+      : null;
+  const projectedFinalSeasonPoints =
+    currentSeasonFantasyPoints !== null &&
+    projectedRestOfSeasonPoints !== null
+      ? currentSeasonFantasyPoints +
+        projectedRestOfSeasonPoints
+      : null;
+  const expectedFantasyPointsToDate =
+    typeof baselineOutlook === 'number'
+      ? baselineOutlook /
+        Math.max(1, seasonLength) *
+        teamGamesPlayed
+      : null;
+  const performanceVsProjectionPoints =
+    currentSeasonFantasyPoints !== null &&
+    expectedFantasyPointsToDate !== null
+      ? currentSeasonFantasyPoints -
+        expectedFantasyPointsToDate
+      : null;
+  const performanceVsProjectionPercent =
+    performanceVsProjectionPoints !== null &&
+    expectedFantasyPointsToDate !== null &&
+    expectedFantasyPointsToDate > 0
+      ? performanceVsProjectionPoints /
+        expectedFantasyPointsToDate *
+        100
+      : null;
+
+  return {
+    currentSeasonFantasyPoints:
+      currentSeasonFantasyPoints === null
+        ? null
+        : roundOneDecimal(currentSeasonFantasyPoints),
+    projectedRestOfSeasonPoints:
+      projectedRestOfSeasonPoints === null
+        ? null
+        : roundOneDecimal(projectedRestOfSeasonPoints),
+    projectedFinalSeasonPoints:
+      projectedFinalSeasonPoints === null
+        ? null
+        : roundOneDecimal(projectedFinalSeasonPoints),
+    expectedFantasyPointsToDate:
+      expectedFantasyPointsToDate === null
+        ? null
+        : roundOneDecimal(expectedFantasyPointsToDate),
+    performanceVsProjectionPoints:
+      performanceVsProjectionPoints === null
+        ? null
+        : roundOneDecimal(performanceVsProjectionPoints),
+    performanceVsProjectionPercent:
+      performanceVsProjectionPercent === null
+        ? null
+        : roundOneDecimal(performanceVsProjectionPercent),
+    seasonTeamGamesPlayed: teamGamesPlayed,
+    seasonGamesRemaining
+  };
+}
+
+function createBreakdownItem(
+  key: string,
+  label: string,
+  statValue: number,
+  statUnit: string,
+  fantasyPoints: number,
+  note?: string
+): ProjectionStatBreakdownItem {
+  return {
+    key,
+    label,
+    statValue: roundOneDecimal(statValue),
+    statUnit,
+    fantasyPoints: roundOneDecimal(fantasyPoints),
+    note: note ?? null
+  };
+}
+
+function buildSkaterSeasonBreakdownFromGames(
+  position: DraftPosition,
+  games: SkaterGameProjectionStats[]
+): ProjectionStatBreakdownItem[] {
+  const positionRules = position === 'D'
+    ? defaultScoringRules.defense
+    : defaultScoringRules.forward;
+  let goals = 0;
+  let assists = 0;
+  let shotsOnGoal = 0;
+  let hits = 0;
+  let blockedShots = 0;
+  let powerPlayPoints = 0;
+  let shortHandedPoints = 0;
+  let gameWinningGoals = 0;
+  let overtimeGoals = 0;
+  let timeOnIceMinutes = 0;
+  let goalFantasyPoints = 0;
+  let primaryAssistFantasyPoints = 0;
+  let secondaryAssistFantasyPoints = 0;
+  let shotFantasyPoints = 0;
+  let hitFantasyPoints = 0;
+  let blockFantasyPoints = 0;
+  let powerPlayFantasyPoints = 0;
+  let shortHandedFantasyPoints = 0;
+  let gameWinningFantasyPoints = 0;
+  let overtimeFantasyPoints = 0;
+  let timeOnIceFantasyPoints = 0;
+
+  for (const game of games) {
+    goals += game.goals;
+    assists += game.assists;
+    shotsOnGoal += game.shotsOnGoal;
+    hits += game.hits;
+    blockedShots += game.blockedShots;
+    powerPlayPoints += game.powerPlayPoints;
+    shortHandedPoints += game.shortHandedPoints;
+    gameWinningGoals += game.gameWinningGoals;
+    overtimeGoals += game.overtimeGoals;
+    timeOnIceMinutes += game.averageTimeOnIceMinutes;
+    goalFantasyPoints += calculateDiminishingGamePoints(
+      game.goals,
+      positionRules.goal
+    );
+    primaryAssistFantasyPoints +=
+      calculateDiminishingGamePoints(
+        game.assists,
+        positionRules.primaryAssist
+      ) * 0.4;
+    secondaryAssistFantasyPoints +=
+      calculateDiminishingGamePoints(
+        game.assists,
+        positionRules.secondaryAssist
+      ) * 0.6;
+    shotFantasyPoints +=
+      game.shotsOnGoal * positionRules.shotOnGoal;
+    hitFantasyPoints +=
+      game.hits * positionRules.hit;
+    blockFantasyPoints +=
+      game.blockedShots * positionRules.blockedShot;
+    powerPlayFantasyPoints +=
+      game.powerPlayPoints *
+      positionRules.powerPlayPoint;
+    shortHandedFantasyPoints +=
+      game.shortHandedPoints *
+      positionRules.shortHandedPoint;
+    gameWinningFantasyPoints +=
+      game.gameWinningGoals *
+      defaultScoringRules.gameWinningGoal;
+    overtimeFantasyPoints +=
+      game.overtimeGoals *
+      defaultScoringRules.overtimeGoal;
+    timeOnIceFantasyPoints +=
+      calculateProjectedToiPoints(
+        position,
+        {
+          averageTimeOnIceMinutes:
+            game.averageTimeOnIceMinutes,
+          plusMinus: game.plusMinus
+        },
+        1
+      );
+  }
+
+  return [
+    createBreakdownItem(
+      'goals',
+      'Goals',
+      goals,
+      'G',
+      goalFantasyPoints
+    ),
+    createBreakdownItem(
+      'primary-assists',
+      'Primary assists',
+      assists * 0.4,
+      'estimated',
+      primaryAssistFantasyPoints,
+      'Projection data estimates 40% of assists as primary.'
+    ),
+    createBreakdownItem(
+      'secondary-assists',
+      'Secondary assists',
+      assists * 0.6,
+      'estimated',
+      secondaryAssistFantasyPoints,
+      'Projection data estimates 60% of assists as secondary.'
+    ),
+    createBreakdownItem(
+      'shots',
+      'Shots on goal',
+      shotsOnGoal,
+      'SOG',
+      shotFantasyPoints
+    ),
+    createBreakdownItem(
+      'hits',
+      'Hits',
+      hits,
+      'HIT',
+      hitFantasyPoints
+    ),
+    createBreakdownItem(
+      'blocks',
+      'Blocked shots',
+      blockedShots,
+      'BLK',
+      blockFantasyPoints
+    ),
+    createBreakdownItem(
+      'power-play',
+      'Power-play points',
+      powerPlayPoints,
+      'PPP',
+      powerPlayFantasyPoints
+    ),
+    createBreakdownItem(
+      'short-handed',
+      'Short-handed points',
+      shortHandedPoints,
+      'SHP',
+      shortHandedFantasyPoints
+    ),
+    createBreakdownItem(
+      'game-winners',
+      'Game-winning goals',
+      gameWinningGoals,
+      'GWG',
+      gameWinningFantasyPoints
+    ),
+    createBreakdownItem(
+      'overtime',
+      'Overtime goals',
+      overtimeGoals,
+      'OTG',
+      overtimeFantasyPoints
+    ),
+    createBreakdownItem(
+      'time-on-ice',
+      'Time on ice',
+      timeOnIceMinutes,
+      'minutes',
+      timeOnIceFantasyPoints,
+      position === 'D'
+        ? 'Defense TOI value includes the scoring model’s bounded role multiplier.'
+        : 'Forward TOI value uses the league scoring multiplier.'
+    )
+  ].filter((item) =>
+    item.statValue > 0 ||
+    Math.abs(item.fantasyPoints) >= 0.05
+  );
+}
+
+function buildSkaterSeasonBreakdownFromStats(
+  position: DraftPosition,
+  stats: Partial<SkaterProjectionStats>
+): ProjectionStatBreakdownItem[] {
+  const positionRules = position === 'D'
+    ? defaultScoringRules.defense
+    : defaultScoringRules.forward;
+  const gamesPlayed = Math.max(1, stats.gamesPlayed ?? 0);
+  const goals = stats.goals ?? 0;
+  const assists = stats.assists ?? 0;
+  const shotsOnGoal = stats.shotsOnGoal ?? 0;
+  const hits = stats.hits ?? 0;
+  const blockedShots = stats.blockedShots ?? 0;
+  const powerPlayPoints = stats.powerPlayPoints ?? 0;
+  const shortHandedPoints = stats.shortHandedPoints ?? 0;
+  const gameWinningGoals = stats.gameWinningGoals ?? 0;
+  const overtimeGoals = stats.overtimeGoals ?? 0;
+  const averageTimeOnIceMinutes = stats.averageTimeOnIceMinutes ?? 0;
+  const estimatedPrimaryAssists = assists * 0.4;
+  const estimatedSecondaryAssists = assists * 0.6;
+
+  return [
+    createBreakdownItem(
+      'goals',
+      'Goals',
+      goals,
+      'G',
+      estimateDiminishingSeasonTotal(
+        goals,
+        gamesPlayed,
+        positionRules.goal
+      )
+    ),
+    createBreakdownItem(
+      'primary-assists',
+      'Primary assists',
+      estimatedPrimaryAssists,
+      'estimated',
+      estimateDiminishingSeasonTotal(
+        estimatedPrimaryAssists,
+        gamesPlayed,
+        positionRules.primaryAssist
+      ),
+      'Projection data estimates 40% of assists as primary.'
+    ),
+    createBreakdownItem(
+      'secondary-assists',
+      'Secondary assists',
+      estimatedSecondaryAssists,
+      'estimated',
+      estimateDiminishingSeasonTotal(
+        estimatedSecondaryAssists,
+        gamesPlayed,
+        positionRules.secondaryAssist
+      ),
+      'Projection data estimates 60% of assists as secondary.'
+    ),
+    createBreakdownItem(
+      'shots',
+      'Shots on goal',
+      shotsOnGoal,
+      'SOG',
+      shotsOnGoal * positionRules.shotOnGoal
+    ),
+    createBreakdownItem(
+      'hits',
+      'Hits',
+      hits,
+      'HIT',
+      hits * positionRules.hit
+    ),
+    createBreakdownItem(
+      'blocks',
+      'Blocked shots',
+      blockedShots,
+      'BLK',
+      blockedShots * positionRules.blockedShot
+    ),
+    createBreakdownItem(
+      'power-play',
+      'Power-play points',
+      powerPlayPoints,
+      'PPP',
+      powerPlayPoints *
+        positionRules.powerPlayPoint
+    ),
+    createBreakdownItem(
+      'short-handed',
+      'Short-handed points',
+      shortHandedPoints,
+      'SHP',
+      shortHandedPoints *
+        positionRules.shortHandedPoint
+    ),
+    createBreakdownItem(
+      'game-winners',
+      'Game-winning goals',
+      gameWinningGoals,
+      'GWG',
+      gameWinningGoals *
+        defaultScoringRules.gameWinningGoal
+    ),
+    createBreakdownItem(
+      'overtime',
+      'Overtime goals',
+      overtimeGoals,
+      'OTG',
+      overtimeGoals *
+        defaultScoringRules.overtimeGoal
+    ),
+    createBreakdownItem(
+      'time-on-ice',
+      'Time on ice',
+      averageTimeOnIceMinutes * gamesPlayed,
+      'minutes',
+      calculateProjectedToiPoints(
+        position,
+        {
+          ...stats,
+          gamesPlayed,
+          goals,
+          assists,
+          shotsOnGoal,
+          hits,
+          blockedShots,
+          powerPlayPoints,
+          shortHandedPoints,
+          gameWinningGoals,
+          overtimeGoals,
+          averageTimeOnIceMinutes,
+          plusMinus: stats.plusMinus ?? 0
+        },
+        gamesPlayed
+      ),
+      'Built from season aggregate NHL statistics.'
+    )
+  ].filter((item) =>
+    item.statValue > 0 ||
+    Math.abs(item.fantasyPoints) >= 0.05
+  );
+}
+
+function buildGoalieSeasonBreakdown(
+  games: GoalieGameProjectionStats[],
+  stats?: Partial<GoalieProjectionStats>
+): ProjectionStatBreakdownItem[] {
+  let gamesPlayed = 0;
+  let saves = 0;
+  let wins = 0;
+  let shutouts = 0;
+  let baseFantasyPoints = 0;
+  let saveFantasyPoints = 0;
+  let qualityFantasyPoints = 0;
+  let winFantasyPoints = 0;
+  let shutoutFantasyPoints = 0;
+  let capAdjustment = 0;
+
+  if (games.length > 0) {
+    for (const game of games) {
+      gamesPlayed += 1;
+      saves += game.saves;
+      wins += game.won ? 1 : 0;
+      shutouts += game.shutout ? 1 : 0;
+      const savePercentage = game.shotsAgainst > 0
+        ? game.saves / game.shotsAgainst
+        : 0;
+      const gameBase =
+        defaultScoringRules.goalieGameBase;
+      const gameSaves =
+        game.saves * defaultScoringRules.goalieSave;
+      const gameQuality =
+        calculateGoalieSaveQualityPoints(
+          savePercentage,
+          defaultScoringRules
+        );
+      const gameWin = game.won
+        ? defaultScoringRules.goalieWin
+        : 0;
+      const gameShutout = game.shutout
+        ? defaultScoringRules.goalieShutout
+        : 0;
+      const uncapped = gameBase + gameSaves +
+        gameQuality + gameWin + gameShutout;
+      const capped = Math.min(
+        defaultScoringRules.goalieGameMaximum,
+        uncapped
+      );
+
+      baseFantasyPoints += gameBase;
+      saveFantasyPoints += gameSaves;
+      qualityFantasyPoints += gameQuality;
+      winFantasyPoints += gameWin;
+      shutoutFantasyPoints += gameShutout;
+      capAdjustment += capped - uncapped;
+    }
+  } else if (stats && (stats.gamesPlayed ?? 0) > 0) {
+    gamesPlayed = stats.gamesPlayed ?? 0;
+    saves = stats.saves ?? 0;
+    wins = stats.wins ?? 0;
+    shutouts = stats.shutouts ?? 0;
+    const shotsAgainst = stats.shotsAgainst ?? 0;
+    const savePercentage = shotsAgainst > 0
+      ? saves / shotsAgainst
+      : 0;
+    baseFantasyPoints =
+      gamesPlayed * defaultScoringRules.goalieGameBase;
+    saveFantasyPoints =
+      saves * defaultScoringRules.goalieSave;
+    qualityFantasyPoints =
+      gamesPlayed * calculateGoalieSaveQualityPoints(
+        savePercentage,
+        defaultScoringRules
+      );
+    winFantasyPoints =
+      wins * defaultScoringRules.goalieWin;
+    shutoutFantasyPoints =
+      shutouts * defaultScoringRules.goalieShutout;
+    const uncapped = baseFantasyPoints +
+      saveFantasyPoints + qualityFantasyPoints +
+      winFantasyPoints + shutoutFantasyPoints;
+    capAdjustment = Math.min(
+      uncapped,
+      gamesPlayed *
+        defaultScoringRules.goalieGameMaximum
+    ) - uncapped;
+  }
+
+  const items = [
+    createBreakdownItem(
+      'goalie-games',
+      'Goalie games',
+      gamesPlayed,
+      'GP',
+      baseFantasyPoints
+    ),
+    createBreakdownItem(
+      'saves',
+      'Saves',
+      saves,
+      'SV',
+      saveFantasyPoints
+    ),
+    createBreakdownItem(
+      'save-quality',
+      'Save quality',
+      gamesPlayed,
+      'games',
+      qualityFantasyPoints,
+      'Calculated game by game from save percentage when game rows are available.'
+    ),
+    createBreakdownItem(
+      'wins',
+      'Wins',
+      wins,
+      'W',
+      winFantasyPoints
+    ),
+    createBreakdownItem(
+      'shutouts',
+      'Shutouts',
+      shutouts,
+      'SO',
+      shutoutFantasyPoints
+    )
+  ];
+
+  if (Math.abs(capAdjustment) >= 0.05) {
+    items.push(
+      createBreakdownItem(
+        'game-cap',
+        'Per-game scoring cap',
+        gamesPlayed,
+        'games checked',
+        capAdjustment,
+        'Negative adjustment applied when an individual goalie game exceeds the league maximum.'
+      )
+    );
+  }
+
+  return items.filter((item) =>
+    item.statValue > 0 ||
+    Math.abs(item.fantasyPoints) >= 0.05
   );
 }
 
@@ -3334,16 +4014,18 @@ export async function loadDraftPlayerPool(
           })
         : NEUTRAL_PROJECTION_SCHEDULE_CONTEXT;
 
+      const currentStats =
+        currentSkaterProjectionStats.get(skater.id);
+      const currentGames =
+        currentSkaterGameStats.get(skater.id) ?? [];
       const baseProjection = calculateSkaterProjection({
         position: skater.position,
-        currentStats:
-          currentSkaterProjectionStats.get(skater.id),
+        currentStats,
         previousStats:
           previousSkaterProjectionStats.get(skater.id),
         secondPreviousStats:
           secondPreviousSkaterProjectionStats.get(skater.id),
-        currentGames:
-          currentSkaterGameStats.get(skater.id) ?? [],
+        currentGames,
         previousGames:
           previousSkaterGameStats.get(skater.id) ?? [],
         currentSeason,
@@ -3365,6 +4047,56 @@ export async function loadDraftPlayerPool(
         options.targetCycleNumber,
         0.22
       );
+      const seasonStatBreakdown = currentGames.length > 0
+        ? buildSkaterSeasonBreakdownFromGames(
+            skater.position,
+            currentGames
+          )
+        : currentStats && (currentStats.gamesPlayed ?? 0) > 0
+          ? buildSkaterSeasonBreakdownFromStats(
+              skater.position,
+              currentStats
+            )
+          : [];
+      const currentSeasonFantasyPoints =
+        currentGames.length > 0
+          ? currentGames.reduce(
+              (total, game) =>
+                total + calculateSkaterGameFantasyPoints(
+                  skater.position,
+                  game
+                ),
+              0
+            )
+          : currentStats && (currentStats.gamesPlayed ?? 0) > 0
+            ? calculateSkaterRawFantasyPoints(
+                skater.position,
+                currentStats,
+                currentStats.gamesPlayed ?? 0
+              )
+            : null;
+      const seasonDecisionMetrics =
+        buildSeasonDecisionMetrics({
+          currentSeasonFantasyPoints,
+          projectedSeasonPoints:
+            projection.projectedSeasonPoints,
+          draftProjectedSeasonPoints:
+            projection.draftProjectedSeasonPoints,
+          teamSchedule: currentTeamSchedule,
+          fallbackGamesPlayed:
+            currentStats?.gamesPlayed ?? null
+        });
+      const currentCycleDecision =
+        getCurrentTeamCycleDecisionData({
+          teamAbbreviation:
+            skater.nhlTeamAbbreviation,
+          schedule: currentTeamSchedule,
+          requiredGamesPerCycle:
+            options.requiredGamesPerCycle,
+          appearedGameIds: new Set(
+            currentGames.map((game) => game.gameId)
+          )
+        });
 
       return {
         assetType: 'skater',
@@ -3374,6 +4106,33 @@ export async function loadDraftPlayerPool(
           projection.projectedSeasonPoints,
         projectedCyclePoints:
           projection.projectedCyclePoints,
+        currentSeasonFantasyPoints:
+          seasonDecisionMetrics.currentSeasonFantasyPoints,
+        projectedRestOfSeasonPoints:
+          seasonDecisionMetrics.projectedRestOfSeasonPoints,
+        projectedFinalSeasonPoints:
+          seasonDecisionMetrics.projectedFinalSeasonPoints,
+        expectedFantasyPointsToDate:
+          seasonDecisionMetrics.expectedFantasyPointsToDate,
+        performanceVsProjectionPoints:
+          seasonDecisionMetrics.performanceVsProjectionPoints,
+        performanceVsProjectionPercent:
+          seasonDecisionMetrics.performanceVsProjectionPercent,
+        seasonTeamGamesPlayed:
+          seasonDecisionMetrics.seasonTeamGamesPlayed,
+        seasonGamesRemaining:
+          seasonDecisionMetrics.seasonGamesRemaining,
+        seasonStatBreakdown,
+        seasonStatBreakdownNote:
+          currentGames.length > 0
+            ? 'Fantasy points are rebuilt from current-season NHL game rows. Primary and secondary assist values use the projection model’s estimated split.'
+            : currentStats && (currentStats.gamesPlayed ?? 0) > 0
+              ? 'Fantasy points are estimated from current-season aggregate NHL statistics because game-by-game rows were unavailable.'
+              : null,
+        currentTeamCycleNumber:
+          currentCycleDecision.currentTeamCycleNumber,
+        currentTeamCycleGames:
+          currentCycleDecision.currentTeamCycleGames,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:
@@ -3509,11 +4268,16 @@ export async function loadDraftPlayerPool(
           })
         : NEUTRAL_PROJECTION_SCHEDULE_CONTEXT;
 
+      const currentStats =
+        currentGoalieProjectionStats.get(
+          club.abbreviation
+        );
+      const currentGames =
+        currentGoalieGameStats.get(
+          club.abbreviation
+        ) ?? [];
       const baseProjection = calculateGoalieUnitProjection({
-        currentStats:
-          currentGoalieProjectionStats.get(
-            club.abbreviation
-          ),
+        currentStats,
         previousStats:
           previousGoalieProjectionStats.get(
             club.abbreviation
@@ -3522,10 +4286,7 @@ export async function loadDraftPlayerPool(
           secondPreviousGoalieProjectionStats.get(
             club.abbreviation
           ),
-        currentGames:
-          currentGoalieGameStats.get(
-            club.abbreviation
-          ) ?? [],
+        currentGames,
         previousGames:
           previousGoalieGameStats.get(
             club.abbreviation
@@ -3544,6 +4305,40 @@ export async function loadDraftPlayerPool(
         options.targetCycleNumber,
         0.18
       );
+      const seasonStatBreakdown =
+        buildGoalieSeasonBreakdown(
+          currentGames,
+          currentStats
+        );
+      const currentSeasonFantasyPoints =
+        currentGames.length > 0
+          ? calculateGoalieFantasyPointsFromGames(
+              currentGames
+            )
+          : currentStats && (currentStats.gamesPlayed ?? 0) > 0
+            ? calculateGoalieRawFantasyPoints(
+                currentStats
+              )
+            : null;
+      const seasonDecisionMetrics =
+        buildSeasonDecisionMetrics({
+          currentSeasonFantasyPoints,
+          projectedSeasonPoints:
+            projection.projectedSeasonPoints,
+          draftProjectedSeasonPoints:
+            projection.draftProjectedSeasonPoints,
+          teamSchedule: currentTeamSchedule,
+          fallbackGamesPlayed:
+            currentStats?.gamesPlayed ?? null
+        });
+      const currentCycleDecision =
+        getCurrentTeamCycleDecisionData({
+          teamAbbreviation: club.abbreviation,
+          schedule: currentTeamSchedule,
+          requiredGamesPerCycle:
+            options.requiredGamesPerCycle,
+          goalieUnit: true
+        });
 
       return {
         assetType: 'team-goalie-unit',
@@ -3558,6 +4353,33 @@ export async function loadDraftPlayerPool(
           projection.projectedSeasonPoints,
         projectedCyclePoints:
           projection.projectedCyclePoints,
+        currentSeasonFantasyPoints:
+          seasonDecisionMetrics.currentSeasonFantasyPoints,
+        projectedRestOfSeasonPoints:
+          seasonDecisionMetrics.projectedRestOfSeasonPoints,
+        projectedFinalSeasonPoints:
+          seasonDecisionMetrics.projectedFinalSeasonPoints,
+        expectedFantasyPointsToDate:
+          seasonDecisionMetrics.expectedFantasyPointsToDate,
+        performanceVsProjectionPoints:
+          seasonDecisionMetrics.performanceVsProjectionPoints,
+        performanceVsProjectionPercent:
+          seasonDecisionMetrics.performanceVsProjectionPercent,
+        seasonTeamGamesPlayed:
+          seasonDecisionMetrics.seasonTeamGamesPlayed,
+        seasonGamesRemaining:
+          seasonDecisionMetrics.seasonGamesRemaining,
+        seasonStatBreakdown,
+        seasonStatBreakdownNote:
+          currentGames.length > 0
+            ? 'Goalie-unit points are rebuilt game by game, including save quality and any per-game cap adjustment.'
+            : currentStats && (currentStats.gamesPlayed ?? 0) > 0
+              ? 'Goalie-unit points are estimated from current-season aggregate NHL statistics because game-by-game rows were unavailable.'
+              : null,
+        currentTeamCycleNumber:
+          currentCycleDecision.currentTeamCycleNumber,
+        currentTeamCycleGames:
+          currentCycleDecision.currentTeamCycleGames,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:

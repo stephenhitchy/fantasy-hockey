@@ -1,0 +1,50 @@
+RINKRAT ADD/DROP DECISION CENTER UPDATE
+July 28, 2026
+
+LIGHT ICE CONTRAST
+- The scrolling NHL logo ribbon now remains intentionally dark in every site theme.
+- Team abbreviation text stays white against the dark logo chips, fixing the nearly invisible labels in Light Ice.
+- The Free Agents / Add-Drop workspace now uses a stable dark decision surface in every theme.
+- Search, position, sort controls, headings, helper text, player rows, and roster-slot comparison panels retain strong contrast.
+
+FREE-AGENT DECISION DATA
+Each free agent and waiver player now shows:
+- Current NHL-team six-game cycle number.
+- Six game markers:
+  green = player appeared and the game counted,
+  red = the NHL team played but the player missed the game,
+  yellow = upcoming scheduled game.
+- Current-season fantasy points.
+- Projected fantasy points for the rest of the regular season.
+- Next-cycle projection.
+- Estimated final-season fantasy total.
+- Ahead / behind / on-pace comparison against the stable draft projection.
+- Next-cycle rank.
+
+Expandable decision details include:
+- Projection reliability.
+- Upcoming schedule difficulty and point adjustment.
+- Expected availability within the next six-game window.
+- Projection data source.
+- Season, last-3, last-5, last-10, and last-20 fantasy-point pace.
+- NHL appearance and team-game sample sizes.
+- Category-by-category fantasy point breakdown.
+
+The point breakdown is exact from current-season game rows when those rows are available. The NHL projection feed does not distinguish primary from secondary assists, so the assist split is explicitly labeled as an estimate. Aggregate-stat fallback is also labeled when game rows are unavailable.
+
+ADD VERSUS DROP COMPARISON
+- Roster-slot choices now show the outgoing player's season points, next-cycle projection, and projection-performance indicator.
+- Selecting a slot opens a side-by-side incoming/outgoing comparison.
+- The comparison shows season points, rest-of-season estimate, next-cycle projection, estimated final total, and the projected gain or loss created by the move.
+- The outgoing player's detailed pace, reliability, availability, schedule, and stat breakdown can be expanded before confirming.
+- Open slots are clearly identified as removing no player value.
+
+RESPONSIVE DESIGN
+- Desktop keeps the full decision grid visible.
+- Tablet stacks action and comparison areas while preserving the important metrics.
+- Phone view keeps the cycle markers, four core projections, performance status, and confirmation flow visible; deeper pace and stat details remain available through expandable sections.
+
+PROJECTION SNAPSHOT VERSION
+- Shared projection schema version increased from 8 to 9.
+- Version 9 adds decision fields, current-cycle markers, and stat breakdowns to shared projection assets.
+- Existing version-8 snapshots are considered stale and should regenerate through the normal projection refresh path.

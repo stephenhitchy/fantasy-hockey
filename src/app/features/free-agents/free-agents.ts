@@ -6,7 +6,13 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../core/firebase';
 
-import { DraftableAsset, DraftPosition, FantasyDraft } from '../../core/draft/draft.models';
+import {
+  DraftableAsset,
+  DraftPosition,
+  FantasyDraft,
+  ProjectionCycleGameMarker,
+  ProjectionStatBreakdownItem,
+} from '../../core/draft/draft.models';
 
 import {
   addDropRosterAsset,
@@ -56,6 +62,13 @@ import {
 } from '../../core/transactions/roster-move-eligibility.service';
 
 type FreeAgentPositionFilter = 'ALL' | DraftPosition;
+type FreeAgentSortMode =
+  | 'NEXT_CYCLE'
+  | 'SEASON_POINTS'
+  | 'REST_OF_SEASON'
+  | 'FINAL_OUTLOOK'
+  | 'PERFORMANCE'
+  | 'RELIABILITY';
 type FreeAgentFlowStep = 'player-pool' | 'roster-slot';
 
 interface DropCandidate {
@@ -114,6 +127,7 @@ export class FreeAgents implements OnDestroy {
 
   searchTerm = signal('');
   positionFilter = signal<FreeAgentPositionFilter>('ALL');
+  sortMode = signal<FreeAgentSortMode>('NEXT_CYCLE');
 
   selectedAddAssetKey = signal('');
   selectedWaiverId = signal('');
@@ -124,6 +138,15 @@ export class FreeAgents implements OnDestroy {
   eligibilityError = signal('');
 
   readonly positionFilters: FreeAgentPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
+  readonly cycleDotSlots = [0, 1, 2, 3, 4, 5];
+  readonly sortOptions: Array<{ value: FreeAgentSortMode; label: string }> = [
+    { value: 'NEXT_CYCLE', label: 'Next Cycle Projection' },
+    { value: 'SEASON_POINTS', label: 'Season Points' },
+    { value: 'REST_OF_SEASON', label: 'Rest-of-Season Estimate' },
+    { value: 'FINAL_OUTLOOK', label: 'Estimated Final Total' },
+    { value: 'PERFORMANCE', label: 'Ahead of Projection' },
+    { value: 'RELIABILITY', label: 'Projection Reliability' },
+  ];
 
   private stopDraftListener: (() => void) | null = null;
   private stopTeamsListener: (() => void) | null = null;
@@ -264,23 +287,7 @@ export class FreeAgents implements OnDestroy {
           .toLowerCase()
           .includes(search);
       })
-      .sort((first, second) => {
-        const firstRank = first.cycleRank ?? 9999;
-        const secondRank = second.cycleRank ?? 9999;
-
-        if (firstRank !== secondRank) {
-          return firstRank - secondRank;
-        }
-
-        const firstProjection = first.projectedCyclePoints ?? -1;
-        const secondProjection = second.projectedCyclePoints ?? -1;
-
-        if (secondProjection !== firstProjection) {
-          return secondProjection - firstProjection;
-        }
-
-        return this.getAssetName(first).localeCompare(this.getAssetName(second));
-      });
+      .sort((first, second) => this.compareAvailableAssets(first, second));
   });
 
   readonly dropCandidates = computed((): DropCandidate[] => {
@@ -498,6 +505,15 @@ export class FreeAgents implements OnDestroy {
 
     if (validFilters.includes(value as FreeAgentPositionFilter)) {
       this.positionFilter.set(value as FreeAgentPositionFilter);
+    }
+  }
+
+
+  setSortMode(value: string): void {
+    const validModes = this.sortOptions.map((option) => option.value);
+
+    if (validModes.includes(value as FreeAgentSortMode)) {
+      this.sortMode.set(value as FreeAgentSortMode);
     }
   }
 
@@ -838,6 +854,55 @@ export class FreeAgents implements OnDestroy {
     return this.playerPool().find((poolAsset) => poolAsset.assetKey === asset.assetKey) ?? asset;
   }
 
+  getDropCandidateProjectionAsset(candidate: DropCandidate | null): DraftableAsset | null {
+    const assetKey = this.getRosterAssetKey(candidate?.asset ?? null);
+
+    if (!assetKey) {
+      return null;
+    }
+
+    return this.playerPool().find((asset) => asset.assetKey === assetKey) ?? null;
+  }
+
+  getSelectedOutgoingProjectionAsset(): DraftableAsset | null {
+    return this.getDropCandidateProjectionAsset(this.selectedDropCandidate());
+  }
+
+  getMoveProjectionDeltaLabel(metric: 'NEXT_CYCLE' | 'REST_OF_SEASON'): string {
+    const incoming = this.selectedAddAsset();
+    const outgoing = this.getSelectedOutgoingProjectionAsset();
+
+    if (!incoming) {
+      return 'Select an incoming player to compare the move.';
+    }
+
+    if (!outgoing) {
+      return 'Open slot — no outgoing player projection is removed.';
+    }
+
+    const incomingProjection = this.getProjectionAsset(incoming);
+    const outgoingProjection = this.getProjectionAsset(outgoing);
+    const incomingValue = metric === 'NEXT_CYCLE'
+      ? incomingProjection.projectedCyclePoints
+      : incomingProjection.projectedRestOfSeasonPoints;
+    const outgoingValue = metric === 'NEXT_CYCLE'
+      ? outgoingProjection.projectedCyclePoints
+      : outgoingProjection.projectedRestOfSeasonPoints;
+
+    if (typeof incomingValue !== 'number' || typeof outgoingValue !== 'number') {
+      return metric === 'NEXT_CYCLE'
+        ? 'Next-cycle comparison unavailable'
+        : 'Rest-of-season comparison unavailable';
+    }
+
+    const difference = incomingValue - outgoingValue;
+    const direction = difference >= 0 ? 'Gain' : 'Lose';
+
+    return `${direction} ${Math.abs(difference).toFixed(1)} projected ${
+      metric === 'NEXT_CYCLE' ? 'next-cycle' : 'rest-of-season'
+    } points`;
+  }
+
   getRecentFormAdjustment(asset: DraftableAsset): number | null {
     const projectionAsset = this.getProjectionAsset(asset);
 
@@ -880,6 +945,249 @@ export class FreeAgents implements OnDestroy {
       this.getProjectionAsset(asset).balancedRank ??
       null
     );
+  }
+
+
+  getCurrentTeamCycleNumber(asset: DraftableAsset): number | null {
+    const projectionAsset = this.getProjectionAsset(asset);
+
+    return (
+      projectionAsset.currentTeamCycleNumber ??
+      projectionAsset.targetProjectionCycleNumber ??
+      null
+    );
+  }
+
+  getCurrentCycleMarker(
+    asset: DraftableAsset,
+    index: number,
+  ): ProjectionCycleGameMarker | null {
+    return this.getProjectionAsset(asset).currentTeamCycleGames?.[index] ?? null;
+  }
+
+  getCycleMarkerClass(marker: ProjectionCycleGameMarker | null): string {
+    if (!marker) {
+      return 'cycle-marker-unavailable';
+    }
+
+    return `cycle-marker-${marker.status}`;
+  }
+
+  getCycleMarkerTooltip(
+    marker: ProjectionCycleGameMarker | null,
+    index: number,
+  ): string {
+    if (!marker) {
+      return `Game ${index + 1}: refresh shared projections for live cycle status.`;
+    }
+
+    const venue = marker.venue === 'home' ? 'vs' : '@';
+    const status =
+      marker.status === 'played'
+        ? 'played and counted'
+        : marker.status === 'missed'
+          ? 'team played; player missed'
+          : 'upcoming';
+
+    return `Game ${index + 1}: ${marker.gameDate} ${venue} ${marker.opponentAbbreviation} — ${status}.`;
+  }
+
+  getCycleProgressLabel(asset: DraftableAsset): string {
+    const markers = this.getProjectionAsset(asset).currentTeamCycleGames ?? [];
+
+    if (markers.length === 0) {
+      return 'Cycle schedule refresh needed';
+    }
+
+    const played = markers.filter((marker) => marker.status === 'played').length;
+    const missed = markers.filter((marker) => marker.status === 'missed').length;
+    const upcoming = markers.filter((marker) => marker.status === 'upcoming').length;
+
+    return `${played} played · ${missed} missed · ${upcoming} upcoming`;
+  }
+
+  getCurrentSeasonPoints(asset: DraftableAsset): number | null {
+    return this.getProjectionAsset(asset).currentSeasonFantasyPoints ?? null;
+  }
+
+  getRestOfSeasonProjection(asset: DraftableAsset): number | null {
+    return this.getProjectionAsset(asset).projectedRestOfSeasonPoints ?? null;
+  }
+
+  getProjectedFinalSeasonPoints(asset: DraftableAsset): number | null {
+    return this.getProjectionAsset(asset).projectedFinalSeasonPoints ?? null;
+  }
+
+  getSeasonGamesLabel(asset: DraftableAsset): string {
+    const projectionAsset = this.getProjectionAsset(asset);
+    const appearances = projectionAsset.projectionGamesPlayed;
+    const teamGames = projectionAsset.seasonTeamGamesPlayed;
+    const remaining = projectionAsset.seasonGamesRemaining;
+
+    if (typeof teamGames !== 'number' && typeof appearances !== 'number') {
+      return 'Season sample unavailable';
+    }
+
+    const pieces: string[] = [];
+
+    if (typeof appearances === 'number') {
+      pieces.push(`${appearances} appearances`);
+    }
+
+    if (typeof teamGames === 'number') {
+      pieces.push(`${teamGames} team games`);
+    }
+
+    if (typeof remaining === 'number') {
+      pieces.push(`${remaining} remaining`);
+    }
+
+    return pieces.join(' · ');
+  }
+
+  getPerformanceClass(asset: DraftableAsset): string {
+    const percent = this.getProjectionAsset(asset).performanceVsProjectionPercent;
+
+    if (typeof percent !== 'number' || Math.abs(percent) < 5) {
+      return 'performance-even';
+    }
+
+    return percent > 0 ? 'performance-ahead' : 'performance-behind';
+  }
+
+  getPerformanceLabel(asset: DraftableAsset): string {
+    const projectionAsset = this.getProjectionAsset(asset);
+    const percent = projectionAsset.performanceVsProjectionPercent;
+    const points = projectionAsset.performanceVsProjectionPoints;
+
+    if (typeof percent !== 'number' || typeof points !== 'number') {
+      return 'Projection pace unavailable';
+    }
+
+    if (Math.abs(percent) < 5) {
+      return `On pace (${points >= 0 ? '+' : ''}${points.toFixed(1)} pts)`;
+    }
+
+    return `${Math.abs(percent).toFixed(0)}% ${percent > 0 ? 'ahead' : 'behind'} (${points >= 0 ? '+' : ''}${points.toFixed(1)} pts)`;
+  }
+
+  getPerformanceDetail(asset: DraftableAsset): string {
+    const expected = this.getProjectionAsset(asset).expectedFantasyPointsToDate;
+
+    return typeof expected === 'number'
+      ? `${expected.toFixed(1)} points were expected through the NHL team games completed so far.`
+      : 'A stable draft projection was not available for a pace comparison.';
+  }
+
+  getProjectionReliability(asset: DraftableAsset): number | null {
+    const projectionAsset = this.getProjectionAsset(asset);
+
+    return projectionAsset.reliabilityRating ?? projectionAsset.draftReliabilityRating ?? null;
+  }
+
+  getReliabilityLabel(asset: DraftableAsset): string {
+    const reliability = this.getProjectionReliability(asset);
+
+    if (typeof reliability !== 'number') {
+      return 'Reliability unavailable';
+    }
+
+    if (reliability >= 82) {
+      return `${reliability.toFixed(0)}/100 · High confidence`;
+    }
+
+    if (reliability >= 65) {
+      return `${reliability.toFixed(0)}/100 · Moderate confidence`;
+    }
+
+    return `${reliability.toFixed(0)}/100 · Volatile outlook`;
+  }
+
+  getScheduleOutlookLabel(asset: DraftableAsset): string {
+    const projectionAsset = this.getProjectionAsset(asset);
+    const label = projectionAsset.scheduleDifficultyLabel;
+    const adjustment = projectionAsset.scheduleStrengthAdjustment;
+
+    if (!label && typeof adjustment !== 'number') {
+      return 'Schedule outlook unavailable';
+    }
+
+    const adjustmentLabel =
+      typeof adjustment === 'number'
+        ? ` (${adjustment >= 0 ? '+' : ''}${adjustment.toFixed(1)} pts)`
+        : '';
+
+    return `${label ?? 'Neutral schedule'}${adjustmentLabel}`;
+  }
+
+  getExpectedAvailabilityLabel(asset: DraftableAsset): string {
+    const projectionAsset = this.getProjectionAsset(asset);
+    const expected = projectionAsset.expectedGamesAvailable;
+    const scheduled = projectionAsset.scheduledGamesInProjectionCycle;
+
+    if (typeof expected !== 'number' || typeof scheduled !== 'number') {
+      return 'Expected availability unavailable';
+    }
+
+    return `${expected.toFixed(1)} of ${scheduled} games expected`;
+  }
+
+  getRecentPaceLabel(asset: DraftableAsset, window: 3 | 5 | 10 | 20): string {
+    const projectionAsset = this.getProjectionAsset(asset);
+    const value =
+      window === 3
+        ? projectionAsset.recentThreeGameFantasyPointsPerGame
+        : window === 5
+          ? projectionAsset.recentFiveGameFantasyPointsPerGame
+          : window === 10
+            ? projectionAsset.recentTenGameFantasyPointsPerGame
+            : projectionAsset.recentTwentyGameFantasyPointsPerGame;
+
+    return typeof value === 'number' ? value.toFixed(1) : '—';
+  }
+
+  getSeasonFantasyPointsPerGame(asset: DraftableAsset): string {
+    const value = this.getProjectionAsset(asset).seasonFantasyPointsPerGame;
+
+    return typeof value === 'number' ? value.toFixed(1) : '—';
+  }
+
+  getStatBreakdown(asset: DraftableAsset): ProjectionStatBreakdownItem[] {
+    return this.getProjectionAsset(asset).seasonStatBreakdown ?? [];
+  }
+
+  getStatBreakdownNote(asset: DraftableAsset): string {
+    return (
+      this.getProjectionAsset(asset).seasonStatBreakdownNote ??
+      'Refresh shared projections to load the current-season point breakdown.'
+    );
+  }
+
+  getBreakdownStatLabel(item: ProjectionStatBreakdownItem): string {
+    const value = Number.isInteger(item.statValue)
+      ? item.statValue.toFixed(0)
+      : item.statValue.toFixed(1);
+
+    return `${value} ${item.statUnit}`;
+  }
+
+  getProjectionSourceLabel(asset: DraftableAsset): string {
+    const source = this.getProjectionAsset(asset).projectionDataSource;
+
+    switch (source) {
+      case 'current-season-form':
+        return 'Current season + recent form';
+      case 'current-season-baseline':
+        return 'Current-season baseline';
+      case 'previous-season-form':
+        return 'Previous season + recent form';
+      case 'previous-season-baseline':
+        return 'Previous-season baseline';
+      case 'conservative-baseline':
+        return 'Conservative position baseline';
+      default:
+        return 'Projection source unavailable';
+    }
   }
 
   getDraftStatusText(): string {
@@ -1428,6 +1736,55 @@ export class FreeAgents implements OnDestroy {
 
   private getFallbackNextCycleNumber(): number {
     return (this.latestCycle()?.cycleNumber ?? 0) + 1;
+  }
+
+  private compareAvailableAssets(first: DraftableAsset, second: DraftableAsset): number {
+    const firstAsset = this.getProjectionAsset(first);
+    const secondAsset = this.getProjectionAsset(second);
+    let firstValue = -Infinity;
+    let secondValue = -Infinity;
+
+    switch (this.sortMode()) {
+      case 'SEASON_POINTS':
+        firstValue = firstAsset.currentSeasonFantasyPoints ?? -Infinity;
+        secondValue = secondAsset.currentSeasonFantasyPoints ?? -Infinity;
+        break;
+      case 'REST_OF_SEASON':
+        firstValue = firstAsset.projectedRestOfSeasonPoints ?? -Infinity;
+        secondValue = secondAsset.projectedRestOfSeasonPoints ?? -Infinity;
+        break;
+      case 'FINAL_OUTLOOK':
+        firstValue = firstAsset.projectedFinalSeasonPoints ?? -Infinity;
+        secondValue = secondAsset.projectedFinalSeasonPoints ?? -Infinity;
+        break;
+      case 'PERFORMANCE':
+        firstValue = firstAsset.performanceVsProjectionPercent ?? -Infinity;
+        secondValue = secondAsset.performanceVsProjectionPercent ?? -Infinity;
+        break;
+      case 'RELIABILITY':
+        firstValue = this.getProjectionReliability(first) ?? -Infinity;
+        secondValue = this.getProjectionReliability(second) ?? -Infinity;
+        break;
+      case 'NEXT_CYCLE':
+      default: {
+        const firstRank = firstAsset.cycleRank ?? 9999;
+        const secondRank = secondAsset.cycleRank ?? 9999;
+
+        if (firstRank !== secondRank) {
+          return firstRank - secondRank;
+        }
+
+        firstValue = firstAsset.projectedCyclePoints ?? -Infinity;
+        secondValue = secondAsset.projectedCyclePoints ?? -Infinity;
+        break;
+      }
+    }
+
+    if (secondValue !== firstValue) {
+      return secondValue - firstValue;
+    }
+
+    return this.getAssetName(first).localeCompare(this.getAssetName(second));
   }
 
   private refreshRosterListeners(teams: FantasyTeam[]): void {

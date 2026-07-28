@@ -592,3 +592,21 @@ Theme-aware compatibility rules now keep legacy draft headings, labels, controls
 
 The detailed Cycle matchup header now displays each manager's selected NHL identity logo, selected variant label, and a three-color identity strip. The logo follows the exact current, away, retro, alternate, or special identity selected on the account page. The color strip makes home and away identities visibly different even when both managers choose the same NHL team and therefore share the same primary crest. The selected palette also lightly tints that manager's matchup summary while roster content remains on readable neutral surfaces.
 
+
+ADD/DROP DECISION CENTER AND LIGHT ICE CONTRAST (JULY 28, 2026)
+----------------------------------------------------------------
+The global NHL logo ribbon remains a fixed dark presentation in every background theme so its white team abbreviations never disappear on Light Ice. The Free Agents page also uses a stable dark decision surface across all themes, including its search, position, sort controls, roster-slot cards, and comparison panels.
+
+Shared projection version 9 adds manager-facing add/drop decision data to each skater and goalie-unit asset: current-season fantasy points, rest-of-season estimate, estimated final total, expected points to date, over/under projection values, current NHL-team six-game cycle number, six played/missed/upcoming game markers, and a category-by-category point breakdown. A green marker means the player appeared, red means the NHL team played while the player missed, and yellow means the game is upcoming.
+
+The Free Agents page now supports sorting by next-cycle projection, season points, rest-of-season estimate, final outlook, projection performance, or reliability. Expandable details show recent fantasy pace, reliability, schedule difficulty, expected availability, sample size, projection source, and scoring breakdown. The roster-slot step also compares the incoming player directly with the selected outgoing player and calculates the projected next-cycle and rest-of-season gain or loss. Mobile keeps the core metrics visible and places lower-priority detail inside expandable sections.
+
+Important files:
+  src/app/core/draft/draft.models.ts
+  src/app/core/draft/draft-player-pool.service.ts
+  src/app/core/projection/projection-snapshot.service.ts
+  src/app/features/free-agents/free-agents.ts
+  src/app/features/free-agents/free-agents.html
+  src/app/features/free-agents/free-agents.css
+  src/styles.css
+  ADD_DROP_DECISION_CENTER_UPDATE.txt

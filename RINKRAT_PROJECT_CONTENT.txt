@@ -585,3 +585,14 @@ Validation command:
 Keep IDs stable because they are stored in league member and team documents. New future categories
 should be added centrally to profile-icon.data.ts, mirrored in the Firestore allowlist, and added
 to the asset validator.
+
+=====================================================================
+ADD/DROP DECISION CENTER AND LIGHT ICE CONTRAST (JULY 28, 2026)
+=====================================================================
+The global NHL logo ribbon stays dark in every theme so Light Ice cannot turn its team abbreviations into white-on-white text. The Free Agents page uses a fixed high-contrast dark workspace for filters, player rows, roster slots, and add/drop comparisons.
+
+Shared projection version 9 adds current-season fantasy production, rest-of-season and final estimates, projection-performance comparison, six-game current-cycle markers, and scoring-category breakdowns. Free-agent cards show green played markers, red missed markers, yellow upcoming markers, four core projection values, next-cycle rank, and an over/under projection indicator. Expandable desktop/mobile details include recent pace, reliability, availability, schedule outlook, sample size, projection source, and stat-level scoring.
+
+The roster-slot step includes outgoing-player metrics and a direct incoming-versus-outgoing comparison, including projected next-cycle and rest-of-season gain/loss. Lower-priority details collapse on smaller screens while the core decision data remains visible.
+
+See ADD_DROP_DECISION_CENTER_UPDATE.txt for the full implementation summary.
