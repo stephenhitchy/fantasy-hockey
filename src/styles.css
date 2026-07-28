@@ -1791,3 +1791,327 @@ body :where(
   min-width: 0;
   gap: 2px;
 }
+
+/* Theme contrast compatibility layer.
+ * Legacy feature styles used light-only text values. These overrides keep
+ * headings, controls, and supporting copy readable in every background preset.
+ */
+body :where(.desktop-navbar, .mobile-topbar, .mobile-bottom-nav, .mobile-menu-panel) {
+  background: #111c29 !important;
+  color: #ffffff !important;
+}
+
+body :where(.desktop-navbar, .mobile-topbar) :where(.brand, .mobile-brand, .brand strong) {
+  color: #ffffff !important;
+}
+
+body .desktop-navbar .desktop-links a,
+body .desktop-navbar .logout-button {
+  color: #b7c4d2 !important;
+}
+
+body .desktop-navbar .desktop-links a:hover,
+body .desktop-navbar .desktop-links a.active,
+body .desktop-navbar .logout-button:hover,
+body .mobile-bottom-nav a.active,
+body .mobile-bottom-nav button.active {
+  color: #ffffff !important;
+}
+
+body :where(
+  [class$='-card'],
+  [class*='-card '],
+  .league-header,
+  .draft-room-header,
+  .cycle-header,
+  .profile-hero,
+  .account-panel
+) :where(h1, h2, h3, h4) {
+  color: var(--text-primary) !important;
+}
+
+body .draft-room-page :where(
+  h1, h2, h3, h4,
+  .current-team-name,
+  .draft-clock-team strong,
+  .draft-clock-time strong,
+  .draft-pick-track-copy strong,
+  .asset-copy strong,
+  .drafted-position-header strong,
+  .drafted-player-row strong,
+  .queue-copy strong,
+  .roster-progress-row strong,
+  .upcoming-row strong,
+  .recent-pick-row strong,
+  .turn-clock-summary strong
+) {
+  color: var(--text-primary) !important;
+}
+
+body .draft-room-page :where(
+  .eyebrow,
+  .panel-heading p,
+  .draft-room-header p,
+  .draft-pick-track-heading > span,
+  .draft-pick-number,
+  .draft-pick-track-copy small,
+  .draft-clock-team span,
+  .draft-clock-time span,
+  .draft-clock-time small,
+  .draft-clock-controls > span,
+  .asset-copy span,
+  .asset-projection-strip small,
+  .drafted-position-header span,
+  .drafted-player-row span,
+  .drafted-player-projections small,
+  .queue-help,
+  .queue-copy small,
+  .empty-sidebar-copy,
+  .waiting-message,
+  .draft-news-note,
+  .pool-loading
+) {
+  color: var(--text-secondary) !important;
+}
+
+body .draft-room-page :where(
+  .draft-pick-track-card,
+  .draft-clock-bar:not(.clock-urgent):not(.clock-paused):not(.clock-stopped),
+  .draft-injury-sync-banner:not(.sync-success):not(.sync-warning),
+  .draft-asset-card,
+  .drafted-player-row,
+  .queue-row,
+  .roster-progress-row,
+  .upcoming-row,
+  .recent-pick-row,
+  .turn-clock-summary:not(.turn-clock-urgent),
+  .retry-pool-button
+) {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+}
+
+body .draft-room-page .draft-pick-track-item {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-3) !important;
+}
+
+body .draft-room-page .draft-pick-track-item.completed-pick {
+  border-color: color-mix(in srgb, var(--accent-green) 56%, var(--border-soft)) !important;
+  background: color-mix(in srgb, var(--accent-green) 12%, var(--surface-2)) !important;
+}
+
+body .draft-room-page .draft-pick-track-item.current-pick {
+  border-color: color-mix(in srgb, var(--accent-yellow) 72%, var(--border-soft)) !important;
+  background: color-mix(in srgb, var(--accent-yellow) 14%, var(--surface-2)) !important;
+}
+
+body .draft-room-page :where(.draft-pick-logo-fallback, .upcoming-pick-marker, .queue-rank, .asset-logo-fallback, .drafted-player-logo-fallback) {
+  background: var(--surface-3) !important;
+  color: var(--text-secondary) !important;
+}
+
+body .draft-room-page :where(input, select, textarea) {
+  border-color: var(--border-strong) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+}
+
+body .draft-room-page :where(input, textarea)::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+body .draft-room-page :where(
+  .clock-control-button:not(.clock-start-button),
+  .commissioner-auto-button:not(.auto-enabled),
+  .auto-draft-toggle:not(.enabled):not(.forced-auto-draft),
+  .queue-button:not(.queued),
+  .queue-row-actions button,
+  .retry-pool-button
+) {
+  border-color: var(--border-strong) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+}
+
+body .draft-room-page :where(
+  .clock-control-button:not(.clock-start-button),
+  .commissioner-auto-button:not(.auto-enabled),
+  .auto-draft-toggle:not(.enabled):not(.forced-auto-draft),
+  .queue-button:not(.queued),
+  .queue-row-actions button,
+  .retry-pool-button
+):hover:not(:disabled) {
+  background: var(--surface-3) !important;
+}
+
+body .draft-room-page .draft-roster-needs :where(
+  .eyebrow,
+  .draft-roster-needs-heading strong,
+  .draft-roster-need strong
+) {
+  color: #f4f7fb !important;
+}
+
+body .draft-room-page .draft-clock-bar:is(.clock-urgent, .clock-paused, .clock-stopped) :where(
+  .draft-clock-team strong,
+  .draft-clock-time strong
+) {
+  color: #172a42 !important;
+}
+
+body .draft-room-page .draft-clock-bar:is(.clock-urgent, .clock-paused, .clock-stopped) :where(
+  .draft-clock-team span,
+  .draft-clock-time span,
+  .draft-clock-time small,
+  .draft-clock-controls > span
+) {
+  color: #61758b !important;
+}
+
+body .draft-room-page .draft-clock-bar.clock-urgent .draft-clock-time strong,
+body .draft-room-page .turn-clock-summary.turn-clock-urgent strong {
+  color: #a62626 !important;
+}
+
+body .draft-room-page .draft-pick-track {
+  scrollbar-color: var(--border-strong) var(--surface-2);
+}
+
+body .draft-room-page .draft-pick-track::-webkit-scrollbar-track { background: var(--surface-2); }
+body .draft-room-page .draft-pick-track::-webkit-scrollbar-thumb { background: var(--border-strong); }
+
+/* Selected NHL identity presentation inside head-to-head matchups. */
+app-cycle-one .team-identity-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+app-cycle-one .team-identity-logo-shell {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  place-items: center;
+  border: 1px solid var(--owner-theme-outline-soft, rgba(198, 213, 228, 0.2));
+  border-radius: 8px;
+  background: var(--owner-theme-banner, #101925);
+  box-shadow: inset 0 0 0 3px rgba(4, 10, 18, 0.34);
+}
+
+app-cycle-one .team-identity-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+app-cycle-one .team-identity-copy {
+  min-width: 0;
+}
+
+app-cycle-one .team-selected-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+  margin-top: 7px;
+}
+
+app-cycle-one .team-selected-identity > span {
+  overflow: hidden;
+  color: #dce8f5;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-cycle-one .team-selected-identity > small,
+app-cycle-one .mobile-team-theme-meta > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 7px;
+  border: 1px solid var(--owner-theme-outline-soft, rgba(198, 213, 228, 0.2));
+  border-radius: 999px;
+  background: var(--owner-theme-chip-background, #2a3a4b);
+  color: var(--owner-theme-chip-text, #ffffff);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+app-cycle-one .team-color-strip {
+  display: grid;
+  width: min(150px, 100%);
+  height: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: #0a111b;
+}
+
+app-cycle-one .team-color-strip i {
+  display: block;
+  min-width: 0;
+}
+
+app-cycle-one .team-color-primary { background: var(--owner-theme-primary, #ffffff); }
+app-cycle-one .team-color-secondary { background: var(--owner-theme-secondary, #7b8794); }
+app-cycle-one .team-color-tertiary { background: var(--owner-theme-tertiary, #d64545); }
+app-cycle-one .mobile-team-theme-meta { display: none; }
+
+app-cycle-one .cycle-page .team-matchup-panel .team-summary-row {
+  background: var(--owner-theme-banner, var(--owner-theme-surface)) !important;
+}
+
+@media (max-width: 1080px) {
+  app-cycle-one .team-summary-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  app-cycle-one .team-score-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  app-cycle-one .team-score-pair div {
+    text-align: center;
+  }
+}
+
+@media (max-width: 780px) {
+  app-cycle-one .mobile-h2h-team {
+    background: var(--owner-theme-banner, var(--owner-theme-surface, #182536)) !important;
+  }
+
+  app-cycle-one .mobile-h2h-team > img {
+    padding: 3px;
+    border: 1px solid var(--owner-theme-outline-soft, rgba(198, 213, 228, 0.2));
+    border-radius: 6px;
+    background: rgba(5, 10, 18, 0.42);
+  }
+
+  app-cycle-one .mobile-team-theme-meta {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(50px, 1fr);
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  app-cycle-one .mobile-team-theme-meta > span { justify-self: start; }
+  app-cycle-one .mobile-team-theme-meta .team-color-strip { width: 100%; margin-top: 0; }
+}
+

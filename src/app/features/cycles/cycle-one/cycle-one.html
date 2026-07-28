@@ -670,6 +670,15 @@
                         </div>
                       </div>
 
+                      <div class="mobile-team-theme-meta">
+                        <span>{{ getOwnerTheme(matchup.teamAOwnerId).variantShortLabel }}</span>
+                        <div class="team-color-strip" aria-hidden="true">
+                          <i class="team-color-primary"></i>
+                          <i class="team-color-secondary"></i>
+                          <i class="team-color-tertiary"></i>
+                        </div>
+                      </div>
+
                       <dl>
                         <div>
                           <dt>Cur</dt>
@@ -701,6 +710,15 @@
                         <div>
                           <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
                           <span>{{ getTeamRecord(matchup.teamBOwnerId) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="mobile-team-theme-meta">
+                        <span>{{ getOwnerTheme(matchup.teamBOwnerId).variantShortLabel }}</span>
+                        <div class="team-color-strip" aria-hidden="true">
+                          <i class="team-color-primary"></i>
+                          <i class="team-color-secondary"></i>
+                          <i class="team-color-tertiary"></i>
                         </div>
                       </div>
 
@@ -863,22 +881,48 @@
                       [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamAOwnerId)"
                     >
                       <div class="team-summary-row">
-                        <div>
-                          <h3 class="manager-name-with-avatar">
-                            <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
-                            <span>{{ getTeamName(matchup.teamAOwnerId) }}</span>
+                        <div class="team-identity-summary">
+                          <div class="team-identity-logo-shell">
+                            <img
+                              class="team-identity-logo"
+                              [src]="getOwnerTheme(matchup.teamAOwnerId).logoUrl"
+                              [alt]="getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
+                            />
+                          </div>
 
-                            @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
-                              <span
-                                class="result-badge"
-                                [class.result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
-                                [class.result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
-                              >
-                                {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
-                              </span>
-                            }
-                          </h3>
-                          <p>{{ getTeamRecord(matchup.teamAOwnerId) }}</p>
+                          <div class="team-identity-copy">
+                            <h3 class="manager-name-with-avatar">
+                              <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
+                              <span>{{ getTeamName(matchup.teamAOwnerId) }}</span>
+
+                              @if (getTeamResultLabel(matchup, matchup.teamAOwnerId)) {
+                                <span
+                                  class="result-badge"
+                                  [class.result-winner]="isWinningTeam(matchup, matchup.teamAOwnerId)"
+                                  [class.result-loser]="isLosingTeam(matchup, matchup.teamAOwnerId)"
+                                >
+                                  {{ getTeamResultLabel(matchup, matchup.teamAOwnerId) }}
+                                </span>
+                              }
+                            </h3>
+
+                            <p>{{ getTeamRecord(matchup.teamAOwnerId) }}</p>
+
+                            <div class="team-selected-identity">
+                              <span>{{ getOwnerTheme(matchup.teamAOwnerId).name }}</span>
+                              <small>{{ getOwnerTheme(matchup.teamAOwnerId).variantShortLabel }}</small>
+                            </div>
+
+                            <div
+                              class="team-color-strip"
+                              [attr.aria-label]="getOwnerTheme(matchup.teamAOwnerId).variantLabel + ' selected colors'"
+                              role="img"
+                            >
+                              <i class="team-color-primary"></i>
+                              <i class="team-color-secondary"></i>
+                              <i class="team-color-tertiary"></i>
+                            </div>
+                          </div>
                         </div>
 
                         <div class="team-score-pair">
@@ -1402,22 +1446,48 @@
                       [class.matchup-loser-panel]="isLosingTeam(matchup, matchup.teamBOwnerId)"
                     >
                       <div class="team-summary-row">
-                        <div>
-                          <h3 class="manager-name-with-avatar">
-                            <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
-                            <span>{{ getTeamName(matchup.teamBOwnerId) }}</span>
+                        <div class="team-identity-summary">
+                          <div class="team-identity-logo-shell">
+                            <img
+                              class="team-identity-logo"
+                              [src]="getOwnerTheme(matchup.teamBOwnerId).logoUrl"
+                              [alt]="getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
+                            />
+                          </div>
 
-                            @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
-                              <span
-                                class="result-badge"
-                                [class.result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
-                                [class.result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
-                              >
-                                {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
-                              </span>
-                            }
-                          </h3>
-                          <p>{{ getTeamRecord(matchup.teamBOwnerId) }}</p>
+                          <div class="team-identity-copy">
+                            <h3 class="manager-name-with-avatar">
+                              <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
+                              <span>{{ getTeamName(matchup.teamBOwnerId) }}</span>
+
+                              @if (getTeamResultLabel(matchup, matchup.teamBOwnerId)) {
+                                <span
+                                  class="result-badge"
+                                  [class.result-winner]="isWinningTeam(matchup, matchup.teamBOwnerId)"
+                                  [class.result-loser]="isLosingTeam(matchup, matchup.teamBOwnerId)"
+                                >
+                                  {{ getTeamResultLabel(matchup, matchup.teamBOwnerId) }}
+                                </span>
+                              }
+                            </h3>
+
+                            <p>{{ getTeamRecord(matchup.teamBOwnerId) }}</p>
+
+                            <div class="team-selected-identity">
+                              <span>{{ getOwnerTheme(matchup.teamBOwnerId).name }}</span>
+                              <small>{{ getOwnerTheme(matchup.teamBOwnerId).variantShortLabel }}</small>
+                            </div>
+
+                            <div
+                              class="team-color-strip"
+                              [attr.aria-label]="getOwnerTheme(matchup.teamBOwnerId).variantLabel + ' selected colors'"
+                              role="img"
+                            >
+                              <i class="team-color-primary"></i>
+                              <i class="team-color-secondary"></i>
+                              <i class="team-color-tertiary"></i>
+                            </div>
+                          </div>
                         </div>
 
                         <div class="team-score-pair">

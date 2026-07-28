@@ -585,3 +585,10 @@ Validation command:
 Keep IDs stable because they are stored in league member and team documents. New future categories
 should be added centrally to profile-icon.data.ts, mirrored in the Firestore allowlist, and added
 to the asset validator.
+
+THEME CONTRAST AND MATCHUP IDENTITY UPDATE (JULY 28, 2026)
+---------------------------------------------------------
+Theme-aware compatibility rules now keep legacy draft headings, labels, controls, and cards readable across Rink Dark, OLED Black, Ice Gray, and Light Ice. The global navigation intentionally remains a dark navy bar in every background preset so the white RinkRat Fantasy brand and navigation labels always retain strong contrast.
+
+The detailed Cycle matchup header now displays each manager's selected NHL identity logo, selected variant label, and a three-color identity strip. The logo follows the exact current, away, retro, alternate, or special identity selected on the account page. The color strip makes home and away identities visibly different even when both managers choose the same NHL team and therefore share the same primary crest. The selected palette also lightly tints that manager's matchup summary while roster content remains on readable neutral surfaces.
+
