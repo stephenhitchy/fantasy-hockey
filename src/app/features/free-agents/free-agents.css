@@ -1759,3 +1759,84 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Current-season stat dropdowns intentionally focus on real production rather
+ * than explaining the projection model. Every category pairs its NHL total
+ * with the fantasy points that category contributed. */
+.season-summary-grid section:first-child strong {
+  color: #8eebb0;
+  font-size: 17px;
+}
+
+.season-summary-grid section:nth-child(2) strong,
+.season-summary-grid section:nth-child(3) strong {
+  font-size: 15px;
+}
+
+.season-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 12px 12px;
+  padding: 11px 12px;
+  border: 1px solid #4d6f62;
+  border-left: 4px solid #76df9d;
+  background: #13241f;
+}
+
+.season-total-row > div {
+  display: grid;
+  gap: 3px;
+}
+
+.season-total-row span {
+  color: #d6e7df;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.season-total-row small {
+  color: #96afa4;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.season-total-row > strong {
+  color: #8eebb0;
+  font-size: 19px;
+  white-space: nowrap;
+}
+
+:host-context(html[data-background-theme='light-ice']) .season-total-row {
+  border-color: #6f9f8b;
+  border-left-color: #24834e;
+  background: #e5f4eb;
+}
+
+:host-context(html[data-background-theme='light-ice']) .season-total-row span {
+  color: #173d2a;
+}
+
+:host-context(html[data-background-theme='light-ice']) .season-total-row small {
+  color: #436653;
+}
+
+:host-context(html[data-background-theme='light-ice']) .season-total-row > strong,
+:host-context(html[data-background-theme='light-ice']) .season-summary-grid section:first-child strong {
+  color: #17693b;
+}
+
+@media (max-width: 580px) {
+  .season-total-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .season-total-row > strong {
+    font-size: 17px;
+  }
+}

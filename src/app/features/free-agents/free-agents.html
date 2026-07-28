@@ -277,39 +277,30 @@
                     </div>
                   </div>
 
-                  <details class="decision-details">
-                    <summary>View decision details</summary>
-                    <div class="decision-detail-grid">
+                  <details class="decision-details season-stats-details">
+                    <summary>View current-season stats</summary>
+                    <div class="decision-detail-grid season-summary-grid">
                       <section>
-                        <span class="detail-label">Projection context</span>
-                        <strong>{{ getReliabilityLabel(waiver.asset) }}</strong>
-                        <p>{{ getScheduleOutlookLabel(waiver.asset) }}</p>
-                        <p>{{ getExpectedAvailabilityLabel(waiver.asset) }}</p>
-                        <p>{{ getProjectionSourceLabel(waiver.asset) }}</p>
+                        <span class="detail-label">Current fantasy total</span>
+                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }} points</strong>
+                        <p>The stat contributions below combine to create this season total.</p>
                       </section>
                       <section>
-                        <span class="detail-label">Fantasy pace per appearance</span>
-                        <div class="pace-grid">
-                          <span>Season <strong>{{ getSeasonFantasyPointsPerGame(waiver.asset) }}</strong></span>
-                          <span>Last 3 <strong>{{ getRecentPaceLabel(waiver.asset, 3) }}</strong></span>
-                          <span>Last 5 <strong>{{ getRecentPaceLabel(waiver.asset, 5) }}</strong></span>
-                          <span>Last 10 <strong>{{ getRecentPaceLabel(waiver.asset, 10) }}</strong></span>
-                          <span>Last 20 <strong>{{ getRecentPaceLabel(waiver.asset, 20) }}</strong></span>
-                        </div>
+                        <span class="detail-label">Fantasy points per appearance</span>
+                        <strong>{{ getSeasonFantasyPointsPerGame(waiver.asset) }}</strong>
                         <p>{{ getSeasonGamesLabel(waiver.asset) }}</p>
                       </section>
                       <section>
-                        <span class="detail-label">Projection performance</span>
-                        <strong [class]="getPerformanceClass(waiver.asset)">{{ getPerformanceLabel(waiver.asset) }}</strong>
-                        <p>{{ getPerformanceDetail(waiver.asset) }}</p>
-                        <p>{{ getRecentFormLabel(waiver.asset) }}</p>
+                        <span class="detail-label">Scoring categories</span>
+                        <strong>{{ getStatBreakdown(waiver.asset).length }} contributing stats</strong>
+                        <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
                       </section>
                     </div>
 
                     <div class="stat-breakdown-heading">
                       <div>
-                        <span class="detail-label">Current-season point breakdown</span>
-                        <strong>How the fantasy total was built</strong>
+                        <span class="detail-label">Current-season stats</span>
+                        <strong>Stat totals → fantasy points</strong>
                       </div>
                       <small>{{ getStatBreakdownNote(waiver.asset) }}</small>
                     </div>
@@ -324,8 +315,15 @@
                           </div>
                         }
                       </div>
+                      <div class="season-total-row">
+                        <div>
+                          <span>Current-season fantasy total</span>
+                          <small>Combined scoring-category contribution</small>
+                        </div>
+                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }} pts</strong>
+                      </div>
                     } @else {
-                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season breakdown and cycle dots.</p>
+                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and cycle dots.</p>
                     }
                   </details>
                 </article>
@@ -443,39 +441,30 @@
                   </button>
                 </div>
 
-                <details class="decision-details">
-                  <summary>View decision details</summary>
-                  <div class="decision-detail-grid">
+                <details class="decision-details season-stats-details">
+                  <summary>View current-season stats</summary>
+                  <div class="decision-detail-grid season-summary-grid">
                     <section>
-                      <span class="detail-label">Projection context</span>
-                      <strong>{{ getReliabilityLabel(asset) }}</strong>
-                      <p>{{ getScheduleOutlookLabel(asset) }}</p>
-                      <p>{{ getExpectedAvailabilityLabel(asset) }}</p>
-                      <p>{{ getProjectionSourceLabel(asset) }}</p>
+                      <span class="detail-label">Current fantasy total</span>
+                      <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }} points</strong>
+                      <p>The stat contributions below combine to create this season total.</p>
                     </section>
                     <section>
-                      <span class="detail-label">Fantasy pace per appearance</span>
-                      <div class="pace-grid">
-                        <span>Season <strong>{{ getSeasonFantasyPointsPerGame(asset) }}</strong></span>
-                        <span>Last 3 <strong>{{ getRecentPaceLabel(asset, 3) }}</strong></span>
-                        <span>Last 5 <strong>{{ getRecentPaceLabel(asset, 5) }}</strong></span>
-                        <span>Last 10 <strong>{{ getRecentPaceLabel(asset, 10) }}</strong></span>
-                        <span>Last 20 <strong>{{ getRecentPaceLabel(asset, 20) }}</strong></span>
-                      </div>
+                      <span class="detail-label">Fantasy points per appearance</span>
+                      <strong>{{ getSeasonFantasyPointsPerGame(asset) }}</strong>
                       <p>{{ getSeasonGamesLabel(asset) }}</p>
                     </section>
                     <section>
-                      <span class="detail-label">Projection performance</span>
-                      <strong [class]="getPerformanceClass(asset)">{{ getPerformanceLabel(asset) }}</strong>
-                      <p>{{ getPerformanceDetail(asset) }}</p>
-                      <p>{{ getRecentFormLabel(asset) }}</p>
+                      <span class="detail-label">Scoring categories</span>
+                      <strong>{{ getStatBreakdown(asset).length }} contributing stats</strong>
+                      <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
                     </section>
                   </div>
 
                   <div class="stat-breakdown-heading">
                     <div>
-                      <span class="detail-label">Current-season point breakdown</span>
-                      <strong>How the fantasy total was built</strong>
+                      <span class="detail-label">Current-season stats</span>
+                      <strong>Stat totals → fantasy points</strong>
                     </div>
                     <small>{{ getStatBreakdownNote(asset) }}</small>
                   </div>
@@ -490,8 +479,15 @@
                         </div>
                       }
                     </div>
+                    <div class="season-total-row">
+                      <div>
+                        <span>Current-season fantasy total</span>
+                        <small>Combined scoring-category contribution</small>
+                      </div>
+                      <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }} pts</strong>
+                    </div>
                   } @else {
-                    <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season breakdown and cycle dots.</p>
+                    <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and cycle dots.</p>
                   }
                 </details>
               </article>
@@ -585,31 +581,32 @@
               <small>{{ getScheduleOutlookLabel(addAsset) }}</small>
             </div>
 
-            <details class="decision-details selected-decision-details">
-              <summary>Review full player breakdown</summary>
-              <div class="decision-detail-grid">
+            <details class="decision-details selected-decision-details season-stats-details">
+              <summary>Review current-season stats</summary>
+              <div class="decision-detail-grid season-summary-grid">
                 <section>
-                  <span class="detail-label">Availability</span>
-                  <strong>{{ getExpectedAvailabilityLabel(addAsset) }}</strong>
+                  <span class="detail-label">Current fantasy total</span>
+                  <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }} points</strong>
+                  <p>The stat contributions below combine to create this season total.</p>
+                </section>
+                <section>
+                  <span class="detail-label">Fantasy points per appearance</span>
+                  <strong>{{ getSeasonFantasyPointsPerGame(addAsset) }}</strong>
                   <p>{{ getSeasonGamesLabel(addAsset) }}</p>
-                  <p>{{ getProjectionSourceLabel(addAsset) }}</p>
                 </section>
                 <section>
-                  <span class="detail-label">Fantasy pace per appearance</span>
-                  <div class="pace-grid">
-                    <span>Season <strong>{{ getSeasonFantasyPointsPerGame(addAsset) }}</strong></span>
-                    <span>Last 3 <strong>{{ getRecentPaceLabel(addAsset, 3) }}</strong></span>
-                    <span>Last 5 <strong>{{ getRecentPaceLabel(addAsset, 5) }}</strong></span>
-                    <span>Last 10 <strong>{{ getRecentPaceLabel(addAsset, 10) }}</strong></span>
-                    <span>Last 20 <strong>{{ getRecentPaceLabel(addAsset, 20) }}</strong></span>
-                  </div>
+                  <span class="detail-label">Scoring categories</span>
+                  <strong>{{ getStatBreakdown(addAsset).length }} contributing stats</strong>
+                  <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
                 </section>
-                <section>
-                  <span class="detail-label">Projection performance</span>
-                  <strong [class]="getPerformanceClass(addAsset)">{{ getPerformanceLabel(addAsset) }}</strong>
-                  <p>{{ getPerformanceDetail(addAsset) }}</p>
-                  <p>{{ getRecentFormLabel(addAsset) }}</p>
-                </section>
+              </div>
+
+              <div class="stat-breakdown-heading">
+                <div>
+                  <span class="detail-label">Current-season stats</span>
+                  <strong>Stat totals → fantasy points</strong>
+                </div>
+                <small>{{ getStatBreakdownNote(addAsset) }}</small>
               </div>
 
               @if (getStatBreakdown(addAsset).length > 0) {
@@ -622,6 +619,15 @@
                     </div>
                   }
                 </div>
+                <div class="season-total-row">
+                  <div>
+                    <span>Current-season fantasy total</span>
+                    <small>Combined scoring-category contribution</small>
+                  </div>
+                  <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }} pts</strong>
+                </div>
+              } @else {
+                <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals.</p>
               }
             </details>
           </section>
@@ -780,31 +786,32 @@
                 </div>
 
                 @if (getDropCandidateProjectionAsset(selectedCandidate); as outgoingAsset) {
-                  <details class="decision-details outgoing-decision-details">
-                    <summary>Review outgoing player breakdown</summary>
-                    <div class="decision-detail-grid">
+                  <details class="decision-details outgoing-decision-details season-stats-details">
+                    <summary>Review outgoing current-season stats</summary>
+                    <div class="decision-detail-grid season-summary-grid">
                       <section>
-                        <span class="detail-label">Projection context</span>
-                        <strong>{{ getReliabilityLabel(outgoingAsset) }}</strong>
-                        <p>{{ getScheduleOutlookLabel(outgoingAsset) }}</p>
-                        <p>{{ getExpectedAvailabilityLabel(outgoingAsset) }}</p>
+                        <span class="detail-label">Current fantasy total</span>
+                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoingAsset)) }} points</strong>
+                        <p>The stat contributions below combine to create this season total.</p>
                       </section>
                       <section>
-                        <span class="detail-label">Fantasy pace per appearance</span>
-                        <div class="pace-grid">
-                          <span>Season <strong>{{ getSeasonFantasyPointsPerGame(outgoingAsset) }}</strong></span>
-                          <span>Last 3 <strong>{{ getRecentPaceLabel(outgoingAsset, 3) }}</strong></span>
-                          <span>Last 5 <strong>{{ getRecentPaceLabel(outgoingAsset, 5) }}</strong></span>
-                          <span>Last 10 <strong>{{ getRecentPaceLabel(outgoingAsset, 10) }}</strong></span>
-                          <span>Last 20 <strong>{{ getRecentPaceLabel(outgoingAsset, 20) }}</strong></span>
-                        </div>
-                      </section>
-                      <section>
-                        <span class="detail-label">Projection performance</span>
-                        <strong [class]="getPerformanceClass(outgoingAsset)">{{ getPerformanceLabel(outgoingAsset) }}</strong>
-                        <p>{{ getPerformanceDetail(outgoingAsset) }}</p>
+                        <span class="detail-label">Fantasy points per appearance</span>
+                        <strong>{{ getSeasonFantasyPointsPerGame(outgoingAsset) }}</strong>
                         <p>{{ getSeasonGamesLabel(outgoingAsset) }}</p>
                       </section>
+                      <section>
+                        <span class="detail-label">Scoring categories</span>
+                        <strong>{{ getStatBreakdown(outgoingAsset).length }} contributing stats</strong>
+                        <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
+                      </section>
+                    </div>
+
+                    <div class="stat-breakdown-heading">
+                      <div>
+                        <span class="detail-label">Current-season stats</span>
+                        <strong>Stat totals → fantasy points</strong>
+                      </div>
+                      <small>{{ getStatBreakdownNote(outgoingAsset) }}</small>
                     </div>
 
                     @if (getStatBreakdown(outgoingAsset).length > 0) {
@@ -817,6 +824,15 @@
                           </div>
                         }
                       </div>
+                      <div class="season-total-row">
+                        <div>
+                          <span>Current-season fantasy total</span>
+                          <small>Combined scoring-category contribution</small>
+                        </div>
+                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoingAsset)) }} pts</strong>
+                      </div>
+                    } @else {
+                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals.</p>
                     }
                   </details>
                 }

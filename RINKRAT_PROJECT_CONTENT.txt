@@ -596,3 +596,12 @@ Shared projection version 9 adds current-season fantasy production, rest-of-seas
 The roster-slot step includes outgoing-player metrics and a direct incoming-versus-outgoing comparison, including projected next-cycle and rest-of-season gain/loss. Lower-priority details collapse on smaller screens while the core decision data remains visible.
 
 See ADD_DROP_DECISION_CENTER_UPDATE.txt for the full implementation summary.
+
+CURRENT-SEASON ADD/DROP STAT DROPDOWN (JULY 28, 2026)
+------------------------------------------------------
+- Add/Drop expandable player details no longer explain projection construction.
+- Free-agent, waiver, incoming, and outgoing dropdowns show current-season NHL
+  stat totals and the fantasy-point contribution from each scoring category.
+- Each dropdown ends with a clear current-season fantasy total.
+- Projection comparison metrics remain visible on the main card outside the
+  dropdown so the dropdown can stay focused on actual production.

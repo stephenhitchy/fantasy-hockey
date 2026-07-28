@@ -610,3 +610,12 @@ Important files:
   src/app/features/free-agents/free-agents.css
   src/styles.css
   ADD_DROP_DECISION_CENTER_UPDATE.txt
+
+CURRENT-SEASON ADD/DROP STAT DROPDOWN (JULY 28, 2026)
+------------------------------------------------------
+- Add/Drop expandable player details no longer explain projection construction.
+- Free-agent, waiver, incoming, and outgoing dropdowns show current-season NHL
+  stat totals and the fantasy-point contribution from each scoring category.
+- Each dropdown ends with a clear current-season fantasy total.
+- Projection comparison metrics remain visible on the main card outside the
+  dropdown so the dropdown can stay focused on actual production.
