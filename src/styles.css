@@ -997,35 +997,145 @@ app-cycle-one .mobile-head-to-head-roster {
   }
 }
 
-/* Mobile matchup width amendment: reclaim the outer gutters created by the
-   main layout and cycle page so the head-to-head board uses more of the phone. */
+/* Mobile matchup width and readability amendment.
+ * Pull the cycle page through nearly all of the main-layout gutter, then use
+ * the reclaimed space for longer team/player names rather than larger chrome. */
 @media (max-width: 780px) {
-  app-cycle-one .cycle-page {
-    width: calc(100% + 12px);
+  .main-content > app-cycle-one {
+    display: block;
+    width: calc(100% + 16px);
     max-width: none;
-    margin-right: -6px;
-    margin-left: -6px;
-    padding-right: 4px;
-    padding-left: 4px;
+    margin-right: -8px;
+    margin-left: -8px;
+  }
+
+  app-cycle-one .cycle-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding-right: 3px;
+    padding-left: 3px;
   }
 
   app-cycle-one .matchups-section,
   app-cycle-one .matchup-grid,
   app-cycle-one .matchup-detail-card,
-  app-cycle-one .mobile-head-to-head-roster {
+  app-cycle-one .mobile-head-to-head-roster,
+  app-cycle-one .mobile-h2h-position-list,
+  app-cycle-one .mobile-h2h-position-group {
     width: 100%;
     max-width: none;
     min-width: 0;
   }
+
+  app-cycle-one .matchup-detail-card {
+    padding: 10px !important;
+    border-radius: 17px;
+  }
+
+  app-cycle-one .mobile-h2h-team-strip {
+    grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  app-cycle-one .mobile-h2h-team {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px 6px;
+    padding: 8px 7px;
+  }
+
+  app-cycle-one .mobile-h2h-team > img {
+    width: 24px;
+    height: 24px;
+  }
+
+  app-cycle-one .mobile-h2h-team .manager-name-stack {
+    width: 100%;
+    gap: 5px;
+  }
+
+  app-cycle-one .mobile-h2h-team app-manager-avatar .manager-avatar-sm {
+    width: 23px;
+    height: 23px;
+  }
+
+  app-cycle-one .mobile-h2h-team > div strong {
+    display: -webkit-box;
+    min-height: 22px;
+    overflow: hidden;
+    font-size: 10.5px;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  app-cycle-one .mobile-h2h-player-row {
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+    gap: 3px;
+    padding: 4px;
+  }
+
+  app-cycle-one .mobile-h2h-player {
+    padding: 8px 7px;
+  }
+
+  app-cycle-one .mobile-h2h-player-identity strong {
+    display: -webkit-box;
+    min-height: 22px;
+    overflow: hidden;
+    font-size: 10.5px;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }
 
 @media (max-width: 390px) {
+  .main-content > app-cycle-one {
+    width: calc(100% + 18px);
+    margin-right: -9px;
+    margin-left: -9px;
+  }
+
   app-cycle-one .cycle-page {
-    width: calc(100% + 16px);
-    margin-right: -8px;
-    margin-left: -8px;
-    padding-right: 2px;
-    padding-left: 2px;
+    padding-right: 1px;
+    padding-left: 1px;
+  }
+
+  app-cycle-one .matchup-detail-card {
+    padding: 6px !important;
+    border-radius: 14px;
+  }
+
+  app-cycle-one .mobile-h2h-team-strip {
+    grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  app-cycle-one .mobile-h2h-team {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 4px;
+    padding: 7px 5px;
+  }
+
+  app-cycle-one .mobile-h2h-team > img,
+  app-cycle-one .mobile-h2h-team app-manager-avatar .manager-avatar-sm {
+    width: 22px;
+    height: 22px;
+  }
+
+  app-cycle-one .mobile-h2h-player-row {
+    grid-template-columns: minmax(0, 1fr) 21px minmax(0, 1fr);
+    gap: 2px;
+    padding: 3px;
+  }
+
+  app-cycle-one .mobile-h2h-player {
+    padding: 7px 5px;
   }
 }
 
