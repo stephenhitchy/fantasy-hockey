@@ -2129,3 +2129,300 @@ body .global-team-ribbon .global-team-logo-chip {
 body .global-team-ribbon .global-team-logo-chip small {
   color: #f4f8fd !important;
 }
+
+/* Light Ice contrast completion.
+ * A few legacy league-home and roster-board elements still used white text
+ * after their cards were converted to pale theme surfaces. Keep the Light Ice
+ * palette bright while forcing readable foregrounds and preserving semantic
+ * injury/status colors.
+ */
+html[data-background-theme='light-ice'] app-team-settings {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(
+  .roster-scoring-note,
+  .availability-policy-note
+) {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .availability-policy-note strong {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(
+  .fantasy-position-group,
+  .transaction-ledger-card,
+  .team-stat-bar
+) {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-position-header,
+html[data-background-theme='light-ice'] app-team-settings .transaction-ledger-heading h2 {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-card:not(.injured-player-card):not(.suspended-player-card),
+html[data-background-theme='light-ice'] app-team-settings .bench-roster-card:not(.injured-player-card):not(.suspended-player-card) {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-1) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-card.empty-slot-card {
+  background: var(--surface-3) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-main strong,
+html[data-background-theme='light-ice'] app-team-settings .clickable-player-card:hover .fantasy-player-main strong,
+html[data-background-theme='light-ice'] app-team-settings .clickable-player-card:focus-visible .fantasy-player-main strong {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-main span {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-main em {
+  color: var(--text-muted) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-score-stack div {
+  border: 1px solid #667384 !important;
+  background: #536071 !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-score-stack strong {
+  color: #ffffff !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-score-stack span {
+  color: #eef4fb !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(.logo-fallback, .roster-status-pill) {
+  background: var(--surface-3) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .roster-card-actions small {
+  color: #7a5100 !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .drop-action {
+  border-color: #d58d96 !important;
+  background: #f6d8dc !important;
+  color: #7d2430 !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .drop-action:hover:not(:disabled) {
+  background: #edb9c0 !important;
+  color: #57151f !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(
+  .fantasy-player-card.injured-player-card,
+  .bench-roster-card.injured-player-card
+) {
+  border-color: #d98993 !important;
+  background: color-mix(in srgb, #f7d8dc 58%, var(--surface-1)) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(
+  .fantasy-player-card.suspended-player-card,
+  .bench-roster-card.suspended-player-card
+) {
+  border-color: #d7aa4a !important;
+  background: color-mix(in srgb, #f9e6b2 56%, var(--surface-1)) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .player-injury-banner {
+  border-color: #d98993 !important;
+  background: #efd7da !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .player-injury-banner strong {
+  color: #79242e !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .player-injury-banner small {
+  color: #94404a !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .player-suspension-banner {
+  border-color: #d7aa4a !important;
+  background: #f5e5b9 !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .player-suspension-banner strong,
+html[data-background-theme='light-ice'] app-team-settings .player-suspension-banner small {
+  color: #6d4a00 !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .team-stat-bar span {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .team-stat-bar strong {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings :where(
+  .transaction-ledger-heading small,
+  .transaction-ledger-row time,
+  .transaction-player small,
+  .transaction-empty-state
+) {
+  color: var(--text-muted) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .transaction-player strong {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail :where(
+  .league-header p,
+  .draft-status-description,
+  .cycle-waiting-copy,
+  .quick-actions-card p,
+  .season-start-copy p,
+  .season-start-actions small
+) {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail :where(
+  .daily-injury-status,
+  .draft-time-display,
+  .draft-injury-sync-card,
+  .season-start-card,
+  .season-start-meta,
+  .league-tools,
+  .tool-link,
+  .hub-action
+) {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail :where(
+  .daily-injury-copy strong,
+  .draft-time-display strong,
+  .draft-injury-sync-card strong,
+  .hub-action strong,
+  .tool-link strong,
+  .league-tools summary strong,
+  .season-start-copy h3,
+  .season-start-meta strong
+) {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail :where(
+  .daily-injury-copy p,
+  .daily-injury-meta small,
+  .draft-time-display span,
+  .draft-injury-sync-card p,
+  .draft-injury-sync-card small,
+  .hub-action span,
+  .tool-link small,
+  .league-tools summary small
+) {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .daily-injury-icon {
+  background: var(--surface-3) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .daily-status-success {
+  border-color: #63947b !important;
+  background: #dcebe2 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .daily-status-warning {
+  border-color: #b58a45 !important;
+  background: #f2e7ce !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .daily-status-running {
+  border-color: #7796b9 !important;
+  background: #dce8f4 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .league-info-card span,
+html[data-background-theme='light-ice'] app-league-detail :where(.eyebrow, .draft-section-eyebrow) {
+  color: var(--text-secondary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .league-info-card strong,
+html[data-background-theme='light-ice'] app-league-detail :where(
+  .section-heading h2,
+  .teams-section h2,
+  .cycle-status-heading h2,
+  .draft-status-heading h2,
+  .quick-actions-heading h2
+) {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .matchup-card header strong,
+html[data-background-theme='light-ice'] app-league-detail .matchup-team-row strong,
+html[data-background-theme='light-ice'] app-league-detail .matchup-team-row > span:last-child,
+html[data-background-theme='light-ice'] app-league-detail .team-card h3 {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .matchup-vs {
+  color: var(--text-muted) !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .matchup-card header > span,
+html[data-background-theme='light-ice'] app-league-detail .team-card-heading > span:last-child {
+  border: 1px solid #667384 !important;
+  background: #536071 !important;
+  color: #ffffff !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .team-stat-grid div {
+  border: 1px solid #667384 !important;
+  background: #536071 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .team-stat-grid span {
+  color: #e5edf7 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .team-stat-grid strong {
+  color: #ffffff !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .status-live {
+  background: #d8ecdf !important;
+  color: #165b34 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .status-complete {
+  background: #dce7f3 !important;
+  color: #234f7b !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .status-ready {
+  background: #f4e7c5 !important;
+  color: #735100 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail .status-scheduled {
+  background: #dbe8f6 !important;
+  color: #285b88 !important;
+}

@@ -1,0 +1,14 @@
+RinkRat Light Ice Remaining Contrast Fix
+Date: July 28, 2026
+
+This patch corrects the remaining Light Ice readability problems visible on:
+- My Team / Roster Board player cards and roster metadata
+- Current League daily injury report and league information cards
+- Cycle summary and matchup preview cards
+- League Teams headings, names, record/stat blocks, and status pills
+
+The update is CSS-only and is intentionally scoped to the Light Ice background theme.
+It preserves dark/OLED/Ice Gray presentation and keeps semantic injury, suspension,
+and active/complete status colors distinct.
+
+No Firestore rules, functions, projection data, or application logic changed.
