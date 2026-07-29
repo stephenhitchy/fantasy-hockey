@@ -741,7 +741,8 @@ app-cycle-one .cycle-header,
 app-cycle-matchup-overview .matchup-overview-header {
   position: relative;
   overflow: visible !important;
-  padding-top: 54px !important;
+  padding-top: 26px !important;
+  padding-left: 22px !important;
   border: 3px solid var(--border-strong) !important;
   background:
     radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--user-team-primary) 17%, transparent), transparent 34%),
@@ -753,13 +754,11 @@ app-cycle-matchup-overview .matchup-overview-header {
 
 app-cycle-one .cycle-header::before,
 app-cycle-matchup-overview .matchup-overview-header::before {
-  content: 'RINKRAT SPORTS NETWORK · LIVE BROADCAST';
+  content: '';
   position: absolute;
   inset: 0 0 auto;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  padding-inline: 18px;
+  height: 12px;
+  display: block;
   border-bottom: 3px solid var(--border-strong);
   background:
     linear-gradient(90deg,
@@ -767,10 +766,6 @@ app-cycle-matchup-overview .matchup-overview-header::before {
       var(--user-team-secondary) 24% 48%,
       var(--user-team-tertiary) 48% 62%,
       var(--rr-phase3-board) 62% 100%);
-  color: var(--user-team-on-primary);
-  font-family: var(--rr-font-micro);
-  font-size: .61rem;
-  letter-spacing: .1em;
 }
 
 app-cycle-one .cycle-header :is(h1, p, .eyebrow),
@@ -1476,7 +1471,7 @@ html[data-background-theme='light-ice'] app-free-agents .decision-asset-card :is
   app-league-standings .standings-header,
   app-point-leaders .point-leaders-header,
   app-playoff-bracket .playoff-hero {
-    padding: 50px 14px 16px !important;
+    padding: 24px 14px 16px 18px !important;
   }
 
   app-team-settings .team-hero-card::before,
@@ -1589,5 +1584,26 @@ html[data-background-theme='light-ice'] app-free-agents .decision-asset-card :is
   app-cycle-one .matchup-scoreboard::after,
   app-cycle-one .mobile-matchup-scorebar::after {
     animation: none !important;
+  }
+}
+
+
+/* -------------------------------------------------------------------------
+   PHASE 3.1 — cleaner broadcast headers
+   ------------------------------------------------------------------------- */
+
+app-cycle-one .cycle-header .league-name,
+app-cycle-matchup-overview .matchup-overview-header .league-name,
+app-cycle-one .cycle-header h1,
+app-cycle-matchup-overview .matchup-overview-header h1 {
+  margin-left: 8px !important;
+}
+
+@media (max-width: 900px) {
+  app-cycle-one .cycle-header .league-name,
+  app-cycle-matchup-overview .matchup-overview-header .league-name,
+  app-cycle-one .cycle-header h1,
+  app-cycle-matchup-overview .matchup-overview-header h1 {
+    margin-left: 4px !important;
   }
 }
