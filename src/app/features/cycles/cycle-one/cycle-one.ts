@@ -659,6 +659,37 @@ export class CycleOne implements OnDestroy {
     );
   }
 
+  getTeamRosterGameTotal(ownerId: string | null): number {
+    return (
+      this.getTeamRosterGamesPlayed(ownerId) +
+      this.getTeamRosterGamesLeft(ownerId)
+    );
+  }
+
+  getTeamRosterProgressPercent(ownerId: string | null): number {
+    const totalGames = this.getTeamRosterGameTotal(ownerId);
+
+    if (totalGames <= 0) {
+      return 0;
+    }
+
+    const percentage = (this.getTeamRosterGamesPlayed(ownerId) / totalGames) * 100;
+
+    return Number(Math.min(100, Math.max(0, percentage)).toFixed(1));
+  }
+
+  getTeamRosterProgressLabel(ownerId: string | null): string {
+    const playedGames = this.getTeamRosterGamesPlayed(ownerId);
+    const gamesLeft = this.getTeamRosterGamesLeft(ownerId);
+    const totalGames = playedGames + gamesLeft;
+
+    if (totalGames <= 0) {
+      return 'Counted roster-game progress is not available yet.';
+    }
+
+    return `${playedGames} of ${totalGames} counted roster games played. ${gamesLeft} left.`;
+  }
+
   isTeamReadyToComplete(ownerId: string | null): boolean {
     if (!ownerId) {
       return true;

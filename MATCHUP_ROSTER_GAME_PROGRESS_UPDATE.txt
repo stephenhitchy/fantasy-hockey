@@ -1,0 +1,19 @@
+RINKRAT MATCHUP ROSTER-GAME PROGRESS UPDATE
+Date: July 29, 2026
+
+WHAT CHANGED
+- Added a progress bar to each desktop matchup team summary.
+- Added the same compact progress bar to each mobile head-to-head team summary.
+- Each bar displays counted starter roster games played and games left.
+- The fill percentage is played / (played + left).
+- The progress bar uses the manager's selected NHL identity colors.
+- Screen-reader progressbar values and descriptive labels are included.
+
+WHY THIS COUNTS ROSTER GAMES
+RinkRat windows are asynchronous at the roster-slot level and every starter has a six-game window. A simple count of players who have appeared at least once would fill too early and would not match matchup readiness. Counted roster games remain accurate for the entire cycle and sum directly to the existing matchup-level "Waiting on N roster games" status.
+
+FILES CHANGED
+- src/app/features/cycles/cycle-one/cycle-one.html
+- src/app/features/cycles/cycle-one/cycle-one.ts
+- src/rinkrat-arena-phase3.css
+- RINKRAT_PROJECT_CONTEXT.txt

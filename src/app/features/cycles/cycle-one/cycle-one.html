@@ -689,6 +689,30 @@
                           <dd>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</dd>
                         </div>
                       </dl>
+
+                      <div class="team-roster-progress mobile-team-roster-progress">
+                        <div class="team-roster-progress-copy">
+                          <span>Window Progress</span>
+                          <strong>
+                            {{ getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} played ·
+                            {{ getTeamRosterGamesLeft(matchup.teamAOwnerId) }} left
+                          </strong>
+                        </div>
+
+                        <div
+                          class="team-roster-progress-track"
+                          role="progressbar"
+                          [attr.aria-label]="getTeamRosterProgressLabel(matchup.teamAOwnerId)"
+                          [attr.aria-valuemin]="0"
+                          [attr.aria-valuemax]="getTeamRosterGameTotal(matchup.teamAOwnerId)"
+                          [attr.aria-valuenow]="getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
+                        >
+                          <span
+                            class="team-roster-progress-fill"
+                            [style.width.%]="getTeamRosterProgressPercent(matchup.teamAOwnerId)"
+                          ></span>
+                        </div>
+                      </div>
                     </article>
 
                     <div class="mobile-h2h-versus" aria-hidden="true">
@@ -732,6 +756,30 @@
                           <dd>{{ getProjectionDisplay(getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</dd>
                         </div>
                       </dl>
+
+                      <div class="team-roster-progress mobile-team-roster-progress">
+                        <div class="team-roster-progress-copy">
+                          <span>Window Progress</span>
+                          <strong>
+                            {{ getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} played ·
+                            {{ getTeamRosterGamesLeft(matchup.teamBOwnerId) }} left
+                          </strong>
+                        </div>
+
+                        <div
+                          class="team-roster-progress-track"
+                          role="progressbar"
+                          [attr.aria-label]="getTeamRosterProgressLabel(matchup.teamBOwnerId)"
+                          [attr.aria-valuemin]="0"
+                          [attr.aria-valuemax]="getTeamRosterGameTotal(matchup.teamBOwnerId)"
+                          [attr.aria-valuenow]="getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
+                        >
+                          <span
+                            class="team-roster-progress-fill"
+                            [style.width.%]="getTeamRosterProgressPercent(matchup.teamBOwnerId)"
+                          ></span>
+                        </div>
+                      </div>
                     </article>
                   </div>
 
@@ -1022,6 +1070,30 @@
                               }}
                             </strong>
                             <span>Projected</span>
+                          </div>
+                        </div>
+
+                        <div class="team-roster-progress">
+                          <div class="team-roster-progress-copy">
+                            <span>Roster Progress</span>
+                            <strong>
+                              {{ getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} played ·
+                              {{ getTeamRosterGamesLeft(matchup.teamAOwnerId) }} left
+                            </strong>
+                          </div>
+
+                          <div
+                            class="team-roster-progress-track"
+                            role="progressbar"
+                            [attr.aria-label]="getTeamRosterProgressLabel(matchup.teamAOwnerId)"
+                            [attr.aria-valuemin]="0"
+                            [attr.aria-valuemax]="getTeamRosterGameTotal(matchup.teamAOwnerId)"
+                            [attr.aria-valuenow]="getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
+                          >
+                            <span
+                              class="team-roster-progress-fill"
+                              [style.width.%]="getTeamRosterProgressPercent(matchup.teamAOwnerId)"
+                            ></span>
                           </div>
                         </div>
                       </div>
@@ -1668,6 +1740,30 @@
                               }}
                             </strong>
                             <span>Projected</span>
+                          </div>
+                        </div>
+
+                        <div class="team-roster-progress">
+                          <div class="team-roster-progress-copy">
+                            <span>Roster Progress</span>
+                            <strong>
+                              {{ getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} played ·
+                              {{ getTeamRosterGamesLeft(matchup.teamBOwnerId) }} left
+                            </strong>
+                          </div>
+
+                          <div
+                            class="team-roster-progress-track"
+                            role="progressbar"
+                            [attr.aria-label]="getTeamRosterProgressLabel(matchup.teamBOwnerId)"
+                            [attr.aria-valuemin]="0"
+                            [attr.aria-valuemax]="getTeamRosterGameTotal(matchup.teamBOwnerId)"
+                            [attr.aria-valuenow]="getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
+                          >
+                            <span
+                              class="team-roster-progress-fill"
+                              [style.width.%]="getTeamRosterProgressPercent(matchup.teamBOwnerId)"
+                            ></span>
                           </div>
                         </div>
                       </div>
