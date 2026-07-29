@@ -672,3 +672,12 @@ respected. The rat-tail divider idea remains intentionally excluded.
 
 This update is frontend presentation only and does not change draft, scoring,
 roster, projection, cycle, Firestore, or Cloud Function logic.
+
+LEAGUE DELETION (JULY 2026)
+---------------------------
+- Current League now includes a commissioner-only League Danger Zone.
+- Permanent deletion requires typing the complete league name exactly.
+- Deletion is performed by the authenticated deleteLeague callable Cloud Function, not by client-side Firestore deletes.
+- The function verifies commissioner ownership, recursively removes the complete leagues/{leagueId} tree, deletes matching leagueInvites, injuryEmailQueue, and emailNotificationLog records, then returns the commissioner to Dashboard.
+- Firestore rules block direct deletion of the league root so nested data cannot be orphaned by an incomplete client delete.
+- The remembered last-league ID is cleared when it matches the deleted league.

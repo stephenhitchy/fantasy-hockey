@@ -10,8 +10,10 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 import { auth, db } from '../firebase';
+import { functions } from '../firebase-functions';
 import {
   CURRENT_SCORING_RULES_VERSION,
   defaultScoringRules,
@@ -66,6 +68,16 @@ export interface LeagueInvite {
   active: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+interface DeleteLeagueRequest {
+  leagueId: string;
+  confirmationName: string;
+}
+
+interface DeleteLeagueResponse {
+  deleted: boolean;
+  leagueId: string;
 }
 
 export interface LeagueSummary {
@@ -450,6 +462,72 @@ export async function getMyLeagues(): Promise<League[]> {
     .sort((first, second) => first.name.localeCompare(second.name));
 
   return leagues;
+}
+
+export async function deleteLeaguePermanently(
+  leagueId: string,
+  confirmationName: string,
+): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('You must be logged in to delete a league.');
+  }
+
+  const normalizedLeagueId = leagueId.trim();
+  const normalizedConfirmationName = confirmationName.trim();
+
+  if (!normalizedLeagueId) {
+    throw new Error('This league is still loading.');
+  }
+
+  if (!normalizedConfirmationName) {
+    throw new Error('Type the full league name before deleting it.');
+  }
+
+  const callable = httpsCallable<DeleteLeagueRequest, DeleteLeagueResponse>(
+    functions,
+    'deleteLeague',
+  );
+
+  try {
+    const result = await callable({
+      leagueId: normalizedLeagueId,
+      confirmationName: normalizedConfirmationName,
+    });
+
+    if (!result.data.deleted || result.data.leagueId !== normalizedLeagueId) {
+      throw new Error('The server could not confirm that the league was deleted.');
+    }
+  } catch (error: unknown) {
+    const record = error && typeof error === 'object'
+      ? error as { code?: unknown; message?: unknown }
+      : {};
+    const code = typeof record.code === 'string' ? record.code : '';
+    const rawMessage = typeof record.message === 'string' ? record.message.trim() : '';
+    const message = rawMessage
+      .replace(/^FirebaseError:\s*/i, '')
+      .replace(/^\[functions\/[^\]]+\]\s*/i, '')
+      .trim();
+
+    if (message) {
+      throw new Error(message);
+    }
+
+    if (code.includes('permission-denied')) {
+      throw new Error('Only the league commissioner can permanently delete this league.');
+    }
+
+    if (code.includes('failed-precondition')) {
+      throw new Error('The confirmation name did not exactly match the league name.');
+    }
+
+    if (code.includes('not-found')) {
+      throw new Error('This league no longer exists.');
+    }
+
+    throw new Error('The league could not be deleted. Please try again.');
+  }
 }
 
 export async function getLeagueById(leagueId: string): Promise<League | null> {

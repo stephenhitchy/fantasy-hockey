@@ -1689,3 +1689,163 @@
     height: 58px;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Commissioner league deletion danger zone
+   ------------------------------------------------------------------------- */
+
+.commissioner-danger-zone {
+  margin-top: 22px;
+  padding: 18px;
+  border: 2px solid color-mix(in srgb, var(--danger, #d94a5f) 72%, var(--border-strong));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--danger, #d94a5f) 12%, transparent), transparent 62%),
+    var(--surface-1, #111e31);
+  color: var(--text-main, #eaf2ff);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--danger, #d94a5f) 24%, transparent);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.danger-zone-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.danger-zone-heading h2,
+.danger-zone-heading p {
+  margin: 0;
+}
+
+.danger-zone-heading h2 {
+  margin-top: 4px;
+  color: var(--text-strong, #fff);
+}
+
+.danger-zone-heading p {
+  max-width: 720px;
+  margin-top: 8px;
+  color: var(--text-muted, #a8bad0);
+}
+
+.danger-zone-toggle,
+.permanent-delete-league-button {
+  border-color: color-mix(in srgb, var(--danger, #d94a5f) 78%, #5a1320) !important;
+  background: color-mix(in srgb, var(--danger, #d94a5f) 86%, #7e2032) !important;
+  color: #fff !important;
+  white-space: nowrap;
+}
+
+.delete-league-confirmation {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 2px solid color-mix(in srgb, var(--danger, #d94a5f) 48%, var(--border-strong));
+  background: var(--surface-2, #0b1728);
+}
+
+.delete-league-warning {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border-left: 4px solid var(--danger, #d94a5f);
+  background: color-mix(in srgb, var(--danger, #d94a5f) 11%, var(--surface-1, #111e31));
+}
+
+.delete-league-warning-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 2px solid var(--danger, #d94a5f);
+  background: color-mix(in srgb, var(--danger, #d94a5f) 18%, transparent);
+  color: var(--text-strong, #fff);
+  font-family: var(--rr-font-micro, monospace);
+  font-weight: 900;
+}
+
+.delete-league-warning strong,
+.delete-league-warning p {
+  display: block;
+  margin: 0;
+}
+
+.delete-league-warning strong {
+  color: var(--text-strong, #fff);
+}
+
+.delete-league-warning p {
+  margin-top: 5px;
+  color: var(--text-muted, #a8bad0);
+}
+
+.delete-league-confirmation label {
+  color: var(--text-main, #eaf2ff);
+  font-weight: 750;
+}
+
+.delete-league-confirmation label strong {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--danger, #ff7f91);
+}
+
+.delete-league-confirmation input {
+  width: 100%;
+  min-height: 46px;
+  border: 2px solid color-mix(in srgb, var(--danger, #d94a5f) 36%, var(--border-strong));
+  background: var(--surface-inset, var(--surface-2, #0b1728));
+  color: var(--text-strong, #fff);
+}
+
+.delete-league-confirmation input:focus {
+  border-color: var(--danger, #d94a5f);
+  outline: 3px solid color-mix(in srgb, var(--danger, #d94a5f) 22%, transparent);
+}
+
+.delete-league-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.permanent-delete-league-button:disabled {
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.cancel-delete-league-button {
+  background: var(--button-secondary-bg, var(--surface-3, #25364d)) !important;
+  color: var(--button-secondary-text, var(--text-strong, #fff)) !important;
+}
+
+.delete-league-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--danger, #d94a5f);
+  background: color-mix(in srgb, var(--danger, #d94a5f) 12%, transparent);
+  color: color-mix(in srgb, var(--danger, #d94a5f) 70%, var(--text-strong, #fff));
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .commissioner-danger-zone {
+    padding: 14px;
+  }
+
+  .danger-zone-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .danger-zone-toggle,
+  .delete-league-actions,
+  .delete-league-actions button {
+    width: 100%;
+  }
+}

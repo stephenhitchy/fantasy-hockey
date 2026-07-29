@@ -43,6 +43,7 @@ import {
 import { PlayerAvailabilitySyncState } from '../../../core/player/player-availability.models';
 
 import {
+  deleteLeaguePermanently,
   getLeagueById,
   League,
   updateLeagueProfileIcon,
@@ -51,6 +52,7 @@ import {
 import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/team/team.service';
 
 import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
+import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.service';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
   getProfileIconsForCategory,
@@ -82,6 +84,7 @@ export class LeagueDetail implements OnDestroy {
   leagueId = '';
   userId = '';
   teamNameDraft = '';
+  deleteLeagueNameDraft = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -114,6 +117,9 @@ export class LeagueDetail implements OnDestroy {
   profileIconSaving = signal(false);
   profileIconMessage = signal('');
   profileIconError = signal('');
+  deleteLeaguePanelOpen = signal(false);
+  deleteLeagueInProgress = signal(false);
+  deleteLeagueError = signal('');
 
   readonly profileIconCategories = PROFILE_ICON_CATEGORIES;
 
@@ -395,6 +401,77 @@ export class LeagueDetail implements OnDestroy {
       this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load this league.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  toggleDeleteLeaguePanel(): void {
+    if (this.deleteLeagueInProgress()) {
+      return;
+    }
+
+    const nextOpen = !this.deleteLeaguePanelOpen();
+    this.deleteLeaguePanelOpen.set(nextOpen);
+    this.deleteLeagueError.set('');
+
+    if (!nextOpen) {
+      this.deleteLeagueNameDraft = '';
+    }
+  }
+
+  canDeleteLeague(): boolean {
+    const currentLeagueName = this.league()?.name ?? '';
+
+    return Boolean(
+      this.isCommissioner() &&
+      currentLeagueName &&
+      this.deleteLeagueNameDraft.trim() === currentLeagueName &&
+      !this.deleteLeagueInProgress()
+    );
+  }
+
+  async permanentlyDeleteLeague(): Promise<void> {
+    const currentLeague = this.league();
+
+    if (!currentLeague || !this.leagueId || !this.isCommissioner()) {
+      this.deleteLeagueError.set(
+        'Only the league commissioner can permanently delete this league.',
+      );
+      return;
+    }
+
+    if (this.deleteLeagueNameDraft.trim() !== currentLeague.name) {
+      this.deleteLeagueError.set(
+        `Type “${currentLeague.name}” exactly before deleting the league.`,
+      );
+      return;
+    }
+
+    this.deleteLeagueError.set('');
+    this.deleteLeagueInProgress.set(true);
+
+    try {
+      await deleteLeaguePermanently(this.leagueId, this.deleteLeagueNameDraft);
+
+      this.stopDraftListener?.();
+      this.stopTeamListener?.();
+      this.stopCycleListener?.();
+      this.stopMatchupsListener?.();
+      this.stopCurrentOwnerMatchupListener?.();
+      this.stopInjurySyncListener?.();
+
+      forgetRememberedLastLeagueId(this.leagueId);
+
+      await this.router.navigate(['/dashboard'], {
+        replaceUrl: true,
+        state: { deletedLeagueName: currentLeague.name },
+      });
+    } catch (error: unknown) {
+      this.deleteLeagueError.set(
+        error instanceof Error
+          ? error.message
+          : 'The league could not be deleted. Please try again.',
+      );
+      this.deleteLeagueInProgress.set(false);
     }
   }
 

@@ -1,0 +1,30 @@
+RINKRAT LEAGUE DELETION UPDATE
+===============================
+
+Added a commissioner-only permanent league deletion workflow.
+
+SAFETY
+------
+- The control appears only to the league commissioner on Current League.
+- The confirmation panel is collapsed by default inside a League Danger Zone.
+- The commissioner must type the complete league name exactly before the destructive button is enabled.
+- The server independently checks authentication, commissioner ownership, league ID, and exact league-name confirmation.
+- Direct client deletion of the league root is blocked by Firestore rules so the safe cleanup function cannot be bypassed accidentally.
+
+DELETION SCOPE
+--------------
+The deleteLeague callable Cloud Function removes:
+- The league document and every nested subcollection.
+- Members, teams, rosters, drafts, picks, queues, cycles, matchups, standings data, transactions, projections, availability records, playoff data, diagnostics, and automation state stored under the league.
+- League invite documents associated with the league.
+- Pending injury email queue records and notification logs associated with the league.
+
+AFTER DELETION
+--------------
+- The deleted league is cleared as the remembered last league when applicable.
+- The commissioner is returned to the Dashboard.
+- Other managers lose access because their league membership documents are removed with the league.
+
+DEPLOYMENT
+----------
+This update changes Angular code, Firestore rules, and Cloud Functions. Use npm run deploy:production rather than a Hosting-only deployment.

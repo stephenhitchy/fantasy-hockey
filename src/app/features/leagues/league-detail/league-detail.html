@@ -613,6 +613,91 @@
         }
       </div>
     </section>
+
+
+    @if (isCommissioner()) {
+      <section class="commissioner-danger-zone" aria-labelledby="delete-league-title">
+        <div class="danger-zone-heading">
+          <div>
+            <span class="draft-section-eyebrow">Commissioner Only</span>
+            <h2 id="delete-league-title">League Danger Zone</h2>
+            <p>
+              Permanently remove this league, its teams, draft, rosters, cycles,
+              matchups, transactions, and invite code.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="danger-zone-toggle"
+            (click)="toggleDeleteLeaguePanel()"
+            [disabled]="deleteLeagueInProgress()"
+            [attr.aria-expanded]="deleteLeaguePanelOpen()"
+            aria-controls="delete-league-confirmation"
+          >
+            {{ deleteLeaguePanelOpen() ? 'Close Confirmation' : 'Delete League' }}
+          </button>
+        </div>
+
+        @if (deleteLeaguePanelOpen()) {
+          <div id="delete-league-confirmation" class="delete-league-confirmation">
+            <div class="delete-league-warning" role="note">
+              <span class="delete-league-warning-icon" aria-hidden="true">!</span>
+              <div>
+                <strong>This cannot be undone.</strong>
+                <p>
+                  Every manager will lose access immediately. Historical scores,
+                  draft results, lineups, and league settings will be permanently deleted.
+                </p>
+              </div>
+            </div>
+
+            <label for="delete-league-name-confirmation">
+              Type the full league name exactly:
+              <strong>{{ league()?.name }}</strong>
+            </label>
+
+            <input
+              id="delete-league-name-confirmation"
+              type="text"
+              maxlength="80"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [(ngModel)]="deleteLeagueNameDraft"
+              [disabled]="deleteLeagueInProgress()"
+              [placeholder]="league()?.name ?? 'League name'"
+            />
+
+            <div class="delete-league-actions">
+              <button
+                type="button"
+                class="permanent-delete-league-button"
+                (click)="permanentlyDeleteLeague()"
+                [disabled]="!canDeleteLeague()"
+              >
+                {{ deleteLeagueInProgress() ? 'Deleting League…' : 'Permanently Delete League' }}
+              </button>
+
+              <button
+                type="button"
+                class="cancel-delete-league-button"
+                (click)="toggleDeleteLeaguePanel()"
+                [disabled]="deleteLeagueInProgress()"
+              >
+                Cancel
+              </button>
+            </div>
+
+            @if (deleteLeagueError()) {
+              <p class="delete-league-error" role="alert">
+                {{ deleteLeagueError() }}
+              </p>
+            }
+          </div>
+        }
+      </section>
+    }
   </section>
 
   @if (showDraftStartedModal()) {

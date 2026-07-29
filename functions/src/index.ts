@@ -2007,6 +2007,150 @@ export const refreshDailyPlayerAvailability = onCall(
   }
 );
 
+
+interface DeleteLeagueResult {
+  deleted: boolean;
+  leagueId: string;
+  deletedRelatedDocumentCount: number;
+}
+
+async function deleteTopLevelDocumentsByLeagueId(
+  collectionName: string,
+  leagueId: string,
+): Promise<number> {
+  let deletedCount = 0;
+
+  while (true) {
+    const snapshot = await db.collection(collectionName)
+      .where('leagueId', '==', leagueId)
+      .limit(MAX_BATCH_WRITES)
+      .get();
+
+    if (snapshot.empty) {
+      return deletedCount;
+    }
+
+    const batch = db.batch();
+
+    for (const document of snapshot.docs) {
+      batch.delete(document.ref);
+    }
+
+    await batch.commit();
+    deletedCount += snapshot.size;
+  }
+}
+
+export const deleteLeague = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    maxInstances: 3,
+    concurrency: 1,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<DeleteLeagueResult> => {
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'You must be logged in to delete a league.'
+      );
+    }
+
+    const data = asRecord(request.data);
+    const leagueId = asString(data['leagueId']);
+    const confirmationName = asString(data['confirmationName']);
+
+    if (
+      !leagueId ||
+      leagueId.length > 128 ||
+      !/^[A-Za-z0-9_-]+$/.test(leagueId)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'A valid league ID is required.'
+      );
+    }
+
+    if (!confirmationName || confirmationName.length > 80) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Type the full league name before deleting it.'
+      );
+    }
+
+    const leagueRef = db.doc(`leagues/${leagueId}`);
+    const leagueSnapshot = await leagueRef.get();
+
+    if (!leagueSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'This league no longer exists.'
+      );
+    }
+
+    const league = leagueSnapshot.data() ?? {};
+    const leagueName = asString(league['name']);
+    const commissionerId = asString(league['commissionerId']);
+
+    if (commissionerId !== request.auth.uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the league commissioner can permanently delete this league.'
+      );
+    }
+
+    if (confirmationName !== leagueName) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The confirmation name did not exactly match the league name.'
+      );
+    }
+
+    await leagueRef.set(
+      {
+        deletionStatus: 'deleting',
+        deletionRequestedBy: request.auth.uid,
+        deletionRequestedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    let deletedRelatedDocumentCount = 0;
+
+    deletedRelatedDocumentCount += await deleteTopLevelDocumentsByLeagueId(
+      'leagueInvites',
+      leagueId
+    );
+    deletedRelatedDocumentCount += await deleteTopLevelDocumentsByLeagueId(
+      'injuryEmailQueue',
+      leagueId
+    );
+    deletedRelatedDocumentCount += await deleteTopLevelDocumentsByLeagueId(
+      'emailNotificationLog',
+      leagueId
+    );
+
+    await db.recursiveDelete(leagueRef);
+
+    console.info('League permanently deleted.', {
+      leagueId,
+      leagueName,
+      commissionerId: request.auth.uid,
+      deletedRelatedDocumentCount
+    });
+
+    return {
+      deleted: true,
+      leagueId,
+      deletedRelatedDocumentCount
+    };
+  }
+);
+
 export {
   advanceHistoricalReplayDay,
   initializeSeasonAfterDraft,

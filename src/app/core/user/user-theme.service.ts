@@ -167,6 +167,18 @@ export function rememberLastLeagueId(leagueId: string): void {
   }
 }
 
+export function forgetRememberedLastLeagueId(leagueId?: string): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  const rememberedLeagueId = localStorage.getItem(LAST_LEAGUE_STORAGE_KEY) || '';
+
+  if (!leagueId || rememberedLeagueId === leagueId) {
+    localStorage.removeItem(LAST_LEAGUE_STORAGE_KEY);
+  }
+}
+
 export function getRememberedLastLeagueId(): string {
   return typeof localStorage === 'undefined'
     ? ''

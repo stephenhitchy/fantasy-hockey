@@ -633,3 +633,7 @@ DRAFT START, AUTO-DRAFT, AND LEGACY MEMBERSHIP FIX (JULY 2026)
 - League status messaging now accurately says the server is opening a scheduled
   draft rather than telling managers it is waiting for the commissioner.
 - See DRAFT_START_AUTODRAFT_PERMISSION_FIX.txt for the detailed summary.
+
+LEAGUE DELETION FEATURE
+-----------------------
+Commissioners can permanently delete a league from a collapsed Danger Zone on Current League. The full league name must be typed exactly. An authenticated Cloud Function verifies ownership and recursively removes the league tree plus related invite and injury-email records. Direct client deletion of league roots is blocked by Firestore rules.
