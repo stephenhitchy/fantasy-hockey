@@ -1,0 +1,137 @@
+.feedback-page {
+  width: min(860px, calc(100% - 24px));
+  margin: 24px auto 60px;
+}
+
+.feedback-hero,
+.feedback-card {
+  border: 3px solid var(--border-strong);
+  background: var(--surface-raised, var(--surface-1));
+  color: var(--text-main);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--border-strong) 30%, transparent);
+}
+
+.feedback-hero {
+  margin-bottom: 18px;
+  padding: 26px;
+}
+
+.feedback-hero h1 {
+  margin: 8px 0;
+  color: var(--text-strong);
+}
+
+.feedback-hero p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.feedback-card {
+  padding: 26px;
+}
+
+.feedback-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.feedback-field > span {
+  color: var(--text-strong);
+  font-weight: 900;
+}
+
+.feedback-field select,
+.feedback-field textarea {
+  width: 100%;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-inset, var(--surface-2));
+  color: var(--text-main);
+  padding: 12px;
+  font: inherit;
+}
+
+.feedback-field textarea {
+  resize: vertical;
+  min-height: 180px;
+}
+
+.feedback-field small,
+.feedback-toggle small {
+  color: var(--text-muted);
+}
+
+.feedback-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 0 22px;
+}
+
+.feedback-toggle input {
+  margin-top: 4px;
+}
+
+.feedback-toggle span {
+  display: grid;
+  gap: 3px;
+}
+
+.feedback-toggle strong {
+  color: var(--text-strong);
+}
+
+.feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.feedback-actions button {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+.feedback-status {
+  margin: 0 0 18px;
+  padding: 12px;
+  border: 2px solid currentColor;
+  font-weight: 800;
+}
+
+.feedback-status.success {
+  color: var(--status-success-text, #70e79d);
+}
+
+.feedback-status.error {
+  color: var(--status-danger-text, #ff93a2);
+}
+
+.feedback-links {
+  margin: 22px 0 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.feedback-links a {
+  color: var(--user-team-secondary);
+  font-weight: 800;
+}
+
+@media (max-width: 620px) {
+  .feedback-page {
+    width: calc(100% - 12px);
+    margin-top: 10px;
+  }
+
+  .feedback-hero,
+  .feedback-card {
+    padding: 18px;
+  }
+
+  .feedback-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

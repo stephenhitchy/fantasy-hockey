@@ -224,3 +224,42 @@
     animation: none;
   }
 }
+
+.site-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(1460px, calc(100% - 28px));
+  margin: 26px auto 110px;
+  padding: 14px 16px;
+  border-top: 2px solid color-mix(in srgb, var(--border-strong) 55%, transparent);
+  color: var(--text-muted);
+  font-size: .88rem;
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.site-footer a {
+  color: var(--text-main);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--user-team-secondary);
+  text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+  .site-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 140px;
+  }
+}

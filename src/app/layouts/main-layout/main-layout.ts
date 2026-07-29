@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
 
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
 import { Navbar } from '../../shared/navbar/navbar';
@@ -7,7 +7,7 @@ import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/p
 
 @Component({
   selector: 'app-main-layout',
-  imports: [RouterOutlet, Navbar],
+  imports: [RouterLink, RouterOutlet, Navbar],
   templateUrl: './main-layout.html',
   styleUrl: './main-layout.css',
 })

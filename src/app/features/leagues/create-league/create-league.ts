@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { createLeague } from '../../../core/league/league.service';
 import { getUserProfile } from '../../../core/user/user.service';
+import { TelemetryService } from '../../../core/observability/telemetry.service';
 import {
   DEFAULT_LEAGUE_LOGO_ID,
   DEFAULT_LEAGUE_LOGO_PALETTE_ID,
@@ -41,7 +42,10 @@ export class CreateLeague {
       this.logoOptions[0]!,
   );
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private telemetry: TelemetryService,
+  ) {}
 
   async submit(): Promise<void> {
     this.errorMessage.set('');
@@ -63,6 +67,7 @@ export class CreateLeague {
         this.selectedLogoId(),
         this.selectedPaletteId(),
       );
+      this.telemetry.track('league_created', { max_teams: this.maxTeams });
       await this.router.navigate(['/dashboard']);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to create the league right now.');

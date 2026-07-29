@@ -638,3 +638,24 @@
 .auth-form-copy small {
   color: var(--text-secondary);
 }
+
+.auth-policy-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px 16px 28px;
+}
+
+.auth-policy-links a {
+  color: var(--text-muted);
+  font-size: .84rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-policy-links a:hover,
+.auth-policy-links a:focus-visible {
+  color: var(--user-team-secondary);
+  text-decoration: underline;
+}

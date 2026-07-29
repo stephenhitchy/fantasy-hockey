@@ -1,0 +1,64 @@
+<section class="feedback-page">
+  <header class="feedback-hero">
+    <span class="eyebrow">Beta Bench</span>
+    <h1>Send RinkRat Feedback</h1>
+    <p>Your report includes the generalized page route and basic technical context. Do not include passwords, invite codes, or private personal information.</p>
+  </header>
+
+  <article class="feedback-card">
+    @if (successMessage()) {
+      <p class="feedback-status success" role="status">{{ successMessage() }}</p>
+    }
+
+    @if (errorMessage()) {
+      <p class="feedback-status error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <label class="feedback-field">
+      <span>Type of feedback</span>
+      <select [(ngModel)]="category" [disabled]="submitting()">
+        <option value="bug">Something is broken</option>
+        <option value="confusing">A screen or rule is confusing</option>
+        <option value="incorrect-result">A fantasy result looks incorrect</option>
+        <option value="feature-request">Feature idea</option>
+        <option value="account-privacy">Account or privacy request</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+
+    <label class="feedback-field">
+      <span>What happened?</span>
+      <textarea
+        [(ngModel)]="message"
+        maxlength="2000"
+        rows="10"
+        [disabled]="submitting()"
+        placeholder="What page were you on? What did you do? What did you expect, and what happened instead?"
+      ></textarea>
+      <small>{{ charactersRemaining() }} characters remaining</small>
+    </label>
+
+    <label class="feedback-toggle">
+      <input type="checkbox" [(ngModel)]="allowFollowUp" [disabled]="submitting()" />
+      <span>
+        <strong>Allow follow-up</strong>
+        <small>RinkRat may use your signed-in account to ask for more details.</small>
+      </span>
+    </label>
+
+    <div class="feedback-actions">
+      <button type="button" class="secondary-button" (click)="returnToPreviousPage()">
+        Go Back
+      </button>
+      <button type="button" class="primary-button" [disabled]="submitting()" (click)="submit()">
+        {{ submitting() ? 'Sending Report...' : 'Send Feedback' }}
+      </button>
+    </div>
+
+    <p class="feedback-links">
+      <a routerLink="/privacy">Privacy Policy</a>
+      <span aria-hidden="true">·</span>
+      <a routerLink="/terms">Terms of Use</a>
+    </p>
+  </article>
+</section>

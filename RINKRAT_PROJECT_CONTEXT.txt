@@ -681,3 +681,53 @@ LEAGUE DELETION (JULY 2026)
 - The function verifies commissioner ownership, recursively removes the complete leagues/{leagueId} tree, deletes matching leagueInvites, injuryEmailQueue, and emailNotificationLog records, then returns the commissioner to Dashboard.
 - Firestore rules block direct deletion of the league root so nested data cannot be orphaned by an incomplete client delete.
 - The remembered last-league ID is cleared when it matches the deleted league.
+
+BETA FOUNDATION — PART 1 (JULY 2026)
+------------------------------------
+The first beta-hardening package adds product observability, safer navigation,
+and a direct support channel without changing fantasy scoring or cycle logic.
+
+Implemented:
+- Authenticated main-layout routes now use an auth guard and preserve a safe
+  returnUrl so signed-out users return to the page they originally requested.
+- Every league route verifies membership before loading. Commissioner-only
+  setup, projection, and management pages also verify commissioner ownership.
+- Production-hidden diagnostics and simulators use a developer-tools guard.
+- Unauthorized users see a themed Access Check page instead of raw Firestore
+  permission errors.
+- Firebase Analytics initializes only on supported non-local hosts. Page paths
+  are generalized so league IDs, player IDs, matchup IDs, cycle numbers, and
+  asset keys are not sent as analytics path values.
+- Initial funnel events include login, registration, league creation, league
+  joining, feedback submission, page views, and generalized client-error types.
+- A custom Angular ErrorHandler deduplicates and rate-limits authenticated
+  client reports before sending sanitized error context to the
+  reportClientError callable Function.
+- Signed-in managers can submit bug reports, confusing-flow reports, incorrect
+  result reports, feature ideas, and account/privacy requests through the new
+  feedback page. Reports include an optional verified league context, a
+  generalized route, and a reference ID.
+- Server-side callable Functions validate, rate-limit, and store feedback and
+  error reports. Browser Firestore rules deny direct access to those internal
+  collections.
+- Public Support, Privacy Policy, and Terms of Use pages are linked from the
+  login screen and authenticated footer. The mobile More menu links directly
+  to feedback and support.
+
+Important files:
+  src/app/core/guards/auth.guard.ts
+  src/app/core/guards/league-access.guard.ts
+  src/app/core/observability/telemetry.service.ts
+  src/app/core/observability/client-error-reporter.service.ts
+  src/app/core/observability/rinkrat-error-handler.ts
+  src/app/features/support/
+  src/app/features/legal/
+  src/app/features/errors/access-denied/
+  functions/src/index.ts
+  firestore.rules
+
+The next beta-foundation package should add App Check configuration and staged
+rollout, account deletion/reauthentication, a development-only listener and
+performance monitor, and emulator-backed multi-account workflow tests. Training
+Camp onboarding and daily manager retention features should follow after the
+foundation is tested.

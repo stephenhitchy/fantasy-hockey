@@ -2151,6 +2151,275 @@ export const deleteLeague = onCall(
   }
 );
 
+
+
+const FEEDBACK_CATEGORIES = new Set([
+  'bug',
+  'confusing',
+  'incorrect-result',
+  'feature-request',
+  'account-privacy',
+  'other'
+]);
+
+async function enforceUserSubmissionLimit(
+  userId: string,
+  bucket: 'feedback' | 'clientError',
+  maximumCount: number,
+  windowMilliseconds: number
+): Promise<void> {
+  const rateLimitRef = db.doc(`observabilityRateLimits/${userId}`);
+  const startedAtField = `${bucket}WindowStartedAt`;
+  const countField = `${bucket}WindowCount`;
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(rateLimitRef);
+    const data = snapshot.data() ?? {};
+    const now = Timestamp.now();
+    const storedStartedAt = data[startedAtField];
+    const storedCount = data[countField];
+    const windowStartedAt = storedStartedAt instanceof Timestamp
+      ? storedStartedAt
+      : null;
+    const count = typeof storedCount === 'number' ? storedCount : 0;
+    const windowExpired = !windowStartedAt ||
+      now.toMillis() - windowStartedAt.toMillis() >= windowMilliseconds;
+
+    if (windowExpired) {
+      transaction.set(
+        rateLimitRef,
+        {
+          [startedAtField]: now,
+          [countField]: 1,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+      return;
+    }
+
+    if (count >= maximumCount) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Too many reports were submitted recently. Wait a few minutes and try again.'
+      );
+    }
+
+    transaction.set(
+      rateLimitRef,
+      {
+        [countField]: count + 1,
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+  });
+}
+
+function redactDiagnosticText(value: string): string {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+    .replace(/\/leagues\/[A-Za-z0-9_-]+/g, '/leagues/:leagueId')
+    .replace(/\/players\/[A-Za-z0-9_-]+/g, '/players/:playerId')
+    .replace(/([?&](?:inviteCode|code)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+function normalizedHeaderValue(
+  value: string | string[] | undefined,
+  maximumLength: number
+): string {
+  const normalized = Array.isArray(value)
+    ? value.join(', ')
+    : value ?? 'unknown';
+
+  return normalized.slice(0, maximumLength);
+}
+
+function normalizedClientContext(headers: {
+  [key: string]: string | string[] | undefined;
+}): {
+  userAgent: string;
+  language: string;
+} {
+  return {
+    userAgent: normalizedHeaderValue(headers['user-agent'], 300),
+    language: normalizedHeaderValue(headers['accept-language'], 120)
+  };
+}
+
+export const reportClientError = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 10,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{ accepted: boolean; reportId: string }> => {
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before sending an automatic error report.'
+      );
+    }
+
+    await enforceUserSubmissionLimit(
+      request.auth.uid,
+      'clientError',
+      20,
+      60 * 60 * 1000
+    );
+
+    const data = asRecord(request.data);
+    const message = redactDiagnosticText(
+      asString(data['message'])
+    ).slice(0, 500);
+    const stack = redactDiagnosticText(
+      asString(data['stack'])
+    ).slice(0, 4_000);
+    const route = asString(data['route']).slice(0, 300);
+    const source = asString(data['source']).slice(0, 60);
+    const category = asString(data['category']).slice(0, 60);
+    const appVersion = asString(data['appVersion']).slice(0, 80);
+
+    if (!message || !route || !source || !category) {
+      throw new HttpsError(
+        'invalid-argument',
+        'The error report was missing required technical context.'
+      );
+    }
+
+    const reportId = randomUUID();
+    const context = normalizedClientContext(request.rawRequest.headers);
+
+    await db.doc(`clientErrorReports/${reportId}`).set({
+      reportId,
+      userId: request.auth.uid,
+      authenticated: true,
+      message,
+      stack,
+      route,
+      source,
+      category,
+      appVersion,
+      userAgent: context.userAgent,
+      language: context.language,
+      status: 'new',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(
+        Date.now() + (90 * 24 * 60 * 60 * 1000)
+      )
+    });
+
+    return {
+      accepted: true,
+      reportId
+    };
+  }
+);
+
+export const submitFeedback = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 10,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{ accepted: boolean; feedbackId: string }> => {
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before submitting feedback.'
+      );
+    }
+
+    await enforceUserSubmissionLimit(
+      request.auth.uid,
+      'feedback',
+      3,
+      10 * 60 * 1000
+    );
+
+    const data = asRecord(request.data);
+    const category = asString(data['category']);
+    const message = asString(data['message']).trim();
+    const route = asString(data['route']).slice(0, 300);
+    const leagueId = asString(data['leagueId']).slice(0, 128);
+    const allowFollowUp = data['allowFollowUp'] === true;
+
+    if (!FEEDBACK_CATEGORIES.has(category)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid feedback category.'
+      );
+    }
+
+    if (!message || message.length > 2_000) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Feedback must contain between 1 and 2,000 characters.'
+      );
+    }
+
+    if (leagueId) {
+      if (!/^[A-Za-z0-9_-]+$/.test(leagueId)) {
+        throw new HttpsError('invalid-argument', 'Invalid league context.');
+      }
+
+      const [leagueSnapshot, memberSnapshot, teamSnapshot] = await Promise.all([
+        db.doc(`leagues/${leagueId}`).get(),
+        db.doc(`leagues/${leagueId}/members/${request.auth.uid}`).get(),
+        db.doc(`leagues/${leagueId}/teams/${request.auth.uid}`).get()
+      ]);
+      const commissionerId = asString(
+        (leagueSnapshot.data() ?? {})['commissionerId']
+      );
+      const hasLeagueAccess = leagueSnapshot.exists && (
+        commissionerId === request.auth.uid ||
+        memberSnapshot.exists ||
+        teamSnapshot.exists
+      );
+
+      if (!hasLeagueAccess) {
+        throw new HttpsError(
+          'permission-denied',
+          'You cannot attach feedback to a league you do not belong to.'
+        );
+      }
+    }
+
+    const feedbackId = randomUUID();
+    const context = normalizedClientContext(request.rawRequest.headers);
+
+    await db.doc(`feedbackReports/${feedbackId}`).set({
+      feedbackId,
+      userId: request.auth.uid,
+      category,
+      message,
+      route: route || '/',
+      leagueId: leagueId || null,
+      allowFollowUp,
+      userAgent: context.userAgent,
+      language: context.language,
+      status: 'new',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(
+        Date.now() + (365 * 24 * 60 * 60 * 1000)
+      )
+    });
+
+    return {
+      accepted: true,
+      feedbackId
+    };
+  }
+);
+
 export {
   advanceHistoricalReplayDay,
   initializeSeasonAfterDraft,

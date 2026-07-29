@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { joinLeagueByInviteCode } from '../../../core/league/league.service';
 import { getUserProfile } from '../../../core/user/user.service';
+import { TelemetryService } from '../../../core/observability/telemetry.service';
 
 @Component({
   selector: 'app-join-league',
@@ -18,7 +19,10 @@ export class JoinLeague {
   errorMessage = signal('');
 
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private telemetry: TelemetryService,
+  ) {}
 
   async submit(): Promise<void> {
     this.errorMessage.set('');
@@ -37,6 +41,7 @@ export class JoinLeague {
         this.inviteCode,
         username,
       );
+      this.telemetry.track('league_joined', { invite_code_length: this.inviteCode.trim().length });
       await this.router.navigate(['/leagues', leagueId]);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to join the league right now.');

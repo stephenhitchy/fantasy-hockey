@@ -1239,6 +1239,20 @@ service cloud.firestore {
         resource.data.uid == currentUserId();
     }
 
+    // Feedback, client diagnostics, and rate-limit records are server-managed.
+    // Callable Functions use the Admin SDK and bypass these browser rules.
+    match /feedbackReports/{feedbackId} {
+      allow read, write: if false;
+    }
+
+    match /clientErrorReports/{reportId} {
+      allow read, write: if false;
+    }
+
+    match /observabilityRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Subscription } from 'rxjs';
 
 import { auth } from './core/firebase-auth';
+import { TelemetryService } from './core/observability/telemetry.service';
 import {
   applyUserTheme,
   initializeStoredUserTheme,
@@ -56,8 +57,9 @@ export class App implements OnDestroy {
   private cancelProfileRefresh: (() => void) | null = null;
   private activeLeagueId = '';
 
-  constructor(router: Router) {
+  constructor(router: Router, telemetry: TelemetryService) {
     initializeStoredUserTheme();
+    telemetry.start(router);
 
     this.stopAuthThemeListener = onAuthStateChanged(auth, (user) => {
       this.cancelProfileRefresh?.();

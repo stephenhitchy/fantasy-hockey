@@ -1,7 +1,8 @@
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
+import { TelemetryService } from '../../core/observability/telemetry.service';
 import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
 import {
   applyUserTheme,
@@ -19,7 +20,7 @@ import {
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './auth.html',
   styleUrl: './auth.css',
 })
@@ -93,7 +94,11 @@ export class Auth {
     return this.isRegistering() ? 'Create Profile' : 'Login';
   });
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private route: ActivatedRoute,
+    private telemetry: TelemetryService,
+  ) {}
 
   async submit(): Promise<void> {
     if (this.loading()) {
@@ -138,6 +143,20 @@ export class Auth {
       this.mascotCelebrating.set(true);
       await new Promise((resolve) => setTimeout(resolve, 850));
 
+      this.telemetry.track(
+        this.isRegistering() ? 'registration_completed' : 'login_completed',
+        {
+          default_landing: profile?.defaultLandingPage === 'lastLeague' ? 'last_league' : 'dashboard',
+        },
+      );
+
+      const returnUrl = this.safeReturnUrl();
+
+      if (returnUrl && !this.isRegistering()) {
+        await this.router.navigateByUrl(returnUrl);
+        return;
+      }
+
       const lastLeagueId = getRememberedLastLeagueId();
       const destination =
         profile?.defaultLandingPage === 'lastLeague' && lastLeagueId
@@ -146,6 +165,9 @@ export class Auth {
 
       await this.router.navigate(destination);
     } catch (error: unknown) {
+      this.telemetry.track('auth_action_failed', {
+        action: this.isRegistering() ? 'register' : 'login',
+      });
       this.errorMessage.set(this.getFriendlyAuthError(error));
       this.mascotCelebrating.set(false);
     } finally {
@@ -233,6 +255,20 @@ export class Auth {
     this.password = '';
     this.errorMessage.set('');
     this.successMessage.set('');
+  }
+
+  private safeReturnUrl(): string {
+    const candidate = this.route.snapshot.queryParamMap.get('returnUrl')?.trim() ?? '';
+
+    if (!candidate.startsWith('/') || candidate.startsWith('//')) {
+      return '';
+    }
+
+    if (candidate === '/' || candidate.startsWith('/privacy') || candidate.startsWith('/terms')) {
+      return '';
+    }
+
+    return candidate;
   }
 
   private getFriendlyAuthError(error: unknown): string {

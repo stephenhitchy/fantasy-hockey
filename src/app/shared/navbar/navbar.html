@@ -45,6 +45,14 @@
       </a>
 
       <a
+        routerLink="/support/feedback"
+        [queryParams]="leagueId() ? { leagueId: leagueId(), from: currentUrl() } : { from: currentUrl() }"
+        routerLinkActive="active"
+      >
+        Feedback
+      </a>
+
+      <a
         routerLink="/account/settings"
         routerLinkActive="active"
         class="account-nav-link"
@@ -293,6 +301,29 @@
           <span>
             <strong>Account Settings</strong>
             <small>Profile and preferences</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/support/feedback"
+          [queryParams]="leagueId() ? { leagueId: leagueId(), from: currentUrl() } : { from: currentUrl() }"
+          (click)="closeMore()"
+        >
+          <span class="pixel-icon icon-lab icon-sm" aria-hidden="true"></span>
+          <span>
+            <strong>Send Feedback</strong>
+            <small>Report a bug or suggest an improvement</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/support"
+          (click)="closeMore()"
+        >
+          <span class="pixel-icon icon-shield icon-sm" aria-hidden="true"></span>
+          <span>
+            <strong>Support & Policies</strong>
+            <small>Help, privacy, and beta terms</small>
           </span>
         </a>
       </div>

@@ -1,0 +1,15 @@
+<section class="access-page">
+  <article class="access-card">
+    <span class="access-icon" aria-hidden="true">🚫</span>
+    <span class="eyebrow">Access Check</span>
+    <h1>{{ title() }}</h1>
+    <p>{{ message() }}</p>
+
+    <div class="access-actions">
+      @if (leagueId) {
+        <a [routerLink]="['/leagues', leagueId]">Return to League</a>
+      }
+      <a routerLink="/dashboard">Go to Dashboard</a>
+    </div>
+  </article>
+</section>
