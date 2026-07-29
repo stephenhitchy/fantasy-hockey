@@ -77,6 +77,23 @@
         </a>
       </header>
 
+      @if (profile() && !trainingCampComplete()) {
+        <section class="training-camp-banner" aria-labelledby="training-camp-banner-title">
+          <span class="training-camp-banner-mascot" aria-hidden="true">
+            <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+          </span>
+          <div class="training-camp-banner-copy">
+            <span class="eyebrow">New Manager Orientation</span>
+            <h2 id="training-camp-banner-title">Learn RinkRat in five quick shifts</h2>
+            <p>
+              See how six-game windows, roster moves, player cards, and automatic season flow work
+              before your first draft.
+            </p>
+          </div>
+          <a routerLink="/training-camp">Start Training Camp →</a>
+        </section>
+      }
+
       @if (errorMessage()) {
         <section class="error-card" role="alert">
           <strong>Dashboard connection</strong>

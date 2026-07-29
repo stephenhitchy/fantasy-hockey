@@ -1,0 +1,277 @@
+@if (loading()) {
+  <section class="training-camp-state" aria-live="polite">
+    <span class="pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
+    <strong>Opening Training Camp...</strong>
+  </section>
+} @else if (completed()) {
+  <section class="training-camp-page completion-page">
+    <article class="completion-card">
+      <div class="completion-mascot" aria-hidden="true">
+        <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+      </div>
+      <span class="eyebrow">Training Camp Complete</span>
+      <h1 id="training-camp-step-title" tabindex="-1">You are ready for puck drop</h1>
+      <p>
+        You now know how six-game windows, roster moves, player cards, and the season flow work.
+        The Coach button remains available throughout RinkRat whenever you need a refresher.
+      </p>
+
+      <div class="completion-badge" aria-label="RinkRat Training Camp completion badge">
+        <span class="pixel-icon icon-trophy icon-lg" aria-hidden="true"></span>
+        <div>
+          <small>Manager Badge</small>
+          <strong>Training Camp Graduate</strong>
+        </div>
+      </div>
+
+      <div class="completion-actions">
+        <a class="primary-camp-button" routerLink="/dashboard">Enter the Arena</a>
+        <button type="button" class="secondary-camp-button" (click)="completed.set(false); selectStep(0)">
+          Review Again
+        </button>
+      </div>
+    </article>
+  </section>
+} @else {
+  <section class="training-camp-page">
+    <header class="training-camp-hero">
+      <div class="training-camp-brand">
+        <img src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot" />
+        <div>
+          <span class="eyebrow">RinkRat Training Camp</span>
+          <h1>Learn the game in five shifts</h1>
+        </div>
+      </div>
+
+      <div class="training-camp-hero-actions">
+        @if (previouslyCompleted()) {
+          <span class="completed-chip">Previously completed</span>
+        }
+        <button type="button" class="exit-camp-button" (click)="leaveTrainingCamp()">
+          Exit Training Camp
+        </button>
+      </div>
+    </header>
+
+    <div class="camp-progress" aria-label="Training Camp progress">
+      <div class="camp-progress-copy">
+        <span>Shift {{ currentStepIndex() + 1 }} of {{ steps.length }}</span>
+        <strong>{{ progressPercent() }}%</strong>
+      </div>
+      <div class="camp-progress-track" aria-hidden="true">
+        <span [style.width.%]="progressPercent()"></span>
+      </div>
+    </div>
+
+    <nav class="camp-step-tabs" aria-label="Training Camp sections">
+      @for (step of steps; track step.id; let index = $index) {
+        <button
+          type="button"
+          [class.active]="index === currentStepIndex()"
+          [class.visited]="index < currentStepIndex()"
+          [attr.aria-current]="index === currentStepIndex() ? 'step' : null"
+          (click)="selectStep(index)"
+        >
+          <span>{{ step.number }}</span>
+          <small>{{ step.eyebrow }}</small>
+        </button>
+      }
+    </nav>
+
+    <article class="camp-lesson-card">
+      <div class="lesson-copy">
+        <span class="eyebrow">{{ currentStep().eyebrow }}</span>
+        <h2 id="training-camp-step-title" tabindex="-1">{{ currentStep().title }}</h2>
+        <p>{{ currentStep().summary }}</p>
+
+        <aside class="coach-note">
+          <span class="coach-avatar" aria-hidden="true">
+            <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+          </span>
+          <div>
+            <small>Coach’s Clipboard</small>
+            <strong>{{ currentStep().coachNote }}</strong>
+          </div>
+        </aside>
+      </div>
+
+      <div class="lesson-visual" [attr.data-step]="currentStep().id">
+        @switch (currentStep().id) {
+          @case ('cycles') {
+            <section class="cycle-demo" aria-label="Two players completing independent six-game windows">
+              <div class="cycle-demo-team">
+                <div class="demo-player">
+                  <span class="demo-logo">A</span>
+                  <div><strong>Player A</strong><small>Fast NHL schedule</small></div>
+                </div>
+                <div class="game-dot-row">
+                  @for (game of [1, 2, 3, 4, 5, 6]; track game) {
+                    <span class="game-dot played">{{ game }}</span>
+                  }
+                  <span class="window-arrow">→</span>
+                  <span class="game-dot next">7</span>
+                </div>
+                <small class="demo-result">Window complete in 9 days</small>
+              </div>
+
+              <div class="cycle-demo-team">
+                <div class="demo-player">
+                  <span class="demo-logo">B</span>
+                  <div><strong>Player B</strong><small>Slower NHL schedule</small></div>
+                </div>
+                <div class="game-dot-row">
+                  @for (game of [1, 2, 3, 4]; track game) {
+                    <span class="game-dot played">{{ game }}</span>
+                  }
+                  @for (game of [5, 6]; track game) {
+                    <span class="game-dot upcoming">{{ game }}</span>
+                  }
+                </div>
+                <small class="demo-result">Still finishing the same six-game window</small>
+              </div>
+
+              <div class="fairness-callout">
+                <strong>Six games each</strong>
+                <span>No schedule-volume advantage</span>
+              </div>
+            </section>
+          }
+
+          @case ('roster') {
+            <section class="roster-demo" aria-label="RinkRat roster structure">
+              <div class="roster-starters">
+                <div><span>LW</span><strong>3</strong></div>
+                <div><span>C</span><strong>3</strong></div>
+                <div><span>RW</span><strong>3</strong></div>
+                <div><span>D</span><strong>4</strong></div>
+                <div><span>G</span><strong>1</strong></div>
+              </div>
+              <div class="roster-support">
+                <article>
+                  <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+                  <div><small>Active lineup</small><strong>14 scoring assets</strong></div>
+                </article>
+                <article>
+                  <span class="pixel-icon icon-bench icon-lg" aria-hidden="true"></span>
+                  <div><small>Bench rail</small><strong>3 flexible slots</strong></div>
+                </article>
+                <article>
+                  <span class="pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
+                  <div><small>Treatment room</small><strong>3 IR slots</strong></div>
+                </article>
+              </div>
+            </section>
+          }
+
+          @case ('moves') {
+            <section class="move-demo" aria-label="Examples of immediate and queued roster moves">
+              <article class="move-example immediate">
+                <span class="move-status">Immediate</span>
+                <strong>Neither asset has played</strong>
+                <div class="move-path"><span>Outgoing</span><b>→</b><span>Incoming</span></div>
+                <small>The new player enters the open window now.</small>
+              </article>
+              <article class="move-example queued">
+                <span class="move-status">Queued</span>
+                <strong>A window already started</strong>
+                <div class="move-path"><span>Current asset</span><b>⏱</b><span>Next window</span></div>
+                <small>Completed and scheduled games remain protected.</small>
+              </article>
+              <article class="move-example ir">
+                <span class="move-status">IR Move</span>
+                <strong>Eligible injured player</strong>
+                <div class="move-path"><span>Active</span><b>+</b><span>IR space</span></div>
+                <small>Open a lineup spot without discarding the player.</small>
+              </article>
+            </section>
+          }
+
+          @case ('cards') {
+            <section class="player-card-demo" aria-label="Example RinkRat player scouting card">
+              <header>
+                <span class="demo-player-logo">RR</span>
+                <div><strong>Example Skater</strong><small>COL · C</small></div>
+                <span class="rank-chip">Rank #18</span>
+              </header>
+              <div class="player-metrics">
+                <article><small>Season</small><strong>286.4</strong></article>
+                <article><small>Next Cycle</small><strong>82.7</strong></article>
+                <article><small>Form</small><strong class="positive">+6.2%</strong></article>
+              </div>
+              <div class="demo-game-row" aria-label="Six-game schedule markers">
+                <span class="played">1</span>
+                <span class="played">2</span>
+                <span class="played">3</span>
+                <span class="upcoming">4</span>
+                <span class="upcoming">5</span>
+                <span class="missed">6</span>
+              </div>
+              <div class="marker-legend">
+                <span><i class="played"></i>Played</span>
+                <span><i class="upcoming"></i>Upcoming</span>
+                <span><i class="missed"></i>Missed</span>
+              </div>
+              <div class="breakdown-strip">
+                <span>Goals 72.0</span><span>Assists 84.5</span><span>Shots 61.5</span><span>Other 68.4</span>
+              </div>
+            </section>
+          }
+
+          @case ('season') {
+            <section class="season-demo" aria-label="RinkRat season progression">
+              <div class="season-stage active">
+                <span>1</span><div><small>Opening night</small><strong>Draft completes</strong></div>
+              </div>
+              <div class="season-line"></div>
+              <div class="season-stage">
+                <span>2</span><div><small>Regular season</small><strong>Cycle matchups</strong></div>
+              </div>
+              <div class="season-line"></div>
+              <div class="season-stage">
+                <span>3</span><div><small>League table</small><strong>Standings update</strong></div>
+              </div>
+              <div class="season-line"></div>
+              <div class="season-stage trophy-stage">
+                <span class="pixel-icon icon-trophy" aria-hidden="true"></span>
+                <div><small>Postseason</small><strong>Road to the Cup</strong></div>
+              </div>
+              <p>Already-played games stay banked until the correct playoff matchup is known.</p>
+            </section>
+          }
+        }
+      </div>
+    </article>
+
+    @if (errorMessage()) {
+      <p class="camp-error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <footer class="camp-controls">
+      <button
+        type="button"
+        class="secondary-camp-button"
+        [disabled]="isFirstStep() || saving()"
+        (click)="previousStep()"
+      >
+        ← Previous Shift
+      </button>
+
+      <span class="camp-control-status">{{ currentStepIndex() + 1 }} / {{ steps.length }}</span>
+
+      @if (isLastStep()) {
+        <button
+          type="button"
+          class="primary-camp-button"
+          [disabled]="saving()"
+          (click)="finishTrainingCamp()"
+        >
+          {{ saving() ? 'Saving...' : 'Finish Training Camp' }}
+        </button>
+      } @else {
+        <button type="button" class="primary-camp-button" (click)="nextStep()">
+          Next Shift →
+        </button>
+      }
+    </footer>
+  </section>
+}

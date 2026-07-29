@@ -4,6 +4,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../core/firebase-auth';
 import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
+import { CURRENT_TRAINING_CAMP_VERSION } from '../../core/onboarding/training-camp.service';
 import { getUserProfile, UserProfile } from '../../core/user/user.service';
 import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.service';
 import { getLeagueLogoAssetPath } from '../../shared/league-logo/league-logo.data';
@@ -16,7 +17,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 3;
+const DASHBOARD_CACHE_VERSION = 4;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 function waitForAuthUser(): Promise<User | null> {
@@ -99,6 +100,10 @@ export class Dashboard {
       profile?.favoriteTeamVariantId || storedTheme.favoriteTeamVariantId,
     );
   });
+
+  readonly trainingCampComplete = computed(
+    () => (this.profile()?.trainingCampVersion ?? 0) >= CURRENT_TRAINING_CAMP_VERSION,
+  );
 
   readonly displayName = computed(() => {
     const profile = this.profile();
@@ -245,6 +250,7 @@ export class Dashboard {
           reducedMotion: profile.reducedMotion,
           defaultLandingPage: profile.defaultLandingPage,
           backgroundTheme: profile.backgroundTheme,
+          trainingCampVersion: profile.trainingCampVersion,
         }
       : null;
 

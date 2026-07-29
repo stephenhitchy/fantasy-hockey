@@ -1,0 +1,9 @@
+RINKRAT BETA ONBOARDING UPDATE
+==============================
+
+Adds the five-shift Training Camp, first-registration routing, cross-device completion state,
+Dashboard invitation for incomplete managers, global contextual Ask Coach help, navigation links,
+and privacy-conscious onboarding analytics.
+
+This update changes Angular code and Firestore rules. It does not change draft, scoring,
+projection, roster, cycle, standings, or playoff behavior.

@@ -42,6 +42,13 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard').then((module) => module.Dashboard),
       },
       {
+        path: 'training-camp',
+        loadComponent: () =>
+          import('./features/onboarding/training-camp/training-camp').then(
+            (module) => module.TrainingCamp,
+          ),
+      },
+      {
         path: 'leagues/create',
         loadComponent: () =>
           import('./features/leagues/create-league/create-league').then(

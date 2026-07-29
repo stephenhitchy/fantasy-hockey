@@ -103,6 +103,25 @@
         </article>
       </section>
 
+      <section class="training-camp-account-card" aria-labelledby="account-training-camp-title">
+        <span class="training-camp-account-icon" aria-hidden="true">
+          <span class="pixel-icon icon-whistle icon-lg"></span>
+        </span>
+        <div>
+          <span class="eyebrow">Manager Education</span>
+          <h2 id="account-training-camp-title">Training Camp</h2>
+          <p>
+            Review six-game windows, roster moves, player cards, and automatic season flow at any time.
+          </p>
+        </div>
+        <span class="training-camp-account-status" [class.complete]="trainingCampComplete()">
+          {{ trainingCampComplete() ? 'Complete' : 'Not Complete' }}
+        </span>
+        <a routerLink="/training-camp">
+          {{ trainingCampComplete() ? 'Replay Training Camp' : 'Start Training Camp' }} →
+        </a>
+      </section>
+
       <div class="account-grid">
         <section class="account-panel favorite-team-panel">
           <div class="panel-heading">

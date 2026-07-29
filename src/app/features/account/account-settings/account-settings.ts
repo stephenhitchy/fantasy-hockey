@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
 import { requestVerificationEmail } from '../../../core/notifications/email-notification.service';
+import { hasCompletedTrainingCamp } from '../../../core/onboarding/training-camp.service';
 import {
   getMyLeagueSummaries,
   LeagueSummary,
@@ -126,6 +127,8 @@ export class AccountSettings {
   readonly totalTeamSlots = computed(() =>
     this.leagueSummaries().reduce((sum, league) => sum + league.teamCount, 0),
   );
+
+  readonly trainingCampComplete = computed(() => hasCompletedTrainingCamp(this.profile()));
 
   readonly achievements = computed<AccountAchievement[]>(() => [
     this.buildAchievement('rat', 'first-line-change'),

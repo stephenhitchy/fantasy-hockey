@@ -832,7 +832,13 @@ service cloud.firestore {
           (!data.keys().hasAny(['backgroundTheme']) ||
             data.backgroundTheme in ['rink-dark', 'oled-black', 'ice-gray', 'light-ice']) &&
           (!data.keys().hasAny(['injuryEmailEnabled']) ||
-            data.injuryEmailEnabled is bool);
+            data.injuryEmailEnabled is bool) &&
+          (!data.keys().hasAny(['trainingCampVersion']) ||
+            (data.trainingCampVersion is int &&
+              data.trainingCampVersion >= 0 &&
+              data.trainingCampVersion <= 10)) &&
+          (!data.keys().hasAny(['trainingCampCompletedAt']) ||
+            data.trainingCampCompletedAt is timestamp);
       }
 
       function validUserProfileUpdate() {
@@ -848,7 +854,9 @@ service cloud.firestore {
             'reducedMotion',
             'defaultLandingPage',
             'backgroundTheme',
-            'injuryEmailEnabled'
+            'injuryEmailEnabled',
+            'trainingCampVersion',
+            'trainingCampCompletedAt'
           ]) &&
           (!changedFields.hasAny(['username']) ||
             validUsername(request.resource.data.username)) &&

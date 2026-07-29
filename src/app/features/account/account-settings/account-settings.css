@@ -1514,3 +1514,81 @@
     align-self: flex-start;
   }
 }
+
+.training-camp-account-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 15px;
+  border: 3px solid var(--border-strong);
+  border-left-color: var(--user-team-accent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 12%, transparent), transparent 58%),
+    var(--surface-1);
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+}
+
+.training-camp-account-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.training-camp-account-card h2 {
+  margin: 2px 0 3px;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+}
+
+.training-camp-account-card p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.training-camp-account-status {
+  padding: 6px 9px;
+  border: 2px solid #c96a78;
+  background: #431722;
+  color: #ffdbe0;
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .58rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.training-camp-account-status.complete {
+  border-color: #4bbf78;
+  background: #143925;
+  color: #d6ffe5;
+}
+
+.training-camp-account-card > a {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+@media (max-width: 780px) {
+  .training-camp-account-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .training-camp-account-status {
+    justify-self: start;
+  }
+
+  .training-camp-account-card > a {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}

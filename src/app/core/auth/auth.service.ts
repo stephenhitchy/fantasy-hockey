@@ -36,6 +36,7 @@ export async function registerUser(
     defaultLandingPage: 'dashboard',
     backgroundTheme: 'rink-dark',
     injuryEmailEnabled: false,
+    trainingCampVersion: 0,
   });
 
   return user;

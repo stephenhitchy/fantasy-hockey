@@ -17,6 +17,8 @@ export interface UserProfile {
   defaultLandingPage?: DefaultLandingPage;
   backgroundTheme?: BackgroundTheme;
   injuryEmailEnabled?: boolean;
+  trainingCampVersion?: number;
+  trainingCampCompletedAt?: unknown;
   welcomeEmailSentAt?: unknown;
   lastVerificationEmailSentAt?: unknown;
 }

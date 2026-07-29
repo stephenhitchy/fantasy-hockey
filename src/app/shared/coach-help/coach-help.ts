@@ -1,0 +1,302 @@
+import {
+  Component,
+  computed,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  signal,
+  ViewChild,
+} from '@angular/core';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { filter, Subscription } from 'rxjs';
+
+import { TelemetryService } from '../../core/observability/telemetry.service';
+
+interface CoachGuide {
+  id: string;
+  title: string;
+  subtitle: string;
+  tips: string[];
+}
+
+const DEFAULT_GUIDE: CoachGuide = {
+  id: 'general',
+  title: 'RinkRat Coach',
+  subtitle: 'Quick help for the screen you are using.',
+  tips: [
+    'Use Training Camp for the full five-shift introduction to RinkRat.',
+    'Green, yellow, and red markers mean played, upcoming, and missed games.',
+    'When a status is unclear, open the nearest details or comparison panel before acting.',
+  ],
+};
+
+@Component({
+  selector: 'app-coach-help',
+  standalone: true,
+  imports: [RouterLink],
+  templateUrl: './coach-help.html',
+  styleUrl: './coach-help.css',
+})
+export class CoachHelp implements OnDestroy {
+  @ViewChild('coachTrigger') private triggerButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('coachPanel') private panel?: ElementRef<HTMLElement>;
+
+  readonly open = signal(false);
+  readonly currentUrl = signal('');
+
+  readonly guide = computed<CoachGuide>(() => this.buildGuide(this.currentUrl()));
+
+  private readonly routeSubscription: Subscription;
+
+  constructor(
+    private readonly router: Router,
+    private readonly telemetry: TelemetryService,
+  ) {
+    this.currentUrl.set(this.router.url);
+    this.routeSubscription = this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe((event) => {
+        this.currentUrl.set(event.urlAfterRedirects);
+        this.open.set(false);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.routeSubscription.unsubscribe();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  handleDocumentKeydown(event: KeyboardEvent): void {
+    if (!this.open()) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.close();
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const focusable = this.getFocusableElements();
+
+    if (focusable.length === 0) {
+      return;
+    }
+
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    const active = document.activeElement;
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  toggle(): void {
+    const nextOpen = !this.open();
+    this.open.set(nextOpen);
+
+    if (nextOpen) {
+      this.telemetry.track('coach_help_opened', {
+        topic: this.guide().id,
+      });
+
+      window.requestAnimationFrame(() => {
+        this.getFocusableElements()[0]?.focus();
+      });
+    }
+  }
+
+  close(): void {
+    if (!this.open()) {
+      return;
+    }
+
+    this.open.set(false);
+    window.requestAnimationFrame(() => this.triggerButton?.nativeElement.focus());
+  }
+
+  private getFocusableElements(): HTMLElement[] {
+    const panel = this.panel?.nativeElement;
+
+    if (!panel) {
+      return [];
+    }
+
+    return Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => !element.hasAttribute('hidden'));
+  }
+
+  private buildGuide(rawUrl: string): CoachGuide {
+    const url = rawUrl.split(/[?#]/)[0];
+
+    if (url === '/training-camp') {
+      return {
+        id: 'training_camp',
+        title: 'Training Camp',
+        subtitle: 'Move through all five shifts at your own pace.',
+        tips: [
+          'Use the numbered tabs to revisit any lesson.',
+          'Finishing saves completion to your RinkRat account.',
+          'You can replay Training Camp later without losing progress.',
+        ],
+      };
+    }
+
+    if (url.includes('/draft/setup')) {
+      return {
+        id: 'draft_setup',
+        title: 'Commissioner Draft Setup',
+        subtitle: 'Prepare a fair draft before opening the room.',
+        tips: [
+          'Confirm every expected manager has joined before finalizing draft order.',
+          'RinkRat needs a healthy shared projection snapshot before a draft can start.',
+          'Scheduled drafts open automatically; the commissioner does not need to press Start at the deadline.',
+        ],
+      };
+    }
+
+    if (/\/draft(?:$|\/)/.test(url)) {
+      return {
+        id: 'draft_room',
+        title: 'Draft Room',
+        subtitle: 'Build every starter before filling the bench.',
+        tips: [
+          'Queue players in the order you want RinkRat to consider them.',
+          'Auto-Draft acts when your team is on the clock and follows roster-position rules.',
+          'The player pool, draft order, timer, and roster board update live for every manager.',
+        ],
+      };
+    }
+
+    if (url.includes('/free-agents')) {
+      return {
+        id: 'add_drop',
+        title: 'Scouting & Add/Drop',
+        subtitle: 'Compare production, projection, availability, and timing before making a move.',
+        tips: [
+          'Open the season breakdown to see exactly how current fantasy points were earned.',
+          'Green, yellow, and red dots show played, upcoming, and missed games in the current window.',
+          'The confirmation screen tells you whether the transaction is immediate or queued.',
+        ],
+      };
+    }
+
+    if (url.includes('/team')) {
+      return {
+        id: 'my_team',
+        title: 'Locker Room',
+        subtitle: 'Manage active slots, bench depth, IR, and queued changes.',
+        tips: [
+          'A slot can change immediately when neither involved asset has played in its current window.',
+          'Only eligible unavailable players can move into IR.',
+          'Bench and queued-move indicators show what will change at the next safe window boundary.',
+        ],
+      };
+    }
+
+    if (url.includes('/matchups') || /\/cycles\/\d+$/.test(url)) {
+      return {
+        id: 'matchup',
+        title: 'Live Matchup',
+        subtitle: 'Each roster slot is following its own six-game NHL window.',
+        tips: [
+          'Current is the score already earned; Projected estimates the completed matchup total.',
+          'Different players can be in different cycle numbers because NHL schedules are asynchronous.',
+          'A matchup finalizes automatically only after every required roster window is complete.',
+        ],
+      };
+    }
+
+    if (url.includes('/playoffs')) {
+      return {
+        id: 'playoffs',
+        title: 'Road to the RinkRat Cup',
+        subtitle: 'Playoff destinations can resolve after some NHL games have already happened.',
+        tips: [
+          'Already-played games are banked rather than discarded.',
+          'When the prior round resolves, banked games are assigned to the correct championship or placement matchup.',
+          'Every team receives a final placement through the championship and consolation structure.',
+        ],
+      };
+    }
+
+    if (url.includes('/standings')) {
+      return {
+        id: 'standings',
+        title: 'League Standings',
+        subtitle: 'Completed matchups update records and playoff position automatically.',
+        tips: [
+          'Points For and Points Against explain more than record alone.',
+          'The playoff line shows the current qualification boundary.',
+          'Standings apply only after a matchup has finalized, never from partial live scores.',
+        ],
+      };
+    }
+
+    if (url.includes('/leaders')) {
+      return {
+        id: 'leaders',
+        title: 'Point Leaders',
+        subtitle: 'Compare forwards, defensemen, and goalie units in separate leaderboards.',
+        tips: [
+          'Positions are separated because goalie units and skaters have different scoring profiles.',
+          'Use player details to inspect game-by-game production.',
+          'Leaderboards reflect completed fantasy scoring rather than projected value.',
+        ],
+      };
+    }
+
+    if (url === '/dashboard') {
+      return {
+        id: 'dashboard',
+        title: 'Manager Home',
+        subtitle: 'Choose a league or create your next competition.',
+        tips: [
+          'Your favorite NHL team controls the global arena accent, not your league-specific manager icon.',
+          'Each league can have a different team name, profile picture, and selected team identity.',
+          'New to RinkRat? Training Camp explains the full system in about three minutes.',
+        ],
+      };
+    }
+
+    if (/^\/leagues\/[^/]+$/.test(url)) {
+      return {
+        id: 'league_home',
+        title: 'League Headquarters',
+        subtitle: 'Your league’s current status, teams, draft, cycles, and commissioner tools live here.',
+        tips: [
+          'Your league profile picture can be changed from the Your Team identity card.',
+          'Commissioner controls appear only for the league owner.',
+          'Use the cycle and matchup links to follow scoring after the draft completes.',
+        ],
+      };
+    }
+
+    if (url.includes('/account/settings')) {
+      return {
+        id: 'account',
+        title: 'Manager Preferences',
+        subtitle: 'Personalize the arena without changing league-specific identities.',
+        tips: [
+          'Favorite-team colors apply across the app, while each league keeps its own profile picture.',
+          'Challenge rewards unlock home, away, retro, and alternate identities for every NHL team.',
+          'Reduced Motion disables decorative animation while preserving important status changes.',
+        ],
+      };
+    }
+
+    return DEFAULT_GUIDE;
+  }
+}

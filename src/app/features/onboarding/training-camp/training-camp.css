@@ -1,0 +1,987 @@
+:host {
+  display: block;
+}
+
+.training-camp-state,
+.training-camp-page {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+}
+
+.training-camp-state {
+  display: grid;
+  min-height: 55vh;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  color: var(--text-primary);
+}
+
+.training-camp-page {
+  display: grid;
+  gap: 18px;
+}
+
+.training-camp-hero,
+.camp-lesson-card,
+.completion-card {
+  border: 3px solid var(--border-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 95%, white 5%), var(--surface-1));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--surface-1) 65%, white 35%),
+    6px 6px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+}
+
+.training-camp-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 22px;
+  border-top-color: var(--user-team-primary);
+  border-right-color: var(--user-team-secondary);
+  border-bottom-color: var(--user-team-tertiary);
+}
+
+.training-camp-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.training-camp-brand img,
+.completion-mascot img,
+.coach-avatar img {
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.training-camp-brand img {
+  width: 72px;
+  height: 72px;
+  padding: 6px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.training-camp-brand h1,
+.camp-lesson-card h2,
+.completion-card h1 {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+}
+
+.training-camp-brand h1 {
+  font-size: clamp(1.65rem, 4vw, 2.6rem);
+}
+
+.training-camp-hero-actions,
+.completion-actions,
+.camp-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.completed-chip,
+.camp-control-status {
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.completed-chip {
+  padding: 8px 10px;
+  border: 2px solid #3f9864;
+  background: #153d29;
+  color: #c9f9dc;
+}
+
+.exit-camp-button,
+.primary-camp-button,
+.secondary-camp-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 2px solid var(--border-strong);
+  font-family: var(--rr-font-ui, inherit);
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-camp-button {
+  border-color: color-mix(in srgb, var(--user-team-primary) 62%, #07111f);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--user-team-primary) 55%, #03070d);
+}
+
+.secondary-camp-button,
+.exit-camp-button {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--surface-3) 65%, #07111f);
+}
+
+.primary-camp-button:active,
+.secondary-camp-button:active,
+.exit-camp-button:active {
+  translate: 0 2px;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--surface-3) 65%, #07111f);
+}
+
+.primary-camp-button:disabled,
+.secondary-camp-button:disabled,
+.exit-camp-button:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+.camp-progress {
+  padding: 12px 16px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.camp-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.camp-progress-copy strong {
+  color: var(--text-primary);
+}
+
+.camp-progress-track {
+  height: 10px;
+  margin-top: 9px;
+  overflow: hidden;
+  border: 2px solid var(--border-strong);
+  background: var(--page-bg);
+}
+
+.camp-progress-track span {
+  display: block;
+  height: 100%;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--user-team-primary) 0 24px,
+      var(--user-team-secondary) 24px 48px,
+      var(--user-team-tertiary) 48px 72px
+    );
+  transition: width .18s steps(4, end);
+}
+
+.camp-step-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.camp-step-tabs button {
+  display: grid;
+  min-height: 68px;
+  align-content: center;
+  gap: 4px;
+  padding: 8px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.camp-step-tabs button > span {
+  color: var(--text-primary);
+  font-family: var(--rr-font-display, inherit);
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.camp-step-tabs button small {
+  overflow: hidden;
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .56rem;
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.camp-step-tabs button.visited {
+  border-color: color-mix(in srgb, #4bbf78 65%, var(--border-strong));
+}
+
+.camp-step-tabs button.active {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-primary) 16%, var(--surface-1));
+  box-shadow: inset 0 -4px 0 var(--user-team-accent);
+  color: var(--text-primary);
+}
+
+.camp-lesson-card {
+  display: grid;
+  grid-template-columns: minmax(290px, .82fr) minmax(420px, 1.18fr);
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.lesson-copy {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  border-right: 3px solid var(--border-strong);
+}
+
+.lesson-copy h2 {
+  max-width: 660px;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+}
+
+.lesson-copy > p {
+  margin: 18px 0 0;
+  color: var(--text-secondary);
+  font-size: 1.08rem;
+  line-height: 1.55;
+}
+
+.coach-note {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: auto;
+  padding: 15px;
+  border: 2px solid var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-primary) 10%, var(--surface-2));
+}
+
+.coach-avatar {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+}
+
+.coach-avatar img {
+  width: 46px;
+  height: 46px;
+}
+
+.coach-note small,
+.completion-badge small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .6rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.coach-note strong {
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.lesson-visual {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  padding: 28px;
+  background:
+    linear-gradient(var(--pixel-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pixel-grid-line) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface-2) 92%, var(--page-bg));
+  background-size: 20px 20px;
+}
+
+/* Step 1 */
+.cycle-demo {
+  display: grid;
+  width: min(100%, 650px);
+  gap: 16px;
+}
+
+.cycle-demo-team,
+.move-example,
+.player-card-demo,
+.roster-support article {
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--page-bg) 72%, black 28%);
+}
+
+.cycle-demo-team {
+  padding: 16px;
+}
+
+.demo-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.demo-logo,
+.demo-player-logo {
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 950;
+}
+
+.demo-logo {
+  width: 42px;
+  height: 42px;
+}
+
+.demo-player strong,
+.demo-player small {
+  display: block;
+}
+
+.demo-player strong {
+  color: var(--text-primary);
+}
+
+.demo-player small,
+.demo-result {
+  color: var(--text-muted);
+}
+
+.game-dot-row,
+.demo-game-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.game-dot,
+.demo-game-row > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-weight: 950;
+}
+
+.played {
+  color: #5bd38c;
+}
+
+.upcoming {
+  color: #f0c95b;
+}
+
+.missed {
+  color: #f06f7d;
+}
+
+.next {
+  color: #74b7ff;
+}
+
+.window-arrow {
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.demo-result {
+  display: block;
+  margin-top: 10px;
+}
+
+.fairness-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid #4bbf78;
+  background: #143925;
+  color: #d6ffe5;
+}
+
+.fairness-callout span {
+  color: #aee9c3;
+}
+
+/* Step 2 */
+.roster-demo {
+  display: grid;
+  width: min(100%, 680px);
+  gap: 20px;
+}
+
+.roster-starters {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 14px;
+  border: 3px solid var(--border-strong);
+  background: var(--rr-scoreboard, #07111f);
+}
+
+.roster-starters div {
+  display: grid;
+  min-height: 92px;
+  place-items: center;
+  border: 2px solid color-mix(in srgb, var(--user-team-accent) 65%, #fff);
+  background: color-mix(in srgb, var(--user-team-primary) 18%, #101b29);
+}
+
+.roster-starters span {
+  color: #c6d4e4;
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .66rem;
+}
+
+.roster-starters strong {
+  color: #fff;
+  font-family: var(--rr-font-display, inherit);
+  font-size: 2.2rem;
+}
+
+.roster-support {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.roster-support article {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+
+.roster-support small,
+.roster-support strong {
+  display: block;
+}
+
+.roster-support small {
+  color: var(--text-muted);
+}
+
+.roster-support strong {
+  margin-top: 3px;
+  color: var(--text-primary);
+}
+
+/* Step 3 */
+.move-demo {
+  display: grid;
+  width: min(100%, 680px);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.move-example {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.move-status,
+.rank-chip {
+  width: fit-content;
+  padding: 5px 8px;
+  border: 2px solid currentColor;
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .58rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.move-example.immediate .move-status {
+  color: #59cf87;
+}
+
+.move-example.queued .move-status {
+  color: #efc65c;
+}
+
+.move-example.ir .move-status {
+  color: #7fb9ff;
+}
+
+.move-example > strong {
+  margin-top: 18px;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.move-path {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  margin: 24px 0;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.move-path span {
+  padding: 8px 5px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.move-path b {
+  color: var(--user-team-accent);
+}
+
+.move-example small {
+  margin-top: auto;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Step 4 */
+.player-card-demo {
+  width: min(100%, 620px);
+  padding: 18px;
+}
+
+.player-card-demo header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.demo-player-logo {
+  width: 52px;
+  height: 52px;
+}
+
+.player-card-demo header > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.player-card-demo header strong,
+.player-card-demo header small {
+  display: block;
+}
+
+.player-card-demo header strong {
+  color: var(--text-primary);
+  font-size: 1.2rem;
+}
+
+.player-card-demo header small {
+  color: var(--text-muted);
+}
+
+.rank-chip {
+  color: #7fb9ff;
+}
+
+.player-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.player-metrics article {
+  padding: 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.player-metrics small,
+.player-metrics strong {
+  display: block;
+}
+
+.player-metrics small {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .58rem;
+  text-transform: uppercase;
+}
+
+.player-metrics strong {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 1.4rem;
+}
+
+.player-metrics .positive {
+  color: #59cf87;
+}
+
+.demo-game-row {
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.marker-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-secondary);
+  font-size: .8rem;
+}
+
+.marker-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.marker-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.breakdown-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin-top: 18px;
+  border: 2px solid var(--border-strong);
+  background: var(--border-strong);
+}
+
+.breakdown-strip span {
+  padding: 9px 5px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: .76rem;
+}
+
+/* Step 5 */
+.season-demo {
+  display: grid;
+  width: min(100%, 680px);
+  grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.season-stage {
+  display: grid;
+  width: 118px;
+  min-height: 150px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+  text-align: center;
+}
+
+.season-stage > span:first-child {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 950;
+}
+
+.season-stage small,
+.season-stage strong {
+  display: block;
+}
+
+.season-stage small {
+  color: var(--text-muted);
+  font-size: .72rem;
+}
+
+.season-stage strong {
+  margin-top: 4px;
+  color: var(--text-primary);
+}
+
+.season-stage.active,
+.trophy-stage {
+  border-color: var(--user-team-accent);
+}
+
+.season-line {
+  height: 6px;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(90deg, var(--user-team-primary), var(--user-team-secondary));
+}
+
+.season-demo > p {
+  grid-column: 1 / -1;
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.camp-error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 2px solid #db6574;
+  background: #431722;
+  color: #ffdbe0;
+}
+
+.camp-controls {
+  justify-content: space-between;
+  padding: 14px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+}
+
+.camp-control-status {
+  color: var(--text-muted);
+}
+
+.completion-page {
+  min-height: 68vh;
+  place-items: center;
+}
+
+.completion-card {
+  display: grid;
+  width: min(700px, 100%);
+  place-items: center;
+  padding: 42px;
+  text-align: center;
+}
+
+.completion-mascot {
+  display: grid;
+  width: 120px;
+  height: 120px;
+  place-items: center;
+  border: 3px solid var(--user-team-accent);
+  background: var(--surface-2);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+}
+
+.completion-mascot img {
+  width: 104px;
+  height: 104px;
+}
+
+.completion-card .eyebrow {
+  margin-top: 24px;
+}
+
+.completion-card p {
+  max-width: 590px;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.completion-badge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0 24px;
+  padding: 14px 18px;
+  border: 3px solid #d5a936;
+  background: #3d3010;
+  color: #fff2bd;
+  text-align: left;
+}
+
+.completion-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .camp-lesson-card {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-copy {
+    border-right: 0;
+    border-bottom: 3px solid var(--border-strong);
+  }
+
+  .coach-note {
+    margin-top: 26px;
+  }
+
+  .move-demo {
+    grid-template-columns: 1fr;
+  }
+
+  .move-example {
+    min-height: 200px;
+  }
+
+  .season-demo {
+    grid-template-columns: 1fr;
+  }
+
+  .season-stage {
+    width: auto;
+    min-height: 110px;
+  }
+
+  .season-line {
+    width: 6px;
+    height: 28px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 680px) {
+  .training-camp-page {
+    width: calc(100% + 8px);
+    margin-inline: -4px;
+  }
+
+  .training-camp-hero {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .training-camp-brand {
+    align-items: flex-start;
+  }
+
+  .training-camp-brand img {
+    width: 54px;
+    height: 54px;
+  }
+
+  .training-camp-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .completed-chip {
+    display: none;
+  }
+
+  .camp-step-tabs {
+    grid-template-columns: repeat(5, 62px);
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+
+  .camp-step-tabs button {
+    min-height: 62px;
+  }
+
+  .camp-step-tabs button small {
+    display: none;
+  }
+
+  .lesson-copy,
+  .lesson-visual {
+    padding: 20px 16px;
+  }
+
+  .roster-starters {
+    grid-template-columns: repeat(5, minmax(52px, 1fr));
+    overflow-x: auto;
+  }
+
+  .roster-support {
+    grid-template-columns: 1fr;
+  }
+
+  .player-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .player-metrics article:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .breakdown-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .camp-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .camp-control-status {
+    display: none;
+  }
+
+  .camp-controls button {
+    width: 100%;
+  }
+
+  .completion-card {
+    padding: 28px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-camp-hero {
+    display: grid;
+  }
+
+  .training-camp-hero-actions {
+    width: 100%;
+  }
+
+  .game-dot-row {
+    gap: 5px;
+  }
+
+  .game-dot,
+  .demo-game-row > span {
+    width: 29px;
+    height: 29px;
+    font-size: .75rem;
+  }
+
+  .fairness-callout {
+    display: grid;
+  }
+
+  .player-card-demo header {
+    align-items: flex-start;
+  }
+
+  .rank-chip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camp-progress-track span {
+    transition: none;
+  }
+}

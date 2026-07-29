@@ -150,9 +150,14 @@ export class Auth {
         },
       );
 
+      if (this.isRegistering()) {
+        await this.router.navigate(['/training-camp']);
+        return;
+      }
+
       const returnUrl = this.safeReturnUrl();
 
-      if (returnUrl && !this.isRegistering()) {
+      if (returnUrl) {
         await this.router.navigateByUrl(returnUrl);
         return;
       }

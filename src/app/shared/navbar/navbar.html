@@ -45,6 +45,13 @@
       </a>
 
       <a
+        routerLink="/training-camp"
+        routerLinkActive="active"
+      >
+        Training Camp
+      </a>
+
+      <a
         routerLink="/support/feedback"
         [queryParams]="leagueId() ? { leagueId: leagueId(), from: currentUrl() } : { from: currentUrl() }"
         routerLinkActive="active"
@@ -301,6 +308,17 @@
           <span>
             <strong>Account Settings</strong>
             <small>Profile and preferences</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/training-camp"
+          (click)="closeMore()"
+        >
+          <span class="pixel-icon icon-whistle icon-sm" aria-hidden="true"></span>
+          <span>
+            <strong>Training Camp</strong>
+            <small>Learn cycles, moves, and scoring</small>
           </span>
         </a>
 

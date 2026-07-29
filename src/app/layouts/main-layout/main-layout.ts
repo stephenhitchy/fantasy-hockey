@@ -3,11 +3,12 @@ import { RouterLink, RouterOutlet } from '@angular/router';
 
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
 import { Navbar } from '../../shared/navbar/navbar';
+import { CoachHelp } from '../../shared/coach-help/coach-help';
 import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
 
 @Component({
   selector: 'app-main-layout',
-  imports: [RouterLink, RouterOutlet, Navbar],
+  imports: [RouterLink, RouterOutlet, Navbar, CoachHelp],
   templateUrl: './main-layout.html',
   styleUrl: './main-layout.css',
 })

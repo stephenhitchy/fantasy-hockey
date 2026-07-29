@@ -731,3 +731,52 @@ rollout, account deletion/reauthentication, a development-only listener and
 performance monitor, and emulator-backed multi-account workflow tests. Training
 Camp onboarding and daily manager retention features should follow after the
 foundation is tested.
+
+BETA ONBOARDING — TRAINING CAMP AND COACH HELP (JULY 2026)
+-----------------------------------------------------------
+The highest-priority new-user clarity work is now implemented as an authenticated five-step
+RinkRat Training Camp plus contextual Coach help throughout the application.
+
+Training Camp route:
+  /training-camp
+
+New registrations are routed to Training Camp before the Dashboard. Existing managers who have
+not completed the current version see a Dashboard invitation, but they may continue using the app
+without completing it. Completion is saved cross-device on the user profile:
+  users/{uid}.trainingCampVersion
+  users/{uid}.trainingCampCompletedAt
+
+Current Training Camp version: 1.
+
+The five lessons explain:
+  1. Independent six-NHL-game roster-slot windows and seventh-game rollover.
+  2. The 14-active, 3-bench, and 3-IR roster structure, including team goalie units.
+  3. Immediate versus queued moves and IR behavior.
+  4. Current production, projection, schedule dots, form, reliability, and stat breakdowns.
+  5. Automatic standings, playoffs, placement routing, and preservation of already-played games.
+
+A global Ask Coach control is mounted in the authenticated Main Layout. It detects the active route
+and supplies concise help for Dashboard, League HQ, Draft Setup, Draft Room, My Team, Add/Drop,
+Matchups, Standings, Leaders, Playoffs, Account Settings, and Training Camp. It links back to the
+full Training Camp and sits above the mobile bottom navigation.
+
+Training Camp analytics events:
+  training_camp_started
+  training_camp_step_viewed
+  training_camp_completed
+  training_camp_exited
+  coach_help_opened
+
+Important files:
+  src/app/core/onboarding/training-camp.service.ts
+  src/app/features/onboarding/training-camp/
+  src/app/shared/coach-help/
+  src/app/layouts/main-layout/
+  src/app/features/dashboard/
+  src/app/features/auth/auth.ts
+  src/app/shared/navbar/navbar.html
+  firestore.rules
+
+Future Training Camp changes must increment CURRENT_TRAINING_CAMP_VERSION only when managers
+should be invited to review materially changed rules. Do not mark completion for merely opening or
+exiting the page; completion is saved only after the final lesson.

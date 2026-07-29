@@ -1,0 +1,62 @@
+<button
+  #coachTrigger
+  type="button"
+  class="coach-help-trigger"
+  [class.open]="open()"
+  [attr.aria-expanded]="open()"
+  aria-controls="rinkrat-coach-panel"
+  (click)="toggle()"
+>
+  <span class="coach-trigger-avatar" aria-hidden="true">
+    <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+  </span>
+  <span class="coach-trigger-copy">
+    <small>Need help?</small>
+    <strong>Ask Coach</strong>
+  </span>
+</button>
+
+@if (open()) {
+  <div class="coach-help-backdrop" role="presentation" (click)="close()">
+    <aside
+      #coachPanel
+      id="rinkrat-coach-panel"
+      class="coach-help-panel"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="'coach-help-title'"
+      (click)="$event.stopPropagation()"
+    >
+      <header>
+        <div class="coach-panel-identity">
+          <span aria-hidden="true"><img src="/assets/branding/rinkrat-headshot.png" alt="" /></span>
+          <div>
+            <small>Coach’s Clipboard</small>
+            <h2 id="coach-help-title">{{ guide().title }}</h2>
+          </div>
+        </div>
+        <button type="button" class="coach-close-button" aria-label="Close Coach help" (click)="close()">
+          ×
+        </button>
+      </header>
+
+      <p class="coach-subtitle">{{ guide().subtitle }}</p>
+
+      <ol class="coach-tip-list">
+        @for (tip of guide().tips; track tip; let index = $index) {
+          <li>
+            <span>{{ index + 1 }}</span>
+            <p>{{ tip }}</p>
+          </li>
+        }
+      </ol>
+
+      <footer>
+        <a routerLink="/training-camp" (click)="close()">
+          Open Full Training Camp
+          <span aria-hidden="true">→</span>
+        </a>
+      </footer>
+    </aside>
+  </div>
+}

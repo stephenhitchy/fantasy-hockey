@@ -658,3 +658,81 @@
     font-size: 29px;
   }
 }
+
+.training-camp-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 3px solid var(--user-team-accent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 13%, transparent), transparent 58%),
+    var(--surface-1);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--surface-1) 60%, white 40%),
+    5px 5px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+}
+
+.training-camp-banner-mascot {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  place-items: center;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.training-camp-banner-mascot img {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.training-camp-banner-copy h2 {
+  margin: 3px 0 4px;
+  color: var(--text-primary);
+  font-size: 1.35rem;
+}
+
+.training-camp-banner-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.training-camp-banner > a {
+  display: grid;
+  min-height: 46px;
+  place-items: center;
+  padding: 10px 14px;
+  border: 2px solid color-mix(in srgb, var(--user-team-primary) 65%, #07111f);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  font-weight: 950;
+  text-decoration: none;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--user-team-primary) 55%, #03070d);
+}
+
+@media (max-width: 760px) {
+  .training-camp-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .training-camp-banner > a {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-camp-banner {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .training-camp-banner-mascot {
+    justify-self: center;
+  }
+}
