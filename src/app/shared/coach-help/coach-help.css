@@ -246,3 +246,16 @@
     transition: none;
   }
 }
+
+
+.coach-help-panel footer {
+  display: grid;
+  gap: 10px;
+}
+
+.coach-help-panel footer a + a {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--border-strong) 55%, #03070d);
+}

@@ -1262,3 +1262,24 @@
     transition: none;
   }
 }
+
+
+.training-scoring-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-top: 14px;
+  border: 2px solid var(--border-strong);
+  padding: 10px 14px;
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.training-scoring-link:hover,
+.training-scoring-link:focus-visible {
+  translate: 0 -2px;
+}

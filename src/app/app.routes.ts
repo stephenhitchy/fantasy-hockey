@@ -50,6 +50,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'scoring',
+        loadComponent: () =>
+          import('./features/scoring/scoring-guide/scoring-guide').then(
+            (module) => module.ScoringGuide,
+          ),
+      },
+      {
         path: 'leagues/create',
         loadComponent: () =>
           import('./features/leagues/create-league/create-league').then(
@@ -177,6 +184,14 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/leaders/point-leaders/point-leaders').then(
             (module) => module.PointLeaders,
+          ),
+      },
+      {
+        path: 'leagues/:leagueId/scoring',
+        canActivate: [leagueMemberGuard],
+        loadComponent: () =>
+          import('./features/scoring/scoring-guide/scoring-guide').then(
+            (module) => module.ScoringGuide,
           ),
       },
       {

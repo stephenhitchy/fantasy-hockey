@@ -141,6 +141,19 @@ export class CoachHelp implements OnDestroy {
   private buildGuide(rawUrl: string): CoachGuide {
     const url = rawUrl.split(/[?#]/)[0];
 
+    if (url === '/scoring' || url.endsWith('/scoring')) {
+      return {
+        id: 'scoring_guide',
+        title: 'Scoring Guide',
+        subtitle: 'Use the exact tables and examples to understand every point.',
+        tips: [
+          'Goals and assists use diminishing returns inside each NHL game, then reset in the next game.',
+          'Power-play, short-handed, game-winning, and overtime bonuses stack with the normal scoring play.',
+          'Use the league version of this page when you need the exact rules frozen to an existing league.',
+        ],
+      };
+    }
+
     if (url === '/training-camp') {
       return {
         id: 'training_camp',

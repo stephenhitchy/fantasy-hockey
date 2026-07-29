@@ -1,0 +1,238 @@
+<main class="scoring-guide-page">
+  <header class="scoring-guide-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Official Rules Desk</span>
+      <h1>{{ pageTitle() }}</h1>
+      <p>{{ pageSubtitle() }}</p>
+
+      <div class="hero-badges" aria-label="Scoring guide summary">
+        <span>{{ cycleGameCount() }} NHL games per active slot</span>
+        <span>Rules version {{ scoringRulesVersion() }}</span>
+        <span>Bench players do not score</span>
+      </div>
+    </div>
+
+    <div class="hero-actions">
+      @if (leagueId()) {
+        <a [routerLink]="['/leagues', leagueId()]">Back to League</a>
+      } @else {
+        <a routerLink="/dashboard">Back to Dashboard</a>
+      }
+      <button type="button" (click)="printGuide()">Print Guide</button>
+    </div>
+  </header>
+
+  @if (loading()) {
+    <p class="status-banner">Loading this league’s saved scoring rules…</p>
+  }
+
+  @if (errorMessage()) {
+    <p class="status-banner warning">{{ errorMessage() }}</p>
+  }
+
+  <section class="quick-explanation" aria-labelledby="how-it-adds-up-title">
+    <div class="section-number">01</div>
+    <div>
+      <span class="eyebrow">The simple version</span>
+      <h2 id="how-it-adds-up-title">How the total is built</h2>
+      <p>
+        RinkRat scores one NHL game at a time. Every active roster slot adds together its next
+        <strong>{{ cycleGameCount() }} NHL games</strong>. Goals and assists use diminishing returns
+        inside each individual game, then reset when the player’s next NHL game begins.
+      </p>
+    </div>
+
+    <div class="formula-flow" aria-label="Scoring calculation flow">
+      <span>Game 1 points</span>
+      <b>+</b>
+      <span>Game 2 points</span>
+      <b>+</b>
+      <span>Games 3–{{ cycleGameCount() }}</span>
+      <b>=</b>
+      <strong>Cycle total</strong>
+    </div>
+  </section>
+
+  <nav class="position-jump-nav" aria-label="Jump to a position scoring section">
+    <a href="#forward-scoring"><span>F</span> Forwards</a>
+    <a href="#defense-scoring"><span>D</span> Defensemen</a>
+    <a href="#goalie-scoring"><span>G</span> Goalie Unit</a>
+    <a href="#worked-examples"><span>?</span> Examples</a>
+  </nav>
+
+  <section id="forward-scoring" class="position-section forward-section" aria-labelledby="forward-title">
+    <header class="position-header">
+      <span class="position-mark" aria-hidden="true">F</span>
+      <div>
+        <span class="eyebrow">Higher upside · More variation</span>
+        <h2 id="forward-title">Forward scoring</h2>
+        <p>Used for left wings, centers, and right wings.</p>
+      </div>
+    </header>
+
+    <div class="scoring-table" role="table" aria-label="Forward scoring values">
+      <div class="scoring-table-head" role="row">
+        <span role="columnheader">Category</span>
+        <span role="columnheader">Points</span>
+        <span role="columnheader">How it works</span>
+      </div>
+      @for (row of forwardRows(); track row.label) {
+        <div class="scoring-row" role="row">
+          <strong role="cell">{{ row.label }}</strong>
+          <b role="cell">{{ row.value }}</b>
+          <span role="cell">{{ row.note }}</span>
+        </div>
+      }
+    </div>
+  </section>
+
+  <section id="defense-scoring" class="position-section defense-section" aria-labelledby="defense-title">
+    <header class="position-header">
+      <span class="position-mark" aria-hidden="true">D</span>
+      <div>
+        <span class="eyebrow">Steadier · Multi-category value</span>
+        <h2 id="defense-title">Defenseman scoring</h2>
+        <p>Blocks and time on ice help defensemen produce even without a goal.</p>
+      </div>
+    </header>
+
+    <div class="scoring-table" role="table" aria-label="Defenseman scoring values">
+      <div class="scoring-table-head" role="row">
+        <span role="columnheader">Category</span>
+        <span role="columnheader">Points</span>
+        <span role="columnheader">How it works</span>
+      </div>
+      @for (row of defenseRows(); track row.label) {
+        <div class="scoring-row" role="row">
+          <strong role="cell">{{ row.label }}</strong>
+          <b role="cell">{{ row.value }}</b>
+          <span role="cell">{{ row.note }}</span>
+        </div>
+      }
+    </div>
+
+    <aside class="rules-note">
+      <strong>Important:</strong>
+      Plus/minus does not directly add or subtract a fixed point total. It only adjusts a defenseman’s time-on-ice multiplier, and that multiplier is always kept between
+      {{ formatPoints(rules().defenseToiFloor) }} and {{ formatPoints(rules().defenseToiCeiling) }} points per minute.
+    </aside>
+  </section>
+
+  <section id="goalie-scoring" class="position-section goalie-section" aria-labelledby="goalie-title">
+    <header class="position-header">
+      <span class="position-mark" aria-hidden="true">G</span>
+      <div>
+        <span class="eyebrow">Team-based unit · Highest expected total</span>
+        <h2 id="goalie-title">Team goalie-unit scoring</h2>
+        <p>The goalie slot follows one NHL team, not one individual goalie. All appearances in that team game are combined.</p>
+      </div>
+    </header>
+
+    <div class="scoring-table" role="table" aria-label="Goalie-unit scoring values">
+      <div class="scoring-table-head" role="row">
+        <span role="columnheader">Category</span>
+        <span role="columnheader">Points</span>
+        <span role="columnheader">How it works</span>
+      </div>
+      @for (row of goalieRows(); track row.label) {
+        <div class="scoring-row" role="row">
+          <strong role="cell">{{ row.label }}</strong>
+          <b role="cell">{{ row.value }}</b>
+          <span role="cell">{{ row.note }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="goalie-formula-panel">
+      <div>
+        <span class="eyebrow">Exact save-quality formula</span>
+        <strong>
+          {{ formatPoints(rules().goalieSavePercentageBasePoints) }} +
+          (((SV% × 100) − {{ (rules().goalieSavePercentageBaseline * 100).toFixed(1) }}) ×
+          {{ formatPoints(rules().goalieSavePercentagePointsPerPercentagePoint) }})
+        </strong>
+        <p>The result is limited to {{ signedPoints(rules().goalieSavePercentageMinimum) }} through +{{ formatPoints(rules().goalieSavePercentageMaximum) }} points.</p>
+      </div>
+
+      <div class="save-quality-grid" aria-label="Save percentage quality examples">
+        @for (example of saveQualityExamples(); track example.percentage) {
+          <span><small>{{ example.percentage }} SV%</small><strong>{{ example.points }}</strong></span>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="common-bonuses" aria-labelledby="common-bonus-title">
+    <header>
+      <span class="eyebrow">Skater bonuses</span>
+      <h2 id="common-bonus-title">Bonuses that stack</h2>
+      <p>These are added after the normal goal value. One scoring play can receive multiple bonuses.</p>
+    </header>
+
+    <div class="bonus-grid">
+      @for (row of commonBonusRows(); track row.label) {
+        <article>
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+          <p>{{ row.note }}</p>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section id="worked-examples" class="worked-examples" aria-labelledby="examples-title">
+    <header>
+      <span class="eyebrow">Worked examples</span>
+      <h2 id="examples-title">See how one NHL game adds up</h2>
+      <p>These examples are calculated by the same scoring engine used by the site.</p>
+    </header>
+
+    <div class="example-grid">
+      <article class="example-card forward-example">
+        <header><span>F</span><div><small>Example forward game</small><strong>2 G · 1 primary A · 4 SOG</strong></div></header>
+        <ul>
+          @for (line of forwardExample().lines; track line.label) {
+            <li><span>{{ line.label }}</span><b>{{ signedPoints(line.points) }}</b></li>
+          }
+        </ul>
+        <footer><span>Game total</span><strong>{{ formatPoints(forwardExample().total) }}</strong></footer>
+      </article>
+
+      <article class="example-card defense-example">
+        <header><span>D</span><div><small>Example defense game</small><strong>1 G · 1 primary A · 3 BLK</strong></div></header>
+        <ul>
+          @for (line of defenseExample().lines; track line.label) {
+            <li><span>{{ line.label }}</span><b>{{ signedPoints(line.points) }}</b></li>
+          }
+        </ul>
+        <footer><span>Game total</span><strong>{{ formatPoints(defenseExample().total) }}</strong></footer>
+      </article>
+
+      <article class="example-card goalie-example">
+        <header><span>G</span><div><small>Example goalie-unit game</small><strong>30 saves on 32 shots · Win</strong></div></header>
+        <ul>
+          @for (line of goalieExample().lines; track line.label) {
+            <li><span>{{ line.label }}</span><b>{{ signedPoints(line.points) }}</b></li>
+          }
+        </ul>
+        <footer><span>Game total</span><strong>{{ formatPoints(goalieExample().total) }}</strong></footer>
+      </article>
+    </div>
+  </section>
+
+  <section class="rule-clarifications" aria-labelledby="clarifications-title">
+    <header>
+      <span class="eyebrow">Common questions</span>
+      <h2 id="clarifications-title">Important scoring details</h2>
+    </header>
+
+    <div class="clarification-grid">
+      <article><strong>Diminishing returns reset every NHL game</strong><p>A player’s first goal in tomorrow’s game is worth the full first-goal value again.</p></article>
+      <article><strong>Special-teams points stack</strong><p>A power-play goal receives the normal goal points plus the power-play-point bonus.</p></article>
+      <article><strong>Only active slots score</strong><p>Bench and IR assets remain owned by the manager but do not add points while inactive.</p></article>
+      <article><strong>Official NHL statistics are the source</strong><p>RinkRat uses credited goals, primary and secondary assists, shots, hits, blocks, time on ice, and goalie results from the NHL game record.</p></article>
+      <article><strong>Each slot has its own six-game window</strong><p>Scoring does not wait for the entire league to reach one shared calendar date.</p></article>
+      <article><strong>Completed scoring stays frozen</strong><p>Once a game is assigned and scored, later roster changes do not rewrite that game.</p></article>
+    </div>
+  </section>
+</main>

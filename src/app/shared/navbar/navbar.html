@@ -51,6 +51,22 @@
         Training Camp
       </a>
 
+      @if (leagueId(); as activeLeagueId) {
+        <a
+          [routerLink]="['/leagues', activeLeagueId, 'scoring']"
+          [class.active]="isLeagueSectionActive('scoring')"
+        >
+          Scoring
+        </a>
+      } @else {
+        <a
+          routerLink="/scoring"
+          routerLinkActive="active"
+        >
+          Scoring
+        </a>
+      }
+
       <a
         routerLink="/support/feedback"
         [queryParams]="leagueId() ? { leagueId: leagueId(), from: currentUrl() } : { from: currentUrl() }"
@@ -250,6 +266,17 @@
           </a>
 
           <a
+            [routerLink]="['/leagues', activeLeagueId, 'scoring']"
+            (click)="closeMore()"
+          >
+            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>Scoring Guide</strong>
+              <small>Exact points and formulas by position</small>
+            </span>
+          </a>
+
+          <a
             [routerLink]="['/leagues', activeLeagueId, 'playoffs']"
             (click)="closeMore()"
           >
@@ -328,6 +355,17 @@
           <span>
             <strong>Training Camp</strong>
             <small>Learn cycles, moves, and scoring</small>
+          </span>
+        </a>
+
+        <a
+          routerLink="/scoring"
+          (click)="closeMore()"
+        >
+          <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
+          <span>
+            <strong>Standard Scoring Guide</strong>
+            <small>Complete point breakdown by position</small>
           </span>
         </a>
 

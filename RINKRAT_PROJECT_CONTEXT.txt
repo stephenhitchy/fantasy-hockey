@@ -851,3 +851,8 @@ BENCH CARD AND MATCHUP VISIBILITY UPDATE (2026-07-29)
 - Detailed matchup pages show each team's three current bench slots below the active lineup; bench assets are explicitly non-scoring and still show their projection.
 - Mobile head-to-head matchup view includes a matching Bench group below LW/C/RW/D/G.
 - The matchup component listens only to the current roster documents for the one displayed matchup, and unsubscribes when the matchup/route changes.
+
+SCORING GUIDE (JUL 2026)
+- Added /scoring for current standard RinkRat rules and /leagues/:leagueId/scoring for exact league-frozen rules.
+- Guide imports the actual ScoringRules object and scoring engine, includes all forward/defense/goalie values, diminishing-return rules, defense TOI formula, goalie save-quality formula, bonuses, worked examples, and print support.
+- Linked from desktop/mobile navigation, Training Camp, and Ask Coach.
