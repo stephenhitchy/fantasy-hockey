@@ -1,0 +1,761 @@
+/*
+ * RinkRat Visual System — Phase 1: Arena Foundation
+ *
+ * This layer intentionally loads after the existing global stylesheet. It
+ * centralizes typography, controls, card shells, status treatments, navigation,
+ * tables, and accessibility without changing fantasy-hockey logic.
+ *
+ * Design direction: a readable 1990s hockey game HUD / arena scoreboard.
+ * No rat-tail dividers are used.
+ */
+
+:root {
+  --rr-font-display: 'Pixelify Sans', 'Arial Black', Impact, sans-serif;
+  --rr-font-interface: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+  --rr-font-micro: 'Silkscreen', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  --rr-scoreboard: #07111d;
+  --rr-scoreboard-raised: #101f31;
+  --rr-scoreboard-inset: #071525;
+  --rr-ice-white: #f4f8fb;
+  --rr-ice-blue: #d8e8f4;
+  --rr-steel: #61758a;
+  --rr-steel-dark: #26384c;
+  --rr-cream: #fff3d2;
+  --rr-success: #55d68d;
+  --rr-warning: #f0c45b;
+  --rr-danger: #e15d6f;
+  --rr-info: #78b7ff;
+
+  --rr-cut-small: 5px;
+  --rr-cut-medium: 8px;
+  --rr-control-shadow: 0 4px 0 #050b13;
+  --rr-control-shadow-hover: 0 6px 0 #050b13;
+  --rr-panel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.4);
+  --rr-focus-ring: 0 0 0 3px var(--page-bg), 0 0 0 6px var(--user-team-accent);
+}
+
+html[data-background-theme='light-ice'] {
+  --rr-scoreboard: #122337;
+  --rr-scoreboard-raised: #1d344d;
+  --rr-scoreboard-inset: #0f2033;
+  --rr-control-shadow: 0 4px 0 #768697;
+  --rr-control-shadow-hover: 0 6px 0 #68798a;
+  --rr-panel-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24);
+}
+
+html,
+body {
+  font-family: var(--rr-font-interface);
+}
+
+body {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.006em;
+  background-color: var(--page-bg);
+  background-image:
+    linear-gradient(90deg, transparent 0 49.8%, color-mix(in srgb, var(--user-team-tertiary) 7%, transparent) 49.8% 50.2%, transparent 50.2%),
+    linear-gradient(0deg, transparent 0 49.8%, color-mix(in srgb, var(--user-team-primary) 5%, transparent) 49.8% 50.2%, transparent 50.2%),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(170, 203, 231, 0.025) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(170, 203, 231, 0.025) 31px 32px);
+  background-attachment: fixed;
+}
+
+html[data-background-theme='light-ice'] body {
+  background-image:
+    linear-gradient(90deg, transparent 0 49.8%, color-mix(in srgb, var(--user-team-tertiary) 6%, transparent) 49.8% 50.2%, transparent 50.2%),
+    linear-gradient(0deg, transparent 0 49.8%, color-mix(in srgb, var(--user-team-primary) 5%, transparent) 49.8% 50.2%, transparent 50.2%),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(52, 81, 108, 0.025) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(52, 81, 108, 0.025) 31px 32px);
+}
+
+/* Typography hierarchy ---------------------------------------------------- */
+
+:where(h1, h2, h3, .page-title, .league-name, .hero-title, .score-value, .timer-value) {
+  font-family: var(--rr-font-display);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+:where(
+  .eyebrow,
+  [class$='-eyebrow'],
+  [class*='-eyebrow '],
+  .card-label,
+  .menu-label,
+  .status-label,
+  .stat-label,
+  .metric-label,
+  .panel-label,
+  .position-label,
+  .section-kicker,
+  .overline
+) {
+  font-family: var(--rr-font-micro);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+:where(button, input, select, textarea) {
+  font-family: var(--rr-font-interface);
+}
+
+:where(button, a[class*='button'], a[class*='action'], a[class*='link']) {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+:where(.score-value, .timer-value, .current-score, .projected-score, [class*='score-number']) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shared arcade controls -------------------------------------------------- */
+
+:where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+) {
+  --rr-button-face: var(--rr-scoreboard-raised);
+  --rr-button-ink: #f4f8fb;
+  --rr-button-edge: #5f7892;
+  --rr-button-bottom: #07111d;
+
+  position: relative;
+  isolation: isolate;
+  border: 2px solid var(--rr-button-edge);
+  border-radius: 0 !important;
+  background: var(--rr-button-face);
+  color: var(--rr-button-ink);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.11),
+    inset 0 -3px 0 color-mix(in srgb, var(--rr-button-bottom) 72%, transparent),
+    var(--rr-control-shadow);
+  clip-path: polygon(
+    0 var(--rr-cut-small),
+    var(--rr-cut-small) var(--rr-cut-small),
+    var(--rr-cut-small) 0,
+    calc(100% - var(--rr-cut-small)) 0,
+    calc(100% - var(--rr-cut-small)) var(--rr-cut-small),
+    100% var(--rr-cut-small),
+    100% calc(100% - var(--rr-cut-small)),
+    calc(100% - var(--rr-cut-small)) calc(100% - var(--rr-cut-small)),
+    calc(100% - var(--rr-cut-small)) 100%,
+    var(--rr-cut-small) 100%,
+    var(--rr-cut-small) calc(100% - var(--rr-cut-small)),
+    0 calc(100% - var(--rr-cut-small))
+  );
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+  transform: translateY(0);
+  transition:
+    filter 100ms steps(2, end),
+    transform 90ms steps(2, end),
+    box-shadow 90ms steps(2, end),
+    border-color 100ms linear;
+}
+
+:where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):hover:not(:disabled) {
+  filter: brightness(1.1) saturate(1.05);
+  transform: translateY(-2px) !important;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -3px 0 color-mix(in srgb, var(--rr-button-bottom) 72%, transparent),
+    var(--rr-control-shadow-hover) !important;
+}
+
+:where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):active:not(:disabled) {
+  filter: brightness(0.98);
+  transform: translateY(3px) !important;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 color-mix(in srgb, var(--rr-button-bottom) 72%, transparent),
+    0 1px 0 #050b13 !important;
+}
+
+:where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):focus-visible {
+  outline: none;
+  box-shadow: var(--rr-focus-ring), var(--rr-control-shadow) !important;
+}
+
+:where(
+  button,
+  a[class*='button'],
+  a[class*='action'],
+  a[class*='link'],
+  a[class*='control']
+):disabled,
+:where(button[aria-disabled='true'], a[aria-disabled='true']) {
+  --rr-button-face: color-mix(in srgb, var(--surface-3) 82%, #5d6874);
+  --rr-button-ink: color-mix(in srgb, var(--text-secondary) 72%, transparent);
+  --rr-button-edge: color-mix(in srgb, var(--border-soft) 75%, transparent);
+  cursor: not-allowed;
+  filter: grayscale(0.55) saturate(0.45);
+  opacity: 0.78;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  transform: none !important;
+}
+
+/* Primary / confirmation controls */
+:where(
+  .primary-button,
+  .primary-action,
+  .primary-submit,
+  .save-button,
+  .save-profile-button,
+  .confirm-move-button,
+  .ir-activation-confirm,
+  .roster-drop-confirm,
+  .draft-button,
+  .claim-button,
+  .choose-slot-button,
+  .start-next-cycle-button,
+  .open-league,
+  .hub-action-highlight,
+  button[class*='confirm'],
+  button[class*='save'],
+  button[class*='submit']
+) {
+  --rr-button-face: var(--user-team-primary);
+  --rr-button-ink: var(--user-team-on-primary);
+  --rr-button-edge: color-mix(in srgb, var(--user-team-primary) 68%, #fff3d2);
+  --rr-button-bottom: var(--user-team-secondary);
+}
+
+/* Secondary / neutral controls */
+:where(
+  .secondary-button,
+  .secondary-action,
+  .secondary-switch,
+  .back-button,
+  .back-link,
+  .overview-header-link,
+  .schedule-preview-header-link,
+  .my-team-header-link,
+  .standings-link,
+  .matchup-link,
+  .view-cycle-link,
+  .open-cycle-link,
+  .change-player-button,
+  .rename-team-trigger,
+  .change-profile-icon-trigger
+) {
+  --rr-button-face: var(--rr-scoreboard-raised);
+  --rr-button-ink: #f4f8fb;
+  --rr-button-edge: color-mix(in srgb, var(--user-team-secondary) 55%, #91a6bc);
+  --rr-button-bottom: var(--rr-scoreboard);
+}
+
+/* Danger / destructive controls */
+:where(
+  .drop-action,
+  .roster-drop-confirm,
+  .sign-out-button,
+  .logout-button,
+  .cancel-pending-button,
+  .clear-button,
+  .clear-schedule-button,
+  .remove-queue-button,
+  button[class*='danger'],
+  button[class*='delete'],
+  button[class*='remove'],
+  button[class*='drop']
+) {
+  --rr-button-face: #9f3447;
+  --rr-button-ink: #fff7e7;
+  --rr-button-edge: #e27a89;
+  --rr-button-bottom: #4c1522;
+}
+
+/* Warning / IR controls */
+:where(.ir-action, .activate-action, .bench-activate-action, .move-to-ir-button) {
+  --rr-button-face: #d59b32;
+  --rr-button-ink: #111821;
+  --rr-button-edge: #ffe0a1;
+  --rr-button-bottom: #725018;
+}
+
+/* Form controls ----------------------------------------------------------- */
+
+:where(input, select, textarea) {
+  min-height: 42px;
+  border: 2px solid var(--border-strong);
+  border-radius: 0 !important;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow:
+    inset 3px 3px 0 color-mix(in srgb, var(--page-bg) 68%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, var(--border-soft) 70%, transparent);
+  font-size: 1rem;
+  font-weight: 650;
+  outline: none;
+  transition:
+    border-color 100ms linear,
+    box-shadow 100ms linear,
+    background 100ms linear;
+}
+
+:where(input, select, textarea):focus {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--surface-1) 94%, var(--user-team-primary));
+  box-shadow:
+    inset 3px 3px 0 color-mix(in srgb, var(--page-bg) 68%, transparent),
+    0 0 0 3px var(--user-team-outline-soft);
+}
+
+:where(input, textarea)::placeholder {
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+
+/* Panels: scoreboard and rink-board shells ------------------------------- */
+
+:where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-card'],
+:where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-card '],
+:where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class$='-panel'],
+:where(
+  article,
+  section,
+  aside,
+  div,
+  form
+)[class*='-panel '] {
+  position: relative;
+}
+
+/* Score-centric components become arena scoreboard modules. */
+:where(
+  .score-card,
+  .my-team-score-card,
+  .current-matchup-card,
+  .turn-card,
+  .draft-status-card,
+  .draft-room-header,
+  .cycle-status-card,
+  .live-score-dock,
+  .matchup-score-dock,
+  .timer-card,
+  .clock-card,
+  [class*='scoreboard']
+) {
+  border: 2px solid color-mix(in srgb, var(--user-team-secondary) 62%, #7690aa) !important;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 4px),
+    var(--rr-scoreboard) !important;
+  color: #f4f8fb !important;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.035),
+    var(--rr-panel-shadow) !important;
+}
+
+:where(
+  .score-card,
+  .my-team-score-card,
+  .current-matchup-card,
+  .turn-card,
+  .draft-status-card,
+  .draft-room-header,
+  .cycle-status-card,
+  .live-score-dock,
+  .matchup-score-dock,
+  .timer-card,
+  .clock-card,
+  [class*='scoreboard']
+) :where(h1, h2, h3, strong, .score, .score-value, .timer-value) {
+  color: #ffffff !important;
+}
+
+:where(
+  .score-card,
+  .my-team-score-card,
+  .current-matchup-card,
+  .turn-card,
+  .draft-status-card,
+  .draft-room-header,
+  .cycle-status-card,
+  .live-score-dock,
+  .matchup-score-dock,
+  .timer-card,
+  .clock-card,
+  [class*='scoreboard']
+) :where(p, small, span:not(.pixel-icon)) {
+  color: #b8caDC;
+}
+
+/* Player/list cards read like rink boards with team-colored rails. */
+:where(
+  .fantasy-player-card,
+  .roster-slot-card,
+  .free-agent-card,
+  .waiver-player-card,
+  .player-card,
+  .team-card,
+  .league-card,
+  .transaction-card,
+  .asset-card,
+  .scheduled-card
+) {
+  border-top-width: 2px !important;
+  border-right-width: 2px !important;
+  border-bottom-width: 3px !important;
+  border-left-width: 2px !important;
+  border-top-color: var(--user-team-primary) !important;
+  border-right-color: var(--border-strong) !important;
+  border-bottom-color: var(--user-team-tertiary) !important;
+  border-left-color: var(--user-team-secondary) !important;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025) 0 12px, transparent 12px),
+    linear-gradient(var(--surface-1), var(--surface-1)) !important;
+}
+
+/* Metallic corner bolts for large arena modules only. */
+:where(
+  .league-header,
+  .team-hero-card,
+  .draft-room-header,
+  .cycle-header,
+  .standings-header,
+  .point-leaders-header,
+  .free-agent-hero,
+  .playoff-hero,
+  .profile-hero,
+  .hero-card
+)::before {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  top: 7px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  background: #8da0b3;
+  box-shadow:
+    calc(-100% + 10px) 0 0 transparent;
+  pointer-events: none;
+}
+
+/* Badges and statuses ----------------------------------------------------- */
+
+:where(
+  [class$='-badge'],
+  [class*='-badge '],
+  [class$='-chip'],
+  [class*='-chip '],
+  [class$='-pill'],
+  [class*='-pill ']
+) {
+  border: 1px solid color-mix(in srgb, currentColor 38%, var(--border-soft));
+  border-radius: 0 !important;
+  font-family: var(--rr-font-micro);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+:where(.active-badge, .ready-badge, .success-badge, .status-active, [class*='success']) {
+  border-color: color-mix(in srgb, var(--rr-success) 70%, #ffffff) !important;
+  background: color-mix(in srgb, var(--rr-success) 18%, var(--rr-scoreboard)) !important;
+  color: #a9f5c8 !important;
+}
+
+:where(.warning-badge, .pending-badge, .status-warning, [class*='warning']) {
+  border-color: color-mix(in srgb, var(--rr-warning) 72%, #ffffff) !important;
+  background: color-mix(in srgb, var(--rr-warning) 18%, var(--rr-scoreboard)) !important;
+  color: #ffe5a0 !important;
+}
+
+:where(.danger-badge, .error-badge, .status-danger, [class*='danger']) {
+  border-color: color-mix(in srgb, var(--rr-danger) 72%, #ffffff) !important;
+  background: color-mix(in srgb, var(--rr-danger) 18%, var(--rr-scoreboard)) !important;
+  color: #ffc0c9 !important;
+}
+
+/* Tables, stat blocks, and fantasy HUD data ------------------------------ */
+
+:where(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+:where(thead th) {
+  font-family: var(--rr-font-micro);
+  font-size: 0.68rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+:where(tbody tr) {
+  transition: background 90ms steps(2, end);
+}
+
+:where(tbody tr:hover) {
+  background: color-mix(in srgb, var(--user-team-primary) 8%, var(--surface-1));
+}
+
+:where(
+  .stat-box,
+  .metric-box,
+  .score-box,
+  .projection-box,
+  .summary-stat,
+  .manager-stat,
+  .roster-need,
+  [class*='metric-cell']
+) {
+  border-radius: 0 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+:where(
+  .stat-box,
+  .metric-box,
+  .score-box,
+  .projection-box,
+  .summary-stat,
+  .manager-stat,
+  .roster-need,
+  [class*='metric-cell']
+) :where(.label, small, [class*='label']) {
+  font-family: var(--rr-font-micro);
+  font-size: 0.63rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Navigation: lit arena-board tabs --------------------------------------- */
+
+.desktop-navbar,
+.mobile-topbar,
+.mobile-bottom-nav {
+  font-family: var(--rr-font-interface);
+}
+
+.brand,
+.mobile-brand {
+  font-family: var(--rr-font-display);
+  letter-spacing: 0.01em !important;
+}
+
+.desktop-links :where(a, button),
+.mobile-bottom-nav :where(a, button) {
+  text-shadow: none;
+}
+
+.desktop-links a.active,
+.mobile-bottom-nav a.active,
+.mobile-bottom-nav button.active {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--user-team-primary) 12%, #172230), #172230) !important;
+}
+
+.desktop-links a.active::after,
+.mobile-bottom-nav a.active::after,
+.mobile-bottom-nav button.active::after {
+  content: '';
+  position: absolute;
+  right: 24%;
+  bottom: 2px;
+  left: 24%;
+  height: 3px;
+  background: var(--user-team-primary);
+  box-shadow: 6px 0 0 var(--user-team-secondary), 12px 0 0 var(--user-team-tertiary);
+  pointer-events: none;
+}
+
+/* Hockey-flavored page identity without compromising data readability. */
+:where(
+  .team-settings-page,
+  .free-agents-page,
+  .draft-room-page,
+  .cycle-page,
+  .standings-page,
+  .league-detail-page,
+  .playoff-page
+) {
+  position: relative;
+}
+
+:where(
+  .team-settings-page,
+  .free-agents-page,
+  .draft-room-page,
+  .cycle-page,
+  .standings-page,
+  .league-detail-page,
+  .playoff-page
+)::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0 48%, color-mix(in srgb, var(--user-team-tertiary) 4%, transparent) 48% 52%, transparent 52%),
+    radial-gradient(circle at 50% 48%, transparent 0 16%, color-mix(in srgb, var(--user-team-primary) 3%, transparent) 16% 16.5%, transparent 16.5%);
+  opacity: 0.8;
+}
+
+/* Light Ice stays high-contrast regardless of NHL palette. */
+html[data-background-theme='light-ice'] :where(
+  .fantasy-player-card,
+  .roster-slot-card,
+  .free-agent-card,
+  .waiver-player-card,
+  .player-card,
+  .team-card,
+  .league-card,
+  .transaction-card,
+  .asset-card,
+  .scheduled-card
+) {
+  background-image:
+    linear-gradient(135deg, rgba(20, 42, 66, 0.035) 0 12px, transparent 12px),
+    linear-gradient(#f8fafc, #f8fafc) !important;
+  color: #172438 !important;
+}
+
+html[data-background-theme='light-ice'] :where(
+  .fantasy-player-card,
+  .roster-slot-card,
+  .free-agent-card,
+  .waiver-player-card,
+  .player-card,
+  .team-card,
+  .league-card,
+  .transaction-card,
+  .asset-card,
+  .scheduled-card
+) :where(h1, h2, h3, h4, strong, .player-name, .team-name, .league-name) {
+  color: #132137 !important;
+}
+
+html[data-background-theme='light-ice'] :where(
+  .fantasy-player-card,
+  .roster-slot-card,
+  .free-agent-card,
+  .waiver-player-card,
+  .player-card,
+  .team-card,
+  .league-card,
+  .transaction-card,
+  .asset-card,
+  .scheduled-card
+) :where(p, small, .meta, .player-meta, .team-meta, .supporting-copy) {
+  color: #4c6076 !important;
+}
+
+html[data-background-theme='light-ice'] :where(input, select, textarea) {
+  background: #ffffff;
+  color: #172438;
+}
+
+/* Mobile density: readable, wide, and touch-friendly. */
+@media (max-width: 780px) {
+  body {
+    font-size: 16px;
+  }
+
+  :where(h1, .page-title) {
+    font-size: clamp(1.65rem, 8vw, 2.25rem);
+  }
+
+  :where(button, a[class*='button'], a[class*='action'], a[class*='link']) {
+    min-height: 42px;
+  }
+
+  :where(.eyebrow, [class$='-eyebrow'], [class*='-eyebrow '], .card-label, .menu-label) {
+    font-size: 0.6rem;
+  }
+
+  .mobile-bottom-nav :where(a, button) {
+    font-size: 0.73rem !important;
+    letter-spacing: 0.015em;
+  }
+}
+
+@media (max-width: 390px) {
+  body {
+    font-size: 15.5px;
+  }
+}
+
+/* Accessibility / motion -------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :where(button, input, select, textarea) {
+    border-width: 3px;
+  }
+
+  :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class$='-card'],
+  :where(
+    article,
+    section,
+    aside,
+    div,
+    form
+  )[class*='-card '] {
+    border-width: 3px !important;
+  }
+}

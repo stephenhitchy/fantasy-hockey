@@ -619,3 +619,18 @@ CURRENT-SEASON ADD/DROP STAT DROPDOWN (JULY 28, 2026)
 - Each dropdown ends with a clear current-season fantasy total.
 - Projection comparison metrics remain visible on the main card outside the
   dropdown so the dropdown can stay focused on actual production.
+
+=====================================================================
+RINKRAT VISUAL SYSTEM PHASE 2A — PAGE IDENTITIES (JULY 2026)
+=====================================================================
+Phase 2A gives the Dashboard, Current League page, and Draft Room distinct visual
+identities on top of the Phase 1 arena foundation. The Dashboard is an arcade
+league-select/save-file screen, Current League is a franchise front office, and
+Draft Room is an arena jumbotron with a scouting terminal and GM desk.
+
+The implementation is presentation-only in src/rinkrat-page-identities-phase2.css,
+loaded after src/rinkrat-visual-system.css through angular.json. It does not change
+Firestore, league logic, draft logic, roster rules, scoring, projections, or the
+asynchronous six-game cycle architecture. Team colors remain controlled accents,
+not unsafe whole-card text/background combinations. Mobile and Light Ice support
+are included. No rat-tail divider is used.

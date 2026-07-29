@@ -1,0 +1,946 @@
+/*
+ * RinkRat Visual System — Phase 2A: League Lobby, Front Office, Draft Jumbotron
+ *
+ * Page-specific presentation layer for the three highest-traffic league entry
+ * experiences. This file intentionally contains no fantasy logic and uses the
+ * semantic tokens established by Phase 1. No rat-tail dividers are used.
+ */
+
+:root {
+  --rr-phase2-metal: color-mix(in srgb, var(--rr-steel-dark) 72%, #050b13);
+  --rr-phase2-glass: color-mix(in srgb, var(--rr-scoreboard-raised) 91%, transparent);
+  --rr-phase2-ice-edge: color-mix(in srgb, var(--rr-ice-blue) 40%, var(--border-soft));
+  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 13%, transparent);
+  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 24%, transparent);
+  --rr-phase2-red-line: #d73b55;
+  --rr-phase2-blue-line: #3d81c8;
+}
+
+html[data-background-theme='light-ice'] {
+  --rr-phase2-metal: #34485f;
+  --rr-phase2-glass: rgba(249, 252, 255, 0.97);
+  --rr-phase2-ice-edge: #879db5;
+  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 9%, #ffffff);
+  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 16%, #ffffff);
+}
+
+/* -------------------------------------------------------------------------
+   DASHBOARD — arcade save files / cartridge shelf
+   ------------------------------------------------------------------------- */
+
+app-dashboard .pixel-dashboard-page {
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(215, 59, 85, 0.1) 8% 8.3%, transparent 8.3% 91.7%, rgba(61, 129, 200, 0.1) 91.7% 92%, transparent 92%),
+    radial-gradient(circle at 12% 16%, var(--rr-phase2-team-wash-strong), transparent 28%),
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--user-team-secondary) 18%, transparent), transparent 28%),
+    var(--page-bg) !important;
+}
+
+app-dashboard .pixel-dashboard-page::after {
+  content: '';
+  position: absolute;
+  inset: 18px 0 auto;
+  height: 8px;
+  border-block: 2px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
+  background:
+    linear-gradient(90deg,
+      var(--rr-phase2-red-line) 0 22%,
+      transparent 22% 39%,
+      var(--rr-warning) 39% 61%,
+      transparent 61% 78%,
+      var(--rr-phase2-blue-line) 78% 100%);
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+app-dashboard .dashboard {
+  max-width: 1280px;
+}
+
+app-dashboard .dashboard-header {
+  position: relative;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+app-dashboard .hero-copy,
+app-dashboard .dashboard-mascot-card {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 52%),
+    var(--surface-1) !important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 8%, transparent),
+    7px 7px 0 color-mix(in srgb, var(--rr-scoreboard) 72%, transparent) !important;
+  clip-path: polygon(0 10px, 10px 10px, 10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px));
+}
+
+app-dashboard .hero-copy::before {
+  content: 'PLAYER ONE · LEAGUE SELECT';
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 7px 12px 8px;
+  border-left: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+  color: var(--rr-ice-white);
+  font-family: var(--rr-font-micro);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+}
+
+app-dashboard .hero-copy h1 {
+  max-width: 780px;
+  text-shadow: 3px 3px 0 color-mix(in srgb, var(--user-team-primary) 25%, transparent);
+}
+
+app-dashboard .quick-actions {
+  padding-top: 4px;
+}
+
+app-dashboard .dashboard-mascot-card::before {
+  content: 'MANAGER PROFILE';
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 7px 10px;
+  background: var(--user-team-secondary);
+  color: var(--user-team-on-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.58rem;
+}
+
+app-dashboard .favorite-team-logo-panel {
+  position: relative;
+  border: 2px solid var(--border-strong);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    var(--rr-scoreboard-inset);
+  background-size: 14px 14px;
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--user-team-primary) 22%, transparent);
+}
+
+app-dashboard .mini-scoreboard {
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard) !important;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.045);
+}
+
+app-dashboard .mini-scoreboard span {
+  color: #aebed1 !important;
+}
+
+app-dashboard .mini-scoreboard strong {
+  color: #ffffff !important;
+  font-family: var(--rr-font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+app-dashboard .leagues-section {
+  position: relative;
+  margin-top: 34px;
+  padding: 24px;
+  border: 3px solid var(--border-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, transparent), var(--surface-1));
+  box-shadow: 7px 7px 0 color-mix(in srgb, var(--rr-scoreboard) 68%, transparent);
+}
+
+app-dashboard .leagues-section::before {
+  content: 'SAVE FILES';
+  position: absolute;
+  top: -15px;
+  left: 24px;
+  padding: 5px 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+  color: #ffffff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+app-dashboard .league-grid {
+  gap: 20px;
+}
+
+app-dashboard .league-card {
+  position: relative;
+  min-height: 258px;
+  overflow: hidden;
+  padding: 22px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 55%),
+    var(--surface-1) !important;
+  box-shadow:
+    inset 0 -8px 0 color-mix(in srgb, var(--rr-scoreboard) 18%, transparent),
+    5px 5px 0 color-mix(in srgb, var(--rr-scoreboard) 62%, transparent) !important;
+  clip-path: polygon(0 9px, 9px 9px, 9px 0, calc(100% - 9px) 0, calc(100% - 9px) 9px, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 9px calc(100% - 9px), 0 calc(100% - 9px));
+}
+
+app-dashboard .league-card::before {
+  content: 'SEASON SAVE';
+  position: absolute;
+  top: 0;
+  left: 54%;
+  translate: -50% 0;
+  min-width: 104px;
+  padding: 4px 10px 5px;
+  border-inline: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+  color: #dfeafb;
+  font-family: var(--rr-font-micro);
+  font-size: 0.52rem;
+  text-align: center;
+}
+
+app-dashboard .league-card::after {
+  content: '';
+  position: absolute;
+  right: 17px;
+  bottom: 12px;
+  width: 46px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, var(--rr-warning) 0 5px, transparent 5px 8px);
+  opacity: 0.75;
+}
+
+app-dashboard .league-card:hover {
+  border-color: var(--user-team-accent) !important;
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 -8px 0 color-mix(in srgb, var(--user-team-primary) 14%, transparent),
+    7px 7px 0 color-mix(in srgb, var(--rr-scoreboard) 68%, transparent) !important;
+}
+
+app-dashboard .league-icon {
+  width: 62px !important;
+  height: 62px !important;
+  border: 2px solid var(--border-strong) !important;
+  background: var(--rr-scoreboard-inset) !important;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--user-team-primary) 28%, transparent);
+}
+
+app-dashboard .league-identity h3 {
+  font-size: clamp(1.4rem, 2.1vw, 1.9rem) !important;
+}
+
+app-dashboard .league-summary-row {
+  border: 2px solid var(--border-soft) !important;
+  background: var(--surface-2) !important;
+}
+
+app-dashboard .league-summary-row > div + div {
+  border-left: 2px dashed color-mix(in srgb, var(--border-strong) 72%, transparent);
+}
+
+app-dashboard .commissioner-badge,
+app-dashboard .league-count,
+app-dashboard .refreshing-badge {
+  border-radius: 0 !important;
+  font-family: var(--rr-font-micro);
+}
+
+app-dashboard .league-actions {
+  margin-top: auto;
+}
+
+app-dashboard .open-league {
+  flex: 1 1 180px;
+  justify-content: space-between !important;
+  padding-inline: 18px !important;
+}
+
+app-dashboard .team-shortcut {
+  width: 52px;
+  min-width: 52px;
+}
+
+html[data-background-theme='light-ice'] app-dashboard .pixel-dashboard-page {
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(194, 42, 70, 0.08) 8% 8.3%, transparent 8.3% 91.7%, rgba(45, 104, 163, 0.08) 91.7% 92%, transparent 92%),
+    radial-gradient(circle at 12% 16%, var(--rr-phase2-team-wash-strong), transparent 28%),
+    #e6edf5 !important;
+}
+
+html[data-background-theme='light-ice'] app-dashboard :is(.hero-copy, .dashboard-mascot-card, .leagues-section, .league-card) {
+  box-shadow: 6px 6px 0 rgba(62, 79, 98, 0.28) !important;
+}
+
+/* -------------------------------------------------------------------------
+   CURRENT LEAGUE — franchise front office
+   ------------------------------------------------------------------------- */
+
+app-league-detail .league-page {
+  max-width: 1320px;
+}
+
+app-league-detail .league-header {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  padding-top: 48px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash-strong), transparent 50%),
+    var(--surface-1) !important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 7%, transparent),
+    7px 7px 0 color-mix(in srgb, var(--rr-scoreboard) 68%, transparent) !important;
+  clip-path: polygon(0 10px, 10px 10px, 10px 0, calc(100% - 10px) 0, calc(100% - 10px) 10px, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 10px calc(100% - 10px), 0 calc(100% - 10px));
+}
+
+app-league-detail .league-header::before {
+  content: 'FRANCHISE FRONT OFFICE';
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding-inline: 18px;
+  border-bottom: 3px solid var(--border-strong);
+  background:
+    linear-gradient(90deg, var(--user-team-primary), var(--user-team-secondary) 52%, var(--rr-scoreboard) 52% 100%);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+app-league-detail .league-header h1 {
+  align-items: center;
+  gap: 14px !important;
+  text-shadow: 3px 3px 0 color-mix(in srgb, var(--user-team-primary) 18%, transparent);
+}
+
+app-league-detail .league-title-logo {
+  width: 72px !important;
+  height: 72px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
+    var(--rr-scoreboard-inset) !important;
+  background-size: 12px 12px !important;
+  box-shadow: inset 0 0 20px var(--rr-phase2-team-wash-strong);
+}
+
+app-league-detail .my-team-identity {
+  position: relative;
+  border: 3px solid color-mix(in srgb, var(--user-team-primary) 65%, var(--border-strong)) !important;
+  background:
+    linear-gradient(90deg, var(--rr-phase2-team-wash-strong), transparent 52%),
+    var(--rr-scoreboard) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.05), 4px 4px 0 rgba(0,0,0,.38);
+}
+
+app-league-detail .my-team-identity::before {
+  content: 'GM IDENTITY';
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.5rem;
+}
+
+app-league-detail .my-team-identity :is(span, strong) {
+  color: #ffffff !important;
+}
+
+app-league-detail .daily-injury-status {
+  position: relative;
+  border-width: 3px !important;
+  border-radius: 0 !important;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-scoreboard) 48%, transparent);
+  clip-path: polygon(0 8px, 8px 8px, 8px 0, calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px));
+}
+
+app-league-detail .daily-injury-status::after {
+  content: 'MEDICAL DESK';
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  font-family: var(--rr-font-micro);
+  font-size: 0.48rem;
+  opacity: 0.65;
+}
+
+app-league-detail .league-info-grid {
+  gap: 14px !important;
+}
+
+app-league-detail .league-info-card {
+  position: relative;
+  min-height: 96px;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 70%),
+    var(--surface-1) !important;
+  box-shadow: inset 0 -5px 0 color-mix(in srgb, var(--user-team-primary) 18%, transparent), 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 45%, transparent);
+}
+
+app-league-detail .league-info-card::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--rr-success) 70%, #fff);
+  background: var(--rr-success);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--rr-success) 62%, transparent);
+}
+
+app-league-detail :is(.cycle-status-card, .draft-status-card, .quick-actions-card, .season-start-card, .invite-card, .teams-section) {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 62%),
+    var(--surface-1) !important;
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--rr-scoreboard) 52%, transparent) !important;
+  clip-path: polygon(0 8px, 8px 8px, 8px 0, calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px));
+}
+
+app-league-detail :is(.cycle-status-card, .draft-status-card, .quick-actions-card, .season-start-card, .invite-card, .teams-section)::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, var(--user-team-primary) 0 32%, var(--user-team-secondary) 32% 60%, var(--user-team-tertiary) 60% 84%, transparent 84%);
+}
+
+app-league-detail .primary-actions-grid,
+app-league-detail .quick-actions-grid,
+app-league-detail .league-tools-grid {
+  gap: 13px !important;
+}
+
+app-league-detail :is(.hub-action, .tool-link) {
+  min-height: 112px;
+  border: 2px solid var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 65%),
+    var(--surface-2) !important;
+  box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--rr-scoreboard) 20%, transparent);
+}
+
+app-league-detail :is(.hub-action, .tool-link):hover {
+  border-color: var(--user-team-accent) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash-strong), transparent 65%),
+    var(--surface-2) !important;
+}
+
+app-league-detail .hub-action-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+}
+
+app-league-detail .matchup-card {
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--rr-scoreboard) !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.04);
+}
+
+app-league-detail .matchup-card :is(strong, .matchup-vs, .matchup-team-row > span:last-child) {
+  color: #ffffff !important;
+}
+
+app-league-detail .team-card {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 65%),
+    var(--surface-1) !important;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 43%, transparent);
+}
+
+app-league-detail .team-card::after {
+  content: 'FRANCHISE FILE';
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro);
+  font-size: 0.44rem;
+  opacity: 0.62;
+}
+
+app-league-detail .team-stat-grid div {
+  border-radius: 0 !important;
+}
+
+html[data-background-theme='light-ice'] app-league-detail :is(.league-header, .daily-injury-status, .league-info-card, .cycle-status-card, .draft-status-card, .quick-actions-card, .season-start-card, .invite-card, .teams-section, .team-card) {
+  box-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24) !important;
+}
+
+/* -------------------------------------------------------------------------
+   DRAFT ROOM — arena jumbotron / scouting desk
+   ------------------------------------------------------------------------- */
+
+app-draft-room .draft-room-page {
+  max-width: 1380px;
+  padding-top: 22px !important;
+}
+
+app-draft-room .back-link {
+  margin-bottom: 14px;
+}
+
+app-draft-room .draft-room-header {
+  position: relative;
+  isolation: isolate;
+  min-height: 150px;
+  overflow: hidden;
+  padding: 48px 24px 22px !important;
+  border: 4px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 45%, var(--rr-phase2-team-wash-strong), transparent 32%),
+    var(--rr-scoreboard) !important;
+  background-size: 12px 12px, 12px 12px, auto, auto !important;
+  color: #ffffff !important;
+  box-shadow: 8px 8px 0 rgba(0,0,0,.45) !important;
+  clip-path: polygon(0 11px, 11px 11px, 11px 0, calc(100% - 11px) 0, calc(100% - 11px) 11px, 100% 11px, 100% calc(100% - 11px), calc(100% - 11px) calc(100% - 11px), calc(100% - 11px) 100%, 11px 100%, 11px calc(100% - 11px), 0 calc(100% - 11px));
+}
+
+app-draft-room .draft-room-header::before {
+  content: 'ARENA JUMBOTRON · LIVE DRAFT CONTROL';
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 31px;
+  display: flex;
+  align-items: center;
+  padding-inline: 15px;
+  border-bottom: 3px solid var(--border-strong);
+  background: linear-gradient(90deg, var(--rr-phase2-red-line), #8e1f36 34%, var(--rr-scoreboard-raised) 34% 100%);
+  color: #ffffff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+}
+
+app-draft-room .draft-room-header::after {
+  content: '';
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  width: 62px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, var(--rr-success) 0 5px, transparent 5px 9px);
+  opacity: 0.7;
+}
+
+app-draft-room .draft-room-header :is(h1, p, .eyebrow) {
+  color: #ffffff !important;
+}
+
+app-draft-room .draft-room-header h1 {
+  font-size: clamp(2.25rem, 5vw, 4.5rem) !important;
+  line-height: 0.88 !important;
+  text-shadow: 4px 4px 0 color-mix(in srgb, var(--user-team-primary) 44%, #000);
+}
+
+app-draft-room .draft-state-badge {
+  border: 2px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  font-family: var(--rr-font-micro);
+  box-shadow: 3px 3px 0 rgba(0,0,0,.42);
+}
+
+app-draft-room .draft-injury-sync-banner {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--surface-1) !important;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 38%, transparent);
+}
+
+app-draft-room .draft-injury-sync-banner::before {
+  content: 'MEDICAL TICKER';
+  margin-right: 10px;
+  padding: 3px 7px;
+  background: var(--rr-danger);
+  color: #ffffff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.48rem;
+}
+
+app-draft-room .draft-clock-bar {
+  position: relative;
+  min-height: 126px;
+  overflow: hidden;
+  border: 4px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    var(--rr-scoreboard) !important;
+  background-size: 10px 10px !important;
+  color: #ffffff !important;
+  box-shadow: 7px 7px 0 rgba(0,0,0,.45);
+}
+
+app-draft-room .draft-clock-bar::before,
+app-draft-room .draft-clock-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: var(--user-team-primary);
+}
+
+app-draft-room .draft-clock-bar::before { left: 0; }
+app-draft-room .draft-clock-bar::after { right: 0; background: var(--user-team-secondary); }
+
+app-draft-room .draft-clock-bar :is(span, strong, small) {
+  color: #ffffff !important;
+}
+
+app-draft-room .draft-clock-time strong {
+  font-size: clamp(3rem, 7vw, 6rem) !important;
+  line-height: 0.8 !important;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--rr-success) 52%, transparent), 4px 4px 0 #000;
+}
+
+app-draft-room .clock-urgent .draft-clock-time strong {
+  color: #fff1f3 !important;
+  text-shadow: 0 0 14px rgba(255, 50, 79, 0.8), 4px 4px 0 #000;
+}
+
+app-draft-room .draft-roster-needs {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, var(--rr-phase2-team-wash), transparent 60%),
+    var(--surface-1) !important;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-scoreboard) 43%, transparent);
+}
+
+app-draft-room .draft-roster-needs::before {
+  content: 'BENCH & LINEUP BOARD';
+  position: absolute;
+  top: -11px;
+  left: 16px;
+  padding: 4px 9px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+  color: #ffffff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.5rem;
+}
+
+app-draft-room .draft-roster-need {
+  min-height: 62px;
+  border-width: 2px !important;
+  background: var(--rr-scoreboard-raised) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,.28) !important;
+}
+
+app-draft-room .draft-roster-need :is(strong, span) {
+  color: #ffffff !important;
+}
+
+app-draft-room .draft-pick-track-card {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--surface-1) !important;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-scoreboard) 42%, transparent);
+}
+
+app-draft-room .draft-pick-track-card::after {
+  content: 'PICK TICKER';
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro);
+  font-size: 0.48rem;
+}
+
+app-draft-room .draft-pick-track-item {
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  background: var(--surface-2) !important;
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--rr-scoreboard) 18%, transparent);
+}
+
+app-draft-room .draft-pick-track-item.current-pick {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--rr-warning) 18%, transparent), transparent),
+    var(--surface-2) !important;
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--rr-warning) 42%, transparent), 0 0 0 2px color-mix(in srgb, var(--rr-warning) 40%, transparent) !important;
+}
+
+app-draft-room .draft-layout {
+  gap: 22px !important;
+}
+
+app-draft-room .player-pool-panel,
+app-draft-room :is(.turn-card, .sidebar-card, .queue-card, .roster-card, .waiting-card) {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash), transparent 65%),
+    var(--surface-1) !important;
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--rr-scoreboard) 47%, transparent) !important;
+  clip-path: polygon(0 7px, 7px 7px, 7px 0, calc(100% - 7px) 0, calc(100% - 7px) 7px, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 7px calc(100% - 7px), 0 calc(100% - 7px));
+}
+
+app-draft-room .player-pool-panel::before {
+  content: 'SCOUTING TERMINAL';
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-family: var(--rr-font-micro);
+  font-size: 0.48rem;
+  color: var(--text-muted);
+}
+
+app-draft-room .draft-sidebar::before {
+  content: 'GENERAL MANAGER DESK';
+  display: block;
+  margin: 0 0 8px;
+  padding: 6px 9px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard);
+  color: #ffffff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+}
+
+app-draft-room .pool-controls {
+  padding: 10px;
+  border: 2px solid var(--border-soft);
+  background: var(--surface-2);
+}
+
+app-draft-room .draft-asset-card {
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  background: var(--surface-2) !important;
+  box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--rr-scoreboard) 15%, transparent);
+}
+
+app-draft-room .draft-asset-card:hover {
+  border-color: var(--user-team-accent) !important;
+  background:
+    linear-gradient(135deg, var(--rr-phase2-team-wash-strong), transparent 66%),
+    var(--surface-2) !important;
+}
+
+app-draft-room .asset-logo,
+app-draft-room .asset-logo-fallback {
+  border: 2px solid var(--border-strong);
+  background: var(--rr-scoreboard-inset);
+}
+
+app-draft-room .asset-projection-strip {
+  border-radius: 0 !important;
+  font-family: var(--rr-font-micro);
+}
+
+app-draft-room :is(.your-turn-badge, .waiting-turn-badge, .bench-need-pill, .rank-pill, .availability-projection-pill) {
+  border-radius: 0 !important;
+  font-family: var(--rr-font-micro);
+}
+
+html[data-background-theme='light-ice'] app-draft-room :is(.draft-injury-sync-banner, .draft-roster-needs, .draft-pick-track-card, .player-pool-panel, .turn-card, .sidebar-card, .queue-card, .roster-card, .waiting-card) {
+  box-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24) !important;
+}
+
+/* -------------------------------------------------------------------------
+   Responsive page identity refinements
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  app-dashboard .dashboard-header {
+    grid-template-columns: 1fr;
+  }
+
+  app-dashboard .dashboard-mascot-card {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 190px);
+    align-items: center;
+  }
+
+  app-dashboard .favorite-team-logo-panel {
+    grid-row: 1 / span 4;
+    grid-column: 2;
+  }
+
+  app-league-detail .league-header {
+    padding-top: 50px !important;
+  }
+
+  app-draft-room .draft-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 640px) {
+  app-dashboard .pixel-dashboard-page {
+    padding-inline: 10px !important;
+  }
+
+  app-dashboard .hero-copy,
+  app-dashboard .dashboard-mascot-card,
+  app-dashboard .leagues-section {
+    padding: 20px !important;
+    box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 58%, transparent) !important;
+  }
+
+  app-dashboard .hero-copy {
+    padding-top: 50px !important;
+  }
+
+  app-dashboard .hero-copy::before {
+    right: auto;
+    left: 0;
+    border-left: 0;
+    border-right: 2px solid var(--border-strong);
+  }
+
+  app-dashboard .dashboard-mascot-card {
+    display: grid;
+    grid-template-columns: 1fr 104px;
+    gap: 10px;
+    padding-top: 42px !important;
+  }
+
+  app-dashboard .favorite-team-logo-panel {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+  }
+
+  app-dashboard .mascot-rink,
+  app-dashboard .mascot-team-copy {
+    display: none;
+  }
+
+  app-dashboard .leagues-section {
+    padding: 24px 12px 14px !important;
+  }
+
+  app-dashboard .league-card {
+    min-height: 232px;
+    padding: 18px 14px !important;
+  }
+
+  app-dashboard .league-summary-row {
+    grid-template-columns: 88px minmax(0, 1fr) !important;
+  }
+
+  app-dashboard .league-summary-row strong {
+    white-space: normal !important;
+  }
+
+  app-league-detail .league-page,
+  app-draft-room .draft-room-page {
+    padding-inline: 8px !important;
+  }
+
+  app-league-detail .league-header {
+    padding: 50px 14px 18px !important;
+    box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 54%, transparent) !important;
+  }
+
+  app-league-detail .league-header::before {
+    font-size: 0.52rem;
+  }
+
+  app-league-detail .league-title-logo {
+    width: 58px !important;
+    height: 58px !important;
+  }
+
+  app-league-detail .league-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  app-league-detail .league-info-card {
+    min-height: 82px;
+    padding: 13px !important;
+  }
+
+  app-league-detail .primary-actions-grid,
+  app-league-detail .quick-actions-grid,
+  app-league-detail .league-tools-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  app-league-detail :is(.hub-action, .tool-link) {
+    min-height: 84px;
+  }
+
+  app-draft-room .draft-room-header {
+    min-height: 128px;
+    padding: 43px 14px 16px !important;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.4) !important;
+  }
+
+  app-draft-room .draft-room-header::before {
+    font-size: 0.48rem;
+  }
+
+  app-draft-room .draft-room-header h1 {
+    font-size: clamp(2rem, 13vw, 3.4rem) !important;
+  }
+
+  app-draft-room .draft-clock-bar {
+    min-height: 152px;
+    padding-inline: 15px !important;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.4);
+  }
+
+  app-draft-room .draft-clock-time strong {
+    font-size: clamp(3rem, 18vw, 4.8rem) !important;
+  }
+
+  app-draft-room .draft-roster-needs,
+  app-draft-room .draft-pick-track-card,
+  app-draft-room .player-pool-panel,
+  app-draft-room :is(.turn-card, .sidebar-card, .queue-card, .roster-card) {
+    box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 42%, transparent) !important;
+  }
+
+  app-draft-room .pool-controls {
+    padding: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  app-dashboard .league-card:hover {
+    transform: none;
+  }
+}

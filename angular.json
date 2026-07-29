@@ -26,7 +26,9 @@
               }
             ],
             "styles": [
-              "src/styles.css"
+              "src/styles.css",
+              "src/rinkrat-visual-system.css",
+              "src/rinkrat-page-identities-phase2.css"
             ]
           },
           "configurations": {
