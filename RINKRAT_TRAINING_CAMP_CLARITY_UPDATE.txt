@@ -1,0 +1,9 @@
+RinkRat Training Camp clarity update
+
+- Rewrites Shift 1 in simpler language and adds a three-step explanation of independent six-game counters.
+- Labels games 1-6 as "First Matchup" and labels game 7 as "Start of Second Matchup."
+- Clarifies that one player may begin Matchup 2 while another player is still finishing Matchup 1.
+- Expands Shift 2 with a plain-language explanation of roster spots.
+- Adds a position-value guide: forwards have bigger scoring swings, defensemen are steadier, and the team goalie unit is usually the highest-scoring asset.
+- Reminds managers to compare players primarily with others at the same position.
+- Includes responsive desktop and mobile layouts and retains theme-aware colors.

@@ -84,6 +84,20 @@
         <h2 id="training-camp-step-title" tabindex="-1">{{ currentStep().title }}</h2>
         <p>{{ currentStep().summary }}</p>
 
+        @if (currentStep().id === 'cycles') {
+          <ol class="lesson-simple-list" aria-label="How six-game matchups work">
+            <li><strong>Games 1 through 6</strong> count toward that player’s first matchup.</li>
+            <li><strong>Game 7 does not go backward.</strong> It becomes Game 1 of that player’s second matchup.</li>
+            <li><strong>Every roster spot keeps its own count.</strong> One player can start Matchup 2 while another player is still finishing Matchup 1.</li>
+          </ol>
+        } @else if (currentStep().id === 'roster') {
+          <ul class="lesson-simple-list roster-simple-list" aria-label="RinkRat roster basics">
+            <li><strong>14 active spots</strong> earn fantasy points.</li>
+            <li><strong>3 bench spots</strong> give you backup options.</li>
+            <li><strong>3 IR spots</strong> hold eligible injured players.</li>
+          </ul>
+        }
+
         <aside class="coach-note">
           <span class="coach-avatar" aria-hidden="true">
             <img src="/assets/branding/rinkrat-headshot.png" alt="" />
@@ -104,14 +118,20 @@
                   <span class="demo-logo">A</span>
                   <div><strong>Player A</strong><small>Fast NHL schedule</small></div>
                 </div>
-                <div class="game-dot-row">
-                  @for (game of [1, 2, 3, 4, 5, 6]; track game) {
-                    <span class="game-dot played">{{ game }}</span>
-                  }
-                  <span class="window-arrow">→</span>
-                  <span class="game-dot next">7</span>
+                <div class="cycle-window-map completed-window">
+                  <span class="window-label first-window-label">First Matchup</span>
+                  <span class="window-label next-window-label">Start of Second Matchup</span>
+                  <div class="first-window-dots">
+                    @for (game of [1, 2, 3, 4, 5, 6]; track game) {
+                      <span class="game-dot played">{{ game }}</span>
+                    }
+                  </div>
+                  <span class="window-arrow" aria-hidden="true">→</span>
+                  <div class="next-window-dot">
+                    <span class="game-dot next">7</span>
+                  </div>
                 </div>
-                <small class="demo-result">Window complete in 9 days</small>
+                <small class="demo-result">Player A finished Matchup 1. Game 7 is now the first game of Matchup 2.</small>
               </div>
 
               <div class="cycle-demo-team">
@@ -119,20 +139,23 @@
                   <span class="demo-logo">B</span>
                   <div><strong>Player B</strong><small>Slower NHL schedule</small></div>
                 </div>
-                <div class="game-dot-row">
-                  @for (game of [1, 2, 3, 4]; track game) {
-                    <span class="game-dot played">{{ game }}</span>
-                  }
-                  @for (game of [5, 6]; track game) {
-                    <span class="game-dot upcoming">{{ game }}</span>
-                  }
+                <div class="cycle-window-map in-progress-window">
+                  <span class="window-label first-window-label">First Matchup</span>
+                  <div class="first-window-dots">
+                    @for (game of [1, 2, 3, 4]; track game) {
+                      <span class="game-dot played">{{ game }}</span>
+                    }
+                    @for (game of [5, 6]; track game) {
+                      <span class="game-dot upcoming">{{ game }}</span>
+                    }
+                  </div>
                 </div>
-                <small class="demo-result">Still finishing the same six-game window</small>
+                <small class="demo-result">Player B is still in Matchup 1. Games 5 and 6 still need to happen.</small>
               </div>
 
               <div class="fairness-callout">
-                <strong>Six games each</strong>
-                <span>No schedule-volume advantage</span>
+                <strong>Both players still count exactly six games</strong>
+                <span>Finishing sooner does not give Player A extra games in Matchup 1.</span>
               </div>
             </section>
           }
@@ -160,6 +183,43 @@
                   <div><small>Treatment room</small><strong>3 IR slots</strong></div>
                 </article>
               </div>
+
+              <section class="position-value-guide" aria-labelledby="position-value-title">
+                <header>
+                  <small>How positions are designed to score</small>
+                  <strong id="position-value-title">Different positions help your team in different ways</strong>
+                </header>
+                <div class="position-value-grid">
+                  <article class="position-value-card forwards">
+                    <span class="position-value-badge" aria-hidden="true">F</span>
+                    <div>
+                      <small>Forwards</small>
+                      <strong>Big upside, more ups and downs</strong>
+                      <p>Goals and assists can create huge scores. They can also have quiet six-game stretches.</p>
+                      <em>Higher best-case score · Lower safe score</em>
+                    </div>
+                  </article>
+                  <article class="position-value-card defense">
+                    <span class="position-value-badge" aria-hidden="true">D</span>
+                    <div>
+                      <small>Defensemen</small>
+                      <strong>Steadier and more reliable</strong>
+                      <p>Shots, hits, blocks, and ice time help them keep scoring even when they do not get a goal.</p>
+                      <em>Fewer huge spikes · More consistent totals</em>
+                    </div>
+                  </article>
+                  <article class="position-value-card goalies">
+                    <span class="position-value-badge" aria-hidden="true">G</span>
+                    <div>
+                      <small>Team Goalie Unit</small>
+                      <strong>Usually your highest-scoring asset</strong>
+                      <p>Your goalie slot counts the NHL team’s goalie appearances and is meant to carry extra weight.</p>
+                      <em>One starting unit · Major lineup impact</em>
+                    </div>
+                  </article>
+                </div>
+                <p class="position-comparison-tip">Compare players mostly with others at the same position. A goalie having more points than a skater is expected.</p>
+              </section>
             </section>
           }
 

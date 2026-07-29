@@ -780,3 +780,9 @@ Important files:
 Future Training Camp changes must increment CURRENT_TRAINING_CAMP_VERSION only when managers
 should be invited to review materially changed rules. Do not mark completion for merely opening or
 exiting the page; completion is saved only after the final lesson.
+
+TRAINING CAMP CLARITY UPDATE
+- Shift 1 now explicitly labels games 1-6 as the First Matchup and game 7 as the Start of Second Matchup.
+- The description uses a three-part plain-language breakdown emphasizing independent six-game counters per roster spot.
+- Shift 2 now explains scoring identity by position: forwards have higher upside and more volatility, defensemen are more consistent, and the team goalie unit is normally the highest-scoring roster asset.
+- Training Camp tells managers to compare players primarily within the same position.

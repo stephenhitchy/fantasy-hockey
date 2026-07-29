@@ -309,6 +309,61 @@
   background-size: 20px 20px;
 }
 
+/* Simple lesson breakdowns */
+.lesson-simple-list {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: lesson-item;
+}
+
+.lesson-simple-list li {
+  position: relative;
+  padding: 11px 12px 11px 46px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  line-height: 1.42;
+  counter-increment: lesson-item;
+}
+
+.lesson-simple-list li::before {
+  content: counter(lesson-item);
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  translate: 0 -50%;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .58rem;
+  font-weight: 900;
+}
+
+.lesson-simple-list strong {
+  color: var(--text-primary);
+}
+
+.roster-simple-list {
+  counter-reset: none;
+}
+
+.roster-simple-list li {
+  padding-left: 42px;
+}
+
+.roster-simple-list li::before {
+  content: '✓';
+  color: #54cf86;
+}
+
 /* Step 1 */
 .cycle-demo {
   display: grid;
@@ -372,6 +427,67 @@
   margin-top: 14px;
 }
 
+.cycle-window-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 126px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 7px 8px;
+  margin-top: 16px;
+}
+
+.window-label {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .56rem;
+  font-weight: 800;
+  letter-spacing: .045em;
+  line-height: 1.25;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.first-window-label {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.next-window-label {
+  grid-column: 3;
+  grid-row: 1;
+  color: #74b7ff;
+}
+
+.first-window-dots {
+  display: flex;
+  grid-column: 1;
+  grid-row: 2;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cycle-window-map .window-arrow {
+  grid-column: 2;
+  grid-row: 2;
+  text-align: center;
+}
+
+.next-window-dot {
+  display: grid;
+  grid-column: 3;
+  grid-row: 2;
+  place-items: center;
+}
+
+.in-progress-window {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.in-progress-window .first-window-dots,
+.in-progress-window .first-window-label {
+  grid-column: 1;
+}
+
 .game-dot,
 .demo-game-row > span {
   display: grid;
@@ -428,7 +544,7 @@
 /* Step 2 */
 .roster-demo {
   display: grid;
-  width: min(100%, 680px);
+  width: min(100%, 760px);
   gap: 20px;
 }
 
@@ -487,6 +603,117 @@
 .roster-support strong {
   margin-top: 3px;
   color: var(--text-primary);
+}
+
+
+.position-value-guide {
+  overflow: hidden;
+  border: 3px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--page-bg) 72%, black 28%);
+}
+
+.position-value-guide > header {
+  padding: 13px 15px;
+  border-bottom: 3px solid var(--border-strong);
+  background: var(--rr-scoreboard, #07111f);
+}
+
+.position-value-guide > header small,
+.position-value-guide > header strong {
+  display: block;
+}
+
+.position-value-guide > header small {
+  color: #9eb0c5;
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .56rem;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.position-value-guide > header strong {
+  margin-top: 4px;
+  color: #fff;
+  font-size: 1.08rem;
+}
+
+.position-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.position-value-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  padding: 15px;
+  border-right: 2px solid var(--border-strong);
+}
+
+.position-value-card:last-child {
+  border-right: 0;
+}
+
+.position-value-badge {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 2px solid currentColor;
+  background: var(--surface-2);
+  font-family: var(--rr-font-display, inherit);
+  font-size: 1.15rem;
+  font-weight: 950;
+}
+
+.position-value-card.forwards .position-value-badge { color: #efb04f; }
+.position-value-card.defense .position-value-badge { color: #64c9db; }
+.position-value-card.goalies .position-value-badge { color: #79a9ff; }
+
+.position-value-card small,
+.position-value-card strong,
+.position-value-card em {
+  display: block;
+}
+
+.position-value-card small {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .55rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.position-value-card strong {
+  margin-top: 4px;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.position-value-card p {
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-size: .88rem;
+  line-height: 1.38;
+}
+
+.position-value-card em {
+  color: var(--user-team-accent);
+  font-size: .75rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.position-comparison-tip {
+  margin: 0;
+  padding: 11px 14px;
+  border-top: 2px solid var(--border-strong);
+  background: color-mix(in srgb, var(--user-team-primary) 10%, var(--surface-2));
+  color: var(--text-primary);
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
 }
 
 /* Step 3 */
@@ -860,6 +1087,21 @@
   }
 }
 
+@media (max-width: 900px) {
+  .position-value-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .position-value-card {
+    border-right: 0;
+    border-bottom: 2px solid var(--border-strong);
+  }
+
+  .position-value-card:last-child {
+    border-bottom: 0;
+  }
+}
+
 @media (max-width: 680px) {
   .training-camp-page {
     width: calc(100% + 8px);
@@ -965,6 +1207,41 @@
     width: 29px;
     height: 29px;
     font-size: .75rem;
+  }
+
+  .cycle-window-map {
+    grid-template-columns: minmax(0, 1fr) 18px 72px;
+    gap: 6px 3px;
+  }
+
+  .first-window-dots {
+    gap: 3px;
+  }
+
+  .cycle-window-map .game-dot {
+    width: 24px;
+    height: 24px;
+    font-size: .68rem;
+  }
+
+  .window-label {
+    font-size: .47rem;
+  }
+
+  .lesson-simple-list li {
+    padding: 10px 10px 10px 40px;
+    font-size: .9rem;
+  }
+
+  .position-value-card {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .position-value-badge {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
   }
 
   .fairness-callout {

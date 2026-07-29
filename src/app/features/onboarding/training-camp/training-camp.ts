@@ -46,21 +46,21 @@ export class TrainingCamp {
       id: 'cycles',
       number: '01',
       eyebrow: 'Fair Matchups',
-      title: 'Every starter gets six NHL games',
+      title: 'Every player gets exactly six NHL games',
       summary:
-        'RinkRat follows each roster slot through its own six-game window. Different NHL schedules can finish on different dates without giving either manager extra games.',
+        'For each player, RinkRat counts the next six NHL games. Games 1 through 6 belong to the first matchup. Game 7 starts that player’s second matchup. Players do not all need to finish on the same day.',
       coachNote:
-        'A player’s seventh scheduled NHL team game begins that slot’s next window—even while other slots are still finishing the previous cycle.',
+        'Think of every roster spot as having its own six-game counter. When one counter reaches six, that spot can move forward even if another counter is still catching up.',
     },
     {
       id: 'roster',
       number: '02',
       eyebrow: 'Build Your Club',
-      title: 'Fill the lineup, bench, and treatment room',
+      title: 'Build a balanced team',
       summary:
-        'Your active lineup carries fourteen scoring assets. Three bench slots give you flexibility, while three IR spaces protect roster depth when eligible players are unavailable.',
+        'Your team has 14 active scoring spots, 3 bench spots, and 3 IR spots. The positions are not meant to score the same way: forwards are explosive, defensemen are steady, and the team goalie unit usually scores the most.',
       coachNote:
-        'The goalie slot represents an NHL team goalie unit, so every goalie appearance for that team can contribute.',
+        'Do not judge every position by the same point total. Compare forwards with forwards, defensemen with defensemen, and goalie units with other goalie units.',
     },
     {
       id: 'moves',
