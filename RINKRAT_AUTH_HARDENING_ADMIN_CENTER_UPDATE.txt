@@ -1,0 +1,35 @@
+RINKRAT AUTH SESSION HARDENING + ADMIN CENTER
+==============================================
+
+AUTH SESSION HARDENING
+- Sign-in, fresh-token confirmation, Auth observer confirmation, and profile loading now have bounded timeouts.
+- A stalled Firebase request can no longer leave the login button on "Logging in..." forever.
+- If sign-in times out after Firebase later completes in the background, the late session is automatically signed out.
+- Account deletion now signs out, terminates the current Firestore client, clears user-scoped browser storage, and replaces the page with a completely new Angular/Firebase runtime.
+- The login screen confirms when a deleted-account browser session has been cleared.
+- Auth route guards and Dashboard/Auth profile startup no longer wait forever for an Auth observer.
+
+PRIVATE ADMIN CENTER
+- New route: /admin
+- Platform-wide access is separate from league commissioner status.
+- A server-side platformAdmins record or platformAdmin custom claim is required.
+- Feedback and automatic client errors remain unreadable through normal browser Firestore rules.
+- Admin data is returned only through authenticated callable Cloud Functions.
+
+FEEDBACK INBOX
+- Newest feedback first.
+- Filter by status/category and search by message, page, email, or reference.
+- Shows follow-up email only when the manager explicitly allowed follow-up.
+- Shows likely related client errors from the same user/page within 30 minutes.
+- Private admin notes and statuses: new, reviewing, planned, in-progress, resolved, not-planned.
+
+ERROR INBOX
+- Similar raw client errors are grouped by a sanitized fingerprint.
+- Shows occurrence count, affected users, browser distribution, route, release, first/last seen, and sample stack.
+- Private admin notes and statuses: new, investigating, fixed, ignored.
+- Existing clientErrorReports without a stored fingerprint are grouped at read time, so older reports still appear.
+
+AUDITING AND SECURITY
+- Admin updates are written by Cloud Functions and recorded in adminAuditLogs.
+- platformAdmins, adminErrorReviews, and adminAuditLogs are blocked from all direct browser reads/writes.
+- League commissioners do not automatically gain platform-admin access.

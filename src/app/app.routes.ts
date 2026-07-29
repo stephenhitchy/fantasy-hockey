@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authChildGuard, authGuard } from './core/guards/auth.guard';
+import { platformAdminGuard } from './core/guards/platform-admin.guard';
 import {
   commissionerGuard,
   developerToolsGuard,
@@ -73,6 +74,14 @@ export const routes: Routes = [
         path: 'support/feedback',
         loadComponent: () =>
           import('./features/support/feedback/feedback').then((module) => module.FeedbackPage),
+      },
+      {
+        path: 'admin',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/admin-center/admin-center').then(
+            (module) => module.AdminCenter,
+          ),
       },
       {
         path: 'access-denied',

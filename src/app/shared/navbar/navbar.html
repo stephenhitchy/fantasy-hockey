@@ -59,6 +59,15 @@
         Feedback
       </a>
 
+      @if (isPlatformAdmin()) {
+        <a
+          routerLink="/admin"
+          routerLinkActive="active"
+        >
+          Admin
+        </a>
+      }
+
       <a
         routerLink="/account/settings"
         routerLinkActive="active"
@@ -344,6 +353,19 @@
             <small>Help, privacy, and beta terms</small>
           </span>
         </a>
+
+        @if (isPlatformAdmin()) {
+          <a
+            routerLink="/admin"
+            (click)="closeMore()"
+          >
+            <span class="pixel-icon icon-lab icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>Admin Center</strong>
+              <small>Feedback and technical error inbox</small>
+            </span>
+          </a>
+        }
       </div>
 
       <button

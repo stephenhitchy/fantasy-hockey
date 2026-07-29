@@ -17,6 +17,7 @@ import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 
 import { logoutUser } from '../../core/auth/auth.service';
+import { PlatformAdminService } from '../../core/admin/platform-admin.service';
 
 @Component({
   selector: 'app-navbar',
@@ -30,6 +31,7 @@ import { logoutUser } from '../../core/auth/auth.service';
 export class Navbar implements OnDestroy {
   readonly moreOpen = signal(false);
   readonly currentUrl = signal('');
+  readonly isPlatformAdmin = computed(() => this.platformAdmin.isAdmin());
 
   readonly leagueId = computed(() => {
     const match = this.currentUrl().match(
@@ -53,8 +55,12 @@ export class Navbar implements OnDestroy {
 
   private readonly routerEventsSubscription: Subscription;
 
-  constructor(private router: Router) {
+  constructor(
+    private router: Router,
+    private platformAdmin: PlatformAdminService,
+  ) {
     this.currentUrl.set(this.router.url);
+    void this.platformAdmin.refreshAccess();
 
     this.routerEventsSubscription = this.router.events
       .pipe(

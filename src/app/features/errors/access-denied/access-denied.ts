@@ -22,6 +22,10 @@ export class AccessDenied {
       return 'Developer Tool Hidden';
     }
 
+    if (this.reason === 'platform-admin') {
+      return 'Platform Admin Access Required';
+    }
+
     return 'This Rink Is Restricted';
   });
 
@@ -32,6 +36,10 @@ export class AccessDenied {
 
     if (this.reason === 'developer-tools') {
       return 'That diagnostic page is disabled in the production version of RinkRat.';
+    }
+
+    if (this.reason === 'platform-admin') {
+      return 'League commissioner status does not grant platform-wide access. This page is limited to approved RinkRat administrators.';
     }
 
     if (this.reason === 'league-check' || this.reason === 'commissioner-check') {

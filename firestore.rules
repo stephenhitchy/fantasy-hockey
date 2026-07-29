@@ -1261,6 +1261,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Platform-administrator access and review records are managed only by
+    // trusted Cloud Functions. Normal league commissioners never receive
+    // platform-wide feedback or diagnostic access.
+    match /platformAdmins/{userId} {
+      allow read, write: if false;
+    }
+
+    match /adminErrorReviews/{fingerprint} {
+      allow read, write: if false;
+    }
+
+    match /adminAuditLogs/{auditId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

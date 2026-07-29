@@ -826,3 +826,15 @@ Important files:
   functions/src/index.ts
   firestore.indexes.json
   APP_CHECK_ROLLOUT_GUIDE.txt
+
+9. BETA OPERATIONS — AUTH HARDENING AND ADMIN CENTER (JULY 2026)
+- Login is bounded by timeouts for credential sign-in, fresh ID token confirmation, Auth observer settlement, and manager profile loading. A stalled request cannot keep the UI in "Logging in..." indefinitely.
+- Late sign-in completion after a timeout is automatically signed out so a rejected login attempt cannot silently become active later.
+- Successful account deletion performs a complete browser-session reset: sign out, terminate the current Firestore client/listeners, clear user-scoped local/session storage, and hard-replace the page before another account signs in.
+- Platform operations use a private /admin route protected by a server-verified platform administrator check. League commissioner status alone never grants access.
+- Platform administrators can be bootstrapped with platformAdmins/{uid}.enabled == true; a platformAdmin Auth custom claim is also accepted.
+- Feedback and automatic errors remain server-managed and blocked by Firestore browser rules.
+- Admin Center feedback workflow supports filtering, follow-up email visibility only when consented, likely-error correlation, private notes, and statuses.
+- Admin Center errors are grouped by a sanitized fingerprint and show occurrences, affected users, browser distribution, routes, releases, timestamps, sample stack, notes, and review status.
+- Admin changes are written through callable Functions and recorded in adminAuditLogs.
+- Release label advanced to Release Candidate 3.

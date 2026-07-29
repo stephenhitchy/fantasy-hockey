@@ -1,9 +1,7 @@
 import { Component, computed, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { onAuthStateChanged, User } from 'firebase/auth';
-
-import { auth } from '../../core/firebase-auth';
 import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
+import { waitForAuthenticatedUser } from '../../core/guards/auth.guard';
 import { CURRENT_TRAINING_CAMP_VERSION } from '../../core/onboarding/training-camp.service';
 import { getUserProfile, UserProfile } from '../../core/user/user.service';
 import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.service';
@@ -20,18 +18,6 @@ interface DashboardCache {
 const DASHBOARD_CACHE_VERSION = 4;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
-function waitForAuthUser(): Promise<User | null> {
-  if (auth.currentUser) {
-    return Promise.resolve(auth.currentUser);
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
-}
 
 function getDashboardCacheKey(userId: string): string {
   return `${DASHBOARD_CACHE_PREFIX}:${userId}`;
@@ -135,7 +121,7 @@ export class Dashboard {
       this.loading.set(true);
     }
 
-    const user = await waitForAuthUser();
+    const user = await waitForAuthenticatedUser();
 
     if (generation !== this.loadGeneration) {
       return;

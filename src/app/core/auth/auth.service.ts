@@ -7,6 +7,11 @@ import {
 } from 'firebase/auth';
 
 import { auth } from '../firebase-auth';
+import {
+  AuthSessionTimeoutError,
+  stabilizeSignedInSession,
+  withTimeout,
+} from './auth-session.service';
 
 export async function registerUser(
   email: string,
@@ -14,8 +19,12 @@ export async function registerUser(
   username: string,
   favoriteTeamAbbreviation: string,
 ): Promise<User> {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  const user = credential.user;
+  const credential = await withTimeout(
+    createUserWithEmailAndPassword(auth, email, password),
+    20_000,
+    'Account creation took too long. Check your connection and try again.',
+  );
+  const user = await stabilizeSignedInSession(credential.user);
 
   // Firestore is intentionally loaded only for registration. Normal sign-in
   // no longer downloads the full database SDK before the login screen renders.
@@ -24,27 +33,53 @@ export async function registerUser(
     import('../firebase-firestore'),
   ]);
 
-  await setDoc(doc(db, 'users', user.uid), {
-    uid: user.uid,
-    email: user.email,
-    username,
-    createdAt: new Date(),
-    favoriteTeamAbbreviation,
-    favoriteTeamVariantId: 'current-home',
-    teamIdentityUnlocks: [],
-    reducedMotion: false,
-    defaultLandingPage: 'dashboard',
-    backgroundTheme: 'rink-dark',
-    injuryEmailEnabled: false,
-    trainingCampVersion: 0,
-  });
+  await withTimeout(
+    setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: user.email,
+      username,
+      createdAt: new Date(),
+      favoriteTeamAbbreviation,
+      favoriteTeamVariantId: 'current-home',
+      teamIdentityUnlocks: [],
+      reducedMotion: false,
+      defaultLandingPage: 'dashboard',
+      backgroundTheme: 'rink-dark',
+      injuryEmailEnabled: false,
+      trainingCampVersion: 0,
+    }),
+    15_000,
+    'Your login was created, but the manager profile took too long to save.',
+  );
 
   return user;
 }
 
 export async function loginUser(email: string, password: string): Promise<User> {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
-  return credential.user;
+  const signInPromise = signInWithEmailAndPassword(auth, email, password);
+  try {
+    const credential = await withTimeout(
+      signInPromise,
+      20_000,
+      'Login took too long. RinkRat stopped waiting so this tab cannot stay frozen.',
+    );
+
+    return await stabilizeSignedInSession(credential.user);
+  } catch (error: unknown) {
+    if (error instanceof AuthSessionTimeoutError) {
+      void signInPromise
+        .then((credential) => {
+          if (auth.currentUser?.uid === credential.user.uid) {
+            return signOut(auth);
+          }
+
+          return undefined;
+        })
+        .catch(() => undefined);
+    }
+
+    throw error;
+  }
 }
 
 export async function logoutUser(): Promise<void> {

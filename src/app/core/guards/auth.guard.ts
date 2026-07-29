@@ -1,20 +1,11 @@
 import { inject } from '@angular/core';
 import { CanActivateChildFn, CanActivateFn, Router, UrlTree } from '@angular/router';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { User } from 'firebase/auth';
 
-import { auth } from '../firebase-auth';
+import { waitForAuthState } from '../auth/auth-session.service';
 
 export function waitForAuthenticatedUser(): Promise<User | null> {
-  if (auth.currentUser) {
-    return Promise.resolve(auth.currentUser);
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
+  return waitForAuthState(undefined, 10_000);
 }
 
 async function requireAuthenticatedRoute(stateUrl: string): Promise<true | UrlTree> {

@@ -2,6 +2,7 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
+import { AuthSessionTimeoutError, withTimeout } from '../../core/auth/auth-session.service';
 import { TelemetryService } from '../../core/observability/telemetry.service';
 import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
 import {
@@ -98,7 +99,19 @@ export class Auth {
     private router: Router,
     private route: ActivatedRoute,
     private telemetry: TelemetryService,
-  ) {}
+  ) {
+    const sessionReset = this.route.snapshot.queryParamMap.get('sessionReset');
+
+    if (sessionReset === 'deleted-account') {
+      this.successMessage.set(
+        'The deleted account session was fully cleared. You can safely sign in to another account.',
+      );
+
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/');
+      }
+    }
+  }
 
   async submit(): Promise<void> {
     if (this.loading()) {
@@ -137,8 +150,24 @@ export class Auth {
       );
 
       const { getUserProfile } = await import('../../core/user/user.service');
-      const profile = await getUserProfile(user.uid);
-      applyUserTheme(profile);
+      let profile = null;
+      let profileLoadTimedOut = false;
+
+      try {
+        profile = await withTimeout(
+          getUserProfile(user.uid),
+          12_000,
+          'Your account signed in, but the manager profile took too long to load.',
+        );
+        applyUserTheme(profile);
+      } catch (error: unknown) {
+        if (!(error instanceof AuthSessionTimeoutError)) {
+          throw error;
+        }
+
+        profileLoadTimedOut = true;
+        applyUserTheme(loadStoredUserTheme(), { persist: false });
+      }
 
       this.mascotCelebrating.set(true);
       await new Promise((resolve) => setTimeout(resolve, 850));
@@ -164,7 +193,7 @@ export class Auth {
 
       const lastLeagueId = getRememberedLastLeagueId();
       const destination =
-        profile?.defaultLandingPage === 'lastLeague' && lastLeagueId
+        !profileLoadTimedOut && profile?.defaultLandingPage === 'lastLeague' && lastLeagueId
           ? ['/leagues', lastLeagueId]
           : ['/dashboard'];
 
@@ -293,6 +322,10 @@ export class Auth {
 
     if (message.includes('auth/invalid-email')) {
       return 'Enter a valid email address.';
+    }
+
+    if (error instanceof AuthSessionTimeoutError) {
+      return `${error.message} The old session was closed. Try again, or open RinkRat in a new tab.`;
     }
 
     return message || 'Unable to continue right now.';

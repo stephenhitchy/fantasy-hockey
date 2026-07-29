@@ -1,10 +1,10 @@
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { onAuthStateChanged, User } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
+import { resetBrowserAfterAccountDeletion } from '../../../core/auth/auth-session.service';
 import {
   AccountDeletionReadiness,
   deleteCurrentUserAccount,
@@ -29,6 +29,7 @@ import {
 } from '../../../core/user/user.service';
 import { applyUserTheme } from '../../../core/user/user-theme.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
+import { waitForAuthenticatedUser } from '../../../core/guards/auth.guard';
 import {
   DEFAULT_TEAM_IDENTITY_VARIANT_ID,
   getNhlLogoUrl,
@@ -55,18 +56,6 @@ const IDENTITY_UNLOCK_ORDER: Exclude<TeamIdentityUnlockRequirement, 'default'>[]
   'crowded-schedule',
 ];
 
-function waitForAuthUser(): Promise<User | null> {
-  if (auth.currentUser) {
-    return Promise.resolve(auth.currentUser);
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
-}
 
 @Component({
   selector: 'app-account-settings',
@@ -163,7 +152,7 @@ export class AccountSettings {
   }
 
   async loadProfile(): Promise<void> {
-    const user = await waitForAuthUser();
+    const user = await waitForAuthenticatedUser();
 
     if (!user) {
       await this.router.navigate(['/']);
@@ -689,17 +678,7 @@ export class AccountSettings {
       await reauthenticateCurrentUserWithPassword(password);
       await deleteCurrentUserAccount(confirmationUsername);
 
-      try {
-        localStorage.removeItem('rinkrat:lastLeagueId');
-        localStorage.removeItem('rinkrat:userProfile');
-        sessionStorage.clear();
-      } catch {
-        // Storage can be unavailable in privacy modes. Account deletion does
-        // not depend on local browser storage being present.
-      }
-
-      await logoutUser().catch(() => undefined);
-      window.location.assign('/');
+      await resetBrowserAfterAccountDeletion();
     } catch (error: unknown) {
       this.deletionErrorMessage.set(
         this.getAccountDeletionErrorMessage(

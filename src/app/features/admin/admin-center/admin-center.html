@@ -1,0 +1,309 @@
+<section class="admin-center-page">
+  <header class="admin-hero">
+    <div>
+      <span class="eyebrow">Platform operations</span>
+      <h1>RinkRat Admin Center</h1>
+      <p>
+        Review beta feedback, connect reports to technical errors, and keep track of what has
+        been fixed without opening raw Firestore documents.
+      </p>
+    </div>
+
+    <button type="button" class="secondary-button" [disabled]="refreshing()" (click)="loadInbox(true)">
+      {{ refreshing() ? 'Refreshing…' : 'Refresh Inbox' }}
+    </button>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="admin-message error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (successMessage()) {
+    <p class="admin-message success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="admin-loading" aria-live="polite">
+      <span class="loading-puck" aria-hidden="true"></span>
+      <strong>Loading the platform inbox…</strong>
+    </section>
+  } @else if (inbox(); as data) {
+    <section class="admin-summary-grid" aria-label="Admin inbox summary">
+      <article>
+        <span>New feedback</span>
+        <strong>{{ data.summary.newFeedbackCount }}</strong>
+      </article>
+      <article>
+        <span>Open error groups</span>
+        <strong>{{ data.summary.unresolvedErrorCount }}</strong>
+      </article>
+      <article>
+        <span>Captured errors</span>
+        <strong>{{ data.summary.capturedErrorCount }}</strong>
+      </article>
+      <article>
+        <span>Newest captured release</span>
+        <strong class="release-label">{{ data.releaseLabel }}</strong>
+      </article>
+    </section>
+
+    <nav class="admin-tabs" aria-label="Admin Center sections">
+      <button
+        type="button"
+        [class.active]="activeTab() === 'feedback'"
+        [attr.aria-selected]="activeTab() === 'feedback'"
+        (click)="showTab('feedback')"
+      >
+        Feedback Inbox
+        <span>{{ data.summary.totalFeedbackCount }}</span>
+      </button>
+      <button
+        type="button"
+        [class.active]="activeTab() === 'errors'"
+        [attr.aria-selected]="activeTab() === 'errors'"
+        (click)="showTab('errors')"
+      >
+        Error Groups
+        <span>{{ data.summary.totalErrorGroupCount }}</span>
+      </button>
+    </nav>
+
+    @if (activeTab() === 'feedback') {
+      <section class="admin-section">
+        <header class="section-heading">
+          <div>
+            <span class="eyebrow">Manager reports</span>
+            <h2>Feedback Inbox</h2>
+            <p>Reports are newest first. Email is shown only when the manager allowed follow-up.</p>
+          </div>
+        </header>
+
+        <div class="admin-filters">
+          <label>
+            <span>Status</span>
+            <select [(ngModel)]="feedbackStatusFilter">
+              <option value="open">Open items</option>
+              <option value="all">All statuses</option>
+              @for (option of feedbackStatusOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Category</span>
+            <select [(ngModel)]="feedbackCategoryFilter">
+              <option value="all">All categories</option>
+              <option value="bug">Something is broken</option>
+              <option value="confusing">Confusing screen or rule</option>
+              <option value="incorrect-result">Incorrect fantasy result</option>
+              <option value="feature-request">Feature request</option>
+              <option value="account-privacy">Account or privacy</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+
+          <label class="search-filter">
+            <span>Search</span>
+            <input [(ngModel)]="feedbackSearch" placeholder="Message, page, email, or reference" />
+          </label>
+        </div>
+
+        <p class="result-count">Showing {{ filteredFeedback().length }} feedback reports.</p>
+
+        <div class="admin-card-list">
+          @for (item of filteredFeedback(); track item.feedbackId) {
+            <article class="admin-report-card" [attr.data-status]="item.status">
+              <header>
+                <div>
+                  <span class="category-badge">{{ categoryLabel(item.category) }}</span>
+                  <h3>{{ item.message }}</h3>
+                </div>
+                <span class="status-badge">{{ statusLabel(item.status) }}</span>
+              </header>
+
+              <dl class="report-meta">
+                <div><dt>Submitted</dt><dd>{{ formatDate(item.createdAt) }}</dd></div>
+                <div><dt>Page</dt><dd><code>{{ item.route }}</code></dd></div>
+                <div><dt>Browser</dt><dd>{{ item.browser }}</dd></div>
+                <div><dt>Reference</dt><dd>{{ item.feedbackId.slice(0, 8).toUpperCase() }}</dd></div>
+                @if (item.leagueId) {
+                  <div><dt>League context</dt><dd>{{ item.leagueId }}</dd></div>
+                }
+              </dl>
+
+              @if (item.relatedErrorCount > 0) {
+                <aside class="related-error-callout">
+                  <strong>{{ item.relatedErrorCount }} possible related technical error{{ item.relatedErrorCount === 1 ? '' : 's' }}</strong>
+                  <span>{{ item.relatedErrorCategories.join(', ') }}</span>
+                </aside>
+              }
+
+              @if (item.allowFollowUp) {
+                <div class="follow-up-row">
+                  <div>
+                    <span>Follow-up allowed</span>
+                    <strong>{{ item.followUpEmail || 'Email unavailable' }}</strong>
+                  </div>
+                  <button type="button" [disabled]="!item.followUpEmail" (click)="copyEmail(item.followUpEmail)">
+                    Copy Email
+                  </button>
+                </div>
+              }
+
+              <div class="review-editor">
+                <label>
+                  <span>Status</span>
+                  <select [(ngModel)]="feedbackStatusDraft[item.feedbackId]">
+                    @for (option of feedbackStatusOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="notes-field">
+                  <span>Private admin notes</span>
+                  <textarea
+                    [(ngModel)]="feedbackNotesDraft[item.feedbackId]"
+                    maxlength="2000"
+                    rows="3"
+                    placeholder="What did you find, what should change, or why was this closed?"
+                  ></textarea>
+                </label>
+
+                <button
+                  type="button"
+                  class="primary-button"
+                  [disabled]="savingId() === item.feedbackId"
+                  (click)="saveFeedback(item)"
+                >
+                  {{ savingId() === item.feedbackId ? 'Saving…' : 'Save Review' }}
+                </button>
+              </div>
+            </article>
+          } @empty {
+            <section class="admin-empty-state">
+              <strong>No feedback matches those filters.</strong>
+              <span>Try showing all statuses or clearing the search.</span>
+            </section>
+          }
+        </div>
+      </section>
+    } @else {
+      <section class="admin-section">
+        <header class="section-heading">
+          <div>
+            <span class="eyebrow">Automatic diagnostics</span>
+            <h2>Error Groups</h2>
+            <p>Similar browser errors are grouped so one repeated problem does not flood the inbox.</p>
+          </div>
+        </header>
+
+        <div class="admin-filters error-filters">
+          <label>
+            <span>Status</span>
+            <select [(ngModel)]="errorStatusFilter">
+              <option value="open">Open groups</option>
+              <option value="all">All statuses</option>
+              @for (option of errorStatusOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+          <label class="search-filter">
+            <span>Search</span>
+            <input [(ngModel)]="errorSearch" placeholder="Message, route, category, or fingerprint" />
+          </label>
+        </div>
+
+        <p class="result-count">Showing {{ filteredErrors().length }} error groups.</p>
+
+        <div class="admin-card-list">
+          @for (item of filteredErrors(); track item.fingerprint) {
+            <article class="admin-report-card error-card" [attr.data-status]="item.status">
+              <header>
+                <div>
+                  <span class="category-badge">{{ item.category }}</span>
+                  <h3>{{ item.message }}</h3>
+                </div>
+                <span class="status-badge">{{ statusLabel(item.status) }}</span>
+              </header>
+
+              <section class="error-metrics">
+                <div><strong>{{ item.occurrenceCount }}</strong><span>Occurrences</span></div>
+                <div><strong>{{ item.affectedUserCount }}</strong><span>Affected users</span></div>
+                <div><strong>{{ item.browsers[0]?.name || 'Unknown' }}</strong><span>Top browser</span></div>
+              </section>
+
+              <dl class="report-meta">
+                <div><dt>Route</dt><dd><code>{{ item.route }}</code></dd></div>
+                <div><dt>Source</dt><dd>{{ item.source }}</dd></div>
+                <div><dt>First seen</dt><dd>{{ formatDate(item.firstSeenAt) }}</dd></div>
+                <div><dt>Last seen</dt><dd>{{ formatDate(item.lastSeenAt) }}</dd></div>
+                <div><dt>Releases</dt><dd>{{ item.releases.join(', ') }}</dd></div>
+                <div><dt>Fingerprint</dt><dd>{{ item.fingerprint.slice(0, 12).toUpperCase() }}</dd></div>
+              </dl>
+
+              <button type="button" class="details-button" (click)="toggleErrorDetails(item.fingerprint)">
+                {{ expandedError() === item.fingerprint ? 'Hide technical details' : 'Show technical details' }}
+              </button>
+
+              @if (expandedError() === item.fingerprint) {
+                <div class="technical-details">
+                  <h4>Browser distribution</h4>
+                  <ul>
+                    @for (browser of item.browsers; track browser.name) {
+                      <li><span>{{ browser.name }}</span><strong>{{ browser.count }}</strong></li>
+                    }
+                  </ul>
+                  <h4>Sample stack</h4>
+                  <pre>{{ item.sampleStack || 'No stack trace was supplied.' }}</pre>
+                </div>
+              }
+
+              <div class="review-editor">
+                <label>
+                  <span>Status</span>
+                  <select [(ngModel)]="errorStatusDraft[item.fingerprint]">
+                    @for (option of errorStatusOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="notes-field">
+                  <span>Private admin notes</span>
+                  <textarea
+                    [(ngModel)]="errorNotesDraft[item.fingerprint]"
+                    maxlength="2000"
+                    rows="3"
+                    placeholder="Cause, test steps, commit, deployment, or reason for ignoring."
+                  ></textarea>
+                </label>
+
+                <button
+                  type="button"
+                  class="primary-button"
+                  [disabled]="savingId() === item.fingerprint"
+                  (click)="saveErrorReview(item)"
+                >
+                  {{ savingId() === item.fingerprint ? 'Saving…' : 'Save Review' }}
+                </button>
+              </div>
+            </article>
+          } @empty {
+            <section class="admin-empty-state">
+              <strong>No error groups match those filters.</strong>
+              <span>That is good news—or the current filters are hiding them.</span>
+            </section>
+          }
+        </div>
+      </section>
+    }
+
+    <footer class="admin-footer-note">
+      <span>Inbox generated {{ formatDate(data.generatedAt) }}.</span>
+      <a routerLink="/support">Open public Support page</a>
+    </footer>
+  }
+</section>

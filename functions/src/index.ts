@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -2505,13 +2505,26 @@ export const deleteMyAccount = onCall(
       userId,
     );
 
-    const rateLimitRef = db.doc(`observabilityRateLimits/${userId}`);
-    const rateLimitSnapshot = await rateLimitRef.get();
+    const [rateLimitSnapshot, platformAdminSnapshot] = await Promise.all([
+      db.doc(`observabilityRateLimits/${userId}`).get(),
+      db.doc(`platformAdmins/${userId}`).get(),
+    ]);
 
     if (rateLimitSnapshot.exists) {
-      await rateLimitRef.delete();
+      await rateLimitSnapshot.ref.delete();
       deletedDocumentCount += 1;
     }
+
+    if (platformAdminSnapshot.exists) {
+      await platformAdminSnapshot.ref.delete();
+      deletedDocumentCount += 1;
+    }
+
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'adminAuditLogs',
+      'adminId',
+      userId,
+    );
 
     await getAuth().deleteUser(userId);
 
@@ -2625,6 +2638,31 @@ function normalizedClientContext(headers: {
   };
 }
 
+
+function diagnosticFingerprint(input: {
+  category: string;
+  source: string;
+  route: string;
+  message: string;
+}): string {
+  const normalizedMessage = input.message
+    .toLowerCase()
+    .replace(/\d+/g, '#')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+
+  return createHash('sha256')
+    .update([
+      input.category.toLowerCase(),
+      input.source.toLowerCase(),
+      input.route.toLowerCase(),
+      normalizedMessage
+    ].join('|'))
+    .digest('hex')
+    .slice(0, 32);
+}
+
 export const reportClientError = onCall(
   {
     region: FUNCTION_REGION,
@@ -2670,9 +2708,16 @@ export const reportClientError = onCall(
 
     const reportId = randomUUID();
     const context = normalizedClientContext(request.rawRequest.headers);
+    const fingerprint = diagnosticFingerprint({
+      category,
+      source,
+      route,
+      message
+    });
 
     await db.doc(`clientErrorReports/${reportId}`).set({
       reportId,
+      fingerprint,
       userId: request.auth.uid,
       authenticated: true,
       message,
@@ -2795,6 +2840,421 @@ export const submitFeedback = onCall(
       accepted: true,
       feedbackId
     };
+  }
+);
+
+
+const ADMIN_FEEDBACK_STATUSES = new Set([
+  'new',
+  'reviewing',
+  'planned',
+  'in-progress',
+  'resolved',
+  'not-planned'
+]);
+
+const ADMIN_ERROR_STATUSES = new Set([
+  'new',
+  'investigating',
+  'fixed',
+  'ignored'
+]);
+
+function timestampMilliseconds(value: unknown): number {
+  return value instanceof Timestamp ? value.toMillis() : 0;
+}
+
+function timestampIso(value: unknown): string | null {
+  const milliseconds = timestampMilliseconds(value);
+  return milliseconds > 0 ? new Date(milliseconds).toISOString() : null;
+}
+
+async function platformAdminRecord(uid: string): Promise<{
+  allowed: boolean;
+  role: string;
+}> {
+  const snapshot = await db.doc(`platformAdmins/${uid}`).get();
+  const data = snapshot.data() ?? {};
+
+  return {
+    allowed: snapshot.exists && data['enabled'] === true,
+    role: asString(data['role']) || 'admin'
+  };
+}
+
+async function requirePlatformAdmin(request: {
+  auth?: {
+    uid: string;
+    token: Record<string, unknown>;
+  } | null;
+}): Promise<{ uid: string; role: string }> {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in before opening the Admin Center.');
+  }
+
+  if (request.auth.token['platformAdmin'] === true) {
+    return { uid: request.auth.uid, role: 'platform-admin' };
+  }
+
+  const record = await platformAdminRecord(request.auth.uid);
+
+  if (!record.allowed) {
+    throw new HttpsError(
+      'permission-denied',
+      'This account does not have RinkRat platform-administrator access.'
+    );
+  }
+
+  return { uid: request.auth.uid, role: record.role };
+}
+
+function browserFamily(userAgent: string): string {
+  const value = userAgent.toLowerCase();
+
+  if (value.includes('edg/')) return 'Edge';
+  if (value.includes('firefox/')) return 'Firefox';
+  if (value.includes('chrome/') && !value.includes('edg/')) return 'Chrome';
+  if (value.includes('safari/') && !value.includes('chrome/')) return 'Safari';
+  return 'Other';
+}
+
+async function lookupUserEmails(userIds: string[]): Promise<Map<string, string>> {
+  const emailByUserId = new Map<string, string>();
+  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+
+  for (let index = 0; index < uniqueUserIds.length; index += 100) {
+    const chunk = uniqueUserIds.slice(index, index + 100);
+    const result = await getAuth().getUsers(chunk.map((uid) => ({ uid })));
+
+    for (const userRecord of result.users) {
+      if (userRecord.email) {
+        emailByUserId.set(userRecord.uid, userRecord.email);
+      }
+    }
+  }
+
+  return emailByUserId;
+}
+
+export const getPlatformAdminAccess = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 20,
+    memory: '256MiB',
+    maxInstances: 10,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{ allowed: boolean; role: string }> => {
+    if (!request.auth) {
+      return { allowed: false, role: '' };
+    }
+
+    if (request.auth.token['platformAdmin'] === true) {
+      return { allowed: true, role: 'platform-admin' };
+    }
+
+    return platformAdminRecord(request.auth.uid);
+  }
+);
+
+export const getAdminInbox = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    maxInstances: 5,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{
+    generatedAt: string;
+    releaseLabel: string;
+    feedback: Array<Record<string, unknown>>;
+    errorGroups: Array<Record<string, unknown>>;
+    summary: Record<string, number | string>;
+  }> => {
+    await requirePlatformAdmin(request);
+
+    const [feedbackSnapshot, errorSnapshot, reviewSnapshot] = await Promise.all([
+      db.collection('feedbackReports').orderBy('createdAt', 'desc').limit(150).get(),
+      db.collection('clientErrorReports').orderBy('createdAt', 'desc').limit(500).get(),
+      db.collection('adminErrorReviews').get()
+    ]);
+
+    const errorReviews = new Map<string, DocumentData>();
+    for (const reviewDoc of reviewSnapshot.docs) {
+      errorReviews.set(reviewDoc.id, reviewDoc.data());
+    }
+
+    const rawErrors = errorSnapshot.docs.map((document) => {
+      const data = document.data();
+      const category = asString(data['category']) || 'unknown';
+      const source = asString(data['source']) || 'unknown';
+      const route = asString(data['route']) || '/';
+      const message = asString(data['message']) || 'Unknown client error';
+      const fingerprint = asString(data['fingerprint']) || diagnosticFingerprint({
+        category,
+        source,
+        route,
+        message
+      });
+
+      return {
+        reportId: document.id,
+        fingerprint,
+        userId: asString(data['userId']),
+        category,
+        source,
+        route,
+        message,
+        stack: asString(data['stack']),
+        appVersion: asString(data['appVersion']) || 'unknown',
+        userAgent: asString(data['userAgent']),
+        createdAtMs: timestampMilliseconds(data['createdAt']),
+        createdAt: timestampIso(data['createdAt'])
+      };
+    });
+
+    const groupedErrors = new Map<string, {
+      fingerprint: string;
+      category: string;
+      source: string;
+      route: string;
+      message: string;
+      sampleStack: string;
+      occurrenceCount: number;
+      affectedUsers: Set<string>;
+      releases: Set<string>;
+      browsers: Map<string, number>;
+      firstSeenMs: number;
+      lastSeenMs: number;
+      latestReportId: string;
+    }>();
+
+    for (const error of rawErrors) {
+      const existing = groupedErrors.get(error.fingerprint);
+      const browser = browserFamily(error.userAgent);
+
+      if (!existing) {
+        groupedErrors.set(error.fingerprint, {
+          fingerprint: error.fingerprint,
+          category: error.category,
+          source: error.source,
+          route: error.route,
+          message: error.message,
+          sampleStack: error.stack,
+          occurrenceCount: 1,
+          affectedUsers: new Set(error.userId ? [error.userId] : []),
+          releases: new Set([error.appVersion]),
+          browsers: new Map([[browser, 1]]),
+          firstSeenMs: error.createdAtMs,
+          lastSeenMs: error.createdAtMs,
+          latestReportId: error.reportId
+        });
+        continue;
+      }
+
+      existing.occurrenceCount += 1;
+      if (error.userId) existing.affectedUsers.add(error.userId);
+      existing.releases.add(error.appVersion);
+      existing.browsers.set(browser, (existing.browsers.get(browser) ?? 0) + 1);
+      existing.firstSeenMs = Math.min(existing.firstSeenMs || error.createdAtMs, error.createdAtMs);
+
+      if (error.createdAtMs >= existing.lastSeenMs) {
+        existing.lastSeenMs = error.createdAtMs;
+        existing.sampleStack = error.stack || existing.sampleStack;
+        existing.latestReportId = error.reportId;
+      }
+    }
+
+    const feedbackDocuments = feedbackSnapshot.docs.map((document) => ({
+      id: document.id,
+      data: document.data()
+    }));
+    const emailByUserId = await lookupUserEmails(
+      feedbackDocuments
+        .filter(({ data }) => data['allowFollowUp'] === true)
+        .map(({ data }) => asString(data['userId']))
+    );
+
+    const feedback = feedbackDocuments.map(({ id, data }) => {
+      const createdAtMs = timestampMilliseconds(data['createdAt']);
+      const userId = asString(data['userId']);
+      const route = asString(data['route']) || '/';
+      const relatedErrors = rawErrors.filter((error) =>
+        error.userId === userId &&
+        error.route === route &&
+        Math.abs(error.createdAtMs - createdAtMs) <= 30 * 60 * 1000
+      );
+
+      return {
+        feedbackId: id,
+        category: asString(data['category']) || 'other',
+        message: asString(data['message']),
+        route,
+        leagueId: asString(data['leagueId']) || null,
+        allowFollowUp: data['allowFollowUp'] === true,
+        followUpEmail: data['allowFollowUp'] === true
+          ? emailByUserId.get(userId) ?? null
+          : null,
+        status: asString(data['status']) || 'new',
+        adminNotes: asString(data['adminNotes']),
+        userAgent: asString(data['userAgent']),
+        browser: browserFamily(asString(data['userAgent'])),
+        createdAt: timestampIso(data['createdAt']),
+        updatedAt: timestampIso(data['updatedAt']),
+        relatedErrorCount: relatedErrors.length,
+        relatedErrorCategories: [...new Set(relatedErrors.map((error) => error.category))].slice(0, 5)
+      };
+    });
+
+    const errorGroups = [...groupedErrors.values()]
+      .map((group) => {
+        const review = errorReviews.get(group.fingerprint) ?? {};
+        const topBrowsers = [...group.browsers.entries()]
+          .sort((left, right) => right[1] - left[1])
+          .slice(0, 4)
+          .map(([name, count]) => ({ name, count }));
+
+        return {
+          fingerprint: group.fingerprint,
+          category: group.category,
+          source: group.source,
+          route: group.route,
+          message: group.message,
+          sampleStack: group.sampleStack,
+          occurrenceCount: group.occurrenceCount,
+          affectedUserCount: group.affectedUsers.size,
+          releases: [...group.releases].slice(0, 10),
+          browsers: topBrowsers,
+          firstSeenAt: group.firstSeenMs > 0 ? new Date(group.firstSeenMs).toISOString() : null,
+          lastSeenAt: group.lastSeenMs > 0 ? new Date(group.lastSeenMs).toISOString() : null,
+          latestReportId: group.latestReportId,
+          status: asString(review['status']) || 'new',
+          adminNotes: asString(review['adminNotes'])
+        };
+      })
+      .sort((left, right) =>
+        String(right.lastSeenAt ?? '').localeCompare(String(left.lastSeenAt ?? ''))
+      );
+
+    const newFeedbackCount = feedback.filter((item) => item.status === 'new').length;
+    const unresolvedErrorCount = errorGroups.filter((item) =>
+      item.status !== 'fixed' && item.status !== 'ignored'
+    ).length;
+    const releases = errorGroups.flatMap((item) => item.releases as string[]);
+    const releaseLabel = releases[0] ?? 'No captured release';
+
+    return {
+      generatedAt: new Date().toISOString(),
+      releaseLabel,
+      feedback,
+      errorGroups,
+      summary: {
+        newFeedbackCount,
+        totalFeedbackCount: feedback.length,
+        unresolvedErrorCount,
+        totalErrorGroupCount: errorGroups.length,
+        capturedErrorCount: rawErrors.length
+      }
+    };
+  }
+);
+
+export const updateAdminFeedback = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 5,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{ updated: boolean }> => {
+    const admin = await requirePlatformAdmin(request);
+    const data = asRecord(request.data);
+    const feedbackId = asString(data['feedbackId']);
+    const status = asString(data['status']);
+    const adminNotes = asString(data['adminNotes']).trim().slice(0, 2_000);
+
+    if (!/^[A-Za-z0-9-]{10,80}$/.test(feedbackId)) {
+      throw new HttpsError('invalid-argument', 'Invalid feedback reference.');
+    }
+
+    if (!ADMIN_FEEDBACK_STATUSES.has(status)) {
+      throw new HttpsError('invalid-argument', 'Choose a valid feedback status.');
+    }
+
+    const reference = db.doc(`feedbackReports/${feedbackId}`);
+    const snapshot = await reference.get();
+
+    if (!snapshot.exists) {
+      throw new HttpsError('not-found', 'That feedback report no longer exists.');
+    }
+
+    await reference.set({
+      status,
+      adminNotes,
+      reviewedBy: admin.uid,
+      reviewedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    await db.collection('adminAuditLogs').add({
+      action: 'feedback-status-updated',
+      targetId: feedbackId,
+      status,
+      adminId: admin.uid,
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return { updated: true };
+  }
+);
+
+export const updateAdminErrorReview = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 5,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public'
+  },
+  async (request): Promise<{ updated: boolean }> => {
+    const admin = await requirePlatformAdmin(request);
+    const data = asRecord(request.data);
+    const fingerprint = asString(data['fingerprint']);
+    const status = asString(data['status']);
+    const adminNotes = asString(data['adminNotes']).trim().slice(0, 2_000);
+
+    if (!/^[a-f0-9]{32}$/.test(fingerprint)) {
+      throw new HttpsError('invalid-argument', 'Invalid error-group reference.');
+    }
+
+    if (!ADMIN_ERROR_STATUSES.has(status)) {
+      throw new HttpsError('invalid-argument', 'Choose a valid error status.');
+    }
+
+    await db.doc(`adminErrorReviews/${fingerprint}`).set({
+      fingerprint,
+      status,
+      adminNotes,
+      reviewedBy: admin.uid,
+      reviewedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    await db.collection('adminAuditLogs').add({
+      action: 'error-status-updated',
+      targetId: fingerprint,
+      status,
+      adminId: admin.uid,
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return { updated: true };
   }
 );
 
