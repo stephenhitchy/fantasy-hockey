@@ -944,3 +944,35 @@ html[data-background-theme='light-ice'] app-draft-room :is(.draft-injury-sync-ba
     transform: none;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Draft header interaction safeguard
+
+   Safari can occasionally misroute pointer hit-testing when an interactive
+   control is nested inside an overflow-hidden element that also has a CSS
+   clip-path. Keep the pixel-board appearance while ensuring the Auto-Draft
+   control always sits above decorative header layers and receives clicks.
+   ------------------------------------------------------------------------- */
+
+app-draft-room .draft-room-header {
+  clip-path: none !important;
+}
+
+app-draft-room .draft-room-header::before,
+app-draft-room .draft-room-header::after {
+  pointer-events: none !important;
+}
+
+app-draft-room .draft-header-actions {
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+app-draft-room .header-auto-draft-toggle {
+  position: relative;
+  z-index: 21;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
