@@ -51,17 +51,24 @@ service cloud.firestore {
     }
 
     function hasExistingOwnedTeam(leagueId) {
+      /*
+       * The team document ID is the authenticated owner's UID. Older test
+       * leagues may predate the ownerId field, so document existence is the
+       * compatibility-safe proof of membership here.
+       */
       return signedIn() &&
-        exists(teamPath(leagueId, currentUserId())) &&
-        get(teamPath(leagueId, currentUserId())).data.ownerId ==
-          currentUserId();
+        exists(teamPath(leagueId, currentUserId()));
     }
 
     function isLeagueMember(leagueId) {
       return signedIn() &&
         (
           exists(memberPath(leagueId, currentUserId())) ||
-          hasExistingOwnedTeam(leagueId)
+          hasExistingOwnedTeam(leagueId) ||
+          (
+            exists(leaguePath(leagueId)) &&
+            get(leaguePath(leagueId)).data.commissionerId == currentUserId()
+          )
         );
     }
 

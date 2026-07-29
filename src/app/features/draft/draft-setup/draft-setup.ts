@@ -27,6 +27,7 @@ import { DraftPickPreview, FantasyDraft } from '../../../core/draft/draft.models
 import {
   generateSharedProjectionSnapshot,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
+  SHARED_PROJECTION_VERSION,
 } from '../../../core/projection/projection-snapshot.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
@@ -342,7 +343,7 @@ export class DraftSetup implements OnDestroy {
 
       if (scheduledStartDate) {
         this.successMessage.set(
-          'Building verified Projection V8 rankings before the schedule is saved…',
+          `Building verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
         );
 
         try {
@@ -368,7 +369,7 @@ export class DraftSetup implements OnDestroy {
             : 'The projection build did not finish.';
 
           throw new Error(
-            `The draft was not scheduled because verified Projection V8 rankings could not be prepared. ${detail} Your previous saved draft settings were left unchanged.`,
+            `The draft was not scheduled because verified Projection V${SHARED_PROJECTION_VERSION} rankings could not be prepared. ${detail} Your previous saved draft settings were left unchanged.`,
           );
         }
       }

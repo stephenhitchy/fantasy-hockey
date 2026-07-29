@@ -303,7 +303,7 @@ function getSharedProjectionPointerRef(leagueId: string) {
 function assertReadySharedProjectionSnapshot(snapshot: {
   exists: () => boolean;
   data: () => unknown;
-}): void {
+}): string {
   if (!snapshot.exists()) {
     throw new Error(
       'Shared projections are not ready. The commissioner must build them before the draft clock can start.',
@@ -327,6 +327,8 @@ function assertReadySharedProjectionSnapshot(snapshot: {
       'Shared projections are incomplete. The commissioner must rebuild them before the draft clock can start.',
     );
   }
+
+  return data.activeSnapshotId.trim();
 }
 
 function getDraftPicksRef(leagueId: string) {
@@ -1007,8 +1009,7 @@ export async function activateScheduledDraftIfReady(
   // transaction prevents projectionSnapshots/current from being fetched again
   // on every retry while the draft document itself remains atomic.
   const projectionSnapshot = await getDoc(getSharedProjectionPointerRef(leagueId));
-
-  assertReadySharedProjectionSnapshot(projectionSnapshot);
+  const activeSnapshotId = assertReadySharedProjectionSnapshot(projectionSnapshot);
 
   return runTransaction(
     db,
@@ -1025,26 +1026,31 @@ export async function activateScheduledDraftIfReady(
         return draft;
       }
 
+      const startedAt = serverTimestamp();
+
       transaction.update(draftRef, {
         status: 'live',
-        clockStatus: 'stopped',
-        pickStartedAt: null,
+        clockStatus: 'running',
+        pickStartedAt: startedAt,
         currentPickSeconds: draft.pickSeconds,
         pausedRemainingSeconds: null,
         clockUpdatedBy: activatedByUserId ?? null,
-        clockUpdatedAt: serverTimestamp(),
-        startedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        clockUpdatedAt: startedAt,
+        serverDraftProjectionSnapshotId: activeSnapshotId,
+        startedAt,
+        updatedAt: startedAt,
       });
 
       return {
         ...draft,
         status: 'live',
-        clockStatus: 'stopped',
-        pickStartedAt: null,
+        clockStatus: 'running',
+        pickStartedAt: startedAt,
         currentPickSeconds: draft.pickSeconds,
         pausedRemainingSeconds: null,
         clockUpdatedBy: activatedByUserId ?? null,
+        serverDraftProjectionSnapshotId: activeSnapshotId,
+        startedAt,
       };
     },
     {

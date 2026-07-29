@@ -935,7 +935,7 @@ export class DraftRoom implements OnDestroy {
       if (snapshot.metadata.generationReason === 'server-emergency') {
         this.playerPool.set([]);
         throw new Error(
-          'The saved player pool contains temporary emergency rankings and cannot be used for this draft. The commissioner must return to Draft Setup and save the schedule again to build verified Projection V8 rankings.',
+          `The saved player pool contains temporary emergency rankings and cannot be used for this draft. The commissioner must return to Draft Setup and save the schedule again to build verified Projection V${SHARED_PROJECTION_VERSION} rankings.`,
         );
       }
 

@@ -634,3 +634,19 @@ Firestore, league logic, draft logic, roster rules, scoring, projections, or the
 asynchronous six-game cycle architecture. Team colors remain controlled accents,
 not unsafe whole-card text/background combinations. Mobile and Light Ice support
 are included. No rat-tail divider is used.
+
+=====================================================================
+DRAFT START, AUTO-DRAFT, AND LEGACY MEMBERSHIP FIX (JULY 2026)
+=====================================================================
+- Firestore draft and pick reads now recognize legacy league team documents even
+  when they predate the ownerId field. Commissioner access is also explicit.
+- Browser and Cloud Functions now agree on Shared Projection Version 9. The old
+  server-side Version 8 requirement could prevent scheduled starts and automatic
+  selections after the Add/Drop projection upgrade.
+- Commissioner-browser scheduled activation starts the first pick clock
+  immediately and pins the verified shared projection snapshot.
+- Server draft-document and auto-draft queue triggers process automatic picks
+  immediately, while exact Cloud Tasks remain the deadline/contention fallback.
+- League status messaging now accurately says the server is opening a scheduled
+  draft rather than telling managers it is waiting for the commissioner.
+- See DRAFT_START_AUTODRAFT_PERMISSION_FIX.txt for the detailed summary.

@@ -253,8 +253,8 @@ export class LeagueDetail implements OnDestroy {
 
     if (this.startTimeReached()) {
       return this.isCommissioner()
-        ? 'Refreshing the shared ESPN injury report before opening the live draft.'
-        : 'Waiting for the commissioner to refresh the shared injury report and open the live draft.';
+        ? 'Finalizing the shared injury report and opening the live draft automatically.'
+        : 'The server is opening the live draft automatically. This page will move you into the room when it is ready.';
     }
 
     return 'The draft will become available at the scheduled time below.';
@@ -1126,7 +1126,7 @@ export class LeagueDetail implements OnDestroy {
 
     if (!this.isCommissioner()) {
       this.draftInjurySyncMessage.set(
-        'Waiting for the commissioner to refresh the shared injury report and open the draft.',
+        'The server is opening the scheduled draft automatically. This page will move you into the room when it is ready.',
       );
       return;
     }

@@ -287,7 +287,7 @@ export interface FantasyDraft {
   clockUpdatedAt?: unknown;
   lastPickId?: string | null;
 
-  /** Projection V8 snapshot frozen for the entire draft. */
+  /** Verified shared projection snapshot frozen for the entire draft. */
   serverDraftProjectionSnapshotId?: string | null;
 
   createdAt?: unknown;

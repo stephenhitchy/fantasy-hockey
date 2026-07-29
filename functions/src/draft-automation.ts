@@ -1006,7 +1006,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
 
   if (!projection) {
     throw new Error(
-      'Verified Projection V8 draft rankings are unavailable. The draft remained stopped so it cannot make inaccurate automatic selections. Open Draft Setup and save the schedule again to build fresh rankings.',
+      `Verified Projection V${SHARED_PROJECTION_VERSION} draft rankings are unavailable. The draft remained stopped so it cannot make inaccurate automatic selections. Open Draft Setup and save the schedule again to build fresh rankings.`,
     );
   }
 
@@ -1039,7 +1039,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
           {
             ...sharedFields,
             serverAutomationMessage:
-              'The server resumed the draft clock using verified Projection V8 rankings.',
+              `The server resumed the draft clock using verified Projection V${SHARED_PROJECTION_VERSION} rankings.`,
           },
           { merge: true },
         );
@@ -1057,7 +1057,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
           status: 'live',
           startedAt: FieldValue.serverTimestamp(),
           serverAutomationMessage:
-            'The scheduled draft opened with verified Projection V8 rankings and its first clock started automatically.',
+            `The scheduled draft opened with verified Projection V${SHARED_PROJECTION_VERSION} rankings and its first clock started automatically.`,
         },
         { merge: true },
       );
@@ -1362,7 +1362,7 @@ async function processLeagueDraftAutomation(
 
     if (!projection) {
       throw new Error(
-        'Verified Projection V8 draft rankings are unavailable. Automatic drafting was stopped to prevent inaccurate selections.',
+        `Verified Projection V${SHARED_PROJECTION_VERSION} draft rankings are unavailable. Automatic drafting was stopped to prevent inaccurate selections.`,
       );
     }
 
@@ -1613,10 +1613,18 @@ export const continueServerDraftAutomation = onDocumentWritten(
       return;
     }
 
-    const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, after);
+    const result = await processLeagueDraftAutomation(event.params.leagueId);
 
-    if (!taskScheduled) {
-      throw new Error('Unable to schedule the exact draft clock deadline.');
+    if (result.status === 'error') {
+      throw new Error(result.message);
+    }
+
+    if (result.status === 'waiting' && result.message.includes('Another server worker')) {
+      const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, after);
+
+      if (!taskScheduled) {
+        throw new Error('Unable to schedule the exact draft clock deadline.');
+      }
     }
   },
 );
@@ -1659,10 +1667,18 @@ export const processAutoDraftQueueChange = onDocumentWritten(
       return;
     }
 
-    const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, draft);
+    const result = await processLeagueDraftAutomation(event.params.leagueId);
 
-    if (!taskScheduled) {
-      throw new Error('Unable to schedule the auto-draft task.');
+    if (result.status === 'error') {
+      throw new Error(result.message);
+    }
+
+    if (result.status === 'waiting' && result.message.includes('Another server worker')) {
+      const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, draft);
+
+      if (!taskScheduled) {
+        throw new Error('Unable to schedule the auto-draft task.');
+      }
     }
   },
 );
