@@ -1,0 +1,7 @@
+RINKRAT READABLE SCORE NUMERALS UPDATE
+
+- Keeps Pixelify Sans for page titles, headings, and branded display text.
+- Changes large scores, totals, timers, rankings, and other prominent numeric values to Barlow Condensed ExtraBold.
+- Barlow Condensed was already loaded by RinkRat, so this adds no new font request or external dependency.
+- Uses tabular lining numerals and slightly increased spacing for easier comparison of decimal scores.
+- Applies across the scoring guide, matchups, My Team, Dashboard, leaders, draft values, standings-style numbers, labs, and admin summaries.

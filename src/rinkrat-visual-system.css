@@ -759,3 +759,62 @@ html[data-background-theme='light-ice'] :where(input, select, textarea) {
     border-width: 3px !important;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Readable arena numerals
+   -------------------------------------------------------------------------
+   Pixelify Sans remains the display face for headings and brand moments.
+   Large scores, totals, timers, rankings, and count values use the existing
+   Barlow Condensed family for clearer digits while keeping a sports-HUD feel.
+*/
+
+:root {
+  --rr-font-numeric: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+}
+
+:where(
+  .score-value,
+  .timer-value,
+  .current-score,
+  .projected-score,
+  .current-score-cell,
+  .asset-score,
+  .cycle-total,
+  .game-points,
+  .game-total,
+  .leader-points,
+  .lab-total,
+  .delta-value,
+  .draft-value-cell,
+  .flow-value,
+  .pick-number,
+  .draft-pick-number,
+  .place-number,
+  .seed-number,
+  .slot-number,
+  .step-number,
+  .section-number,
+  .cycle-step-number,
+  .milestone-number,
+  .position-value-badge,
+  .projection-rank-pill,
+  .mini-scoreboard strong,
+  .team-stat-bar strong,
+  .score-team-card em,
+  .season-summary-grid strong,
+  .comparison-metrics strong,
+  .leader-summary-grid strong,
+  .format-grid strong,
+  .admin-summary-grid strong,
+  .summary-score-card strong,
+  .position-total-row strong,
+  .season-total-row strong,
+  .breakdown-total-grid strong,
+  .scoreboard-row strong,
+  .example-card footer strong
+) {
+  font-family: var(--rr-font-numeric) !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.025em;
+}
