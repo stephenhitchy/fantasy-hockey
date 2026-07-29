@@ -36,6 +36,9 @@ const currentTeamFiles = [
 const archivedFiles = [
   ...source.matchAll(/\barchivedLogo\('([^']+)'\)/g),
 ].map((match) => match[1]);
+const customFiles = [
+  ...source.matchAll(/\bcustomLogo\('([^']+)'\)/g),
+].map((match) => `custom/${match[1]}`);
 const requestedFiles = [...new Set([...currentTeamFiles, ...archivedFiles])].sort();
 
 if (currentTeamFiles.length !== 32) {
@@ -46,9 +49,22 @@ if (currentTeamFiles.length !== 32) {
 
 await mkdir(outputDirectory, { recursive: true });
 
+const missingCustomFiles = [];
+for (const customFile of customFiles) {
+  if (!(await isUsableImageFile(resolve(outputDirectory, customFile)))) {
+    missingCustomFiles.push(customFile);
+  }
+}
+
+if (missingCustomFiles.length > 0) {
+  throw new Error(
+    `Missing local custom team logo asset(s): ${missingCustomFiles.join(', ')}`,
+  );
+}
+
 if (!refreshRequested && (await allAssetsExist(requestedFiles))) {
   console.log(
-    `Team identity logo cache is ready (${requestedFiles.length} local SVG assets).`,
+    `Team identity logo cache is ready (${requestedFiles.length} official SVG assets and ${customFiles.length} custom assets).`,
   );
   process.exit(0);
 }
@@ -373,6 +389,37 @@ async function writeSvgAtomically(destinationPath, content) {
 function isSvgContent(content) {
   const beginning = content.trimStart().slice(0, 500).toLowerCase();
   return beginning.includes('<svg') && !beginning.includes('<html');
+}
+
+
+async function isUsableImageFile(filePath) {
+  try {
+    const fileStats = await stat(filePath);
+    if (!fileStats.isFile() || fileStats.size < 100) {
+      return false;
+    }
+
+    const extension = filePath.toLowerCase().split('.').pop();
+    if (extension === 'svg') {
+      const content = await readFile(filePath, 'utf8');
+      return isSvgContent(content);
+    }
+
+    if (extension === 'png') {
+      const buffer = await readFile(filePath);
+      return (
+        buffer.length >= 8 &&
+        buffer[0] === 0x89 &&
+        buffer[1] === 0x50 &&
+        buffer[2] === 0x4e &&
+        buffer[3] === 0x47
+      );
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 async function allAssetsExist(fileNames) {

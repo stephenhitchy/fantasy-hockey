@@ -1,0 +1,18 @@
+RINKRAT FAVORITE-TEAM CUSTOM LOGO PIPELINE FIX
+
+Root cause
+- The Vegas and San Jose alternate marks were local PNG files referenced through archivedLogo().
+- The logo sync and validation scripts assumed every archivedLogo() asset was an official SVG.
+- During prestart/prebuild, those PNG paths were rejected and the account page silently fell back to the current team crest.
+- Team colors were not involved in the failure.
+
+Fix
+- Added a dedicated customLogo() path for locally curated alternate marks.
+- The NHL sync now manages only official NHL SVG assets and separately verifies local custom images without trying to download or overwrite them.
+- The validator now supports both official SVGs and custom PNG alternate marks.
+- Added new versioned filenames and a URL version token to bypass any cached failed image requests.
+- Reprocessed both supplied logos with transparent outer backgrounds.
+
+Updated identities
+- Vegas Golden Knights / Gold Jersey: crossed-swords secondary mark.
+- San Jose Sharks / Stealth Black: circular fin secondary mark.
