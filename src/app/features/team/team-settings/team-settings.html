@@ -715,29 +715,29 @@
       <div class="bench-slot-grid">
         @for (slot of getBenchSlots(); track slot.slotId) {
           <article
-            class="bench-roster-card"
-            [class.empty-bench-roster-card]="!slot.asset"
+            class="fantasy-player-card bench-player-card"
+            [class.empty-slot-card]="!slot.asset"
+            [class.clickable-player-card]="slot.asset"
             [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
-                      [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
+            [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
+            [attr.role]="slot.asset ? 'link' : null"
+            [attr.tabindex]="slot.asset ? 0 : null"
+            [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
+            (click)="slot.asset && openRosterAssetDetail(slot.asset)"
+            (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
           >
             @if (slot.asset; as asset) {
-              @if (getRosterAssetLogoUrl(asset); as logoUrl) {
-                <img class="fantasy-player-logo" [src]="logoUrl" [alt]="getRosterAssetTeamLabel(asset) + ' logo'" />
-              } @else {
-                <span class="fantasy-player-logo logo-fallback">{{ getRosterAssetTeamLabel(asset) }}</span>
-              }
-
               @if (hasRosterAssetAlert(asset)) {
-                <div class="player-injury-banner bench-injury-banner" [class.player-suspension-banner]="isRosterAssetSuspended(asset)">
+                <div class="player-injury-banner" [class.player-suspension-banner]="isRosterAssetSuspended(asset)">
                   <span
-                              class="injury-cross player-status-tooltip"
-                              [class.suspension-icon]="isRosterAssetSuspended(asset)"
-                              role="img"
-                              tabindex="0"
-                              [attr.aria-label]="getRosterAssetAlertTooltip(asset)"
-                              [attr.data-status-tooltip]="getRosterAssetAlertTooltip(asset)"
-                              [attr.title]="getRosterAssetAlertTooltip(asset)"
-                            >{{ getRosterAssetAlertIcon(asset) }}</span>
+                    class="injury-cross player-status-tooltip"
+                    [class.suspension-icon]="isRosterAssetSuspended(asset)"
+                    role="img"
+                    tabindex="0"
+                    [attr.aria-label]="getRosterAssetAlertTooltip(asset)"
+                    [attr.data-status-tooltip]="getRosterAssetAlertTooltip(asset)"
+                    [attr.title]="getRosterAssetAlertTooltip(asset)"
+                  >{{ getRosterAssetAlertIcon(asset) }}</span>
                   <div>
                     <strong>{{ getRosterAssetAlertTitle(asset) }}</strong>
                     <small>{{ getRosterAssetAlertDetail(asset) }}</small>
@@ -745,28 +745,66 @@
                 </div>
               }
 
-              <div class="bench-player-main">
+              @if (getRosterAssetLogoUrl(asset); as logoUrl) {
+                <img class="fantasy-player-logo" [src]="logoUrl" [alt]="getRosterAssetTeamLabel(asset) + ' logo'" />
+              } @else {
+                <span class="fantasy-player-logo logo-fallback">{{ getRosterAssetTeamLabel(asset) }}</span>
+              }
+
+              <div class="fantasy-player-main">
                 <strong>{{ getRosterAssetName(asset) }}</strong>
                 <span>{{ getRosterAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}</span>
+                <em>Bench asset · does not add points while benched</em>
                 @if (asset.eligibleFromCycleNumber) {
-                  <small>Cannot become active before Cycle {{ asset.eligibleFromCycleNumber }}</small>
+                  <em>Eligible to start in Cycle {{ asset.eligibleFromCycleNumber }}</em>
                 } @else {
-                  <small>Activation cycle is checked when you start the player.</small>
+                  <em>Activation timing is checked when you press Start.</em>
                 }
               </div>
 
-              <div class="roster-card-action-buttons bench-action-buttons">
-                <button type="button" class="mini-roster-action" (click)="beginBenchSwap(slot.slotId)" [disabled]="rosterMoveLoading()">
-                  Start
-                </button>
-                @if (shouldShowMoveToIrAction(asset)) {
-                  <button type="button" class="mini-roster-action ir-action" (click)="moveBenchSlotToIr(slot.slotId)" [disabled]="!canMoveBenchSlotToIr(slot)">
-                    Move to IR
+              <div class="fantasy-player-score-stack">
+                <div>
+                  <strong>—</strong>
+                  <span>Bench</span>
+                </div>
+
+                <div>
+                  <strong>{{ getDisplayNumber(getProjectedCycle(asset)) }}</strong>
+                  <span>Proj</span>
+                </div>
+              </div>
+
+              <div class="roster-card-actions">
+                <div class="roster-card-action-buttons bench-action-buttons">
+                  <button
+                    type="button"
+                    class="mini-roster-action"
+                    (click)="$event.stopPropagation(); beginBenchSwap(slot.slotId)"
+                    [disabled]="rosterMoveLoading()"
+                  >
+                    Start
                   </button>
-                }
-                <button type="button" class="mini-roster-action drop-action" (click)="beginRosterDrop('bench', slot.slotId)" [disabled]="rosterMoveLoading()">
-                  Drop
-                </button>
+
+                  @if (shouldShowMoveToIrAction(asset)) {
+                    <button
+                      type="button"
+                      class="mini-roster-action ir-action"
+                      (click)="$event.stopPropagation(); moveBenchSlotToIr(slot.slotId)"
+                      [disabled]="!canMoveBenchSlotToIr(slot)"
+                    >
+                      Move to IR
+                    </button>
+                  }
+
+                  <button
+                    type="button"
+                    class="mini-roster-action drop-action"
+                    (click)="$event.stopPropagation(); beginRosterDrop('bench', slot.slotId)"
+                    [disabled]="rosterMoveLoading()"
+                  >
+                    Drop
+                  </button>
+                </div>
               </div>
             } @else {
               <div class="empty-slot-copy">

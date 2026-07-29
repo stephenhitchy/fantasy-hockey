@@ -2709,3 +2709,145 @@
     width: 100%;
   }
 }
+
+/* -------------------------------------------------------------------------
+   Bench presentation — same card language as the active lineup
+   ------------------------------------------------------------------------- */
+
+.matchup-bench-section {
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid rgba(230, 179, 72, 0.28);
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(230, 179, 72, 0.06), transparent 55%),
+    rgba(8, 15, 25, 0.88);
+}
+
+.matchup-bench-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.matchup-bench-heading h4,
+.matchup-bench-heading p {
+  margin: 0;
+}
+
+.matchup-bench-heading h4 {
+  color: #f8fbff;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.matchup-bench-heading p,
+.matchup-bench-note {
+  color: #aebdcb;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.matchup-bench-note {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.matchup-bench-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.matchup-bench-card {
+  width: 100%;
+  min-width: 0;
+  min-height: 104px;
+  border-color: rgba(230, 179, 72, 0.34);
+  background:
+    linear-gradient(180deg, rgba(73, 62, 39, 0.72), rgba(35, 40, 48, 0.96));
+}
+
+.matchup-bench-card .fantasy-player-main em {
+  margin-top: 6px;
+  color: #d7bc7d;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.matchup-logo-fallback {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(217, 226, 235, 0.18);
+  border-radius: 50%;
+  background: rgba(217, 226, 235, 0.08);
+  color: #dce8f3;
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.matchup-bench-empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  border-style: dashed;
+  background: rgba(24, 31, 40, 0.78);
+}
+
+.matchup-bench-empty-card:hover,
+.matchup-bench-empty-card:focus-visible {
+  transform: none;
+  border-color: rgba(230, 179, 72, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.matchup-bench-empty-copy {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.matchup-bench-empty-copy strong {
+  color: #e8edf3;
+  font-size: 11px;
+}
+
+.matchup-bench-empty-copy span {
+  color: #8fa1b3;
+  font-size: 9px;
+}
+
+@media (max-width: 1100px) {
+  .matchup-bench-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .mobile-h2h-bench-group {
+    border-color: rgba(230, 179, 72, 0.35);
+  }
+
+  .mobile-h2h-bench-group > header {
+    background: rgba(75, 57, 25, 0.92);
+  }
+
+  .mobile-h2h-bench-player {
+    border-color: color-mix(in srgb, var(--owner-theme-outline-soft) 72%, #d6aa4f 28%);
+  }
+
+  .mobile-h2h-bench-player.injured-player-card {
+    box-shadow: inset 3px 0 0 rgba(255, 102, 116, 0.82);
+  }
+
+  .mobile-h2h-bench-player.suspended-player-card {
+    box-shadow: inset 3px 0 0 rgba(255, 201, 92, 0.84);
+  }
+}

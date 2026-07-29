@@ -845,3 +845,9 @@ FAVORITE-TEAM LOGO RELIABILITY
 - npm start and npm run build automatically prepare missing assets.
 - Runtime identity cards use local SVG paths, removing broken guessed remote filenames and hot-link dependence.
 - npm run validate:team-logos verifies all 32 current crests plus every archived/secondary identity asset.
+
+BENCH CARD AND MATCHUP VISIBILITY UPDATE (2026-07-29)
+- My Team bench cards now reuse the same fantasy-player-card structure as active starters instead of the older separate bench-card layout.
+- Detailed matchup pages show each team's three current bench slots below the active lineup; bench assets are explicitly non-scoring and still show their projection.
+- Mobile head-to-head matchup view includes a matching Bench group below LW/C/RW/D/G.
+- The matchup component listens only to the current roster documents for the one displayed matchup, and unsubscribes when the matchup/route changes.

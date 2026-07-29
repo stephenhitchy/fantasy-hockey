@@ -2419,3 +2419,39 @@
 .availability-policy-note strong {
   color: #c7d5e2;
 }
+
+/* Bench cards now use the same roster-card structure as active starters. */
+.bench-slot-grid {
+  align-items: stretch;
+}
+
+.bench-player-card {
+  width: 100%;
+  min-width: 0;
+  min-height: 104px;
+}
+
+.bench-player-card .player-injury-banner {
+  grid-column: 1 / -1;
+}
+
+.bench-player-card .roster-card-actions {
+  grid-column: 2 / -1;
+}
+
+.bench-player-card .bench-action-buttons {
+  flex-wrap: wrap;
+}
+
+.bench-player-card.empty-slot-card {
+  display: flex;
+  align-items: center;
+  min-height: 104px;
+}
+
+@media (max-width: 820px) {
+  .bench-player-card,
+  .bench-player-card.empty-slot-card {
+    min-height: 112px;
+  }
+}

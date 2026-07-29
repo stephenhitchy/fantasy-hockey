@@ -1,0 +1,22 @@
+RINKRAT BENCH CARD + MATCHUP VISIBILITY UPDATE
+
+My Team
+- Rebuilt all three bench cards with the same fantasy-player-card structure used by active starters.
+- Bench cards now keep consistent logo, name, team/position, projection, injury/suspension, and action placement.
+- Start, Move to IR, and Drop controls stop their clicks from opening player detail.
+- Bench cards clearly state that benched assets do not score.
+
+Matchup Detail
+- Added a Bench section below each team's active lineup.
+- Reads the current roster document for only the matchup teams currently being displayed, so add/drop and bench changes remain accurate without listening to every team in the league.
+- Displays all three bench slots using the same player-card presentation as starters.
+- Bench projections remain visible, but current score is shown as non-scoring while benched.
+- Added the same bench comparison beneath the active position groups in the condensed mobile head-to-head layout.
+- Empty bench slots, injuries, suspensions, team logos, and player-detail navigation are supported.
+
+Files changed
+- src/app/features/team/team-settings/team-settings.html
+- src/app/features/team/team-settings/team-settings.css
+- src/app/features/cycles/cycle-one/cycle-one.ts
+- src/app/features/cycles/cycle-one/cycle-one.html
+- src/app/features/cycles/cycle-one/cycle-one.css

@@ -869,6 +869,86 @@
                         }
                       </section>
                     }
+
+                    <section class="mobile-h2h-position-group mobile-h2h-bench-group">
+                      <header>
+                        <span>Bench</span>
+                        <small>Non-scoring</small>
+                      </header>
+
+                      @for (row of getMobileMatchupBenchRows(matchup); track row.slotIndex) {
+                        <div class="mobile-h2h-player-row mobile-h2h-bench-row">
+                          @if (row.teamASlot.asset; as asset) {
+                            <article
+                              class="mobile-h2h-player mobile-h2h-player-a mobile-h2h-bench-player"
+                              [class.injured-player-card]="isBenchAssetInjured(asset)"
+                              [class.suspended-player-card]="isBenchAssetSuspended(asset)"
+                              [ngStyle]="getOwnerThemeStyles(matchup.teamAOwnerId)"
+                              role="link"
+                              tabindex="0"
+                              (click)="openBenchAssetDetail(asset)"
+                              (keydown.enter)="openBenchAssetDetail(asset)"
+                            >
+                              <div class="mobile-h2h-player-identity">
+                                @if (getBenchAssetLogoUrl(asset); as logoUrl) {
+                                  <img [src]="logoUrl" [alt]="getBenchAssetTeamLabel(asset) + ' logo'" />
+                                }
+                                <div>
+                                  <strong>{{ getBenchAssetName(asset) }}</strong>
+                                  <span>{{ getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</span>
+                                  <small>Bench {{ row.teamASlot.slotNumber }} · does not score</small>
+                                </div>
+                              </div>
+                              <div class="mobile-h2h-player-scores">
+                                <span>Bench <strong>—</strong></span>
+                                <span>Proj <strong>{{ getProjectionDisplay(getBenchAssetProjection(asset)) }}</strong></span>
+                              </div>
+                            </article>
+                          } @else {
+                            <article class="mobile-h2h-player mobile-h2h-player-empty">
+                              <span>Open bench</span>
+                            </article>
+                          }
+
+                          <div class="mobile-h2h-slot-label" aria-hidden="true">
+                            <strong>B</strong>
+                            <span>{{ row.slotIndex + 1 }}</span>
+                          </div>
+
+                          @if (row.teamBSlot.asset; as asset) {
+                            <article
+                              class="mobile-h2h-player mobile-h2h-player-b mobile-h2h-bench-player"
+                              [class.injured-player-card]="isBenchAssetInjured(asset)"
+                              [class.suspended-player-card]="isBenchAssetSuspended(asset)"
+                              [ngStyle]="getOwnerThemeStyles(matchup.teamBOwnerId)"
+                              role="link"
+                              tabindex="0"
+                              (click)="openBenchAssetDetail(asset)"
+                              (keydown.enter)="openBenchAssetDetail(asset)"
+                            >
+                              <div class="mobile-h2h-player-identity">
+                                @if (getBenchAssetLogoUrl(asset); as logoUrl) {
+                                  <img [src]="logoUrl" [alt]="getBenchAssetTeamLabel(asset) + ' logo'" />
+                                }
+                                <div>
+                                  <strong>{{ getBenchAssetName(asset) }}</strong>
+                                  <span>{{ getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</span>
+                                  <small>Bench {{ row.teamBSlot.slotNumber }} · does not score</small>
+                                </div>
+                              </div>
+                              <div class="mobile-h2h-player-scores">
+                                <span>Bench <strong>—</strong></span>
+                                <span>Proj <strong>{{ getProjectionDisplay(getBenchAssetProjection(asset)) }}</strong></span>
+                              </div>
+                            </article>
+                          } @else {
+                            <article class="mobile-h2h-player mobile-h2h-player-empty">
+                              <span>Open bench</span>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </section>
                   </div>
                 </section>
 
@@ -1431,6 +1511,87 @@
                           }
                         </div>
                       </div>
+
+                      <section class="matchup-bench-section" aria-label="{{ getTeamName(matchup.teamAOwnerId) }} bench">
+                        <header class="matchup-bench-heading">
+                          <div>
+                            <span class="eyebrow">Non-Scoring Depth</span>
+                            <h4>Bench</h4>
+                          </div>
+                          <p>{{ getTeamBenchFilledCount(matchup.teamAOwnerId) }} of 3 spots filled</p>
+                        </header>
+
+                        <p class="matchup-bench-note">
+                          Bench assets stay on the team but do not add points until they are moved into an active roster slot.
+                        </p>
+
+                        <div class="matchup-bench-grid">
+                          @for (slot of getTeamBenchSlots(matchup.teamAOwnerId); track slot.slotId) {
+                            <article
+                              class="fantasy-player-card matchup-bench-card"
+                              [class.matchup-bench-empty-card]="!slot.asset"
+                              [class.injured-player-card]="slot.asset ? isBenchAssetInjured(slot.asset) : false"
+                              [class.suspended-player-card]="slot.asset ? isBenchAssetSuspended(slot.asset) : false"
+                              [attr.role]="slot.asset ? 'link' : null"
+                              [attr.tabindex]="slot.asset ? 0 : null"
+                              (click)="slot.asset && openBenchAssetDetail(slot.asset)"
+                              (keydown.enter)="slot.asset && openBenchAssetDetail(slot.asset)"
+                            >
+                              @if (slot.asset; as asset) {
+                                @if (hasBenchAssetStatusFlag(asset)) {
+                                  <span
+                                    class="matchup-injury-cross player-status-tooltip"
+                                    [class.matchup-suspension-flag]="isBenchAssetSuspended(asset)"
+                                    role="img"
+                                    tabindex="0"
+                                    [attr.aria-label]="getBenchAssetStatusTooltip(asset)"
+                                    [attr.data-status-tooltip]="getBenchAssetStatusTooltip(asset)"
+                                    [attr.title]="getBenchAssetStatusTooltip(asset)"
+                                  >
+                                    {{ getBenchAssetStatusFlagIcon(asset) }}
+                                  </span>
+                                }
+
+                                @if (getBenchAssetLogoUrl(asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getBenchAssetTeamLabel(asset) + ' logo'"
+                                  />
+                                } @else {
+                                  <span class="fantasy-player-logo matchup-logo-fallback">
+                                    {{ getBenchAssetTeamLabel(asset) }}
+                                  </span>
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getBenchAssetName(asset) }}</strong>
+                                  <span>
+                                    {{ getBenchAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}
+                                  </span>
+                                  <em>Does not score while on the bench</em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>—</strong>
+                                    <span>Bench</span>
+                                  </div>
+                                  <div>
+                                    <strong>{{ getProjectionDisplay(getBenchAssetProjection(asset)) }}</strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              } @else {
+                                <div class="matchup-bench-empty-copy">
+                                  <strong>Open Bench {{ slot.slotNumber }}</strong>
+                                  <span>No asset assigned</span>
+                                </div>
+                              }
+                            </article>
+                          }
+                        </div>
+                      </section>
                     </section>
                   }
 
@@ -1996,6 +2157,87 @@
                           }
                         </div>
                       </div>
+
+                      <section class="matchup-bench-section" aria-label="{{ getTeamName(matchup.teamBOwnerId) }} bench">
+                        <header class="matchup-bench-heading">
+                          <div>
+                            <span class="eyebrow">Non-Scoring Depth</span>
+                            <h4>Bench</h4>
+                          </div>
+                          <p>{{ getTeamBenchFilledCount(matchup.teamBOwnerId) }} of 3 spots filled</p>
+                        </header>
+
+                        <p class="matchup-bench-note">
+                          Bench assets stay on the team but do not add points until they are moved into an active roster slot.
+                        </p>
+
+                        <div class="matchup-bench-grid">
+                          @for (slot of getTeamBenchSlots(matchup.teamBOwnerId); track slot.slotId) {
+                            <article
+                              class="fantasy-player-card matchup-bench-card"
+                              [class.matchup-bench-empty-card]="!slot.asset"
+                              [class.injured-player-card]="slot.asset ? isBenchAssetInjured(slot.asset) : false"
+                              [class.suspended-player-card]="slot.asset ? isBenchAssetSuspended(slot.asset) : false"
+                              [attr.role]="slot.asset ? 'link' : null"
+                              [attr.tabindex]="slot.asset ? 0 : null"
+                              (click)="slot.asset && openBenchAssetDetail(slot.asset)"
+                              (keydown.enter)="slot.asset && openBenchAssetDetail(slot.asset)"
+                            >
+                              @if (slot.asset; as asset) {
+                                @if (hasBenchAssetStatusFlag(asset)) {
+                                  <span
+                                    class="matchup-injury-cross player-status-tooltip"
+                                    [class.matchup-suspension-flag]="isBenchAssetSuspended(asset)"
+                                    role="img"
+                                    tabindex="0"
+                                    [attr.aria-label]="getBenchAssetStatusTooltip(asset)"
+                                    [attr.data-status-tooltip]="getBenchAssetStatusTooltip(asset)"
+                                    [attr.title]="getBenchAssetStatusTooltip(asset)"
+                                  >
+                                    {{ getBenchAssetStatusFlagIcon(asset) }}
+                                  </span>
+                                }
+
+                                @if (getBenchAssetLogoUrl(asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="getBenchAssetTeamLabel(asset) + ' logo'"
+                                  />
+                                } @else {
+                                  <span class="fantasy-player-logo matchup-logo-fallback">
+                                    {{ getBenchAssetTeamLabel(asset) }}
+                                  </span>
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ getBenchAssetName(asset) }}</strong>
+                                  <span>
+                                    {{ getBenchAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}
+                                  </span>
+                                  <em>Does not score while on the bench</em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>—</strong>
+                                    <span>Bench</span>
+                                  </div>
+                                  <div>
+                                    <strong>{{ getProjectionDisplay(getBenchAssetProjection(asset)) }}</strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              } @else {
+                                <div class="matchup-bench-empty-copy">
+                                  <strong>Open Bench {{ slot.slotNumber }}</strong>
+                                  <span>No asset assigned</span>
+                                </div>
+                              }
+                            </article>
+                          }
+                        </div>
+                      </section>
                     </section>
                   }
                 </div>

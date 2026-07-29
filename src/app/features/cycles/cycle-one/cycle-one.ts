@@ -69,6 +69,9 @@ import {
 import { getNhlTeamSeasonSchedule, NHL_DRAFT_CLUBS } from '../../../core/nhl/nhl-api.service';
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
+import { BENCH_SLOT_COUNT } from '../../../core/team/roster-config';
+import { BenchRosterSlot, FantasyRoster, RosterAsset } from '../../../core/team/roster.models';
+import { listenToFantasyRoster } from '../../../core/team/roster.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import {
   PixelTeamTheme,
@@ -148,6 +151,12 @@ interface MobileMatchupPositionGroup {
   rows: MobileMatchupPlayerPair[];
 }
 
+interface MobileMatchupBenchRow {
+  slotIndex: number;
+  teamASlot: BenchRosterSlot;
+  teamBSlot: BenchRosterSlot;
+}
+
 interface CycleWindowGameMarker {
   index: number;
   gameId: number | null;
@@ -213,6 +222,7 @@ export class CycleOne implements OnDestroy {
   picks = signal<DraftPick[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
   teamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
+  teamRostersByOwner = signal<Record<string, FantasyRoster | null>>({});
 
   teamGameCounts = signal<Record<string, number>>({});
 
@@ -867,6 +877,7 @@ export class CycleOne implements OnDestroy {
   private stopSharedScoringListener: (() => void) | null = null;
   private stopLiveScoringControlListener: (() => void) | null = null;
   private stopHistoricalReplayListener: (() => void) | null = null;
+  private stopRosterListeners = new Map<string, () => void>();
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
   private effectivePicksKey: string | null = null;
@@ -1836,6 +1847,11 @@ export class CycleOne implements OnDestroy {
     this.stopLiveScoringControlListener?.();
     this.stopHistoricalReplayListener?.();
 
+    for (const stopRosterListener of this.stopRosterListeners.values()) {
+      stopRosterListener();
+    }
+    this.stopRosterListeners.clear();
+
     this.stopCyclesListener = null;
     this.stopCycleListener = null;
     this.stopMatchupsListener = null;
@@ -1865,6 +1881,7 @@ export class CycleOne implements OnDestroy {
     this.picks.set([]);
     this.playerPool.set([]);
     this.teamWindowsByOwner.set({});
+    this.teamRostersByOwner.set({});
     this.teamGameCounts.set({});
     this.cycleScoring.set(null);
     this.sharedScoringSnapshot.set(null);
@@ -2025,6 +2042,7 @@ export class CycleOne implements OnDestroy {
 
       this.stopMatchupsListener = listenToCycleMatchups(leagueId, cycleNumber, (matchups) => {
         this.matchups.set(matchups);
+        this.syncDisplayedMatchupRosterListeners(matchups);
 
         const scoringResult = this.cycleScoring();
 
@@ -2330,20 +2348,191 @@ export class CycleOne implements OnDestroy {
     return `${this.getCycleLabel()} Matchup Detail`;
   }
 
-  getDisplayedMatchups(): FantasyMatchup[] {
-    const matchups = this.matchups();
-
+  private getDisplayedMatchupsFrom(matchups: FantasyMatchup[]): FantasyMatchup[] {
     if (this.matchupId) {
       return matchups.filter((matchup) => matchup.id === this.matchupId);
     }
 
-    const myMatchup = this.myMatchup();
+    const myMatchup = matchups.find(
+      (matchup) => matchup.teamAOwnerId === this.userId || matchup.teamBOwnerId === this.userId,
+    );
 
-    if (myMatchup) {
-      return [myMatchup];
+    return myMatchup ? [myMatchup] : matchups.slice(0, 1);
+  }
+
+  private syncDisplayedMatchupRosterListeners(matchups: FantasyMatchup[]): void {
+    const ownerIds = new Set<string>();
+
+    for (const matchup of this.getDisplayedMatchupsFrom(matchups)) {
+      ownerIds.add(matchup.teamAOwnerId);
+
+      if (matchup.teamBOwnerId) {
+        ownerIds.add(matchup.teamBOwnerId);
+      }
     }
 
-    return matchups.slice(0, 1);
+    for (const [ownerId, stopListener] of this.stopRosterListeners.entries()) {
+      if (ownerIds.has(ownerId)) {
+        continue;
+      }
+
+      stopListener();
+      this.stopRosterListeners.delete(ownerId);
+      this.teamRostersByOwner.update((current) => {
+        const next = { ...current };
+        delete next[ownerId];
+        return next;
+      });
+    }
+
+    for (const ownerId of ownerIds) {
+      if (this.stopRosterListeners.has(ownerId)) {
+        continue;
+      }
+
+      const stopListener = listenToFantasyRoster(
+        this.leagueId,
+        ownerId,
+        (roster) => {
+          this.teamRostersByOwner.update((current) => ({
+            ...current,
+            [ownerId]: roster,
+          }));
+        },
+        (error) => {
+          console.error(`Unable to load bench for ${ownerId}.`, error);
+          this.teamRostersByOwner.update((current) => ({
+            ...current,
+            [ownerId]: null,
+          }));
+        },
+      );
+
+      this.stopRosterListeners.set(ownerId, stopListener);
+    }
+  }
+
+  private createEmptyBenchSlots(): BenchRosterSlot[] {
+    return Array.from({ length: BENCH_SLOT_COUNT }, (_, index) => ({
+      slotId: `B-${index + 1}`,
+      slotNumber: index + 1,
+      asset: null,
+    }));
+  }
+
+  getTeamBenchSlots(ownerId: string | null): BenchRosterSlot[] {
+    if (!ownerId) {
+      return this.createEmptyBenchSlots();
+    }
+
+    return this.teamRostersByOwner()[ownerId]?.benchSlots ?? this.createEmptyBenchSlots();
+  }
+
+  getTeamBenchFilledCount(ownerId: string | null): number {
+    return this.getTeamBenchSlots(ownerId).filter((slot) => Boolean(slot.asset)).length;
+  }
+
+  getMobileMatchupBenchRows(matchup: FantasyMatchup): MobileMatchupBenchRow[] {
+    const teamASlots = this.getTeamBenchSlots(matchup.teamAOwnerId);
+    const teamBSlots = this.getTeamBenchSlots(matchup.teamBOwnerId);
+
+    return Array.from({ length: BENCH_SLOT_COUNT }, (_, slotIndex) => ({
+      slotIndex,
+      teamASlot: teamASlots[slotIndex] ?? this.createEmptyBenchSlots()[slotIndex],
+      teamBSlot: teamBSlots[slotIndex] ?? this.createEmptyBenchSlots()[slotIndex],
+    }));
+  }
+
+  getBenchAssetName(asset: RosterAsset): string {
+    return asset.assetType === 'skater' ? asset.player.fullName : `${asset.teamName} Goalie Unit`;
+  }
+
+  getBenchAssetTeamLabel(asset: RosterAsset): string {
+    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
+  }
+
+  getBenchAssetLogoUrl(asset: RosterAsset): string | undefined {
+    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
+  }
+
+  getBenchAssetProjection(asset: RosterAsset): number | null {
+    const assetKey = this.getBenchAssetKey(asset);
+    const poolAsset = assetKey
+      ? this.playerPool().find((availableAsset) => availableAsset.assetKey === assetKey)
+      : null;
+
+    return (
+      asset.projectedCyclePoints ??
+      asset.availabilityAdjustedCyclePoints ??
+      poolAsset?.projectedCyclePoints ??
+      poolAsset?.availabilityAdjustedCyclePoints ??
+      null
+    );
+  }
+
+  isBenchAssetInjured(asset: RosterAsset): boolean {
+    if (asset.assetType !== 'skater') {
+      return false;
+    }
+
+    const status = getPlayerAvailabilityForPlayer(asset.player).status;
+    return ['day-to-day', 'out', 'injured-reserve', 'long-term-injured-reserve'].includes(status);
+  }
+
+  isBenchAssetSuspended(asset: RosterAsset): boolean {
+    return asset.assetType === 'skater' && getPlayerAvailabilityForPlayer(asset.player).status === 'suspended';
+  }
+
+  hasBenchAssetStatusFlag(asset: RosterAsset): boolean {
+    return this.isBenchAssetInjured(asset) || this.isBenchAssetSuspended(asset);
+  }
+
+  getBenchAssetStatusFlagIcon(asset: RosterAsset): string {
+    return this.isBenchAssetSuspended(asset) ? '⛔' : '✚';
+  }
+
+  getBenchAssetStatusTooltip(asset: RosterAsset): string {
+    if (asset.assetType !== 'skater') {
+      return '';
+    }
+
+    const availability = getPlayerAvailabilityForPlayer(asset.player);
+    const detail = availability.note?.trim();
+    return detail ? `${availability.label}: ${detail}` : availability.label;
+  }
+
+  private getBenchAssetKey(asset: RosterAsset): string | null {
+    if (asset.assetKey) {
+      return asset.assetKey;
+    }
+
+    if (asset.assetType === 'team-goalie-unit') {
+      return asset.teamAbbreviation ? `goalie-unit-${asset.teamAbbreviation}` : null;
+    }
+
+    const playerId = asset.player?.id;
+    return playerId !== undefined && playerId !== null ? `skater-${playerId}` : null;
+  }
+
+  openBenchAssetDetail(asset: RosterAsset): void {
+    const assetKey = this.getBenchAssetKey(asset);
+
+    if (!assetKey) {
+      return;
+    }
+
+    void this.router.navigate(
+      ['/leagues', this.leagueId, 'cycles', this.cycleNumber, 'assets', assetKey],
+      {
+        queryParams: {
+          returnTo: this.router.url,
+        },
+      },
+    );
+  }
+
+  getDisplayedMatchups(): FantasyMatchup[] {
+    return this.getDisplayedMatchupsFrom(this.matchups());
   }
 
   getNoDisplayedMatchupMessage(): string {
