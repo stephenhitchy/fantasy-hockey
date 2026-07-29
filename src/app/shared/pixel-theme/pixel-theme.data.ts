@@ -137,9 +137,10 @@ const NHL_TEAM_PALETTES: PixelTeamPalette[] = [
 /**
  * Full identity catalog. Each club receives one retro reward, one alternate
  * reward, and one special reward in addition to the universal home/away pair.
- * Historical logos use exact filenames from the NHL logo archive. Alternate
- * identities without a verified alternate crest deliberately reuse the current
- * crest while still applying their distinct uniform-inspired color palette.
+ * Historical logos use exact filenames from the NHL logo archive. Teams with
+ * a verified secondary or alternate mark point to a dedicated local asset.
+ * Alternate identities without a true alternate crest deliberately reuse the
+ * current crest while still applying their distinct uniform-inspired palette.
  */
 const SPECIAL_TEAM_VARIANTS: Record<string, TeamIdentityVariantDefinition[]> = {
   ANA: [
@@ -259,7 +260,7 @@ const SPECIAL_TEAM_VARIANTS: Record<string, TeamIdentityVariantDefinition[]> = {
   ],
   SJS: [
     heritage('sjs-original-teal', 'Original Teal', 'Original Teal', 'The inaugural teal, black, silver, and white Sharks identity.', '1991–1998 heritage', '#006D75', '#111111', '#A2AAAD', archivedLogo('SJS_19911992-19971998_light.svg')),
-    alternate('sjs-stealth', 'Stealth Black', 'Stealth', 'Black, teal, and orange built for a dark-arena look.', '#050505', '#006D75', '#EA7200'),
+    alternate('sjs-stealth', 'Stealth Black', 'Stealth', 'Black, teal, and orange built for a dark-arena look.', '#050505', '#006D75', '#EA7200', archivedLogo('custom/sjs-alt-fin-circle.png')),
     special('sjs-golden-seals', 'Golden Seals Heritage', 'Golden Seals', 'Kelly green, california gold, and white honoring Bay Area hockey roots.', '#00843D', '#FFB81C', '#FFFFFF', archivedLogo('CGS_19701971-19731974_light.svg')),
   ],
   STL: [
@@ -289,7 +290,7 @@ const SPECIAL_TEAM_VARIANTS: Record<string, TeamIdentityVariantDefinition[]> = {
   ],
   VGK: [
     heritage('vgk-inaugural', 'Inaugural Steel', 'Inaugural', 'Steel gray, vegas gold, red, and black from the franchise’s first run.', '2017 heritage', '#333F42', '#B9975B', '#C8102E', archivedLogo('VGK_light.svg')),
-    alternate('vgk-gold-jersey', 'Gold Jersey', 'Gold Jersey', 'Vegas gold leads with steel gray, black, and red.', '#B9975B', '#333F42', '#111111'),
+    alternate('vgk-gold-jersey', 'Gold Jersey', 'Gold Jersey', 'Vegas gold leads with steel gray, black, and red, using the crossed-swords secondary mark.', '#B9975B', '#333F42', '#111111', archivedLogo('custom/vgk-alt-crossed-swords.png')),
     special('vgk-reverse-red', 'Reverse Retro Red', 'Reverse Red', 'A red-first Las Vegas color rush with gold, black, and white.', '#C8102E', '#B9975B', '#111111'),
   ],
   WSH: [

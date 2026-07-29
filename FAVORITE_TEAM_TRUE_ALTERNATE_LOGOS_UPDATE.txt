@@ -1,0 +1,12 @@
+RINKRAT FAVORITE-TEAM TRUE ALTERNATE LOGOS UPDATE
+
+What changed
+- Vegas Golden Knights "Gold Jersey" alternate now uses the crossed-swords secondary crest instead of reusing the primary shield logo.
+- San Jose Sharks "Stealth Black" alternate now uses the circular fin secondary crest instead of reusing the primary shark logo.
+- Added stable local assets for those alternate marks under public/assets/team-identity-logos/custom/.
+- Clarified the identity-catalog note so teams with a real secondary mark use that asset, while teams without one keep the primary crest on color-based alternates.
+
+Files changed
+- src/app/shared/pixel-theme/pixel-theme.data.ts
+- public/assets/team-identity-logos/custom/vgk-alt-crossed-swords.png
+- public/assets/team-identity-logos/custom/sjs-alt-fin-circle.png
