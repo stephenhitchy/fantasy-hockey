@@ -650,3 +650,25 @@ DRAFT START, AUTO-DRAFT, AND LEGACY MEMBERSHIP FIX (JULY 2026)
 - League status messaging now accurately says the server is opening a scheduled
   draft rather than telling managers it is waiting for the commissioner.
 - See DRAFT_START_AUTODRAFT_PERMISSION_FIX.txt for the detailed summary.
+
+
+ARENA VISUAL SYSTEM — PHASE 3 (JULY 2026)
+------------------------------------------
+The site now includes the final coordinated page-identity and mascot-polish
+layer in `src/rinkrat-arena-phase3.css`, loaded after Phase 1 and Phase 2A.
+
+Key page identities:
+- My Team = locker room / roster board.
+- Add / Drop = scouting terminal / general manager decision center.
+- Matchups = RinkRat Sports Network broadcast package.
+- Standings = arena standings board.
+- Point Leaders = league stat network.
+- Playoffs = Road to the RinkRat Cup.
+
+Polish includes mascot loading/empty states, puck-slide transaction feedback,
+goal-light score feedback, penalty-box suspended states, treatment-room IR,
+and trophy styling for completed challenges. Reduced-motion preferences remain
+respected. The rat-tail divider idea remains intentionally excluded.
+
+This update is frontend presentation only and does not change draft, scoring,
+roster, projection, cycle, Firestore, or Cloud Function logic.

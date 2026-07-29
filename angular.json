@@ -28,7 +28,8 @@
             "styles": [
               "src/styles.css",
               "src/rinkrat-visual-system.css",
-              "src/rinkrat-page-identities-phase2.css"
+              "src/rinkrat-page-identities-phase2.css",
+              "src/rinkrat-arena-phase3.css"
             ]
           },
           "configurations": {

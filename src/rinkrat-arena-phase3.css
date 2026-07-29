@@ -1,0 +1,1593 @@
+/*
+ * RinkRat Visual System — Phase 3
+ * Locker Room, Scouting Terminal, Broadcast Matchups, Arena Boards,
+ * and mascot-driven polish.
+ *
+ * This layer is presentation-only. It intentionally does not alter scoring,
+ * drafting, roster, projection, or Firebase behavior. No rat-tail dividers.
+ */
+
+:root {
+  --rr-phase3-board: color-mix(in srgb, var(--rr-scoreboard) 92%, #000);
+  --rr-phase3-board-raised: color-mix(in srgb, var(--rr-scoreboard-raised) 90%, #15283d);
+  --rr-phase3-ice: color-mix(in srgb, var(--surface-1) 91%, var(--rr-ice-blue));
+  --rr-phase3-steel: color-mix(in srgb, var(--border-strong) 76%, var(--rr-steel));
+  --rr-phase3-gold: #d8ad4b;
+  --rr-phase3-red: #d84b5f;
+  --rr-phase3-blue: #5a9de2;
+  --rr-phase3-green: #52ca83;
+  --rr-phase3-shadow: 6px 6px 0 color-mix(in srgb, var(--rr-scoreboard) 70%, transparent);
+  --rr-phase3-inset: inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 7%, transparent);
+  --rr-phase3-cut: polygon(
+    0 9px,
+    9px 9px,
+    9px 0,
+    calc(100% - 9px) 0,
+    calc(100% - 9px) 9px,
+    100% 9px,
+    100% calc(100% - 9px),
+    calc(100% - 9px) calc(100% - 9px),
+    calc(100% - 9px) 100%,
+    9px 100%,
+    9px calc(100% - 9px),
+    0 calc(100% - 9px)
+  );
+}
+
+html[data-background-theme='light-ice'] {
+  --rr-phase3-board: #122337;
+  --rr-phase3-board-raised: #203952;
+  --rr-phase3-ice: #f7fafc;
+  --rr-phase3-shadow: 6px 6px 0 rgba(73, 91, 111, 0.26);
+}
+
+@keyframes rrPhase3SignalBlink {
+  0%, 42%, 100% { opacity: 1; }
+  43%, 58% { opacity: 0.35; }
+}
+
+@keyframes rrPhase3PuckSlide {
+  0% { opacity: 0; transform: translateX(-48px) rotate(-12deg); }
+  24% { opacity: 1; }
+  72% { opacity: 1; transform: translateX(0) rotate(0); }
+  84% { transform: translateX(-3px) rotate(-2deg); }
+  100% { opacity: 0; transform: translateX(0) rotate(0); }
+}
+
+@keyframes rrPhase3GoalLight {
+  0%, 100% { opacity: 0; transform: scale(0.72); filter: brightness(0.65); }
+  12% { opacity: 1; transform: scale(1.1); filter: brightness(1.55); }
+  27% { opacity: 0.35; transform: scale(0.95); }
+  40% { opacity: 1; transform: scale(1.05); filter: brightness(1.5); }
+  74% { opacity: 0.9; transform: scale(1); }
+}
+
+@keyframes rrPhase3LockerOpen {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rrPhase3Ticker {
+  from { background-position-x: 0; }
+  to { background-position-x: 32px; }
+}
+
+@keyframes rrPhase3UnlockPop {
+  0% { transform: scale(0.96); filter: brightness(0.8); }
+  36% { transform: scale(1.035); filter: brightness(1.35); }
+  62% { transform: scale(0.995); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* -------------------------------------------------------------------------
+   MY TEAM — locker room
+   ------------------------------------------------------------------------- */
+
+app-team-settings .team-page {
+  max-width: 1360px;
+}
+
+app-team-settings .team-hero-card {
+  position: relative;
+  isolation: isolate;
+  overflow: visible !important;
+  padding-top: 54px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--user-team-primary) 14%, transparent), transparent 54%),
+    var(--surface-1) !important;
+  box-shadow: var(--rr-phase3-inset), var(--rr-phase3-shadow) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-team-settings .team-hero-card::before {
+  content: 'LOCKER ROOM · ACTIVE ROSTER';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border-bottom: 3px solid var(--border-strong);
+  background:
+    linear-gradient(90deg,
+      var(--user-team-primary) 0 30%,
+      var(--user-team-secondary) 30% 62%,
+      var(--rr-phase3-board) 62% 100%);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.62rem;
+  letter-spacing: 0.11em;
+  text-shadow: 0 1px 0 rgba(0,0,0,.34);
+  pointer-events: none;
+}
+
+app-team-settings .team-hero-card::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  right: 14px;
+  bottom: -1px;
+  width: 88px;
+  height: 88px;
+  background: url('/assets/branding/rinkrat-mascot-crop.png') center / contain no-repeat;
+  opacity: 0.14;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+app-team-settings .team-hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+app-team-settings .manager-identity {
+  padding: 12px 14px;
+  border: 2px solid var(--border-soft);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 12%, transparent), transparent),
+    var(--rr-phase3-board);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.045);
+}
+
+app-team-settings .manager-identity-copy :is(.manager-name, h1, p) {
+  color: #f5f8fb !important;
+}
+
+app-team-settings .manager-identity-copy p {
+  color: #b8c7d7 !important;
+}
+
+app-team-settings .team-stat-bar {
+  position: relative;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  background: var(--rr-phase3-board) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-team-settings .team-stat-bar::before {
+  content: 'SEASON HUD';
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 4px 9px 5px;
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.49rem;
+  letter-spacing: 0.08em;
+}
+
+app-team-settings .team-stat-bar article {
+  min-height: 76px;
+  padding-top: 24px !important;
+  border-right: 2px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  background: linear-gradient(180deg, rgba(255,255,255,.025), transparent);
+}
+
+app-team-settings .team-stat-bar article:last-child {
+  border-right: 0;
+}
+
+app-team-settings .team-stat-bar span {
+  color: #9fb0c4 !important;
+  font-family: var(--rr-font-micro);
+  font-size: 0.52rem !important;
+}
+
+app-team-settings .team-stat-bar strong {
+  color: #fff !important;
+  font-family: var(--rr-font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+app-team-settings .quick-actions-card {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-secondary) 12%, transparent), transparent),
+    var(--surface-1) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-team-settings .quick-actions-card::before {
+  content: 'COACHING BOARD';
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.55rem;
+}
+
+app-team-settings .current-matchup-card {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--user-team-primary) 14%, transparent), transparent 42%),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-team-settings .current-matchup-card::before {
+  content: 'NEXT SHIFT';
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 5px 10px;
+  border-left: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: 0.52rem;
+}
+
+app-team-settings .current-matchup-card :is(h2, p, strong, em) {
+  color: #fff !important;
+}
+
+app-team-settings .current-matchup-card .eyebrow,
+app-team-settings .score-team-card span {
+  color: #a9bbcf !important;
+}
+
+app-team-settings .scoreboard-row {
+  gap: 12px;
+}
+
+app-team-settings .score-team-card {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.04);
+}
+
+app-team-settings .score-team-card em {
+  font-family: var(--rr-font-display);
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+app-team-settings .transaction-ledger-card {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  background: var(--surface-1) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-team-settings .transaction-ledger-card::before {
+  content: 'ROSTER NOTICE BOARD';
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.54rem;
+}
+
+app-team-settings .transaction-ledger-row {
+  position: relative;
+  overflow: hidden;
+  border-left: 4px solid var(--user-team-primary);
+  animation: rrPhase3LockerOpen 180ms steps(3, end) both;
+}
+
+app-team-settings .transaction-added::before {
+  content: '●';
+  margin-right: 6px;
+  color: var(--rr-phase3-green);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--rr-phase3-green) 66%, transparent);
+}
+
+app-team-settings .transaction-dropped::before {
+  content: '↘';
+  margin-right: 6px;
+  color: var(--rr-phase3-red);
+}
+
+app-team-settings .roster-section {
+  position: relative;
+  padding: 24px 18px 20px !important;
+  border: 3px solid var(--border-strong);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 118px, rgba(255,255,255,.025) 118px 120px),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, transparent), var(--surface-1));
+  box-shadow: var(--rr-phase3-shadow);
+}
+
+app-team-settings .roster-section::before {
+  content: 'LOCKER STALLS';
+  position: absolute;
+  top: -14px;
+  left: 22px;
+  padding: 4px 11px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: 0.56rem;
+}
+
+app-team-settings .fantasy-position-group {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.018), transparent 18% 82%, rgba(255,255,255,.018)),
+    var(--rr-phase3-board-raised) !important;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.035),
+    4px 4px 0 rgba(0,0,0,.28) !important;
+}
+
+app-team-settings .fantasy-position-group::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 7px;
+  background: repeating-linear-gradient(90deg,
+    var(--user-team-primary) 0 18px,
+    var(--user-team-secondary) 18px 36px,
+    var(--user-team-tertiary) 36px 54px);
+  opacity: .68;
+}
+
+app-team-settings .fantasy-position-header {
+  border-bottom: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 19%, transparent), transparent),
+    var(--rr-phase3-board) !important;
+  color: #fff !important;
+  font-family: var(--rr-font-display);
+}
+
+app-team-settings .fantasy-player-card,
+app-team-settings .bench-roster-card,
+app-team-settings .ir-slot-card {
+  min-height: 104px;
+  border: 2px solid color-mix(in srgb, var(--rr-phase3-steel) 86%, transparent) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--user-team-primary) 5%, transparent), transparent 60%),
+    var(--surface-1) !important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 4%, transparent),
+    3px 3px 0 rgba(0,0,0,.22) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-team-settings .bench-slot-grid {
+  position: relative;
+  padding: 18px;
+  border: 3px solid var(--rr-phase3-steel);
+  background:
+    linear-gradient(180deg, transparent 0 70%, color-mix(in srgb, var(--user-team-secondary) 28%, transparent) 70% 77%, transparent 77%),
+    var(--surface-2);
+}
+
+app-team-settings .bench-slot-grid::before {
+  content: 'BENCH RAIL';
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  padding: 3px 9px;
+  border: 2px solid var(--rr-phase3-steel);
+  background: var(--user-team-secondary);
+  color: var(--user-team-on-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: .52rem;
+}
+
+app-team-settings .ir-roster-section {
+  position: relative;
+  border: 3px solid color-mix(in srgb, var(--rr-danger) 58%, var(--rr-phase3-steel)) !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(225,93,111,.06) 0 10px, transparent 10px 20px),
+    var(--surface-1) !important;
+}
+
+app-team-settings .ir-roster-section::before {
+  content: 'TREATMENT ROOM';
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid #a84d5b;
+  background: #702c3a;
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .54rem;
+}
+
+app-team-settings :is(.suspended-player-card, .player-suspension-banner) {
+  border-color: #d9a83e !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,206,91,.14) 0 8px, rgba(0,0,0,.08) 8px 16px),
+    var(--surface-1) !important;
+}
+
+app-team-settings .suspended-player-card::after {
+  content: 'PENALTY BOX';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 3px 6px;
+  border: 1px solid #d9a83e;
+  background: #352b16;
+  color: #ffd978;
+  font-family: var(--rr-font-micro);
+  font-size: .45rem;
+}
+
+/* -------------------------------------------------------------------------
+   ADD / DROP — scouting terminal
+   ------------------------------------------------------------------------- */
+
+app-free-agents .free-agents-page {
+  max-width: 1400px;
+}
+
+app-free-agents .free-agent-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: visible !important;
+  padding-top: 55px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    radial-gradient(circle at 82% 22%, color-mix(in srgb, var(--user-team-primary) 16%, transparent), transparent 28%),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+  box-shadow: var(--rr-phase3-inset), var(--rr-phase3-shadow) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-free-agents .free-agent-hero::before {
+  content: 'SCOUTING TERMINAL · WAIVER WIRE';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding-inline: 18px;
+  border-bottom: 3px solid var(--border-strong);
+  background:
+    linear-gradient(90deg, var(--user-team-primary), var(--user-team-secondary) 48%, var(--rr-phase3-board) 48%);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: .62rem;
+  letter-spacing: .1em;
+}
+
+app-free-agents .free-agent-hero::after {
+  content: '';
+  position: absolute;
+  right: 20px;
+  bottom: -6px;
+  width: 94px;
+  height: 94px;
+  background: url('/assets/branding/rinkrat-headshot.png') center / contain no-repeat;
+  opacity: .16;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+app-free-agents .free-agent-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+app-free-agents .free-agent-hero :is(h1, p, .eyebrow) {
+  color: #fff !important;
+}
+
+app-free-agents .free-agent-hero p {
+  color: #b7c7d8 !important;
+}
+
+app-free-agents .status-card {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.04);
+}
+
+app-free-agents .fairness-card {
+  position: relative;
+  padding-left: 54px !important;
+  border: 3px solid color-mix(in srgb, var(--rr-warning) 60%, var(--border-strong)) !important;
+  background:
+    repeating-linear-gradient(135deg, rgba(240,196,91,.08) 0 8px, transparent 8px 16px),
+    var(--surface-1) !important;
+}
+
+app-free-agents .fairness-card::before {
+  content: '⚖';
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--rr-warning);
+  font-size: 1.35rem;
+}
+
+app-free-agents :is(.pending-moves-card, .free-agent-list-card, .waiver-queue-card, .selected-player-card, .roster-slot-step, .move-comparison-panel) {
+  border: 3px solid var(--border-strong) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-free-agents .free-agent-list-card,
+app-free-agents .waiver-queue-card {
+  position: relative;
+  padding-top: 46px !important;
+  background:
+    linear-gradient(rgba(94,170,224,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94,170,224,.035) 1px, transparent 1px),
+    var(--rr-phase3-board) !important;
+  background-size: 16px 16px !important;
+  color: #fff;
+}
+
+app-free-agents .free-agent-list-card::before {
+  content: 'AVAILABLE PLAYER DATABASE';
+}
+
+app-free-agents .waiver-queue-card::before {
+  content: 'WAIVER CLAIM QUEUE';
+}
+
+app-free-agents .free-agent-list-card::before,
+app-free-agents .waiver-queue-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 3px solid var(--border-strong);
+  background: var(--rr-phase3-board-raised);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .58rem;
+  letter-spacing: .08em;
+}
+
+app-free-agents .free-agent-list-card :is(h2, h3, strong),
+app-free-agents .waiver-queue-card :is(h2, h3, strong) {
+  color: #fff !important;
+}
+
+app-free-agents .free-agent-list-card :is(p, small, span),
+app-free-agents .waiver-queue-card :is(p, small, span) {
+  color: #b7c7d8;
+}
+
+app-free-agents .filter-row,
+app-free-agents .decision-filter-row {
+  border: 2px solid var(--rr-phase3-steel);
+  background: var(--rr-phase3-board-raised) !important;
+}
+
+app-free-agents .asset-row,
+app-free-agents .waiver-row,
+app-free-agents .decision-asset-card {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--rr-phase3-steel) 86%, transparent) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 5%, transparent), transparent 48%),
+    var(--surface-1) !important;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.22) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-free-agents .asset-row::before,
+app-free-agents .waiver-row::before,
+app-free-agents .decision-asset-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(var(--user-team-primary), var(--user-team-tertiary));
+}
+
+app-free-agents .asset-row:hover,
+app-free-agents .waiver-row:hover,
+app-free-agents .decision-asset-card:hover {
+  border-color: var(--user-team-accent) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 10%, transparent), transparent 55%),
+    var(--surface-1) !important;
+}
+
+app-free-agents .decision-metric-grid,
+app-free-agents .season-summary-grid,
+app-free-agents .comparison-metrics {
+  gap: 6px;
+}
+
+app-free-agents .decision-metric-grid > *,
+app-free-agents .season-summary-grid > *,
+app-free-agents .comparison-metrics > * {
+  border: 2px solid var(--border-soft);
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff !important;
+}
+
+app-free-agents .decision-metric-grid small,
+app-free-agents .season-summary-grid small,
+app-free-agents .comparison-metrics small {
+  color: #9eb0c4 !important;
+  font-family: var(--rr-font-micro);
+}
+
+app-free-agents .decision-metric-grid strong,
+app-free-agents .season-summary-grid strong,
+app-free-agents .comparison-metrics strong {
+  color: #fff !important;
+  font-family: var(--rr-font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+app-free-agents .decision-details,
+app-free-agents .selected-decision-details,
+app-free-agents .outgoing-decision-details {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(113,168,214,.035) 27px 28px),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+}
+
+app-free-agents .decision-details summary,
+app-free-agents .selected-decision-details summary,
+app-free-agents .outgoing-decision-details summary {
+  font-family: var(--rr-font-display);
+  color: #fff !important;
+}
+
+app-free-agents .stat-breakdown-grid {
+  border-top: 2px dashed color-mix(in srgb, var(--border-strong) 72%, transparent);
+}
+
+app-free-agents .stat-breakdown-item {
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--rr-phase3-board-raised) 92%, transparent) !important;
+}
+
+app-free-agents .cycle-game-marker {
+  border: 2px solid currentColor;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.08);
+}
+
+app-free-agents .move-comparison-panel {
+  position: relative;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--rr-phase3-green) 8%, transparent) 0 48%,
+      transparent 48% 52%,
+      color-mix(in srgb, var(--rr-phase3-red) 8%, transparent) 52% 100%),
+    var(--surface-1) !important;
+}
+
+app-free-agents .move-comparison-panel::before {
+  content: 'GENERAL MANAGER DECISION';
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .54rem;
+}
+
+app-free-agents .pending-move-row {
+  position: relative;
+  overflow: hidden;
+}
+
+app-free-agents .pending-move-row::after {
+  content: '●';
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  color: #121922;
+  font-size: 1rem;
+  animation: rrPhase3PuckSlide 2.5s steps(7, end) infinite;
+}
+
+/* -------------------------------------------------------------------------
+   MATCHUPS — broadcast package
+   ------------------------------------------------------------------------- */
+
+app-cycle-one .cycle-page,
+app-cycle-matchup-overview .matchup-overview-page {
+  max-width: 1460px;
+}
+
+app-cycle-one .cycle-header,
+app-cycle-matchup-overview .matchup-overview-header {
+  position: relative;
+  overflow: visible !important;
+  padding-top: 54px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--user-team-primary) 17%, transparent), transparent 34%),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+  box-shadow: var(--rr-phase3-inset), var(--rr-phase3-shadow) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-cycle-one .cycle-header::before,
+app-cycle-matchup-overview .matchup-overview-header::before {
+  content: 'RINKRAT SPORTS NETWORK · LIVE BROADCAST';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding-inline: 18px;
+  border-bottom: 3px solid var(--border-strong);
+  background:
+    linear-gradient(90deg,
+      var(--user-team-primary) 0 24%,
+      var(--user-team-secondary) 24% 48%,
+      var(--user-team-tertiary) 48% 62%,
+      var(--rr-phase3-board) 62% 100%);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: .61rem;
+  letter-spacing: .1em;
+}
+
+app-cycle-one .cycle-header :is(h1, p, .eyebrow),
+app-cycle-matchup-overview .matchup-overview-header :is(h1, p, .eyebrow) {
+  color: #fff !important;
+}
+
+app-cycle-one .matchup-scoreboard,
+app-cycle-one .mobile-matchup-scorebar {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    var(--rr-phase3-board) !important;
+  background-size: 16px 16px !important;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.04),
+    5px 5px 0 rgba(0,0,0,.38) !important;
+}
+
+app-cycle-one .matchup-scoreboard::before,
+app-cycle-one .mobile-matchup-scorebar::before {
+  content: 'LIVE MATCHUP';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  padding: 4px 10px 5px;
+  border-inline: 2px solid var(--rr-phase3-steel);
+  border-bottom: 2px solid var(--rr-phase3-steel);
+  background: #a52b3e;
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .5rem;
+  letter-spacing: .09em;
+}
+
+app-cycle-one .matchup-scoreboard::after,
+app-cycle-one .mobile-matchup-scorebar::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #ff8796;
+  background: #e93049;
+  box-shadow: 0 0 12px rgba(233,48,73,.7);
+  animation: rrPhase3SignalBlink 2.1s steps(2, end) infinite;
+}
+
+app-cycle-one .team-summary-row,
+app-cycle-one .team-matchup-panel,
+app-cycle-matchup-overview .overview-team-card {
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--owner-theme-primary, var(--user-team-primary)) 11%, transparent), transparent 58%),
+    var(--rr-phase3-board-raised) !important;
+  color: #fff;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.035), 4px 4px 0 rgba(0,0,0,.28) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-cycle-one .team-summary-row :is(strong, b, em),
+app-cycle-one .team-matchup-panel :is(strong, b, em),
+app-cycle-matchup-overview .overview-team-card :is(strong, b, em) {
+  color: #fff !important;
+}
+
+app-cycle-one .team-summary-row :is(span, small),
+app-cycle-one .team-matchup-panel :is(span, small),
+app-cycle-matchup-overview .overview-team-card :is(span, small) {
+  color: #aebed0;
+}
+
+app-cycle-one .team-color-strip,
+app-cycle-one .mobile-team-color-strip {
+  height: 8px !important;
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 2px 0 rgba(0,0,0,.25);
+}
+
+app-cycle-one .my-matchup-card,
+app-cycle-one .matchup-detail-card,
+app-cycle-matchup-overview .matchup-overview-card {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 94%, transparent), var(--surface-1)) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-cycle-one .my-matchup-card::before,
+app-cycle-one .matchup-detail-card::before,
+app-cycle-matchup-overview .matchup-overview-card::before {
+  content: 'GAME CENTER';
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .54rem;
+  letter-spacing: .08em;
+}
+
+app-cycle-one .fantasy-roster-board {
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(90deg, rgba(79,130,180,.035) 1px, transparent 1px),
+    linear-gradient(rgba(79,130,180,.035) 1px, transparent 1px),
+    var(--rr-phase3-board) !important;
+  background-size: 18px 18px !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.03), 4px 4px 0 rgba(0,0,0,.28) !important;
+}
+
+app-cycle-one .fantasy-position-header {
+  border-bottom: 3px solid var(--rr-phase3-steel) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 13%, transparent), transparent),
+    var(--rr-phase3-board-raised) !important;
+  color: #fff !important;
+}
+
+app-cycle-one .fantasy-player-card {
+  border: 2px solid color-mix(in srgb, var(--rr-phase3-steel) 86%, transparent) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.2) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-cycle-one .fantasy-player-card :is(strong, b) {
+  color: #fff !important;
+}
+
+app-cycle-one .fantasy-player-card :is(span, em, small) {
+  color: #aebed0;
+}
+
+app-cycle-one .current-score-cell.score-change-active::after {
+  content: '';
+  position: absolute;
+  z-index: 10;
+  top: -18px;
+  right: -13px;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #ff9ba7;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 42% 36%, #fff 0 12%, #ff4c63 13% 48%, #8f0e24 49% 100%);
+  box-shadow: 0 0 18px rgba(255,55,82,.8);
+  animation: rrPhase3GoalLight 1.35s steps(5, end) both;
+  pointer-events: none;
+}
+
+app-cycle-one .current-score-cell.score-change-active.score-change-opponent::after {
+  border-color: var(--owner-theme-highlight, #cfd8e5);
+  background:
+    radial-gradient(circle at 42% 36%, #fff 0 12%, var(--owner-theme-primary, #8998aa) 13% 48%, var(--owner-theme-secondary, #3c4653) 49% 100%);
+  box-shadow: 0 0 18px var(--owner-theme-outline-soft, rgba(255,255,255,.42));
+}
+
+app-cycle-one .score-delta-pop::before {
+  content: 'GOAL LIGHT';
+  margin-right: 5px;
+  font-family: var(--rr-font-micro);
+  font-size: .42rem;
+}
+
+app-cycle-one .matchup-suspension-flag,
+app-cycle-one .suspended-player-card {
+  background:
+    repeating-linear-gradient(135deg, rgba(255,202,79,.17) 0 7px, rgba(0,0,0,.08) 7px 14px),
+    var(--rr-phase3-board-raised) !important;
+  color: #ffdb77 !important;
+}
+
+/* -------------------------------------------------------------------------
+   STANDINGS / LEADERS / PLAYOFFS — arena boards and trophy road
+   ------------------------------------------------------------------------- */
+
+app-league-standings .standings-page,
+app-point-leaders .point-leaders-page,
+app-playoff-bracket .playoff-page {
+  max-width: 1380px;
+}
+
+app-league-standings .standings-header,
+app-point-leaders .point-leaders-header,
+app-playoff-bracket .playoff-hero {
+  position: relative;
+  overflow: visible !important;
+  padding-top: 54px !important;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    radial-gradient(circle at 82% 22%, color-mix(in srgb, var(--user-team-primary) 14%, transparent), transparent 28%),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+  box-shadow: var(--rr-phase3-inset), var(--rr-phase3-shadow) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-league-standings .standings-header::before {
+  content: 'ARENA STANDINGS BOARD';
+}
+
+app-point-leaders .point-leaders-header::before {
+  content: 'LEAGUE STAT NETWORK';
+}
+
+app-playoff-bracket .playoff-hero::before {
+  content: 'ROAD TO THE RINKRAT CUP';
+}
+
+app-league-standings .standings-header::before,
+app-point-leaders .point-leaders-header::before,
+app-playoff-bracket .playoff-hero::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding-inline: 18px;
+  border-bottom: 3px solid var(--border-strong);
+  background:
+    linear-gradient(90deg, var(--user-team-primary), var(--user-team-secondary) 47%, var(--rr-phase3-board) 47%);
+  color: var(--user-team-on-primary);
+  font-family: var(--rr-font-micro);
+  font-size: .62rem;
+  letter-spacing: .1em;
+}
+
+app-league-standings .standings-header :is(h1, p, .eyebrow),
+app-point-leaders .point-leaders-header :is(h1, p, .eyebrow),
+app-playoff-bracket .playoff-hero :is(h1, p, .eyebrow) {
+  color: #fff !important;
+}
+
+app-league-standings .league-summary-grid,
+app-point-leaders .leader-summary-grid,
+app-playoff-bracket .format-grid {
+  gap: 8px;
+  border: 3px solid var(--rr-phase3-steel);
+  background: var(--rr-phase3-board) !important;
+  box-shadow: var(--rr-phase3-shadow);
+}
+
+app-league-standings .league-summary-grid article,
+app-point-leaders .leader-summary-grid article,
+app-playoff-bracket .format-grid article {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff;
+}
+
+app-league-standings .league-summary-grid span,
+app-point-leaders .leader-summary-grid span,
+app-playoff-bracket .format-grid span {
+  color: #a8b9cc !important;
+  font-family: var(--rr-font-micro);
+}
+
+app-league-standings .league-summary-grid strong,
+app-point-leaders .leader-summary-grid strong,
+app-playoff-bracket .format-grid strong {
+  color: #fff !important;
+  font-family: var(--rr-font-display);
+}
+
+app-league-standings .standings-card,
+app-point-leaders .leaderboard-card,
+app-playoff-bracket :is(.bracket-board, .placements-card, .champion-card) {
+  position: relative;
+  border: 3px solid var(--border-strong) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 94%, transparent), var(--surface-1)) !important;
+  box-shadow: var(--rr-phase3-shadow) !important;
+}
+
+app-league-standings .standings-card::before {
+  content: 'LEAGUE TABLE';
+}
+
+app-point-leaders .leaderboard-card::before {
+  content: 'SCORING LEADERS';
+}
+
+app-playoff-bracket .bracket-board::before {
+  content: 'PLAYOFF BRACKET';
+}
+
+app-league-standings .standings-card::before,
+app-point-leaders .leaderboard-card::before,
+app-playoff-bracket .bracket-board::before {
+  position: absolute;
+  top: -13px;
+  left: 20px;
+  padding: 4px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .54rem;
+  letter-spacing: .08em;
+}
+
+app-league-standings .standings-table {
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board) !important;
+}
+
+app-league-standings .standings-table thead th {
+  border-bottom: 3px solid var(--user-team-primary) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff !important;
+  font-family: var(--rr-font-micro);
+  font-size: .56rem;
+}
+
+app-league-standings .standings-table tbody tr {
+  background: color-mix(in srgb, var(--rr-phase3-board-raised) 94%, transparent);
+  color: #fff;
+}
+
+app-league-standings .standings-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--rr-phase3-board) 92%, #1b2f43);
+}
+
+app-league-standings .standings-table tbody tr:hover {
+  background: color-mix(in srgb, var(--user-team-primary) 14%, var(--rr-phase3-board-raised));
+}
+
+app-league-standings .standings-table td {
+  border-bottom-color: color-mix(in srgb, var(--rr-phase3-steel) 58%, transparent) !important;
+  color: #dbe5ef !important;
+}
+
+app-league-standings .first-place-row {
+  box-shadow: inset 5px 0 0 var(--rr-phase3-gold);
+}
+
+app-league-standings .first-place-row .rank-pill::before {
+  content: '★ ';
+  color: var(--rr-phase3-gold);
+}
+
+app-league-standings .playoff-cut-line td {
+  border-bottom: 4px dashed var(--rr-phase3-red) !important;
+}
+
+app-point-leaders .leader-row {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.2);
+}
+
+app-point-leaders .leader-row :is(strong, b) {
+  color: #fff !important;
+}
+
+app-point-leaders .leader-row :is(span, small) {
+  color: #aebed0;
+}
+
+app-point-leaders .top-three-row {
+  border-color: var(--rr-phase3-gold) !important;
+  background:
+    linear-gradient(90deg, rgba(216,173,75,.12), transparent 45%),
+    var(--rr-phase3-board-raised) !important;
+}
+
+app-playoff-bracket .round-column {
+  border: 3px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board) !important;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.28);
+}
+
+app-playoff-bracket .round-header {
+  border-bottom: 3px solid var(--user-team-primary) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff !important;
+  font-family: var(--rr-font-display);
+}
+
+app-playoff-bracket .bracket-matchup,
+app-playoff-bracket .seed-card,
+app-playoff-bracket .placement-seed-card {
+  border: 2px solid var(--rr-phase3-steel) !important;
+  background: var(--rr-phase3-board-raised) !important;
+  color: #fff;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.2) !important;
+}
+
+app-playoff-bracket .winner-team {
+  border-color: var(--rr-phase3-gold) !important;
+  background:
+    linear-gradient(90deg, rgba(216,173,75,.16), transparent 55%),
+    var(--rr-phase3-board-raised) !important;
+}
+
+app-playoff-bracket .champion-card {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(216,173,75,.18), transparent 35%),
+    var(--rr-phase3-board) !important;
+  color: #fff;
+}
+
+app-playoff-bracket .champion-card::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: 8px;
+  width: 112px;
+  height: 112px;
+  background: url('/assets/profile-icons/misc-hockey/championship-cup.webp') center / contain no-repeat;
+  opacity: .18;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------
+   MASCOT STATES, MOVEMENT FEEDBACK, CHALLENGES
+   ------------------------------------------------------------------------- */
+
+.page-loading {
+  position: relative;
+  min-height: 190px;
+  display: grid;
+  place-items: end center;
+  padding: 112px 20px 24px !important;
+  border: 3px solid var(--border-strong);
+  background:
+    url('/assets/branding/rinkrat-mascot-crop.png') center 18px / 78px 78px no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 94%, transparent), var(--surface-1));
+  box-shadow: var(--rr-phase3-shadow);
+  color: var(--text-primary) !important;
+  font-family: var(--rr-font-display);
+  text-align: center;
+  image-rendering: pixelated;
+}
+
+.page-loading::before {
+  content: 'LOADING LINEUP';
+  position: absolute;
+  top: 95px;
+  left: 50%;
+  translate: -50% 0;
+  color: var(--text-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: .55rem;
+  letter-spacing: .08em;
+}
+
+.page-loading::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 13px;
+  width: 96px;
+  height: 5px;
+  translate: -50% 0;
+  background: repeating-linear-gradient(90deg,
+    var(--user-team-primary) 0 12px,
+    var(--user-team-secondary) 12px 24px,
+    var(--user-team-tertiary) 24px 36px,
+    transparent 36px 43px);
+  animation: rrPhase3Ticker .85s steps(4, end) infinite;
+}
+
+:is(
+  .empty-state-card,
+  .transaction-empty-state,
+  .empty-card,
+  .empty-copy,
+  .empty-leaderboard,
+  .empty-round,
+  .empty-cycle-card,
+  .empty-impact-message
+) {
+  position: relative;
+  min-height: 96px;
+  padding: 24px 90px 24px 22px !important;
+  border: 2px dashed var(--border-strong) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--user-team-primary) 5%, transparent), transparent),
+    var(--surface-2) !important;
+}
+
+:is(
+  .empty-state-card,
+  .transaction-empty-state,
+  .empty-card,
+  .empty-copy,
+  .empty-leaderboard,
+  .empty-round,
+  .empty-cycle-card,
+  .empty-impact-message
+)::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  width: 68px;
+  height: 68px;
+  background: url('/assets/branding/rinkrat-headshot.png') center / contain no-repeat;
+  opacity: .23;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+:is(.success-card, .success-message, .success-note, .cycle-complete-success) {
+  position: relative;
+  overflow: hidden;
+}
+
+:is(.success-card, .success-message, .success-note, .cycle-complete-success)::after {
+  content: '●';
+  position: absolute;
+  right: 16px;
+  bottom: 4px;
+  color: #0c1219;
+  font-size: 1.2rem;
+  text-shadow: 0 1px 0 rgba(255,255,255,.12);
+  animation: rrPhase3PuckSlide 1.45s steps(7, end) both;
+  pointer-events: none;
+}
+
+app-account-settings .achievement-grid article {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid var(--border-strong) !important;
+  background: var(--surface-1) !important;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.24) !important;
+  clip-path: var(--rr-phase3-cut);
+}
+
+app-account-settings .achievement-grid article::before {
+  content: 'CHALLENGE';
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 3px 7px;
+  background: var(--rr-phase3-board);
+  color: #fff;
+  font-family: var(--rr-font-micro);
+  font-size: .43rem;
+}
+
+app-account-settings .achievement-grid article.unlocked {
+  border-color: var(--rr-phase3-gold) !important;
+  background:
+    radial-gradient(circle at 16% 24%, rgba(216,173,75,.17), transparent 25%),
+    var(--surface-1) !important;
+  animation: rrPhase3UnlockPop 480ms steps(5, end) both;
+}
+
+app-account-settings .achievement-grid article.unlocked::before {
+  content: 'UNLOCKED';
+  background: #6f5120;
+  color: #ffe49a;
+}
+
+app-account-settings .achievement-grid article.unlocked::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 60px;
+  height: 60px;
+  background: url('/assets/profile-icons/misc-hockey/championship-cup.webp') center / contain no-repeat;
+  opacity: .16;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+app-account-settings .team-variant-card:not(.variant-locked) {
+  position: relative;
+}
+
+app-account-settings .team-variant-card:not(.variant-locked)::after {
+  content: '✓';
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #7bd59d;
+  background: #153b28;
+  color: #9ef1bd;
+  font-family: var(--rr-font-micro);
+  font-size: .62rem;
+}
+
+/* -------------------------------------------------------------------------
+   LIGHT ICE safeguards for Phase 3 dark identity panels
+   ------------------------------------------------------------------------- */
+
+html[data-background-theme='light-ice'] app-team-settings :is(
+  .team-hero-card,
+  .quick-actions-card,
+  .transaction-ledger-card,
+  .roster-section,
+  .fantasy-player-card,
+  .bench-roster-card,
+  .ir-slot-card
+),
+html[data-background-theme='light-ice'] app-free-agents :is(
+  .asset-row,
+  .waiver-row,
+  .decision-asset-card,
+  .move-comparison-panel
+),
+html[data-background-theme='light-ice'] app-league-standings :is(.standings-card),
+html[data-background-theme='light-ice'] app-point-leaders :is(.leaderboard-card),
+html[data-background-theme='light-ice'] app-playoff-bracket :is(.bracket-board, .placements-card) {
+  color: var(--text-primary);
+}
+
+html[data-background-theme='light-ice'] app-team-settings :is(
+  .team-hero-card,
+  .quick-actions-card,
+  .transaction-ledger-card,
+  .roster-section,
+  .fantasy-player-card,
+  .bench-roster-card,
+  .ir-slot-card
+),
+html[data-background-theme='light-ice'] app-free-agents :is(
+  .asset-row,
+  .waiver-row,
+  .decision-asset-card,
+  .move-comparison-panel
+),
+html[data-background-theme='light-ice'] app-league-standings .standings-card,
+html[data-background-theme='light-ice'] app-point-leaders .leaderboard-card,
+html[data-background-theme='light-ice'] app-playoff-bracket :is(.bracket-board, .placements-card) {
+  background-color: var(--surface-1) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-card :is(strong, b),
+html[data-background-theme='light-ice'] app-team-settings .bench-roster-card :is(strong, b),
+html[data-background-theme='light-ice'] app-free-agents .asset-row :is(strong, b),
+html[data-background-theme='light-ice'] app-free-agents .decision-asset-card :is(strong, b) {
+  color: var(--text-primary) !important;
+}
+
+html[data-background-theme='light-ice'] app-team-settings .fantasy-player-card :is(span, em, small),
+html[data-background-theme='light-ice'] app-team-settings .bench-roster-card :is(span, em, small),
+html[data-background-theme='light-ice'] app-free-agents .asset-row :is(span, em, small),
+html[data-background-theme='light-ice'] app-free-agents .decision-asset-card :is(span, em, small) {
+  color: var(--text-secondary) !important;
+}
+
+/* -------------------------------------------------------------------------
+   Responsive refinement
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  app-team-settings .team-stat-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  app-team-settings .team-stat-bar article:nth-child(3) {
+    border-right: 0;
+  }
+
+  app-team-settings .team-stat-bar article:nth-child(-n+3) {
+    border-bottom: 2px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  }
+
+  app-free-agents .free-agent-hero::after {
+    opacity: .09;
+  }
+}
+
+@media (max-width: 720px) {
+  app-team-settings .team-page,
+  app-free-agents .free-agents-page,
+  app-cycle-one .cycle-page,
+  app-cycle-matchup-overview .matchup-overview-page,
+  app-league-standings .standings-page,
+  app-point-leaders .point-leaders-page,
+  app-playoff-bracket .playoff-page {
+    width: calc(100% + 12px) !important;
+    max-width: none !important;
+    margin-inline: -6px !important;
+  }
+
+  app-team-settings .team-hero-card,
+  app-free-agents .free-agent-hero,
+  app-cycle-one .cycle-header,
+  app-cycle-matchup-overview .matchup-overview-header,
+  app-league-standings .standings-header,
+  app-point-leaders .point-leaders-header,
+  app-playoff-bracket .playoff-hero {
+    padding: 50px 14px 16px !important;
+  }
+
+  app-team-settings .team-hero-card::before,
+  app-free-agents .free-agent-hero::before,
+  app-cycle-one .cycle-header::before,
+  app-cycle-matchup-overview .matchup-overview-header::before,
+  app-league-standings .standings-header::before,
+  app-point-leaders .point-leaders-header::before,
+  app-playoff-bracket .playoff-hero::before {
+    padding-inline: 12px;
+    font-size: .5rem;
+  }
+
+  app-team-settings .team-hero-card::after,
+  app-free-agents .free-agent-hero::after {
+    width: 70px;
+    height: 70px;
+  }
+
+  app-team-settings .team-stat-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  app-team-settings .team-stat-bar article {
+    border-right: 2px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  }
+
+  app-team-settings .team-stat-bar article:nth-child(even) {
+    border-right: 0;
+  }
+
+  app-team-settings .team-stat-bar article:nth-last-child(-n+2) {
+    border-bottom: 0;
+  }
+
+  app-team-settings .roster-section,
+  app-free-agents :is(.free-agent-list-card, .waiver-queue-card, .move-comparison-panel),
+  app-league-standings .standings-card,
+  app-point-leaders .leaderboard-card,
+  app-playoff-bracket :is(.bracket-board, .placements-card) {
+    padding-inline: 10px !important;
+  }
+
+  app-cycle-one .team-summary-row,
+  app-cycle-one .team-matchup-panel,
+  app-cycle-matchup-overview .overview-team-card {
+    clip-path: none;
+  }
+
+  app-league-standings .standings-table-wrap {
+    border: 2px solid var(--rr-phase3-steel);
+    background: var(--rr-phase3-board);
+  }
+
+  :is(
+    .empty-state-card,
+    .transaction-empty-state,
+    .empty-card,
+    .empty-copy,
+    .empty-leaderboard,
+    .empty-round,
+    .empty-cycle-card,
+    .empty-impact-message
+  ) {
+    padding-right: 66px !important;
+  }
+
+  :is(
+    .empty-state-card,
+    .transaction-empty-state,
+    .empty-card,
+    .empty-copy,
+    .empty-leaderboard,
+    .empty-round,
+    .empty-cycle-card,
+    .empty-impact-message
+  )::after {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (max-width: 480px) {
+  app-team-settings .manager-identity {
+    padding: 10px;
+  }
+
+  app-team-settings .team-stat-bar article {
+    min-height: 70px;
+  }
+
+  app-free-agents .free-agent-list-card,
+  app-free-agents .waiver-queue-card {
+    padding-top: 42px !important;
+  }
+
+  app-cycle-one .matchup-scoreboard::before,
+  app-cycle-one .mobile-matchup-scorebar::before {
+    font-size: .43rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loading::after,
+  app-free-agents .pending-move-row::after,
+  :is(.success-card, .success-message, .success-note, .cycle-complete-success)::after,
+  app-cycle-one .current-score-cell.score-change-active::after,
+  app-account-settings .achievement-grid article.unlocked,
+  app-cycle-one .matchup-scoreboard::after,
+  app-cycle-one .mobile-matchup-scorebar::after {
+    animation: none !important;
+  }
+}
