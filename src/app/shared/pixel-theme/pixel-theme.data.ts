@@ -440,7 +440,7 @@ function special(
 }
 
 function archivedLogo(fileName: string): string {
-  return `https://assets.nhle.com/logos/nhl/svg/${fileName}`;
+  return `/assets/team-identity-logos/${fileName}`;
 }
 
 function buildTheme(
@@ -549,7 +549,8 @@ export function hexToRgba(hexColor: string, alpha: number): string {
 }
 
 export function getNhlLogoUrl(abbreviation: string): string {
-  return `https://assets.nhle.com/logos/nhl/svg/${abbreviation}_light.svg`;
+  const normalizedAbbreviation = abbreviation.trim().toUpperCase();
+  return `/assets/team-identity-logos/${normalizedAbbreviation}_light.svg`;
 }
 
 export function getTeamIdentityVariants(

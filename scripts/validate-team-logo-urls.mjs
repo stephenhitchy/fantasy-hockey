@@ -1,107 +1,70 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const sourcePath = resolve(
   process.cwd(),
   'src/app/shared/pixel-theme/pixel-theme.data.ts',
 );
+const assetDirectory = resolve(
+  process.cwd(),
+  'public/assets/team-identity-logos',
+);
 const source = await readFile(sourcePath, 'utf8');
 
-const forbiddenHelpers = ['historicalLogo(', 'alternateLogo(', 'commonsFile('];
-const staleHelper = forbiddenHelpers.find((helper) => source.includes(helper));
-if (staleHelper) {
-  console.error(`Unsupported guessed logo helper is still present: ${staleHelper}`);
+const remoteArchiveHelper = /function archivedLogo\([^)]*\)[\s\S]*?assets\.nhle\.com/;
+const remoteCurrentHelper = /function getNhlLogoUrl\([^)]*\)[\s\S]*?assets\.nhle\.com/;
+if (remoteArchiveHelper.test(source) || remoteCurrentHelper.test(source)) {
+  console.error('Team identity helpers still point directly at remote NHL logo URLs.');
   process.exit(1);
 }
 
-const teamAbbreviations = [
+const currentTeamFiles = [
   ...source.matchAll(/\bteam\('([A-Z]{3})',/g),
-].map((match) => match[1]);
+].map((match) => `${match[1]}_light.svg`);
 const archiveFiles = [
   ...source.matchAll(/\barchivedLogo\('([^']+)'\)/g),
 ].map((match) => match[1]);
+const expectedFiles = [...new Set([...currentTeamFiles, ...archiveFiles])].sort();
 
-if (teamAbbreviations.length !== 32) {
-  console.error(`Expected 32 current NHL team entries, found ${teamAbbreviations.length}.`);
+if (currentTeamFiles.length !== 32) {
+  console.error(`Expected 32 current NHL team entries, found ${currentTeamFiles.length}.`);
   process.exit(1);
-}
-
-const baseUrl = 'https://assets.nhle.com/logos/nhl/svg';
-const urls = [
-  ...teamAbbreviations.map((abbreviation) => `${baseUrl}/${abbreviation}_light.svg`),
-  ...archiveFiles.map((fileName) => `${baseUrl}/${fileName}`),
-];
-const uniqueUrls = [...new Set(urls)].sort();
-
-const sleep = (milliseconds) =>
-  new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
-
-async function verifyUrl(url) {
-  let lastError = 'Unknown request failure';
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'image/svg+xml,image/*;q=0.9,*/*;q=0.8',
-          Range: 'bytes=0-0',
-          'User-Agent': 'RinkRat-Fantasy-Team-Logo-Validator/1.0',
-        },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(15000),
-      });
-
-      await response.body?.cancel();
-
-      if (response.ok || response.status === 206) {
-        return null;
-      }
-
-      lastError = `HTTP ${response.status}`;
-      if (response.status !== 429 && response.status < 500) {
-        break;
-      }
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-
-    await sleep(500 * attempt);
-  }
-
-  return { url, error: lastError };
 }
 
 const failures = [];
-const concurrency = 6;
-let nextIndex = 0;
+for (const fileName of expectedFiles) {
+  const filePath = resolve(assetDirectory, fileName);
+  try {
+    const fileStats = await stat(filePath);
+    const content = await readFile(filePath, 'utf8');
+    const beginning = content.trimStart().slice(0, 500).toLowerCase();
 
-async function worker() {
-  while (nextIndex < uniqueUrls.length) {
-    const index = nextIndex;
-    nextIndex += 1;
-    const url = uniqueUrls[index];
-    const result = await verifyUrl(url);
-
-    if (result) {
-      failures.push(result);
-      console.error(`✗ ${result.error} ${url}`);
-    } else {
-      console.log(`✓ ${url}`);
+    if (!fileStats.isFile() || fileStats.size < 100 || !beginning.includes('<svg')) {
+      failures.push(`${fileName}: missing or invalid SVG content`);
+      continue;
     }
+
+    console.log(`✓ ${fileName}`);
+  } catch (error) {
+    failures.push(
+      `${fileName}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
-await Promise.all(Array.from({ length: concurrency }, () => worker()));
-
 console.log(
-  `\nChecked ${uniqueUrls.length} unique logo URLs ` +
-    `(${teamAbbreviations.length} current team crests and ${new Set(archiveFiles).size} archived/secondary assets).`,
+  `\nChecked ${expectedFiles.length} local team identity logo assets ` +
+    `(${currentTeamFiles.length} current crests and ${new Set(archiveFiles).size} archived/secondary assets).`,
 );
 
 if (failures.length > 0) {
-  console.error(`\n${failures.length} logo URL(s) failed validation.`);
+  for (const failure of failures) {
+    console.error(`✗ ${failure}`);
+  }
+  console.error(
+    '\nRun "npm run sync:team-identity-logos" while online, then validate again.',
+  );
   process.exit(1);
 }
 
-console.log('All team identity logo URLs are reachable.');
+console.log('All favorite-team identity logos are present as local SVG assets.');

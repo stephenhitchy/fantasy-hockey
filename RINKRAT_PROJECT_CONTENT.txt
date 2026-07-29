@@ -637,3 +637,10 @@ DRAFT START, AUTO-DRAFT, AND LEGACY MEMBERSHIP FIX (JULY 2026)
 LEAGUE DELETION FEATURE
 -----------------------
 Commissioners can permanently delete a league from a collapsed Danger Zone on Current League. The full league name must be typed exactly. An authenticated Cloud Function verifies ownership and recursively removes the league tree plus related invite and injury-email records. Direct client deletion of league roots is blocked by Firestore rules.
+
+
+FAVORITE-TEAM LOGO RELIABILITY
+- Favorite-team current and historical logo assets are now synchronized from the official NHL logo catalog into public/assets/team-identity-logos.
+- npm start and npm run build automatically prepare missing assets.
+- Runtime identity cards use local SVG paths, removing broken guessed remote filenames and hot-link dependence.
+- npm run validate:team-logos verifies all 32 current crests plus every archived/secondary identity asset.

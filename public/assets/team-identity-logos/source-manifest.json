@@ -1,0 +1,439 @@
+{
+  "generatedAt": "2026-07-29T16:24:53.556Z",
+  "catalogUrl": "https://records.nhl.com/site/api/franchise?include=teams.active&include=teams.commonName&include=teams.fullName&include=teams.id&include=teams.logos&include=teams.triCode",
+  "assetCount": 72,
+  "assets": [
+    {
+      "requestedFile": "ANA_19931994-19951996_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/ANA_19931994-19951996_light.svg",
+      "resolvedFileName": "ANA_19931994-19951996_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "ANA_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/ANA_light.svg",
+      "resolvedFileName": "ANA_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "BOS_19241925-19251926_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/BOS_19241925-19251926_light.svg",
+      "resolvedFileName": "BOS_19241925-19251926_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "BOS_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/BOS_light.svg",
+      "resolvedFileName": "BOS_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "BUF_19701971-19951996_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/BUF_19701971-19951996_light.svg",
+      "resolvedFileName": "BUF_19701971-19951996_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "BUF_19961997-19981999_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/BUF_19961997-19981999_light.svg",
+      "resolvedFileName": "BUF_19961997-19981999_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "BUF_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/BUF_light.svg",
+      "resolvedFileName": "BUF_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CAR_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CAR_light.svg",
+      "resolvedFileName": "CAR_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CBJ_20002001-20062007_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CBJ_20002001-20062007_light.svg",
+      "resolvedFileName": "CBJ_20002001-20062007_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CBJ_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CBJ_light.svg",
+      "resolvedFileName": "CBJ_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CGS_19701971-19731974_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CGS_19701971-19731974_light.svg",
+      "resolvedFileName": "CGS_19701971-19731974_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CGY_19801981-19931994_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CGY_19801981-19931994_light.svg",
+      "resolvedFileName": "CGY_19801981-19931994_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CGY_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CGY_light.svg",
+      "resolvedFileName": "CGY_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CHI_19261927-19561957_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CHI_19261927-19561957_light.svg",
+      "resolvedFileName": "CHI_19261927-19561957_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CHI_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CHI_light.svg",
+      "resolvedFileName": "CHI_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "CLR_19761977-19811982_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/CLR_19761977-19811982_light.svg",
+      "resolvedFileName": "CLR_19761977-19811982_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "COL_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/COL_light.svg",
+      "resolvedFileName": "COL_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "DAL_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/DAL_light.svg",
+      "resolvedFileName": "DAL_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "DCG_19261927-19291930_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/DCG_19261927-19291930_light.svg",
+      "resolvedFileName": "DCG_19261927-19291930_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "DET_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/DET_light.svg",
+      "resolvedFileName": "DET_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "EDM_19791980-19851986_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/EDM_19791980-19851986_light.svg",
+      "resolvedFileName": "EDM_19791980-19851986_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "EDM_19971998-20102011_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/EDM_19971998-20102011_light.svg",
+      "resolvedFileName": "EDM_19971998-20102011_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "EDM_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/EDM_light.svg",
+      "resolvedFileName": "EDM_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "FLA_19992000-20152016_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/FLA_19992000-20152016_light.svg",
+      "resolvedFileName": "FLA_19992000-20152016_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "FLA_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/FLA_light.svg",
+      "resolvedFileName": "FLA_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "HFD_19791980-19911992_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/HFD_19791980-19911992_light.svg",
+      "resolvedFileName": "HFD_19791980-19911992_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "KCS_19741975-19761977_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/KCS_19741975-19761977_light.svg",
+      "resolvedFileName": "KCS_19741975-19761977_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "LAK_19671968-19741975_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/LAK_19671968-19741975_light.svg",
+      "resolvedFileName": "LAK_19671968-19741975_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "LAK_19881989-19971998_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/LAK_19881989-19971998_light.svg",
+      "resolvedFileName": "LAK_19881989-19971998_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "LAK_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/LAK_light.svg",
+      "resolvedFileName": "LAK_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "MIN_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/MIN_light.svg",
+      "resolvedFileName": "MIN_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "MNS_19671968-19841985_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/MNS_19671968-19841985_light.svg",
+      "resolvedFileName": "MNS_19671968-19841985_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "MTL_19191920-19201921_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/MTL_19191920-19201921_light.svg",
+      "resolvedFileName": "MTL_19191920-19201921_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "MTL_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/MTL_light.svg",
+      "resolvedFileName": "MTL_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NJD_19821983-19911992_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NJD_19821983-19911992_light.svg",
+      "resolvedFileName": "NJD_19821983-19911992_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NJD_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NJD_light.svg",
+      "resolvedFileName": "NJD_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NSH_19981999-20102011_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NSH_19981999-20102011_light.svg",
+      "resolvedFileName": "NSH_19981999-20102011_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NSH_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NSH_light.svg",
+      "resolvedFileName": "NSH_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NYI_19721973-19941995_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NYI_19721973-19941995_light.svg",
+      "resolvedFileName": "NYI_19721973-19941995_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NYI_19951996-19961997_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NYI_19951996-19961997_light.svg",
+      "resolvedFileName": "NYI_19951996-19961997_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NYI_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NYI_light.svg",
+      "resolvedFileName": "NYI_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NYR_19261927-19341935_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NYR_19261927-19341935_light.svg",
+      "resolvedFileName": "NYR_19261927-19341935_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "NYR_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/NYR_light.svg",
+      "resolvedFileName": "NYR_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "OTT_19921993-19961997_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/OTT_19921993-19961997_light.svg",
+      "resolvedFileName": "OTT_19921993-19961997_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "OTT_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg",
+      "resolvedFileName": "OTT_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "PHI_19671968-19981999_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/PHI_19671968-19981999_light.svg",
+      "resolvedFileName": "PHI_19671968-19981999_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "PHI_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/PHI_light.svg",
+      "resolvedFileName": "PHI_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "PIT_19681969-19711972_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/PIT_19681969-19711972_light.svg",
+      "resolvedFileName": "PIT_19681969-19711972_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "PIT_19921993-19981999_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/PIT_19921993-19981999_light.svg",
+      "resolvedFileName": "PIT_19921993-19981999_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "PIT_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/PIT_light.svg",
+      "resolvedFileName": "PIT_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "QUE_19791980-19941995_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/QUE_19791980-19941995_light.svg",
+      "resolvedFileName": "QUE_19791980-19941995_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "SEA_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/SEA_light.svg",
+      "resolvedFileName": "SEA_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "SJS_19911992-19971998_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/SJS_19911992-19971998_light.svg",
+      "resolvedFileName": "SJS_19911992-19971998_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "SJS_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/SJS_light.svg",
+      "resolvedFileName": "SJS_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "STL_19891990-19971998_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/STL_19891990-19971998_light.svg",
+      "resolvedFileName": "STL_19891990-19971998_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "STL_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/STL_light.svg",
+      "resolvedFileName": "STL_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "TAN_19171918-19181919_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/TAN_19171918-19181919_light.svg",
+      "resolvedFileName": "TAN_19171918-19181919_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "TBL_19921993-20002001_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/TBL_19921993-20002001_light.svg",
+      "resolvedFileName": "TBL_19921993-20002001_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "TBL_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/TBL_light.svg",
+      "resolvedFileName": "TBL_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "TOR_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/TOR_light.svg",
+      "resolvedFileName": "TOR_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "TSP_19191920-19211922_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/TSP_19191920-19211922_light.svg",
+      "resolvedFileName": "TSP_19191920-19211922_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "UTA_20242025-20242025_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/UTA_20242025-20242025_light.svg",
+      "resolvedFileName": "UTA_20242025-20242025_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "UTA_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/UTA_light.svg",
+      "resolvedFileName": "UTA_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "VAN_19781979-19911992_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/VAN_19781979-19911992_light.svg",
+      "resolvedFileName": "VAN_19781979-19911992_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "VAN_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/VAN_light.svg",
+      "resolvedFileName": "VAN_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "VGK_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/VGK_light.svg",
+      "resolvedFileName": "VGK_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WIN_19791980-19891990_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WIN_19791980-19891990_light.svg",
+      "resolvedFileName": "WIN_19791980-19891990_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WPG_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WPG_light.svg",
+      "resolvedFileName": "WPG_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WSH_19741975-19941995_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WSH_19741975-19941995_light.svg",
+      "resolvedFileName": "WSH_19741975-19941995_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WSH_19951996-20062007_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WSH_19951996-20062007_light.svg",
+      "resolvedFileName": "WSH_19951996-20062007_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WSH_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WSH_light.svg",
+      "resolvedFileName": "WSH_light.svg",
+      "resolution": "exact"
+    },
+    {
+      "requestedFile": "WSH_secondary_light.svg",
+      "sourceUrl": "https://assets.nhle.com/logos/nhl/svg/WSH_secondary_light.svg",
+      "resolvedFileName": "WSH_secondary_light.svg",
+      "resolution": "exact"
+    }
+  ]
+}
