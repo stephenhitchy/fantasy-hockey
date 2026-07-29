@@ -54,10 +54,18 @@
   </section>
 
   <nav class="position-jump-nav" aria-label="Jump to a position scoring section">
-    <a href="#forward-scoring"><span>F</span> Forwards</a>
-    <a href="#defense-scoring"><span>D</span> Defensemen</a>
-    <a href="#goalie-scoring"><span>G</span> Goalie Unit</a>
-    <a href="#worked-examples"><span>?</span> Examples</a>
+    <button type="button" aria-controls="forward-scoring" (click)="scrollToSection('forward-scoring')">
+      <span>F</span> Forwards
+    </button>
+    <button type="button" aria-controls="defense-scoring" (click)="scrollToSection('defense-scoring')">
+      <span>D</span> Defensemen
+    </button>
+    <button type="button" aria-controls="goalie-scoring" (click)="scrollToSection('goalie-scoring')">
+      <span>G</span> Goalie Unit
+    </button>
+    <button type="button" aria-controls="worked-examples" (click)="scrollToSection('worked-examples')">
+      <span>?</span> Examples
+    </button>
   </nav>
 
   <section id="forward-scoring" class="position-section forward-section" aria-labelledby="forward-title">

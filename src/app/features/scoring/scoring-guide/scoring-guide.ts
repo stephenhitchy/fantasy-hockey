@@ -1,3 +1,4 @@
+import { ViewportScroller } from '@angular/common';
 import { Component, computed, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
@@ -181,12 +182,20 @@ export class ScoringGuide {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly telemetry: TelemetryService,
+    private readonly viewportScroller: ViewportScroller,
   ) {
     this.telemetry.track('scoring_guide_opened', {
       source: this.route.snapshot.paramMap.has('leagueId') ? 'league' : 'global',
     });
 
     void this.loadLeagueRules();
+  }
+
+  scrollToSection(sectionId: string): void {
+    // These controls only move within the current scoring guide. Using the
+    // viewport scroller avoids a URL navigation and therefore does not rerun
+    // authentication or league route guards.
+    this.viewportScroller.scrollToAnchor(sectionId);
   }
 
   printGuide(): void {

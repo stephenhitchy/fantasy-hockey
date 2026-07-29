@@ -96,7 +96,7 @@
 
 .hero-actions a,
 .hero-actions button,
-.position-jump-nav a,
+.position-jump-nav button,
 .training-scoring-link {
   min-height: 44px;
   display: inline-flex;
@@ -189,8 +189,10 @@
   backdrop-filter: blur(10px);
 }
 
-.position-jump-nav a {
+.position-jump-nav button {
+  width: 100%;
   gap: 9px;
+  appearance: none;
 }
 
 .position-jump-nav span {

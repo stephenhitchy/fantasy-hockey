@@ -1,0 +1,10 @@
+RINKRAT SCORING GUIDE POSITION BUTTON ROUTE FIX
+
+Problem
+- The Forward, Defensemen, Goalie Unit, and Examples controls used plain hash-link anchors.
+- In some app/route states those clicks were treated as navigation, reran route guards, and could return the manager to login.
+
+Fix
+- Replaced the four hash links with type=button controls.
+- Buttons now use Angular ViewportScroller to move to the requested section without changing routes.
+- Updated CSS so the controls retain the exact same appearance and responsive layout.
