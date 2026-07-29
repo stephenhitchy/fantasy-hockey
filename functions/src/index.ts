@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import {
   DocumentData,
   DocumentReference,
@@ -2149,6 +2150,383 @@ export const deleteLeague = onCall(
       deletedRelatedDocumentCount
     };
   }
+);
+
+
+interface AccountDeletionLeagueSummary {
+  leagueId: string;
+  leagueName: string;
+}
+
+interface AccountDeletionReadinessResult {
+  canDelete: boolean;
+  commissionerLeagues: AccountDeletionLeagueSummary[];
+  memberLeagueCount: number;
+  anonymizedLeagueCount: number;
+}
+
+interface DeleteMyAccountResult {
+  deleted: boolean;
+  anonymizedLeagueCount: number;
+  deletedDocumentCount: number;
+}
+
+const ACCOUNT_DELETION_RECENT_AUTH_SECONDS = 10 * 60;
+const DELETED_MANAGER_NAME = 'Deleted Manager';
+const DELETED_TEAM_NAME = 'Vacant Team';
+const DELETED_PROFILE_ICON_ID = 'hockey-bench-gear';
+
+function getLeagueIdFromNestedDocumentPath(path: string): string | null {
+  const pathParts = path.split('/');
+  const leaguesIndex = pathParts.indexOf('leagues');
+
+  if (leaguesIndex < 0 || pathParts.length <= leaguesIndex + 1) {
+    return null;
+  }
+
+  return pathParts[leaguesIndex + 1] || null;
+}
+
+async function getAccountDeletionReadinessForUser(
+  userId: string,
+): Promise<AccountDeletionReadinessResult> {
+  const [commissionerSnapshot, membershipSnapshot, teamSnapshot] = await Promise.all([
+    db.collection('leagues').where('commissionerId', '==', userId).get(),
+    db.collectionGroup('members').where('uid', '==', userId).get(),
+    db.collectionGroup('teams').where('ownerId', '==', userId).get(),
+  ]);
+
+  const commissionerLeagues = commissionerSnapshot.docs
+    .map((document) => ({
+      leagueId: document.id,
+      leagueName: asString(document.data()['name']) || 'Unnamed League',
+    }))
+    .sort((first, second) => first.leagueName.localeCompare(second.leagueName));
+  const commissionerLeagueIds = new Set(
+    commissionerLeagues.map((league) => league.leagueId),
+  );
+  const memberLeagueIds = new Set<string>();
+
+  for (const document of [...membershipSnapshot.docs, ...teamSnapshot.docs]) {
+    const leagueId = getLeagueIdFromNestedDocumentPath(document.ref.path);
+
+    if (leagueId) {
+      memberLeagueIds.add(leagueId);
+    }
+  }
+
+  for (const league of commissionerLeagues) {
+    memberLeagueIds.add(league.leagueId);
+  }
+
+  const anonymizedLeagueCount = [...memberLeagueIds]
+    .filter((leagueId) => !commissionerLeagueIds.has(leagueId))
+    .length;
+
+  return {
+    canDelete: commissionerLeagues.length === 0,
+    commissionerLeagues,
+    memberLeagueCount: memberLeagueIds.size,
+    anonymizedLeagueCount,
+  };
+}
+
+function requireRecentAuthentication(authToken: Record<string, unknown>): void {
+  const authTime = authToken['auth_time'];
+  const authTimeSeconds = typeof authTime === 'number'
+    ? authTime
+    : Number(authTime);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (
+    !Number.isFinite(authTimeSeconds) ||
+    nowSeconds - authTimeSeconds > ACCOUNT_DELETION_RECENT_AUTH_SECONDS
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'For your security, enter your password again before deleting your account.',
+      { reason: 'recent-authentication-required' },
+    );
+  }
+}
+
+async function deleteTopLevelDocumentsByField(
+  collectionName: string,
+  fieldName: string,
+  fieldValue: string,
+): Promise<number> {
+  let deletedCount = 0;
+
+  while (true) {
+    const snapshot = await db.collection(collectionName)
+      .where(fieldName, '==', fieldValue)
+      .limit(MAX_BATCH_WRITES)
+      .get();
+
+    if (snapshot.empty) {
+      return deletedCount;
+    }
+
+    const batch = db.batch();
+
+    for (const document of snapshot.docs) {
+      batch.delete(document.ref);
+    }
+
+    await batch.commit();
+    deletedCount += snapshot.size;
+  }
+}
+
+async function anonymizeDeletedAccountInLeague(
+  leagueId: string,
+  userId: string,
+): Promise<boolean> {
+  const leagueRef = db.doc(`leagues/${leagueId}`);
+  const memberRef = db.doc(`leagues/${leagueId}/members/${userId}`);
+  const teamRef = db.doc(`leagues/${leagueId}/teams/${userId}`);
+  const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+  const queueRef = db.doc(`leagues/${leagueId}/draft/current/queues/${userId}`);
+  const [leagueSnapshot, memberSnapshot, teamSnapshot, draftSnapshot] = await Promise.all([
+    leagueRef.get(),
+    memberRef.get(),
+    teamRef.get(),
+    draftRef.get(),
+  ]);
+
+  if (!leagueSnapshot.exists) {
+    return false;
+  }
+
+  if (asString((leagueSnapshot.data() ?? {})['commissionerId']) === userId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Delete or transfer every league you commission before deleting your account.',
+      { leagueId },
+    );
+  }
+
+  const batch = db.batch();
+  const accountDeletedAt = FieldValue.serverTimestamp();
+
+  if (memberSnapshot.exists) {
+    batch.set(
+      memberRef,
+      {
+        username: DELETED_MANAGER_NAME,
+        profileIconId: DELETED_PROFILE_ICON_ID,
+        accountDeleted: true,
+        accountDeletedAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
+  if (teamSnapshot.exists) {
+    batch.set(
+      teamRef,
+      {
+        teamName: DELETED_TEAM_NAME,
+        managerName: DELETED_MANAGER_NAME,
+        profileIconId: DELETED_PROFILE_ICON_ID,
+        accountDeleted: true,
+        accountDeletedAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
+  if (draftSnapshot.exists) {
+    const draftStatus = asString((draftSnapshot.data() ?? {})['status']);
+
+    if (draftStatus && draftStatus !== 'complete') {
+      batch.set(
+        queueRef,
+        {
+          ownerId: userId,
+          autoDraftEnabled: true,
+          autoDraftActivatedByTimeout: false,
+          accountDeleted: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  }
+
+  batch.set(
+    leagueRef,
+    {
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
+  return memberSnapshot.exists || teamSnapshot.exists;
+}
+
+export const getAccountDeletionReadiness = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    maxInstances: 10,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<AccountDeletionReadinessResult> => {
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before reviewing account deletion.',
+      );
+    }
+
+    return getAccountDeletionReadinessForUser(request.auth.uid);
+  },
+);
+
+export const deleteMyAccount = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    maxInstances: 3,
+    concurrency: 1,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<DeleteMyAccountResult> => {
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before deleting your account.',
+      );
+    }
+
+    requireRecentAuthentication(request.auth.token as Record<string, unknown>);
+
+    const data = asRecord(request.data);
+    const confirmationUsername = asString(data['confirmationUsername']);
+
+    if (!confirmationUsername || confirmationUsername.length > 40) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Type your full manager name before deleting your account.',
+      );
+    }
+
+    const userId = request.auth.uid;
+    const userRef = db.doc(`users/${userId}`);
+    const profileSnapshot = await userRef.get();
+
+    if (!profileSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Your RinkRat manager profile could not be found.',
+      );
+    }
+
+    const profile = profileSnapshot.data() ?? {};
+    const username = asString(profile['username']);
+
+    if (confirmationUsername !== username) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The manager name did not exactly match your saved profile.',
+        { reason: 'username-mismatch' },
+      );
+    }
+
+    const readiness = await getAccountDeletionReadinessForUser(userId);
+
+    if (!readiness.canDelete) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Delete each league you commission before deleting your account.',
+        {
+          reason: 'commissioner-leagues-exist',
+          commissionerLeagues: readiness.commissionerLeagues,
+        },
+      );
+    }
+
+    const [membershipSnapshot, teamSnapshot] = await Promise.all([
+      db.collectionGroup('members').where('uid', '==', userId).get(),
+      db.collectionGroup('teams').where('ownerId', '==', userId).get(),
+    ]);
+    const leagueIds = new Set<string>();
+
+    for (const document of [...membershipSnapshot.docs, ...teamSnapshot.docs]) {
+      const leagueId = getLeagueIdFromNestedDocumentPath(document.ref.path);
+
+      if (leagueId) {
+        leagueIds.add(leagueId);
+      }
+    }
+
+    let anonymizedLeagueCount = 0;
+
+    for (const leagueId of leagueIds) {
+      if (await anonymizeDeletedAccountInLeague(leagueId, userId)) {
+        anonymizedLeagueCount += 1;
+      }
+    }
+
+    let deletedDocumentCount = 0;
+    const userSnapshotBeforeDelete = await userRef.get();
+
+    if (userSnapshotBeforeDelete.exists) {
+      await db.recursiveDelete(userRef);
+      deletedDocumentCount += 1;
+    }
+
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'feedbackReports',
+      'userId',
+      userId,
+    );
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'clientErrorReports',
+      'userId',
+      userId,
+    );
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'injuryEmailQueue',
+      'ownerId',
+      userId,
+    );
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'emailNotificationLog',
+      'ownerId',
+      userId,
+    );
+
+    const rateLimitRef = db.doc(`observabilityRateLimits/${userId}`);
+    const rateLimitSnapshot = await rateLimitRef.get();
+
+    if (rateLimitSnapshot.exists) {
+      await rateLimitRef.delete();
+      deletedDocumentCount += 1;
+    }
+
+    await getAuth().deleteUser(userId);
+
+    console.info('RinkRat account permanently deleted.', {
+      userId,
+      anonymizedLeagueCount,
+      deletedDocumentCount,
+    });
+
+    return {
+      deleted: true,
+      anonymizedLeagueCount,
+      deletedDocumentCount,
+    };
+  },
 );
 
 

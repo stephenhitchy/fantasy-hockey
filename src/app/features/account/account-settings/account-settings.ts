@@ -5,6 +5,12 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
+import {
+  AccountDeletionReadiness,
+  deleteCurrentUserAccount,
+  getAccountDeletionReadiness,
+  reauthenticateCurrentUserWithPassword,
+} from '../../../core/auth/account-deletion.service';
 import { requestVerificationEmail } from '../../../core/notifications/email-notification.service';
 import { hasCompletedTrainingCamp } from '../../../core/onboarding/training-camp.service';
 import {
@@ -22,6 +28,7 @@ import {
   UserProfile,
 } from '../../../core/user/user.service';
 import { applyUserTheme } from '../../../core/user/user-theme.service';
+import { TelemetryService } from '../../../core/observability/telemetry.service';
 import {
   DEFAULT_TEAM_IDENTITY_VARIANT_ID,
   getNhlLogoUrl,
@@ -79,6 +86,11 @@ export class AccountSettings {
   readonly emailVerified = signal(false);
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
+  readonly deleteAccountPanelOpen = signal(false);
+  readonly loadingDeletionReadiness = signal(false);
+  readonly deletingAccount = signal(false);
+  readonly deletionReadiness = signal<AccountDeletionReadiness | null>(null);
+  readonly deletionErrorMessage = signal('');
   readonly unlockedIdentityRequirements = signal<
     Exclude<TeamIdentityUnlockRequirement, 'default'>[]
   >([]);
@@ -90,6 +102,9 @@ export class AccountSettings {
   defaultLandingPage: DefaultLandingPage = 'dashboard';
   injuryEmailEnabled = false;
   backgroundTheme: BackgroundTheme = 'rink-dark';
+  deleteConfirmationUsername = '';
+  deletePassword = '';
+  deleteAcknowledged = false;
 
   readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
   readonly backgroundOptions: { value: BackgroundTheme; title: string; description: string }[] = [
@@ -129,6 +144,9 @@ export class AccountSettings {
   );
 
   readonly trainingCampComplete = computed(() => hasCompletedTrainingCamp(this.profile()));
+  readonly accountDeletionBlocked = computed(
+    () => (this.deletionReadiness()?.commissionerLeagues.length ?? 0) > 0,
+  );
 
   readonly achievements = computed<AccountAchievement[]>(() => [
     this.buildAchievement('rat', 'first-line-change'),
@@ -137,7 +155,10 @@ export class AccountSettings {
     this.buildAchievement('league', 'crowded-schedule'),
   ]);
 
-  constructor(private router: Router) {
+  constructor(
+    private router: Router,
+    private telemetry: TelemetryService,
+  ) {
     void this.loadProfile();
   }
 
@@ -590,6 +611,138 @@ export class AccountSettings {
     return date && !Number.isNaN(date.getTime())
       ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date)
       : 'Founding manager';
+  }
+
+  async openDeleteAccountPanel(): Promise<void> {
+    this.telemetry.track('account_deletion_reviewed');
+    this.deleteAccountPanelOpen.set(true);
+    this.deleteConfirmationUsername = '';
+    this.deletePassword = '';
+    this.deleteAcknowledged = false;
+    this.deletionErrorMessage.set('');
+    await this.refreshAccountDeletionReadiness();
+  }
+
+  closeDeleteAccountPanel(): void {
+    if (this.deletingAccount()) {
+      return;
+    }
+
+    this.deleteAccountPanelOpen.set(false);
+    this.deleteConfirmationUsername = '';
+    this.deletePassword = '';
+    this.deleteAcknowledged = false;
+    this.deletionErrorMessage.set('');
+  }
+
+  async refreshAccountDeletionReadiness(): Promise<void> {
+    if (this.loadingDeletionReadiness()) {
+      return;
+    }
+
+    this.loadingDeletionReadiness.set(true);
+    this.deletionErrorMessage.set('');
+
+    try {
+      this.deletionReadiness.set(await getAccountDeletionReadiness());
+    } catch (error: unknown) {
+      this.deletionReadiness.set(null);
+      this.deletionErrorMessage.set(
+        this.getAccountDeletionErrorMessage(
+          error,
+          'Unable to review your leagues for account deletion.',
+        ),
+      );
+    } finally {
+      this.loadingDeletionReadiness.set(false);
+    }
+  }
+
+  canSubmitAccountDeletion(): boolean {
+    const profileUsername = this.profile()?.username ?? '';
+
+    return Boolean(
+      this.deletionReadiness()?.canDelete &&
+      this.deleteAcknowledged &&
+      this.deletePassword.length > 0 &&
+      this.deleteConfirmationUsername === profileUsername &&
+      !this.deletingAccount(),
+    );
+  }
+
+  async permanentlyDeleteAccount(): Promise<void> {
+    if (!this.canSubmitAccountDeletion()) {
+      return;
+    }
+
+    const confirmationUsername = this.deleteConfirmationUsername;
+    const password = this.deletePassword;
+    this.deletingAccount.set(true);
+    this.deletionErrorMessage.set('');
+    this.successMessage.set('');
+    this.errorMessage.set('');
+
+    try {
+      this.telemetry.track('account_deletion_started', {
+        member_league_count: this.deletionReadiness()?.memberLeagueCount ?? 0,
+      });
+      await reauthenticateCurrentUserWithPassword(password);
+      await deleteCurrentUserAccount(confirmationUsername);
+
+      try {
+        localStorage.removeItem('rinkrat:lastLeagueId');
+        localStorage.removeItem('rinkrat:userProfile');
+        sessionStorage.clear();
+      } catch {
+        // Storage can be unavailable in privacy modes. Account deletion does
+        // not depend on local browser storage being present.
+      }
+
+      await logoutUser().catch(() => undefined);
+      window.location.assign('/');
+    } catch (error: unknown) {
+      this.deletionErrorMessage.set(
+        this.getAccountDeletionErrorMessage(
+          error,
+          'Unable to delete your account. Nothing was deleted from this browser session.',
+        ),
+      );
+      this.deletePassword = '';
+      await this.refreshAccountDeletionReadiness();
+    } finally {
+      this.deletingAccount.set(false);
+    }
+  }
+
+  private getAccountDeletionErrorMessage(error: unknown, fallback: string): string {
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+    };
+    const code = typeof candidate?.code === 'string' ? candidate.code : '';
+    const rawMessage = typeof candidate?.message === 'string' ? candidate.message : '';
+
+    if (code.includes('auth/wrong-password') || code.includes('auth/invalid-credential')) {
+      return 'That password was not correct. Enter your current RinkRat password and try again.';
+    }
+
+    if (code.includes('auth/too-many-requests')) {
+      return 'Too many sign-in attempts were made. Wait a few minutes and try again.';
+    }
+
+    if (code.includes('auth/network-request-failed')) {
+      return 'The password could not be verified because the network connection was interrupted.';
+    }
+
+    if (rawMessage) {
+      return rawMessage
+        .replace(/^Firebase:\s*/i, '')
+        .replace(/\s*\([^)]*\)\.?$/, '')
+        .trim();
+    }
+
+    return fallback;
   }
 
   async signOut(): Promise<void> {

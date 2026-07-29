@@ -454,6 +454,147 @@
           </nav>
         </section>
       </div>
+
+      <section class="account-security-zone" aria-labelledby="account-security-title">
+        <div class="account-security-copy">
+          <span class="eyebrow">Account Security</span>
+          <h2 id="account-security-title">Permanent Account Deletion</h2>
+          <p>
+            This removes your login, manager profile, feedback, diagnostics, and email-alert data.
+            League history is protected so deleting an account cannot break another manager's season.
+          </p>
+        </div>
+
+        @if (!deleteAccountPanelOpen()) {
+          <button
+            type="button"
+            class="open-delete-account-button"
+            (click)="openDeleteAccountPanel()"
+          >
+            Review Account Deletion
+          </button>
+        } @else {
+          <div class="delete-account-checker">
+            <div class="delete-account-checker-heading">
+              <div>
+                <span class="eyebrow">Final Safety Check</span>
+                <h3>Review what will happen</h3>
+              </div>
+              <button
+                type="button"
+                class="close-delete-account-button"
+                (click)="closeDeleteAccountPanel()"
+                [disabled]="deletingAccount()"
+                aria-label="Close account deletion checker"
+              >
+                Close
+              </button>
+            </div>
+
+            @if (loadingDeletionReadiness()) {
+              <div class="delete-account-loading" role="status">
+                <span class="pixel-icon icon-loading icon-md" aria-hidden="true"></span>
+                <span>Checking your leagues...</span>
+              </div>
+            } @else if (deletionReadiness(); as readiness) {
+              @if (readiness.commissionerLeagues.length > 0) {
+                <section class="deletion-blocker" aria-labelledby="deletion-blocker-title">
+                  <h4 id="deletion-blocker-title">Account deletion is currently blocked</h4>
+                  <p>
+                    A league cannot be left without its commissioner. Permanently delete these
+                    leagues from each league's Danger Zone before deleting your account:
+                  </p>
+                  <div class="commissioner-league-blockers">
+                    @for (league of readiness.commissionerLeagues; track league.leagueId) {
+                      <a [routerLink]="['/leagues', league.leagueId]">
+                        <strong>{{ league.leagueName }}</strong>
+                        <span>Open League Headquarters →</span>
+                      </a>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    class="refresh-deletion-check-button"
+                    (click)="refreshAccountDeletionReadiness()"
+                    [disabled]="loadingDeletionReadiness()"
+                  >
+                    Check Again
+                  </button>
+                </section>
+              } @else {
+                <div class="deletion-impact-grid">
+                  <article>
+                    <strong>Deleted completely</strong>
+                    <span>Login and account profile</span>
+                    <span>Feedback and automatic error reports</span>
+                    <span>Injury email queues and settings</span>
+                    <span>Saved appearance and Training Camp progress</span>
+                  </article>
+
+                  <article>
+                    <strong>Kept anonymously</strong>
+                    <span>{{ readiness.anonymizedLeagueCount }} league team record(s)</span>
+                    <span>Past scores, draft picks, and standings</span>
+                    <span>Your manager name becomes “Deleted Manager”</span>
+                    <span>Your team becomes “Vacant Team”</span>
+                  </article>
+                </div>
+
+                <p class="deletion-integrity-note">
+                  Keeping anonymous league history prevents your deletion from changing another
+                  manager's record, draft, matchup, standings, or playoff result.
+                </p>
+
+                <label class="form-field deletion-confirmation-field">
+                  <span>Type your full manager name exactly</span>
+                  <input
+                    [(ngModel)]="deleteConfirmationUsername"
+                    [placeholder]="profile()?.username || 'Manager name'"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <small>
+                    Required text: <strong>{{ profile()?.username }}</strong>
+                  </small>
+                </label>
+
+                <label class="form-field deletion-confirmation-field">
+                  <span>Current password</span>
+                  <input
+                    type="password"
+                    [(ngModel)]="deletePassword"
+                    autocomplete="current-password"
+                    placeholder="Enter your current password"
+                  />
+                  <small>Your password is used only to verify that this is really you.</small>
+                </label>
+
+                <label class="delete-account-acknowledgement">
+                  <input type="checkbox" [(ngModel)]="deleteAcknowledged" />
+                  <span>
+                    I understand that this permanently deletes my RinkRat login and cannot be undone.
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  class="permanent-delete-account-button"
+                  (click)="permanentlyDeleteAccount()"
+                  [disabled]="!canSubmitAccountDeletion()"
+                >
+                  {{ deletingAccount() ? 'Deleting Account...' : 'Permanently Delete My Account' }}
+                </button>
+              }
+            }
+
+            @if (deletionErrorMessage()) {
+              <p class="deletion-error-message" role="alert">
+                {{ deletionErrorMessage() }}
+              </p>
+            }
+          </div>
+        }
+      </section>
     </section>
   </section>
 }

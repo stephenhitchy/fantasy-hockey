@@ -786,3 +786,43 @@ TRAINING CAMP CLARITY UPDATE
 - The description uses a three-part plain-language breakdown emphasizing independent six-game counters per roster spot.
 - Shift 2 now explains scoring identity by position: forwards have higher upside and more volatility, defensemen are more consistent, and the team goalie unit is normally the highest-scoring roster asset.
 - Training Camp tells managers to compare players primarily within the same position.
+
+BETA FOUNDATION — PART 2 (JULY 2026)
+------------------------------------
+The second beta-hardening package adds secure account lifecycle controls and a
+staged Firebase App Check client foundation.
+
+Account deletion:
+- Account Settings includes a permanent deletion checker.
+- The manager must have no commissioner-owned leagues, type the exact saved
+  manager name, acknowledge the irreversible action, and re-enter the current
+  password.
+- The client reauthenticates with Firebase Authentication and refreshes the ID
+  token. The deleteMyAccount callable independently requires a recent auth_time.
+- The callable removes the Auth user, user profile tree, feedback, diagnostics,
+  injury email queues/logs, and observability rate-limit data.
+- Joined-league team and membership records are anonymized rather than removed
+  so league history remains mathematically stable. The record becomes Deleted
+  Manager / Vacant Team.
+- An unfinished draft queue for a deleted manager is switched to Auto-Draft so
+  the draft can continue.
+- Commissioner-owned leagues block deletion and must be removed through each
+  league's existing Danger Zone first.
+
+App Check preparation:
+- Firebase App Check initialization now occurs before the Angular application
+  imports Auth, Firestore, Functions, or Analytics.
+- reCAPTCHA Enterprise configuration is centralized in
+  src/environments/app-check.config.ts.
+- App Check is intentionally disabled until a production site key is registered
+  and request metrics can be monitored. Follow APP_CHECK_ROLLOUT_GUIDE.txt and
+  never enable enforcement before the token-monitoring stage is healthy.
+
+Important files:
+  src/app/core/auth/account-deletion.service.ts
+  src/app/core/firebase-app-check.ts
+  src/environments/app-check.config.ts
+  src/app/features/account/account-settings/
+  functions/src/index.ts
+  firestore.indexes.json
+  APP_CHECK_ROLLOUT_GUIDE.txt
