@@ -1,11 +1,10 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, OnDestroy, signal, ViewEncapsulation } from '@angular/core';
 
 import {
   CycleAssetScoreSummary,
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
 
-import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 
@@ -13,13 +12,8 @@ import { saveProjectionAccuracyForCycle } from '../../../core/projection/project
 
 import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
 
-import { NgStyle } from '@angular/common';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { onAuthStateChanged, User } from 'firebase/auth';
-
-import { auth } from '../../../core/firebase';
-
 import {
   FantasyAssetCycleWindow,
   FantasyCycle,
@@ -100,101 +94,49 @@ import {
 } from '../../../core/player/player-availability.service';
 import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
 
-const CYCLE_PROJECTION_WINDOW_DAYS = 14;
-const NHL_SCHEDULE_BATCH_SIZE = 4;
+import { CycleExplainer } from './components/cycle-explainer/cycle-explainer';
+import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
+import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
+import { CycleMobileScorebar } from './components/cycle-mobile-scorebar/cycle-mobile-scorebar';
+import { CyclePageHeader } from './components/cycle-page-header/cycle-page-header';
+import { CycleStatusBanners } from './components/cycle-status-banners/cycle-status-banners';
 
-const PROJECTION_NEUTRAL_PERCENT = 0.1;
-const PROJECTION_NEUTRAL_POINTS = 10;
-
-type MatchupViewMode = 'teamA' | 'both' | 'teamB';
-
-interface MatchupPositionBreakdownRow {
-  position: DraftPosition;
-  label: string;
-  actual: number;
-  projected: number | null;
-  delta: number | null;
-}
-
-interface MatchupAssetPerformanceRow {
-  asset: DraftableAsset;
-  ownerId: string;
-  teamName: string;
-  actual: number;
-  projected: number | null;
-  delta: number | null;
-  position: DraftPosition;
-}
-
-interface MobileMatchupPlayerPair {
-  position: DraftPosition;
-  slotIndex: number;
-  teamAPick: DraftPick | null;
-  teamBPick: DraftPick | null;
-}
-
-interface MobileMatchupPositionGroup {
-  position: DraftPosition;
-  label: string;
-  rows: MobileMatchupPlayerPair[];
-}
-
-interface MobileMatchupBenchRow {
-  slotIndex: number;
-  teamASlot: BenchRosterSlot;
-  teamBSlot: BenchRosterSlot;
-}
-
-interface CycleWindowGameMarker {
-  index: number;
-  gameId: number | null;
-  gameDate: string | null;
-  gameLabel: string;
-  status: 'played' | 'missed' | 'upcoming' | 'unavailable';
-  statusLabel: string;
-  title: string;
-}
-
-interface ScoreDeltaAnimation {
-  id: number;
-  delta: number;
-  direction: 'gain' | 'loss';
-  ownerId: string;
-  presentation: 'my-team' | 'opponent';
-}
-
-interface OwnerTeamIdentity {
-  abbreviation: string;
-  variantId: string;
-}
-
-interface PendingScoreDelta {
-  delta: number;
-  rosterOrder: number;
-  targetScore: number;
-  ownerId: string;
-}
-
-function waitForAuthUser(): Promise<User | null> {
-  if (auth.currentUser) {
-    return Promise.resolve(auth.currentUser);
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
-}
+import { waitForAuthUser } from './cycle-one-auth.util';
+import {
+  CYCLE_PROJECTION_WINDOW_DAYS,
+  CycleWindowGameMarker,
+  MatchupAssetPerformanceRow,
+  MatchupPositionBreakdownRow,
+  MatchupViewMode,
+  MobileMatchupBenchRow,
+  MobileMatchupPlayerPair,
+  MobileMatchupPositionGroup,
+  NHL_SCHEDULE_BATCH_SIZE,
+  OwnerTeamIdentity,
+  PendingScoreDelta,
+  PROJECTION_NEUTRAL_PERCENT,
+  PROJECTION_NEUTRAL_POINTS,
+  ScoreDeltaAnimation,
+} from './cycle-one.models';
 
 @Component({
   selector: 'app-cycle-one',
-  imports: [RouterLink, NgStyle, ManagerAvatar],
+  host: { class: 'g' },
+  imports: [
+    RouterLink,
+    CycleMobileScorebar,
+    CyclePageHeader,
+    CycleStatusBanners,
+    CycleExplainer,
+    CycleMatchupToolbar,
+    CycleMatchupCard,
+  ],
   templateUrl: './cycle-one.html',
   styleUrl: './cycle-one.css',
+  encapsulation: ViewEncapsulation.None,
 })
 export class CycleOne implements OnDestroy {
+  readonly presenter = this;
   readonly developerToolsEnabled = areDeveloperToolsEnabled();
   leagueId = '';
   userId = '';

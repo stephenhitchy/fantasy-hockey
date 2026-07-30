@@ -1,0 +1,81 @@
+              <article
+                class="matchup-detail-card"
+                [class.my-matchup-outline]="presenter.isMyMatchup(matchup)"
+                [class.matchup-ready-outline]="
+                  presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
+                "
+                [class.matchup-waiting-outline]="
+                  !presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
+                "
+              >
+                <div class="matchup-card-heading">
+                  <strong>
+                    {{ matchup.id }}
+                  </strong>
+
+                  <div class="matchup-heading-statuses">
+                    @if (presenter.isMyMatchup(matchup)) {
+                      <span class="your-matchup-badge">Your Matchup</span>
+                    }
+
+                    <span
+                      class="matchup-cycle-state-badge"
+                      [class.matchup-cycle-active]="presenter.cycle()?.status === 'active'"
+                      [class.matchup-cycle-complete]="presenter.cycle()?.status === 'complete'"
+                    >
+                      {{
+                        presenter.cycle()?.status === 'complete'
+                          ? 'Complete'
+                          : presenter.cycle()?.status === 'active'
+                            ? 'Active'
+                            : 'Not Started'
+                      }}
+                    </span>
+
+                    <span
+                      class="matchup-readiness-badge"
+                      [class.readiness-complete]="presenter.isMatchupComplete(matchup)"
+                      [class.readiness-ready]="
+                        presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
+                      "
+                      [class.readiness-waiting]="
+                        !presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
+                      "
+                    >
+                      {{ presenter.getMatchupReadinessLabel(matchup) }}
+                    </span>
+                  </div>
+                </div>
+
+                <app-cycle-mobile-head-to-head
+                  [matchup]="matchup"
+                  [presenter]="presenter"
+                ></app-cycle-mobile-head-to-head>
+
+                <div [class]="presenter.getTeamsComparisonClass()">
+                  @if (presenter.shouldShowTeamA()) {
+                    <app-cycle-matchup-team-panel
+                      [matchup]="matchup"
+                      [ownerId]="matchup.teamAOwnerId"
+                      [presenter]="presenter"
+                    ></app-cycle-matchup-team-panel>
+                  }
+
+                  @if (presenter.shouldShowMatchupDivider()) {
+                    <div class="comparison-vs">vs</div>
+                  }
+
+                  @if (presenter.shouldShowTeamB()) {
+                    <app-cycle-matchup-team-panel
+                      [matchup]="matchup"
+                      [ownerId]="matchup.teamBOwnerId"
+                      [presenter]="presenter"
+                    ></app-cycle-matchup-team-panel>
+                  }
+                </div>
+
+                <app-cycle-matchup-breakdown
+                  [matchup]="matchup"
+                  [presenter]="presenter"
+                ></app-cycle-matchup-breakdown>
+              </article>

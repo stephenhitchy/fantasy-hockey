@@ -1,0 +1,663 @@
+                    <section
+                      class="team-matchup-panel"
+                      [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
+                      [class.matchup-winner-panel]="presenter.isWinningTeam(matchup, ownerId)"
+                      [class.matchup-loser-panel]="presenter.isLosingTeam(matchup, ownerId)"
+                    >
+                      <div class="team-summary-row">
+                        <div class="team-identity-summary">
+                          <div class="team-identity-logo-shell">
+                            <img
+                              class="team-identity-logo"
+                              [src]="presenter.getOwnerTheme(ownerId).logoUrl"
+                              [alt]="presenter.getOwnerTheme(ownerId).name + ' logo'"
+                            />
+                          </div>
+
+                          <div class="team-identity-copy">
+                            <h3 class="manager-name-with-avatar">
+                              <app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(ownerId)" [label]="presenter.getTeamManagerLabel(ownerId)" size="sm" />
+                              <span>{{ presenter.getTeamName(ownerId) }}</span>
+
+                              @if (presenter.getTeamResultLabel(matchup, ownerId)) {
+                                <span
+                                  class="result-badge"
+                                  [class.result-winner]="presenter.isWinningTeam(matchup, ownerId)"
+                                  [class.result-loser]="presenter.isLosingTeam(matchup, ownerId)"
+                                >
+                                  {{ presenter.getTeamResultLabel(matchup, ownerId) }}
+                                </span>
+                              }
+                            </h3>
+
+                            <p>{{ presenter.getTeamRecord(ownerId) }}</p>
+
+                            <div class="team-selected-identity">
+                              <span>{{ presenter.getOwnerTheme(ownerId).name }}</span>
+                              <small>{{ presenter.getOwnerTheme(ownerId).variantShortLabel }}</small>
+                            </div>
+
+                            <div
+                              class="team-color-strip"
+                              [attr.aria-label]="presenter.getOwnerTheme(ownerId).variantLabel + ' selected colors'"
+                              role="img"
+                            >
+                              <i class="team-color-primary"></i>
+                              <i class="team-color-secondary"></i>
+                              <i class="team-color-tertiary"></i>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="team-score-pair">
+                          <div>
+                            <strong>{{
+                              presenter.getProjectionDisplay(
+                                presenter.getMatchupTeamCurrentScore(matchup, ownerId)
+                              )
+                            }}</strong>
+                            <span>Current</span>
+                          </div>
+
+                          <div>
+                            <strong>
+                              {{
+                                presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(ownerId))
+                              }}
+                            </strong>
+                            <span>Projected</span>
+                          </div>
+                        </div>
+
+                        <div class="team-roster-progress">
+                          <div class="team-roster-progress-copy">
+                            <span>Roster Progress</span>
+                            <strong>
+                              {{ presenter.getTeamRosterGamesPlayed(ownerId) }} played ·
+                              {{ presenter.getTeamRosterGamesLeft(ownerId) }} left
+                            </strong>
+                          </div>
+
+                          <div
+                            class="team-roster-progress-track"
+                            role="progressbar"
+                            [attr.aria-label]="presenter.getTeamRosterProgressLabel(ownerId)"
+                            [attr.aria-valuemin]="0"
+                            [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(ownerId)"
+                            [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(ownerId)"
+                          >
+                            <span
+                              class="team-roster-progress-fill"
+                              [style.width.%]="presenter.getTeamRosterProgressPercent(ownerId)"
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="fantasy-roster-board">
+                        <div class="forward-row">
+                          @for (position of presenter.forwardPositions; track position) {
+                            <section class="fantasy-position-group">
+                              <div class="fantasy-position-header">
+                                {{ presenter.getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="presenter.openAssetDetail(pick.asset)"
+                                    (keydown.enter)="presenter.openAssetDetail(pick.asset)"
+                                  >
+                                    @if (presenter.hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="presenter.isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="presenter.getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ presenter.getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
+                                    @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ presenter.getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      @if (presenter.isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="presenter.getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ presenter.getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of presenter.getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                        @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ presenter.getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionCurrentTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ presenter.getPositionGamesPlayed(ownerId, position) }}
+                                  /
+                                  {{ presenter.getPositionGamesLeft(ownerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+                        </div>
+
+                        <div class="defense-goalie-row">
+                          @for (position of presenter.defensePositions; track position) {
+                            <section class="fantasy-position-group defense-group">
+                              <div class="fantasy-position-header">
+                                {{ presenter.getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots defense-slots">
+                                @for (
+                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card"
+                                    [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="presenter.openAssetDetail(pick.asset)"
+                                    (keydown.enter)="presenter.openAssetDetail(pick.asset)"
+                                  >
+                                    @if (presenter.hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="presenter.isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="presenter.getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ presenter.getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
+                                    @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ presenter.getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      @if (presenter.isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="presenter.getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ presenter.getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of presenter.getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                        @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ presenter.getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionCurrentTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ presenter.getPositionGamesPlayed(ownerId, position) }}
+                                  /
+                                  {{ presenter.getPositionGamesLeft(ownerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+
+                          @for (position of presenter.goaliePositions; track position) {
+                            <section class="fantasy-position-group goalie-group">
+                              <div class="fantasy-position-header">
+                                {{ presenter.getPositionLabel(position) }}
+                              </div>
+
+                              <div class="fantasy-position-slots">
+                                @for (
+                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  track pick.overallPick
+                                ) {
+                                  <article
+                                    class="fantasy-player-card goalie-card"
+                                    [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
+                                    [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
+                                    [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
+                                    role="link"
+                                    tabindex="0"
+                                    (click)="presenter.openAssetDetail(pick.asset)"
+                                    (keydown.enter)="presenter.openAssetDetail(pick.asset)"
+                                  >
+                                    @if (presenter.hasAssetStatusFlag(pick.asset)) {
+                                      <span
+                                        class="matchup-injury-cross player-status-tooltip"
+                                        [class.matchup-suspension-flag]="presenter.isAssetSuspended(pick.asset)"
+                                        role="img"
+                                        tabindex="0"
+                                        [attr.aria-label]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.data-status-tooltip]="presenter.getAssetStatusTooltip(pick.asset)"
+                                        [attr.title]="presenter.getAssetStatusTooltip(pick.asset)"
+                                      >
+                                        {{ presenter.getAssetStatusFlagIcon(pick.asset) }}
+                                      </span>
+                                    }
+
+                                    @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                                      <img
+                                        class="fantasy-player-logo"
+                                        [src]="logoUrl"
+                                        [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                                      />
+                                    }
+
+                                    <div class="fantasy-player-main">
+                                      <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+
+                                      <span>
+                                        {{ presenter.getAssetTeamLabel(pick.asset) }}
+                                        · {{ pick.asset.position }}
+                                      </span>
+
+                                      @if (presenter.isFutureWindowPending(pick)) {
+                                        <em
+                                          class="future-window-callout"
+                                          [attr.title]="presenter.getPendingWindowTooltip(pick)"
+                                        >
+                                          {{ presenter.getPendingWindowCallout(pick) }}
+                                        </em>
+                                      }
+
+                                      <div
+                                        class="window-game-markers"
+                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                      >
+                                        @for (
+                                          marker of presenter.getWindowGameMarkers(pick);
+                                          track marker.index
+                                        ) {
+                                          <span
+                                            class="window-game-marker"
+                                            [class.marker-played]="marker.status === 'played'"
+                                            [class.marker-missed]="marker.status === 'missed'"
+                                            [class.marker-upcoming]="marker.status === 'upcoming'"
+                                            [class.marker-unavailable]="
+                                              marker.status === 'unavailable'
+                                            "
+                                            [title]="marker.title"
+                                          >
+                                            {{ marker.index }}
+                                          </span>
+                                        }
+                                      </div>
+
+                                    </div>
+
+                                    <div class="fantasy-player-score-stack">
+                                      <div
+                                        class="current-score-cell"
+                                        [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                                        [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                                      >
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>Cur</span>
+                                        @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
+                                          <small
+                                            class="score-delta-pop"
+                                            [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
+                                            [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
+                                            [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
+                                          >
+                                            {{ presenter.getScoreDeltaLabel(scoreUpdate) }}
+                                          </small>
+                                        }
+                                      </div>
+
+                                      <div>
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                          }}
+                                        </strong>
+                                        <span>Proj</span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                }
+                              </div>
+
+                              <footer class="position-total-row">
+                                <span>{{ position }} Total</span>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionCurrentTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Cur</small>
+                                </div>
+
+                                <div>
+                                  <strong>
+                                    {{
+                                      presenter.getProjectionDisplay(
+                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                      )
+                                    }}
+                                  </strong>
+                                  <small>Proj</small>
+                                </div>
+
+                                <em>
+                                  {{ presenter.getPositionGamesPlayed(ownerId, position) }}
+                                  /
+                                  {{ presenter.getPositionGamesLeft(ownerId, position) }}
+                                  GP/Left
+                                </em>
+                              </footer>
+                            </section>
+                          }
+                        </div>
+                      </div>
+
+                      <section class="matchup-bench-section" aria-label="{{ presenter.getTeamName(ownerId) }} bench">
+                        <header class="matchup-bench-heading">
+                          <div>
+                            <span class="eyebrow">Non-Scoring Depth</span>
+                            <h4>Bench</h4>
+                          </div>
+                          <p>{{ presenter.getTeamBenchFilledCount(ownerId) }} of 3 spots filled</p>
+                        </header>
+
+                        <p class="matchup-bench-note">
+                          Bench assets stay on the team but do not add points until they are moved into an active roster slot.
+                        </p>
+
+                        <div class="matchup-bench-grid">
+                          @for (slot of presenter.getTeamBenchSlots(ownerId); track slot.slotId) {
+                            <article
+                              class="fantasy-player-card matchup-bench-card"
+                              [class.matchup-bench-empty-card]="!slot.asset"
+                              [class.injured-player-card]="slot.asset ? presenter.isBenchAssetInjured(slot.asset) : false"
+                              [class.suspended-player-card]="slot.asset ? presenter.isBenchAssetSuspended(slot.asset) : false"
+                              [attr.role]="slot.asset ? 'link' : null"
+                              [attr.tabindex]="slot.asset ? 0 : null"
+                              (click)="slot.asset && presenter.openBenchAssetDetail(slot.asset)"
+                              (keydown.enter)="slot.asset && presenter.openBenchAssetDetail(slot.asset)"
+                            >
+                              @if (slot.asset; as asset) {
+                                @if (presenter.hasBenchAssetStatusFlag(asset)) {
+                                  <span
+                                    class="matchup-injury-cross player-status-tooltip"
+                                    [class.matchup-suspension-flag]="presenter.isBenchAssetSuspended(asset)"
+                                    role="img"
+                                    tabindex="0"
+                                    [attr.aria-label]="presenter.getBenchAssetStatusTooltip(asset)"
+                                    [attr.data-status-tooltip]="presenter.getBenchAssetStatusTooltip(asset)"
+                                    [attr.title]="presenter.getBenchAssetStatusTooltip(asset)"
+                                  >
+                                    {{ presenter.getBenchAssetStatusFlagIcon(asset) }}
+                                  </span>
+                                }
+
+                                @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
+                                  <img
+                                    class="fantasy-player-logo"
+                                    [src]="logoUrl"
+                                    [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'"
+                                  />
+                                } @else {
+                                  <span class="fantasy-player-logo matchup-logo-fallback">
+                                    {{ presenter.getBenchAssetTeamLabel(asset) }}
+                                  </span>
+                                }
+
+                                <div class="fantasy-player-main">
+                                  <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
+                                  <span>
+                                    {{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}
+                                  </span>
+                                  <em>Does not score while on the bench</em>
+                                </div>
+
+                                <div class="fantasy-player-score-stack">
+                                  <div>
+                                    <strong>—</strong>
+                                    <span>Bench</span>
+                                  </div>
+                                  <div>
+                                    <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong>
+                                    <span>Proj</span>
+                                  </div>
+                                </div>
+                              } @else {
+                                <div class="matchup-bench-empty-copy">
+                                  <strong>Open Bench {{ slot.slotNumber }}</strong>
+                                  <span>No asset assigned</span>
+                                </div>
+                              }
+                            </article>
+                          }
+                        </div>
+                      </section>
+                    </section>

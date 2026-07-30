@@ -1,0 +1,63 @@
+        <div class="section-heading matchup-section-heading">
+          <div>
+            <span class="eyebrow">Detailed Matchup View</span>
+            <h2>{{ presenter.getDetailedMatchupHeading() }}</h2>
+          </div>
+
+          <div class="matchup-heading-controls">
+            @if (presenter.matchups().length > 1) {
+              <div class="matchup-arrow-nav" aria-label="Cycle matchup navigation">
+                <button
+                  type="button"
+                  (click)="presenter.openPreviousMatchup()"
+                  [disabled]="!presenter.getPreviousMatchup()"
+                  [title]="presenter.getMatchupNavigationTitle(presenter.getPreviousMatchup())"
+                >
+                  ←
+                </button>
+
+                <span>
+                  {{ presenter.getCurrentDisplayedMatchup()?.id || 'Matchup' }}
+                  <small
+                    >{{ presenter.getCurrentDisplayedMatchupIndex() + 1 }} / {{ presenter.matchups().length }}</small
+                  >
+                </span>
+
+                <button
+                  type="button"
+                  (click)="presenter.openNextMatchup()"
+                  [disabled]="!presenter.getNextMatchup()"
+                  [title]="presenter.getMatchupNavigationTitle(presenter.getNextMatchup())"
+                >
+                  →
+                </button>
+              </div>
+            }
+
+            <div class="matchup-view-selector">
+              <button
+                type="button"
+                [class.active-view]="presenter.matchupView() === 'teamA'"
+                (click)="presenter.setMatchupView('teamA')"
+              >
+                Team A
+              </button>
+
+              <button
+                type="button"
+                [class.active-view]="presenter.matchupView() === 'both'"
+                (click)="presenter.setMatchupView('both')"
+              >
+                Both
+              </button>
+
+              <button
+                type="button"
+                [class.active-view]="presenter.matchupView() === 'teamB'"
+                (click)="presenter.setMatchupView('teamB')"
+              >
+                Team B
+              </button>
+            </div>
+          </div>
+        </div>

@@ -1,0 +1,39 @@
+      <section
+        class="mobile-matchup-scorebar"
+        aria-label="Current matchup score"
+        aria-live="polite"
+      >
+        <article class="mobile-score-team mobile-score-team-a" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamAOwnerId)">
+          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamAOwnerId)" [label]="presenter.getTeamManagerLabel(mobileMatchup.teamAOwnerId)" size="xs" /><span>{{ presenter.getTeamName(mobileMatchup.teamAOwnerId) }}</span></span>
+          <strong>
+            {{
+              presenter.getProjectionDisplay(
+                presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)
+              )
+            }}
+          </strong>
+          <small>
+            Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
+          </small>
+        </article>
+
+        <div class="mobile-score-center">
+          <span>{{ presenter.getCycleLabel() }}</span>
+          <strong>VS</strong>
+          <small>{{ presenter.getMatchupReadinessLabel(mobileMatchup) }}</small>
+        </div>
+
+        <article class="mobile-score-team mobile-score-team-b" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">
+          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamBOwnerId)" [label]="presenter.getTeamManagerLabel(mobileMatchup.teamBOwnerId)" size="xs" /><span>{{ presenter.getTeamName(mobileMatchup.teamBOwnerId) }}</span></span>
+          <strong>
+            {{
+              presenter.getProjectionDisplay(
+                presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)
+              )
+            }}
+          </strong>
+          <small>
+            Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
+          </small>
+        </article>
+      </section>

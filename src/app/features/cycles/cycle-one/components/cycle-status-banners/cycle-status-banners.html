@@ -1,0 +1,32 @@
+    @if (presenter.shouldShowCompactAutoStatus()) {
+      <section
+        class="compact-auto-status"
+        [class.compact-status-error]="presenter.getAutoLeagueStatusClass() === 'auto-status-error'"
+        [class.compact-status-working]="
+          presenter.getAutoLeagueStatusClass() === 'auto-status-working' || presenter.scoringLoading()
+        "
+        role="status"
+        aria-live="polite"
+      >
+        <span class="compact-status-indicator" aria-hidden="true"></span>
+
+        <div>
+          <strong>{{ presenter.getAutoLeagueStatusTitle() }}</strong>
+          <p>{{ presenter.getAutoLeagueStatusText() }}</p>
+        </div>
+      </section>
+    }
+
+    <section
+      class="shared-scoring-status-card"
+      [class.shared-scoring-refreshing]="presenter.liveScoringControl()?.status === 'refreshing'"
+      [class.shared-scoring-error]="presenter.liveScoringControl()?.status === 'error'"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="shared-scoring-pulse" aria-hidden="true"></span>
+      <div>
+        <strong>{{ presenter.getSharedScoringStatusLabel() }}</strong>
+        <p>{{ presenter.getSharedScoringStatusText() }}</p>
+      </div>
+    </section>
