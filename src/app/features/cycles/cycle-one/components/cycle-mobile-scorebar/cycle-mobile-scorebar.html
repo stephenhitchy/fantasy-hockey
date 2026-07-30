@@ -1,39 +1,108 @@
-      <section
-        class="mobile-matchup-scorebar"
-        aria-label="Current matchup score"
-        aria-live="polite"
-      >
-        <article class="mobile-score-team mobile-score-team-a" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamAOwnerId)">
-          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamAOwnerId)" [label]="presenter.getTeamManagerLabel(mobileMatchup.teamAOwnerId)" size="xs" /><span>{{ presenter.getTeamName(mobileMatchup.teamAOwnerId) }}</span></span>
-          <strong>
-            {{
-              presenter.getProjectionDisplay(
-                presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)
-              )
-            }}
-          </strong>
-          <small>
-            Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
-          </small>
-        </article>
+<section
+  class="mobile-matchup-scorebar"
+  [attr.aria-label]="presenter.getMatchupScoreAriaLabel(mobileMatchup)"
+>
+  <article
+    class="mobile-score-team mobile-score-team-a"
+    [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamAOwnerId)"
+  >
+    <span class="manager-name-with-avatar">
+      <app-manager-avatar
+        [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamAOwnerId)"
+        [label]="presenter.getTeamManagerLabel(mobileMatchup.teamAOwnerId)"
+        size="xs"
+      />
+      <span>{{ presenter.getTeamName(mobileMatchup.teamAOwnerId) }}</span>
+    </span>
+    <strong>
+      {{
+        presenter.getProjectionDisplay(
+          presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamAOwnerId)
+        )
+      }}
+    </strong>
+    <small>
+      Proj.
+      {{
+        presenter.getProjectionDisplay(
+          presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)
+        )
+      }}
+    </small>
+    <div
+      class="mobile-score-progress-track"
+      role="progressbar"
+      [attr.aria-label]="presenter.getTeamRosterProgressLabel(mobileMatchup.teamAOwnerId)"
+      [attr.aria-valuemin]="0"
+      [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(mobileMatchup.teamAOwnerId)"
+      [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(mobileMatchup.teamAOwnerId)"
+      [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(mobileMatchup.teamAOwnerId)"
+    >
+      <span
+        class="mobile-score-progress-fill"
+        [style.width.%]="presenter.getTeamRosterProgressPercent(mobileMatchup.teamAOwnerId)"
+      ></span>
+    </div>
+    <em>
+      {{ presenter.getTeamRosterGamesPlayed(mobileMatchup.teamAOwnerId) }}/{{
+        presenter.getTeamRosterGameTotal(mobileMatchup.teamAOwnerId)
+      }}
+      counted
+    </em>
+  </article>
 
-        <div class="mobile-score-center">
-          <span>{{ presenter.getCycleLabel() }}</span>
-          <strong>VS</strong>
-          <small>{{ presenter.getMatchupReadinessLabel(mobileMatchup) }}</small>
-        </div>
+  <div class="mobile-score-center" aria-hidden="true">
+    <span>{{ presenter.getCycleLabel() }}</span>
+    <strong>VS</strong>
+    <small>{{ presenter.getMatchupMobileStatusLabel(mobileMatchup) }}</small>
+  </div>
 
-        <article class="mobile-score-team mobile-score-team-b" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">
-          <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamBOwnerId)" [label]="presenter.getTeamManagerLabel(mobileMatchup.teamBOwnerId)" size="xs" /><span>{{ presenter.getTeamName(mobileMatchup.teamBOwnerId) }}</span></span>
-          <strong>
-            {{
-              presenter.getProjectionDisplay(
-                presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)
-              )
-            }}
-          </strong>
-          <small>
-            Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
-          </small>
-        </article>
-      </section>
+  <article
+    class="mobile-score-team mobile-score-team-b"
+    [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamBOwnerId)"
+  >
+    <span class="manager-name-with-avatar">
+      <app-manager-avatar
+        [profileIconId]="presenter.getTeamProfileIconId(mobileMatchup.teamBOwnerId)"
+        [label]="presenter.getTeamManagerLabel(mobileMatchup.teamBOwnerId)"
+        size="xs"
+      />
+      <span>{{ presenter.getTeamName(mobileMatchup.teamBOwnerId) }}</span>
+    </span>
+    <strong>
+      {{
+        presenter.getProjectionDisplay(
+          presenter.getMatchupTeamCurrentScore(mobileMatchup, mobileMatchup.teamBOwnerId)
+        )
+      }}
+    </strong>
+    <small>
+      Proj.
+      {{
+        presenter.getProjectionDisplay(
+          presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)
+        )
+      }}
+    </small>
+    <div
+      class="mobile-score-progress-track"
+      role="progressbar"
+      [attr.aria-label]="presenter.getTeamRosterProgressLabel(mobileMatchup.teamBOwnerId)"
+      [attr.aria-valuemin]="0"
+      [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(mobileMatchup.teamBOwnerId)"
+      [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(mobileMatchup.teamBOwnerId)"
+      [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(mobileMatchup.teamBOwnerId)"
+    >
+      <span
+        class="mobile-score-progress-fill"
+        [style.width.%]="presenter.getTeamRosterProgressPercent(mobileMatchup.teamBOwnerId)"
+      ></span>
+    </div>
+    <em>
+      {{ presenter.getTeamRosterGamesPlayed(mobileMatchup.teamBOwnerId) }}/{{
+        presenter.getTeamRosterGameTotal(mobileMatchup.teamBOwnerId)
+      }}
+      counted
+    </em>
+  </article>
+</section>

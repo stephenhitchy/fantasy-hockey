@@ -33,7 +33,9 @@
     "test:profile-injury-authority:run": "node --test --test-concurrency=1 test/profile-injury-authority/*.test.mjs",
     "verify:batch5": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run && npm run test:profile-injury-authority:run",
     "test:game-center-refactor:run": "node --test --test-concurrency=1 test/game-center-refactor/*.test.mjs",
-    "verify:batch6a": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run && npm run test:profile-injury-authority:run && npm run test:game-center-refactor:run"
+    "verify:batch6a": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run && npm run test:profile-injury-authority:run && npm run test:game-center-refactor:run",
+    "test:game-center-hierarchy:run": "node --test --test-concurrency=1 test/game-center-hierarchy/*.test.mjs",
+    "verify:batch6b": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run && npm run test:profile-injury-authority:run && npm run test:game-center-refactor:run && npm run test:game-center-hierarchy:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

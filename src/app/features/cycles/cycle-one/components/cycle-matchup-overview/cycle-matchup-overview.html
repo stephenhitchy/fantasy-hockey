@@ -1,0 +1,156 @@
+<section
+  class="matchup-overview"
+  [class.matchup-overview-complete]="presenter.isMatchupComplete(matchup)"
+  [attr.aria-label]="presenter.getMatchupScoreAriaLabel(matchup)"
+>
+  <div
+    class="matchup-overview-headline"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <span class="matchup-overview-kicker">
+      {{ presenter.isMatchupComplete(matchup) ? 'Final result' : 'Current matchup' }}
+    </span>
+    <h2>{{ presenter.getMatchupOutcomeHeadline(matchup) }}</h2>
+    <p>{{ presenter.getMatchupOutcomeDetail(matchup) }}</p>
+  </div>
+
+  <div class="matchup-overview-scoreboard" aria-hidden="true">
+    <article
+      class="matchup-overview-team matchup-overview-team-a"
+      [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
+    >
+      <div class="matchup-overview-team-name">
+        <img
+          [src]="presenter.getOwnerTheme(matchup.teamAOwnerId).logoUrl"
+          [alt]="presenter.getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
+        />
+        <span>{{ presenter.getTeamName(matchup.teamAOwnerId) }}</span>
+      </div>
+      <strong>
+        {{
+          presenter.getProjectionDisplay(
+            presenter.getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)
+          )
+        }}
+      </strong>
+      <small>Current score</small>
+    </article>
+
+    <div class="matchup-overview-versus">
+      <span>{{ presenter.getCycleLabel() }}</span>
+      <strong>VS</strong>
+      <small>{{ presenter.getMatchupMobileStatusLabel(matchup) }}</small>
+    </div>
+
+    @if (matchup.teamBOwnerId) {
+      <article
+        class="matchup-overview-team matchup-overview-team-b"
+        [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
+      >
+        <div class="matchup-overview-team-name">
+          <img
+            [src]="presenter.getOwnerTheme(matchup.teamBOwnerId).logoUrl"
+            [alt]="presenter.getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
+          />
+          <span>{{ presenter.getTeamName(matchup.teamBOwnerId) }}</span>
+        </div>
+        <strong>
+          {{
+            presenter.getProjectionDisplay(
+              presenter.getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)
+            )
+          }}
+        </strong>
+        <small>Current score</small>
+      </article>
+    } @else {
+      <article class="matchup-overview-team matchup-overview-bye-team">
+        <span>Bye</span>
+        <strong>—</strong>
+        <small>No opponent</small>
+      </article>
+    }
+  </div>
+
+  <div class="matchup-overview-insights">
+    <article>
+      <span>{{ presenter.isMatchupComplete(matchup) ? 'Final result' : 'Projected finish' }}</span>
+      <strong>{{ presenter.getProjectedWinnerLabel(matchup) }}</strong>
+      <small>{{ presenter.getMatchupProjectionStageLabel(matchup) }}</small>
+    </article>
+
+    <article>
+      <span>Matchup progress</span>
+      <strong>{{ presenter.getMatchupProgressSummary(matchup) }}</strong>
+      <small>{{ presenter.getMatchupProgressStageLabel(matchup) }}</small>
+    </article>
+  </div>
+
+  <div class="matchup-overview-progress-grid">
+    <div
+      class="matchup-overview-progress-row"
+      [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
+    >
+      <div>
+        <span>{{ presenter.getTeamName(matchup.teamAOwnerId) }}</span>
+        <strong>
+          {{ presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} of
+          {{ presenter.getTeamRosterGameTotal(matchup.teamAOwnerId) }} counted ·
+          {{ presenter.getTeamRosterGamesLeft(matchup.teamAOwnerId) }} left
+        </strong>
+      </div>
+      <div
+        class="matchup-overview-progress-track"
+        role="progressbar"
+        [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
+        [attr.aria-valuemin]="0"
+        [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamAOwnerId)"
+        [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
+        [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
+      >
+        <span
+          class="matchup-overview-progress-fill"
+          [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamAOwnerId)"
+        ></span>
+      </div>
+    </div>
+
+    @if (matchup.teamBOwnerId) {
+      <div
+        class="matchup-overview-progress-row"
+        [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
+      >
+        <div>
+          <span>{{ presenter.getTeamName(matchup.teamBOwnerId) }}</span>
+          <strong>
+            {{ presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} of
+            {{ presenter.getTeamRosterGameTotal(matchup.teamBOwnerId) }} counted ·
+            {{ presenter.getTeamRosterGamesLeft(matchup.teamBOwnerId) }} left
+          </strong>
+        </div>
+        <div
+          class="matchup-overview-progress-track"
+          role="progressbar"
+          [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamBOwnerId)"
+          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
+          [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
+        >
+          <span
+            class="matchup-overview-progress-fill"
+            [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamBOwnerId)"
+          ></span>
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (!presenter.isMatchupComplete(matchup)) {
+    <p class="matchup-overview-disclaimer">
+      Projections are estimates and update as each starter's independent six-game window advances.
+    </p>
+  }
+</section>
