@@ -6,15 +6,15 @@
   } @else if (!authorized()) {
     <section class="state-card error-card">
       <h1>Commissioner access required</h1>
-      <p>Only the league commissioner can view or control the shared NHL scoring worker.</p>
+      <p>Only the league commissioner can view or control the server NHL scorer.</p>
     </section>
   } @else {
     <header class="page-header">
       <div>
         <span class="eyebrow">Commissioner Tools</span>
-        <h1>Shared NHL Scorer</h1>
+        <h1>Server NHL Scorer</h1>
         <p>
-          Verify the single-worker lease, refresh cadence, shared snapshots, and skipped Firestore
+          Verify the trusted server worker, refresh cadence, shared snapshots, and skipped Firestore
           writes without opening the browser console.
         </p>
       </div>
@@ -44,8 +44,8 @@
       </div>
 
       <div class="worker-id">
-        <small>This tab</small>
-        <code>{{ sessionInfo().clientId }}</code>
+        <small>Active worker</small>
+        <code>{{ control()?.holderClientId || 'No active worker' }}</code>
       </div>
     </section>
 
@@ -65,7 +65,7 @@
       <article class="metric-card">
         <span>Lease expires</span>
         <strong>{{ formatCountdown(control()?.leaseExpiresAt) }}</strong>
-        <small>{{ isLeaseHolder() ? 'Held by this tab' : 'Shared worker protection' }}</small>
+        <small>Server worker protection</small>
       </article>
 
       <article class="metric-card">
@@ -151,7 +151,7 @@
       <div class="section-heading">
         <div>
           <span class="eyebrow">Safe commissioner actions</span>
-          <h2>Refresh and handoff</h2>
+          <h2>Server scoring controls</h2>
         </div>
       </div>
 
@@ -168,26 +168,17 @@
         <button
           type="button"
           class="secondary-button"
-          [disabled]="actionInProgress() || !isLeaseHolder()"
+          [disabled]="actionInProgress()"
           (click)="releaseForHandoff()"
         >
-          Release Lease for Handoff
-        </button>
-
-        <button
-          type="button"
-          class="secondary-button"
-          [disabled]="actionInProgress() || !isPaused()"
-          (click)="resumeThisTab()"
-        >
-          Resume This Tab
+          Clear Stale Control Lease
         </button>
       </div>
 
       <p class="helper-copy">
-        For a two-tab test, open this page in both tabs. The lease holder releases the lease and
-        pauses itself; the other commissioner tab should claim the worker and display its own client
-        id as the holder.
+        Live scoring now runs through trusted Cloud Functions. Refresh Scores Now starts a server
+        scoring pass, while Clear Stale Control Lease is only for an expired browser-era lease or
+        error state. A healthy active server worker cannot be interrupted.
       </p>
     </section>
 

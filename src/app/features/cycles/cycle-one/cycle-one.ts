@@ -844,7 +844,7 @@ export class CycleOne implements OnDestroy {
     try {
       await requestLeagueLiveScoringRefresh(this.leagueId);
       this.syncScoreMessage.set(
-        'Shared scoring refresh requested. The league scorer will publish only if NHL data changed.',
+        'Server scoring refresh completed. A shared snapshot was published only if NHL data changed.',
       );
     } catch (error: unknown) {
       this.syncScoreError.set(

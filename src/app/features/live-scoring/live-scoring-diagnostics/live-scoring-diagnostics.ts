@@ -6,12 +6,10 @@ import { auth } from '../../../core/firebase';
 import { areDeveloperToolsEnabled } from '../../../core/cycle/cycle-runtime.config';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import {
-  getLeagueLiveScoringSessionInfo,
   listenToSharedCycleScoring,
   listenToSharedLiveScoringControl,
   releaseLeagueLiveScoringLeaseForHandoff,
   requestLeagueLiveScoringRefresh,
-  resumeLeagueLiveScoringSession,
 } from '../../../core/live-scoring/live-scoring.service';
 import {
   LiveScoringSimulationResult,
@@ -59,29 +57,6 @@ export class LiveScoringDiagnostics implements OnDestroy {
       .sort((first, second) => first.cycleNumber - second.cycleNumber),
   );
 
-  readonly sessionInfo = computed(() => {
-    this.now();
-    return getLeagueLiveScoringSessionInfo(this.leagueId);
-  });
-
-  readonly isLeaseHolder = computed(() => {
-    const control = this.control();
-    const session = this.sessionInfo();
-    const leaseExpiresAt = this.toMillis(control?.leaseExpiresAt);
-
-    return Boolean(
-      control?.holderClientId &&
-      control.holderClientId === session.clientId &&
-      leaseExpiresAt &&
-      leaseExpiresAt > this.now(),
-    );
-  });
-
-  readonly isPaused = computed(() => {
-    const pausedUntil = this.sessionInfo().pausedUntilMs;
-    return Boolean(pausedUntil && pausedUntil > this.now());
-  });
-
   constructor(route: ActivatedRoute) {
     this.leagueId = route.snapshot.paramMap.get('leagueId') ?? '';
     void this.initialize();
@@ -102,7 +77,7 @@ export class LiveScoringDiagnostics implements OnDestroy {
     try {
       await requestLeagueLiveScoringRefresh(this.leagueId);
       this.actionMessage.set(
-        'Refresh requested. The worker will publish only if scoring data changed.',
+        'Server refresh completed. A new snapshot was published only when scoring data changed.',
       );
     } catch (error: unknown) {
       this.errorMessage.set(this.getErrorMessage(error));
@@ -119,22 +94,13 @@ export class LiveScoringDiagnostics implements OnDestroy {
     try {
       await releaseLeagueLiveScoringLeaseForHandoff(this.leagueId);
       this.actionMessage.set(
-        'This tab released the lease and paused for 20 minutes. Open or refresh another commissioner tab to verify takeover.',
+        'The stale control lease was cleared. Active server scoring workers are never interrupted.',
       );
     } catch (error: unknown) {
       this.errorMessage.set(this.getErrorMessage(error));
     } finally {
       this.actionInProgress.set(false);
     }
-  }
-
-  resumeThisTab(): void {
-    resumeLeagueLiveScoringSession(this.leagueId);
-    this.actionMessage.set(
-      'This tab resumed and will compete for the next available scoring lease.',
-    );
-    this.errorMessage.set('');
-    this.now.set(Date.now());
   }
 
   runSimulator(): void {
@@ -157,44 +123,34 @@ export class LiveScoringDiagnostics implements OnDestroy {
     }
 
     if (control.status === 'refreshing') {
-      return 'Refreshing now';
+      return control.holderClientId?.startsWith('server:')
+        ? 'Server refresh in progress'
+        : 'Legacy lease detected';
     }
 
-    if (this.isLeaseHolder()) {
-      return 'This tab holds the lease';
-    }
-
-    if (control.holderClientId && this.isLeaseActive()) {
-      return 'Another tab holds the lease';
-    }
-
-    return 'Ready for a worker';
+    return 'Server automation ready';
   }
 
   getStatusDescription(): string {
     const control = this.control();
 
     if (!control) {
-      return 'The control document will be created when the commissioner worker performs its first refresh.';
+      return 'The control document will be created by the server during the first scheduled or manual refresh.';
     }
 
     if (control.lastError) {
       return control.lastError;
     }
 
-    if (this.isPaused()) {
-      return 'This tab is intentionally paused so another commissioner tab can take over.';
-    }
-
-    if (this.isLeaseHolder()) {
-      return 'Only this browser tab should request NHL data until the lease is released or expires.';
+    if (control.status === 'refreshing' && control.holderClientId?.startsWith('server:')) {
+      return 'A trusted Cloud Function is calculating scores and publishing any changed snapshots.';
     }
 
     if (control.holderClientId && this.isLeaseActive()) {
-      return 'This tab is listening to the shared results and will not duplicate the active worker.';
+      return 'An active legacy browser lease is present. Clear it only after confirming no server refresh is running.';
     }
 
-    return 'No active lease is blocking the next eligible commissioner refresh.';
+    return 'Scheduled server automation owns scoring. Browsers can read results and commissioners can request a trusted server refresh.';
   }
 
   getRefreshReasonLabel(): string {

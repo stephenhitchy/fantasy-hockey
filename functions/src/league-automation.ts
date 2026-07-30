@@ -60,6 +60,13 @@ const ERROR_RETRY_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 const MAX_TRANSITION_PASSES = 3;
 const MAX_PARALLEL_LEAGUES = 2;
 
+type LeagueAutomationTrigger =
+  | 'scheduled'
+  | 'draft-complete'
+  | 'season-start'
+  | 'historical-replay'
+  | 'manual';
+
 const HISTORICAL_REPLAY_TARGET_SEASON = '20262027';
 const HISTORICAL_REPLAY_SOURCE_SEASON = '20252026';
 const HISTORICAL_REPLAY_TEAMS = [
@@ -695,7 +702,7 @@ async function claimLeagueAutomationLease(
   leagueId: string,
   workerId: string,
   force: boolean,
-  trigger: 'scheduled' | 'draft-complete' | 'season-start' | 'historical-replay',
+  trigger: LeagueAutomationTrigger,
 ): Promise<LeaseClaimResult> {
   const controlRef = getControlRef(leagueId);
   const now = Date.now();
@@ -1061,7 +1068,7 @@ async function ensureCycleOneStarted(
 async function runLeagueAutomation(
   leagueId: string,
   force: boolean,
-  trigger: 'scheduled' | 'draft-complete' | 'season-start' | 'historical-replay',
+  trigger: LeagueAutomationTrigger,
 ): Promise<LeagueAutomationResult> {
   const startedAt = Date.now();
   const workerId = `${SERVER_WORKER_PREFIX}${randomUUID()}`;
@@ -1242,7 +1249,7 @@ async function runLeagueAutomation(
           Date.now() + refreshDelay,
         ),
         lastRefreshCompletedAt: FieldValue.serverTimestamp(),
-        lastRefreshReason: 'scheduled',
+        lastRefreshReason: trigger,
         serverTrigger: trigger,
         serverHeartbeatAt: FieldValue.serverTimestamp(),
         lastRefreshDurationMs: Math.max(0, Date.now() - startedAt),
@@ -1290,7 +1297,7 @@ async function runLeagueAutomation(
         nextRefreshAt: Timestamp.fromMillis(
           Date.now() + ERROR_RETRY_INTERVAL_MILLISECONDS,
         ),
-        lastRefreshReason: 'scheduled',
+        lastRefreshReason: trigger,
         serverTrigger: trigger,
         serverHeartbeatAt: FieldValue.serverTimestamp(),
         lastError: message.slice(0, 500),
@@ -1512,6 +1519,249 @@ export const initializeSeasonAfterDraft = onDocumentWritten(
       true,
       'draft-complete',
     );
+  },
+);
+
+interface ManualLiveScoringRefreshResult {
+  status: 'success';
+  activeCycleNumbers: number[];
+  publishedSnapshotCount: number;
+  skippedSnapshotCount: number;
+  cycleOneCreated: boolean;
+  durationMilliseconds: number;
+}
+
+interface LiveScoringControlResetResult {
+  reset: true;
+  message: string;
+}
+
+function requestedLeagueId(data: unknown): string {
+  if (!data || typeof data !== 'object') {
+    return '';
+  }
+
+  const leagueId = (data as Record<string, unknown>)['leagueId'];
+  return typeof leagueId === 'string' ? leagueId.trim() : '';
+}
+
+async function requireLeagueCommissioner(
+  userId: string | undefined,
+  leagueId: string,
+): Promise<ServerLeague> {
+  if (!userId) {
+    throw new HttpsError(
+      'unauthenticated',
+      'You must be signed in to manage live scoring.',
+    );
+  }
+
+  if (!leagueId) {
+    throw new HttpsError('invalid-argument', 'A league id is required.');
+  }
+
+  const league = await getServerLeague(leagueId);
+
+  if (!league) {
+    throw new HttpsError('not-found', 'League not found.');
+  }
+
+  if (league.commissionerId !== userId) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the league commissioner can manage live scoring.',
+    );
+  }
+
+  return league;
+}
+
+/**
+ * Runs the same Admin-SDK scoring path used by the ten-minute scheduler.
+ * Browsers never write liveScoring/control or cycle snapshots directly.
+ */
+export const requestLeagueLiveScoringRefresh = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    cors: TRUSTED_WEB_ORIGINS,
+  },
+  async (request): Promise<ManualLiveScoringRefreshResult> => {
+    const leagueId = requestedLeagueId(request.data);
+    await requireLeagueCommissioner(request.auth?.uid, leagueId);
+
+    const replayControl = await getHistoricalReplayControl(leagueId);
+
+    if (replayControl) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Live score refresh is disabled while historical replay is active. Use Advance One Day instead.',
+      );
+    }
+
+    try {
+      const result = await runLeagueAutomation(leagueId, true, 'manual');
+
+      if (result.status === 'skipped') {
+        throw new HttpsError(
+          'aborted',
+          'Another server scoring update is already finishing. Wait a moment and try again.',
+        );
+      }
+
+      return {
+        status: 'success',
+        activeCycleNumbers: result.activeCycleNumbers,
+        publishedSnapshotCount: result.publishedSnapshotCount,
+        skippedSnapshotCount: result.skippedSnapshotCount,
+        cycleOneCreated: result.cycleOneCreated,
+        durationMilliseconds: result.durationMilliseconds,
+      };
+    } catch (error: unknown) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      const message = error instanceof Error
+        ? error.message
+        : 'The server scoring refresh failed.';
+
+      throw new HttpsError('unavailable', message);
+    }
+  },
+);
+
+/**
+ * Clears a stale browser-era lease without interrupting an active server run.
+ * Kept for the diagnostics screen while the broader scoring UI is refactored.
+ */
+export const releaseLeagueLiveScoringHandoff = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    cors: TRUSTED_WEB_ORIGINS,
+  },
+  async (request): Promise<LiveScoringControlResetResult> => {
+    const leagueId = requestedLeagueId(request.data);
+    await requireLeagueCommissioner(request.auth?.uid, leagueId);
+
+    const controlRef = getControlRef(leagueId);
+    const now = Date.now();
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(controlRef);
+      const data = snapshot.data() ?? {};
+      const holderClientId =
+        typeof data['holderClientId'] === 'string' ? data['holderClientId'] : '';
+      const leaseExpiresAt = toMilliseconds(data['leaseExpiresAt']);
+      const serverWorkerActive =
+        data['status'] === 'refreshing' &&
+        holderClientId.startsWith(SERVER_WORKER_PREFIX) &&
+        leaseExpiresAt > now;
+
+      if (serverWorkerActive) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A server scoring update is currently running. Wait for it to finish before resetting the control record.',
+        );
+      }
+
+      transaction.set(
+        controlRef,
+        {
+          id: 'control',
+          schemaVersion: 2,
+          automationMode: 'server',
+          serverAutomationEnabled: true,
+          status: 'idle',
+          holderUserId: null,
+          holderClientId: '',
+          leaseExpiresAt: Timestamp.fromMillis(now),
+          nextRefreshAt: Timestamp.fromMillis(now),
+          lastRefreshReason: 'manual',
+          serverTrigger: 'manual-control-reset',
+          lastError: '',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    return {
+      reset: true,
+      message: 'The stale live-scoring control lease was released.',
+    };
+  },
+);
+
+/**
+ * Recovery action used by Release Readiness. It only resets an expired lease
+ * or an error state and refuses to interrupt a healthy active worker.
+ */
+export const clearExpiredOrErroredLiveScoringLease = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    cors: TRUSTED_WEB_ORIGINS,
+  },
+  async (request): Promise<LiveScoringControlResetResult> => {
+    const leagueId = requestedLeagueId(request.data);
+    await requireLeagueCommissioner(request.auth?.uid, leagueId);
+
+    const controlRef = getControlRef(leagueId);
+    const now = Date.now();
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(controlRef);
+
+      if (!snapshot.exists) {
+        return;
+      }
+
+      const data = snapshot.data() ?? {};
+      const holderClientId =
+        typeof data['holderClientId'] === 'string' ? data['holderClientId'] : '';
+      const leaseExpiresAt = toMilliseconds(data['leaseExpiresAt']);
+      const healthyActiveLease =
+        data['status'] !== 'error' &&
+        Boolean(holderClientId) &&
+        leaseExpiresAt > now;
+
+      if (healthyActiveLease) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The scoring worker still has a healthy active lease. Wait for it to finish before using recovery.',
+        );
+      }
+
+      transaction.set(
+        controlRef,
+        {
+          id: 'control',
+          schemaVersion: 2,
+          automationMode: 'server',
+          serverAutomationEnabled: true,
+          status: 'idle',
+          holderUserId: null,
+          holderClientId: '',
+          leaseExpiresAt: Timestamp.fromMillis(now),
+          nextRefreshAt: Timestamp.fromMillis(now),
+          lastRefreshReason: 'manual',
+          serverTrigger: 'manual-recovery',
+          lastError: '',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    return {
+      reset: true,
+      message: 'The expired or errored live-scoring lease was cleared.',
+    };
   },
 );
 

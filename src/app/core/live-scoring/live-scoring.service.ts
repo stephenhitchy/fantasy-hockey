@@ -9,8 +9,10 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 
 import { auth, db } from '../firebase';
+import { functions } from '../firebase-functions';
 import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scoring.service';
 import {
   advanceCompletedRegularSeasonAssetWindows,
@@ -48,7 +50,35 @@ const RAPID_TRANSITION_REFRESH_MS = 7_500;
 const ERROR_RETRY_INTERVAL_MS = 5 * 60 * 1000;
 const LEASE_DURATION_MS = 15 * 60 * 1000;
 const CLAIM_JITTER_MS = 1_500;
-const HANDOFF_PAUSE_MS = 20 * 60 * 1000;
+
+interface ManualLiveScoringRefreshResult {
+  status: 'success';
+  activeCycleNumbers: number[];
+  publishedSnapshotCount: number;
+  skippedSnapshotCount: number;
+  cycleOneCreated: boolean;
+  durationMilliseconds: number;
+}
+
+interface LiveScoringControlResetResult {
+  reset: true;
+  message: string;
+}
+
+const requestServerLiveScoringRefresh = httpsCallable<
+  { leagueId: string },
+  ManualLiveScoringRefreshResult
+>(functions, 'requestLeagueLiveScoringRefresh');
+
+const releaseServerLiveScoringHandoff = httpsCallable<
+  { leagueId: string },
+  LiveScoringControlResetResult
+>(functions, 'releaseLeagueLiveScoringHandoff');
+
+const clearServerLiveScoringLease = httpsCallable<
+  { leagueId: string },
+  LiveScoringControlResetResult
+>(functions, 'clearExpiredOrErroredLiveScoringLease');
 
 interface CachedCycleContext {
   key: string;
@@ -931,67 +961,11 @@ export async function releaseLeagueLiveScoringLeaseForHandoff(leagueId: string):
     throw new Error('You must be signed in to release the scoring lease.');
   }
 
-  const league = await getLeagueById(leagueId);
+  const response = await releaseServerLiveScoringHandoff({ leagueId });
 
-  if (!league || league.commissionerId !== user.uid) {
-    throw new Error('Only the league commissioner can release the scoring lease.');
+  if (!response.data.reset) {
+    throw new Error('The live-scoring control record was not reset.');
   }
-
-  const session = sessions.get(leagueId);
-  const clientId = session?.clientId ?? getClientId();
-  const now = Date.now();
-
-  if (session) {
-    session.pausedUntil = now + HANDOFF_PAUSE_MS;
-    session.nextRefreshReason = 'handoff';
-
-    if (session.timer) {
-      clearTimeout(session.timer);
-      session.timer = null;
-    }
-  }
-
-  await runTransaction(db, async (transaction) => {
-    const controlRef = getControlRef(leagueId);
-    const snapshot = await transaction.get(controlRef);
-    const current = snapshot.exists()
-      ? normalizeControl(snapshot.data() as Partial<SharedLiveScoringControl>)
-      : null;
-    const leaseExpiresAt = toMillis(current?.leaseExpiresAt) ?? 0;
-
-    if (current?.holderClientId && current.holderClientId !== clientId && leaseExpiresAt > now) {
-      throw new Error('This browser does not currently hold the active scoring lease.');
-    }
-
-    transaction.set(
-      controlRef,
-      {
-        id: 'control',
-        schemaVersion: 1,
-        status: 'idle',
-        holderUserId: null,
-        holderClientId: null,
-        leaseExpiresAt: Timestamp.fromMillis(now),
-        nextRefreshAt: Timestamp.fromMillis(now),
-        lastRefreshReason: 'handoff',
-        lastError: '',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
-}
-
-export function resumeLeagueLiveScoringSession(leagueId: string): void {
-  const session = sessions.get(leagueId);
-
-  if (!session) {
-    return;
-  }
-
-  session.pausedUntil = 0;
-  session.nextRefreshReason = 'manual';
-  scheduleSessionAttempt(session, 250);
 }
 
 export async function requestLeagueLiveScoringRefresh(leagueId: string): Promise<void> {
@@ -1001,44 +975,10 @@ export async function requestLeagueLiveScoringRefresh(leagueId: string): Promise
     throw new Error('You must be signed in to refresh shared scoring.');
   }
 
-  const league = await getLeagueById(leagueId);
+  const response = await requestServerLiveScoringRefresh({ leagueId });
 
-  if (!league || league.commissionerId !== user.uid) {
-    throw new Error('Only the league commissioner can force a shared scoring refresh.');
-  }
-
-  const existingControlSnapshot = await getDoc(getControlRef(leagueId));
-  const existingControl = existingControlSnapshot.exists()
-    ? normalizeControl(existingControlSnapshot.data() as Partial<SharedLiveScoringControl>)
-    : null;
-
-  if (existingControl?.historicalReplayEnabled) {
-    throw new Error(
-      'Live score refresh is disabled while historical replay is active. Use Advance One Day instead.',
-    );
-  }
-
-  await setDoc(
-    getControlRef(leagueId),
-    {
-      id: 'control',
-      schemaVersion: 1,
-      status: 'idle',
-      nextRefreshAt: Timestamp.fromMillis(Date.now()),
-      refreshRequestedAt: serverTimestamp(),
-      lastRefreshReason: 'manual',
-      lastError: '',
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  const session = sessions.get(leagueId);
-
-  if (session) {
-    session.pausedUntil = 0;
-    session.nextRefreshReason = 'manual';
-    scheduleSessionAttempt(session, 250);
+  if (response.data.status !== 'success') {
+    throw new Error('The server scoring refresh did not complete successfully.');
   }
 }
 
@@ -1054,9 +994,8 @@ export async function getSharedLiveScoringControlOnce(
 }
 
 /**
- * Safe recovery for an expired or errored lease. A healthy active worker is
- * never interrupted; commissioners should use the normal handoff button for
- * that case.
+ * Safe server recovery for an expired or errored control lease. A healthy
+ * active worker is never interrupted.
  */
 export async function clearExpiredOrErroredLiveScoringLease(leagueId: string): Promise<void> {
   const user = await waitForAuthUser();
@@ -1065,56 +1004,9 @@ export async function clearExpiredOrErroredLiveScoringLease(leagueId: string): P
     throw new Error('You must be signed in to clear a scoring lease.');
   }
 
-  const league = await getLeagueById(leagueId);
+  const response = await clearServerLiveScoringLease({ leagueId });
 
-  if (!league || league.commissionerId !== user.uid) {
-    throw new Error('Only the league commissioner can clear a scoring lease.');
-  }
-
-  const now = Date.now();
-
-  await runTransaction(db, async (transaction) => {
-    const controlRef = getControlRef(leagueId);
-    const snapshot = await transaction.get(controlRef);
-
-    if (!snapshot.exists()) {
-      return;
-    }
-
-    const current = normalizeControl(snapshot.data() as Partial<SharedLiveScoringControl>);
-    const leaseExpiresAt = toMillis(current?.leaseExpiresAt) ?? 0;
-    const healthyActiveLease =
-      current?.status !== 'error' && Boolean(current?.holderClientId) && leaseExpiresAt > now;
-
-    if (healthyActiveLease) {
-      throw new Error(
-        'The scoring worker still has a healthy active lease. Use the normal handoff control from the lease-holding tab instead.',
-      );
-    }
-
-    transaction.set(
-      controlRef,
-      {
-        id: 'control',
-        schemaVersion: 1,
-        status: 'idle',
-        holderUserId: null,
-        holderClientId: null,
-        leaseExpiresAt: Timestamp.fromMillis(now),
-        nextRefreshAt: Timestamp.fromMillis(now),
-        lastRefreshReason: 'handoff',
-        lastError: '',
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
-
-  const session = sessions.get(leagueId);
-
-  if (session) {
-    session.pausedUntil = 0;
-    session.nextRefreshReason = 'handoff';
-    scheduleSessionAttempt(session, 250);
+  if (!response.data.reset) {
+    throw new Error('The expired or errored scoring lease was not cleared.');
   }
 }

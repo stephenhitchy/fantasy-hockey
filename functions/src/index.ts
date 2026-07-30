@@ -3260,7 +3260,10 @@ export const updateAdminErrorReview = onCall(
 
 export {
   advanceHistoricalReplayDay,
+  clearExpiredOrErroredLiveScoringLease,
   initializeSeasonAfterDraft,
+  releaseLeagueLiveScoringHandoff,
+  requestLeagueLiveScoringRefresh,
   runScheduledLeagueAutomation,
   runSeasonStartAutomation,
 } from './league-automation';

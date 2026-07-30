@@ -1,0 +1,88 @@
+RINKRAT — BATCH 1 SECURITY TEST FOUNDATION
+===========================================
+
+Purpose
+-------
+This batch creates a repeatable security test foundation before the more restrictive roster,
+draft, scoring, injury, and profile changes begin.
+
+What changed
+------------
+1. Added 24 Firestore Emulator security tests covering:
+   - signed-out access
+   - account profiles
+   - league members and outsiders
+   - team and roster records
+   - draft state, picks, and private queues
+   - transactions and waivers
+   - cycles, matchups, roster picks, and team windows
+   - playoff records and playoff window banks
+   - live-scoring documents
+   - global and league-specific availability records
+
+2. Added five test identities:
+   - commissioner
+   - manager
+   - opponent manager
+   - signed-in league outsider
+   - signed-out browser
+
+3. Added safe emulator commands:
+   - npm run test:rules
+   - npm run verify:batch1
+
+   The rules suite uses the demo project id demo-rinkrat-rules. It does not use the production
+   Firebase project.
+
+4. Documented current security exposures as executable tests.
+   Tests labeled [baseline exposure] intentionally prove that a risky permission still exists.
+   Those tests will be flipped from allowed to denied as later batches harden each area.
+
+5. Fixed the live-scoring refresh permission mismatch.
+   The browser no longer tries to write leagues/{leagueId}/liveScoring/control when the
+   commissioner requests a refresh. It now calls a trusted Cloud Function that runs the same
+   Admin SDK scoring path used by scheduled automation.
+
+6. Added two server-controlled scoring recovery actions:
+   - releaseLeagueLiveScoringHandoff
+   - clearExpiredOrErroredLiveScoringLease
+
+   Both refuse to interrupt a healthy active server worker.
+
+7. Updated the Live Scoring Diagnostics screen so it describes server automation rather than a
+   commissioner browser acting as the authoritative scoring worker.
+
+Intentionally not fixed in Batch 1
+----------------------------------
+The following exposures remain because later batches will change them behind dedicated server
+transactions and migration-safe client flows:
+
+- owners can directly overwrite structurally valid roster documents
+- commissioners can directly overwrite other teams' rosters
+- draft picks can contain non-canonical client asset objects
+- commissioners can directly alter draft and competition records
+- transaction and waiver validation trusts too much client data
+- commissioners can write the global availability document
+- any signed-in user can get another user's full profile document
+
+Leaving these unchanged in this batch prevents us from tightening rules without first having tests
+that prove which legitimate flows would break.
+
+Files added
+-----------
+- test/firestore-rules/emulator-helpers.mjs
+- test/firestore-rules/firestore.rules.test.mjs
+- test/firestore-rules/README.md
+- BATCH_1_SECURITY_TEST_FOUNDATION_UPDATE.txt
+- BATCH_1_MANUAL_TEST_CHECKLIST.md
+
+Files updated
+-------------
+- package.json
+- firebase.json
+- functions/src/index.ts
+- functions/src/league-automation.ts
+- src/app/core/live-scoring/live-scoring.service.ts
+- src/app/features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics.ts
+- src/app/features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics.html
+- src/app/features/cycles/cycle-one/cycle-one.ts
