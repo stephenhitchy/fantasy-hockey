@@ -1,16 +1,9 @@
-import {
-  Component,
-  computed,
-  ElementRef,
-  HostListener,
-  OnDestroy,
-  signal,
-  ViewChild,
-} from '@angular/core';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 
 import { TelemetryService } from '../../core/observability/telemetry.service';
+import { DialogFocusTrapDirective } from '../accessibility/dialog-focus-trap.directive';
 
 interface CoachGuide {
   id: string;
@@ -33,14 +26,11 @@ const DEFAULT_GUIDE: CoachGuide = {
 @Component({
   selector: 'app-coach-help',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DialogFocusTrapDirective],
   templateUrl: './coach-help.html',
   styleUrl: './coach-help.css',
 })
 export class CoachHelp implements OnDestroy {
-  @ViewChild('coachTrigger') private triggerButton?: ElementRef<HTMLButtonElement>;
-  @ViewChild('coachPanel') private panel?: ElementRef<HTMLElement>;
-
   readonly open = signal(false);
   readonly currentUrl = signal('');
 
@@ -65,41 +55,6 @@ export class CoachHelp implements OnDestroy {
     this.routeSubscription.unsubscribe();
   }
 
-  @HostListener('document:keydown', ['$event'])
-  handleDocumentKeydown(event: KeyboardEvent): void {
-    if (!this.open()) {
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.close();
-      return;
-    }
-
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const focusable = this.getFocusableElements();
-
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0]!;
-    const last = focusable[focusable.length - 1]!;
-    const active = document.activeElement;
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   toggle(): void {
     const nextOpen = !this.open();
     this.open.set(nextOpen);
@@ -109,9 +64,6 @@ export class CoachHelp implements OnDestroy {
         topic: this.guide().id,
       });
 
-      window.requestAnimationFrame(() => {
-        this.getFocusableElements()[0]?.focus();
-      });
     }
   }
 
@@ -121,21 +73,6 @@ export class CoachHelp implements OnDestroy {
     }
 
     this.open.set(false);
-    window.requestAnimationFrame(() => this.triggerButton?.nativeElement.focus());
-  }
-
-  private getFocusableElements(): HTMLElement[] {
-    const panel = this.panel?.nativeElement;
-
-    if (!panel) {
-      return [];
-    }
-
-    return Array.from(
-      panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((element) => !element.hasAttribute('hidden'));
   }
 
   private buildGuide(rawUrl: string): CoachGuide {

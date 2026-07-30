@@ -1,5 +1,4 @@
 <button
-  #coachTrigger
   type="button"
   class="coach-help-trigger"
   [class.open]="open()"
@@ -19,11 +18,12 @@
 @if (open()) {
   <div class="coach-help-backdrop" role="presentation" (click)="close()">
     <aside
-      #coachPanel
       id="rinkrat-coach-panel"
       class="coach-help-panel"
       role="dialog"
       aria-modal="true"
+      appDialogFocusTrap
+      (dialogEscape)="close()"
       [attr.aria-labelledby]="'coach-help-title'"
       (click)="$event.stopPropagation()"
     >

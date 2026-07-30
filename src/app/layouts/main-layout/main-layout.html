@@ -1,5 +1,9 @@
 <a class="skip-link" href="#main-content"> Skip to main content </a>
 
+<p class="rr-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+  {{ routeAnnouncement() }}
+</p>
+
 <app-navbar></app-navbar>
 
 @if (scoringRuntime.effectiveMode === 'historical' || scoringRuntime.historicalModeBlocked) {
@@ -42,7 +46,7 @@
   </div>
 </div>
 
-<main id="main-content" class="main-content" tabindex="-1">
+<main #mainContent id="main-content" class="main-content" tabindex="-1">
   <router-outlet></router-outlet>
 </main>
 

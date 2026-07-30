@@ -1,4 +1,4 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, ElementRef, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
@@ -26,6 +26,11 @@ import {
   styleUrl: './auth.css',
 })
 export class Auth {
+  @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('favoriteTeamGrid') private favoriteTeamGrid?: ElementRef<HTMLElement>;
+  @ViewChild('emailInput') private emailInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('passwordInput') private passwordInput?: ElementRef<HTMLInputElement>;
+
   email = '';
   password = '';
   username = '';
@@ -35,6 +40,7 @@ export class Auth {
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
   readonly loading = signal(false);
+  readonly invalidField = signal<'username' | 'team' | 'email' | 'password' | ''>('');
   readonly mascotCelebrating = signal(false);
 
   readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
@@ -95,6 +101,10 @@ export class Auth {
     return this.isRegistering() ? 'Create Profile' : 'Login';
   });
 
+  readonly passwordAutocomplete = computed(() =>
+    this.isRegistering() ? 'new-password' : 'current-password',
+  );
+
   constructor(
     private router: Router,
     private route: ActivatedRoute,
@@ -118,18 +128,18 @@ export class Auth {
       return;
     }
 
+    if (!this.validateCurrentForm()) {
+      return;
+    }
+
     if (this.isResettingPassword()) {
       await this.submitPasswordReset();
       return;
     }
 
-    if (this.isRegistering() && !this.favoriteTeamAbbreviation()) {
-      this.errorMessage.set('Choose your favorite NHL team to finish creating your profile.');
-      return;
-    }
-
     this.errorMessage.set('');
     this.successMessage.set('');
+    this.invalidField.set('');
     this.loading.set(true);
     this.mascotCelebrating.set(false);
 
@@ -212,11 +222,6 @@ export class Auth {
   private async submitPasswordReset(): Promise<void> {
     const normalizedEmail = this.email.trim();
 
-    if (!normalizedEmail) {
-      this.errorMessage.set('Enter the email address used for your account.');
-      return;
-    }
-
     this.errorMessage.set('');
     this.successMessage.set('');
     this.loading.set(true);
@@ -241,6 +246,7 @@ export class Auth {
     }
 
     this.favoriteTeamAbbreviation.set(team.abbreviation);
+    this.invalidField.set('');
     this.errorMessage.set('');
     applyUserTheme(
       {
@@ -252,6 +258,45 @@ export class Auth {
     );
   }
 
+  handleTeamGridKeydown(event: KeyboardEvent, currentTeam: PixelTeamTheme): void {
+    const supportedKeys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+
+    if (!supportedKeys.includes(event.key) || this.loading()) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const currentIndex = this.teams.findIndex(
+      (team) => team.abbreviation === currentTeam.abbreviation,
+    );
+    let nextIndex = currentIndex;
+
+    if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = this.teams.length - 1;
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1) % this.teams.length;
+    } else {
+      nextIndex = (currentIndex - 1 + this.teams.length) % this.teams.length;
+    }
+
+    const nextTeam = this.teams[nextIndex];
+
+    if (!nextTeam) {
+      return;
+    }
+
+    this.selectRegistrationTeam(nextTeam);
+
+    window.requestAnimationFrame(() => {
+      const buttons =
+        this.favoriteTeamGrid?.nativeElement.querySelectorAll<HTMLButtonElement>('button');
+      buttons?.[nextIndex]?.focus({ preventScroll: true });
+    });
+  }
+
   toggleMode(): void {
     const nextMode = !this.isRegistering();
 
@@ -261,6 +306,7 @@ export class Auth {
     this.password = '';
     this.errorMessage.set('');
     this.successMessage.set('');
+    this.invalidField.set('');
     this.loading.set(false);
     this.mascotCelebrating.set(false);
     applyUserTheme(loadStoredUserTheme(), { persist: false });
@@ -276,6 +322,7 @@ export class Auth {
     this.password = '';
     this.errorMessage.set('');
     this.successMessage.set('');
+    this.invalidField.set('');
     this.mascotCelebrating.set(false);
   }
 
@@ -289,6 +336,83 @@ export class Auth {
     this.password = '';
     this.errorMessage.set('');
     this.successMessage.set('');
+    this.invalidField.set('');
+  }
+
+  clearInvalidField(field: 'username' | 'email' | 'password'): void {
+    if (this.invalidField() === field) {
+      this.invalidField.set('');
+      this.errorMessage.set('');
+    }
+  }
+
+  private validateCurrentForm(): boolean {
+    if (this.isRegistering() && this.username.trim().length < 2) {
+      this.setValidationError(
+        'username',
+        'Enter a username with at least two characters.',
+        this.usernameInput?.nativeElement,
+      );
+      return false;
+    }
+
+    if (this.isRegistering() && !this.favoriteTeamAbbreviation()) {
+      const firstTeamButton =
+        this.favoriteTeamGrid?.nativeElement.querySelector<HTMLButtonElement>('button');
+      this.setValidationError(
+        'team',
+        'Choose your favorite NHL team to finish creating your profile.',
+        firstTeamButton ?? this.favoriteTeamGrid?.nativeElement,
+      );
+      return false;
+    }
+
+    const normalizedEmail = this.email.trim();
+    const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+
+    if (!normalizedEmail || !emailLooksValid) {
+      this.setValidationError(
+        'email',
+        normalizedEmail
+          ? 'Enter a valid email address.'
+          : 'Enter the email address used for your account.',
+        this.emailInput?.nativeElement,
+      );
+      return false;
+    }
+
+    if (this.isResettingPassword()) {
+      return true;
+    }
+
+    const minimumPasswordLength = this.isRegistering() ? 6 : 1;
+
+    if (this.password.length < minimumPasswordLength) {
+      this.setValidationError(
+        'password',
+        this.isRegistering()
+          ? 'Choose a password with at least six characters.'
+          : 'Enter your password.',
+        this.passwordInput?.nativeElement,
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  private setValidationError(
+    field: 'username' | 'team' | 'email' | 'password',
+    message: string,
+    focusTarget?: HTMLElement,
+  ): void {
+    this.invalidField.set(field);
+    this.successMessage.set('');
+    this.errorMessage.set(message);
+
+    if (focusTarget && typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
+    }
   }
 
   private safeReturnUrl(): string {

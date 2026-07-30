@@ -11,20 +11,24 @@ import {
 export const routes: Routes = [
   {
     path: '',
+    title: 'RinkRat Fantasy',
     pathMatch: 'full',
     loadComponent: () => import('./features/auth/auth').then((module) => module.Auth),
   },
   {
     path: 'privacy',
+    title: 'Privacy',
     loadComponent: () =>
       import('./features/legal/privacy/privacy').then((module) => module.PrivacyPage),
   },
   {
     path: 'terms',
+    title: 'Terms',
     loadComponent: () => import('./features/legal/terms/terms').then((module) => module.TermsPage),
   },
   {
     path: 'support',
+    title: 'Support',
     loadComponent: () =>
       import('./features/support/support-home/support-home').then(
         (module) => module.SupportHome,
@@ -39,11 +43,13 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
+        title: 'Dashboard',
         loadComponent: () =>
           import('./features/dashboard/dashboard').then((module) => module.Dashboard),
       },
       {
         path: 'training-camp',
+        title: 'Training Camp',
         loadComponent: () =>
           import('./features/onboarding/training-camp/training-camp').then(
             (module) => module.TrainingCamp,
@@ -51,6 +57,7 @@ export const routes: Routes = [
       },
       {
         path: 'scoring',
+        title: 'Scoring Guide',
         loadComponent: () =>
           import('./features/scoring/scoring-guide/scoring-guide').then(
             (module) => module.ScoringGuide,
@@ -58,6 +65,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/create',
+        title: 'Create League',
         loadComponent: () =>
           import('./features/leagues/create-league/create-league').then(
             (module) => module.CreateLeague,
@@ -65,6 +73,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/join',
+        title: 'Join League',
         loadComponent: () =>
           import('./features/leagues/join-league/join-league').then(
             (module) => module.JoinLeague,
@@ -72,6 +81,7 @@ export const routes: Routes = [
       },
       {
         path: 'account/settings',
+        title: 'Account Settings',
         loadComponent: () =>
           import('./features/account/account-settings/account-settings').then(
             (module) => module.AccountSettings,
@@ -79,11 +89,13 @@ export const routes: Routes = [
       },
       {
         path: 'support/feedback',
+        title: 'Send Feedback',
         loadComponent: () =>
           import('./features/support/feedback/feedback').then((module) => module.FeedbackPage),
       },
       {
         path: 'admin',
+        title: 'Admin Center',
         canActivate: [platformAdminGuard],
         loadComponent: () =>
           import('./features/admin/admin-center/admin-center').then(
@@ -92,6 +104,7 @@ export const routes: Routes = [
       },
       {
         path: 'access-denied',
+        title: 'Access Denied',
         loadComponent: () =>
           import('./features/errors/access-denied/access-denied').then(
             (module) => module.AccessDenied,
@@ -99,12 +112,14 @@ export const routes: Routes = [
       },
       {
         path: 'scoring-test',
+        title: 'Scoring Test Lab',
         canActivate: [developerToolsGuard],
         loadComponent: () =>
           import('./features/scoring-test/scoring-test').then((module) => module.ScoringTest),
       },
       {
         path: 'players/:playerId',
+        title: 'Player Details',
         loadComponent: () =>
           import('./features/players/player-detail/player-detail').then(
             (module) => module.PlayerDetail,
@@ -112,6 +127,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/team',
+        title: 'My Team',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/team/team-settings/team-settings').then(
@@ -120,12 +136,14 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/free-agents',
+        title: 'Free Agents',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/free-agents/free-agents').then((module) => module.FreeAgents),
       },
       {
         path: 'leagues/:leagueId/draft/setup',
+        title: 'Draft Setup',
         canActivate: [leagueMemberGuard, commissionerGuard],
         loadComponent: () =>
           import('./features/draft/draft-setup/draft-setup').then(
@@ -134,12 +152,14 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/draft',
+        title: 'Draft Room',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/draft/draft-room/draft-room').then((module) => module.DraftRoom),
       },
       {
         path: 'leagues/:leagueId/projections',
+        title: 'Projection Lab',
         canActivate: [leagueMemberGuard, commissionerGuard],
         loadComponent: () =>
           import('./features/projections/projection-lab/projection-lab').then(
@@ -148,6 +168,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/player-availability',
+        title: 'Player Availability',
         canActivate: [leagueMemberGuard, commissionerGuard],
         loadComponent: () =>
           import('./features/player-availability/player-availability-manager/player-availability-manager').then(
@@ -156,6 +177,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/live-scoring',
+        title: 'Live Scoring Diagnostics',
         canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
         loadComponent: () =>
           import('./features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics').then(
@@ -164,6 +186,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/release-readiness',
+        title: 'Release Readiness',
         canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
         loadComponent: () =>
           import('./features/release/release-readiness/release-readiness').then(
@@ -172,6 +195,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/standings',
+        title: 'Standings',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/leagues/league-standings/league-standings').then(
@@ -180,6 +204,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/leaders',
+        title: 'Point Leaders',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/leaders/point-leaders/point-leaders').then(
@@ -188,6 +213,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/scoring',
+        title: 'Scoring Guide',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/scoring/scoring-guide/scoring-guide').then(
@@ -196,6 +222,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/playoffs/simulator',
+        title: 'Playoff Window Simulator',
         canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
         loadComponent: () =>
           import('./features/playoffs/playoff-window-simulator/playoff-window-simulator').then(
@@ -204,6 +231,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/playoffs',
+        title: 'Playoffs',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/playoffs/playoff-bracket/playoff-bracket').then(
@@ -212,6 +240,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/schedule-preview',
+        title: 'Schedule Preview',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/schedule-preview/cycle-schedule-preview').then(
@@ -220,6 +249,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/simulator',
+        title: 'Cycle Simulator',
         canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-simulator/cycle-simulator').then(
@@ -228,12 +258,14 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId',
+        title: 'Game Center',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-one/cycle-one').then((module) => module.CycleOne),
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/matchups',
+        title: 'Matchups',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/matchup-overview/cycle-matchup-overview').then(
@@ -242,6 +274,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',
+        title: 'Player Window',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-asset-detail/cycle-asset-detail').then(
@@ -250,12 +283,14 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber',
+        title: 'Game Center',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-one/cycle-one').then((module) => module.CycleOne),
       },
       {
         path: 'leagues/:leagueId',
+        title: 'League HQ',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/leagues/league-detail/league-detail').then(

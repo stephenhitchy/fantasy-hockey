@@ -211,6 +211,8 @@
       role="dialog"
       aria-modal="true"
       aria-label="More navigation"
+      appDialogFocusTrap
+      (dialogEscape)="closeMore()"
       (click)="$event.stopPropagation()"
     >
       <header class="mobile-menu-header">

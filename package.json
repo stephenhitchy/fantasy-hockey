@@ -41,7 +41,10 @@
     "test:documentation:run": "node --test --test-concurrency=1 test/documentation/*.test.mjs",
     "test:design-system:run": "node --test --test-concurrency=1 test/design-system/*.test.mjs",
     "audit:design-system": "node scripts/audit-design-system.mjs",
-    "verify:batch7a": "npm run verify:batch6c && npm run test:design-system:run && npm run audit:design-system"
+    "verify:batch7a": "npm run verify:batch6c && npm run test:design-system:run && npm run audit:design-system",
+    "test:accessibility:run": "node --test --test-concurrency=1 test/accessibility-foundation/*.test.mjs",
+    "audit:accessibility": "node scripts/audit-accessibility.mjs",
+    "verify:batch7b": "npm run verify:batch7a && npm run test:accessibility:run && npm run audit:accessibility"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

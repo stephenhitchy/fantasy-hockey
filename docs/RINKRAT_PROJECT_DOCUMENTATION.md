@@ -6105,3 +6105,55 @@ For one favorite-team palette with a light primary color and one with a dark pri
 - No new console errors appear.
 
 This batch changes only CSS organization, opt-in shared style foundations, tests, and documentation. It does not change Angular behavior, Firebase configuration, Firestore rules, Cloud Functions, scoring, drafts, rosters, cycles, standings, injuries, or playoffs.
+
+# Batch 7B — Accessibility Foundations
+
+Batch 7B standardizes keyboard, focus, form, and route-announcement behavior without redesigning the approved RinkRat pages or changing fantasy logic.
+
+## What changed
+
+- Added `DialogFocusTrapDirective`, a standalone shared directive that:
+  - Moves focus into an opened dialog.
+  - Keeps Tab and Shift+Tab inside the dialog.
+  - Restores focus to the control that opened the dialog.
+  - Emits a consistent Escape action for dismissible dialogs.
+- Applied the shared dialog behavior to Coach Help, the mobile More menu, all My Team roster-move dialogs, and the automatic Draft Is Live prompt.
+- Converted the sign-in, registration, and password-reset controls into one semantic form. Pressing Enter now submits the current action.
+- Added explicit input names, labels, autocomplete values, required states, busy state, accessible validation, and automatic focus on the first invalid field.
+- Converted favorite-team selection to a radio-group interaction with Arrow keys, Home, End, Enter, and Space support.
+- Added route titles for every lazy-loaded page.
+- Added authenticated route-change announcements, document-title updates, and focus movement to the new page heading or main content.
+- Added the reusable `.rr-visually-hidden` primitive for screen-reader-only announcements.
+- Added nine accessibility contract tests and a repeatable accessibility audit. The audit rejects new modal dialogs without the shared focus trap and icon-only close buttons without accessible labels.
+
+## Batch 7B verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch7b
+```
+
+The command runs all approved Batch 7A verification, nine accessibility-foundation tests, and the accessibility audit.
+
+## Manual keyboard checklist
+
+1. On the login page, enter an email and password and press Enter. Confirm the form submits once.
+2. Open registration, submit empty fields, and confirm focus moves to the first missing item.
+3. In the favorite-team grid, use Arrow keys, Home, and End. Confirm the selected team and focus move together.
+4. Open Coach Help and the mobile More menu. Confirm focus enters the panel, Tab stays inside, Escape closes it, and focus returns to the opener.
+5. In My Team, open an IR activation, bench move, active/bench swap, and drop confirmation. Confirm each traps focus and Escape safely cancels it.
+6. Navigate between Dashboard, League HQ, My Team, Free Agents, and Game Center using only the keyboard. Confirm focus moves to the new page heading and the browser tab title updates.
+7. Repeat the checks at approximately 390 pixels wide and with reduced motion enabled.
+8. Confirm there are no new console errors and that mouse/touch behavior remains unchanged.
+
+## Deployment
+
+Batch 7B is frontend-only. It does not require Firestore rules, indexes, Functions, or data migration.
+
+```bash
+firebase deploy --only hosting:app -m "Batch 7B accessibility foundations"
+```

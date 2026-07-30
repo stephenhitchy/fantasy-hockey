@@ -1,5 +1,20 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  OnDestroy,
+  signal,
+  ViewChild,
+} from '@angular/core';
+import {
+  ActivatedRouteSnapshot,
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
+import { Title } from '@angular/platform-browser';
+import { filter, Subscription } from 'rxjs';
 
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
 import { Navbar } from '../../shared/navbar/navbar';
@@ -12,7 +27,97 @@ import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/p
   templateUrl: './main-layout.html',
   styleUrl: './main-layout.css',
 })
-export class MainLayout {
+export class MainLayout implements AfterViewInit, OnDestroy {
+  @ViewChild('mainContent') private mainContent?: ElementRef<HTMLElement>;
+
   readonly scoringRuntime = getScoringRuntimeState();
   readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
+  readonly routeAnnouncement = signal('');
+
+  private readonly routeSubscription: Subscription;
+  private lastAccessiblePath = '';
+  private routeFocusTimer: number | null = null;
+
+  constructor(
+    private readonly router: Router,
+    private readonly documentTitle: Title,
+  ) {
+    this.routeSubscription = this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe((event) => this.handleRouteChange(event.urlAfterRedirects));
+  }
+
+  ngAfterViewInit(): void {
+    this.handleRouteChange(this.router.url);
+  }
+
+  ngOnDestroy(): void {
+    this.routeSubscription.unsubscribe();
+
+    if (this.routeFocusTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.routeFocusTimer);
+    }
+  }
+
+  private handleRouteChange(rawUrl: string): void {
+    const path = rawUrl.split(/[?#]/)[0];
+
+    if (path === this.lastAccessiblePath) {
+      return;
+    }
+
+    this.lastAccessiblePath = path;
+    const pageTitle = this.getDeepestRouteTitle(this.router.routerState.snapshot.root);
+    const fullTitle = pageTitle === 'RinkRat Fantasy' ? pageTitle : `${pageTitle} | RinkRat Fantasy`;
+
+    this.documentTitle.setTitle(fullTitle);
+    this.routeAnnouncement.set('');
+
+    if (typeof window === 'undefined') {
+      this.routeAnnouncement.set(`${pageTitle} page loaded.`);
+      return;
+    }
+
+    if (this.routeFocusTimer !== null) {
+      window.clearTimeout(this.routeFocusTimer);
+    }
+
+    this.routeFocusTimer = window.setTimeout(() => {
+      this.routeFocusTimer = null;
+      this.routeAnnouncement.set(`${pageTitle} page loaded.`);
+      this.focusRouteHeadingOrMain();
+    }, 0);
+  }
+
+  private getDeepestRouteTitle(snapshot: ActivatedRouteSnapshot): string {
+    let current: ActivatedRouteSnapshot | null = snapshot;
+    let title = 'RinkRat Fantasy';
+
+    while (current) {
+      if (typeof current.title === 'string' && current.title.trim()) {
+        title = current.title.trim();
+      }
+
+      current = current.firstChild ?? null;
+    }
+
+    return title;
+  }
+
+  private focusRouteHeadingOrMain(): void {
+    const main = this.mainContent?.nativeElement;
+
+    if (!main) {
+      return;
+    }
+
+    const heading = main.querySelector<HTMLElement>('h1');
+    const target = heading ?? main;
+
+    if (!target.hasAttribute('tabindex')) {
+      target.setAttribute('tabindex', '-1');
+    }
+
+    target.focus({ preventScroll: true });
+  }
 }

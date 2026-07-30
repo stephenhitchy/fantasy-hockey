@@ -1,7 +1,6 @@
 import {
   Component,
   computed,
-  HostListener,
   OnDestroy,
   signal
 } from '@angular/core';
@@ -18,12 +17,14 @@ import { filter } from 'rxjs/operators';
 
 import { logoutUser } from '../../core/auth/auth.service';
 import { PlatformAdminService } from '../../core/admin/platform-admin.service';
+import { DialogFocusTrapDirective } from '../accessibility/dialog-focus-trap.directive';
 
 @Component({
   selector: 'app-navbar',
   imports: [
     RouterLink,
-    RouterLinkActive
+    RouterLinkActive,
+    DialogFocusTrapDirective
   ],
   templateUrl: './navbar.html',
   styleUrl: './navbar.css'
@@ -77,11 +78,6 @@ export class Navbar implements OnDestroy {
 
   ngOnDestroy(): void {
     this.routerEventsSubscription.unsubscribe();
-  }
-
-  @HostListener('document:keydown.escape')
-  handleEscape(): void {
-    this.closeMore();
   }
 
   toggleMore(): void {

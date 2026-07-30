@@ -940,6 +940,8 @@
             role="dialog"
             aria-modal="true"
             aria-labelledby="ir-activation-title"
+            appDialogFocusTrap
+            (dialogEscape)="cancelIrActivation()"
             (click)="$event.stopPropagation()"
           >
             <header class="ir-activation-dialog-header">
@@ -1064,14 +1066,14 @@
     @if (getPendingIrBenchActivationSlot(); as irBenchSlot) {
       @if (irBenchSlot.asset; as irBenchAsset) {
         <div class="ir-activation-backdrop" role="presentation" (click)="cancelIrBenchActivation()">
-          <section class="ir-activation-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-bench-title" (click)="$event.stopPropagation()">
+          <section class="ir-activation-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-bench-title" appDialogFocusTrap (dialogEscape)="cancelIrBenchActivation()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header">
               <div>
                 <span class="eyebrow">IR Roster Move</span>
                 <h2 id="ir-bench-title">Move {{ getRosterAssetName(irBenchAsset) }} to Bench</h2>
                 <p>Choose one of your three bench slots. Replacing an occupied slot sends that asset to waivers.</p>
               </div>
-              <button type="button" class="ir-activation-close" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">×</button>
+              <button type="button" class="ir-activation-close" aria-label="Close IR bench move" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">×</button>
             </header>
 
             <div class="ir-activation-target-list">
@@ -1111,14 +1113,14 @@
     @if (getPendingBenchSwapSlot(); as benchSwapSlot) {
       @if (benchSwapSlot.asset; as benchSwapAsset) {
         <div class="ir-activation-backdrop" role="presentation" (click)="cancelBenchSwap()">
-          <section class="ir-activation-dialog" role="dialog" aria-modal="true" aria-labelledby="bench-swap-title" (click)="$event.stopPropagation()">
+          <section class="ir-activation-dialog" role="dialog" aria-modal="true" aria-labelledby="bench-swap-title" appDialogFocusTrap (dialogEscape)="cancelBenchSwap()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header">
               <div>
                 <span class="eyebrow">Cycle-Safe Lineup Change</span>
                 <h2 id="bench-swap-title">Start {{ getRosterAssetName(benchSwapAsset) }}</h2>
                 <p>Choose the matching active slot. Untouched individual windows swap immediately; started windows wait for the first fair boundary.</p>
               </div>
-              <button type="button" class="ir-activation-close" (click)="cancelBenchSwap()" [disabled]="rosterMoveLoading()">×</button>
+              <button type="button" class="ir-activation-close" aria-label="Close lineup swap" (click)="cancelBenchSwap()" [disabled]="rosterMoveLoading()">×</button>
             </header>
 
             <div class="lineup-change-player-summary ir-activation-player-summary">
@@ -1190,6 +1192,8 @@
           role="dialog"
           aria-modal="true"
           aria-labelledby="roster-drop-title"
+          appDialogFocusTrap
+          (dialogEscape)="cancelRosterDrop()"
           (click)="$event.stopPropagation()"
         >
           <header class="ir-activation-dialog-header">

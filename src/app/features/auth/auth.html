@@ -38,103 +38,185 @@
       </div>
 
       <div class="card-body">
-        @if (isRegistering()) {
-          <label class="form-field">
-            <span>Username</span>
-            <input [(ngModel)]="username" placeholder="Choose a username" />
-          </label>
+        <form
+          class="auth-form"
+          (ngSubmit)="submit()"
+          [attr.aria-busy]="loading()"
+          [attr.aria-describedby]="errorMessage() ? 'auth-error-message' : successMessage() ? 'auth-success-message' : null"
+        >
+          @if (isRegistering()) {
+            <label class="form-field" for="auth-username">
+              <span>Username</span>
+              <input
+                #usernameInput
+                id="auth-username"
+                name="username"
+                [(ngModel)]="username"
+                (ngModelChange)="clearInvalidField('username')"
+                placeholder="Choose a username"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+                minlength="2"
+                [attr.aria-invalid]="invalidField() === 'username' ? 'true' : null"
+                [attr.aria-describedby]="invalidField() === 'username' ? 'auth-error-message' : null"
+                [disabled]="loading()"
+              />
+            </label>
 
-          <section class="registration-team-picker" aria-labelledby="favorite-team-label">
-            <div class="team-picker-heading">
-              <div>
-                <span id="favorite-team-label">Favorite NHL Team</span>
-                <small>Required · You can change this later</small>
+            <section
+              class="registration-team-picker"
+              role="group"
+              aria-labelledby="favorite-team-label"
+              aria-describedby="favorite-team-help"
+              [attr.aria-invalid]="invalidField() === 'team' ? 'true' : null"
+            >
+              <div class="team-picker-heading">
+                <div>
+                  <span id="favorite-team-label">Favorite NHL Team</span>
+                  <small id="favorite-team-help">Required · You can change this later</small>
+                </div>
+
+                @if (selectedRegistrationTeam(); as selectedTeam) {
+                  <div class="selected-team-preview">
+                    <img [src]="selectedTeam.logoUrl" [alt]="selectedTeam.name + ' logo'" />
+                    <strong>{{ selectedTeam.abbreviation }}</strong>
+                  </div>
+                } @else {
+                  <span class="team-required-badge">Choose One</span>
+                }
               </div>
 
-              @if (selectedRegistrationTeam(); as selectedTeam) {
-                <div class="selected-team-preview">
-                  <img [src]="selectedTeam.logoUrl" [alt]="selectedTeam.name + ' logo'" />
-                  <strong>{{ selectedTeam.abbreviation }}</strong>
-                </div>
-              } @else {
-                <span class="team-required-badge">Choose One</span>
-              }
-            </div>
+              <div
+                #favoriteTeamGrid
+                class="auth-team-grid"
+                role="radiogroup"
+                aria-label="Choose your favorite NHL team"
+              >
+                @for (team of teams; track team.abbreviation; let first = $first) {
+                  <button
+                    type="button"
+                    class="auth-team-button"
+                    role="radio"
+                    [class.selected]="team.abbreviation === favoriteTeamAbbreviation()"
+                    [attr.aria-checked]="team.abbreviation === favoriteTeamAbbreviation()"
+                    [attr.aria-label]="'Choose ' + team.name"
+                    [attr.tabindex]="team.abbreviation === favoriteTeamAbbreviation() || (!favoriteTeamAbbreviation() && first) ? 0 : -1"
+                    [title]="team.name"
+                    [disabled]="loading()"
+                    (click)="selectRegistrationTeam(team)"
+                    (keydown)="handleTeamGridKeydown($event, team)"
+                  >
+                    <img [src]="team.logoUrl" [alt]="''" width="34" height="34" />
+                    <span>{{ team.abbreviation }}</span>
+                  </button>
+                }
+              </div>
+            </section>
+          }
 
-            <div class="auth-team-grid" role="list" aria-label="Choose your favorite NHL team">
-              @for (team of teams; track team.abbreviation) {
-                <button
-                  type="button"
-                  class="auth-team-button"
-                  [class.selected]="team.abbreviation === favoriteTeamAbbreviation()"
-                  [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation()"
-                  [attr.aria-label]="'Choose ' + team.name"
-                  [title]="team.name"
-                  [disabled]="loading()"
-                  (click)="selectRegistrationTeam(team)"
-                >
-                  <img [src]="team.logoUrl" [alt]="''" width="34" height="34" />
-                  <span>{{ team.abbreviation }}</span>
-                </button>
-              }
-            </div>
-          </section>
-        }
-
-        <label class="form-field">
-          <span>Email</span>
-          <input [(ngModel)]="email" placeholder="manager@example.com" type="email" />
-        </label>
-
-        @if (!isResettingPassword()) {
-          <label class="form-field">
-            <span>Password</span>
-            <input [(ngModel)]="password" placeholder="Enter your password" type="password" />
+          <label class="form-field" for="auth-email">
+            <span>Email</span>
+            <input
+              #emailInput
+              id="auth-email"
+              name="email"
+              [(ngModel)]="email"
+              (ngModelChange)="clearInvalidField('email')"
+              placeholder="manager@example.com"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+              [attr.aria-invalid]="invalidField() === 'email' ? 'true' : null"
+              [attr.aria-describedby]="invalidField() === 'email' ? 'auth-error-message' : null"
+              [disabled]="loading()"
+            />
           </label>
-        }
 
-        <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
-          {{ submitLabel() }}
-        </button>
+          @if (!isResettingPassword()) {
+            <label class="form-field" for="auth-password">
+              <span>Password</span>
+              <input
+                #passwordInput
+                id="auth-password"
+                name="password"
+                [(ngModel)]="password"
+                (ngModelChange)="clearInvalidField('password')"
+                placeholder="Enter your password"
+                type="password"
+                [attr.autocomplete]="passwordAutocomplete()"
+                required
+                [attr.minlength]="isRegistering() ? 6 : null"
+                [attr.aria-invalid]="invalidField() === 'password' ? 'true' : null"
+                [attr.aria-describedby]="invalidField() === 'password' ? 'auth-error-message' : null"
+                [disabled]="loading()"
+              />
+            </label>
+          }
 
-        @if (isResettingPassword()) {
-          <button
-            type="button"
-            class="secondary-switch"
-            (click)="returnToLogin()"
-            [disabled]="loading()"
-          >
-            Return to login
+          <button type="submit" class="primary-submit" [disabled]="loading()">
+            {{ submitLabel() }}
           </button>
-        } @else {
-          @if (!isRegistering()) {
+
+          @if (isResettingPassword()) {
             <button
               type="button"
-              class="forgot-password-button"
-              (click)="beginPasswordReset()"
+              class="secondary-switch"
+              (click)="returnToLogin()"
               [disabled]="loading()"
             >
-              Forgot password?
+              Return to login
+            </button>
+          } @else {
+            @if (!isRegistering()) {
+              <button
+                type="button"
+                class="forgot-password-button"
+                (click)="beginPasswordReset()"
+                [disabled]="loading()"
+              >
+                Forgot password?
+              </button>
+            }
+
+            <button
+              type="button"
+              class="secondary-switch"
+              (click)="toggleMode()"
+              [disabled]="loading()"
+            >
+              {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
             </button>
           }
 
-          <button
-            type="button"
-            class="secondary-switch"
-            (click)="toggleMode()"
-            [disabled]="loading()"
-          >
-            {{ isRegistering() ? 'Already have an account? Sign in' : 'Need an account? Create one' }}
-          </button>
-        }
+          @if (errorMessage()) {
+            <p
+              id="auth-error-message"
+              class="status-message error"
+              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
+            >
+              {{ errorMessage() }}
+            </p>
+          }
 
-        @if (errorMessage()) {
-          <p class="status-message error">{{ errorMessage() }}</p>
-        }
-
-        @if (successMessage()) {
-          <p class="status-message success">{{ successMessage() }}</p>
-        }
+          @if (successMessage()) {
+            <p
+              id="auth-success-message"
+              class="status-message success"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {{ successMessage() }}
+            </p>
+          }
+        </form>
       </div>
     </section>
 

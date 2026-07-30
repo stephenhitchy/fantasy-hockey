@@ -659,3 +659,16 @@
   color: var(--user-team-secondary);
   text-decoration: underline;
 }
+
+/* Batch 7B accessibility foundation: preserve the approved card layout while
+ * allowing the authentication controls to submit as one semantic form. */
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.form-field input[aria-invalid='true'],
+.registration-team-picker[aria-invalid='true'] {
+  border-color: var(--rr-color-danger);
+  box-shadow: var(--rr-focus-ring);
+}

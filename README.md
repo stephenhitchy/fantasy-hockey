@@ -11,7 +11,7 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batch7a
+npm run verify:batch6c
 ```
 
-The Batch 7A verification runs the approved security, build, authority, Game Center, and documentation-cleanliness suites, followed by the design-system foundation tests and visual-debt audit. The retired live browser workflow remains excluded.
+The Batch 6C verification runs the approved security, build, authority, Game Center, and documentation-cleanliness suites. The retired live browser workflow is no longer part of the verification command.

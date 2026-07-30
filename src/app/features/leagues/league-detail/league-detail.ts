@@ -53,6 +53,7 @@ import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/
 
 import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
 import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.service';
+import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
   getProfileIconsForCategory,
@@ -76,7 +77,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink, ManagerAvatar],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })

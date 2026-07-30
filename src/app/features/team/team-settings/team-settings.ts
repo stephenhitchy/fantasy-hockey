@@ -76,6 +76,7 @@ import {
 import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/team/roster.service';
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
 import { getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
+import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 
 import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
@@ -108,7 +109,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink, ManagerAvatar],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })
