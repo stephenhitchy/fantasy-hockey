@@ -1,101 +1,4 @@
-/* Global visual refresh foundation */
-:root {
-  color-scheme: dark;
-  --page-bg: #0e1116;
-  --page-bg-secondary: #141922;
-  --page-bg-tertiary: #1a212b;
-  --surface-1: #171c23;
-  --surface-2: #202731;
-  --surface-3: #262f3b;
-  --border-soft: #323b47;
-  --border-strong: #495666;
-  --text-primary: #f4f1e8;
-  --text-secondary: #aab3bf;
-  --text-muted: #8591a0;
-  --accent-blue: #5fa3ff;
-  --accent-cyan: #85dce6;
-  --accent-green: #62c98e;
-  --accent-yellow: #e1b649;
-  --accent-red: #d64545;
-  --shadow-deep: 0 22px 55px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.34);
-  --user-team-primary: #b9975b;
-  --user-team-secondary: #333f42;
-  --user-team-tertiary: #c8102e;
-  --user-team-accent: #b9975b;
-  --user-team-highlight: #b9975b;
-  --user-team-on-primary: #07111d;
-  --user-team-on-secondary: #ffffff;
-  --user-team-on-tertiary: #ffffff;
-  --user-team-outline: #b9975b;
-  --user-team-outline-soft: rgba(185, 151, 91, 0.28);
-  --user-team-subtext: #b7c4d2;
-  --user-team-glow: rgba(185, 151, 91, 0.22);
-  --user-team-wash: rgba(185, 151, 91, 0.09);
-  --user-team-primary-wash: rgba(185, 151, 91, 0.12);
-  --user-team-secondary-wash: rgba(51, 63, 66, 0.12);
-  --user-team-tertiary-wash: rgba(200, 16, 46, 0.12);
-}
-
-html[data-background-theme='rink-dark'] {
-  --page-bg: #0e1116;
-  --page-bg-secondary: #141922;
-  --page-bg-tertiary: #1a212b;
-  --surface-1: #171c23;
-  --surface-2: #202731;
-  --surface-3: #262f3b;
-  --border-soft: #323b47;
-  --border-strong: #495666;
-  --text-primary: #f4f1e8;
-  --text-secondary: #aab3bf;
-  --text-muted: #8591a0;
-}
-
-html[data-background-theme='oled-black'] {
-  --page-bg: #050607;
-  --page-bg-secondary: #0b0d10;
-  --page-bg-tertiary: #12151a;
-  --surface-1: #0d1014;
-  --surface-2: #141920;
-  --surface-3: #1b222b;
-  --border-soft: #29313b;
-  --border-strong: #404b57;
-  --text-primary: #f6f5f0;
-  --text-secondary: #adb6c0;
-  --text-muted: #8793a0;
-}
-
-html[data-background-theme='ice-gray'] {
-  --page-bg: #15181d;
-  --page-bg-secondary: #1c2128;
-  --page-bg-tertiary: #252c35;
-  --surface-1: #1f252d;
-  --surface-2: #282f39;
-  --surface-3: #313947;
-  --border-soft: #424d5b;
-  --border-strong: #576779;
-  --text-primary: #f4f6f8;
-  --text-secondary: #c0cad5;
-  --text-muted: #99a7b5;
-}
-
-html[data-background-theme='light-ice'] {
-  color-scheme: light;
-  --page-bg: #dfe5eb;
-  --page-bg-secondary: #e9edf2;
-  --page-bg-tertiary: #f3f6f9;
-  --surface-1: #f8fafc;
-  --surface-2: #eef3f7;
-  --surface-3: #e3e9ef;
-  --border-soft: #aab6c2;
-  --border-strong: #7d8b98;
-  --text-primary: #18202a;
-  --text-secondary: #394757;
-  --text-muted: #5e6e7e;
-  --shadow-deep: 0 22px 50px rgba(31, 45, 62, 0.16);
-  --shadow-card: 0 14px 28px rgba(31, 45, 62, 0.14);
-}
-
+/* Global visual refresh foundation. Theme values live in rinkrat-design-tokens.css. */
 html {
 
   min-height: 100%;
@@ -1146,15 +1049,6 @@ app-cycle-one .mobile-head-to-head-roster {
  * restrained motion across every authenticated feature page. This section is
  * intentionally global so future pages inherit the same visual language.
  * -------------------------------------------------------------------------- */
-:root {
-  --pixel-grid-line: rgba(185, 207, 229, 0.035);
-  --pixel-edge: #42586f;
-  --pixel-edge-strong: #607b96;
-  --pixel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.42);
-  --pixel-shadow-hover: 7px 7px 0 rgba(2, 8, 16, 0.48);
-  --pixel-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-}
-
 @keyframes pixelPageReveal {
   from {
     opacity: 0;

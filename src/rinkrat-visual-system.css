@@ -9,40 +9,7 @@
  * No rat-tail dividers are used.
  */
 
-:root {
-  --rr-font-display: 'Pixelify Sans', 'Arial Black', Impact, sans-serif;
-  --rr-font-interface: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
-  --rr-font-micro: 'Silkscreen', ui-monospace, 'SFMono-Regular', Consolas, monospace;
-
-  --rr-scoreboard: #07111d;
-  --rr-scoreboard-raised: #101f31;
-  --rr-scoreboard-inset: #071525;
-  --rr-ice-white: #f4f8fb;
-  --rr-ice-blue: #d8e8f4;
-  --rr-steel: #61758a;
-  --rr-steel-dark: #26384c;
-  --rr-cream: #fff3d2;
-  --rr-success: #55d68d;
-  --rr-warning: #f0c45b;
-  --rr-danger: #e15d6f;
-  --rr-info: #78b7ff;
-
-  --rr-cut-small: 5px;
-  --rr-cut-medium: 8px;
-  --rr-control-shadow: 0 4px 0 #050b13;
-  --rr-control-shadow-hover: 0 6px 0 #050b13;
-  --rr-panel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.4);
-  --rr-focus-ring: 0 0 0 3px var(--page-bg), 0 0 0 6px var(--user-team-accent);
-}
-
-html[data-background-theme='light-ice'] {
-  --rr-scoreboard: #122337;
-  --rr-scoreboard-raised: #1d344d;
-  --rr-scoreboard-inset: #0f2033;
-  --rr-control-shadow: 0 4px 0 #768697;
-  --rr-control-shadow-hover: 0 6px 0 #68798a;
-  --rr-panel-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24);
-}
+/* Core arena tokens live in rinkrat-design-tokens.css. */
 
 html,
 body {
@@ -767,10 +734,6 @@ html[data-background-theme='light-ice'] :where(input, select, textarea) {
    Large scores, totals, timers, rankings, and count values use the existing
    Barlow Condensed family for clearer digits while keeping a sports-HUD feel.
 */
-
-:root {
-  --rr-font-numeric: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
-}
 
 :where(
   .score-value,

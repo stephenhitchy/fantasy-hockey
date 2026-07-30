@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Batch 7A baseline. Future visual work may reduce these values but should not increase them without an explicit migration decision.",
+  "allCssImportantDeclarations": 597,
+  "allCssLiteralColors": 3295,
+  "globalCssLiteralColorsOutsideTokenFile": 420,
+  "globalRootSelectorsOutsideTokenFile": 0,
+  "sharedPrimitiveImportantDeclarations": 0,
+  "sharedPrimitiveLiteralColors": 0
+}

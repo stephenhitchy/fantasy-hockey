@@ -1,0 +1,337 @@
+/*
+ * RinkRat Shared Primitives — Batch 7A
+ *
+ * These classes are deliberately opt-in. Existing feature templates are not
+ * migrated in this foundation batch, so current pages retain their approved
+ * appearance. New and migrated UI should compose these primitives instead of
+ * adding another global override layer.
+ */
+
+.rr-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rr-stack-gap, var(--rr-space-4));
+}
+
+.rr-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rr-cluster-gap, var(--rr-space-3));
+}
+
+.rr-page-shell {
+  width: min(100%, var(--rr-content-standard));
+  margin-inline: auto;
+  padding: var(--rr-space-6) var(--rr-space-4) var(--rr-space-10);
+}
+
+.rr-card {
+  position: relative;
+  border: var(--rr-border-width) solid var(--rr-color-border-strong);
+  background: var(--rr-color-surface);
+  color: var(--rr-color-text);
+  box-shadow: var(--rr-shadow-pixel);
+}
+
+.rr-card--raised {
+  background: var(--rr-color-surface-raised);
+  box-shadow: var(--rr-shadow-card);
+}
+
+.rr-card--inset {
+  background: var(--rr-scoreboard-inset);
+  color: var(--rr-ice-white);
+  box-shadow: inset 0 0 0 var(--rr-border-width) color-mix(in srgb, var(--rr-ice-white) 7%, transparent);
+}
+
+.rr-card__header,
+.rr-card__body,
+.rr-card__footer {
+  padding: var(--rr-space-4);
+}
+
+.rr-card__header {
+  border-block-end: var(--rr-border-width) solid var(--rr-color-border);
+}
+
+.rr-card__footer {
+  border-block-start: var(--rr-border-width) solid var(--rr-color-border);
+}
+
+.rr-button {
+  min-height: var(--rr-control-min-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--rr-space-2);
+  padding: var(--rr-space-2) var(--rr-space-4);
+  border: var(--rr-border-width) solid var(--rr-button-border, var(--rr-color-border-strong));
+  border-radius: var(--rr-radius-none);
+  background: var(--rr-button-background, var(--rr-scoreboard-raised));
+  color: var(--rr-button-color, var(--rr-ice-white));
+  font-family: var(--rr-font-interface);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--rr-control-shadow);
+  transition:
+    transform var(--rr-duration-instant) var(--rr-ease-steps),
+    filter var(--rr-duration-instant) var(--rr-ease-steps),
+    box-shadow var(--rr-duration-instant) var(--rr-ease-steps);
+}
+
+.rr-button:hover:not(:disabled):not([aria-disabled='true']) {
+  filter: brightness(1.08) saturate(1.04);
+  transform: translateY(-2px);
+  box-shadow: var(--rr-control-shadow-hover);
+}
+
+.rr-button:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--rr-scoreboard);
+}
+
+.rr-button:focus-visible {
+  outline: none;
+  box-shadow: var(--rr-focus-ring), var(--rr-control-shadow);
+}
+
+.rr-button:disabled,
+.rr-button[aria-disabled='true'] {
+  cursor: not-allowed;
+  filter: grayscale(0.55) saturate(0.45);
+  opacity: 0.72;
+  transform: none;
+  box-shadow: none;
+}
+
+.rr-button--primary {
+  --rr-button-background: var(--rr-color-primary);
+  --rr-button-color: var(--rr-color-on-primary);
+  --rr-button-border: color-mix(in srgb, var(--rr-color-primary) 70%, var(--rr-ice-white));
+}
+
+.rr-button--secondary {
+  --rr-button-background: var(--rr-color-secondary);
+  --rr-button-color: var(--rr-color-on-secondary);
+  --rr-button-border: color-mix(in srgb, var(--rr-color-secondary) 62%, var(--rr-ice-white));
+}
+
+.rr-button--danger {
+  --rr-button-background: color-mix(in srgb, var(--rr-color-danger) 78%, var(--rr-scoreboard));
+  --rr-button-color: var(--rr-ice-white);
+  --rr-button-border: var(--rr-color-danger);
+}
+
+.rr-button--quiet {
+  --rr-button-background: transparent;
+  --rr-button-color: var(--rr-color-text);
+  box-shadow: none;
+}
+
+.rr-field-group {
+  display: grid;
+  gap: var(--rr-space-2);
+}
+
+.rr-label {
+  color: var(--rr-color-text-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: var(--rr-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: var(--rr-line-normal);
+  text-transform: uppercase;
+}
+
+.rr-field,
+.rr-select,
+.rr-textarea {
+  width: 100%;
+  min-height: var(--rr-control-min-height);
+  padding: var(--rr-space-2) var(--rr-space-3);
+  border: var(--rr-border-width) solid var(--rr-color-border-strong);
+  border-radius: var(--rr-radius-none);
+  background: var(--rr-scoreboard-inset);
+  color: var(--rr-ice-white);
+  font: inherit;
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--rr-scoreboard) 74%, transparent);
+}
+
+.rr-textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.rr-field::placeholder,
+.rr-textarea::placeholder {
+  color: color-mix(in srgb, var(--rr-ice-white) 55%, transparent);
+}
+
+.rr-field:focus-visible,
+.rr-select:focus-visible,
+.rr-textarea:focus-visible {
+  outline: none;
+  border-color: var(--rr-color-accent);
+  box-shadow: var(--rr-focus-ring);
+}
+
+.rr-field[aria-invalid='true'],
+.rr-select[aria-invalid='true'],
+.rr-textarea[aria-invalid='true'] {
+  border-color: var(--rr-color-danger);
+}
+
+.rr-field-hint,
+.rr-field-error {
+  margin: 0;
+  font-size: var(--rr-text-sm);
+  line-height: var(--rr-line-normal);
+}
+
+.rr-field-hint {
+  color: var(--rr-color-text-muted);
+}
+
+.rr-field-error {
+  color: var(--rr-color-danger);
+  font-weight: 700;
+}
+
+.rr-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: var(--rr-space-1) var(--rr-space-2);
+  border: var(--rr-border-width) solid var(--rr-badge-color, var(--rr-color-border-strong));
+  border-radius: var(--rr-radius-pill);
+  background: color-mix(in srgb, var(--rr-badge-color, var(--rr-color-border-strong)) 16%, var(--rr-scoreboard));
+  color: var(--rr-badge-text, var(--rr-ice-white));
+  font-family: var(--rr-font-micro);
+  font-size: var(--rr-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.rr-badge--success {
+  --rr-badge-color: var(--rr-color-success);
+}
+
+.rr-badge--warning {
+  --rr-badge-color: var(--rr-color-warning);
+}
+
+.rr-badge--danger {
+  --rr-badge-color: var(--rr-color-danger);
+}
+
+.rr-badge--info {
+  --rr-badge-color: var(--rr-color-info);
+}
+
+.rr-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-4);
+  border: var(--rr-border-width) solid var(--rr-notice-color, var(--rr-color-border-strong));
+  background: color-mix(in srgb, var(--rr-notice-color, var(--rr-color-border-strong)) 12%, var(--rr-color-surface));
+  color: var(--rr-color-text);
+}
+
+.rr-notice--success {
+  --rr-notice-color: var(--rr-color-success);
+}
+
+.rr-notice--warning {
+  --rr-notice-color: var(--rr-color-warning);
+}
+
+.rr-notice--danger {
+  --rr-notice-color: var(--rr-color-danger);
+}
+
+.rr-notice--info {
+  --rr-notice-color: var(--rr-color-info);
+}
+
+.rr-progress {
+  position: relative;
+  min-height: 0.75rem;
+  overflow: hidden;
+  border: var(--rr-border-width) solid var(--rr-color-border-strong);
+  background: var(--rr-scoreboard-inset);
+}
+
+.rr-progress__value {
+  width: clamp(0%, var(--rr-progress-value, 0%), 100%);
+  min-height: inherit;
+  background: linear-gradient(90deg, var(--rr-color-secondary), var(--rr-color-primary));
+  transition: width var(--rr-duration-normal) var(--rr-ease-standard);
+}
+
+.rr-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-8) var(--rr-space-4);
+  border: var(--rr-border-width) dashed var(--rr-color-border-strong);
+  background: var(--rr-color-surface);
+  color: var(--rr-color-text-secondary);
+  text-align: center;
+}
+
+.rr-state h2,
+.rr-state h3,
+.rr-state p {
+  margin: 0;
+}
+
+.rr-spinner {
+  width: 2rem;
+  aspect-ratio: 1;
+  border: var(--rr-border-width-strong) solid color-mix(in srgb, var(--rr-color-accent) 24%, transparent);
+  border-block-start-color: var(--rr-color-accent);
+  border-radius: 50%;
+  animation: rrPrimitiveSpin 700ms linear infinite;
+}
+
+@keyframes rrPrimitiveSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+html[data-background-theme='light-ice'] :is(.rr-field, .rr-select, .rr-textarea) {
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--rr-color-border) 40%, transparent);
+}
+
+html[data-background-theme='light-ice'] :is(.rr-field, .rr-textarea)::placeholder {
+  color: var(--rr-color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .rr-page-shell {
+    padding-inline: var(--rr-space-3);
+  }
+
+  .rr-button {
+    min-height: var(--rr-touch-target);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-button,
+  .rr-progress__value,
+  .rr-spinner {
+    animation: none;
+    transition: none;
+  }
+}

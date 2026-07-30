@@ -7,39 +7,7 @@
  * drafting, roster, projection, or Firebase behavior. No rat-tail dividers.
  */
 
-:root {
-  --rr-phase3-board: color-mix(in srgb, var(--rr-scoreboard) 92%, #000);
-  --rr-phase3-board-raised: color-mix(in srgb, var(--rr-scoreboard-raised) 90%, #15283d);
-  --rr-phase3-ice: color-mix(in srgb, var(--surface-1) 91%, var(--rr-ice-blue));
-  --rr-phase3-steel: color-mix(in srgb, var(--border-strong) 76%, var(--rr-steel));
-  --rr-phase3-gold: #d8ad4b;
-  --rr-phase3-red: #d84b5f;
-  --rr-phase3-blue: #5a9de2;
-  --rr-phase3-green: #52ca83;
-  --rr-phase3-shadow: 6px 6px 0 color-mix(in srgb, var(--rr-scoreboard) 70%, transparent);
-  --rr-phase3-inset: inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 7%, transparent);
-  --rr-phase3-cut: polygon(
-    0 9px,
-    9px 9px,
-    9px 0,
-    calc(100% - 9px) 0,
-    calc(100% - 9px) 9px,
-    100% 9px,
-    100% calc(100% - 9px),
-    calc(100% - 9px) calc(100% - 9px),
-    calc(100% - 9px) 100%,
-    9px 100%,
-    9px calc(100% - 9px),
-    0 calc(100% - 9px)
-  );
-}
-
-html[data-background-theme='light-ice'] {
-  --rr-phase3-board: #122337;
-  --rr-phase3-board-raised: #203952;
-  --rr-phase3-ice: #f7fafc;
-  --rr-phase3-shadow: 6px 6px 0 rgba(73, 91, 111, 0.26);
-}
+/* Phase 3 page tokens live in rinkrat-design-tokens.css. */
 
 @keyframes rrPhase3SignalBlink {
   0%, 42%, 100% { opacity: 1; }

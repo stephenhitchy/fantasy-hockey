@@ -1,0 +1,270 @@
+/*
+ * RinkRat Design Tokens — Batch 7A
+ *
+ * This is the single global source of truth for theme colors, typography,
+ * spacing, elevation, motion, focus, and team identity aliases. Existing
+ * variable names remain available so the approved interface keeps the same
+ * appearance while pages migrate gradually to the semantic --rr-* layer.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Existing theme foundation (preserved values). */
+  --page-bg: #0e1116;
+  --page-bg-secondary: #141922;
+  --page-bg-tertiary: #1a212b;
+  --surface-1: #171c23;
+  --surface-2: #202731;
+  --surface-3: #262f3b;
+  --border-soft: #323b47;
+  --border-strong: #495666;
+  --text-primary: #f4f1e8;
+  --text-secondary: #aab3bf;
+  --text-muted: #8591a0;
+  --accent-blue: #5fa3ff;
+  --accent-cyan: #85dce6;
+  --accent-green: #62c98e;
+  --accent-yellow: #e1b649;
+  --accent-red: #d64545;
+  --shadow-deep: 0 22px 55px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.34);
+
+  /* Favorite-team identity (runtime values may replace these defaults). */
+  --user-team-primary: #b9975b;
+  --user-team-secondary: #333f42;
+  --user-team-tertiary: #c8102e;
+  --user-team-accent: #b9975b;
+  --user-team-highlight: #b9975b;
+  --user-team-on-primary: #07111d;
+  --user-team-on-secondary: #ffffff;
+  --user-team-on-tertiary: #ffffff;
+  --user-team-outline: #b9975b;
+  --user-team-outline-soft: rgba(185, 151, 91, 0.28);
+  --user-team-subtext: #b7c4d2;
+  --user-team-glow: rgba(185, 151, 91, 0.22);
+  --user-team-wash: rgba(185, 151, 91, 0.09);
+  --user-team-primary-wash: rgba(185, 151, 91, 0.12);
+  --user-team-secondary-wash: rgba(51, 63, 66, 0.12);
+  --user-team-tertiary-wash: rgba(200, 16, 46, 0.12);
+
+  /* Arena typography and preserved Phase 1 values. */
+  --rr-font-display: 'Pixelify Sans', 'Arial Black', Impact, sans-serif;
+  --rr-font-interface: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+  --rr-font-micro: 'Silkscreen', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --rr-font-numeric: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+
+  --rr-scoreboard: #07111d;
+  --rr-scoreboard-raised: #101f31;
+  --rr-scoreboard-inset: #071525;
+  --rr-ice-white: #f4f8fb;
+  --rr-ice-blue: #d8e8f4;
+  --rr-steel: #61758a;
+  --rr-steel-dark: #26384c;
+  --rr-cream: #fff3d2;
+  --rr-success: #55d68d;
+  --rr-warning: #f0c45b;
+  --rr-danger: #e15d6f;
+  --rr-info: #78b7ff;
+
+  --rr-cut-small: 5px;
+  --rr-cut-medium: 8px;
+  --rr-control-shadow: 0 4px 0 #050b13;
+  --rr-control-shadow-hover: 0 6px 0 #050b13;
+  --rr-panel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.4);
+  --rr-focus-ring: 0 0 0 3px var(--page-bg), 0 0 0 6px var(--user-team-accent);
+
+  /* Preserved pixel-arena and page-identity values. */
+  --pixel-grid-line: rgba(185, 207, 229, 0.035);
+  --pixel-edge: #42586f;
+  --pixel-edge-strong: #607b96;
+  --pixel-shadow: 5px 5px 0 rgba(2, 8, 16, 0.42);
+  --pixel-shadow-hover: 7px 7px 0 rgba(2, 8, 16, 0.48);
+  --pixel-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+
+  --rr-phase2-metal: color-mix(in srgb, var(--rr-steel-dark) 72%, #050b13);
+  --rr-phase2-glass: color-mix(in srgb, var(--rr-scoreboard-raised) 91%, transparent);
+  --rr-phase2-ice-edge: color-mix(in srgb, var(--rr-ice-blue) 40%, var(--border-soft));
+  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 13%, transparent);
+  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 24%, transparent);
+  --rr-phase2-red-line: #d73b55;
+  --rr-phase2-blue-line: #3d81c8;
+
+  --rr-phase3-board: color-mix(in srgb, var(--rr-scoreboard) 92%, #000);
+  --rr-phase3-board-raised: color-mix(in srgb, var(--rr-scoreboard-raised) 90%, #15283d);
+  --rr-phase3-ice: color-mix(in srgb, var(--surface-1) 91%, var(--rr-ice-blue));
+  --rr-phase3-steel: color-mix(in srgb, var(--border-strong) 76%, var(--rr-steel));
+  --rr-phase3-gold: #d8ad4b;
+  --rr-phase3-red: #d84b5f;
+  --rr-phase3-blue: #5a9de2;
+  --rr-phase3-green: #52ca83;
+  --rr-phase3-shadow: 6px 6px 0 color-mix(in srgb, var(--rr-scoreboard) 70%, transparent);
+  --rr-phase3-inset: inset 0 0 0 2px color-mix(in srgb, var(--rr-ice-white) 7%, transparent);
+  --rr-phase3-cut: polygon(
+    0 9px,
+    9px 9px,
+    9px 0,
+    calc(100% - 9px) 0,
+    calc(100% - 9px) 9px,
+    100% 9px,
+    100% calc(100% - 9px),
+    calc(100% - 9px) calc(100% - 9px),
+    calc(100% - 9px) 100%,
+    9px 100%,
+    9px calc(100% - 9px),
+    0 calc(100% - 9px)
+  );
+
+  /* Semantic colors: new code should prefer these aliases. */
+  --rr-color-page: var(--page-bg);
+  --rr-color-page-secondary: var(--page-bg-secondary);
+  --rr-color-page-tertiary: var(--page-bg-tertiary);
+  --rr-color-surface: var(--surface-1);
+  --rr-color-surface-raised: var(--surface-2);
+  --rr-color-surface-strong: var(--surface-3);
+  --rr-color-border: var(--border-soft);
+  --rr-color-border-strong: var(--border-strong);
+  --rr-color-text: var(--text-primary);
+  --rr-color-text-secondary: var(--text-secondary);
+  --rr-color-text-muted: var(--text-muted);
+  --rr-color-primary: var(--user-team-primary);
+  --rr-color-on-primary: var(--user-team-on-primary);
+  --rr-color-secondary: var(--user-team-secondary);
+  --rr-color-on-secondary: var(--user-team-on-secondary);
+  --rr-color-accent: var(--user-team-accent);
+  --rr-color-success: var(--rr-success);
+  --rr-color-warning: var(--rr-warning);
+  --rr-color-danger: var(--rr-danger);
+  --rr-color-info: var(--rr-info);
+
+  /* Type scale. */
+  --rr-text-xs: 0.75rem;
+  --rr-text-sm: 0.875rem;
+  --rr-text-md: 1rem;
+  --rr-text-lg: 1.125rem;
+  --rr-text-xl: 1.375rem;
+  --rr-text-2xl: clamp(1.65rem, 3vw, 2.25rem);
+  --rr-text-3xl: clamp(2rem, 5vw, 3.25rem);
+  --rr-line-tight: 1.15;
+  --rr-line-normal: 1.5;
+  --rr-line-relaxed: 1.65;
+
+  /* Four-pixel spacing rhythm. */
+  --rr-space-0: 0;
+  --rr-space-1: 0.25rem;
+  --rr-space-2: 0.5rem;
+  --rr-space-3: 0.75rem;
+  --rr-space-4: 1rem;
+  --rr-space-5: 1.25rem;
+  --rr-space-6: 1.5rem;
+  --rr-space-8: 2rem;
+  --rr-space-10: 2.5rem;
+  --rr-space-12: 3rem;
+
+  /* Shared sizing, borders, elevation, and layout. */
+  --rr-control-min-height: 44px;
+  --rr-touch-target: 44px;
+  --rr-content-narrow: 42rem;
+  --rr-content-standard: 72rem;
+  --rr-content-wide: 90rem;
+  --rr-border-width: 2px;
+  --rr-border-width-strong: 3px;
+  --rr-radius-none: 0;
+  --rr-radius-sm: 4px;
+  --rr-radius-md: 8px;
+  --rr-radius-pill: 999px;
+  --rr-shadow-card: var(--shadow-card);
+  --rr-shadow-deep: var(--shadow-deep);
+  --rr-shadow-pixel: var(--pixel-shadow);
+  --rr-shadow-pixel-hover: var(--pixel-shadow-hover);
+
+  /* Motion and layer order. */
+  --rr-duration-instant: 90ms;
+  --rr-duration-fast: 140ms;
+  --rr-duration-normal: 220ms;
+  --rr-duration-slow: 320ms;
+  --rr-ease-standard: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --rr-ease-steps: steps(2, end);
+  --rr-z-base: 0;
+  --rr-z-sticky: 20;
+  --rr-z-menu: 40;
+  --rr-z-dialog: 80;
+  --rr-z-toast: 100;
+}
+
+html[data-background-theme='rink-dark'] {
+  --page-bg: #0e1116;
+  --page-bg-secondary: #141922;
+  --page-bg-tertiary: #1a212b;
+  --surface-1: #171c23;
+  --surface-2: #202731;
+  --surface-3: #262f3b;
+  --border-soft: #323b47;
+  --border-strong: #495666;
+  --text-primary: #f4f1e8;
+  --text-secondary: #aab3bf;
+  --text-muted: #8591a0;
+}
+
+html[data-background-theme='oled-black'] {
+  --page-bg: #050607;
+  --page-bg-secondary: #0b0d10;
+  --page-bg-tertiary: #12151a;
+  --surface-1: #0d1014;
+  --surface-2: #141920;
+  --surface-3: #1b222b;
+  --border-soft: #29313b;
+  --border-strong: #404b57;
+  --text-primary: #f6f5f0;
+  --text-secondary: #adb6c0;
+  --text-muted: #8793a0;
+}
+
+html[data-background-theme='ice-gray'] {
+  --page-bg: #15181d;
+  --page-bg-secondary: #1c2128;
+  --page-bg-tertiary: #252c35;
+  --surface-1: #1f252d;
+  --surface-2: #282f39;
+  --surface-3: #313947;
+  --border-soft: #424d5b;
+  --border-strong: #576779;
+  --text-primary: #f4f6f8;
+  --text-secondary: #c0cad5;
+  --text-muted: #99a7b5;
+}
+
+html[data-background-theme='light-ice'] {
+  color-scheme: light;
+  --page-bg: #dfe5eb;
+  --page-bg-secondary: #e9edf2;
+  --page-bg-tertiary: #f3f6f9;
+  --surface-1: #f8fafc;
+  --surface-2: #eef3f7;
+  --surface-3: #e3e9ef;
+  --border-soft: #aab6c2;
+  --border-strong: #7d8b98;
+  --text-primary: #18202a;
+  --text-secondary: #394757;
+  --text-muted: #5e6e7e;
+  --shadow-deep: 0 22px 50px rgba(31, 45, 62, 0.16);
+  --shadow-card: 0 14px 28px rgba(31, 45, 62, 0.14);
+
+  --rr-scoreboard: #122337;
+  --rr-scoreboard-raised: #1d344d;
+  --rr-scoreboard-inset: #0f2033;
+  --rr-control-shadow: 0 4px 0 #768697;
+  --rr-control-shadow-hover: 0 6px 0 #68798a;
+  --rr-panel-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24);
+
+  --rr-phase2-metal: #34485f;
+  --rr-phase2-glass: rgba(249, 252, 255, 0.97);
+  --rr-phase2-ice-edge: #879db5;
+  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 9%, #ffffff);
+  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 16%, #ffffff);
+
+  --rr-phase3-board: #122337;
+  --rr-phase3-board-raised: #203952;
+  --rr-phase3-ice: #f7fafc;
+  --rr-phase3-shadow: 6px 6px 0 rgba(73, 91, 111, 0.26);
+}

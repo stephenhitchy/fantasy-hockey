@@ -6048,3 +6048,60 @@ IMPLEMENTATION
 The live multi-account browser workflow was removed from the default verification process after its test-only Firestore inspection conflicted with the intentionally hardened league-list rules. This retirement does not loosen Firestore rules, Cloud Function authority, authentication checks, or any production behavior. It removes only the flaky local browser automation.
 
 The approved verification path continues to run the Firestore rule suite, Angular production build, Functions TypeScript build, draft authority tests, league onboarding tests, competition authority tests, profile and injury authority tests, Game Center structural tests, Game Center rollback tests, and documentation-cleanliness tests.
+
+# Batch 7A — Design-System Foundation
+
+Batch 7A creates a controlled visual foundation without intentionally redesigning any current page. The approved Batch 6C.4 appearance remains in place while future pages gain a consistent, testable styling API.
+
+## What changed
+
+- Added `src/rinkrat-design-tokens.css` as the single global source of truth for theme colors, favorite-team aliases, typography, spacing, control sizing, elevation, motion, and z-index layers.
+- Preserved the existing Rink Dark, OLED Black, Ice Gray, and Light Ice values exactly while adding semantic `--rr-*` aliases for future migrations.
+- Moved the existing Phase 1, Phase 2, Phase 3, numeric-font, and pixel-arena global token declarations into the centralized file.
+- Added `src/rinkrat-shared-primitives.css` with opt-in foundations for cards, buttons, forms, badges, notices, progress bars, empty/loading states, layout stacks, and clusters.
+- Kept all primitives opt-in. No current feature template uses them yet, so this batch does not silently change the appearance of Game Center, Dashboard, League HQ, Draft Room, Free Agents, My Team, or Account Settings.
+- Added a repeatable design-debt audit. The audit prevents the existing `!important` and literal-color counts from increasing beyond the Batch 7A baseline and requires shared primitives to remain token-driven.
+- Added nine design-system contract tests and retained the consolidated documentation structure. No loose update `.txt` files or root-level batch checklists were added.
+
+## New styling rules for future work
+
+1. Reusable values belong in `rinkrat-design-tokens.css`.
+2. New shared controls should compose `.rr-*` primitives instead of adding broad global selectors.
+3. Feature styles may handle layout and feature-specific states, but should consume semantic tokens rather than introducing new hard-coded colors.
+4. The design-system debt budgets may be lowered as pages migrate. They should not be raised casually.
+5. Page migrations must be reviewed in both Rink Dark and Light Ice before old overrides are removed.
+
+## Batch 7A verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch7a
+```
+
+The command runs all approved Batch 6C verification, nine design-system foundation tests, and the visual-debt audit.
+
+## Manual appearance-preservation checklist
+
+After the automated verification passes, run the site and check these pages in both Rink Dark and Light Ice:
+
+- Dashboard
+- Current League / League HQ
+- Game Center
+- My Team
+- Free Agents
+- Draft Setup and Draft Room
+- Account Settings
+
+For one favorite-team palette with a light primary color and one with a dark primary color, confirm:
+
+- Page backgrounds, cards, borders, headings, buttons, fields, scores, badges, and progress bars look the same as before Batch 7A.
+- Text remains readable in both themes.
+- Buttons still show hover, pressed, disabled, and keyboard-focus states.
+- No horizontal scrolling appears around 390 pixels wide.
+- No new console errors appear.
+
+This batch changes only CSS organization, opt-in shared style foundations, tests, and documentation. It does not change Angular behavior, Firebase configuration, Firestore rules, Cloud Functions, scoring, drafts, rosters, cycles, standings, injuries, or playoffs.

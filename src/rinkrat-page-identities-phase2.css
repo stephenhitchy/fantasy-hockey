@@ -6,23 +6,7 @@
  * semantic tokens established by Phase 1. No rat-tail dividers are used.
  */
 
-:root {
-  --rr-phase2-metal: color-mix(in srgb, var(--rr-steel-dark) 72%, #050b13);
-  --rr-phase2-glass: color-mix(in srgb, var(--rr-scoreboard-raised) 91%, transparent);
-  --rr-phase2-ice-edge: color-mix(in srgb, var(--rr-ice-blue) 40%, var(--border-soft));
-  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 13%, transparent);
-  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 24%, transparent);
-  --rr-phase2-red-line: #d73b55;
-  --rr-phase2-blue-line: #3d81c8;
-}
-
-html[data-background-theme='light-ice'] {
-  --rr-phase2-metal: #34485f;
-  --rr-phase2-glass: rgba(249, 252, 255, 0.97);
-  --rr-phase2-ice-edge: #879db5;
-  --rr-phase2-team-wash: color-mix(in srgb, var(--user-team-primary) 9%, #ffffff);
-  --rr-phase2-team-wash-strong: color-mix(in srgb, var(--user-team-primary) 16%, #ffffff);
-}
+/* Phase 2 page tokens live in rinkrat-design-tokens.css. */
 
 /* -------------------------------------------------------------------------
    DASHBOARD — arcade save files / cartridge shelf

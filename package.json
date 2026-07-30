@@ -38,7 +38,10 @@
     "verify:batch6b-rollback": "npm run verify:batch6a && npm run test:game-center-rollback:run",
     "docs:consolidate": "node scripts/consolidate-project-docs.mjs",
     "verify:batch6c": "npm run verify:batch6b-rollback && npm run test:documentation:run",
-    "test:documentation:run": "node --test --test-concurrency=1 test/documentation/*.test.mjs"
+    "test:documentation:run": "node --test --test-concurrency=1 test/documentation/*.test.mjs",
+    "test:design-system:run": "node --test --test-concurrency=1 test/design-system/*.test.mjs",
+    "audit:design-system": "node scripts/audit-design-system.mjs",
+    "verify:batch7a": "npm run verify:batch6c && npm run test:design-system:run && npm run audit:design-system"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
