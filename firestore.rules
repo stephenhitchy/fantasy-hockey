@@ -235,6 +235,27 @@ service cloud.firestore {
         data.irSlots.size() == 3;
     }
 
+    function validTemporaryManualDraftRosterUpdate(leagueId, teamId) {
+      let draft = get(draftPath(leagueId)).data;
+      let nextDraft = getAfter(draftPath(leagueId)).data;
+      let pickId = nextDraft.lastPickId;
+
+      return signedIn() &&
+        teamId == currentUserId() &&
+        draft.status == 'live' &&
+        draft.clockStatus == 'running' &&
+        nextDraft.nextOverallPick == draft.nextOverallPick + 1 &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['activeSlots', 'benchSlots', 'updatedAt']) &&
+        request.resource.data.schemaVersion == resource.data.schemaVersion &&
+        request.resource.data.irSlots == resource.data.irSlots &&
+        pickId is string &&
+        existsAfter(draftPickPath(leagueId, pickId)) &&
+        getAfter(draftPickPath(leagueId, pickId)).data.ownerId == currentUserId() &&
+        getAfter(draftPickPath(leagueId, pickId)).data.selectionType == 'manual' &&
+        getAfter(draftPickPath(leagueId, pickId)).data.selectedByUserId == currentUserId();
+    }
+
     function validDraftPickSequence(draft, data) {
       let teamCount = draft.roundOneOrder.size();
 
@@ -627,69 +648,6 @@ service cloud.firestore {
       return validLegacyAsset || validChunk;
     }
 
-    function validOwnerTransactionCreate() {
-      let data = request.resource.data;
-
-      return data.ownerId == currentUserId() &&
-        data.type in [
-          'add-drop',
-          'add-open-slot',
-          'move-to-ir',
-          'activate-from-ir',
-          'drop-to-waivers',
-          'waiver-claim',
-          'queue-add-drop',
-          'queue-add-open-slot',
-          'cancel-queued-move',
-          'queue-active-bench-swap',
-          'move-bench-to-ir',
-          'activate-ir-to-bench'
-        ];
-    }
-
-    function validOwnerWaiverCreate(waiverId) {
-      let data = request.resource.data;
-
-      return data.droppedByOwnerId == currentUserId() &&
-        data.status == 'active' &&
-        data.claims is list &&
-        data.claims.size() == 0 &&
-        data.assetKey == waiverId &&
-        data.asset is map &&
-        data.asset.assetKey == waiverId;
-    }
-
-    function validOwnerWaiverReset(waiverId) {
-      let data = request.resource.data;
-
-      return data.droppedByOwnerId == currentUserId() &&
-        data.status == 'active' &&
-        data.claims is list &&
-        data.claims.size() == 0 &&
-        data.assetKey == waiverId &&
-        data.asset is map &&
-        data.asset.assetKey == waiverId;
-    }
-
-    function validOwnerWaiverClaimUpdate() {
-      let changedKeys = request.resource.data
-        .diff(resource.data)
-        .affectedKeys();
-      let nextClaims = request.resource.data.claims;
-      let previousClaims = resource.data.claims;
-
-      return resource.data.status == 'active' &&
-        request.resource.data.status == 'active' &&
-        changedKeys.hasOnly(['claims', 'updatedAt']) &&
-        nextClaims is list &&
-        previousClaims is list &&
-        nextClaims.size() >= 1 &&
-        nextClaims.size() >= previousClaims.size() &&
-        nextClaims.size() <= previousClaims.size() + 1 &&
-        nextClaims[nextClaims.size() - 1].ownerId == currentUserId();
-    }
-
-
     function validPlayerAvailabilityStatus(status) {
       return status in [
         'active',
@@ -1019,16 +977,17 @@ service cloud.firestore {
         match /roster/{rosterId} {
           allow read: if isLeagueMember(leagueId);
 
-          allow create, update: if
+          // Browser roster creation is disabled. Missing rosters are created
+          // by ensureFantasyRoster. Existing roster changes are server-owned,
+          // with two temporary update-only exceptions: manual draft placement
+          // until Batch 3 and commissioner cycle progression until Batch 4.
+          allow create: if false;
+
+          allow update: if validRosterDocument(rosterId) &&
             (
               isLeagueCommissioner(leagueId) ||
-              (
-                signedIn() &&
-                teamId == currentUserId() &&
-                isLeagueMemberAfter(leagueId)
-              )
-            ) &&
-            validRosterDocument(rosterId);
+              validTemporaryManualDraftRosterUpdate(leagueId, teamId)
+            );
 
           allow delete: if false;
         }
@@ -1085,34 +1044,19 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow read: if isLeagueMember(leagueId);
 
-        allow create: if isLeagueCommissioner(leagueId) ||
-          (
-            isLeagueMember(leagueId) &&
-            validOwnerTransactionCreate()
-          );
-
+        // Manager transaction logs are written by roster-authority Functions.
+        // Commissioner writes remain temporarily available to the legacy cycle
+        // progression code and will be removed with Batch 4.
+        allow create: if isLeagueCommissioner(leagueId);
         allow update, delete: if false;
       }
 
       match /waivers/{waiverId} {
         allow read: if isLeagueMember(leagueId);
 
-        allow create: if isLeagueCommissioner(leagueId) ||
-          (
-            isLeagueMember(leagueId) &&
-            validOwnerWaiverCreate(waiverId)
-          );
-
-        allow update: if isLeagueCommissioner(leagueId) ||
-          (
-            isLeagueMember(leagueId) &&
-            (
-              validOwnerWaiverClaimUpdate() ||
-              validOwnerWaiverReset(waiverId)
-            )
-          );
-
-        allow delete: if isLeagueCommissioner(leagueId);
+        // Drops, claims, awards, and resets are server-authoritative. The
+        // commissioner exception is temporary for legacy cycle-boundary work.
+        allow create, update, delete: if isLeagueCommissioner(leagueId);
       }
 
 

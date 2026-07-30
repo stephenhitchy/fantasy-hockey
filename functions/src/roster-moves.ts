@@ -34,6 +34,7 @@ interface ImmediateRosterMoveRequest {
   activeSlotId?: unknown;
   benchSlotId?: unknown;
   irSlotId?: unknown;
+  addAssetKey?: unknown;
   addAsset?: unknown;
 }
 
@@ -90,6 +91,26 @@ function getAssetKey(asset: unknown): string {
 
   const teamAbbreviation = asString(data['teamAbbreviation']);
   return teamAbbreviation ? `goalie-unit-${teamAbbreviation}` : '';
+}
+
+export async function loadCanonicalDraftableAsset(
+  leagueId: string,
+  assetKey: string,
+): Promise<DraftableAsset> {
+  const snapshot = await loadSharedProjectionSnapshot(leagueId).catch(() => null);
+  const asset = snapshot?.assets.find((candidate) => candidate.assetKey === assetKey) ?? null;
+
+  if (!asset) {
+    throw new HttpsError(
+      'failed-precondition',
+      'That player or goalie unit is not available in the league\'s authoritative player pool.',
+    );
+  }
+
+  return {
+    ...asset,
+    assetKey,
+  } as DraftableAsset;
 }
 
 function getAssetTeamAbbreviation(asset: DraftableAsset | RosterAsset): string {
@@ -216,7 +237,7 @@ const IR_ELIGIBLE_STATUSES = new Set([
   'long-term-injured-reserve',
 ]);
 
-async function getAuthoritativeAvailabilityStatus(
+export async function getAuthoritativeAvailabilityStatus(
   leagueId: string,
   asset: RosterAsset,
 ): Promise<string> {
@@ -272,7 +293,7 @@ function getScheduleGameState(game: NhlScheduleGame): 'scheduled' | 'live' | 'fi
   return 'scheduled';
 }
 
-async function getEarliestEligibleCycleNumber(
+export async function getEarliestEligibleCycleNumber(
   asset: DraftableAsset | RosterAsset,
   gamesPerCycle: number,
 ): Promise<number> {
@@ -491,19 +512,12 @@ export const applyImmediateRosterMove = onCall(
       throw new HttpsError('unauthenticated', 'You must be signed in to change your roster.');
     }
 
-    const input = request.data as ImmediateRosterMoveRequest;
+    const input = asRecord(request.data) as unknown as ImmediateRosterMoveRequest;
     const leagueId = asString(input.leagueId);
     const moveType = asString(input.moveType) as ImmediateRosterMoveType;
     const activeSlotId = asString(input.activeSlotId);
     const benchSlotId = asString(input.benchSlotId);
     const irSlotId = asString(input.irSlotId);
-    const addAsset = input.addAsset && typeof input.addAsset === 'object'
-      ? input.addAsset as DraftableAsset
-      : null;
-    const canTargetOpenSlot =
-      moveType === 'add-open-active' ||
-      moveType === 'active-bench-swap' ||
-      moveType === 'activate-ir-active';
 
     if (!leagueId || !activeSlotId) {
       throw new HttpsError('invalid-argument', 'League and active roster slot are required.');
@@ -512,6 +526,15 @@ export const applyImmediateRosterMove = onCall(
     if (!['add-drop-active', 'add-open-active', 'active-bench-swap', 'activate-ir-active', 'move-active-to-ir', 'drop-active'].includes(moveType)) {
       throw new HttpsError('invalid-argument', 'That immediate roster move type is not supported.');
     }
+
+    const requestedAssetKey = asString(input.addAssetKey) || getAssetKey(input.addAsset);
+    const addAsset = requestedAssetKey
+      ? await loadCanonicalDraftableAsset(leagueId, requestedAssetKey)
+      : null;
+    const canTargetOpenSlot =
+      moveType === 'add-open-active' ||
+      moveType === 'active-bench-swap' ||
+      moveType === 'activate-ir-active';
 
     if ((moveType === 'add-drop-active' || moveType === 'add-open-active') && !addAsset) {
       throw new HttpsError('invalid-argument', 'The incoming player is required.');
@@ -566,10 +589,9 @@ export const applyImmediateRosterMove = onCall(
     const cycleRef = db.doc(context.cycleRefPath);
     const teamWindowsRef = db.doc(context.teamWindowsRefPath);
     const rosterPickRef = db.doc(context.rosterPickRefPath);
-    const rosterRefs = teamsSnapshot.docs.map((team) => {
-      const teamOwnerId = asString(team.data()['ownerId']) || team.id;
-      return db.doc(`leagues/${leagueId}/teams/${teamOwnerId}/roster/current`);
-    });
+    const rosterRefs = teamsSnapshot.docs.map((team) =>
+      db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
+    );
 
     const [preflightRosterSnapshot, preflightRosterPickSnapshot] = await Promise.all([
       rosterRef.get(),

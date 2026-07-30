@@ -1,12 +1,11 @@
 import {
   doc,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp,
-  setDoc
+  getDoc,
+  onSnapshot
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
+import { ensureFantasyRoster } from '../transactions/roster-authority.service';
 import {
   BENCH_SLOT_COUNT,
   DEFAULT_ROSTER_GROUPS,
@@ -141,46 +140,35 @@ export async function getOrCreateFantasyRoster(
   ownerId: string
 ): Promise<FantasyRoster> {
   const rosterRef = getFantasyRosterRef(leagueId, ownerId);
+  const snapshot = await getDoc(rosterRef);
 
-  return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(rosterRef);
+  if (snapshot.exists()) {
+    const source = snapshot.data() as Partial<FantasyRoster>;
+    const roster = normalizeFantasyRoster(source);
+    const needsMigration =
+      source.schemaVersion !== 2 ||
+      !Array.isArray(source.benchSlots) ||
+      source.benchSlots.length !== BENCH_SLOT_COUNT ||
+      !Array.isArray(source.irSlots) ||
+      source.irSlots.length !== IR_SLOT_COUNT;
 
-    if (snapshot.exists()) {
-      const source = snapshot.data() as Partial<FantasyRoster>;
-      const roster = normalizeFantasyRoster(source);
-      const needsMigration =
-        source.schemaVersion !== 2 ||
-        !Array.isArray(source.benchSlots) ||
-        source.benchSlots.length !== BENCH_SLOT_COUNT ||
-        !Array.isArray(source.irSlots) ||
-        source.irSlots.length !== IR_SLOT_COUNT;
-
-      if (needsMigration) {
-        transaction.set(rosterRef, {
-          schemaVersion: roster.schemaVersion,
-          activeSlots: roster.activeSlots,
-          benchSlots: roster.benchSlots,
-          irSlots: roster.irSlots,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
-
+    if (!needsMigration) {
       return roster;
     }
+  }
 
-    const roster = createEmptyFantasyRoster();
+  // Roster creation and schema migration are server-authoritative. The
+  // callable verifies that the signed-in user owns this team before writing.
+  await ensureFantasyRoster(leagueId);
 
-    transaction.set(rosterRef, {
-      schemaVersion: roster.schemaVersion,
-      activeSlots: roster.activeSlots,
-      benchSlots: roster.benchSlots,
-      irSlots: roster.irSlots,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+  const ensuredSnapshot = await getDoc(rosterRef);
+  if (!ensuredSnapshot.exists()) {
+    throw new Error('The roster could not be initialized.');
+  }
 
-    return roster;
-  });
+  return normalizeFantasyRoster(
+    ensuredSnapshot.data() as Partial<FantasyRoster>
+  );
 }
 
 export function listenToFantasyRoster(
@@ -222,21 +210,11 @@ export function listenToFantasyRoster(
 }
 
 export async function saveFantasyRoster(
-  leagueId: string,
-  ownerId: string,
-  roster: FantasyRoster
+  _leagueId: string,
+  _ownerId: string,
+  _roster: FantasyRoster
 ): Promise<void> {
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-
-  await setDoc(
-    rosterRef,
-    {
-      schemaVersion: roster.schemaVersion,
-      activeSlots: roster.activeSlots,
-      benchSlots: roster.benchSlots,
-      irSlots: roster.irSlots,
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
+  throw new Error(
+    'Direct roster saves are disabled. Use an authenticated roster action instead.'
   );
 }

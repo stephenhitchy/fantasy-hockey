@@ -3278,6 +3278,11 @@ export {
 export { applyImmediateRosterMove } from './roster-moves';
 
 export {
+  ensureFantasyRoster,
+  executeSecureRosterAction,
+} from './roster-authority';
+
+export {
   processQueuedInjuryEmails,
   requestPasswordResetEmail,
   resendVerificationEmail,

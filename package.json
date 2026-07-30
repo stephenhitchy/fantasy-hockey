@@ -21,7 +21,8 @@
     "validate:profile-icons": "node scripts/validate-profile-icon-assets.mjs",
     "test:rules:run": "node --test --test-concurrency=1 test/firestore-rules/*.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-rinkrat-rules --only auth,firestore \"npm run test:rules:run\"",
-    "verify:batch1": "npm run test:rules && npm run build:all"
+    "verify:batch1": "npm run test:rules && npm run build:all",
+    "verify:batch2": "npm run test:rules && npm run build:all"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

@@ -28,6 +28,8 @@ import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
 
 import { applyImmediateRosterMove } from '../transactions/immediate-roster-move.service';
 
+import { executeSecureRosterAction } from '../transactions/roster-authority.service';
+
 import {
   createEmptyFantasyRoster,
   getFantasyRosterRef,
@@ -1876,7 +1878,7 @@ export async function addDropRosterAsset({
   addAsset,
   effectiveCycleNumber = null,
   effectiveLabel = null,
-  leagueOwnerIds = [],
+  leagueOwnerIds: _leagueOwnerIds = [],
   preferImmediateCurrentCycle = false,
 }: AddDropRosterAssetInput): Promise<RosterMoveExecutionResult> {
   if (preferImmediateCurrentCycle) {
@@ -1884,7 +1886,7 @@ export async function addDropRosterAsset({
       leagueId,
       moveType: 'add-drop-active',
       activeSlotId: dropSlotId,
-      addAsset,
+      addAssetKey: addAsset.assetKey,
     });
 
     return {
@@ -1893,222 +1895,23 @@ export async function addDropRosterAsset({
     };
   }
 
-  const queueAtSlotBoundary = await hasStartedFantasyCycle(leagueId);
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-  const otherRosterRefs = leagueOwnerIds
-    .filter((leagueOwnerId) => leagueOwnerId !== ownerId)
-    .map((leagueOwnerId) => getFantasyRosterRef(leagueId, leagueOwnerId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  return runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot, ...otherRosterSnapshots] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-      ...otherRosterRefs.map((otherRosterRef) => transaction.get(otherRosterRef)),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === dropSlotId);
-
-    if (benchSlotIndex >= 0) {
-      const benchSlot = roster.benchSlots[benchSlotIndex];
-      const dropAsset = benchSlot.asset;
-
-      if (!dropAsset) {
-        throw new Error('The selected bench slot is already empty.');
-      }
-
-      const dropAssetKey = getRosterAssetKey(dropAsset);
-
-      if (dropAssetKey === addAsset.assetKey || isAssetOnRoster(roster, addAsset.assetKey)) {
-        throw new Error('You already have that player on your roster.');
-      }
-
-      if (isAssetOnAnyRoster(otherRosterSnapshots, addAsset.assetKey)) {
-        throw new Error(
-          'That player or goalie unit is already on another roster or reserved by another queued move.',
-        );
-      }
-
-      roster.benchSlots[benchSlotIndex] = {
-        ...benchSlot,
-        asset: {
-          ...createRosterAsset(addAsset, 'benched'),
-          eligibleFromCycleNumber: effectiveCycleNumber,
-        },
-      };
-
-      transaction.set(
-        rosterRef,
-        {
-          schemaVersion: roster.schemaVersion,
-          activeSlots: roster.activeSlots,
-          benchSlots: roster.benchSlots,
-          irSlots: roster.irSlots,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(
-        getWaiverRef(leagueId, dropAssetKey),
-        buildActiveWaiverPayload(dropAsset, ownerId, effectiveCycleNumber, effectiveLabel),
-      );
-
-      transaction.set(transactionRef, {
-        type: 'add-drop',
-        ownerId,
-        addedAsset: addAsset,
-        droppedAsset: dropAsset,
-        waiverId: dropAssetKey,
-        waiverAsset: rosterAssetToDraftableAsset(dropAsset),
-        sourceRosterArea: 'bench',
-        benchSlotId: benchSlot.slotId,
-        dropSlotId,
-        rosterSlotId: dropSlotId,
-        effectiveCycleNumber,
-        effectiveLabel,
-        createdAt: serverTimestamp(),
-      });
-
-      return { mode: 'ownership-only', effectiveCycleNumber };
-    }
-
-    const slotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === dropSlotId);
-
-    if (slotIndex === -1) {
-      throw new Error('The selected roster slot was not found.');
-    }
-
-    const selectedSlot = roster.activeSlots[slotIndex];
-    const dropAsset = selectedSlot.asset;
-
-    assertSlotHasNoPendingMove(selectedSlot);
-
-    if (!dropAsset) {
-      throw new Error('The selected roster slot is already empty.');
-    }
-
-    if (selectedSlot.position !== addAsset.position) {
-      throw new Error(
-        `This version only supports same-position moves. Drop ${addAsset.position} to add ${addAsset.position}.`,
-      );
-    }
-
-    const dropAssetKey = getRosterAssetKey(dropAsset);
-
-    if (dropAssetKey === addAsset.assetKey) {
-      throw new Error('You already have that player on your roster.');
-    }
-
-    if (isAssetOnRoster(roster, addAsset.assetKey)) {
-      throw new Error(
-        'That player or goalie unit is already on your roster or reserved by a queued move.',
-      );
-    }
-
-    if (isAssetOnAnyRoster(otherRosterSnapshots, addAsset.assetKey)) {
-      throw new Error(
-        'That player or goalie unit is already on another roster or reserved by another queued move.',
-      );
-    }
-
-    if (queueAtSlotBoundary) {
-      const pendingMove = createPendingRosterMove(
-        'add-drop',
-        ownerId,
-        selectedSlot,
-        addAsset,
-        null,
-        effectiveCycleNumber,
-        effectiveLabel,
-      );
-
-      roster.activeSlots[slotIndex] = {
-        ...selectedSlot,
-        pendingMove,
-      };
-
-      transaction.set(
-        rosterRef,
-        {
-          schemaVersion: roster.schemaVersion,
-          activeSlots: roster.activeSlots,
-          benchSlots: roster.benchSlots,
-          irSlots: roster.irSlots,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(transactionRef, {
-        type: 'queue-add-drop',
-        ownerId,
-        addedAsset: addAsset,
-        droppedAsset: dropAsset,
-        dropSlotId,
-        rosterSlotId: dropSlotId,
-        queuedMoveId: pendingMove.id,
-        effectiveCycleNumber,
-        effectiveLabel: effectiveLabel ?? 'After current slot window',
-        createdAt: serverTimestamp(),
-      });
-
-      return { mode: 'queued', effectiveCycleNumber };
-    }
-
-    roster.activeSlots[slotIndex] = {
-      ...selectedSlot,
-      asset: createRosterAsset(addAsset, 'new'),
-      pendingMove: null,
-      openFromCycleNumber: null,
-    };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(
-      getWaiverRef(leagueId, dropAssetKey),
-      buildActiveWaiverPayload(dropAsset, ownerId, effectiveCycleNumber, effectiveLabel),
-    );
-
-    transaction.set(transactionRef, {
-      type: 'add-drop',
-      ownerId,
-      addedAsset: addAsset,
-      droppedAsset: dropAsset,
-      waiverId: dropAssetKey,
-      waiverAsset: rosterAssetToDraftableAsset(dropAsset),
-      dropSlotId,
-      rosterSlotId: dropSlotId,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
-
-    return { mode: 'immediate', effectiveCycleNumber };
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'add-drop',
+    assetKey: addAsset.assetKey,
+    dropSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
+
+  return {
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
+  };
 }
 
 export async function addFreeAgentToOpenRosterSlot({
@@ -2118,7 +1921,7 @@ export async function addFreeAgentToOpenRosterSlot({
   addAsset,
   effectiveCycleNumber = null,
   effectiveLabel = null,
-  leagueOwnerIds = [],
+  leagueOwnerIds: _leagueOwnerIds = [],
   preferImmediateCurrentCycle = false,
 }: AddOpenRosterAssetInput): Promise<RosterMoveExecutionResult> {
   if (preferImmediateCurrentCycle) {
@@ -2126,7 +1929,7 @@ export async function addFreeAgentToOpenRosterSlot({
       leagueId,
       moveType: 'add-open-active',
       activeSlotId: targetSlotId,
-      addAsset,
+      addAssetKey: addAsset.assetKey,
     });
 
     return {
@@ -2135,197 +1938,23 @@ export async function addFreeAgentToOpenRosterSlot({
     };
   }
 
-  const queueAtSlotBoundary = await hasStartedFantasyCycle(leagueId);
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-  const otherRosterRefs = leagueOwnerIds
-    .filter((leagueOwnerId) => leagueOwnerId !== ownerId)
-    .map((leagueOwnerId) => getFantasyRosterRef(leagueId, leagueOwnerId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  return runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot, ...otherRosterSnapshots] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-      ...otherRosterRefs.map((otherRosterRef) => transaction.get(otherRosterRef)),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === targetSlotId);
-
-    if (benchSlotIndex >= 0) {
-      const benchSlot = roster.benchSlots[benchSlotIndex];
-
-      if (benchSlot.asset) {
-        throw new Error('That bench slot is already filled.');
-      }
-
-      if (isAssetOnRoster(roster, addAsset.assetKey)) {
-        throw new Error('That player or goalie unit is already on your roster.');
-      }
-
-      if (isAssetOnAnyRoster(otherRosterSnapshots, addAsset.assetKey)) {
-        throw new Error(
-          'That player or goalie unit is already on another roster or reserved by another queued move.',
-        );
-      }
-
-      roster.benchSlots[benchSlotIndex] = {
-        ...benchSlot,
-        asset: {
-          ...createRosterAsset(addAsset, 'benched'),
-          eligibleFromCycleNumber: effectiveCycleNumber,
-        },
-      };
-
-      transaction.set(
-        rosterRef,
-        {
-          schemaVersion: roster.schemaVersion,
-          activeSlots: roster.activeSlots,
-          benchSlots: roster.benchSlots,
-          irSlots: roster.irSlots,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(transactionRef, {
-        type: 'add-open-slot',
-        ownerId,
-        addedAsset: addAsset,
-        droppedAsset: null,
-        sourceRosterArea: 'bench',
-        benchSlotId: benchSlot.slotId,
-        targetSlotId,
-        rosterSlotId: targetSlotId,
-        effectiveCycleNumber,
-        effectiveLabel,
-        createdAt: serverTimestamp(),
-      });
-
-      return { mode: 'ownership-only', effectiveCycleNumber };
-    }
-
-    const slotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === targetSlotId);
-
-    if (slotIndex === -1) {
-      throw new Error('The selected roster slot was not found.');
-    }
-
-    const selectedSlot = roster.activeSlots[slotIndex];
-
-    assertSlotHasNoPendingMove(selectedSlot);
-
-    if (selectedSlot.asset) {
-      throw new Error(
-        'That roster slot is already filled. Choose a filled same-position player to drop, or choose an open slot.',
-      );
-    }
-
-    if (selectedSlot.position !== addAsset.position) {
-      throw new Error(`This player must be added to an open ${addAsset.position} slot.`);
-    }
-
-    if (isAssetOnRoster(roster, addAsset.assetKey)) {
-      throw new Error(
-        'That player or goalie unit is already on your roster or reserved by a queued move.',
-      );
-    }
-
-    if (isAssetOnAnyRoster(otherRosterSnapshots, addAsset.assetKey)) {
-      throw new Error(
-        'That player or goalie unit is already on another roster or reserved by another queued move.',
-      );
-    }
-
-    if (queueAtSlotBoundary) {
-      const pendingMove = createPendingRosterMove(
-        'add-open-slot',
-        ownerId,
-        selectedSlot,
-        addAsset,
-        null,
-        effectiveCycleNumber,
-        effectiveLabel,
-      );
-
-      roster.activeSlots[slotIndex] = {
-        ...selectedSlot,
-        pendingMove,
-      };
-
-      transaction.set(
-        rosterRef,
-        {
-          schemaVersion: roster.schemaVersion,
-          activeSlots: roster.activeSlots,
-          benchSlots: roster.benchSlots,
-          irSlots: roster.irSlots,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(transactionRef, {
-        type: 'queue-add-open-slot',
-        ownerId,
-        addedAsset: addAsset,
-        targetSlotId,
-        rosterSlotId: targetSlotId,
-        queuedMoveId: pendingMove.id,
-        effectiveCycleNumber,
-        effectiveLabel: effectiveLabel ?? 'At this slot boundary',
-        createdAt: serverTimestamp(),
-      });
-
-      return { mode: 'queued', effectiveCycleNumber };
-    }
-
-    roster.activeSlots[slotIndex] = {
-      ...selectedSlot,
-      asset: createRosterAsset(addAsset, 'new'),
-      pendingMove: null,
-      openFromCycleNumber: null,
-    };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type: 'add-open-slot',
-      ownerId,
-      addedAsset: addAsset,
-      droppedAsset: null,
-      targetSlotId,
-      rosterSlotId: targetSlotId,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
-
-    return { mode: 'immediate', effectiveCycleNumber };
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'add-open-slot',
+    assetKey: addAsset.assetKey,
+    targetSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
+
+  return {
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
+  };
 }
 
 export async function cancelQueuedRosterMove({
@@ -2337,64 +1966,14 @@ export async function cancelQueuedRosterMove({
   ownerId: string;
   rosterSlotId: string;
 }): Promise<void> {
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const rosterSnapshot = await transaction.get(rosterRef);
-
-    if (!rosterSnapshot.exists()) {
-      throw new Error('Your roster was not found.');
-    }
-
-    const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
-    const slotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === rosterSlotId);
-
-    if (slotIndex === -1) {
-      throw new Error('The queued roster slot was not found.');
-    }
-
-    const slot = roster.activeSlots[slotIndex];
-    const pendingMove = slot.pendingMove;
-
-    if (!pendingMove) {
-      throw new Error('That roster slot no longer has a queued move.');
-    }
-
-    if (pendingMove.sourceWaiverId) {
-      throw new Error(
-        'An awarded waiver move cannot be canceled after the commissioner processes it.',
-      );
-    }
-
-    roster.activeSlots[slotIndex] = {
-      ...slot,
-      pendingMove: null,
-    };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type: 'cancel-queued-move',
-      ownerId,
-      addedAsset: rosterAssetToDraftableAsset(pendingMove.incomingAsset),
-      droppedAsset: slot.asset,
-      rosterSlotId,
-      queuedMoveId: pendingMove.id,
-      effectiveCycleNumber: null,
-      effectiveLabel: 'Canceled before activation',
-      createdAt: serverTimestamp(),
-    });
+  await executeSecureRosterAction({
+    leagueId,
+    action: 'cancel-queued-move',
+    rosterSlotId,
   });
 }
 
@@ -2420,108 +1999,17 @@ export async function moveRosterAssetToIr({
     };
   }
 
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    const activeSlotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === activeSlotId);
-
-    if (activeSlotIndex === -1) {
-      throw new Error('The selected active roster slot was not found.');
-    }
-
-    const activeSlot = roster.activeSlots[activeSlotIndex];
-    const asset = activeSlot.asset;
-
-    assertSlotHasNoPendingMove(activeSlot);
-
-    if (!asset) {
-      throw new Error('That roster slot is already empty.');
-    }
-
-    if (asset.assetType !== 'skater') {
-      throw new Error('Only skaters can be moved to IR.');
-    }
-
-    const availability = getPlayerAvailabilityForPlayer(asset.player);
-
-    if (!isPlayerIrEligible(availability.status)) {
-      throw new Error(
-        getPlayerIrIneligibleReason(availability) ||
-          `${availability.label} players are not IR eligible.`,
-      );
-    }
-
-    const openIrSlotIndex = roster.irSlots.findIndex((slot) => slot.asset === null);
-
-    if (openIrSlotIndex === -1) {
-      throw new Error('All IR slots are already filled.');
-    }
-
-    const openIrSlot = roster.irSlots[openIrSlotIndex];
-    const irAsset = {
-      ...asset,
-      rosterStatus: 'injured' as RosterStatus,
-    };
-
-    roster.activeSlots[activeSlotIndex] = {
-      ...activeSlot,
-      asset: null,
-      openFromCycleNumber: null,
-    };
-
-    roster.irSlots[openIrSlotIndex] = {
-      ...openIrSlot,
-      asset: irAsset,
-    };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type: 'move-to-ir',
-      ownerId,
-      movedAsset: asset,
-      activeSlotId,
-      irSlotId: openIrSlot.slotId,
-      availabilityStatus: availability.status,
-      availabilityLabel: availability.label,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'move-active-to-ir',
+    activeSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 
   return {
-    mode: 'ownership-only',
-    effectiveCycleNumber,
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
   };
 }
 
@@ -2533,57 +2021,40 @@ export async function activateIrRosterAsset({
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: ActivateIrRosterAssetInput): Promise<RosterMoveExecutionResult> {
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-  const preflightRosterSnapshot = await getDoc(rosterRef);
+  const rosterSnapshot = await getDoc(getFantasyRosterRef(leagueId, ownerId));
 
-  if (!preflightRosterSnapshot.exists()) {
+  if (!rosterSnapshot.exists()) {
     throw new Error('Your roster was not found.');
   }
 
-  const preflightRoster = normalizeFantasyRoster(
-    preflightRosterSnapshot.data() as Partial<FantasyRoster>,
-  );
-  const preflightIrSlot = preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId);
-  const preflightIrAsset = preflightIrSlot?.asset ?? null;
+  const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
+  const irAsset = roster.irSlots.find((slot) => slot.slotId === irSlotId)?.asset ?? null;
 
-  if (!preflightIrAsset) {
+  if (!irAsset) {
     throw new Error('That IR slot is already empty.');
   }
 
-  const resolvedActiveSlotId = activeSlotId ?? preflightRoster.activeSlots.find(
-    (slot) => slot.position === preflightIrAsset.position && slot.asset === null,
+  const resolvedActiveSlotId = activeSlotId ?? roster.activeSlots.find(
+    (slot) => slot.position === irAsset.position && slot.asset === null,
   )?.slotId ?? null;
 
   if (!resolvedActiveSlotId) {
-    throw new Error(
-      `Choose a ${preflightIrAsset.position} roster slot before activating this player from IR.`,
-    );
+    throw new Error(`Choose a ${irAsset.position} roster slot before activating this player from IR.`);
   }
 
-  const preflightActiveSlot = preflightRoster.activeSlots.find(
-    (slot) => slot.slotId === resolvedActiveSlotId,
-  );
-  const currentWindow = await getLatestRosterSlotWindow(
-    leagueId,
-    ownerId,
-    resolvedActiveSlotId,
-  );
-  const immediateCycleNumber =
-    currentWindow?.cycleNumber ?? preflightActiveSlot?.openFromCycleNumber ?? null;
+  const activeSlot = roster.activeSlots.find((slot) => slot.slotId === resolvedActiveSlotId);
+  const currentWindow = await getLatestRosterSlotWindow(leagueId, ownerId, resolvedActiveSlotId);
+  const immediateCycleNumber = currentWindow?.cycleNumber ?? activeSlot?.openFromCycleNumber ?? null;
   const activeAssignmentUntouched =
     isUntouchedRosterWindow(currentWindow) ||
-    (!currentWindow &&
-      !preflightActiveSlot?.asset &&
-      typeof preflightActiveSlot?.openFromCycleNumber === 'number');
+    (!currentWindow && !activeSlot?.asset && typeof activeSlot?.openFromCycleNumber === 'number');
   const requiredGamesPerCycle = await getLeagueRequiredGamesPerCycle(leagueId);
   const incomingEligibility = await resolveRosterMoveAssetCycleEligibility(
-    rosterAssetToDraftableAsset(preflightIrAsset),
+    rosterAssetToDraftableAsset(irAsset),
     requiredGamesPerCycle,
   );
   const incomingEarliestCycleNumber = Math.max(
-    preflightIrAsset.eligibleFromCycleNumber ?? 1,
+    irAsset.eligibleFromCycleNumber ?? 1,
     incomingEligibility.earliestEligibleCycleNumber,
   );
 
@@ -2605,136 +2076,20 @@ export async function activateIrRosterAsset({
     };
   }
 
-  const fairEffectiveCycleNumber = Math.max(
-    effectiveCycleNumber ?? ((immediateCycleNumber ?? 0) + 1),
-    incomingEarliestCycleNumber,
-  );
-  const fairEffectiveLabel = effectiveLabel ?? `Cycle ${fairEffectiveCycleNumber}`;
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    const irSlotIndex = roster.irSlots.findIndex((slot) => slot.slotId === irSlotId);
-
-    if (irSlotIndex === -1) {
-      throw new Error('The selected IR slot was not found.');
-    }
-
-    const irSlot = roster.irSlots[irSlotIndex];
-    const asset = irSlot.asset;
-
-    if (!asset) {
-      throw new Error('That IR slot is already empty.');
-    }
-
-    const activeSlotIndex = roster.activeSlots.findIndex(
-      (slot) => slot.slotId === resolvedActiveSlotId,
-    );
-
-    if (activeSlotIndex === -1) {
-      throw new Error(
-        `Choose a ${asset.position} roster slot before activating this player from IR.`,
-      );
-    }
-
-    const activeSlot = roster.activeSlots[activeSlotIndex];
-
-    assertSlotHasNoPendingMove(activeSlot);
-
-    if (activeSlot.position !== asset.position) {
-      throw new Error(`This player must be activated into a ${asset.position} roster slot.`);
-    }
-
-    const droppedAsset = activeSlot.asset;
-
-    const activatedAsset = {
-      ...asset,
-      rosterStatus: 'moved' as RosterStatus,
-      eligibleFromCycleNumber: fairEffectiveCycleNumber,
-    };
-
-    roster.activeSlots[activeSlotIndex] = {
-      ...activeSlot,
-      asset: activatedAsset,
-      openFromCycleNumber: null,
-    };
-
-    roster.irSlots[irSlotIndex] = {
-      ...irSlot,
-      asset: null,
-    };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    let waiverId: string | null = null;
-    let waiverAsset: DraftableAsset | null = null;
-
-    if (droppedAsset) {
-      waiverId = getRosterAssetKey(droppedAsset);
-
-      if (!waiverId) {
-        throw new Error('The replaced player could not be identified for waivers.');
-      }
-
-      waiverAsset = rosterAssetToDraftableAsset(droppedAsset);
-
-      transaction.set(
-        getWaiverRef(leagueId, waiverId),
-        buildActiveWaiverPayload(
-          droppedAsset,
-          ownerId,
-          fairEffectiveCycleNumber,
-          fairEffectiveLabel,
-        ),
-      );
-    }
-
-    transaction.set(transactionRef, {
-      type: 'activate-from-ir',
-      ownerId,
-      activatedAsset: asset,
-      droppedAsset,
-      waiverId,
-      waiverAsset,
-      activeSlotId: activeSlot.slotId,
-      irSlotId,
-      effectiveCycleNumber: fairEffectiveCycleNumber,
-      effectiveLabel: fairEffectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'activate-ir-active',
+    activeSlotId: resolvedActiveSlotId,
+    irSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 
   return {
-    mode: 'ownership-only',
-    effectiveCycleNumber: fairEffectiveCycleNumber,
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
   };
 }
-
 
 export async function dropRosterAssetToWaivers({
   leagueId,
@@ -2761,148 +2116,18 @@ export async function dropRosterAssetToWaivers({
     }
   }
 
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    let droppedAsset: RosterAsset | null = null;
-    let activeSlotId: string | null = null;
-    let irSlotId: string | null = null;
-
-    if (sourceRosterArea === 'active') {
-      const activeSlotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === slotId);
-
-      if (activeSlotIndex === -1) {
-        throw new Error('The selected active roster slot was not found.');
-      }
-
-      const activeSlot = roster.activeSlots[activeSlotIndex];
-
-      assertSlotHasNoPendingMove(activeSlot);
-
-      if (!activeSlot.asset) {
-        throw new Error('That active roster slot is already empty.');
-      }
-
-      droppedAsset = activeSlot.asset;
-      activeSlotId = activeSlot.slotId;
-
-      roster.activeSlots[activeSlotIndex] = {
-        ...activeSlot,
-        asset: null,
-        openFromCycleNumber: null,
-      };
-    } else if (sourceRosterArea === 'bench') {
-      const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === slotId);
-
-      if (benchSlotIndex === -1) {
-        throw new Error('The selected bench slot was not found.');
-      }
-
-      const benchSlot = roster.benchSlots[benchSlotIndex];
-
-      if (!benchSlot.asset) {
-        throw new Error('That bench slot is already empty.');
-      }
-
-      const benchAssetKey = getRosterAssetKey(benchSlot.asset);
-      const reservedBySwap = roster.activeSlots.some(
-        (slot) => slot.pendingMove?.sourceBenchSlotId === benchSlot.slotId &&
-          getRosterAssetKey(slot.pendingMove.incomingAsset) === benchAssetKey,
-      );
-
-      if (reservedBySwap) {
-        throw new Error('That bench player is reserved for a queued active-lineup swap.');
-      }
-
-      droppedAsset = benchSlot.asset;
-      roster.benchSlots[benchSlotIndex] = { ...benchSlot, asset: null };
-    } else if (sourceRosterArea === 'ir') {
-      const irSlotIndex = roster.irSlots.findIndex((slot) => slot.slotId === slotId);
-
-      if (irSlotIndex === -1) {
-        throw new Error('The selected IR slot was not found.');
-      }
-
-      const irSlot = roster.irSlots[irSlotIndex];
-
-      if (!irSlot.asset) {
-        throw new Error('That IR slot is already empty.');
-      }
-
-      droppedAsset = irSlot.asset;
-      irSlotId = irSlot.slotId;
-
-      roster.irSlots[irSlotIndex] = {
-        ...irSlot,
-        asset: null,
-      };
-    } else {
-      throw new Error('Choose whether to drop from the active roster, bench, or IR.');
-    }
-
-    const waiverId = getRosterAssetKey(droppedAsset);
-
-    if (!waiverId) {
-      throw new Error('The selected player or goalie unit could not be identified for waivers.');
-    }
-
-    const waiverAsset = rosterAssetToDraftableAsset(droppedAsset);
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(
-      getWaiverRef(leagueId, waiverId),
-      buildActiveWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
-    );
-
-    transaction.set(transactionRef, {
-      type: 'drop-to-waivers',
-      ownerId,
-      droppedAsset,
-      waiverId,
-      waiverAsset,
-      sourceRosterArea,
-      dropSlotId: slotId,
-      activeSlotId,
-      irSlotId,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'drop-to-waivers',
+    sourceRosterArea,
+    slotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 
   return {
-    mode: sourceRosterArea === 'active' ? 'ownership-only' : 'immediate',
-    effectiveCycleNumber,
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
   };
 }
 
@@ -2914,49 +2139,32 @@ export async function queueActiveBenchSwap({
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: QueueActiveBenchSwapInput): Promise<RosterMoveExecutionResult> {
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-  const preflightRosterSnapshot = await getDoc(rosterRef);
+  const rosterSnapshot = await getDoc(getFantasyRosterRef(leagueId, ownerId));
 
-  if (!preflightRosterSnapshot.exists()) {
+  if (!rosterSnapshot.exists()) {
     throw new Error('Your roster was not found.');
   }
 
-  const preflightRoster = normalizeFantasyRoster(
-    preflightRosterSnapshot.data() as Partial<FantasyRoster>,
-  );
-  const preflightBenchSlot = preflightRoster.benchSlots.find(
-    (slot) => slot.slotId === benchSlotId,
-  );
+  const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
+  const benchAsset = roster.benchSlots.find((slot) => slot.slotId === benchSlotId)?.asset ?? null;
+  const activeSlot = roster.activeSlots.find((slot) => slot.slotId === activeSlotId);
 
-  if (!preflightBenchSlot?.asset) {
-    throw new Error('The selected bench slot is empty.');
+  if (!benchAsset || !activeSlot) {
+    throw new Error('The selected active or bench slot was not found.');
   }
 
   const requiredGamesPerCycle = await getLeagueRequiredGamesPerCycle(leagueId);
   const benchEligibility = await resolveRosterMoveAssetCycleEligibility(
-    rosterAssetToDraftableAsset(preflightBenchSlot.asset),
+    rosterAssetToDraftableAsset(benchAsset),
     requiredGamesPerCycle,
   );
-  const preflightActiveSlot = preflightRoster.activeSlots.find(
-    (slot) => slot.slotId === activeSlotId,
-  );
-
-  if (!preflightActiveSlot) {
-    throw new Error('The selected active roster slot was not found.');
-  }
-
   const currentWindow = await getLatestRosterSlotWindow(leagueId, ownerId, activeSlotId);
-  const immediateCycleNumber =
-    currentWindow?.cycleNumber ?? preflightActiveSlot.openFromCycleNumber ?? null;
+  const immediateCycleNumber = currentWindow?.cycleNumber ?? activeSlot.openFromCycleNumber ?? null;
   const activeAssignmentUntouched =
     isUntouchedRosterWindow(currentWindow) ||
-    (!currentWindow &&
-      !preflightActiveSlot.asset &&
-      typeof preflightActiveSlot.openFromCycleNumber === 'number');
+    (!currentWindow && !activeSlot.asset && typeof activeSlot.openFromCycleNumber === 'number');
   const incomingEarliestCycleNumber = Math.max(
-    preflightBenchSlot.asset.eligibleFromCycleNumber ?? 1,
+    benchAsset.eligibleFromCycleNumber ?? 1,
     benchEligibility.earliestEligibleCycleNumber,
   );
 
@@ -2978,96 +2186,19 @@ export async function queueActiveBenchSwap({
     };
   }
 
-  const fairEffectiveCycleNumber = Math.max(
-    effectiveCycleNumber ?? ((immediateCycleNumber ?? 0) + 1),
-    incomingEarliestCycleNumber,
-  );
-
-  return runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    assertDraftComplete(normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>));
-
-    const roster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-    const activeSlotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === activeSlotId);
-    const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === benchSlotId);
-
-    if (activeSlotIndex < 0 || benchSlotIndex < 0) {
-      throw new Error('The selected active or bench slot was not found.');
-    }
-
-    const activeSlot = roster.activeSlots[activeSlotIndex];
-    const benchSlot = roster.benchSlots[benchSlotIndex];
-    const benchAsset = benchSlot.asset;
-
-    assertSlotHasNoPendingMove(activeSlot);
-
-    if (!benchAsset) {
-      throw new Error('The selected bench slot is empty.');
-    }
-
-    if (activeSlot.position !== benchAsset.position) {
-      throw new Error(`That bench asset can only move into a ${benchAsset.position} active slot.`);
-    }
-
-    const requestedCycle = Math.max(
-      fairEffectiveCycleNumber,
-      benchAsset.eligibleFromCycleNumber ?? 1,
-    );
-    const pendingMove = createPendingRosterMove(
-      'add-drop',
-      ownerId,
-      activeSlot,
-      rosterAssetToDraftableAsset(benchAsset),
-      null,
-      requestedCycle,
-      effectiveLabel,
-      benchSlot.slotId,
-      'bench',
-    );
-
-    roster.activeSlots[activeSlotIndex] = { ...activeSlot, pendingMove };
-
-    transaction.set(
-      rosterRef,
-      {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type: 'queue-active-bench-swap',
-      ownerId,
-      movedAsset: benchAsset,
-      droppedAsset: activeSlot.asset,
-      activeSlotId,
-      benchSlotId,
-      rosterSlotId: activeSlotId,
-      queuedMoveId: pendingMove.id,
-      effectiveCycleNumber: requestedCycle,
-      effectiveLabel: effectiveLabel ?? `Cycle ${requestedCycle}`,
-      createdAt: serverTimestamp(),
-    });
-
-    return {
-      mode: 'queued',
-      effectiveCycleNumber: requestedCycle,
-    };
+  const result = await executeSecureRosterAction({
+    leagueId,
+    action: 'queue-active-bench-swap',
+    activeSlotId,
+    benchSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
+
+  return {
+    mode: result.mode,
+    effectiveCycleNumber: result.effectiveCycleNumber,
+  };
 }
 
 export async function moveBenchRosterAssetToIr({
@@ -3077,83 +2208,16 @@ export async function moveBenchRosterAssetToIr({
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: MoveBenchRosterAssetToIrInput): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    assertDraftComplete(normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>));
-    const roster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-    const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === benchSlotId);
-    const openIrSlotIndex = roster.irSlots.findIndex((slot) => slot.asset === null);
-
-    if (benchSlotIndex < 0) {
-      throw new Error('The selected bench slot was not found.');
-    }
-    if (openIrSlotIndex < 0) {
-      throw new Error('All IR slots are already filled.');
-    }
-
-    const benchSlot = roster.benchSlots[benchSlotIndex];
-    const asset = benchSlot.asset;
-
-    if (!asset || asset.assetType !== 'skater') {
-      throw new Error('Only a skater on the bench can be moved to IR.');
-    }
-
-    const availability = getPlayerAvailabilityForPlayer(asset.player);
-    if (!isPlayerIrEligible(availability.status)) {
-      throw new Error(
-        getPlayerIrIneligibleReason(availability) || `${availability.label} players are not IR eligible.`,
-      );
-    }
-
-    const assetKey = getRosterAssetKey(asset);
-    const reservedBySwap = roster.activeSlots.some(
-      (slot) => slot.pendingMove?.sourceBenchSlotId === benchSlotId &&
-        getRosterAssetKey(slot.pendingMove.incomingAsset) === assetKey,
-    );
-    if (reservedBySwap) {
-      throw new Error('Cancel the queued active-lineup swap before moving this player to IR.');
-    }
-
-    roster.benchSlots[benchSlotIndex] = { ...benchSlot, asset: null };
-    roster.irSlots[openIrSlotIndex] = {
-      ...roster.irSlots[openIrSlotIndex],
-      asset: { ...asset, rosterStatus: 'injured' },
-    };
-
-    transaction.set(rosterRef, {
-      schemaVersion: roster.schemaVersion,
-      activeSlots: roster.activeSlots,
-      benchSlots: roster.benchSlots,
-      irSlots: roster.irSlots,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    transaction.set(transactionRef, {
-      type: 'move-bench-to-ir',
-      ownerId,
-      movedAsset: asset,
-      benchSlotId,
-      irSlotId: roster.irSlots[openIrSlotIndex].slotId,
-      availabilityStatus: availability.status,
-      availabilityLabel: availability.label,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  await executeSecureRosterAction({
+    leagueId,
+    action: 'move-bench-to-ir',
+    benchSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 }
 
@@ -3165,89 +2229,17 @@ export async function activateIrRosterAssetToBench({
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: ActivateIrRosterAssetToBenchInput): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, rosterSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(rosterRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    assertDraftComplete(normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>));
-    const roster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-    const irSlotIndex = roster.irSlots.findIndex((slot) => slot.slotId === irSlotId);
-    const benchSlotIndex = benchSlotId
-      ? roster.benchSlots.findIndex((slot) => slot.slotId === benchSlotId)
-      : roster.benchSlots.findIndex((slot) => slot.asset === null);
-
-    if (irSlotIndex < 0 || !roster.irSlots[irSlotIndex].asset) {
-      throw new Error('The selected IR player was not found.');
-    }
-    if (benchSlotIndex < 0) {
-      throw new Error('Choose a bench player to replace or open a bench slot first.');
-    }
-
-    const irAsset = roster.irSlots[irSlotIndex].asset!;
-    const benchSlot = roster.benchSlots[benchSlotIndex];
-    const droppedAsset = benchSlot.asset;
-
-    if (droppedAsset) {
-      const droppedAssetKey = getRosterAssetKey(droppedAsset);
-      const reservedBySwap = roster.activeSlots.some(
-        (slot) => slot.pendingMove?.sourceBenchSlotId === benchSlot.slotId &&
-          getRosterAssetKey(slot.pendingMove.incomingAsset) === droppedAssetKey,
-      );
-
-      if (reservedBySwap) {
-        throw new Error(
-          'That bench player is reserved for a queued active-lineup swap. Cancel the swap or choose another bench slot.',
-        );
-      }
-    }
-
-    roster.irSlots[irSlotIndex] = { ...roster.irSlots[irSlotIndex], asset: null };
-    roster.benchSlots[benchSlotIndex] = {
-      ...benchSlot,
-      asset: { ...irAsset, rosterStatus: 'benched' },
-    };
-
-    transaction.set(rosterRef, {
-      schemaVersion: roster.schemaVersion,
-      activeSlots: roster.activeSlots,
-      benchSlots: roster.benchSlots,
-      irSlots: roster.irSlots,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    let waiverId: string | null = null;
-    if (droppedAsset) {
-      waiverId = getRosterAssetKey(droppedAsset);
-      transaction.set(
-        getWaiverRef(leagueId, waiverId),
-        buildActiveWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
-      );
-    }
-
-    transaction.set(transactionRef, {
-      type: 'activate-ir-to-bench',
-      ownerId,
-      activatedAsset: irAsset,
-      droppedAsset,
-      waiverId,
-      irSlotId,
-      benchSlotId: benchSlot.slotId,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  await executeSecureRosterAction({
+    leagueId,
+    action: 'activate-ir-to-bench',
+    irSlotId,
+    benchSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 }
 
@@ -3261,135 +2253,19 @@ export async function placeWaiverClaim({
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: PlaceWaiverClaimInput): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-  const waiverRef = getWaiverRef(leagueId, waiverId);
-  const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-  const teamRef = getTeamRef(leagueId, ownerId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, waiverSnapshot, rosterSnapshot, teamSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(waiverRef),
-      transaction.get(rosterRef),
-      transaction.get(teamRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    if (!waiverSnapshot.exists()) {
-      throw new Error('That waiver player was not found.');
-    }
-
-    const waiver = {
-      id: waiverSnapshot.id,
-      ...(waiverSnapshot.data() as Omit<FantasyWaiver, 'id'>),
-    } as FantasyWaiver;
-
-    if (waiver.status !== 'active') {
-      throw new Error('That player is no longer on waivers.');
-    }
-
-    if (waiver.droppedByOwnerId === ownerId) {
-      throw new Error('You cannot claim a player you just dropped while he is still on waivers.');
-    }
-
-    const claimAsset = waiver.asset;
-
-    if (!claimAsset || claimAsset.assetKey !== waiver.assetKey) {
-      throw new Error('The waiver asset is missing or invalid.');
-    }
-
-    const roster: FantasyRoster = rosterSnapshot.exists()
-      ? normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>)
-      : createEmptyFantasyRoster();
-
-    if (isAssetOnRoster(roster, claimAsset.assetKey)) {
-      throw new Error('That player or goalie unit is already on your roster.');
-    }
-
-    const selectedSlotId = moveType === 'open-slot' ? targetSlotId : dropSlotId;
-
-    if (!selectedSlotId) {
-      throw new Error('Choose the roster spot for this waiver claim.');
-    }
-
-    const activeSlot = roster.activeSlots.find((slot) => slot.slotId === selectedSlotId);
-    const benchSlot = roster.benchSlots.find((slot) => slot.slotId === selectedSlotId);
-
-    if (!activeSlot && !benchSlot) {
-      throw new Error('The selected roster slot was not found.');
-    }
-
-    if (activeSlot) {
-      assertSlotHasNoPendingMove(activeSlot);
-
-      if (activeSlot.position !== claimAsset.position) {
-        throw new Error(`This waiver claim needs a ${claimAsset.position} active roster spot.`);
-      }
-
-      if (moveType === 'open-slot' && activeSlot.asset) {
-        throw new Error('The selected open slot is no longer open.');
-      }
-
-      if (moveType === 'drop' && !activeSlot.asset) {
-        throw new Error('The selected drop slot is already open.');
-      }
-    } else if (benchSlot) {
-      if (moveType === 'open-slot' && benchSlot.asset) {
-        throw new Error('The selected bench slot is no longer open.');
-      }
-
-      if (moveType === 'drop' && !benchSlot.asset) {
-        throw new Error('The selected bench drop slot is already open.');
-      }
-    }
-
-    const team = teamSnapshot.exists() ? (teamSnapshot.data() as FantasyTeam) : undefined;
-
-    const newClaim: FantasyWaiverClaim = {
-      ownerId,
-      moveType,
-      rosterArea: benchSlot ? 'bench' : 'active',
-      dropSlotId: moveType === 'drop' ? selectedSlotId : null,
-      targetSlotId: moveType === 'open-slot' ? selectedSlotId : null,
-      waiverPriorityAtClaim: getTeamWaiverPriority(team, 999),
-      effectiveCycleNumber,
-      effectiveLabel,
-      claimedAt: new Date().toISOString(),
-    };
-
-    const existingClaims = Array.isArray(waiver.claims) ? waiver.claims : [];
-
-    const nextClaims = [...existingClaims.filter((claim) => claim.ownerId !== ownerId), newClaim];
-
-    transaction.set(
-      waiverRef,
-      {
-        ...waiver,
-        claims: nextClaims,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type: 'waiver-claim',
-      ownerId,
-      waiverId,
-      waiverAsset: claimAsset,
-      targetSlotId: newClaim.targetSlotId,
-      dropSlotId: newClaim.dropSlotId,
-      effectiveCycleNumber,
-      effectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  await executeSecureRosterAction({
+    leagueId,
+    action: 'place-waiver-claim',
+    waiverId,
+    waiverMoveType: moveType,
+    dropSlotId,
+    targetSlotId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 }
 
@@ -3397,351 +2273,24 @@ export async function processWaiver({
   leagueId,
   commissionerId,
   waiverId,
-  leagueTeams,
+  leagueTeams: _leagueTeams,
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: ProcessWaiverInput): Promise<void> {
-  const queueAtSlotBoundary = await hasStartedFantasyCycle(leagueId);
-  const leagueRef = getLeagueRef(leagueId);
-  const draftRef = getDraftRef(leagueId);
-  const waiverRef = getWaiverRef(leagueId, waiverId);
-  const transactionRef = doc(getTransactionsRef(leagueId));
-  const orderedTeams = [...leagueTeams].sort(
-    (first, second) => getTeamWaiverPriority(first, 999) - getTeamWaiverPriority(second, 999),
-  );
+  if (!commissionerId) {
+    throw new Error('The commissioner is required.');
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const [leagueSnapshot, draftSnapshot, waiverSnapshot] = await Promise.all([
-      transaction.get(leagueRef),
-      transaction.get(draftRef),
-      transaction.get(waiverRef),
-    ]);
-
-    if (!leagueSnapshot.exists()) {
-      throw new Error('League not found.');
-    }
-
-    const leagueData = leagueSnapshot.data() as {
-      commissionerId?: string;
-    };
-
-    if (leagueData.commissionerId !== commissionerId) {
-      throw new Error('Only the commissioner can process waivers.');
-    }
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    assertDraftComplete(draft);
-
-    if (!waiverSnapshot.exists()) {
-      throw new Error('That waiver player was not found.');
-    }
-
-    const waiver = {
-      id: waiverSnapshot.id,
-      ...(waiverSnapshot.data() as Omit<FantasyWaiver, 'id'>),
-    } as FantasyWaiver;
-
-    if (waiver.status !== 'active') {
-      throw new Error('That waiver has already been processed.');
-    }
-
-    const activeClaims = Array.isArray(waiver.claims) ? waiver.claims : [];
-
-    if (activeClaims.length === 0) {
-      transaction.set(
-        waiverRef,
-        {
-          status: 'cleared',
-          processedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(transactionRef, {
-        type: 'waiver-cleared',
-        ownerId: commissionerId,
-        waiverId,
-        waiverAsset: waiver.asset,
-        effectiveCycleNumber,
-        effectiveLabel,
-        createdAt: serverTimestamp(),
-      });
-
-      return;
-    }
-
-    const teamByOwnerId = new Map(
-      orderedTeams.map((team, index) => [
-        team.ownerId,
-        {
-          team,
-          fallbackPriority: index + 1,
-        },
-      ]),
-    );
-    const orderedClaims = [...activeClaims].sort((first, second) => {
-      const firstTeam = teamByOwnerId.get(first.ownerId);
-      const secondTeam = teamByOwnerId.get(second.ownerId);
-
-      return (
-        getTeamWaiverPriority(firstTeam?.team, firstTeam?.fallbackPriority ?? 999) -
-        getTeamWaiverPriority(secondTeam?.team, secondTeam?.fallbackPriority ?? 999)
-      );
-    });
-    const claimantOwnerIds = [...new Set(orderedClaims.map((claim) => claim.ownerId))];
-    const claimantRosterRefs = claimantOwnerIds.map((ownerId) =>
-      getFantasyRosterRef(leagueId, ownerId),
-    );
-    const claimantRosterSnapshots = await Promise.all(
-      claimantRosterRefs.map((rosterRef) => transaction.get(rosterRef)),
-    );
-    const claimantRostersByOwnerId = new Map(
-      claimantOwnerIds.map((ownerId, index) => {
-        const snapshot = claimantRosterSnapshots[index];
-
-        return [
-          ownerId,
-          snapshot?.exists()
-            ? normalizeFantasyRoster(snapshot.data() as Partial<FantasyRoster>)
-            : null,
-        ] as const;
-      }),
-    );
-
-    let winningClaim: FantasyWaiverClaim | null = null;
-    let winnerRoster: FantasyRoster | null = null;
-    let activeSlotIndex = -1;
-    let benchSlotIndex = -1;
-    let winningRosterArea: 'active' | 'bench' = 'active';
-    let slotId = '';
-
-    for (const claim of orderedClaims) {
-      const claimRoster = claimantRostersByOwnerId.get(claim.ownerId);
-      const claimSlotId = claim.moveType === 'open-slot' ? claim.targetSlotId : claim.dropSlotId;
-
-      if (!claimRoster || !claimSlotId) {
-        continue;
-      }
-
-      const claimActiveSlotIndex = claimRoster.activeSlots.findIndex(
-        (slot) => slot.slotId === claimSlotId,
-      );
-      const claimBenchSlotIndex = claimRoster.benchSlots.findIndex(
-        (slot) => slot.slotId === claimSlotId,
-      );
-      const claimActiveSlot = claimActiveSlotIndex >= 0
-        ? claimRoster.activeSlots[claimActiveSlotIndex]
-        : null;
-      const claimBenchSlot = claimBenchSlotIndex >= 0
-        ? claimRoster.benchSlots[claimBenchSlotIndex]
-        : null;
-      const slotIsEligible = !isAssetOnRoster(claimRoster, waiver.asset.assetKey) && (
-        claimActiveSlot
-          ? !claimActiveSlot.pendingMove &&
-            claimActiveSlot.position === waiver.asset.position &&
-            ((claim.moveType === 'open-slot' && !claimActiveSlot.asset) ||
-              (claim.moveType === 'drop' && Boolean(claimActiveSlot.asset)))
-          : claimBenchSlot
-            ? ((claim.moveType === 'open-slot' && !claimBenchSlot.asset) ||
-              (claim.moveType === 'drop' && Boolean(claimBenchSlot.asset)))
-            : false
-      );
-
-      if (!slotIsEligible) {
-        continue;
-      }
-
-      winningClaim = claim;
-      winnerRoster = claimRoster;
-      activeSlotIndex = claimActiveSlotIndex;
-      benchSlotIndex = claimBenchSlotIndex;
-      winningRosterArea = claimBenchSlot ? 'bench' : 'active';
-      slotId = claimSlotId;
-      break;
-    }
-
-    if (
-      !winningClaim ||
-      !winnerRoster ||
-      (winningRosterArea === 'active' ? activeSlotIndex === -1 : benchSlotIndex === -1)
-    ) {
-      transaction.set(
-        waiverRef,
-        {
-          status: 'cleared',
-          processedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      transaction.set(transactionRef, {
-        type: 'waiver-cleared',
-        ownerId: commissionerId,
-        waiverId,
-        waiverAsset: waiver.asset,
-        effectiveCycleNumber,
-        effectiveLabel: 'All submitted claims were no longer roster-eligible',
-        createdAt: serverTimestamp(),
-      });
-
-      return;
-    }
-
-    const winnerRosterRef = getFantasyRosterRef(leagueId, winningClaim.ownerId);
-    const selectedActiveSlot = winningRosterArea === 'active'
-      ? winnerRoster.activeSlots[activeSlotIndex]
-      : null;
-    const selectedBenchSlot = winningRosterArea === 'bench'
-      ? winnerRoster.benchSlots[benchSlotIndex]
-      : null;
-    const droppedByWinningTeam = selectedActiveSlot?.asset ?? selectedBenchSlot?.asset ?? null;
-    const winningEffectiveCycleCandidates = [
-      winningClaim.effectiveCycleNumber,
-      effectiveCycleNumber,
-    ].filter(
-      (value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0,
-    );
-    const winningEffectiveCycleNumber =
-      winningEffectiveCycleCandidates.length > 0
-        ? Math.max(...winningEffectiveCycleCandidates)
-        : null;
-    const winningEffectiveLabel = winningEffectiveCycleNumber
-      ? `Cycle ${winningEffectiveCycleNumber}`
-      : (winningClaim.effectiveLabel ?? effectiveLabel ?? 'After current slot window');
-    let queuedMove: PendingRosterSlotMove | null = null;
-
-    if (winningRosterArea === 'bench' && selectedBenchSlot) {
-      winnerRoster.benchSlots[benchSlotIndex] = {
-        ...selectedBenchSlot,
-        asset: {
-          ...createRosterAsset(waiver.asset, 'benched'),
-          eligibleFromCycleNumber: winningEffectiveCycleNumber,
-        },
-      };
-    } else if (queueAtSlotBoundary && selectedActiveSlot) {
-      queuedMove = createPendingRosterMove(
-        'waiver-award',
-        winningClaim.ownerId,
-        selectedActiveSlot,
-        waiver.asset,
-        waiver.id,
-        winningEffectiveCycleNumber,
-        winningEffectiveLabel,
-      );
-
-      winnerRoster.activeSlots[activeSlotIndex] = {
-        ...selectedActiveSlot,
-        pendingMove: queuedMove,
-      };
-    } else if (selectedActiveSlot) {
-      winnerRoster.activeSlots[activeSlotIndex] = {
-        ...selectedActiveSlot,
-        asset: createRosterAsset(waiver.asset, 'new'),
-        pendingMove: null,
-        openFromCycleNumber: null,
-      };
-    }
-
-    transaction.set(
-      winnerRosterRef,
-      {
-        schemaVersion: winnerRoster.schemaVersion,
-        activeSlots: winnerRoster.activeSlots,
-        benchSlots: winnerRoster.benchSlots,
-        irSlots: winnerRoster.irSlots,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    if ((winningRosterArea === 'bench' || !queueAtSlotBoundary) && droppedByWinningTeam) {
-      const droppedAssetKey = getRosterAssetKey(droppedByWinningTeam);
-
-      transaction.set(
-        getWaiverRef(leagueId, droppedAssetKey),
-        buildActiveWaiverPayload(
-          droppedByWinningTeam,
-          winningClaim.ownerId,
-          effectiveCycleNumber,
-          effectiveLabel,
-        ),
-      );
-    }
-
-    const winnerTeamRecord = teamByOwnerId.get(winningClaim.ownerId);
-    const winnerPriority = getTeamWaiverPriority(
-      winnerTeamRecord?.team,
-      winnerTeamRecord?.fallbackPriority ?? orderedTeams.length,
-    );
-    const maxPriority = Math.max(1, orderedTeams.length);
-
-    for (const [index, team] of orderedTeams.entries()) {
-      const currentPriority = getTeamWaiverPriority(team, index + 1);
-      let nextPriority = currentPriority;
-
-      if (team.ownerId === winningClaim.ownerId) {
-        nextPriority = maxPriority;
-      } else if (currentPriority > winnerPriority) {
-        nextPriority = Math.max(1, currentPriority - 1);
-      }
-
-      transaction.set(
-        getTeamRef(leagueId, team.ownerId),
-        {
-          waiverPriority: nextPriority,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    transaction.set(
-      waiverRef,
-      {
-        status: 'claimed',
-        awardedToOwnerId: winningClaim.ownerId,
-        queuedMoveId: queuedMove?.id ?? null,
-        rosterSlotId: slotId,
-        effectiveCycleNumber: winningEffectiveCycleNumber,
-        effectiveLabel: winningEffectiveLabel,
-        processedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    transaction.set(transactionRef, {
-      type:
-        winningRosterArea === 'active' && queueAtSlotBoundary
-          ? 'queue-waiver-award'
-          : 'waiver-award',
-      ownerId: winningClaim.ownerId,
-      winningOwnerId: winningClaim.ownerId,
-      waiverId,
-      waiverAsset: waiver.asset,
-      addedAsset: waiver.asset,
-      droppedAsset: droppedByWinningTeam,
-      targetSlotId: winningClaim.targetSlotId ?? null,
-      dropSlotId: winningClaim.dropSlotId ?? null,
-      rosterSlotId: slotId,
-      queuedMoveId: queuedMove?.id ?? null,
-      effectiveCycleNumber: winningEffectiveCycleNumber,
-      effectiveLabel: winningEffectiveLabel,
-      createdAt: serverTimestamp(),
-    });
+  await executeSecureRosterAction({
+    leagueId,
+    action: 'process-waiver',
+    waiverId,
+    effectiveCycleNumber,
+    effectiveLabel,
   });
 }
 
-// Backward-compatible wrapper name. It now preserves draft history and only
-// updates the current roster plus transaction log. New code should call
-// addDropRosterAsset with a dropSlotId.
 export async function addDropDraftAsset(input: AddDropRosterAssetInput): Promise<void> {
   await addDropRosterAsset(input);
 }
+

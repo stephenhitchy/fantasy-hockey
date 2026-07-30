@@ -1,6 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
 
-import { DraftableAsset } from '../draft/draft.models';
 import { functions } from '../firebase-functions';
 
 export type ImmediateRosterMoveType =
@@ -17,7 +16,7 @@ export interface ImmediateRosterMoveRequest {
   activeSlotId: string;
   benchSlotId?: string | null;
   irSlotId?: string | null;
-  addAsset?: DraftableAsset | null;
+  addAssetKey?: string | null;
 }
 
 export interface ImmediateRosterMoveResult {

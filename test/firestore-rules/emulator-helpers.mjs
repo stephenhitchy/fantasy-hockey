@@ -107,6 +107,31 @@ function encodeFirestoreFields(data) {
   );
 }
 
+export async function deleteSeededDocument(path) {
+  const encodedPath = path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  const response = await fetch(
+    emulatorUrl(
+      firestoreHostname,
+      firestorePort,
+      `/v1/projects/${TEST_PROJECT_ID}/databases/(default)/documents/${encodedPath}`,
+    ),
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: 'Bearer owner',
+      },
+    },
+  );
+
+  if (response.status === 404) {
+    return;
+  }
+  await expectOk(response, `Deleting seeded document ${path}`);
+}
+
 export async function seedDocument(path, data) {
   const encodedPath = path
     .split('/')

@@ -15,6 +15,7 @@ import {
 import {
   createAuthenticatedClient,
   createSignedOutClient,
+  deleteSeededDocument,
   expectAllowed,
   expectDenied,
   resetAllEmulators,
@@ -303,8 +304,8 @@ describe('league membership and reads', () => {
   });
 });
 
-describe('roster authority baseline', () => {
-  test('[baseline exposure] an owner can overwrite the roster with forged and duplicated assets', async () => {
+describe('roster authority hardening', () => {
+  test('an owner cannot overwrite the roster with forged and duplicated assets', async () => {
     const forgedRoster = validRoster('forged');
     const duplicatedAsset = { assetKey: 'forged-duplicate', displayName: 'Invented Player' };
 
@@ -313,7 +314,7 @@ describe('roster authority baseline', () => {
       asset: duplicatedAsset,
     }));
 
-    await expectAllowed(
+    await expectDenied(
       setDoc(
         doc(manager.db, 'leagues', LEAGUE_ID, 'teams', manager.uid, 'roster', 'current'),
         forgedRoster,
@@ -332,7 +333,21 @@ describe('roster authority baseline', () => {
     );
   });
 
-  test('[baseline exposure] a commissioner can directly overwrite another team roster', async () => {
+  test('browser clients cannot recreate their own missing roster document', async () => {
+    await deleteSeededDocument(
+      `leagues/${LEAGUE_ID}/teams/${manager.uid}/roster/current`,
+    );
+
+    await expectDenied(
+      setDoc(
+        doc(manager.db, 'leagues', LEAGUE_ID, 'teams', manager.uid, 'roster', 'current'),
+        validRoster('client-create'),
+      ),
+      'Owner browser roster creation',
+    );
+  });
+
+  test('[temporary Batch 4 dependency] commissioner cycle code can still update an existing roster', async () => {
     await expectAllowed(
       setDoc(
         doc(commissioner.db, 'leagues', LEAGUE_ID, 'teams', manager.uid, 'roster', 'current'),
@@ -387,6 +402,61 @@ describe('draft authority baseline', () => {
     });
 
     await expectAllowed(batch.commit(), 'Forged manual draft pick batch');
+  });
+
+  test('[temporary Batch 3 dependency] a valid manual pick can update its existing roster in the same batch', async () => {
+    const batch = writeBatch(manager.db);
+    const draftRef = doc(manager.db, 'leagues', LEAGUE_ID, 'draft', 'current');
+    const pickRef = doc(
+      manager.db,
+      'leagues',
+      LEAGUE_ID,
+      'draft',
+      'current',
+      'picks',
+      'pick-with-roster',
+    );
+    const rosterRef = doc(
+      manager.db,
+      'leagues',
+      LEAGUE_ID,
+      'teams',
+      manager.uid,
+      'roster',
+      'current',
+    );
+    const draftRoster = validRoster('draft-placement');
+
+    batch.set(pickRef, {
+      ownerId: manager.uid,
+      round: 1,
+      pickInRound: 1,
+      overallPick: 1,
+      asset: { assetKey: 'draft-placement-active-1' },
+      selectionType: 'manual',
+      selectedByUserId: manager.uid,
+      autoPickReason: null,
+      madeAt: serverTimestamp(),
+    });
+    batch.set(rosterRef, {
+      ...draftRoster,
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(draftRef, {
+      status: 'live',
+      nextOverallPick: 2,
+      draftedAssetKeys: ['draft-placement-active-1'],
+      clockStatus: 'running',
+      pickStartedAt: serverTimestamp(),
+      currentPickSeconds: 120,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: manager.uid,
+      clockUpdatedAt: serverTimestamp(),
+      lastPickId: 'pick-with-roster',
+      updatedAt: serverTimestamp(),
+    });
+
+    await expectAllowed(batch.commit(), 'Manual draft roster placement batch');
   });
 
   test('a manager cannot pick when another manager owns the current turn', async () => {
@@ -496,7 +566,7 @@ describe('draft authority baseline', () => {
   });
 });
 
-describe('transactions and waivers baseline', () => {
+describe('transactions and waivers authority hardening', () => {
   test('members can read transaction and waiver records while outsiders cannot', async () => {
     await expectAllowed(
       getDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'transactions', 'fixture-transaction')),
@@ -516,8 +586,8 @@ describe('transactions and waivers baseline', () => {
     );
   });
 
-  test('[baseline exposure] owner transaction validation accepts only ownerId and a type', async () => {
-    await expectAllowed(
+  test('ordinary managers cannot create transaction records directly', async () => {
+    await expectDenied(
       setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'transactions', 'minimal-client-write'), {
         ownerId: manager.uid,
         type: 'add-drop',
@@ -527,8 +597,8 @@ describe('transactions and waivers baseline', () => {
     );
   });
 
-  test('[baseline exposure] a manager can create a waiver containing an arbitrary client asset', async () => {
-    await expectAllowed(
+  test('ordinary managers cannot create arbitrary waiver assets', async () => {
+    await expectDenied(
       setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'invented-asset'), {
         droppedByOwnerId: manager.uid,
         status: 'active',
@@ -542,6 +612,26 @@ describe('transactions and waivers baseline', () => {
       'Arbitrary waiver asset write',
     );
   });
+
+
+  test('ordinary managers cannot append waiver claims directly', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
+        claims: [{ ownerId: manager.uid, moveType: 'open-slot' }],
+      }),
+      'Direct waiver claim update',
+    );
+  });
+
+  test('[temporary Batch 4 dependency] commissioner cycle code can write waiver records', async () => {
+    await expectAllowed(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
+        status: 'cleared',
+      }),
+      'Commissioner waiver update',
+    );
+  });
+
 });
 
 describe('scoring, cycles, and playoff authority baseline', () => {
