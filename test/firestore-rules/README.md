@@ -8,9 +8,7 @@ Run:
 npm run test:rules
 ```
 
-Batch 4 contains **40 Firestore Emulator tests**.
-
-Tests labeled **`[baseline exposure]`** intentionally document risky permissions scheduled for later batches. Batch 4 closes the former commissioner browser exceptions for rosters, transactions, waivers, standings, cycles, matchups, roster snapshots, team windows, playoff brackets, and playoff window banks.
+Batch 5 contains **44 Firestore Emulator tests**.
 
 Covered identities:
 
@@ -22,7 +20,8 @@ Covered identities:
 
 Covered areas:
 
-- user profiles
+- owner-only private user profiles
+- display-safe public manager profiles without email or private preferences
 - league/member/team reads
 - safe team-identity edits and direct standings-write denials
 - roster reads and direct-write denials for every browser role
@@ -32,12 +31,13 @@ Covered areas:
 - server-owned cycles, matchups, roster picks, team windows, playoffs, and playoff banks
 - the narrow projection-accuracy analytics marker that remains client-compatible
 - live-scoring authority
-- global and league availability data
+- server-only global ESPN injury data
+- league-scoped commissioner availability overrides
 
-Additional Batch 4 browser/server boundary checks run with:
+Additional Batch 5 browser/server boundary checks run with:
 
 ```bash
-npm run test:competition-authority:run
+npm run test:profile-injury-authority:run
 ```
 
 The pure server draft-selection tests remain separate:

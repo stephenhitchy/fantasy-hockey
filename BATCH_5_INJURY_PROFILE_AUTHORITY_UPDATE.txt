@@ -1,0 +1,76 @@
+RINKRAT BATCH 5 — INJURY DATA AUTHORITY AND PROFILE PRIVACY
+============================================================
+
+Purpose
+-------
+This batch closes two important privacy and authority gaps:
+
+1. Private account documents are now readable only by their owner.
+2. The shared ESPN injury report can now be written only by trusted Cloud Functions.
+
+The site still displays manager names and favorite-team styling through a separate,
+minimal public profile containing only display-safe fields.
+
+Major changes
+-------------
+
+PRIVATE AND PUBLIC PROFILES
+- /users/{uid} is now private to that signed-in user.
+- Added /publicProfiles/{uid} with only:
+  - uid
+  - username
+  - favoriteTeamAbbreviation
+  - favoriteTeamVariantId
+  - updatedAt
+- Public-profile collection listing is denied.
+- Users may update only their own public profile.
+- Email addresses, injury-email preferences, accessibility preferences, unlocks,
+  onboarding state, and other private account fields are never copied publicly.
+- Existing accounts are repaired lazily after login or when their league matchup
+  identity is requested. No bulk migration is required.
+- Username and favorite-team changes update the private and public copies together.
+- Account deletion now removes the public profile too.
+
+LEAGUE MANAGER IDENTITY
+- Game Center no longer reads an opponent's private /users document.
+- Added getPublicManagerProfiles Cloud Function.
+- The function verifies the requester belongs to the league.
+- It returns profiles only for managers who own teams in that league.
+- It returns only display-safe fields and backfills missing legacy public profiles.
+
+INJURY DATA AUTHORITY
+- Browsers can read the shared appData/playerAvailability report but cannot write it.
+- The browser no longer fetches ESPN directly or writes shared injury data.
+- refreshDailyPlayerAvailability verifies league membership before running.
+- Forced/manual refreshes require the league commissioner.
+- A global lease prevents duplicate concurrent refreshes.
+- Successful, running, cooldown, and error states are handled server-side.
+- The scheduled server refresh and authenticated callable now share one authority path.
+- The shared report no longer stores the requesting league ID or a user's UID as the
+  report authority label.
+- League-specific commissioner manual overrides remain separate and continue to work.
+
+TEST COVERAGE
+-------------
+- 44 Firestore security-rule tests
+- 7 draft-authority tests
+- 2 league-onboarding tests
+- 4 competition-authority tests
+- 7 profile/injury authority contract tests
+- 64 named tests total, plus Angular and Functions production builds
+
+Deployment order
+----------------
+Deploy Functions first, then Firestore rules, then hosting.
+
+This order ensures the new callables exist before the browser uses them, closes the
+old private/global write paths before the new client is released, and avoids a new
+client attempting public-profile writes before the publicProfiles rules exist.
+
+Compatibility
+-------------
+- No manual Firestore migration is required.
+- Existing accounts are backfilled safely and gradually.
+- Missing public profiles do not prevent login or account creation.
+- Existing leagues, team identities, profile icons, and favorite-team themes remain
+  compatible.

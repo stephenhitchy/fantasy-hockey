@@ -505,10 +505,9 @@ service cloud.firestore {
         validUsername(request.resource.data.username) &&
         validUserPreferences(request.resource.data);
 
-      // Matchup pages read an opponent's favorite team by document ID so that
-      // each side can use that manager's saved colors. Listing all profiles is
-      // still blocked.
-      allow get: if signedIn();
+      // Private account documents contain email and personal preferences.
+      // Browsers may only read the signed-in user's own private profile.
+      allow get: if signedIn() && userId == currentUserId();
       allow list: if false;
 
       allow update: if signedIn() &&
@@ -550,6 +549,54 @@ service cloud.firestore {
       }
     }
 
+    match /publicProfiles/{userId} {
+      function validPublicFavoriteTeam(data) {
+        return data.favoriteTeamAbbreviation in [
+          'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
+          'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
+          'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
+          'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK', 'WSH', 'WPG'
+        ];
+      }
+
+      function validPublicProfile() {
+        let data = request.resource.data;
+
+        return data.keys().hasAll([
+            'uid',
+            'username',
+            'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'updatedAt'
+          ]) &&
+          data.keys().hasOnly([
+            'uid',
+            'username',
+            'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'updatedAt'
+          ]) &&
+          data.uid == userId &&
+          validUsername(data.username) &&
+          validPublicFavoriteTeam(data) &&
+          data.favoriteTeamVariantId is string &&
+          data.favoriteTeamVariantId.size() >= 1 &&
+          data.favoriteTeamVariantId.size() <= 80 &&
+          data.updatedAt == request.time;
+      }
+
+      // Public manager identity contains only display-safe fields. Individual
+      // reads are allowed for signed-in users; collection-wide browsing is not.
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create, update: if signedIn() &&
+        userId == currentUserId() &&
+        validPublicProfile();
+
+      allow delete: if false;
+    }
+
     match /leagueInvites/{inviteCode} {
       allow get: if signedIn();
       allow list: if false;
@@ -567,8 +614,10 @@ service cloud.firestore {
 
     match /appData/playerAvailability {
       allow read: if signedIn();
-      allow create, update: if validGlobalPlayerAvailabilityWrite();
-      allow delete: if false;
+
+      // The Admin SDK is the sole authority for the shared ESPN report.
+      // Commissioners request refreshes through an authenticated callable.
+      allow create, update, delete: if false;
     }
 
 

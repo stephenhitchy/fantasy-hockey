@@ -28,7 +28,7 @@ export async function registerUser(
 
   // Firestore is intentionally loaded only for registration. Normal sign-in
   // no longer downloads the full database SDK before the login screen renders.
-  const [{ doc, setDoc }, { db }] = await Promise.all([
+  const [{ doc, serverTimestamp, setDoc }, { db }] = await Promise.all([
     import('firebase/firestore'),
     import('../firebase-firestore'),
   ]);
@@ -51,6 +51,28 @@ export async function registerUser(
     15_000,
     'Your login was created, but the manager profile took too long to save.',
   );
+
+  // The display-safe copy is repairable and must not make account creation
+  // fail during a staged rules/hosting deployment or a transient write error.
+  try {
+    await withTimeout(
+      setDoc(doc(db, 'publicProfiles', user.uid), {
+        uid: user.uid,
+        username,
+        favoriteTeamAbbreviation,
+        favoriteTeamVariantId: 'current-home',
+        updatedAt: serverTimestamp(),
+      }),
+      8_000,
+      'The public manager profile took too long to save.',
+    );
+  } catch (error: unknown) {
+    console.warn(
+      'The account was created, but the public manager profile will be repaired after login.',
+      error,
+    );
+  }
+
 
   return user;
 }

@@ -297,6 +297,7 @@ export class PlayerAvailabilityManager {
       const result = await syncPlayerAvailabilityFromEspn({
         leagueId: this.leagueId,
         players: this.players(),
+        force,
         trigger: 'commissioner-browser',
       });
 

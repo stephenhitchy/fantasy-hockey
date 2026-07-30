@@ -29,7 +29,9 @@
     "test:league-onboarding:run": "node --test --test-concurrency=1 test/league-onboarding/*.test.mjs",
     "verify:batch3-hotfix": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run",
     "test:competition-authority:run": "node --test --test-concurrency=1 test/competition-authority/*.test.mjs",
-    "verify:batch4": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run"
+    "verify:batch4": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run",
+    "test:profile-injury-authority:run": "node --test --test-concurrency=1 test/profile-injury-authority/*.test.mjs",
+    "verify:batch5": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run && npm run test:profile-injury-authority:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

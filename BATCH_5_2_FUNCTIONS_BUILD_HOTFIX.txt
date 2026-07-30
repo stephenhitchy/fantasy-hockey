@@ -1,0 +1,20 @@
+RinkRat Batch 5.2 - Functions TypeScript Build Hotfix
+July 30, 2026
+
+This hotfix corrects the five Functions build errors reported after Batch 5.1.
+
+Corrections:
+1. Added an explicit discriminated union for the global injury refresh transaction claim.
+   This allows TypeScript to prove that the skipped-refresh branch cannot pass a
+   "success" status into buildSkippedResult().
+
+2. Restored the DeleteLeagueResult return interface used by the deleteLeague callable.
+
+3. Reconnected league deletion cleanup to the existing generic
+   deleteTopLevelDocumentsByField() helper for leagueInvites, injuryEmailQueue, and
+   emailNotificationLog.
+
+4. Retains the Batch 5.1 public-profile updatedAt type narrowing fix.
+
+No Firestore schema, security-rule, callable API, or runtime behavior was intentionally
+changed by this hotfix. It is a TypeScript integration/build correction.

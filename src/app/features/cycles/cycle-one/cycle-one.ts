@@ -59,7 +59,7 @@ import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 import { BENCH_SLOT_COUNT } from '../../../core/team/roster-config';
 import { BenchRosterSlot, FantasyRoster, RosterAsset } from '../../../core/team/roster.models';
 import { listenToFantasyRoster } from '../../../core/team/roster.service';
-import { getUserProfile } from '../../../core/user/user.service';
+import { getPublicManagerProfilesForLeague } from '../../../core/user/user.service';
 import {
   PixelTeamTheme,
   getPixelTeamTheme,
@@ -1972,30 +1972,32 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    const resolvedEntries = await Promise.all(
-      unresolvedOwnerIds.map(async (ownerId) => {
-        try {
-          const profile = await getUserProfile(ownerId);
-          return [
-            ownerId,
-            {
-              abbreviation:
-                profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId),
-              variantId:
-                profile?.favoriteTeamVariantId || this.getFallbackFavoriteTeamVariant(ownerId),
-            },
-          ] as const;
-        } catch {
-          return [
-            ownerId,
-            {
-              abbreviation: this.getFallbackFavoriteTeam(ownerId),
-              variantId: this.getFallbackFavoriteTeamVariant(ownerId),
-            },
-          ] as const;
-        }
-      }),
-    );
+    let profiles = new Map<string, {
+      favoriteTeamAbbreviation: string;
+      favoriteTeamVariantId: string;
+    }>();
+
+    try {
+      profiles = new Map(
+        await getPublicManagerProfilesForLeague(this.leagueId, unresolvedOwnerIds),
+      );
+    } catch (error: unknown) {
+      console.warn('Unable to load public opponent themes. Using safe defaults.', error);
+    }
+
+    const resolvedEntries = unresolvedOwnerIds.map((ownerId) => {
+      const profile = profiles.get(ownerId);
+
+      return [
+        ownerId,
+        {
+          abbreviation:
+            profile?.favoriteTeamAbbreviation || this.getFallbackFavoriteTeam(ownerId),
+          variantId:
+            profile?.favoriteTeamVariantId || this.getFallbackFavoriteTeamVariant(ownerId),
+        },
+      ] as const;
+    });
 
     this.ownerFavoriteTeams.set({
       ...this.ownerFavoriteTeams(),

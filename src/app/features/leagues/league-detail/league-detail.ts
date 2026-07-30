@@ -614,7 +614,7 @@ export class LeagueDetail implements OnDestroy {
 
   getDailyInjuryStatusDescription(): string {
     if (this.dailyInjuryRefreshInProgress()) {
-      return 'A browser is checking whether today’s app-wide ESPN injury report is already current.';
+      return 'The secure server is checking whether today’s app-wide ESPN injury report is already current.';
     }
 
     if (this.dailyInjuryRefreshError()) {

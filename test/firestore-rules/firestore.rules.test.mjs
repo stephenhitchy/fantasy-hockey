@@ -49,6 +49,16 @@ function validProfile(client, username) {
   };
 }
 
+function validPublicProfile(client, username) {
+  return {
+    uid: client.uid,
+    username,
+    favoriteTeamAbbreviation: 'MIN',
+    favoriteTeamVariantId: 'home',
+    updatedAt: serverTimestamp(),
+  };
+}
+
 function validRoster(assetPrefix = 'fixture') {
   return {
     schemaVersion: 2,
@@ -78,6 +88,27 @@ async function seedLeagueFixture() {
     seedDocument(`users/${commissioner.uid}`, validProfile(commissioner, 'Commissioner')),
     seedDocument(`users/${manager.uid}`, validProfile(manager, 'Manager')),
     seedDocument(`users/${opponent.uid}`, validProfile(opponent, 'Opponent')),
+    seedDocument(`publicProfiles/${commissioner.uid}`, {
+      uid: commissioner.uid,
+      username: 'Commissioner',
+      favoriteTeamAbbreviation: 'MIN',
+      favoriteTeamVariantId: 'home',
+      updatedAt: now,
+    }),
+    seedDocument(`publicProfiles/${manager.uid}`, {
+      uid: manager.uid,
+      username: 'Manager',
+      favoriteTeamAbbreviation: 'MIN',
+      favoriteTeamVariantId: 'home',
+      updatedAt: now,
+    }),
+    seedDocument(`publicProfiles/${opponent.uid}`, {
+      uid: opponent.uid,
+      username: 'Opponent',
+      favoriteTeamAbbreviation: 'MIN',
+      favoriteTeamVariantId: 'home',
+      updatedAt: now,
+    }),
     seedDocument(`leagues/${LEAGUE_ID}`, {
       id: LEAGUE_ID,
       commissionerId: commissioner.uid,
@@ -241,10 +272,14 @@ after(async () => {
 });
 
 describe('account profile boundaries', () => {
-  test('signed-out users cannot read profiles', async () => {
+  test('signed-out users cannot read private or public profiles', async () => {
     await expectDenied(
       getDoc(doc(signedOut.db, 'users', manager.uid)),
-      'Signed-out profile read',
+      'Signed-out private profile read',
+    );
+    await expectDenied(
+      getDoc(doc(signedOut.db, 'publicProfiles', manager.uid)),
+      'Signed-out public profile read',
     );
   });
 
@@ -255,16 +290,69 @@ describe('account profile boundaries', () => {
     );
   });
 
-  test('[baseline exposure] any signed-in user can get another full user document', async () => {
-    const snapshot = await getDoc(doc(outsider.db, 'users', manager.uid));
-    assert.equal(snapshot.exists(), true);
-    assert.equal(snapshot.data().email, manager.email);
+  test('signed-in users cannot read another manager private profile', async () => {
+    await expectDenied(
+      getDoc(doc(outsider.db, 'users', manager.uid)),
+      'Another manager private profile read',
+    );
   });
 
-  test('listing all user profiles is denied', async () => {
+  test('signed-in users can read a display-safe public profile without email', async () => {
+    const snapshot = await getDoc(doc(outsider.db, 'publicProfiles', manager.uid));
+    assert.equal(snapshot.exists(), true);
+    assert.equal(snapshot.data().username, 'Manager');
+    assert.equal(snapshot.data().favoriteTeamAbbreviation, 'MIN');
+    assert.equal('email' in snapshot.data(), false);
+  });
+
+  test('a user can create their own display-safe public profile', async () => {
+    await expectAllowed(
+      setDoc(
+        doc(outsider.db, 'publicProfiles', outsider.uid),
+        validPublicProfile(outsider, 'Outsider'),
+      ),
+      'Own public profile creation',
+    );
+  });
+
+  test('an owner can update their own display-safe public profile', async () => {
+    await expectAllowed(
+      setDoc(doc(manager.db, 'publicProfiles', manager.uid), {
+        uid: manager.uid,
+        username: 'Manager Updated',
+        favoriteTeamAbbreviation: 'VGK',
+        favoriteTeamVariantId: 'current-home',
+        updatedAt: serverTimestamp(),
+      }),
+      'Own public profile update',
+    );
+  });
+
+  test('users cannot write another manager public profile or add private fields', async () => {
+    await expectDenied(
+      updateDoc(doc(outsider.db, 'publicProfiles', manager.uid), {
+        username: 'Forged Manager',
+        updatedAt: serverTimestamp(),
+      }),
+      'Another manager public profile update',
+    );
+    await expectDenied(
+      setDoc(doc(outsider.db, 'publicProfiles', outsider.uid), {
+        ...validPublicProfile(outsider, 'Outsider'),
+        email: outsider.email,
+      }),
+      'Private field in public profile',
+    );
+  });
+
+  test('listing all private or public user profiles is denied', async () => {
     await expectDenied(
       getDocs(collection(manager.db, 'users')),
-      'User profile collection listing',
+      'Private user profile collection listing',
+    );
+    await expectDenied(
+      getDocs(collection(manager.db, 'publicProfiles')),
+      'Public profile collection listing',
     );
   });
 
@@ -1005,8 +1093,8 @@ describe('scoring, cycles, and playoff authority baseline', () => {
 });
 
 describe('injury and availability authority baseline', () => {
-  test('[baseline exposure] a league commissioner can write the global availability document', async () => {
-    await expectAllowed(
+  test('commissioners cannot write the global availability document directly', async () => {
+    await expectDenied(
       setDoc(doc(commissioner.db, 'appData', 'playerAvailability'), {
         source: 'ESPN',
         status: 'success',
@@ -1014,7 +1102,7 @@ describe('injury and availability authority baseline', () => {
         lastAttemptAt: serverTimestamp(),
         updatedBy: commissioner.uid,
         refreshLeagueId: LEAGUE_ID,
-        message: 'Commissioner browser wrote global availability.',
+        message: 'Commissioner browser attempted a global availability write.',
         records: [],
       }),
       'Commissioner global availability write',
