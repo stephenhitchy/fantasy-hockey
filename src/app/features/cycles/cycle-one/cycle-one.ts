@@ -28,20 +28,13 @@ import {
 } from '../../../core/cycle/cycle.models';
 
 import {
-  advanceCompletedRegularSeasonAssetWindows,
-  completeCycle,
   listenToCycle,
   listenToCycleMatchups,
   listenToCycleRosterPicks,
   listenToLeagueCycles,
-  reconcileRegularSeasonCycleMatchupCompletion,
-  startNextCycle,
 } from '../../../core/cycle/cycle.service';
 
-import {
-  listenToCycleTeamWindows,
-  syncCycleTeamWindows,
-} from '../../../core/cycle/asset-cycle-window.service';
+import { listenToCycleTeamWindows } from '../../../core/cycle/asset-cycle-window.service';
 
 import { loadDraftPlayerPool } from '../../../core/draft/draft-player-pool.service';
 
@@ -51,12 +44,6 @@ import { listenToDraftPicks } from '../../../core/draft/draft.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
 
-import { getFantasyPlayoffs } from '../../../core/playoffs/playoff.service';
-
-import {
-  ensureNextPlayoffBankWindows,
-  syncPlayoffWindowBankScores,
-} from '../../../core/playoffs/playoff-window-bank.service';
 
 import {
   STANDARD_FULL_CYCLE_SEASON_COUNT,
@@ -87,6 +74,7 @@ import {
 import {
   listenToSharedCycleScoring,
   listenToSharedLiveScoringControl,
+  openNextCompetitionPeriod,
   requestLeagueLiveScoringRefresh,
 } from '../../../core/live-scoring/live-scoring.service';
 
@@ -551,61 +539,46 @@ export class CycleOne implements OnDestroy {
     }
 
     if (cycle.status === 'complete') {
-      this.completeCycleError.set(`${this.getCycleLabel()} has already been completed.`);
+      this.completeCycleMessage.set(`${this.getCycleLabel()} is already complete.`);
       return;
     }
 
     if (!scoring) {
       this.completeCycleError.set(
-        'Current scores are not ready yet. Wait for scoring to finish loading.',
+        'Current scores are not ready yet. Wait for server scoring to finish loading.',
       );
       return;
     }
 
     if (matchups.length === 0) {
-      this.completeCycleError.set('No matchups were found to complete.');
+      this.completeCycleError.set('No matchups were found to reconcile.');
       return;
     }
 
     if (!this.areAllMatchupsReadyToComplete()) {
       this.completeCycleError.set(
-        `${this.getCycleLabel()} is not ready to complete yet. Some roster games are still unfinished.`,
+        `${this.getCycleLabel()} is not ready yet. Some roster games are still unfinished.`,
       );
+      return;
+    }
+
+    if (!this.isCommissioner()) {
+      this.completeCycleError.set('Only the league commissioner can request a scoring reconciliation.');
       return;
     }
 
     this.completingCycle.set(true);
 
     try {
-      if (cycle.phase === 'regular_season') {
-        const completionResult = await reconcileRegularSeasonCycleMatchupCompletion(
-          this.leagueId,
-          this.cycleNumber,
-        );
-
-        if (!completionResult.cycleCompleted) {
-          throw new Error(
-            `${this.getCycleLabel()} still has ${completionResult.pendingMatchupCount} matchup${completionResult.pendingMatchupCount === 1 ? '' : 's'} waiting on roster-slot windows.`,
-          );
-        }
-      } else {
-        await completeCycle(this.leagueId, this.cycleNumber, matchups, scoring.teamScores);
-      }
-
+      await requestLeagueLiveScoringRefresh(this.leagueId);
       await this.saveCurrentCycleProjectionAccuracy();
 
       this.completeCycleMessage.set(
-        cycle.phase === 'playoffs'
-          ? `${this.getCycleLabel()} was completed and the playoff bracket advanced.`
-          : `${this.getCycleLabel()} was completed and team records were updated.`,
+        'Server scoring was refreshed. Any completed matchups, standings, roster windows, and playoff advancement were reconciled securely.',
       );
-
-      this.teams.set(await getLeagueTeams(this.leagueId));
-
-      await this.startOrOpenNextCycleAfterCompletion('manual', true);
     } catch (error: unknown) {
       this.completeCycleError.set(
-        error instanceof Error ? error.message : `Unable to complete ${this.getCycleLabel()}.`,
+        error instanceof Error ? error.message : `Unable to refresh ${this.getCycleLabel()}.`,
       );
     } finally {
       this.completingCycle.set(false);
@@ -1405,194 +1378,25 @@ export class CycleOne implements OnDestroy {
       ...result.teamGameCounts,
     });
 
-    if (this.isCommissioner() && cycle && picks.length > 0) {
-      await this.persistWindowProgressAndAdvance(cycle, picks, result);
-    }
-
-    void this.evaluateAutoCompleteCycleIfReady();
+    // The shared snapshot is read-only in the browser. The same server run
+    // that published it also persists windows, scores, standings, cycle
+    // completion, and playoff transitions through the Admin SDK.
   }
 
   private async persistWindowProgressAndAdvance(
-    cycle: FantasyCycle,
-    picks: DraftPick[],
-    scoring: CycleScoringResult,
+    _cycle: FantasyCycle,
+    _picks: DraftPick[],
+    _scoring: CycleScoringResult,
   ): Promise<void> {
-    const progressKey = [
-      cycle.id,
-      picks.length,
-      ...Object.values(scoring.windowScores)
-        .sort((first, second) => first.windowId.localeCompare(second.windowId))
-        .map(
-          (summary) =>
-            `${summary.windowId}:${summary.status}:${summary.gamesPlayed}:${summary.currentScore}`,
-        ),
-    ].join('|');
-
-    if (this.windowProgressSyncKey === progressKey) {
-      return;
-    }
-
-    this.windowProgressSyncKey = progressKey;
-
-    try {
-      const windowSyncResult = await syncCycleTeamWindows(this.leagueId, cycle, picks, scoring);
-
-      if (cycle.phase === 'regular_season') {
-        const completionKey = [cycle.id, windowSyncResult.completionFingerprint].join('::');
-
-        if (this.matchupCompletionSyncKey !== completionKey) {
-          this.matchupCompletionSyncKey = completionKey;
-
-          const completionResult = await reconcileRegularSeasonCycleMatchupCompletion(
-            this.leagueId,
-            cycle.cycleNumber,
-          );
-
-          if (completionResult.newlyCompletedMatchupIds.length > 0) {
-            this.autoFlowMessage.set(
-              completionResult.cycleCompleted
-                ? `${this.getCycleLabel()} is complete. All matchup results were finalized and standings were updated.`
-                : `${completionResult.newlyCompletedMatchupIds.length} matchup${completionResult.newlyCompletedMatchupIds.length === 1 ? '' : 's'} finalized. ${completionResult.pendingMatchupCount} still waiting on roster-slot windows.`,
-            );
-          }
-
-          if (completionResult.cycleCompleted) {
-            await this.saveCurrentCycleProjectionAccuracy();
-            this.teams.set(await getLeagueTeams(this.leagueId));
-          }
-        }
-      }
-
-      if (cycle.phase === 'playoffs') {
-        const playoffs = await getFantasyPlayoffs(this.leagueId);
-        const league = this.league();
-
-        if (playoffs && league) {
-          const scoringRules = league.scoringRules ?? defaultScoringRules;
-          const requiredGamesPerCycle =
-            scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
-          const season = this.getNhlSeasonForDate(
-            this.getProjectionWindowStartDate() ?? new Date(),
-          );
-          const banks = await syncPlayoffWindowBankScores({
-            leagueId: this.leagueId,
-            playoffs,
-            season,
-            requiredGamesPerCycle,
-            scoringRules,
-            assignedPicks: picks,
-            assignedScoring: scoring,
-          });
-
-          await ensureNextPlayoffBankWindows({
-            leagueId: this.leagueId,
-            playoffs,
-            banks,
-          });
-        }
-      }
-
-      try {
-        await advanceCompletedRegularSeasonAssetWindows(
-          this.leagueId,
-          this.teams(),
-          cycle,
-          picks,
-          scoring,
-        );
-      } catch (advanceError: unknown) {
-        console.warn(
-          'Current window progress was saved, but one or more next-window assignments could not be opened yet.',
-          advanceError,
-        );
-      }
-    } catch (error: unknown) {
-      this.windowProgressSyncKey = null;
-      this.matchupCompletionSyncKey = null;
-      console.warn('Unable to save independent cycle-window progress.', error);
-    }
+    // Kept as a compatibility seam while the matchup component is split into
+    // smaller pieces. Competition writes are performed only by Cloud Functions.
+    return;
   }
 
   private async evaluateAutoCompleteCycleIfReady(): Promise<void> {
-    // Cycle completion and creation update shared league records.
-    // Only the commissioner should run this browser-side automatic flow.
-    if (!this.isCommissioner()) {
-      return;
-    }
-
-    const cycle = this.cycle();
-    const scoring = this.cycleScoring();
-    const matchups = this.matchups();
-
-    if (!cycle || cycle.status !== 'active') {
-      return;
-    }
-
-    // Regular-season matchups now finalize independently from persisted
-    // roster-slot windows. The legacy whole-cycle completion path remains for
-    // playoff rounds until playoff-window routing is introduced.
-    if (cycle.phase === 'regular_season') {
-      return;
-    }
-
-    if (!scoring || matchups.length === 0) {
-      return;
-    }
-
-    if (!this.hasCurrentCycleScheduledGames()) {
-      this.autoFlowMessage.set(this.getNoMoreGamesMessage());
-      return;
-    }
-
-    if (this.scoringLoading() || this.completingCycle()) {
-      return;
-    }
-
-    if (!this.areAllMatchupsReadyToComplete()) {
-      return;
-    }
-
-    const attemptKey = this.getAutoCompleteAttemptKey(cycle, scoring, matchups);
-
-    if (this.autoCompleteAttemptKey === attemptKey) {
-      return;
-    }
-
-    this.autoCompleteAttemptKey = attemptKey;
-    this.autoFlowMessage.set(`${this.getCycleLabel()} is ready. Completing automatically...`);
-    this.autoFlowError.set('');
-    this.completeCycleMessage.set('');
-    this.completeCycleError.set('');
-    this.completingCycle.set(true);
-
-    try {
-      await completeCycle(this.leagueId, this.cycleNumber, matchups, scoring.teamScores);
-
-      await this.saveCurrentCycleProjectionAccuracy();
-
-      this.autoFlowMessage.set(
-        cycle.phase === 'playoffs'
-          ? `${this.getCycleLabel()} was completed automatically and the playoff bracket advanced.`
-          : `${this.getCycleLabel()} was completed automatically and team records were updated.`,
-      );
-
-      this.teams.set(await getLeagueTeams(this.leagueId));
-
-      await this.startOrOpenNextCycleAfterCompletion('automatic', true);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : `Unable to auto-complete ${this.getCycleLabel()}.`;
-
-      if (message.includes('has already been completed')) {
-        this.autoFlowMessage.set(`${this.getCycleLabel()} is already complete.`);
-        return;
-      }
-
-      this.autoCompleteAttemptKey = null;
-      this.autoFlowError.set(message);
-    } finally {
-      this.completingCycle.set(false);
-    }
+    // Scheduled and manual server scoring already finalizes ready matchups and
+    // opens the next period. Browser listeners only render the resulting state.
+    return;
   }
 
   private getDisplayedProjectionByAssetKey(): Record<string, number | null> {
@@ -1781,9 +1585,12 @@ export class CycleOne implements OnDestroy {
     this.autoFlowMessage.set(preparingMessage);
 
     try {
-      const nextCycle = await startNextCycle(this.leagueId, this.teams(), this.cycleNumber);
+      const result = await openNextCompetitionPeriod(
+        this.leagueId,
+        this.cycleNumber,
+      );
 
-      if (!nextCycle) {
+      if (result.status === 'season-complete' || result.nextCycleNumber === null) {
         const completeMessage =
           'The fantasy season is complete. Opening the final playoff bracket...';
 
@@ -1794,29 +1601,24 @@ export class CycleOne implements OnDestroy {
         return;
       }
 
+      const actionLabel = result.alreadyExisted ? 'already existed' : 'was opened securely';
       const successMessage =
         source === 'automatic'
-          ? `${this.getNextCycleLabel()} was started automatically. Opening it now...`
-          : `${this.getNextCycleLabel()} was started. Opening it now...`;
+          ? `${this.getNextCycleLabel()} ${actionLabel}. Opening it now...`
+          : `${this.getNextCycleLabel()} ${actionLabel}. Opening it now...`;
 
       this.startNextCycleMessage.set(successMessage);
       this.autoFlowMessage.set(successMessage);
 
-      await this.router.navigate(['/leagues', this.leagueId, 'cycles', nextCycleNumber]);
+      await this.router.navigate([
+        '/leagues',
+        this.leagueId,
+        'cycles',
+        result.nextCycleNumber,
+      ]);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : `Unable to start ${this.getNextCycleLabel()}.`;
-
-      if (errorMessage.includes(`Cycle ${nextCycleNumber} has already been started`)) {
-        const alreadyStartedMessage = `${this.getNextCycleLabel()} already exists. Opening it now...`;
-
-        this.startNextCycleMessage.set(alreadyStartedMessage);
-        this.autoFlowMessage.set(alreadyStartedMessage);
-
-        await this.router.navigate(['/leagues', this.leagueId, 'cycles', nextCycleNumber]);
-
-        return;
-      }
 
       this.autoStartNextCycleAttemptKey = null;
       this.startNextCycleError.set(errorMessage);

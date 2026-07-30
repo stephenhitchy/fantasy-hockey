@@ -399,6 +399,41 @@ describe('league membership and reads', () => {
   });
 });
 
+describe('standings authority hardening', () => {
+  test('commissioners can edit safe team identity fields', async () => {
+    await expectAllowed(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
+        teamName: 'Renamed by Commissioner',
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner safe team identity update',
+    );
+  });
+
+  test('commissioners cannot directly change standings or waiver priority', async () => {
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
+        wins: 99,
+        pointsFor: 9999,
+        waiverPriority: 1,
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner standings tamper',
+    );
+  });
+
+  test('team owners cannot directly change their own standings', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
+        losses: 0,
+        pointsAgainst: 0,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner standings tamper',
+    );
+  });
+});
+
 describe('roster authority hardening', () => {
   test('an owner cannot overwrite the roster with forged and duplicated assets', async () => {
     const forgedRoster = validRoster('forged');
@@ -442,8 +477,8 @@ describe('roster authority hardening', () => {
     );
   });
 
-  test('[temporary Batch 4 dependency] commissioner cycle code can still update an existing roster', async () => {
-    await expectAllowed(
+  test('commissioners cannot overwrite a roster directly after cycle authority hardening', async () => {
+    await expectDenied(
       setDoc(
         doc(commissioner.db, 'leagues', LEAGUE_ID, 'teams', manager.uid, 'roster', 'current'),
         validRoster('commissioner-overwrite'),
@@ -801,12 +836,22 @@ describe('transactions and waivers authority hardening', () => {
     );
   });
 
-  test('[temporary Batch 4 dependency] commissioner cycle code can write waiver records', async () => {
-    await expectAllowed(
+  test('commissioners cannot bypass the waiver authority function', async () => {
+    await expectDenied(
       updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
         status: 'cleared',
       }),
       'Commissioner waiver update',
+    );
+  });
+
+  test('commissioners cannot forge transaction audit records', async () => {
+    await expectDenied(
+      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'transactions', 'forged-audit'), {
+        ownerId: manager.uid,
+        type: 'commissioner-forgery',
+      }),
+      'Commissioner transaction creation',
     );
   });
 
@@ -834,7 +879,7 @@ describe('scoring, cycles, and playoff authority baseline', () => {
     );
   });
 
-  test('[baseline exposure] a commissioner can directly alter all competition records', async () => {
+  test('commissioners cannot directly alter competition records', async () => {
     const updates = [
       doc(commissioner.db, 'leagues', LEAGUE_ID, 'cycles', 'cycle-1'),
       doc(
@@ -884,11 +929,42 @@ describe('scoring, cycles, and playoff authority baseline', () => {
     ];
 
     for (const [index, reference] of updates.entries()) {
-      await expectAllowed(
+      await expectDenied(
         updateDoc(reference, { [`commissionerTamper${index}`]: true }),
         `Commissioner competition write ${index + 1}`,
       );
     }
+  });
+
+  test('commissioners cannot create or delete cycle and playoff records from the browser', async () => {
+    await expectDenied(
+      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'cycles', 'cycle-2'), {
+        id: 'cycle-2',
+        cycleNumber: 2,
+        status: 'active',
+      }),
+      'Commissioner cycle creation',
+    );
+    await expectDenied(
+      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'playoffs', 'replacement'), {
+        id: 'replacement',
+        status: 'active',
+      }),
+      'Commissioner playoff creation',
+    );
+  });
+
+  test('projection accuracy analytics can mark a cycle without changing competition fields', async () => {
+    await expectAllowed(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'cycles', 'cycle-1'), {
+        projectionAccuracyStatus: 'complete',
+        projectionAccuracyAssetCount: 17,
+        projectionAccuracyProjectionVersions: [9],
+        projectionAccuracyUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+      'Projection accuracy cycle marker',
+    );
   });
 
   test('ordinary managers cannot directly alter competition records', async () => {

@@ -642,11 +642,17 @@ service cloud.firestore {
         allow create: if isLeagueMemberAfter(leagueId) &&
           validTeamCreate(teamId);
 
-        allow update: if isLeagueCommissioner(leagueId) ||
+        // Identity fields remain editable, but standings, waiver priority,
+        // draft position, and every other computed competition field are
+        // server-authoritative. Commissioners receive no browser bypass for
+        // score or record manipulation.
+        allow update: if validOwnerTeamUpdate() &&
           (
-            signedIn() &&
-            teamId == currentUserId() &&
-            validOwnerTeamUpdate()
+            isLeagueCommissioner(leagueId) ||
+            (
+              signedIn() &&
+              teamId == currentUserId()
+            )
           );
 
         allow delete: if isLeagueCommissioner(leagueId);
@@ -654,16 +660,10 @@ service cloud.firestore {
         match /roster/{rosterId} {
           allow read: if isLeagueMember(leagueId);
 
-          // Browser roster creation is disabled. Missing rosters are created
-          // by ensureFantasyRoster. Draft placement is now server-owned. The
-          // commissioner update exception remains only for legacy cycle-boundary
-          // processing and is removed in Batch 4.
-          allow create: if false;
-
-          allow update: if validRosterDocument(rosterId) &&
-            isLeagueCommissioner(leagueId);
-
-          allow delete: if false;
+          // All roster creation and mutation is server-authoritative. The
+          // Admin SDK performs draft placement, secure roster moves, queued
+          // cycle-boundary activation, and repair of legacy rosters.
+          allow create, update, delete: if false;
         }
       }
 
@@ -702,19 +702,16 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow read: if isLeagueMember(leagueId);
 
-        // Manager transaction logs are written by roster-authority Functions.
-        // Commissioner writes remain temporarily available to the legacy cycle
-        // progression code and will be removed with Batch 4.
-        allow create: if isLeagueCommissioner(leagueId);
-        allow update, delete: if false;
+        // Transaction history is an immutable server audit trail.
+        allow create, update, delete: if false;
       }
 
       match /waivers/{waiverId} {
         allow read: if isLeagueMember(leagueId);
 
-        // Drops, claims, awards, and resets are server-authoritative. The
-        // commissioner exception is temporary for legacy cycle-boundary work.
-        allow create, update, delete: if isLeagueCommissioner(leagueId);
+        // Drops, claims, awards, expiration, and resets are all handled by
+        // roster-authority Functions and trusted cycle automation.
+        allow create, update, delete: if false;
       }
 
 
@@ -807,37 +804,55 @@ service cloud.firestore {
 
       match /playoffWindowBanks/{ownerId} {
         allow read: if isLeagueMember(leagueId);
-        allow create, update, delete: if isLeagueCommissioner(leagueId);
+        // Bank creation, scoring, assignment, and rollover are performed by
+        // trusted league automation only.
+        allow create, update, delete: if false;
 
         match /windows/{windowId} {
           allow read: if isLeagueMember(leagueId);
-          allow create, update, delete: if isLeagueCommissioner(leagueId);
+          allow create, update, delete: if false;
         }
       }
 
       match /playoffs/{playoffId} {
         allow read: if isLeagueMember(leagueId);
-        allow create, update, delete: if isLeagueCommissioner(leagueId);
+        // Bracket seeds, advancement, placements, and results are server-owned.
+        allow create, update, delete: if false;
       }
 
       match /cycles/{cycleId} {
         allow read: if isLeagueMember(leagueId);
-        allow create, update, delete: if isLeagueCommissioner(leagueId);
+
+        // Cycle lifecycle and competition fields are server-authoritative. The
+        // only remaining browser update is the existing projection-accuracy
+        // analytics marker; it cannot change scores, status, standings, windows,
+        // matchup ids, or playoff state.
+        allow create, delete: if false;
+        allow update: if isLeagueCommissioner(leagueId) &&
+          request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'projectionAccuracyStatus',
+              'projectionAccuracyAssetCount',
+              'projectionAccuracyProjectionVersions',
+              'projectionAccuracyUpdatedAt',
+              'updatedAt'
+            ]);
 
         match /matchups/{matchupId} {
           allow read: if isLeagueMember(leagueId);
-          allow create, update, delete: if isLeagueCommissioner(leagueId);
+          allow create, update, delete: if false;
         }
 
         match /rosterPicks/{pickId} {
           allow read: if isLeagueMember(leagueId);
-          allow create, update, delete: if isLeagueCommissioner(leagueId);
+          allow create, update, delete: if false;
         }
-
 
         match /teamWindows/{ownerId} {
           allow read: if isLeagueMember(leagueId);
-          allow create, update, delete: if isLeagueCommissioner(leagueId);
+          allow create, update, delete: if false;
         }
       }
     }

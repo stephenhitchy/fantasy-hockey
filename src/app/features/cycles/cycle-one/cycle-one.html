@@ -420,10 +420,10 @@
             >
               {{
                 completingCycle()
-                  ? 'Completing Cycle...'
+                  ? 'Finalizing on Server...'
                   : cycle()?.status === 'complete'
                     ? 'Cycle Complete'
-                    : 'Complete ' + getCycleLabel()
+                    : 'Finalize Ready ' + getCycleLabel()
               }}
             </button>
 
@@ -487,8 +487,8 @@
                 >
                   {{
                     startingNextCycle()
-                      ? 'Starting Next Matchup Period...'
-                      : 'Start/Open ' + getNextCycleLabel()
+                      ? 'Opening Next Period on Server...'
+                      : 'Open ' + getNextCycleLabel()
                   }}
                 </button>
               }

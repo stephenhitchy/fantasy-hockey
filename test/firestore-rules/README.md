@@ -8,11 +8,9 @@ Run:
 npm run test:rules
 ```
 
-Batch 3 currently contains **32 Firestore Emulator tests**.
+Batch 4 contains **40 Firestore Emulator tests**.
 
-Tests labeled **`[baseline exposure]`** intentionally prove that a risky browser permission still exists in an area scheduled for a later security batch. They are not approvals of that behavior. Each later batch changes the relevant rule or client flow and then flips the test from `expectAllowed` to `expectDenied`.
-
-Tests labeled **`[temporary Batch 4 dependency]`** preserve a narrowly documented commissioner browser path that Batch 4 will move behind server authority. Batch 3 removes the former temporary manual-draft exception: draft setup, clock progression, picks, roster placement during a pick, and automatic selections are now server-owned.
+Tests labeled **`[baseline exposure]`** intentionally document risky permissions scheduled for later batches. Batch 4 closes the former commissioner browser exceptions for rosters, transactions, waivers, standings, cycles, matchups, roster snapshots, team windows, playoff brackets, and playoff window banks.
 
 Covered identities:
 
@@ -26,18 +24,24 @@ Covered areas:
 
 - user profiles
 - league/member/team reads
-- roster reads and direct-write denials
+- safe team-identity edits and direct standings-write denials
+- roster reads and direct-write denials for every browser role
 - draft setup, clock state, picks, frozen projection data, and queue privacy
 - owner-only queue edits and denial of commissioner queue tampering
-- transaction and waiver reads plus direct manager write denials
-- cycles, matchups, roster picks, team windows, and playoffs
+- immutable transaction records and server-owned waivers
+- server-owned cycles, matchups, roster picks, team windows, playoffs, and playoff banks
+- the narrow projection-accuracy analytics marker that remains client-compatible
 - live-scoring authority
 - global and league availability data
 
-The pure server draft-selection tests are separate:
+Additional Batch 4 browser/server boundary checks run with:
+
+```bash
+npm run test:competition-authority:run
+```
+
+The pure server draft-selection tests remain separate:
 
 ```bash
 npm run test:draft-authority
 ```
-
-They cover snake order, live-team/order consistency, starter-first auto-drafting, queue fallback, bench-role diversity, goalie reserve protection, and authoritative roster placement.

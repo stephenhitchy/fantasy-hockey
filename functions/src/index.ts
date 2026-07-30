@@ -3262,6 +3262,7 @@ export {
   advanceHistoricalReplayDay,
   clearExpiredOrErroredLiveScoringLease,
   initializeSeasonAfterDraft,
+  openNextCompetitionPeriod,
   releaseLeagueLiveScoringHandoff,
   requestLeagueLiveScoringRefresh,
   runScheduledLeagueAutomation,

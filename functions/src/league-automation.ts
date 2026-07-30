@@ -1536,6 +1536,15 @@ interface LiveScoringControlResetResult {
   message: string;
 }
 
+interface OpenNextCompetitionPeriodResult {
+  status: 'opened' | 'season-complete';
+  currentCycleNumber: number;
+  nextCycleNumber: number | null;
+  nextCycleId: string | null;
+  phase: FantasyCycle['phase'] | null;
+  alreadyExisted: boolean;
+}
+
 function requestedLeagueId(data: unknown): string {
   if (!data || typeof data !== 'object') {
     return '';
@@ -1628,6 +1637,85 @@ export const requestLeagueLiveScoringRefresh = onCall(
         : 'The server scoring refresh failed.';
 
       throw new HttpsError('unavailable', message);
+    }
+  },
+);
+
+/**
+ * Opens the next regular-season cycle or playoff round through the same
+ * Admin-SDK lifecycle code used by scheduled scoring. This is intentionally
+ * idempotent: if the next period already exists, the saved period is returned.
+ */
+export const openNextCompetitionPeriod = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    cors: TRUSTED_WEB_ORIGINS,
+  },
+  async (request): Promise<OpenNextCompetitionPeriodResult> => {
+    const leagueId = requestedLeagueId(request.data);
+    await requireLeagueCommissioner(request.auth?.uid, leagueId);
+
+    const rawCycleNumber =
+      request.data && typeof request.data === 'object'
+        ? (request.data as Record<string, unknown>)['currentCycleNumber']
+        : null;
+    const currentCycleNumber =
+      typeof rawCycleNumber === 'number' && Number.isInteger(rawCycleNumber)
+        ? rawCycleNumber
+        : Number.NaN;
+
+    if (!Number.isInteger(currentCycleNumber) || currentCycleNumber < 1) {
+      throw new HttpsError(
+        'invalid-argument',
+        'A valid current cycle number is required.',
+      );
+    }
+
+    const teams = await getLeagueTeams(leagueId);
+    const nextCycleNumber = currentCycleNumber + 1;
+    const nextCycleRef = db.doc(
+      `leagues/${leagueId}/cycles/cycle-${nextCycleNumber}`,
+    );
+    const existingNextCycle = await nextCycleRef.get();
+
+    try {
+      const nextCycle = await startNextCycle(
+        leagueId,
+        teams,
+        currentCycleNumber,
+      );
+
+      if (!nextCycle) {
+        return {
+          status: 'season-complete',
+          currentCycleNumber,
+          nextCycleNumber: null,
+          nextCycleId: null,
+          phase: null,
+          alreadyExisted: false,
+        };
+      }
+
+      return {
+        status: 'opened',
+        currentCycleNumber,
+        nextCycleNumber: nextCycle.cycleNumber,
+        nextCycleId: nextCycle.id,
+        phase: nextCycle.phase,
+        alreadyExisted: existingNextCycle.exists,
+      };
+    } catch (error: unknown) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      const message = error instanceof Error
+        ? error.message
+        : 'The next matchup period could not be opened.';
+
+      throw new HttpsError('failed-precondition', message);
     }
   },
 );
