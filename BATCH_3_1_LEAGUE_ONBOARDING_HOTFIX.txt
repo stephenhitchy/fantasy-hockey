@@ -1,0 +1,35 @@
+RINKRAT BATCH 3.1 — LEAGUE ONBOARDING PERMISSION HOTFIX
+========================================================
+
+ROOT CAUSE
+----------
+Batch 2 correctly made roster/current server-authoritative by denying browser
+roster creation. However, the existing create-league and join-league client
+flows still tried to create roster/current inside their Firestore write batch.
+Because one write in the batch was denied, the entire Create League or Join
+League action surfaced "Missing or insufficient permissions."
+
+This was a client/rules integration regression. It was not caused by the age of
+the account, platform-admin status, league commissioner status, or Batch 3's
+secure draft callable.
+
+FIX
+---
+- Create League now writes only the league, invite, commissioner membership,
+  and commissioner team from the browser.
+- Join League now writes only the membership and team from the browser.
+- Roster creation and legacy roster repair now use ensureFantasyRoster, the
+  authenticated Cloud Function introduced in Batch 2.
+- Existing memberships that are missing a roster are repaired through the same
+  callable.
+- Added Firestore Emulator regression tests for the complete create/join write
+  batches.
+- Added source-contract tests that fail if create/join reintroduce direct roster
+  writes.
+- verify:batch3 now includes the new league-onboarding regression suite.
+
+DEPLOYMENT
+----------
+The necessary ensureFantasyRoster Function and tightened Firestore rules are
+already deployed. This hotfix only requires the updated hosting build after all
+verification passes.

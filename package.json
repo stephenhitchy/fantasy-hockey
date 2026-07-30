@@ -25,7 +25,9 @@
     "verify:batch2": "npm run test:rules && npm run build:all",
     "test:draft-authority:run": "node --test --test-concurrency=1 test/draft-authority/*.test.mjs",
     "test:draft-authority": "npm --prefix functions run build && npm run test:draft-authority:run",
-    "verify:batch3": "npm run test:rules && npm run build:all && npm run test:draft-authority:run"
+    "verify:batch3": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run",
+    "test:league-onboarding:run": "node --test --test-concurrency=1 test/league-onboarding/*.test.mjs",
+    "verify:batch3-hotfix": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

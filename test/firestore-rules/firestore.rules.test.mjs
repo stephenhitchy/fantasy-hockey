@@ -87,6 +87,12 @@ async function seedLeagueFixture() {
       matchupFormat: 'cycle_matchup',
       scoringRules: {},
     }),
+    seedDocument('leagueInvites/ABC123', {
+      inviteCode: 'ABC123',
+      leagueId: LEAGUE_ID,
+      createdBy: commissioner.uid,
+      active: true,
+    }),
     seedDocument(`leagues/${LEAGUE_ID}/members/${commissioner.uid}`, {
       uid: commissioner.uid,
       leagueId: LEAGUE_ID,
@@ -269,6 +275,95 @@ describe('account profile boundaries', () => {
       }),
       'Protected profile field update',
     );
+  });
+});
+
+
+describe('league onboarding compatibility', () => {
+  test('a signed-in user can create the league, invite, membership, and team before server roster initialization', async () => {
+    const leagueId = 'new-rules-league';
+    const inviteCode = 'NEW123';
+    const batch = writeBatch(outsider.db);
+
+    batch.set(doc(outsider.db, 'leagues', leagueId), {
+      id: leagueId,
+      commissionerId: outsider.uid,
+      name: 'New Rules League',
+      inviteCode,
+      maxTeams: 6,
+      matchupFormat: 'cycle_matchup',
+      scoringRules: {},
+      createdAt: serverTimestamp(),
+    });
+    batch.set(doc(outsider.db, 'leagueInvites', inviteCode), {
+      inviteCode,
+      leagueId,
+      createdBy: outsider.uid,
+      active: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(doc(outsider.db, 'leagues', leagueId, 'members', outsider.uid), {
+      uid: outsider.uid,
+      leagueId,
+      username: 'Outsider',
+      profileIconId: VALID_ICON,
+      role: 'commissioner',
+      inviteCodeUsed: null,
+      joinedAt: serverTimestamp(),
+    });
+    batch.set(doc(outsider.db, 'leagues', leagueId, 'teams', outsider.uid), {
+      id: outsider.uid,
+      ownerId: outsider.uid,
+      teamName: 'Outsider',
+      managerName: 'Outsider',
+      profileIconId: VALID_ICON,
+      logo: '',
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      waiverPriority: 1,
+      draftPosition: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await expectAllowed(batch.commit(), 'League onboarding batch without roster');
+  });
+
+  test('a signed-in invitee can create membership and team before server roster initialization', async () => {
+    const batch = writeBatch(outsider.db);
+
+    batch.set(doc(outsider.db, 'leagues', LEAGUE_ID, 'members', outsider.uid), {
+      uid: outsider.uid,
+      leagueId: LEAGUE_ID,
+      username: 'Outsider',
+      profileIconId: VALID_ICON,
+      role: 'member',
+      inviteCodeUsed: 'ABC123',
+      joinedAt: serverTimestamp(),
+    });
+    batch.set(doc(outsider.db, 'leagues', LEAGUE_ID, 'teams', outsider.uid), {
+      id: outsider.uid,
+      ownerId: outsider.uid,
+      teamName: 'Outsider',
+      managerName: 'Outsider',
+      profileIconId: VALID_ICON,
+      logo: '',
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      waiverPriority: 1,
+      draftPosition: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await expectAllowed(batch.commit(), 'Join-league onboarding batch without roster');
   });
 });
 

@@ -20,7 +20,7 @@ import {
   ScoringRules,
 } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
-import { createEmptyFantasyRoster, getFantasyRosterRef } from '../team/roster.service';
+import { ensureFantasyRoster } from '../transactions/roster-authority.service';
 import {
   DEFAULT_LEAGUE_LOGO_ID,
   DEFAULT_LEAGUE_LOGO_PALETTE_ID,
@@ -279,19 +279,6 @@ function getNewTeamDocument(
   };
 }
 
-function getNewRosterDocument() {
-  const roster = createEmptyFantasyRoster();
-
-  return {
-    schemaVersion: roster.schemaVersion,
-    activeSlots: roster.activeSlots,
-    benchSlots: roster.benchSlots,
-    irSlots: roster.irSlots,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-}
-
 async function createUniqueInviteCode(): Promise<string> {
   for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt += 1) {
     const inviteCode = createInviteCodeCandidate();
@@ -380,7 +367,6 @@ export async function createLeague(
   const inviteRef = getLeagueInviteRef(inviteCode);
   const memberRef = getLeagueMemberRef(leagueRef.id, user.uid);
   const teamRef = getLeagueTeamRef(leagueRef.id, user.uid);
-  const rosterRef = getFantasyRosterRef(leagueRef.id, user.uid);
   const normalizedUsername = normalizeUsername(username);
   const normalizedProfileIconId = getRandomProfileIconId();
 
@@ -427,9 +413,17 @@ export async function createLeague(
     teamRef,
     getNewTeamDocument(user.uid, normalizedUsername, normalizedProfileIconId),
   );
-  batch.set(rosterRef, getNewRosterDocument());
-
   await batch.commit();
+
+  // Firestore rules intentionally deny browser-created roster documents.
+  // Initialize the commissioner roster through the authenticated server
+  // authority after the league, member, and team records exist. If this
+  // transient follow-up fails, roster pages retry the same callable lazily.
+  try {
+    await ensureFantasyRoster(leagueRef.id);
+  } catch (error) {
+    console.warn('League created; roster initialization will retry when needed.', error);
+  }
 
   return leagueRef.id;
 }
@@ -626,15 +620,13 @@ export async function joinLeagueByInviteCode(
   const leagueRef = getLeagueRef(leagueId);
   const memberRef = getLeagueMemberRef(leagueId, user.uid);
   const teamRef = getLeagueTeamRef(leagueId, user.uid);
-  const rosterRef = getFantasyRosterRef(leagueId, user.uid);
   const normalizedUsername = normalizeUsername(username);
   const existingMemberSnapshot = await getDoc(memberRef);
 
   if (existingMemberSnapshot.exists()) {
-    const [leagueSnapshot, existingTeamSnapshot, existingRosterSnapshot] = await Promise.all([
+    const [leagueSnapshot, existingTeamSnapshot] = await Promise.all([
       getDoc(leagueRef),
       getDoc(teamRef),
-      getDoc(rosterRef),
     ]);
 
     if (!leagueSnapshot.exists()) {
@@ -708,14 +700,13 @@ export async function joinLeagueByInviteCode(
       repairNeeded = true;
     }
 
-    if (!existingRosterSnapshot.exists()) {
-      repairBatch.set(rosterRef, getNewRosterDocument());
-      repairNeeded = true;
-    }
-
     if (repairNeeded) {
       await repairBatch.commit();
     }
+
+    // Existing or repaired memberships use the same server-owned roster
+    // initializer. This also repairs legacy accounts that predate schema v2.
+    await ensureFantasyRoster(leagueId);
 
     return leagueId;
   }
@@ -740,9 +731,9 @@ export async function joinLeagueByInviteCode(
     teamRef,
     getNewTeamDocument(user.uid, normalizedUsername, profileIconId),
   );
-  joinBatch.set(rosterRef, getNewRosterDocument());
 
   await joinBatch.commit();
+  await ensureFantasyRoster(leagueId);
 
   return leagueId;
 }
