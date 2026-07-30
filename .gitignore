@@ -51,3 +51,4 @@ functions/lib/
 # Firebase Functions environment configuration
 functions/.env*
 !functions/.env.example
+functions/.secret.local

@@ -193,7 +193,24 @@ function buildEmailShell(options: {
 </html>`;
 }
 
+function isFunctionsEmulator(): boolean {
+  return process.env['FUNCTIONS_EMULATOR'] === 'true';
+}
+
 async function sendTransactionalEmail(email: TransactionalEmail): Promise<void> {
+  if (isFunctionsEmulator()) {
+    const recipientHash = createHash('sha256')
+      .update(email.to.toLowerCase())
+      .digest('hex')
+      .slice(0, 12);
+
+    console.info('Transactional email delivery skipped in the Firebase Functions Emulator.', {
+      category: email.category,
+      recipientHash,
+    });
+    return;
+  }
+
   const apiKey = asString(RESEND_API_KEY.value());
 
   if (!apiKey) {

@@ -1,6 +1,0 @@
-RINKRAT BENCH COMPONENT STYLE BUDGET FIX
-
-The matchup bench UI increased cycle-one.css to 40.73 kB, which was 733 bytes above the previous 40 kB production error limit.
-This update raises the anyComponentStyle warning threshold to 42 kB and the hard error threshold to 45 kB.
-No runtime code, scoring logic, Firebase behavior, or styling was changed.
-The limit remains intentionally narrow so future accidental CSS growth still fails the build.
