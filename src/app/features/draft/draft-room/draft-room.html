@@ -341,23 +341,6 @@
             <div class="pool-error-block">
                 <p class="pool-error">{{ playerPoolError() }}</p>
 
-                @if (canRepairSharedProjections()) {
-                  <button
-                    type="button"
-                    class="repair-pool-button"
-                    (click)="repairSharedProjectionsForLiveDraft()"
-                    [disabled]="sharedProjectionRepairInProgress()"
-                  >
-                    {{
-                      sharedProjectionRepairInProgress()
-                        ? 'Building Shared Projections...'
-                        : draft()?.clockStatus === 'running'
-                          ? 'Pause Clock & Build Shared Projections'
-                          : 'Build Shared Projections'
-                    }}
-                  </button>
-                }
-
                 <button
                   type="button"
                   class="retry-pool-button"
@@ -564,21 +547,6 @@
               <strong>{{ draftClockDisplay() }}</strong>
             </div>
 
-            @if (isCommissioner() && currentPick()) {
-              <button
-                type="button"
-                class="commissioner-auto-button"
-                [class.auto-enabled]="currentOwnerAutoDraftEnabled()"
-                (click)="toggleCurrentOwnerAutoDraft()"
-                [disabled]="queueSaving()"
-              >
-                {{
-                  currentOwnerAutoDraftEnabled()
-                    ? 'Disable Auto-Draft for This Team'
-                    : 'Enable Auto-Draft for This Team'
-                }}
-              </button>
-            }
           </section>
 
           <section class="sidebar-card queue-card">

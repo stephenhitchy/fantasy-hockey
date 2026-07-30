@@ -1121,7 +1121,6 @@
 }
 
 .clock-control-button,
-.commissioner-auto-button,
 .auto-draft-toggle,
 .queue-button,
 .draft-button,
@@ -1135,7 +1134,6 @@
 }
 
 .clock-control-button,
-.commissioner-auto-button,
 .auto-draft-toggle,
 .queue-button,
 .queue-row-actions button {
@@ -1145,7 +1143,6 @@
 }
 
 .clock-control-button:hover:not(:disabled),
-.commissioner-auto-button:hover:not(:disabled),
 .auto-draft-toggle:hover:not(:disabled),
 .queue-button:hover:not(:disabled),
 .queue-row-actions button:hover:not(:disabled) {
@@ -1213,7 +1210,6 @@
 .draft-button:disabled,
 .queue-button:disabled,
 .clock-control-button:disabled,
-.commissioner-auto-button:disabled,
 .auto-draft-toggle:disabled,
 .queue-row-actions button:disabled {
   cursor: not-allowed;
@@ -1252,13 +1248,6 @@
   color: #a22626;
 }
 
-.commissioner-auto-button {
-  width: 100%;
-  margin-top: 10px;
-  padding: 9px 10px;
-}
-
-.commissioner-auto-button.auto-enabled,
 .auto-draft-toggle.enabled {
   border-color: #78a98a;
   background: #e6f6eb;
@@ -1475,7 +1464,6 @@
   text-align: center;
 }
 
-.repair-pool-button,
 .retry-pool-button {
   min-height: 40px;
   padding: 9px 13px;
@@ -1486,19 +1474,12 @@
   font-weight: 800;
 }
 
-.repair-pool-button {
-  border: 1px solid #294f79;
-  background: #183554;
-  color: #ffffff;
-}
-
 .retry-pool-button {
   border: 1px solid #9db4cc;
   background: #ffffff;
   color: #29435f;
 }
 
-.repair-pool-button:disabled,
 .retry-pool-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;

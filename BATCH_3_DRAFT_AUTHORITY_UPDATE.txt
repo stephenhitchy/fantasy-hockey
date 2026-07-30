@@ -1,0 +1,164 @@
+RINKRAT BATCH 3 — DRAFT AUTHORITY HARDENING
+==============================================
+
+PURPOSE
+-------
+Batch 3 removes authoritative draft progression from the browser. Draft setup,
+clock controls, manual picks, automatic picks, roster placement, and pick
+records now pass through Cloud Functions or existing server automation.
+
+PRIMARY CHANGES
+---------------
+1. Added executeDraftCommand (callable Cloud Function)
+   - Saves draft settings only for the commissioner.
+   - Requires the snake order to contain every current league team exactly once.
+   - Restricts pick-clock values to supported durations.
+   - Requires a healthy verified Projection V9 snapshot before scheduling.
+   - Opens scheduled drafts, starts the first clock, and handles commissioner
+     pause/resume commands without browser writes to the draft document.
+   - Locks settings once picks or a live/completed draft exist.
+
+2. Added makeSecureDraftPick (callable Cloud Function)
+   - Accepts only leagueId and assetKey from the browser.
+   - Verifies authentication, league membership, current turn, live clock state,
+     and unexpired pick time.
+   - Loads the complete canonical asset from the draft's frozen shared
+     projection snapshot instead of trusting client-supplied player data.
+   - Rechecks all authority and timing conditions inside one Firestore
+     transaction.
+   - Stops the draft if the current team documents no longer exactly match the
+     saved draft order.
+   - Rejects duplicate drafted assets and assets already assigned to any roster.
+   - Validates starter/bench destination and positional feasibility.
+   - Preserves enough assets for other managers' required starting positions.
+   - Atomically writes the pick, roster, queue, and next draft state.
+   - Stamps manual pick records with authority: "cloud-function" and the frozen
+     projectionSnapshotId.
+
+3. Centralized server draft-selection logic
+   - Added functions/src/draft-pick-engine.ts.
+   - Manual and automatic server picks now share the same snake-order,
+     destination, bench-role, position-reserve, and roster-placement logic.
+   - Automatic pick records now also include authority: "cloud-function" and
+     projectionSnapshotId.
+   - Server automatic picks verify the frozen snapshot again inside the
+     transaction before committing.
+
+4. Removed the legacy browser draft transaction
+   - The Angular draft service no longer contains the former direct Firestore
+     transaction that accepted a complete client-provided DraftableAsset.
+   - The client submits only the selected assetKey to makeSecureDraftPick.
+   - The obsolete browser automatic-pick API was removed; scheduled automation
+     and Cloud Tasks own all automatic selections.
+
+5. Tightened Firestore rules
+   - All browser create/update/delete operations on draft/current are denied.
+   - All browser create/update/delete operations on draft pick records are denied.
+   - The former temporary manual-draft roster-write exception is removed.
+   - A manager may edit only their own queue.
+   - Commissioners may read queues for draft visibility but cannot reorder or
+     enable auto-draft for another manager.
+   - Shared projection records cannot be modified during any live draft, so the
+     frozen pool remains immutable from the first clock through the final pick.
+
+6. Updated the Draft Room
+   - Removed the commissioner control that changed another manager's auto-draft
+     preference.
+   - Removed the live-draft browser projection-rebuild path, which conflicts with
+     an immutable frozen draft pool.
+   - Managers retain control of their own queue and auto-draft setting.
+   - Commissioner pause/resume remains available through executeDraftCommand.
+
+7. Expanded automated coverage
+   - 32 Firestore Emulator security tests.
+   - 7 pure server draft-engine tests.
+   - New security tests deny forged picks, direct draft creation, draft clock
+     manipulation, commissioner draft tampering, live projection tampering, and
+     commissioner edits to another manager's queue.
+   - Draft-engine tests cover snake order, starter-first auto-draft behavior,
+     queue fallback, bench-role diversity, goalie reserve protection, and
+     authoritative roster placement.
+
+8. Added npm scripts
+   - npm run test:draft-authority
+   - npm run verify:batch3
+
+AUTHORITY BOUNDARY AFTER BATCH 3
+--------------------------------
+Browser clients may:
+- read draft state and picks when they are league members;
+- manage only their own draft queue and auto-draft preference;
+- request commissioner draft commands through executeDraftCommand;
+- request their own current manual pick by assetKey through makeSecureDraftPick.
+
+Browser clients may not:
+- create, update, or delete the draft document;
+- create, update, or delete pick documents;
+- place a drafted player directly onto a roster;
+- submit an automatic pick;
+- edit another manager's queue;
+- change the shared projection pool while the draft is live.
+
+Cloud Functions/server automation own:
+- authoritative settings validation;
+- scheduled opening and clock state;
+- manual and automatic pick selection;
+- canonical asset lookup;
+- roster placement;
+- duplicate prevention;
+- pick/queue/draft atomic progression.
+
+DATA AND DEPLOYMENT SAFETY
+--------------------------
+- Do not deploy Batch 3 while a real draft is actively running.
+- Before deployment, inspect every live draft with existing picks. It must have a
+  non-empty serverDraftProjectionSnapshotId. A legacy live draft with picks but
+  no frozen snapshot is deliberately stopped by the new callable rather than
+  silently continuing from a different player pool.
+- Functions must be deployed before hosting, and rules must be deployed only
+  after the pre-rules browser smoke test passes.
+- No destructive data migration is performed automatically.
+
+IMPORTANT REMAINING TRANSITION PATH
+-----------------------------------
+Batch 4 still needs to move commissioner cycle, matchup, standings, playoff,
+waiver-boundary, and related competition writes fully behind server authority.
+The rules tests continue to label those permissions as baseline exposure or a
+temporary Batch 4 dependency.
+
+FILES ADDED
+-----------
+- functions/src/draft-authority.ts
+- functions/src/draft-pick-engine.ts
+- src/app/core/draft/draft-authority.service.ts
+- test/draft-authority/draft-pick-engine.test.mjs
+
+KEY FILES UPDATED
+-----------------
+- firestore.rules
+- functions/src/draft-automation.ts
+- functions/src/index.ts
+- src/app/core/draft/draft.service.ts
+- src/app/features/draft/draft-room/draft-room.ts
+- src/app/features/draft/draft-room/draft-room.html
+- src/app/features/draft/draft-room/draft-room.css
+- test/firestore-rules/firestore.rules.test.mjs
+- test/firestore-rules/README.md
+- package.json
+
+LOCAL VALIDATION COMPLETED IN THE DELIVERY ENVIRONMENT
+------------------------------------------------------
+- Changed TypeScript files passed TypeScript syntax/transpile checks.
+- JavaScript test files passed node --check.
+- The 7 pure draft-engine tests were executed successfully against a temporary
+  compiled copy of the engine.
+- JSON configuration parsed successfully.
+- Firestore rules delimiter structure was checked.
+- Client source was checked for remaining direct draft/pick writes.
+- Function exports and deployment names were verified.
+- ZIP integrity is checked before delivery.
+
+The Angular build, Functions semantic TypeScript build, and Firebase Emulator
+suite must still be run on Stephen's Mac because the delivery environment's npm
+mirror cannot install all locked dependencies and it cannot run the Firebase
+CLI emulators.

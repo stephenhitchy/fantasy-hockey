@@ -9,12 +9,9 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 import { db } from './shared/core/firebase';
 import {
   DraftAutoPickReason,
-  DraftPosition,
   DraftQueue,
-  DraftSelectionType,
   DraftableAsset,
   DraftPick,
-  DraftPickPreview,
   FantasyDraft,
 } from './shared/core/draft/draft.models';
 import {
@@ -22,15 +19,20 @@ import {
   SharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
 } from './shared/core/projection/projection-snapshot.service';
-import {
-  FantasyRoster,
-  RosterAsset,
-  RosterStatus,
-} from './shared/core/team/roster.models';
+import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
   normalizeFantasyRoster,
 } from './shared/core/team/roster.service';
+import {
+  applyDraftAssetToRoster,
+  getDraftAssetName,
+  getDraftDestination,
+  getDraftPickAtOverall,
+  getDraftTotalPickCount,
+  hasExactDraftOwnerSet,
+  selectAutomaticDraftCandidate,
+} from './draft-pick-engine';
 
 const FUNCTION_REGION = 'us-central1';
 const SERVER_DRAFT_ACTOR = 'server:draft-automation';
@@ -49,12 +51,6 @@ interface DraftAutomationRunResult {
   message: string;
 }
 
-interface DraftDestination {
-  rosterArea: 'active' | 'bench';
-  slotIndex: number;
-  slotId: string;
-}
-
 interface DraftAutomationLease {
   referencePath: string;
   token: string;
@@ -66,8 +62,6 @@ interface DraftClockTaskPayload {
   expectedPickStartedAtMilliseconds: number;
   expectedDueAtMilliseconds: number;
 }
-
-type BenchRole = 'F' | 'D' | 'G';
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -455,7 +449,7 @@ async function loadVerifiedDraftProjectionSnapshot(
   return null;
 }
 
-async function loadProjectionSnapshotForDraft(
+export async function loadProjectionSnapshotForDraft(
   leagueId: string,
   draft: FantasyDraft,
 ): Promise<SharedProjectionSnapshot | null> {
@@ -516,7 +510,7 @@ async function scheduleDraftClockTask(
     return false;
   }
 
-  const currentPick = getPickAtOverall(draft, draft.nextOverallPick);
+  const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
   const pickStartedAt = asTimestampDate(draft.pickStartedAt);
 
   if (!currentPick || !pickStartedAt) {
@@ -553,7 +547,6 @@ async function scheduleDraftClockTask(
     console.info('Scheduled exact draft clock task.', {
       leagueId,
       overallPick: currentPick.overallPick,
-      ownerId: currentPick.ownerId,
       autoDraftEnabled: queue.autoDraftEnabled,
       dueAt: new Date(dueAtMilliseconds).toISOString(),
     });
@@ -672,32 +665,6 @@ function normalizeQueue(ownerId: string, value: Partial<DraftQueue> | undefined)
   };
 }
 
-function getTotalPickCount(draft: FantasyDraft): number {
-  return draft.totalRounds * draft.roundOneOrder.length;
-}
-
-function getPickAtOverall(draft: FantasyDraft, overallPick: number): DraftPickPreview | null {
-  const totalPickCount = getTotalPickCount(draft);
-
-  if (overallPick < 1 || overallPick > totalPickCount || draft.roundOneOrder.length === 0) {
-    return null;
-  }
-
-  const teamCount = draft.roundOneOrder.length;
-  const round = Math.floor((overallPick - 1) / teamCount) + 1;
-  const pickInRound = ((overallPick - 1) % teamCount) + 1;
-  const order = round % 2 === 1
-    ? draft.roundOneOrder
-    : [...draft.roundOneOrder].reverse();
-
-  return {
-    overallPick,
-    round,
-    pickInRound,
-    ownerId: order[pickInRound - 1],
-  };
-}
-
 function isScheduledStartReached(draft: FantasyDraft, now = new Date()): boolean {
   const scheduledStart = asTimestampDate(draft.scheduledStartAt);
   return Boolean(scheduledStart && scheduledStart.getTime() <= now.getTime());
@@ -719,253 +686,6 @@ function isClockExpired(draft: FantasyDraft, now = new Date()): boolean {
   );
 
   return startedAt.getTime() + currentPickSeconds * 1000 <= now.getTime();
-}
-
-function getBenchRole(position: DraftPosition): BenchRole {
-  if (position === 'D') {
-    return 'D';
-  }
-
-  if (position === 'G') {
-    return 'G';
-  }
-
-  return 'F';
-}
-
-function getDestination(roster: FantasyRoster, position: DraftPosition): DraftDestination | null {
-  const activeSlotIndex = roster.activeSlots.findIndex(
-    (slot) => slot.position === position && slot.asset === null,
-  );
-
-  if (activeSlotIndex >= 0) {
-    return {
-      rosterArea: 'active',
-      slotIndex: activeSlotIndex,
-      slotId: roster.activeSlots[activeSlotIndex].slotId,
-    };
-  }
-
-  const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.asset === null);
-
-  if (benchSlotIndex >= 0) {
-    return {
-      rosterArea: 'bench',
-      slotIndex: benchSlotIndex,
-      slotId: roster.benchSlots[benchSlotIndex].slotId,
-    };
-  }
-
-  return null;
-}
-
-function needsAnyStarter(roster: FantasyRoster): boolean {
-  return roster.activeSlots.some((slot) => slot.asset === null);
-}
-
-function getExistingBenchRoles(roster: FantasyRoster): Set<BenchRole> {
-  return new Set(
-    roster.benchSlots
-      .map((slot) => slot.asset?.position)
-      .filter((position): position is DraftPosition => Boolean(position))
-      .map(getBenchRole),
-  );
-}
-
-function automaticCandidateAllowed(
-  roster: FantasyRoster,
-  asset: DraftableAsset,
-  destination: DraftDestination | null,
-): boolean {
-  if (!destination) {
-    return false;
-  }
-
-  if (needsAnyStarter(roster)) {
-    return destination.rosterArea === 'active';
-  }
-
-  if (destination.rosterArea !== 'bench') {
-    return false;
-  }
-
-  return !getExistingBenchRoles(roster).has(getBenchRole(asset.position));
-}
-
-function getAssetDraftValue(asset: DraftableAsset): number | null {
-  const candidates = [
-    asset.draftScore,
-    asset.draftValueAboveReplacement,
-    asset.balancedDraftValue,
-    asset.floorAdjustedDraftValue,
-  ];
-
-  const value = candidates.find(
-    (candidate): candidate is number => typeof candidate === 'number' && Number.isFinite(candidate),
-  );
-
-  return value ?? null;
-}
-
-function getAssetProjectedCycle(asset: DraftableAsset): number | null {
-  const candidates = [
-    asset.draftProjectedCyclePoints,
-    asset.availabilityAdjustedCyclePoints,
-    asset.floorAdjustedCyclePoints,
-    asset.projectedCyclePoints,
-  ];
-
-  const value = candidates.find(
-    (candidate): candidate is number => typeof candidate === 'number' && Number.isFinite(candidate),
-  );
-
-  return value ?? null;
-}
-
-function getAssetName(asset: DraftableAsset): string {
-  return asset.assetType === 'skater'
-    ? asset.player.fullName
-    : `${asset.teamName} Goalie Unit`;
-}
-
-function compareDraftValue(first: DraftableAsset, second: DraftableAsset): number {
-  const firstValue = getAssetDraftValue(first);
-  const secondValue = getAssetDraftValue(second);
-
-  if (firstValue !== null && secondValue !== null && firstValue !== secondValue) {
-    return secondValue - firstValue;
-  }
-
-  if (firstValue !== null && secondValue === null) {
-    return -1;
-  }
-
-  if (firstValue === null && secondValue !== null) {
-    return 1;
-  }
-
-  const firstProjection = getAssetProjectedCycle(first) ?? -1;
-  const secondProjection = getAssetProjectedCycle(second) ?? -1;
-
-  if (firstProjection !== secondProjection) {
-    return secondProjection - firstProjection;
-  }
-
-  return getAssetName(first).localeCompare(getAssetName(second));
-}
-
-function canUseAssetForBench(
-  asset: DraftableAsset,
-  destination: DraftDestination,
-  draft: FantasyDraft,
-  rostersByOwnerId: Map<string, FantasyRoster>,
-  allAssets: DraftableAsset[],
-): boolean {
-  if (destination.rosterArea !== 'bench') {
-    return true;
-  }
-
-  const missingStartingAssets = [...rostersByOwnerId.values()].reduce(
-    (total, roster) => total + roster.activeSlots.filter(
-      (slot) => slot.position === asset.position && slot.asset === null,
-    ).length,
-    0,
-  );
-
-  if (missingStartingAssets <= 0) {
-    return true;
-  }
-
-  const draftedKeys = new Set(draft.draftedAssetKeys);
-  const availableAtPosition = allAssets.filter(
-    (candidate) =>
-      candidate.position === asset.position &&
-      !draftedKeys.has(candidate.assetKey),
-  ).length;
-  const safeAvailableCount = availableAtPosition > 0
-    ? availableAtPosition
-    : asset.position === 'G'
-      ? Math.max(
-          0,
-          32 - [...rostersByOwnerId.values()].reduce(
-            (total, roster) => total +
-              roster.activeSlots.filter((slot) => slot.asset?.position === 'G').length +
-              roster.benchSlots.filter((slot) => slot.asset?.position === 'G').length,
-            0,
-          ),
-        )
-      : Number.POSITIVE_INFINITY;
-
-  return safeAvailableCount === Number.POSITIVE_INFINITY ||
-    Math.max(0, safeAvailableCount - 1) >= missingStartingAssets;
-}
-
-function createRosterAsset(
-  asset: DraftableAsset,
-  rosterStatus: RosterStatus,
-): RosterAsset {
-  const cycleScore = {
-    cycleNumber: 1,
-    gamesCounted: 0,
-    fantasyPoints: 0,
-  };
-
-  if (asset.assetType === 'skater') {
-    return {
-      ...asset,
-      rosterStatus,
-      cycleScore,
-    };
-  }
-
-  return {
-    ...asset,
-    rosterStatus,
-    cycleScore,
-  };
-}
-
-function selectAutomaticCandidate(input: {
-  ownerId: string;
-  queue: DraftQueue;
-  draft: FantasyDraft;
-  roster: FantasyRoster;
-  rostersByOwnerId: Map<string, FantasyRoster>;
-  assets: DraftableAsset[];
-}): { asset: DraftableAsset; selectionType: Extract<DraftSelectionType, 'queue' | 'automatic'> } | null {
-  const draftedKeys = new Set(input.draft.draftedAssetKeys);
-  const assetsByKey = new Map(input.assets.map((asset) => [asset.assetKey, asset] as const));
-
-  const isEligible = (asset: DraftableAsset): boolean => {
-    if (draftedKeys.has(asset.assetKey)) {
-      return false;
-    }
-
-    const destination = getDestination(input.roster, asset.position);
-    return automaticCandidateAllowed(input.roster, asset, destination) &&
-      Boolean(destination) &&
-      canUseAssetForBench(
-        asset,
-        destination!,
-        input.draft,
-        input.rostersByOwnerId,
-        input.assets,
-      );
-  };
-
-  for (const assetKey of input.queue.assetKeys) {
-    const asset = assetsByKey.get(assetKey);
-
-    if (asset && isEligible(asset)) {
-      return { asset, selectionType: 'queue' };
-    }
-  }
-
-  const asset = input.assets
-    .filter(isEligible)
-    .sort(compareDraftValue)[0];
-
-  return asset ? { asset, selectionType: 'automatic' } : null;
 }
 
 async function setDraftAutomationError(
@@ -1071,6 +791,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
 async function makeOneServerAutomaticPick(
   leagueId: string,
   projectionAssets: DraftableAsset[],
+  projectionSnapshotId: string,
   reasonOverride?: DraftAutoPickReason,
 ): Promise<boolean> {
   if (projectionAssets.length === 0) {
@@ -1092,7 +813,22 @@ async function makeOneServerAutomaticPick(
       return false;
     }
 
-    const currentPick = getPickAtOverall(draft, draft.nextOverallPick);
+    if (draft.serverDraftProjectionSnapshotId !== projectionSnapshotId) {
+      throw new Error('The draft projection snapshot changed before the automatic pick was committed.');
+    }
+
+    const currentTeamsSnapshot = await transaction.get(
+      db.collection(`leagues/${leagueId}/teams`),
+    );
+    const currentTeamOwnerIds = currentTeamsSnapshot.docs.map((document) => document.id);
+
+    if (!hasExactDraftOwnerSet(draft, currentTeamOwnerIds)) {
+      throw new Error(
+        'League membership changed after the draft order was saved. Automatic drafting was stopped.',
+      );
+    }
+
+    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
     if (!currentPick) {
       return false;
@@ -1135,8 +871,7 @@ async function makeOneServerAutomaticPick(
     });
 
     const roster = rostersByOwnerId.get(currentPick.ownerId) ?? createEmptyFantasyRoster();
-    const selected = selectAutomaticCandidate({
-      ownerId: currentPick.ownerId,
+    const selected = selectAutomaticDraftCandidate({
       queue,
       draft,
       roster,
@@ -1150,29 +885,17 @@ async function makeOneServerAutomaticPick(
       );
     }
 
-    const destination = getDestination(roster, selected.asset.position);
+    const destination = getDraftDestination(roster, selected.asset.position);
 
     if (!destination) {
       throw new Error(`No roster destination was available for ${selected.asset.assetKey}.`);
     }
 
-    const rosterAsset = createRosterAsset(
+    const updatedRoster = applyDraftAssetToRoster(
+      roster,
       selected.asset,
-      destination.rosterArea === 'active' ? 'active' : 'benched',
+      destination,
     );
-
-    if (destination.rosterArea === 'active') {
-      roster.activeSlots[destination.slotIndex] = {
-        ...roster.activeSlots[destination.slotIndex],
-        asset: rosterAsset,
-        openFromCycleNumber: null,
-      };
-    } else {
-      roster.benchSlots[destination.slotIndex] = {
-        ...roster.benchSlots[destination.slotIndex],
-        asset: rosterAsset,
-      };
-    }
 
     let nextConsecutiveClockExpirations = queue.consecutiveClockExpirations;
     let nextAutoDraftEnabled = queue.autoDraftEnabled;
@@ -1199,22 +922,24 @@ async function makeOneServerAutomaticPick(
       autoPickReason: autoReason,
     };
     const nextOverallPick = currentPick.overallPick + 1;
-    const draftComplete = nextOverallPick > getTotalPickCount(draft);
+    const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);
     const rosterRef = db.doc(
       `leagues/${leagueId}/teams/${currentPick.ownerId}/roster/current`,
     );
 
     transaction.set(pickRef, {
       ...pick,
+      authority: 'cloud-function',
+      projectionSnapshotId,
       madeAt: FieldValue.serverTimestamp(),
     });
     transaction.set(
       rosterRef,
       {
-        schemaVersion: roster.schemaVersion,
-        activeSlots: roster.activeSlots,
-        benchSlots: roster.benchSlots,
-        irSlots: roster.irSlots,
+        schemaVersion: updatedRoster.schemaVersion,
+        activeSlots: updatedRoster.activeSlots,
+        benchSlots: updatedRoster.benchSlots,
+        irSlots: updatedRoster.irSlots,
         updatedAt: FieldValue.serverTimestamp(),
         ...(rosterSnapshots[rosterOwners.indexOf(currentPick.ownerId)].exists
           ? {}
@@ -1250,7 +975,7 @@ async function makeOneServerAutomaticPick(
         serverAutomationStatus: draftComplete ? 'complete' : 'healthy',
         serverAutomationMessage: draftComplete
           ? 'The server completed the draft.'
-          : `The server selected ${getAssetName(selected.asset)} for pick ${currentPick.overallPick}.`,
+          : `The server selected ${getDraftAssetName(selected.asset)} for pick ${currentPick.overallPick}.`,
         serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -1320,7 +1045,7 @@ async function processLeagueDraftAutomation(
       };
     }
 
-    const currentPick = getPickAtOverall(draft, draft.nextOverallPick);
+    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
     if (!currentPick) {
       return {
@@ -1367,7 +1092,11 @@ async function processLeagueDraftAutomation(
     }
 
     const picked = await withContentionRetry(
-      () => makeOneServerAutomaticPick(leagueId, projection.assets),
+      () => makeOneServerAutomaticPick(
+        leagueId,
+        projection.assets,
+        projection.metadata.activeSnapshotId,
+      ),
       `automatic pick for ${leagueId}`,
     );
     const updatedDraftSnapshot = await draftRef.get();
@@ -1661,7 +1390,7 @@ export const processAutoDraftQueueChange = onDocumentWritten(
     }
 
     const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-    const currentPick = getPickAtOverall(draft, draft.nextOverallPick);
+    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
     if (!currentPick || currentPick.ownerId !== event.params.ownerId) {
       return;

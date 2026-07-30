@@ -7,18 +7,11 @@ import {
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
-import {
-  type AutoDraftBenchRole,
-  getAutoDraftBenchRole,
-  getAutoDraftCandidateBlockReason,
-} from './auto-draft-strategy';
-
 import {
   getCycleTeamWindowsRef,
   normalizeFantasyTeamCycleWindows,
@@ -29,6 +22,8 @@ import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
 import { applyImmediateRosterMove } from '../transactions/immediate-roster-move.service';
 
 import { executeSecureRosterAction } from '../transactions/roster-authority.service';
+
+import { executeDraftCommand, makeSecureDraftPick } from './draft-authority.service';
 
 import {
   createEmptyFantasyRoster,
@@ -53,15 +48,12 @@ import {
 import { PlayerAvailabilityStatus } from '../player/player-availability.models';
 
 import {
-  DraftAutoPickReason,
   DraftableAsset,
   DraftPick,
   DraftPickPreview,
-  DraftPosition,
   DraftProjection,
   DraftQueue,
   DraftRosterRequirements,
-  DraftSelectionType,
   DraftStatus,
   FantasyDraft,
 } from './draft.models';
@@ -503,10 +495,6 @@ function getTransactionsRef(leagueId: string) {
   return collection(db, 'leagues', leagueId, 'transactions');
 }
 
-function getLeagueRef(leagueId: string) {
-  return doc(db, 'leagues', leagueId);
-}
-
 function getTeamRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'teams', ownerId);
 }
@@ -521,18 +509,6 @@ function getWaiverRef(leagueId: string, waiverId: string) {
 
 export function getDraftPickDocumentId(overallPick: number): string {
   return overallPick.toString().padStart(3, '0');
-}
-
-function getDraftPickRef(leagueId: string, overallPick: number) {
-  return doc(
-    db,
-    'leagues',
-    leagueId,
-    'draft',
-    DRAFT_DOCUMENT_ID,
-    'picks',
-    getDraftPickDocumentId(overallPick),
-  );
 }
 
 function normalizePickSeconds(value: unknown): number {
@@ -849,43 +825,15 @@ export function listenToLeagueWaivers(
 }
 
 export async function saveFantasyDraft(leagueId: string, draft: FantasyDraft): Promise<void> {
-  const pickSeconds = normalizePickSeconds(draft.pickSeconds);
+  const scheduledStart = getScheduledStartDate(draft);
 
-  await setDoc(
-    getDraftRef(leagueId),
-    {
-      schemaVersion: 3,
-      status: draft.status,
-      format: draft.format,
-      totalRounds: draft.totalRounds,
-      rosterRequirements: draft.rosterRequirements,
-      benchSlots: draft.benchSlots,
-      roundOneOrder: draft.roundOneOrder,
-      nextOverallPick: draft.nextOverallPick,
-      draftedAssetKeys: draft.draftedAssetKeys,
-      scheduledStartAt: draft.scheduledStartAt ?? null,
-      pickSeconds,
-      clockStatus:
-        draft.status === 'complete'
-          ? 'complete'
-          : draft.status === 'live'
-            ? draft.clockStatus
-            : 'stopped',
-      pickStartedAt: draft.status === 'live' ? (draft.pickStartedAt ?? null) : null,
-      currentPickSeconds:
-        draft.status === 'live' ? (draft.currentPickSeconds ?? pickSeconds) : pickSeconds,
-      pausedRemainingSeconds:
-        draft.status === 'live' ? (draft.pausedRemainingSeconds ?? null) : null,
-      clockUpdatedBy: draft.clockUpdatedBy ?? null,
-      lastPickId: draft.lastPickId ?? null,
-      serverDraftProjectionSnapshotId:
-        draft.status === 'live'
-          ? (draft.serverDraftProjectionSnapshotId ?? null)
-          : null,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  await executeDraftCommand({
+    leagueId,
+    action: 'save-settings',
+    roundOneOrder: [...draft.roundOneOrder],
+    scheduledStartAt: scheduledStart?.toISOString() ?? null,
+    pickSeconds: normalizePickSeconds(draft.pickSeconds),
+  });
 }
 
 export function getScheduledStartDate(draft: FantasyDraft | null): Date | null {
@@ -1001,203 +949,43 @@ export function isDraftStartTimeReached(
 
 export async function activateScheduledDraftIfReady(
   leagueId: string,
-  activatedByUserId?: string,
+  _activatedByUserId?: string,
 ): Promise<FantasyDraft | null> {
-  const draftRef = getDraftRef(leagueId);
+  await executeDraftCommand({
+    leagueId,
+    action: 'activate-scheduled',
+  });
 
-  // Read the shared projection pointer once before entering the transaction.
-  // Firestore transactions can automatically retry every document read when
-  // the service is throttled. Keeping this readiness check outside the
-  // transaction prevents projectionSnapshots/current from being fetched again
-  // on every retry while the draft document itself remains atomic.
-  const projectionSnapshot = await getDoc(getSharedProjectionPointerRef(leagueId));
-  const activeSnapshotId = assertReadySharedProjectionSnapshot(projectionSnapshot);
-
-  return runTransaction(
-    db,
-    async (transaction) => {
-      const snapshot = await transaction.get(draftRef);
-
-      if (!snapshot.exists()) {
-        return null;
-      }
-
-      const draft = normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
-
-      if (draft.status !== 'scheduled' || !isDraftStartTimeReached(draft)) {
-        return draft;
-      }
-
-      const startedAt = serverTimestamp();
-
-      transaction.update(draftRef, {
-        status: 'live',
-        clockStatus: 'running',
-        pickStartedAt: startedAt,
-        currentPickSeconds: draft.pickSeconds,
-        pausedRemainingSeconds: null,
-        clockUpdatedBy: activatedByUserId ?? null,
-        clockUpdatedAt: startedAt,
-        serverDraftProjectionSnapshotId: activeSnapshotId,
-        startedAt,
-        updatedAt: startedAt,
-      });
-
-      return {
-        ...draft,
-        status: 'live',
-        clockStatus: 'running',
-        pickStartedAt: startedAt,
-        currentPickSeconds: draft.pickSeconds,
-        pausedRemainingSeconds: null,
-        clockUpdatedBy: activatedByUserId ?? null,
-        serverDraftProjectionSnapshotId: activeSnapshotId,
-        startedAt,
-      };
-    },
-    {
-      maxAttempts: 2,
-    },
-  );
+  return getFantasyDraft(leagueId);
 }
 
-export async function startDraftClock(leagueId: string, ownerId: string): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, projectionSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(getSharedProjectionPointerRef(leagueId)),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    if (draft.status !== 'live') {
-      throw new Error('The live draft has not opened yet.');
-    }
-
-    assertReadySharedProjectionSnapshot(projectionSnapshot);
-
-    if (draft.clockStatus === 'running') {
-      return;
-    }
-
-    if (draft.clockStatus === 'paused') {
-      throw new Error('The commissioner has paused the draft clock.');
-    }
-
-    if (draft.clockStatus !== 'stopped') {
-      throw new Error('The draft clock cannot be started right now.');
-    }
-
-    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
-
-    if (!currentPick || currentPick.ownerId !== ownerId) {
-      throw new Error(
-        'Only the manager currently making the first pick can start the draft clock.',
-      );
-    }
-
-    transaction.update(draftRef, {
-      clockStatus: 'running',
-      pickStartedAt: serverTimestamp(),
-      currentPickSeconds: draft.pickSeconds,
-      pausedRemainingSeconds: null,
-      clockUpdatedBy: ownerId,
-      clockUpdatedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+export async function startDraftClock(
+  leagueId: string,
+  _ownerId: string,
+): Promise<void> {
+  await executeDraftCommand({
+    leagueId,
+    action: 'start-clock',
   });
 }
 
-export async function pauseDraftClock(leagueId: string, commissionerId: string): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-  const leagueRef = getLeagueRef(leagueId);
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, leagueSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(leagueRef),
-    ]);
-
-    if (!draftSnapshot.exists() || !leagueSnapshot.exists()) {
-      throw new Error('Draft or league setup was not found.');
-    }
-
-    const leagueData = leagueSnapshot.data() as {
-      commissionerId?: string;
-    };
-
-    if (leagueData.commissionerId !== commissionerId) {
-      throw new Error('Only the commissioner can pause the draft clock.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    if (draft.status !== 'live' || draft.clockStatus !== 'running') {
-      return;
-    }
-
-    const remainingSeconds = Math.max(1, getDraftClockRemainingSeconds(draft));
-
-    transaction.update(draftRef, {
-      clockStatus: 'paused',
-      pickStartedAt: null,
-      currentPickSeconds: remainingSeconds,
-      pausedRemainingSeconds: remainingSeconds,
-      clockUpdatedBy: commissionerId,
-      clockUpdatedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+export async function pauseDraftClock(
+  leagueId: string,
+  _commissionerId: string,
+): Promise<void> {
+  await executeDraftCommand({
+    leagueId,
+    action: 'pause-clock',
   });
 }
 
-export async function resumeDraftClock(leagueId: string, commissionerId: string): Promise<void> {
-  const draftRef = getDraftRef(leagueId);
-  const leagueRef = getLeagueRef(leagueId);
-
-  await runTransaction(db, async (transaction) => {
-    const [draftSnapshot, leagueSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(leagueRef),
-    ]);
-
-    if (!draftSnapshot.exists() || !leagueSnapshot.exists()) {
-      throw new Error('Draft or league setup was not found.');
-    }
-
-    const leagueData = leagueSnapshot.data() as {
-      commissionerId?: string;
-    };
-
-    if (leagueData.commissionerId !== commissionerId) {
-      throw new Error('Only the commissioner can resume the draft clock.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    if (draft.status !== 'live' || draft.clockStatus !== 'paused') {
-      return;
-    }
-
-    const remainingSeconds = Math.max(
-      1,
-      Math.min(draft.pickSeconds, draft.pausedRemainingSeconds ?? draft.pickSeconds),
-    );
-
-    transaction.update(draftRef, {
-      clockStatus: 'running',
-      pickStartedAt: serverTimestamp(),
-      currentPickSeconds: remainingSeconds,
-      pausedRemainingSeconds: null,
-      clockUpdatedBy: commissionerId,
-      clockUpdatedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+export async function resumeDraftClock(
+  leagueId: string,
+  _commissionerId: string,
+): Promise<void> {
+  await executeDraftCommand({
+    leagueId,
+    action: 'resume-clock',
   });
 }
 
@@ -1463,376 +1251,12 @@ function getTeamWaiverPriority(team: FantasyTeam | undefined, fallback: number):
   return typeof team?.waiverPriority === 'number' ? team.waiverPriority : fallback;
 }
 
-function getPositionRequirement(draft: FantasyDraft, position: DraftPosition): number {
-  return draft.rosterRequirements[position];
-}
-
-interface DraftRosterDestination {
-  rosterArea: 'active' | 'bench';
-  slotIndex: number;
-  slotId: string;
-}
-
-function getDraftRosterDestination(
-  roster: FantasyRoster,
-  position: DraftPosition,
-): DraftRosterDestination | null {
-  const activeSlotIndex = roster.activeSlots.findIndex(
-    (slot) => slot.position === position && slot.asset === null,
-  );
-
-  if (activeSlotIndex >= 0) {
-    return {
-      rosterArea: 'active',
-      slotIndex: activeSlotIndex,
-      slotId: roster.activeSlots[activeSlotIndex].slotId,
-    };
-  }
-
-  const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.asset === null);
-
-  if (benchSlotIndex >= 0) {
-    return {
-      rosterArea: 'bench',
-      slotIndex: benchSlotIndex,
-      slotId: roster.benchSlots[benchSlotIndex].slotId,
-    };
-  }
-
-  return null;
-}
-
-function assertGoalieReserveForBenchPick(
-  draft: FantasyDraft,
-  ownerId: string,
-  asset: DraftableAsset,
-  rostersByOwnerId: Map<string, FantasyRoster>,
-  destination: DraftRosterDestination,
-): void {
-  if (asset.position !== 'G' || destination.rosterArea !== 'bench') {
-    return;
-  }
-
-  const ownerRoster = rostersByOwnerId.get(ownerId);
-  const ownerNeedsStartingGoalie = ownerRoster?.activeSlots.some(
-    (slot) => slot.position === 'G' && slot.asset === null,
-  );
-
-  if (ownerNeedsStartingGoalie) {
-    return;
-  }
-
-  const missingStartingGoalies = [...rostersByOwnerId.values()].filter((roster) =>
-    roster.activeSlots.some((slot) => slot.position === 'G' && slot.asset === null),
-  ).length;
-
-  const draftedGoalieUnits = [...rostersByOwnerId.values()].reduce((total, roster) => {
-    const activeGoalies = roster.activeSlots.filter((slot) => slot.asset?.position === 'G').length;
-    const benchGoalies = roster.benchSlots.filter((slot) => slot.asset?.position === 'G').length;
-    return total + activeGoalies + benchGoalies;
-  }, 0);
-
-  const remainingGoalieUnitsAfterPick = Math.max(0, 32 - draftedGoalieUnits - 1);
-
-  if (remainingGoalieUnitsAfterPick < missingStartingGoalies) {
-    throw new Error(
-      'That goalie unit is reserved for a team that still needs its starting goalie. Choose a different bench player.',
-    );
-  }
-}
-
-interface MakeDraftPickInternalInput {
-  leagueId: string;
-  actorUserId: string;
-  ownerId: string;
-  asset: DraftableAsset;
-  selectionType: DraftSelectionType;
-  autoPickReason?: DraftAutoPickReason | null;
-}
-
-async function makeDraftPickInternal({
-  leagueId,
-  actorUserId,
-  ownerId,
-  asset,
-  selectionType,
-  autoPickReason = null,
-}: MakeDraftPickInternalInput): Promise<DraftPick> {
-  const draftRef = getDraftRef(leagueId);
-  const leagueRef = getLeagueRef(leagueId);
-
-  return runTransaction(db, async (transaction) => {
-    const [draftSnapshot, leagueSnapshot] = await Promise.all([
-      transaction.get(draftRef),
-      transaction.get(leagueRef),
-    ]);
-
-    if (!draftSnapshot.exists()) {
-      throw new Error('Draft setup was not found.');
-    }
-
-    if (!leagueSnapshot.exists()) {
-      throw new Error('League setup was not found.');
-    }
-
-    const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
-
-    if (draft.status !== 'live') {
-      throw new Error(
-        'The draft is waiting for the commissioner to refresh the injury report and open it.',
-      );
-    }
-
-    if (draft.clockStatus === 'stopped') {
-      throw new Error('The first manager must start the draft clock before making a pick.');
-    }
-
-    if (draft.clockStatus === 'paused') {
-      throw new Error('The draft clock is currently paused.');
-    }
-
-    if (draft.clockStatus !== 'running') {
-      throw new Error('The draft clock is not running.');
-    }
-
-    if (draft.nextOverallPick > getDraftTotalPickCount(draft)) {
-      throw new Error('This draft is already complete.');
-    }
-
-    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
-
-    if (!currentPick) {
-      throw new Error('Unable to determine the current draft pick.');
-    }
-
-    if (currentPick.ownerId !== ownerId) {
-      throw new Error('That manager is no longer on the clock.');
-    }
-
-    const leagueData = leagueSnapshot.data() as {
-      commissionerId?: string;
-    };
-
-    const isAutomaticSelection = selectionType !== 'manual';
-
-    if (!isAutomaticSelection && actorUserId !== ownerId) {
-      throw new Error('Managers can only make their own manual draft picks.');
-    }
-
-    const queueRef = getDraftQueueRef(leagueId, ownerId);
-
-    const queueSnapshot = await transaction.get(queueRef);
-    const queue = normalizeDraftQueue(
-      ownerId,
-      queueSnapshot.exists() ? (queueSnapshot.data() as Partial<DraftQueue>) : undefined,
-    );
-
-    if (isAutomaticSelection) {
-      if (leagueData.commissionerId !== actorUserId) {
-        throw new Error('Only the commissioner can process automatic draft picks.');
-      }
-
-      if (!queue.autoDraftEnabled && !isDraftClockExpired(draft)) {
-        throw new Error('The manager is not on auto-draft and the pick timer has not expired.');
-      }
-    }
-
-    let nextConsecutiveClockExpirations = queue.consecutiveClockExpirations;
-    let nextAutoDraftEnabled = queue.autoDraftEnabled;
-    let nextAutoDraftActivatedByTimeout = queue.autoDraftActivatedByTimeout;
-
-    if (selectionType === 'manual') {
-      if (!queue.autoDraftActivatedByTimeout) {
-        nextConsecutiveClockExpirations = 0;
-      }
-    } else if (autoPickReason === 'timer-expired') {
-      nextConsecutiveClockExpirations = Math.min(2, queue.consecutiveClockExpirations + 1);
-
-      if (nextConsecutiveClockExpirations >= 2) {
-        nextAutoDraftEnabled = true;
-        nextAutoDraftActivatedByTimeout = true;
-      }
-    }
-
-    if (draft.draftedAssetKeys.includes(asset.assetKey)) {
-      throw new Error('That player or goalie unit has already been drafted.');
-    }
-
-    const rosterOwners = Array.from(new Set([...draft.roundOneOrder, ownerId]));
-    const rosterRefs = rosterOwners.map((rosterOwnerId) =>
-      getFantasyRosterRef(leagueId, rosterOwnerId),
-    );
-    const rosterSnapshots = await Promise.all(
-      rosterRefs.map((rosterRef) => transaction.get(rosterRef)),
-    );
-
-    const rostersByOwnerId = new Map<string, FantasyRoster>();
-    rosterOwners.forEach((rosterOwnerId, index) => {
-      const snapshot = rosterSnapshots[index];
-      rostersByOwnerId.set(
-        rosterOwnerId,
-        snapshot.exists()
-          ? normalizeFantasyRoster(snapshot.data() as Partial<FantasyRoster>)
-          : createEmptyFantasyRoster(),
-      );
-    });
-
-    const rosterRef = getFantasyRosterRef(leagueId, ownerId);
-    const rosterSnapshotIndex = rosterOwners.indexOf(ownerId);
-    const rosterSnapshot = rosterSnapshots[rosterSnapshotIndex];
-    const roster = rostersByOwnerId.get(ownerId) ?? createEmptyFantasyRoster();
-    const destination = getDraftRosterDestination(roster, asset.position);
-
-    if (!destination) {
-      throw new Error(
-        `Your ${asset.position} starters are filled and all ${draft.benchSlots} bench slots are full.`,
-      );
-    }
-
-    if (isAutomaticSelection) {
-      const blockReason = getAutoDraftCandidateBlockReason({
-        hasOpenStartingSlot: roster.activeSlots.some((slot) => slot.asset === null),
-        destination: destination.rosterArea,
-        assetPosition: asset.position,
-        existingBenchRoles: new Set(
-          roster.benchSlots
-            .map((slot) => slot.asset?.position)
-            .filter((position): position is DraftPosition => !!position)
-            .map((position) => getAutoDraftBenchRole(position)),
-        ) as Set<AutoDraftBenchRole>,
-      });
-
-      if (blockReason === 'fill-starters-first') {
-        throw new Error(
-          'Auto-draft must fill every starting roster spot before selecting bench players.',
-        );
-      }
-
-      if (blockReason === 'duplicate-bench-role') {
-        throw new Error(
-          'Auto-draft must fill a missing bench role before duplicating a forward, defenseman, or goalie unit.',
-        );
-      }
-    }
-
-    assertGoalieReserveForBenchPick(draft, ownerId, asset, rostersByOwnerId, destination);
-
-    if (destination.rosterArea === 'active') {
-      roster.activeSlots[destination.slotIndex] = {
-        ...roster.activeSlots[destination.slotIndex],
-        asset: createRosterAsset(asset, 'active'),
-        openFromCycleNumber: null,
-      };
-    } else {
-      roster.benchSlots[destination.slotIndex] = {
-        ...roster.benchSlots[destination.slotIndex],
-        asset: createRosterAsset(asset, 'benched'),
-      };
-    }
-
-    const pick: DraftPick = {
-      overallPick: currentPick.overallPick,
-      round: currentPick.round,
-      pickInRound: currentPick.pickInRound,
-      ownerId,
-      asset,
-      rosterArea: destination.rosterArea,
-      rosterSlotId: destination.slotId,
-      selectionType,
-      selectedByUserId: actorUserId,
-      autoPickReason,
-    };
-
-    const nextOverallPick = currentPick.overallPick + 1;
-    const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);
-
-    const pickId = getDraftPickDocumentId(currentPick.overallPick);
-
-    const pickRef = getDraftPickRef(leagueId, currentPick.overallPick);
-
-    transaction.set(pickRef, {
-      ...pick,
-      madeAt: serverTimestamp(),
-    });
-
-    const rosterPayload = {
-      schemaVersion: roster.schemaVersion,
-      activeSlots: roster.activeSlots,
-      benchSlots: roster.benchSlots,
-      irSlots: roster.irSlots,
-      updatedAt: serverTimestamp(),
-    };
-
-    if (rosterSnapshot.exists()) {
-      transaction.set(rosterRef, rosterPayload, { merge: true });
-    } else {
-      transaction.set(rosterRef, {
-        ...rosterPayload,
-        createdAt: serverTimestamp(),
-      });
-    }
-
-    transaction.update(draftRef, {
-      status: draftComplete ? 'complete' : 'live',
-      nextOverallPick,
-      draftedAssetKeys: [...draft.draftedAssetKeys, asset.assetKey],
-      clockStatus: draftComplete ? 'complete' : 'running',
-      pickStartedAt: draftComplete ? null : serverTimestamp(),
-      currentPickSeconds: draft.pickSeconds,
-      pausedRemainingSeconds: null,
-      clockUpdatedBy: actorUserId,
-      clockUpdatedAt: serverTimestamp(),
-      lastPickId: pickId,
-      updatedAt: serverTimestamp(),
-    });
-
-    transaction.set(
-      queueRef,
-      {
-        ownerId,
-        assetKeys: queue.assetKeys.filter((assetKey) => assetKey !== asset.assetKey),
-        autoDraftEnabled: nextAutoDraftEnabled,
-        consecutiveClockExpirations: nextConsecutiveClockExpirations,
-        autoDraftActivatedByTimeout: nextAutoDraftActivatedByTimeout,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    return pick;
-  });
-}
-
 export async function makeDraftPick(
   leagueId: string,
-  selectingUserId: string,
+  _selectingUserId: string,
   asset: DraftableAsset,
 ): Promise<DraftPick> {
-  return makeDraftPickInternal({
-    leagueId,
-    actorUserId: selectingUserId,
-    ownerId: selectingUserId,
-    asset,
-    selectionType: 'manual',
-  });
-}
-
-export async function makeAutomaticDraftPick(
-  leagueId: string,
-  commissionerId: string,
-  ownerId: string,
-  asset: DraftableAsset,
-  selectionType: Extract<DraftSelectionType, 'queue' | 'automatic'>,
-  autoPickReason: DraftAutoPickReason,
-): Promise<DraftPick> {
-  return makeDraftPickInternal({
-    leagueId,
-    actorUserId: commissionerId,
-    ownerId,
-    asset,
-    selectionType,
-    autoPickReason,
-  });
+  return makeSecureDraftPick(leagueId, asset.assetKey);
 }
 
 function assertDraftComplete(draft: FantasyDraft): void {

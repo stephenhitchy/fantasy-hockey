@@ -22,7 +22,10 @@
     "test:rules:run": "node --test --test-concurrency=1 test/firestore-rules/*.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-rinkrat-rules --only auth,firestore \"npm run test:rules:run\"",
     "verify:batch1": "npm run test:rules && npm run build:all",
-    "verify:batch2": "npm run test:rules && npm run build:all"
+    "verify:batch2": "npm run test:rules && npm run build:all",
+    "test:draft-authority:run": "node --test --test-concurrency=1 test/draft-authority/*.test.mjs",
+    "test:draft-authority": "npm --prefix functions run build && npm run test:draft-authority:run",
+    "verify:batch3": "npm run test:rules && npm run build:all && npm run test:draft-authority:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

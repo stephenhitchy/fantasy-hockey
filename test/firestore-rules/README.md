@@ -1,6 +1,6 @@
 # RinkRat Firestore security tests
 
-These tests run only against Firebase's local Auth and Firestore emulators. The command uses the demo project id `demo-rinkrat-rules`, so it cannot write to the production project.
+These tests run only against Firebase's local Auth and Firestore emulators. The command uses the demo project ID `demo-rinkrat-rules`, so it cannot write to the production project.
 
 Run:
 
@@ -8,9 +8,11 @@ Run:
 npm run test:rules
 ```
 
-Tests labeled **`[baseline exposure]`** intentionally prove that a risky browser permission still exists in the current rules. They are not approvals of that behavior. Each later security batch should change the relevant rule or client flow and then flip the corresponding test from `expectAllowed` to `expectDenied`.
+Batch 3 currently contains **32 Firestore Emulator tests**.
 
-Tests labeled **`[temporary Batch 3 dependency]`** or **`[temporary Batch 4 dependency]`** preserve a narrowly documented legacy browser path that a later server-authority batch will remove. Batch 2 now denies ordinary manager roster, transaction, waiver, and waiver-claim writes outside those explicit transition paths.
+Tests labeled **`[baseline exposure]`** intentionally prove that a risky browser permission still exists in an area scheduled for a later security batch. They are not approvals of that behavior. Each later batch changes the relevant rule or client flow and then flips the test from `expectAllowed` to `expectDenied`.
+
+Tests labeled **`[temporary Batch 4 dependency]`** preserve a narrowly documented commissioner browser path that Batch 4 will move behind server authority. Batch 3 removes the former temporary manual-draft exception: draft setup, clock progression, picks, roster placement during a pick, and automatic selections are now server-owned.
 
 Covered identities:
 
@@ -24,9 +26,18 @@ Covered areas:
 
 - user profiles
 - league/member/team reads
-- roster reads, direct-write denials, roster creation denials, and the temporary manual-draft transition
-- draft state, picks, and queues
+- roster reads and direct-write denials
+- draft setup, clock state, picks, frozen projection data, and queue privacy
+- owner-only queue edits and denial of commissioner queue tampering
 - transaction and waiver reads plus direct manager write denials
 - cycles, matchups, roster picks, team windows, and playoffs
 - live-scoring authority
 - global and league availability data
+
+The pure server draft-selection tests are separate:
+
+```bash
+npm run test:draft-authority
+```
+
+They cover snake order, live-team/order consistency, starter-first auto-drafting, queue fallback, bench-role diversity, goalie reserve protection, and authoritative roster placement.

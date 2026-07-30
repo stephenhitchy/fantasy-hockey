@@ -134,7 +134,6 @@ export class DraftRoom implements OnDestroy {
   draftInjurySyncInProgress = signal(false);
   queueSaving = signal(false);
   clockActionInProgress = signal(false);
-  sharedProjectionRepairInProgress = signal(false);
   preDraftPreparationInProgress = signal(false);
   preDraftPreparationReady = signal(false);
   preDraftPreparationMessage = signal('');
@@ -1556,87 +1555,6 @@ export class DraftRoom implements OnDestroy {
       );
     } finally {
       this.queueSaving.set(false);
-    }
-  }
-
-  async toggleCurrentOwnerAutoDraft(): Promise<void> {
-    const ownerId = this.currentPick()?.ownerId;
-
-    if (!ownerId || !this.isCommissioner() || this.queueSaving()) {
-      return;
-    }
-
-    this.queueSaving.set(true);
-    this.errorMessage.set('');
-
-    try {
-      await setDraftAutoDraftEnabled(
-        this.leagueId,
-        ownerId,
-        !this.getQueueForOwner(ownerId).autoDraftEnabled,
-      );
-    } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to update that manager’s auto-draft preference.',
-      );
-    } finally {
-      this.queueSaving.set(false);
-    }
-  }
-
-  canRepairSharedProjections(): boolean {
-    const draft = this.draft();
-
-    return Boolean(
-      this.isCommissioner() &&
-      draft?.status === 'live' &&
-      draft.nextOverallPick === 1 &&
-      draft.draftedAssetKeys.length === 0 &&
-      this.picks().length === 0 &&
-      !this.sharedProjectionRepairInProgress(),
-    );
-  }
-
-  async repairSharedProjectionsForLiveDraft(): Promise<void> {
-    const draft = this.draft();
-
-    if (!draft || !this.canRepairSharedProjections()) {
-      return;
-    }
-
-    this.sharedProjectionRepairInProgress.set(true);
-    this.playerPoolLoading.set(true);
-    this.playerPoolError.set('');
-    this.errorMessage.set('');
-    this.successMessage.set('');
-
-    try {
-      if (draft.clockStatus === 'running') {
-        await pauseDraftClock(this.leagueId, this.userId);
-      }
-
-      const snapshot = await generateSharedProjectionSnapshot({
-        leagueId: this.leagueId,
-        teamCount: this.getProjectionTeamCount(),
-        requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
-        generationReason: 'draft-start-fallback',
-      });
-
-      this.playerPool.set(snapshot.assets);
-      this.successMessage.set(
-        draft.clockStatus === 'running'
-          ? 'Shared projections were rebuilt. The clock was paused so the commissioner can confirm the player pool before resuming.'
-          : 'Shared projections were rebuilt. The server will start the clock automatically.',
-      );
-    } catch (error: unknown) {
-      this.playerPoolError.set(
-        error instanceof Error ? error.message : 'Unable to rebuild shared projections.',
-      );
-    } finally {
-      this.playerPoolLoading.set(false);
-      this.sharedProjectionRepairInProgress.set(false);
     }
   }
 

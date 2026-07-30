@@ -30,24 +30,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
     }
 
-    function draftPickPath(leagueId, pickId) {
-      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/picks/$(pickId);
-    }
-
     function draftQueuePath(leagueId, ownerId) {
       return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/queues/$(ownerId);
     }
 
     function sharedProjectionPointerPath(leagueId) {
       return /databases/$(database)/documents/leagues/$(leagueId)/projectionSnapshots/current;
-    }
-
-    function hasReadySharedProjectionSnapshot(leagueId) {
-      return exists(sharedProjectionPointerPath(leagueId)) &&
-        get(sharedProjectionPointerPath(leagueId)).data.status == 'ready' &&
-        get(sharedProjectionPointerPath(leagueId)).data.activeSnapshotId is string &&
-        get(sharedProjectionPointerPath(leagueId)).data.assetCount is int &&
-        get(sharedProjectionPointerPath(leagueId)).data.assetCount > 0;
     }
 
     function hasExistingOwnedTeam(leagueId) {
@@ -235,314 +223,6 @@ service cloud.firestore {
         data.irSlots.size() == 3;
     }
 
-    function validTemporaryManualDraftRosterUpdate(leagueId, teamId) {
-      let draft = get(draftPath(leagueId)).data;
-      let nextDraft = getAfter(draftPath(leagueId)).data;
-      let pickId = nextDraft.lastPickId;
-
-      return signedIn() &&
-        teamId == currentUserId() &&
-        draft.status == 'live' &&
-        draft.clockStatus == 'running' &&
-        nextDraft.nextOverallPick == draft.nextOverallPick + 1 &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['activeSlots', 'benchSlots', 'updatedAt']) &&
-        request.resource.data.schemaVersion == resource.data.schemaVersion &&
-        request.resource.data.irSlots == resource.data.irSlots &&
-        pickId is string &&
-        existsAfter(draftPickPath(leagueId, pickId)) &&
-        getAfter(draftPickPath(leagueId, pickId)).data.ownerId == currentUserId() &&
-        getAfter(draftPickPath(leagueId, pickId)).data.selectionType == 'manual' &&
-        getAfter(draftPickPath(leagueId, pickId)).data.selectedByUserId == currentUserId();
-    }
-
-    function validDraftPickSequence(draft, data) {
-      let teamCount = draft.roundOneOrder.size();
-
-      return teamCount > 0 &&
-        data.round is int &&
-        data.round >= 1 &&
-        data.pickInRound is int &&
-        data.pickInRound >= 1 &&
-        data.pickInRound <= teamCount &&
-        data.overallPick ==
-          ((data.round - 1) * teamCount) +
-          data.pickInRound;
-    }
-
-    function expectedDraftPickOwner(draft, data) {
-      let teamCount = draft.roundOneOrder.size();
-
-      return data.round % 2 == 1
-        ? draft.roundOneOrder[data.pickInRound - 1]
-        : draft.roundOneOrder[teamCount - data.pickInRound];
-    }
-
-    function validNextPickClock(data) {
-      return data.status == 'complete'
-        ? (
-            data.clockStatus == 'complete' &&
-            data.pickStartedAt == null
-          )
-        : (
-            data.status == 'live' &&
-            data.clockStatus == 'running' &&
-            data.pickStartedAt == request.time &&
-            data.currentPickSeconds ==
-              data.pickSeconds
-          );
-    }
-
-    function validManualDraftPickAfter(
-      leagueId,
-      pickId,
-      draft
-    ) {
-      let pick = getAfter(
-        draftPickPath(leagueId, pickId)
-      ).data;
-
-      return pick.overallPick == draft.nextOverallPick &&
-        pick.ownerId == currentUserId() &&
-        pick.selectedByUserId == currentUserId() &&
-        pick.selectionType == 'manual' &&
-        pick.asset is map &&
-        pick.asset.assetKey is string &&
-        !draft.draftedAssetKeys.hasAny([
-          pick.asset.assetKey
-        ]) &&
-        request.resource.data.draftedAssetKeys.hasAny([
-          pick.asset.assetKey
-        ]) &&
-        validDraftPickSequence(draft, pick) &&
-        expectedDraftPickOwner(draft, pick) ==
-          currentUserId();
-    }
-
-    function validInitialDraftClockStart(leagueId) {
-      let changedKeys = request.resource.data
-        .diff(resource.data)
-        .affectedKeys();
-
-      return hasReadySharedProjectionSnapshot(leagueId) &&
-        resource.data.status == 'live' &&
-        resource.data.clockStatus == 'stopped' &&
-        resource.data.nextOverallPick == 1 &&
-        resource.data.roundOneOrder is list &&
-        resource.data.roundOneOrder.size() > 0 &&
-        resource.data.roundOneOrder[0] == currentUserId() &&
-        changedKeys.hasOnly([
-          'clockStatus',
-          'pickStartedAt',
-          'currentPickSeconds',
-          'pausedRemainingSeconds',
-          'clockUpdatedBy',
-          'clockUpdatedAt',
-          'updatedAt'
-        ]) &&
-        request.resource.data.status == 'live' &&
-        request.resource.data.nextOverallPick == 1 &&
-        request.resource.data.draftedAssetKeys ==
-          resource.data.draftedAssetKeys &&
-        request.resource.data.clockStatus == 'running' &&
-        request.resource.data.pickStartedAt == request.time &&
-        request.resource.data.currentPickSeconds ==
-          resource.data.pickSeconds &&
-        request.resource.data.pausedRemainingSeconds == null &&
-        request.resource.data.clockUpdatedBy ==
-          currentUserId() &&
-        request.resource.data.clockUpdatedAt ==
-          request.time &&
-        request.resource.data.updatedAt ==
-          request.time;
-    }
-
-    function validMemberDraftUpdate(leagueId) {
-      let changedKeys = request.resource.data
-        .diff(resource.data)
-        .affectedKeys();
-
-      let pickId = request.resource.data.lastPickId;
-
-      let pickProgress =
-        resource.data.status == 'live' &&
-        resource.data.clockStatus == 'running' &&
-        changedKeys.hasOnly([
-          'status',
-          'nextOverallPick',
-          'draftedAssetKeys',
-          'clockStatus',
-          'pickStartedAt',
-          'currentPickSeconds',
-          'pausedRemainingSeconds',
-          'clockUpdatedBy',
-          'clockUpdatedAt',
-          'lastPickId',
-          'updatedAt'
-        ]) &&
-        request.resource.data.nextOverallPick ==
-          resource.data.nextOverallPick + 1 &&
-        request.resource.data.draftedAssetKeys is list &&
-        resource.data.draftedAssetKeys is list &&
-        request.resource.data.draftedAssetKeys.size() ==
-          resource.data.draftedAssetKeys.size() + 1 &&
-        request.resource.data.draftedAssetKeys.hasAll(
-          resource.data.draftedAssetKeys
-        ) &&
-        request.resource.data.pausedRemainingSeconds == null &&
-        request.resource.data.clockUpdatedBy ==
-          currentUserId() &&
-        request.resource.data.clockUpdatedAt ==
-          request.time &&
-        request.resource.data.updatedAt ==
-          request.time &&
-        validNextPickClock(request.resource.data) &&
-        pickId is string &&
-        existsAfter(draftPickPath(leagueId, pickId)) &&
-        validManualDraftPickAfter(
-          leagueId,
-          pickId,
-          resource.data
-        );
-
-      return isLeagueMember(leagueId) &&
-        (
-          pickProgress ||
-          validInitialDraftClockStart(leagueId)
-        );
-    }
-
-    function validDraftProgressForCreatedPick(
-      leagueId,
-      pickId,
-      draft,
-      data
-    ) {
-      let nextDraft = getAfter(draftPath(leagueId)).data;
-
-      return nextDraft.nextOverallPick ==
-          draft.nextOverallPick + 1 &&
-        nextDraft.draftedAssetKeys is list &&
-        draft.draftedAssetKeys is list &&
-        nextDraft.draftedAssetKeys.size() ==
-          draft.draftedAssetKeys.size() + 1 &&
-        nextDraft.draftedAssetKeys.hasAll(
-          draft.draftedAssetKeys
-        ) &&
-        nextDraft.draftedAssetKeys.hasAny([
-          data.asset.assetKey
-        ]) &&
-        nextDraft.pausedRemainingSeconds == null &&
-        nextDraft.clockUpdatedBy == currentUserId() &&
-        nextDraft.clockUpdatedAt == request.time &&
-        nextDraft.updatedAt == request.time &&
-        nextDraft.lastPickId == pickId &&
-        validNextPickClock(nextDraft);
-    }
-
-    function validDraftPickCreate(leagueId, pickId) {
-      let draft = get(draftPath(leagueId)).data;
-      let data = request.resource.data;
-
-      let validCommonPick =
-        isLeagueMember(leagueId) &&
-        draft.status == 'live' &&
-        draft.clockStatus == 'running' &&
-        data.ownerId is string &&
-        data.overallPick is int &&
-        data.overallPick == draft.nextOverallPick &&
-        validDraftPickSequence(draft, data) &&
-        data.ownerId == expectedDraftPickOwner(draft, data) &&
-        data.asset is map &&
-        data.asset.assetKey is string &&
-        !draft.draftedAssetKeys.hasAny([
-          data.asset.assetKey
-        ]) &&
-        data.selectionType in [
-          'manual',
-          'queue',
-          'automatic'
-        ] &&
-        data.selectedByUserId == currentUserId() &&
-        data.madeAt == request.time;
-
-      let validManualPick =
-        data.selectionType == 'manual' &&
-        data.ownerId == currentUserId() &&
-        data.autoPickReason == null &&
-        draft.pickStartedAt is timestamp &&
-        draft.currentPickSeconds is int &&
-        request.time <
-          draft.pickStartedAt +
-          duration.value(
-            draft.currentPickSeconds,
-            's'
-          );
-
-      let ownerQueueExists =
-        exists(draftQueuePath(leagueId, data.ownerId));
-
-      let managerAutoDraftEnabled =
-        ownerQueueExists &&
-        get(
-          draftQueuePath(leagueId, data.ownerId)
-        ).data.autoDraftEnabled == true;
-
-      let queueContainsAsset =
-        ownerQueueExists &&
-        get(
-          draftQueuePath(leagueId, data.ownerId)
-        ).data.assetKeys is list &&
-        get(
-          draftQueuePath(leagueId, data.ownerId)
-        ).data.assetKeys.hasAny([
-          data.asset.assetKey
-        ]);
-
-      let timerExpired =
-        draft.pickStartedAt is timestamp &&
-        draft.currentPickSeconds is int &&
-        request.time >=
-          draft.pickStartedAt +
-          duration.value(
-            draft.currentPickSeconds,
-            's'
-          );
-
-      let validAutomaticPick =
-        isLeagueCommissioner(leagueId) &&
-        data.selectionType in [
-          'queue',
-          'automatic'
-        ] &&
-        (
-          data.selectionType == 'automatic' ||
-          queueContainsAsset
-        ) &&
-        (
-          (
-            data.autoPickReason == 'manager-auto-mode' &&
-            managerAutoDraftEnabled
-          ) ||
-          (
-            data.autoPickReason == 'timer-expired' &&
-            timerExpired
-          )
-        );
-
-      return validCommonPick &&
-        validDraftProgressForCreatedPick(
-          leagueId,
-          pickId,
-          draft,
-          data
-        ) &&
-        (
-          validManualPick ||
-          validAutomaticPick
-        );
-    }
-
     function validDraftQueueWrite(leagueId, ownerId) {
       let data = request.resource.data;
       let timeoutStatePresent =
@@ -586,16 +266,13 @@ service cloud.firestore {
     }
 
     function sharedProjectionWriteAllowed(leagueId) {
+      // Projection generation remains available before and after a draft, but
+      // the frozen pool is immutable for the entire live draft, including the
+      // first-pick clock.
       return isLeagueCommissioner(leagueId) &&
         (
           !exists(draftPath(leagueId)) ||
-          get(draftPath(leagueId)).data.status != 'live' ||
-          (
-            get(draftPath(leagueId)).data.status == 'live' &&
-            get(draftPath(leagueId)).data.nextOverallPick == 1 &&
-            get(draftPath(leagueId)).data.draftedAssetKeys is list &&
-            get(draftPath(leagueId)).data.draftedAssetKeys.size() == 0
-          )
+          get(draftPath(leagueId)).data.status != 'live'
         );
     }
 
@@ -978,16 +655,13 @@ service cloud.firestore {
           allow read: if isLeagueMember(leagueId);
 
           // Browser roster creation is disabled. Missing rosters are created
-          // by ensureFantasyRoster. Existing roster changes are server-owned,
-          // with two temporary update-only exceptions: manual draft placement
-          // until Batch 3 and commissioner cycle progression until Batch 4.
+          // by ensureFantasyRoster. Draft placement is now server-owned. The
+          // commissioner update exception remains only for legacy cycle-boundary
+          // processing and is removed in Batch 4.
           allow create: if false;
 
           allow update: if validRosterDocument(rosterId) &&
-            (
-              isLeagueCommissioner(leagueId) ||
-              validTemporaryManualDraftRosterUpdate(leagueId, teamId)
-            );
+            isLeagueCommissioner(leagueId);
 
           allow delete: if false;
         }
@@ -996,24 +670,14 @@ service cloud.firestore {
       match /draft/{draftId} {
         allow read: if isLeagueMember(leagueId);
 
-        allow create: if draftId == 'current' &&
-          isLeagueCommissioner(leagueId);
-
-        allow update: if draftId == 'current' &&
-          (
-            isLeagueCommissioner(leagueId) ||
-            validMemberDraftUpdate(leagueId)
-          );
-
-        allow delete: if isLeagueCommissioner(leagueId);
+        // Draft setup, clock state, pick progression, and deletion are all
+        // server-authoritative. Browser clients use executeDraftCommand and
+        // makeSecureDraftPick instead of writing draft records directly.
+        allow create, update, delete: if false;
 
         match /picks/{pickId} {
           allow read: if isLeagueMember(leagueId);
-
-          allow create: if draftId == 'current' &&
-            validDraftPickCreate(leagueId, pickId);
-
-          allow update, delete: if isLeagueCommissioner(leagueId);
+          allow create, update, delete: if false;
         }
 
         match /queues/{ownerId} {
@@ -1026,18 +690,12 @@ service cloud.firestore {
 
           allow create, update: if draftId == 'current' &&
             isLeagueMember(leagueId) &&
-            (
-              ownerId == currentUserId() ||
-              isLeagueCommissioner(leagueId)
-            ) &&
+            ownerId == currentUserId() &&
             validDraftQueueWrite(leagueId, ownerId);
 
           allow delete: if draftId == 'current' &&
             isLeagueMember(leagueId) &&
-            (
-              ownerId == currentUserId() ||
-              isLeagueCommissioner(leagueId)
-            );
+            ownerId == currentUserId();
         }
       }
 

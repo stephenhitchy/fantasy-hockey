@@ -3275,6 +3275,11 @@ export {
   runScheduledDraftAutomation,
 } from './draft-automation';
 
+export {
+  executeDraftCommand,
+  makeSecureDraftPick,
+} from './draft-authority';
+
 export { applyImmediateRosterMove } from './roster-moves';
 
 export {

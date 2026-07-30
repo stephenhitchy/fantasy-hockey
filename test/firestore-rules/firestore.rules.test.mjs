@@ -358,8 +358,8 @@ describe('roster authority hardening', () => {
   });
 });
 
-describe('draft authority baseline', () => {
-  test('[baseline exposure] a manual pick accepts a non-canonical client asset object', async () => {
+describe('draft authority hardening', () => {
+  test('browser clients cannot submit a non-canonical manual pick object', async () => {
     const batch = writeBatch(manager.db);
     const draftRef = doc(manager.db, 'leagues', LEAGUE_ID, 'draft', 'current');
     const pickRef = doc(
@@ -401,10 +401,10 @@ describe('draft authority baseline', () => {
       updatedAt: serverTimestamp(),
     });
 
-    await expectAllowed(batch.commit(), 'Forged manual draft pick batch');
+    await expectDenied(batch.commit(), 'Forged manual draft pick batch');
   });
 
-  test('[temporary Batch 3 dependency] a valid manual pick can update its existing roster in the same batch', async () => {
+  test('browser clients cannot place a manual pick into their roster directly', async () => {
     const batch = writeBatch(manager.db);
     const draftRef = doc(manager.db, 'leagues', LEAGUE_ID, 'draft', 'current');
     const pickRef = doc(
@@ -456,7 +456,7 @@ describe('draft authority baseline', () => {
       updatedAt: serverTimestamp(),
     });
 
-    await expectAllowed(batch.commit(), 'Manual draft roster placement batch');
+    await expectDenied(batch.commit(), 'Manual draft roster placement batch');
   });
 
   test('a manager cannot pick when another manager owns the current turn', async () => {
@@ -517,20 +517,20 @@ describe('draft authority baseline', () => {
     await expectDenied(batch.commit(), 'Wrong-owner manual draft pick');
   });
 
-  test('[baseline exposure] commissioners can arbitrarily update draft records and picks', async () => {
+  test('commissioners cannot arbitrarily update draft records or completed picks', async () => {
     await seedDocument(`leagues/${LEAGUE_ID}/draft/current/picks/existing-pick`, {
       overallPick: 1,
       ownerId: manager.uid,
       asset: { assetKey: 'fixture' },
     });
 
-    await expectAllowed(
+    await expectDenied(
       updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'draft', 'current'), {
         tamperedByCommissioner: true,
       }),
       'Commissioner draft update',
     );
-    await expectAllowed(
+    await expectDenied(
       updateDoc(
         doc(
           commissioner.db,
@@ -547,7 +547,52 @@ describe('draft authority baseline', () => {
     );
   });
 
-  test('draft queues are private to their owner and commissioner', async () => {
+  test('commissioners cannot create draft state directly from the browser', async () => {
+    await deleteSeededDocument(`leagues/${LEAGUE_ID}/draft/current`);
+
+    await expectDenied(
+      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'draft', 'current'), {
+        status: 'setup',
+        format: 'snake',
+        roundOneOrder: [manager.uid, opponent.uid],
+        nextOverallPick: 1,
+        draftedAssetKeys: [],
+      }),
+      'Commissioner direct draft creation',
+    );
+  });
+
+  test('the manager on the clock cannot change draft clock state directly', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'draft', 'current'), {
+        clockStatus: 'paused',
+      }),
+      'Manager direct draft clock update',
+    );
+  });
+
+
+  test('the frozen projection pool cannot be changed during a live draft', async () => {
+    await expectDenied(
+      setDoc(
+        doc(
+          commissioner.db,
+          'leagues',
+          LEAGUE_ID,
+          'projectionSnapshots',
+          'current',
+        ),
+        {
+          status: 'ready',
+          activeSnapshotId: 'tampered-snapshot',
+          assetCount: 1,
+        },
+      ),
+      'Commissioner live-draft projection pointer write',
+    );
+  });
+
+  test('draft queues are private to their owner and readable by the commissioner', async () => {
     const queuePath = [
       'leagues',
       LEAGUE_ID,
@@ -563,6 +608,44 @@ describe('draft authority baseline', () => {
       'Commissioner draft queue read',
     );
     await expectDenied(getDoc(doc(opponent.db, ...queuePath)), 'Opponent draft queue read');
+  });
+
+  test('only a manager can edit their own draft queue', async () => {
+    const managerQueueRef = doc(
+      manager.db,
+      'leagues',
+      LEAGUE_ID,
+      'draft',
+      'current',
+      'queues',
+      manager.uid,
+    );
+    const commissionerQueueRef = doc(
+      commissioner.db,
+      'leagues',
+      LEAGUE_ID,
+      'draft',
+      'current',
+      'queues',
+      manager.uid,
+    );
+
+    await expectAllowed(
+      updateDoc(managerQueueRef, {
+        assetKeys: ['skater-101'],
+        autoDraftEnabled: true,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner draft queue update',
+    );
+    await expectDenied(
+      updateDoc(commissionerQueueRef, {
+        assetKeys: ['skater-999'],
+        autoDraftEnabled: true,
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner editing another manager queue',
+    );
   });
 });
 
