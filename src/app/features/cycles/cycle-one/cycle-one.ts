@@ -103,18 +103,6 @@ import { CycleStatusBanners } from './components/cycle-status-banners/cycle-stat
 
 import { waitForAuthUser } from './cycle-one-auth.util';
 import {
-  getMatchupMobileStatusLabel as formatMatchupMobileStatusLabel,
-  getMatchupOutcomeDetail as formatMatchupOutcomeDetail,
-  getMatchupOutcomeHeadline as formatMatchupOutcomeHeadline,
-  getMatchupProgressPercent as calculateMatchupProgressPercent,
-  getMatchupProgressStageLabel as formatMatchupProgressStageLabel,
-  getMatchupProgressSummary as formatMatchupProgressSummary,
-  getMatchupProjectionStageLabel as formatMatchupProjectionStageLabel,
-  getMatchupScoreAriaLabel as formatMatchupScoreAriaLabel,
-  MatchupSummaryContext,
-} from './cycle-matchup-summary.util';
-
-import {
   CYCLE_PROJECTION_WINDOW_DAYS,
   CycleWindowGameMarker,
   MatchupAssetPerformanceRow,
@@ -396,9 +384,9 @@ export class CycleOne implements OnDestroy {
       0,
     );
 
-    const gameLabel = gamesLeft === 1 ? 'starter game remains' : 'starter games remain';
+    const gameLabel = gamesLeft === 1 ? 'counted roster game' : 'counted roster games';
 
-    return `${gamesLeft} ${gameLabel} across all matchups. Missed or injured appearances still count when that player's NHL team game becomes final.`;
+    return `Waiting on ${gamesLeft} ${gameLabel}. Missed or injured player games still count once that player's NHL team game is final.`;
   }
 
   getAutoLeagueStatusClass(): string {
@@ -688,78 +676,9 @@ export class CycleOne implements OnDestroy {
     }
 
     const gamesLeft = this.getMatchupRosterGamesLeft(matchup);
-    const gameLabel = gamesLeft === 1 ? 'Starter Game Left' : 'Starter Games Left';
+    const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
 
-    return `${gamesLeft} ${gameLabel}`;
-  }
-
-  getMatchupRosterGamesPlayed(matchup: FantasyMatchup): number {
-    return (
-      this.getTeamRosterGamesPlayed(matchup.teamAOwnerId) +
-      this.getTeamRosterGamesPlayed(matchup.teamBOwnerId)
-    );
-  }
-
-  getMatchupRosterGameTotal(matchup: FantasyMatchup): number {
-    return (
-      this.getTeamRosterGameTotal(matchup.teamAOwnerId) +
-      this.getTeamRosterGameTotal(matchup.teamBOwnerId)
-    );
-  }
-
-  getMatchupProgressPercent(matchup: FantasyMatchup): number {
-    return calculateMatchupProgressPercent(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupProgressSummary(matchup: FantasyMatchup): string {
-    return formatMatchupProgressSummary(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupProgressStageLabel(matchup: FantasyMatchup): string {
-    return formatMatchupProgressStageLabel(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupProjectionStageLabel(matchup: FantasyMatchup): string {
-    return formatMatchupProjectionStageLabel(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupMobileStatusLabel(matchup: FantasyMatchup): string {
-    return formatMatchupMobileStatusLabel(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupOutcomeHeadline(matchup: FantasyMatchup): string {
-    return formatMatchupOutcomeHeadline(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupOutcomeDetail(matchup: FantasyMatchup): string {
-    return formatMatchupOutcomeDetail(this.getMatchupSummaryContext(matchup));
-  }
-
-  getMatchupScoreAriaLabel(matchup: FantasyMatchup): string {
-    return formatMatchupScoreAriaLabel(this.getMatchupSummaryContext(matchup));
-  }
-
-  private getMatchupSummaryContext(matchup: FantasyMatchup): MatchupSummaryContext {
-    return {
-      isComplete: this.isMatchupComplete(matchup),
-      hasOpponent: Boolean(matchup.teamBOwnerId),
-      hasCycle: Boolean(this.cycle()),
-      hasScoring: Boolean(this.cycleScoring()),
-      scoringLoading: this.scoringLoading(),
-      readyToComplete: this.isMatchupReadyToComplete(matchup),
-      teamAOwnerId: matchup.teamAOwnerId,
-      teamBOwnerId: matchup.teamBOwnerId,
-      teamAName: this.getTeamName(matchup.teamAOwnerId),
-      teamBName: this.getTeamName(matchup.teamBOwnerId),
-      teamAScore: this.getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId),
-      teamBScore: this.getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId),
-      teamAProjection: this.getProjectedCycleForTeam(matchup.teamAOwnerId),
-      teamBProjection: this.getProjectedCycleForTeam(matchup.teamBOwnerId),
-      viewerId: this.userId,
-      playedGames: this.getMatchupRosterGamesPlayed(matchup),
-      totalGames: this.getMatchupRosterGameTotal(matchup),
-      gamesLeft: this.getMatchupRosterGamesLeft(matchup),
-    };
+    return `Waiting on ${gamesLeft} ${gameLabel}`;
   }
 
   getCycleCompletionReadinessText(): string {
@@ -790,9 +709,9 @@ export class CycleOne implements OnDestroy {
       0,
     );
 
-    const gameLabel = gamesLeft === 1 ? 'starter game remains' : 'starter games remain';
+    const gameLabel = gamesLeft === 1 ? 'roster game' : 'roster games';
 
-    return `${gamesLeft} ${gameLabel} across ${this.getCycleLabel()}.`;
+    return `${this.getCycleLabel()} is waiting on ${gamesLeft} counted ${gameLabel}.`;
   }
 
   isWinningTeam(matchup: FantasyMatchup, ownerId: string | null): boolean {

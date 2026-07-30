@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
@@ -33,7 +34,7 @@ describe('Batch 6A Game Center component boundaries', () => {
     }
   });
 
-  test('the matchup card delegates its four major rendering regions', async () => {
+  test('the matchup card delegates its three largest rendering regions', async () => {
     const template = await read(
       'src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html',
     );
@@ -42,7 +43,6 @@ describe('Batch 6A Game Center component boundaries', () => {
       lineCount(template) < 150,
       `Expected the matchup card shell to stay below 150 lines, received ${lineCount(template)}.`,
     );
-    assert.match(template, /<app-cycle-matchup-overview\b/);
     assert.match(template, /<app-cycle-mobile-head-to-head\b/);
     assert.match(template, /<app-cycle-matchup-team-panel\b/);
     assert.match(template, /<app-cycle-matchup-breakdown\b/);
@@ -80,7 +80,7 @@ describe('Batch 6A Game Center component boundaries', () => {
       assert.match(teamPanel + mobile, new RegExp(`presenter\\.${requiredCall}\\(`));
     }
 
-    assert.match(teamPanel, /Counted Games/);
+    assert.match(teamPanel, /Roster Progress/);
     assert.match(teamPanel, /Does not score while on the bench/);
   });
 
@@ -110,27 +110,80 @@ describe('Batch 6A Game Center component boundaries', () => {
   });
 
 
-  test('the hierarchy pass keeps the extracted matchup regions and asynchronous window details', async () => {
-    const matchupCard = await read(
-      'src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html',
-    );
-    const overview = await read(
-      'src/app/features/cycles/cycle-one/components/cycle-matchup-overview/cycle-matchup-overview.html',
-    );
-    const teamPanel = await read(
-      'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
+  test('expanding the new component boundaries reproduces the pre-refactor markup exactly', async () => {
+    const componentRoot = 'src/app/features/cycles/cycle-one/components';
+    const stripPresenter = (source) => source.replaceAll('presenter.', '');
+    const replaceComponent = (source, selector, replacement) =>
+      source.replace(new RegExp(`<app-${selector}\\b[\\s\\S]*?</app-${selector}>`, 'g'), replacement);
+
+    let matchupCard = await read(`${componentRoot}/cycle-matchup-card/cycle-matchup-card.html`);
+    matchupCard = replaceComponent(
+      matchupCard,
+      'cycle-mobile-head-to-head',
+      stripPresenter(
+        await read(`${componentRoot}/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html`),
+      ),
     );
 
-    assert.match(matchupCard, /<app-cycle-matchup-overview\b/);
-    assert.match(matchupCard, /<app-cycle-mobile-head-to-head\b/);
-    assert.match(matchupCard, /<app-cycle-matchup-team-panel\b/);
-    assert.match(matchupCard, /<app-cycle-matchup-breakdown\b/);
+    const teamPanel = stripPresenter(
+      await read(`${componentRoot}/cycle-matchup-team-panel/cycle-matchup-team-panel.html`),
+    );
+    matchupCard = matchupCard.replace(
+      /<app-cycle-matchup-team-panel\s+[\s\S]*?\[ownerId\]="([^"]+)"[\s\S]*?<\/app-cycle-matchup-team-panel>/g,
+      (_match, ownerExpression) => teamPanel.replaceAll('ownerId', ownerExpression),
+    );
+    matchupCard = replaceComponent(
+      matchupCard,
+      'cycle-matchup-breakdown',
+      stripPresenter(
+        await read(`${componentRoot}/cycle-matchup-breakdown/cycle-matchup-breakdown.html`),
+      ),
+    );
+    matchupCard = stripPresenter(matchupCard);
 
-    assert.match(overview, /getMatchupOutcomeHeadline/);
-    assert.match(overview, /getMatchupProgressSummary/);
-    assert.match(overview, /role="progressbar"/);
-    assert.match(teamPanel, /getWindowGameMarkers/);
-    assert.match(teamPanel, /getPendingWindowCallout/);
+    const replacements = new Map([
+      [
+        'cycle-mobile-scorebar',
+        stripPresenter(
+          await read(`${componentRoot}/cycle-mobile-scorebar/cycle-mobile-scorebar.html`),
+        ),
+      ],
+      [
+        'cycle-page-header',
+        stripPresenter(await read(`${componentRoot}/cycle-page-header/cycle-page-header.html`)),
+      ],
+      [
+        'cycle-status-banners',
+        stripPresenter(
+          await read(`${componentRoot}/cycle-status-banners/cycle-status-banners.html`),
+        ),
+      ],
+      [
+        'cycle-explainer',
+        stripPresenter(await read(`${componentRoot}/cycle-explainer/cycle-explainer.html`)),
+      ],
+      [
+        'cycle-matchup-toolbar',
+        stripPresenter(
+          await read(`${componentRoot}/cycle-matchup-toolbar/cycle-matchup-toolbar.html`),
+        ),
+      ],
+      ['cycle-matchup-card', matchupCard],
+    ]);
+
+    let expanded = await read('src/app/features/cycles/cycle-one/cycle-one.html');
+    for (const [selector, replacement] of replacements) {
+      expanded = replaceComponent(expanded, selector, replacement);
+    }
+
+    const normalized = expanded.replace(/\s+/g, ' ').trim();
+    const digest = createHash('sha256').update(normalized).digest('hex');
+
+    assert.equal(
+      digest,
+      '008c90217fd6ae93daf2dfd6c22c1b3cc13fb3b22d29f4b0e8d963d566a11033',
+      'The structural refactor must preserve the exact pre-Batch-6A Game Center markup.',
+    );
   });
 
   test('the route remains the sole state and scoring presenter during the structural pass', async () => {

@@ -42,10 +42,9 @@
 
                       <div class="team-roster-progress mobile-team-roster-progress">
                         <div class="team-roster-progress-copy">
-                          <span>Counted Games</span>
+                          <span>Window Progress</span>
                           <strong>
-                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} of
-                            {{ presenter.getTeamRosterGameTotal(matchup.teamAOwnerId) }} ·
+                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} played ·
                             {{ presenter.getTeamRosterGamesLeft(matchup.teamAOwnerId) }} left
                           </strong>
                         </div>
@@ -57,7 +56,6 @@
                           [attr.aria-valuemin]="0"
                           [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamAOwnerId)"
                           [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
-                          [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
                         >
                           <span
                             class="team-roster-progress-fill"
@@ -111,10 +109,9 @@
 
                       <div class="team-roster-progress mobile-team-roster-progress">
                         <div class="team-roster-progress-copy">
-                          <span>Counted Games</span>
+                          <span>Window Progress</span>
                           <strong>
-                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} of
-                            {{ presenter.getTeamRosterGameTotal(matchup.teamBOwnerId) }} ·
+                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} played ·
                             {{ presenter.getTeamRosterGamesLeft(matchup.teamBOwnerId) }} left
                           </strong>
                         </div>
@@ -126,7 +123,6 @@
                           [attr.aria-valuemin]="0"
                           [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamBOwnerId)"
                           [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
-                          [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
                         >
                           <span
                             class="team-roster-progress-fill"

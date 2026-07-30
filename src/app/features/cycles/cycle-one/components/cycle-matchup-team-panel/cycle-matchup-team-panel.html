@@ -71,10 +71,9 @@
 
                         <div class="team-roster-progress">
                           <div class="team-roster-progress-copy">
-                            <span>Counted Games</span>
+                            <span>Roster Progress</span>
                             <strong>
-                              {{ presenter.getTeamRosterGamesPlayed(ownerId) }} of
-                              {{ presenter.getTeamRosterGameTotal(ownerId) }} ·
+                              {{ presenter.getTeamRosterGamesPlayed(ownerId) }} played ·
                               {{ presenter.getTeamRosterGamesLeft(ownerId) }} left
                             </strong>
                           </div>
@@ -86,7 +85,6 @@
                             [attr.aria-valuemin]="0"
                             [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(ownerId)"
                             [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(ownerId)"
-                            [attr.aria-valuetext]="presenter.getTeamRosterProgressLabel(ownerId)"
                           >
                             <span
                               class="team-roster-progress-fill"
