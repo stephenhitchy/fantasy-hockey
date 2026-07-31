@@ -47,7 +47,10 @@
     "verify:batch7b": "npm run verify:batch7a && npm run test:accessibility:run && npm run audit:accessibility",
     "test:design-migration:run": "node --test --test-concurrency=1 test/design-migration/*.test.mjs",
     "audit:design-migration": "node scripts/audit-shared-ui-migration.mjs",
-    "verify:batch7c1": "npm run verify:batch7b && npm run test:design-migration:run && npm run audit:design-migration"
+    "verify:batch7c1": "npm run verify:batch7b && npm run test:design-migration:run && npm run audit:design-migration",
+    "test:page-design-migration:run": "node --test --test-concurrency=1 test/page-design-migration/*.test.mjs",
+    "audit:page-design-migration": "node scripts/audit-page-design-migration.mjs",
+    "verify:batch7c2": "npm run verify:batch7c1 && npm run test:page-design-migration:run && npm run audit:page-design-migration"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

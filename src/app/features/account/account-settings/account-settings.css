@@ -11,6 +11,32 @@
 }
 
 :host {
+  /* Transitional aliases preserve the approved page palette during shared-primitive migration. */
+  --rr-account-migration-color-01: #2f4b6d;
+  --rr-account-migration-color-02: #121d2a;
+  --rr-account-migration-color-03: #1f252d;
+  --rr-account-migration-color-04: #172230;
+  --rr-account-migration-color-05: #3d9967;
+  --rr-account-migration-color-06: #8f5a33;
+  --rr-account-migration-color-07: #caffdf;
+  --rr-account-migration-color-08: #e16073;
+  --rr-account-migration-color-09: #ffd4aa;
+  --rr-account-migration-color-10: rgba(92, 50, 22, 0.55);
+  --rr-account-migration-color-11: #0e1116;
+  --rr-account-migration-color-12: #1d2c3d;
+  --rr-account-migration-color-13: #232833;
+  --rr-account-migration-color-14: #30465f;
+  --rr-account-migration-color-15: #365578;
+  --rr-account-migration-color-16: #6bb8dc;
+  --rr-account-migration-color-17: #8fa6c0;
+  --rr-account-migration-color-18: #d74f63;
+  --rr-account-migration-color-19: #fff;
+  --rr-account-migration-color-20: rgba(0, 0, 0, 0.28);
+  --rr-account-migration-color-21: rgba(24, 59, 43, 0.88);
+  --rr-account-migration-color-22: rgba(255, 255, 255, 0.018);
+  --rr-account-migration-color-23: rgba(255, 255, 255, 0.06);
+  --rr-account-migration-color-24: rgba(255, 255, 255, 0.08);
+
   display: block;
   min-height: calc(100dvh - 68px);
   color: var(--text-primary);
@@ -41,8 +67,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    linear-gradient(var(--rr-account-migration-color-22) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rr-account-migration-color-22) 1px, transparent 1px);
   background-size: 22px 22px;
   pointer-events: none;
 }
@@ -122,7 +148,7 @@
   height: 78%;
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.28));
+  filter: drop-shadow(0 4px 8px var(--rr-account-migration-color-20));
 }
 
 .online-pixel {
@@ -172,7 +198,7 @@
 .identity-chips span,
 .selected-team-badge {
   padding: 7px 10px;
-  border: 1px solid #365578;
+  border: 1px solid var(--rr-account-migration-color-15);
   background: rgba(17, 32, 52, 0.95);
   color: #d9e9fa;
   font-size: 11px;
@@ -194,7 +220,7 @@
   min-height: 190px;
   padding: 20px 20px 24px;
   border: 2px solid var(--user-team-accent);
-  background: #121d2a;
+  background: var(--rr-account-migration-color-02);
   text-align: center;
 }
 
@@ -227,8 +253,8 @@
   padding: 13px 15px;
 }
 .status-message.success {
-  border-color: #3d9967;
-  color: #caffdf;
+  border-color: var(--rr-account-migration-color-05);
+  color: var(--rr-account-migration-color-07);
 }
 .status-message.error {
   border-color: #a14e5d;
@@ -325,8 +351,8 @@
   place-items: center;
   gap: 5px;
   padding: 8px 4px;
-  border: 2px solid #2f4b6d;
-  background: #1d2c3d;
+  border: 2px solid var(--rr-account-migration-color-01);
+  background: var(--rr-account-migration-color-12);
   color: var(--text-primary);
   cursor: pointer;
 }
@@ -374,8 +400,8 @@
   gap: 12px;
   margin-top: 22px;
   padding: 16px;
-  border: 2px solid var(--border-strong, #2f4b6d);
-  background: var(--surface-2, #121d2a);
+  border: 2px solid var(--border-strong, var(--rr-account-migration-color-01));
+  background: var(--surface-2, var(--rr-account-migration-color-02));
 }
 
 .team-identity-heading {
@@ -422,8 +448,8 @@
   gap: 12px;
   min-width: 0;
   padding: 12px;
-  border: 2px solid var(--border-strong, #30465f);
-  background: var(--surface-1, #172230);
+  border: 2px solid var(--border-strong, var(--rr-account-migration-color-14));
+  background: var(--surface-1, var(--rr-account-migration-color-04));
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -443,10 +469,10 @@
 }
 
 .team-variant-card.locked {
-  border-color: color-mix(in srgb, var(--border-strong, #30465f) 72%, #111827);
+  border-color: color-mix(in srgb, var(--border-strong, var(--rr-account-migration-color-14)) 72%, #111827);
   background:
     linear-gradient(135deg, rgba(4, 8, 15, 0.2), rgba(4, 8, 15, 0.55)),
-    var(--surface-1, #172230);
+    var(--surface-1, var(--rr-account-migration-color-04));
 }
 
 .team-variant-card.locked:hover,
@@ -474,7 +500,7 @@
   overflow: hidden;
   border: 2px solid var(--border-strong, #3a4e65);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 55%),
+    linear-gradient(135deg, var(--rr-account-migration-color-24), transparent 55%),
     var(--surface-2, #101925);
 }
 
@@ -484,7 +510,7 @@
   height: 62px;
   object-fit: contain;
   image-rendering: crisp-edges;
-  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.28));
+  filter: drop-shadow(0 4px 7px var(--rr-account-migration-color-20));
 }
 
 .variant-lock-mark {
@@ -592,9 +618,9 @@
 .form-field select {
   min-height: 50px;
   padding: 12px 13px;
-  border: 2px solid #365578;
+  border: 2px solid var(--rr-account-migration-color-15);
   outline: none;
-  background: #121d2a;
+  background: var(--rr-account-migration-color-02);
   color: var(--text-primary);
 }
 .form-field input:focus,
@@ -608,7 +634,7 @@
   justify-content: space-between;
   gap: 15px;
   padding: 14px;
-  border: 2px solid #2f4b6d;
+  border: 2px solid var(--rr-account-migration-color-01);
   background: rgba(16, 29, 44, 0.88);
 }
 .toggle-row strong,
@@ -617,7 +643,7 @@
 }
 .toggle-row small {
   margin-top: 4px;
-  color: #8fa6c0;
+  color: var(--rr-account-migration-color-17);
   line-height: 1.4;
 }
 .toggle-row input {
@@ -701,8 +727,8 @@
   align-items: center;
   min-height: 64px;
   padding: 10px 12px;
-  border: 2px solid #2f4b6d;
-  background: #1d2c3d;
+  border: 2px solid var(--rr-account-migration-color-01);
+  background: var(--rr-account-migration-color-12);
   color: #eaf3ff;
   text-align: left;
   text-decoration: none;
@@ -721,7 +747,7 @@
 }
 .account-quick-links small {
   margin-top: 3px;
-  color: #8fa6c0;
+  color: var(--rr-account-migration-color-17);
 }
 .sign-out-button {
   width: 100%;
@@ -857,7 +883,7 @@
   width: 42px;
   height: 42px;
   background: #e7c2a3;
-  box-shadow: inset 0 -7px 0 #bb8f71, 0 0 0 5px #1f252d;
+  box-shadow: inset 0 -7px 0 #bb8f71, 0 0 0 5px var(--rr-account-migration-color-03);
 }
 
 .account-ref-body {
@@ -873,7 +899,7 @@
   );
   box-shadow:
     inset 0 -13px 0 var(--ref-team-tertiary, var(--user-team-tertiary)),
-    0 0 0 5px #1f252d;
+    0 0 0 5px var(--rr-account-migration-color-03);
 }
 
 .account-ref-arm {
@@ -881,8 +907,8 @@
   top: 61px;
   width: 17px;
   height: 51px;
-  background: repeating-linear-gradient(180deg, #f7f8fb 0 7px, #232833 7px 14px);
-  box-shadow: 0 0 0 4px #1f252d;
+  background: repeating-linear-gradient(180deg, #f7f8fb 0 7px, var(--rr-account-migration-color-13) 7px 14px);
+  box-shadow: 0 0 0 4px var(--rr-account-migration-color-03);
 }
 
 .account-ref-arm-left { left: 3px; }
@@ -892,8 +918,8 @@
   top: 124px;
   width: 18px;
   height: 17px;
-  background: #232833;
-  box-shadow: 0 0 0 4px #1f252d;
+  background: var(--rr-account-migration-color-13);
+  box-shadow: 0 0 0 4px var(--rr-account-migration-color-03);
 }
 
 .account-ref-leg-left { left: 35px; }
@@ -931,16 +957,16 @@
 }
 
 .identity-chips .email-unverified-chip {
-  border-color: #8f5a33;
-  background: rgba(92, 50, 22, 0.55);
-  color: #ffd4aa;
+  border-color: var(--rr-account-migration-color-06);
+  background: var(--rr-account-migration-color-10);
+  color: var(--rr-account-migration-color-09);
 }
 
 .email-preferences {
   display: grid;
   gap: 13px;
   padding: 15px;
-  border: 2px solid #2f4b6d;
+  border: 2px solid var(--rr-account-migration-color-01);
   background: rgba(11, 23, 37, 0.72);
 }
 
@@ -960,9 +986,9 @@
 .verification-badge {
   flex: 0 0 auto;
   padding: 6px 8px;
-  border: 1px solid #8f5a33;
-  background: rgba(92, 50, 22, 0.55);
-  color: #ffd4aa;
+  border: 1px solid var(--rr-account-migration-color-06);
+  background: var(--rr-account-migration-color-10);
+  color: var(--rr-account-migration-color-09);
   font-size: 9px;
   font-weight: 950;
   letter-spacing: 0.08em;
@@ -970,9 +996,9 @@
 }
 
 .verification-badge.verified {
-  border-color: #3d9967;
-  background: rgba(24, 59, 43, 0.88);
-  color: #caffdf;
+  border-color: var(--rr-account-migration-color-05);
+  background: var(--rr-account-migration-color-21);
+  color: var(--rr-account-migration-color-07);
 }
 
 .email-verification-copy {
@@ -1048,7 +1074,7 @@
   gap: 12px;
   padding: 16px;
   border: 2px solid #2b3b4e;
-  background: #121d2a;
+  background: var(--rr-account-migration-color-02);
 }
 
 .background-option-grid {
@@ -1063,7 +1089,7 @@
   align-items: center;
   padding: 10px;
   border: 2px solid #304255;
-  background: #172230;
+  background: var(--rr-account-migration-color-04);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -1095,7 +1121,7 @@
   width: 100%;
   height: 46px;
   border: 2px solid #405265;
-  background: #0e1116;
+  background: var(--rr-account-migration-color-11);
   overflow: hidden;
 }
 
@@ -1104,12 +1130,12 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    linear-gradient(var(--rr-account-migration-color-23) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rr-account-migration-color-23) 1px, transparent 1px);
   background-size: 10px 10px;
 }
 
-.background-swatch[data-theme='rink-dark'] { background: #0e1116; }
+.background-swatch[data-theme='rink-dark'] { background: var(--rr-account-migration-color-11); }
 .background-swatch[data-theme='oled-black'] { background: #050607; }
 .background-swatch[data-theme='ice-gray'] { background: #15181d; }
 .background-swatch[data-theme='light-ice'] { background: #dde4eb; }
@@ -1216,9 +1242,9 @@
 }
 
 .email-feature-status.enabled {
-  border-color: #3d9967;
-  background: rgba(24, 59, 43, 0.88);
-  color: #caffdf;
+  border-color: var(--rr-account-migration-color-05);
+  background: var(--rr-account-migration-color-21);
+  color: var(--rr-account-migration-color-07);
 }
 
 .email-feature-status.available {
@@ -1228,9 +1254,9 @@
 }
 
 .email-feature-status.locked {
-  border-color: #8f5a33;
-  background: rgba(92, 50, 22, 0.55);
-  color: #ffd4aa;
+  border-color: var(--rr-account-migration-color-06);
+  background: var(--rr-account-migration-color-10);
+  color: var(--rr-account-migration-color-09);
 }
 
 .toggle-title-with-icon {
@@ -1337,7 +1363,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--rr-account-migration-color-24);
   pointer-events: none;
 }
 
@@ -1382,7 +1408,7 @@
   padding: 4px 6px;
   border: 1px solid var(--user-team-accent);
   background: rgba(5, 13, 23, 0.92);
-  color: #ffffff;
+  color: var(--rr-account-migration-color-19)fff;
   font-size: 9px;
   font-weight: 950;
   letter-spacing: 0.08em;
@@ -1604,7 +1630,7 @@
   gap: 20px;
   margin-top: 22px;
   padding: 20px;
-  border: 3px solid color-mix(in srgb, #d74f63 78%, var(--border-strong));
+  border: 3px solid color-mix(in srgb, var(--rr-account-migration-color-18) 78%, var(--border-strong));
   background:
     linear-gradient(135deg, color-mix(in srgb, #8d1d31 15%, transparent), transparent 55%),
     var(--surface-1);
@@ -1637,9 +1663,9 @@
 
 .open-delete-account-button {
   padding: 10px 15px;
-  border-color: #e16073;
+  border-color: var(--rr-account-migration-color-08);
   background: #5d1724;
-  color: #fff4f6;
+  color: var(--rr-account-migration-color-19)4f6;
 }
 
 .open-delete-account-button:hover,
@@ -1652,7 +1678,7 @@
   display: grid;
   gap: 16px;
   padding-top: 18px;
-  border-top: 2px solid color-mix(in srgb, #d74f63 55%, var(--border-strong));
+  border-top: 2px solid color-mix(in srgb, var(--rr-account-migration-color-18) 55%, var(--border-strong));
 }
 
 .delete-account-checker-heading {
@@ -1749,11 +1775,11 @@
 }
 
 .deletion-impact-grid article:first-child {
-  border-left-color: #e16073;
+  border-left-color: var(--rr-account-migration-color-08);
 }
 
 .deletion-impact-grid article:last-child {
-  border-left-color: #6bb8dc;
+  border-left-color: var(--rr-account-migration-color-16);
 }
 
 .deletion-impact-grid strong {
@@ -1779,7 +1805,7 @@
 .deletion-integrity-note {
   margin: 0;
   padding: 12px 14px;
-  border-left: 4px solid #6bb8dc;
+  border-left: 4px solid var(--rr-account-migration-color-16);
   background: color-mix(in srgb, #2a6f91 13%, var(--surface-2));
   color: var(--text-secondary);
   line-height: 1.5;
@@ -1824,7 +1850,7 @@
   padding: 11px 16px;
   border-color: #ff7d90;
   background: #a21f35;
-  color: #fff;
+  color: var(--rr-account-migration-color-19);
 }
 
 .permanent-delete-account-button:hover:not(:disabled),
@@ -1842,7 +1868,7 @@
 .deletion-error-message {
   margin: 0;
   padding: 12px 14px;
-  border: 2px solid #e16073;
+  border: 2px solid var(--rr-account-migration-color-08);
   background: color-mix(in srgb, #801a2c 24%, var(--surface-2));
   color: var(--text-primary);
   font-weight: 800;
@@ -1851,7 +1877,7 @@
 
 [data-background-theme='light-ice'] .open-delete-account-button,
 [data-background-theme='light-ice'] .permanent-delete-account-button {
-  color: #fff;
+  color: var(--rr-account-migration-color-19);
 }
 
 @media (max-width: 780px) {

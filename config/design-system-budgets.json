@@ -1,10 +1,13 @@
 {
   "version": 1,
-  "description": "Batch 7C.1 migration baseline. Shared navigation, onboarding shells, support cards, forms, and notices have moved to token-driven primitives; future visual work should maintain or reduce these values.",
+  "description": "Batch 7C.2 migration baseline. Dashboard, League HQ, and Account Settings now compose shared primitives, while repeated feature-palette literals are consolidated without changing approved values.",
   "allCssImportantDeclarations": 595,
-  "allCssLiteralColors": 3216,
+  "allCssLiteralColors": 3079,
   "globalCssLiteralColorsOutsideTokenFile": 420,
   "globalRootSelectorsOutsideTokenFile": 0,
   "sharedPrimitiveImportantDeclarations": 0,
-  "sharedPrimitiveLiteralColors": 0
+  "sharedPrimitiveLiteralColors": 0,
+  "dashboardCssLiteralColors": 29,
+  "leagueHqCssLiteralColors": 140,
+  "accountSettingsCssLiteralColors": 111
 }

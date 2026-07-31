@@ -6210,3 +6210,53 @@ Batch 7C.1 is frontend-only:
 ```bash
 firebase deploy --only hosting:app -m "Batch 7C.1 shared UI migration"
 ```
+
+# Batch 7C.2 — Dashboard, League HQ, and Account Migration
+
+Batch 7C.2 applies the shared design system to the three largest everyday management surfaces while preserving their approved feature layouts and all fantasy behavior.
+
+## What changed
+
+- Dashboard hero cards, league cards, action buttons, training notice, error notice, badges, and empty state now compose shared `.rr-*` primitives.
+- Account Settings now composes shared cards, stat tiles, choice cards, fields, selects, notices, action tiles, buttons, and danger-zone foundations.
+- League HQ now composes shared stat tiles, status cards, notices, action tiles, forms, buttons, matchup/team cards, profile choices, and commissioner danger-zone foundations.
+- Added shared page-composition primitives for interactive cards, section headings, stat grids, action tiles, choice cards, and danger zones.
+- Consolidated repeated page-specific color literals into transitional local aliases. These aliases preserve the exact approved palette values while reducing duplicate CSS declarations and preparing the pages for later semantic token replacement.
+- Reduced the project-wide literal-color ceiling from 3,216 to 3,079 without increasing the existing `!important` ceiling.
+- Kept feature CSS responsible for the current approved spacing and page-specific layout, so this migration does not intentionally redesign Dashboard, League HQ, or Account Settings.
+- Added seven contract tests and a page-design migration audit.
+
+No TypeScript business logic, Firebase configuration, Firestore rules, Cloud Functions, scoring, drafting, rosters, cycles, standings, injuries, playoffs, or data structures changed.
+
+## Batch 7C.2 verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch7c2
+```
+
+The command runs every approved Batch 7C.1 check, seven page-migration tests, and the page-design migration audit.
+
+## Manual appearance checklist
+
+Review Dashboard, League HQ, and Account Settings in Rink Dark and Light Ice, then repeat around 390 pixels wide.
+
+1. Confirm page spacing, favorite-team colors, cards, headings, and backgrounds remain familiar.
+2. Check every primary, secondary, quiet, and danger action for hover, pressed, disabled, and keyboard-focus states.
+3. Confirm Dashboard league cards, commissioner badges, empty state, and training notice remain readable.
+4. Confirm League HQ profile selection, rename controls, injury status, draft/cycle status, hub actions, invite code, team cards, and Danger Zone work normally.
+5. Confirm Account Settings favorite-team choices, background choices, email verification, save action, quick links, sign out, and account deletion checker work normally.
+6. Confirm Light Ice fields and notices have readable text and borders.
+7. Confirm no horizontal scrolling or new console errors appear.
+
+## Deployment
+
+Batch 7C.2 is frontend-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch 7C.2 page design migration"
+```

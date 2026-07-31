@@ -9,7 +9,7 @@
     <div class="locker-light locker-light-right" aria-hidden="true"></div>
 
     <section class="account-content">
-      <header class="profile-hero">
+      <header class="profile-hero rr-card rr-card--padded">
         <div class="profile-avatar-wrap">
           <div class="profile-avatar">
             <img
@@ -70,40 +70,40 @@
       </header>
 
       @if (successMessage()) {
-        <p class="status-message success" role="status">{{ successMessage() }}</p>
+        <p class="status-message success rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
       }
 
       @if (errorMessage()) {
-        <p class="status-message error" role="alert">{{ errorMessage() }}</p>
+        <p class="status-message error rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
       }
 
-      <section class="manager-stats" aria-label="Fantasy manager statistics">
-        <article>
+      <section class="manager-stats rr-stat-grid" aria-label="Fantasy manager statistics">
+        <article class="rr-stat-card">
           <span>Leagues</span>
           <strong>{{ leagueCount() }}</strong>
           <small>Active manager teams</small>
         </article>
 
-        <article>
+        <article class="rr-stat-card">
           <span>Commissioner</span>
           <strong>{{ commissionerLeagueCount() }}</strong>
           <small>Leagues you manage</small>
         </article>
 
-        <article>
+        <article class="rr-stat-card">
           <span>Opponents</span>
           <strong>{{ opponentCount() }}</strong>
           <small>Managers in your leagues</small>
         </article>
 
-        <article>
+        <article class="rr-stat-card">
           <span>Team Slots</span>
           <strong>{{ totalTeamSlots() }}</strong>
           <small>Total league membership</small>
         </article>
       </section>
 
-      <section class="training-camp-account-card" aria-labelledby="account-training-camp-title">
+      <section class="training-camp-account-card rr-notice rr-notice--info" aria-labelledby="account-training-camp-title">
         <span class="training-camp-account-icon" aria-hidden="true">
           <span class="pixel-icon icon-whistle icon-lg"></span>
         </span>
@@ -123,14 +123,14 @@
       </section>
 
       <div class="account-grid">
-        <section class="account-panel favorite-team-panel">
+        <section class="account-panel favorite-team-panel rr-card rr-card--padded">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Personalize the Arena</span>
               <h2>Favorite Team</h2>
             </div>
 
-            <span class="selected-team-badge">
+            <span class="selected-team-badge rr-badge rr-badge--info">
               {{ selectedTeam().abbreviation }} · {{ selectedTeam().variantShortLabel }}
             </span>
           </div>
@@ -143,7 +143,7 @@
             @for (team of teams; track team.abbreviation) {
               <button
                 type="button"
-                class="team-selector-button"
+                class="team-selector-button rr-choice-card"
                 [class.selected]="team.abbreviation === favoriteTeamAbbreviation"
                 [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation"
                 [title]="team.name"
@@ -179,7 +179,7 @@
               @for (variant of availableTeamVariants(); track variant.variantId) {
                 <button
                   type="button"
-                  class="team-variant-card"
+                  class="team-variant-card rr-choice-card"
                   [class.selected]="variant.variantId === favoriteTeamVariantId"
                   [class.locked]="!isTeamVariantUnlocked(variant)"
                   [attr.aria-pressed]="variant.variantId === favoriteTeamVariantId"
@@ -229,7 +229,7 @@
           </p>
         </section>
 
-        <section class="account-panel settings-panel">
+        <section class="account-panel settings-panel rr-card rr-card--padded">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Profile Settings</span>
@@ -237,9 +237,9 @@
             </div>
           </div>
 
-          <label class="form-field">
+          <label class="form-field rr-field-group">
             <span>Display Name</span>
-            <input [(ngModel)]="username" placeholder="Manager name" />
+            <input class="rr-field" [(ngModel)]="username" placeholder="Manager name" />
           </label>
 
           <label class="toggle-row">
@@ -255,9 +255,9 @@
             />
           </label>
 
-          <label class="form-field">
+          <label class="form-field rr-field-group">
             <span>After Login</span>
-            <select [(ngModel)]="defaultLandingPage" (change)="previewPreferenceChanges()">
+            <select class="rr-select" [(ngModel)]="defaultLandingPage" (change)="previewPreferenceChanges()">
               <option value="dashboard">Open Dashboard</option>
               <option value="lastLeague">Open Last League</option>
             </select>
@@ -279,7 +279,7 @@
               @for (option of backgroundOptions; track option.value) {
                 <button
                   type="button"
-                  class="background-option"
+                  class="background-option rr-choice-card"
                   [class.selected]="option.value === backgroundTheme"
                   [attr.aria-pressed]="option.value === backgroundTheme"
                   (click)="backgroundTheme = option.value; previewPreferenceChanges()"
@@ -301,12 +301,12 @@
                 <h3 id="email-preferences-title">Roster Alerts</h3>
               </div>
 
-              <span class="verification-badge" [class.verified]="emailVerified()">
+              <span class="verification-badge rr-badge" [class.verified]="emailVerified()">
                 {{ emailVerified() ? 'Verified' : 'Verification Required' }}
               </span>
             </div>
 
-            <div class="email-feature-callout" [class.inactive]="!emailVerified() && !injuryEmailEnabled">
+            <div class="email-feature-callout rr-notice rr-notice--info" [class.inactive]="!emailVerified() && !injuryEmailEnabled">
               <div class="email-feature-icon-wrap" aria-hidden="true">
                 <span class="pixel-icon icon-mail icon-lg"></span>
               </div>
@@ -345,7 +345,7 @@
               <div class="verification-actions">
                 <button
                   type="button"
-                  class="verification-button"
+                  class="verification-button rr-button rr-button--primary"
                   (click)="sendVerificationEmail()"
                   [disabled]="sendingVerification() || refreshingVerification()"
                 >
@@ -354,7 +354,7 @@
 
                 <button
                   type="button"
-                  class="verification-button secondary"
+                  class="verification-button secondary rr-button rr-button--secondary"
                   (click)="refreshVerificationStatus()"
                   [disabled]="sendingVerification() || refreshingVerification()"
                 >
@@ -386,7 +386,7 @@
 
           <button
             type="button"
-            class="save-profile-button"
+            class="save-profile-button rr-button rr-button--primary"
             (click)="saveAccountSettings()"
             [disabled]="saving() || savingFavoriteTeam()"
           >
@@ -396,7 +396,7 @@
       </div>
 
       <div class="account-grid lower-grid">
-        <section class="account-panel achievement-panel">
+        <section class="account-panel achievement-panel rr-card rr-card--padded">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Trophy Shelf</span>
@@ -421,7 +421,7 @@
           </div>
         </section>
 
-        <section class="account-panel quick-links-panel">
+        <section class="account-panel quick-links-panel rr-card rr-card--padded">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Manager Shortcuts</span>
@@ -430,24 +430,24 @@
           </div>
 
           <nav class="account-quick-links" aria-label="Account shortcuts">
-            <a routerLink="/dashboard">
+            <a class="rr-action-tile" routerLink="/dashboard">
               <span class="pixel-icon icon-home icon-sm" aria-hidden="true"></span>
               <div><strong>My Leagues</strong><small>Return to the arena lobby.</small></div>
             </a>
 
-            <a routerLink="/leagues/create">
+            <a class="rr-action-tile" routerLink="/leagues/create">
               <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
               <div><strong>Create League</strong><small>Open a new commissioner room.</small></div>
             </a>
 
-            <a routerLink="/leagues/join">
+            <a class="rr-action-tile" routerLink="/leagues/join">
               <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
               <div>
                 <strong>Join League</strong><small>Enter a commissioner invite code.</small>
               </div>
             </a>
 
-            <button type="button" class="sign-out-button" (click)="signOut()">
+            <button type="button" class="sign-out-button rr-action-tile" (click)="signOut()">
               <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
               <div><strong>Sign Out</strong><small>Leave the locker room safely.</small></div>
             </button>
@@ -455,7 +455,7 @@
         </section>
       </div>
 
-      <section class="account-security-zone" aria-labelledby="account-security-title">
+      <section class="account-security-zone rr-danger-zone" aria-labelledby="account-security-title">
         <div class="account-security-copy">
           <span class="eyebrow">Account Security</span>
           <h2 id="account-security-title">Permanent Account Deletion</h2>
@@ -468,13 +468,13 @@
         @if (!deleteAccountPanelOpen()) {
           <button
             type="button"
-            class="open-delete-account-button"
+            class="open-delete-account-button rr-button rr-button--danger"
             (click)="openDeleteAccountPanel()"
           >
             Review Account Deletion
           </button>
         } @else {
-          <div class="delete-account-checker">
+          <div class="delete-account-checker rr-card rr-card--padded">
             <div class="delete-account-checker-heading">
               <div>
                 <span class="eyebrow">Final Safety Check</span>
@@ -482,7 +482,7 @@
               </div>
               <button
                 type="button"
-                class="close-delete-account-button"
+                class="close-delete-account-button rr-button rr-button--quiet"
                 (click)="closeDeleteAccountPanel()"
                 [disabled]="deletingAccount()"
                 aria-label="Close account deletion checker"
@@ -492,13 +492,13 @@
             </div>
 
             @if (loadingDeletionReadiness()) {
-              <div class="delete-account-loading" role="status">
+              <div class="delete-account-loading rr-state" role="status">
                 <span class="pixel-icon icon-loading icon-md" aria-hidden="true"></span>
                 <span>Checking your leagues...</span>
               </div>
             } @else if (deletionReadiness(); as readiness) {
               @if (readiness.commissionerLeagues.length > 0) {
-                <section class="deletion-blocker" aria-labelledby="deletion-blocker-title">
+                <section class="deletion-blocker rr-notice rr-notice--warning" aria-labelledby="deletion-blocker-title">
                   <h4 id="deletion-blocker-title">Account deletion is currently blocked</h4>
                   <p>
                     A league cannot be left without its commissioner. Permanently delete these
@@ -514,7 +514,7 @@
                   </div>
                   <button
                     type="button"
-                    class="refresh-deletion-check-button"
+                    class="refresh-deletion-check-button rr-button rr-button--secondary"
                     (click)="refreshAccountDeletionReadiness()"
                     [disabled]="loadingDeletionReadiness()"
                   >
@@ -545,9 +545,10 @@
                   manager's record, draft, matchup, standings, or playoff result.
                 </p>
 
-                <label class="form-field deletion-confirmation-field">
+                <label class="form-field deletion-confirmation-field rr-field-group">
                   <span>Type your full manager name exactly</span>
                   <input
+                    class="rr-field"
                     [(ngModel)]="deleteConfirmationUsername"
                     [placeholder]="profile()?.username || 'Manager name'"
                     autocomplete="off"
@@ -558,10 +559,11 @@
                   </small>
                 </label>
 
-                <label class="form-field deletion-confirmation-field">
+                <label class="form-field deletion-confirmation-field rr-field-group">
                   <span>Current password</span>
                   <input
                     type="password"
+                    class="rr-field"
                     [(ngModel)]="deletePassword"
                     autocomplete="current-password"
                     placeholder="Enter your current password"
@@ -578,7 +580,7 @@
 
                 <button
                   type="button"
-                  class="permanent-delete-account-button"
+                  class="permanent-delete-account-button rr-button rr-button--danger"
                   (click)="permanentlyDeleteAccount()"
                   [disabled]="!canSubmitAccountDeletion()"
                 >
@@ -588,7 +590,7 @@
             }
 
             @if (deletionErrorMessage()) {
-              <p class="deletion-error-message" role="alert">
+              <p class="deletion-error-message rr-notice rr-notice--danger" role="alert">
                 {{ deletionErrorMessage() }}
               </p>
             }

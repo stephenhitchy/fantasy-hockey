@@ -7,7 +7,7 @@
   <section class="pixel-dashboard-page">
     <section class="dashboard">
       <header class="dashboard-header">
-        <div class="hero-copy">
+        <div class="hero-copy rr-card rr-card--padded">
           <div class="dashboard-welcome-row">
             <div>
               <span class="eyebrow">Arena Lobby</span>
@@ -18,12 +18,12 @@
           <p>Pick a league, manage your roster, and get straight to the action.</p>
 
           <div class="quick-actions" aria-label="League actions">
-            <a class="primary-action" routerLink="/leagues/create">
+            <a class="primary-action rr-button rr-button--primary" routerLink="/leagues/create">
               <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
               Create League
             </a>
 
-            <a class="secondary-action" routerLink="/leagues/join">
+            <a class="secondary-action rr-button rr-button--secondary" routerLink="/leagues/join">
               <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
               Join League
             </a>
@@ -31,7 +31,7 @@
         </div>
 
         <a
-          class="dashboard-mascot-card"
+          class="dashboard-mascot-card rr-card rr-card--padded rr-card--interactive"
           routerLink="/account/settings"
           [style.--ref-team-primary]="favoriteTeam().primaryColor"
           [style.--ref-team-secondary]="favoriteTeam().secondaryColor"
@@ -78,7 +78,7 @@
       </header>
 
       @if (profile() && !trainingCampComplete()) {
-        <section class="training-camp-banner" aria-labelledby="training-camp-banner-title">
+        <section class="training-camp-banner rr-notice rr-notice--info" aria-labelledby="training-camp-banner-title">
           <span class="training-camp-banner-mascot" aria-hidden="true">
             <img src="/assets/branding/rinkrat-headshot.png" alt="" />
           </span>
@@ -95,16 +95,16 @@
       }
 
       @if (errorMessage()) {
-        <section class="error-card" role="alert">
+        <section class="error-card rr-notice rr-notice--danger" role="alert">
           <strong>Dashboard connection</strong>
           <span>{{ errorMessage() }}</span>
 
-          <button type="button" (click)="loadDashboard()">Try Again</button>
+          <button type="button" class="rr-button rr-button--danger" (click)="loadDashboard()">Try Again</button>
         </section>
       }
 
       <section class="leagues-section">
-        <div class="section-heading">
+        <div class="section-heading rr-section-heading">
           <div>
             <span class="eyebrow">Your Competition</span>
             <h2>My Leagues</h2>
@@ -112,10 +112,10 @@
 
           <div class="league-status">
             @if (leaguesLoading()) {
-              <span class="refreshing-badge" aria-live="polite"> Refreshing </span>
+              <span class="refreshing-badge rr-badge rr-badge--info" aria-live="polite"> Refreshing </span>
             }
 
-            <span class="league-count">
+            <span class="league-count rr-badge">
               {{ leagueSummaries().length }}
             </span>
           </div>
@@ -123,14 +123,14 @@
 
         @if (leaguesLoading() && leagueSummaries().length === 0) {
           <div class="league-grid dashboard-skeletons" aria-label="Loading leagues">
-            <article class="league-card skeleton-card" aria-hidden="true">
+            <article class="league-card skeleton-card rr-card rr-card--padded" aria-hidden="true">
               <div class="skeleton-line skeleton-title"></div>
               <div class="skeleton-line skeleton-copy"></div>
               <div class="skeleton-box"></div>
               <div class="skeleton-button"></div>
             </article>
 
-            <article class="league-card skeleton-card" aria-hidden="true">
+            <article class="league-card skeleton-card rr-card rr-card--padded" aria-hidden="true">
               <div class="skeleton-line skeleton-title"></div>
               <div class="skeleton-line skeleton-copy"></div>
               <div class="skeleton-box"></div>
@@ -138,20 +138,20 @@
             </article>
           </div>
         } @else if (leagueSummaries().length === 0) {
-          <article class="empty-state">
+          <article class="empty-state rr-state rr-card rr-card--padded">
             <span class="empty-icon pixel-icon icon-arena icon-xl" aria-hidden="true"></span>
             <h3>Your locker room is empty</h3>
             <p>Create a league or join one with an invite code.</p>
 
             <div class="empty-actions">
-              <a routerLink="/leagues/create">Create League</a>
-              <a routerLink="/leagues/join">Join League</a>
+              <a class="rr-button rr-button--primary" routerLink="/leagues/create">Create League</a>
+              <a class="rr-button rr-button--secondary" routerLink="/leagues/join">Join League</a>
             </div>
           </article>
         } @else {
           <div class="league-grid">
             @for (league of leagueSummaries(); track league.leagueId) {
-              <article class="league-card">
+              <article class="league-card rr-card rr-card--padded">
                 <div class="league-card-top">
                   <div class="league-identity">
                     <span class="league-icon" aria-hidden="true">
@@ -165,7 +165,7 @@
                   </div>
 
                   @if (league.isCommissioner) {
-                    <span class="commissioner-badge"> Commissioner </span>
+                    <span class="commissioner-badge rr-badge rr-badge--info"> Commissioner </span>
                   }
                 </div>
 
@@ -182,13 +182,13 @@
                 </div>
 
                 <div class="league-actions">
-                  <a class="open-league" [routerLink]="['/leagues', league.leagueId]">
+                  <a class="open-league rr-button rr-button--primary" [routerLink]="['/leagues', league.leagueId]">
                     Open League
                     <span aria-hidden="true">→</span>
                   </a>
 
                   <a
-                    class="team-shortcut"
+                    class="team-shortcut rr-button rr-button--quiet"
                     [routerLink]="['/leagues', league.leagueId, 'team']"
                     aria-label="Open my team"
                   >

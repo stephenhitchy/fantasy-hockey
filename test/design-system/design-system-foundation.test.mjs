@@ -133,6 +133,9 @@ test('keeps shared primitives free of hard-coded colors and important overrides'
 
 test('keeps primitive adoption limited to deliberately reviewed templates', async () => {
   const approved = new Set([
+    'src/app/features/account/account-settings/account-settings.html',
+    'src/app/features/dashboard/dashboard.html',
+    'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/errors/access-denied/access-denied.html',
     'src/app/features/leagues/create-league/create-league.html',
     'src/app/features/leagues/join-league/join-league.html',

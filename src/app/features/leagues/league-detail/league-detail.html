@@ -31,7 +31,7 @@
             <div class="my-team-identity-actions">
               <button
                 type="button"
-                class="change-profile-icon-trigger"
+                class="change-profile-icon-trigger rr-button rr-button--secondary"
                 (click)="openProfileIconPicker()"
                 [attr.aria-expanded]="profileIconPickerOpen()"
               >
@@ -40,7 +40,7 @@
 
               <button
                 type="button"
-                class="rename-team-trigger"
+                class="rename-team-trigger rr-button rr-button--quiet"
                 (click)="openRenameTeam()"
                 [attr.aria-expanded]="renameTeamOpen()"
               >
@@ -50,7 +50,7 @@
           </div>
 
           @if (profileIconPickerOpen()) {
-            <section class="league-profile-icon-panel" aria-labelledby="league-profile-icon-title">
+            <section class="league-profile-icon-panel rr-card rr-card--padded" aria-labelledby="league-profile-icon-title">
               <div class="league-profile-icon-heading">
                 <div>
                   <span class="eyebrow">This League Only</span>
@@ -60,7 +60,7 @@
 
                 <button
                   type="button"
-                  class="close-profile-icon-picker"
+                  class="close-profile-icon-picker rr-button rr-button--quiet"
                   (click)="closeProfileIconPicker()"
                   [disabled]="profileIconSaving()"
                   aria-label="Close profile icon picker"
@@ -84,7 +84,7 @@
                       @for (icon of profileIconsForCategory(category.id); track icon.id) {
                         <button
                           type="button"
-                          class="league-profile-icon-option"
+                          class="league-profile-icon-option rr-choice-card"
                           [class.selected]="icon.id === selectedLeagueProfileIconId()"
                           [attr.aria-pressed]="icon.id === selectedLeagueProfileIconId()"
                           [title]="icon.label"
@@ -107,12 +107,13 @@
           }
 
           @if (renameTeamOpen()) {
-            <div class="rename-team-panel" aria-label="Rename your fantasy team">
+            <div class="rename-team-panel rr-card rr-card--padded" aria-label="Rename your fantasy team">
               <label for="league-team-name">Team name</label>
 
               <div class="rename-team-controls">
                 <input
                   id="league-team-name"
+                  class="rr-field"
                   type="text"
                   maxlength="60"
                   [(ngModel)]="teamNameDraft"
@@ -123,7 +124,7 @@
 
                 <button
                   type="button"
-                  class="save-team-name-button"
+                  class="save-team-name-button rr-button rr-button--primary"
                   (click)="saveMyTeamName()"
                   [disabled]="renameTeamSaving()"
                 >
@@ -132,7 +133,7 @@
 
                 <button
                   type="button"
-                  class="cancel-team-name-button"
+                  class="cancel-team-name-button rr-button rr-button--quiet"
                   (click)="cancelRenameTeam()"
                   [disabled]="renameTeamSaving()"
                 >
@@ -141,7 +142,7 @@
               </div>
 
               @if (renameTeamError()) {
-                <small class="rename-team-error" role="alert">
+                <small class="rename-team-error rr-notice rr-notice--danger" role="alert">
                   {{ renameTeamError() }}
                 </small>
               }
@@ -149,13 +150,13 @@
           }
 
           @if (renameTeamMessage()) {
-            <small class="rename-team-success" aria-live="polite">
+            <small class="rename-team-success rr-notice rr-notice--success" aria-live="polite">
               {{ renameTeamMessage() }}
             </small>
           }
 
           @if (profileIconMessage()) {
-            <small class="rename-team-success" aria-live="polite">
+            <small class="rename-team-success rr-notice rr-notice--success" aria-live="polite">
               {{ profileIconMessage() }}
             </small>
           }
@@ -164,18 +165,18 @@
 
       <div class="league-actions">
         @if (draft()?.status === 'live') {
-          <a class="primary-action" [routerLink]="['/leagues', leagueId, 'draft']">
+          <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
             Enter Live Draft
           </a>
         } @else if (draft()?.status !== 'complete') {
-          <a class="secondary-action" [routerLink]="['/leagues', leagueId, 'draft']">
+          <a class="secondary-action rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'draft']">
             Draft Room
           </a>
         }
 
         @if (isCommissioner() && draft()?.status !== 'complete') {
           <a
-            class="secondary-action commissioner-action"
+            class="secondary-action commissioner-action rr-button rr-button--secondary"
             [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
           >
             Draft Setup
@@ -185,13 +186,13 @@
     </header>
 
     @if (errorMessage()) {
-      <section class="error-card">
+      <section class="error-card rr-notice rr-notice--danger">
         {{ errorMessage() }}
       </section>
     }
 
     <section
-      class="daily-injury-status"
+      class="daily-injury-status rr-notice rr-notice--info"
       [class.daily-status-running]="
         dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'
       "
@@ -215,7 +216,7 @@
         @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
           <button
             type="button"
-            class="daily-injury-refresh-button"
+            class="daily-injury-refresh-button rr-button rr-button--secondary"
             (click)="requestTodayInjuryRefresh()"
             [disabled]="dailyInjuryRefreshInProgress()"
           >
@@ -225,32 +226,32 @@
       </div>
     </section>
 
-    <section class="league-info-grid">
-      <article class="league-info-card">
+    <section class="league-info-grid rr-stat-grid">
+      <article class="league-info-card rr-stat-card">
         <span>Format</span>
         <strong>Cycle Matchups</strong>
       </article>
 
-      <article class="league-info-card">
+      <article class="league-info-card rr-stat-card">
         <span>Current Cycle</span>
         <strong>{{ currentCycleLabel() }}</strong>
       </article>
 
-      <article class="league-info-card">
+      <article class="league-info-card rr-stat-card">
         <span>Games Per Cycle</span>
         <strong>
           {{ league()?.scoringRules?.requiredGamesPerCycle ?? 6 }}
         </strong>
       </article>
 
-      <article class="league-info-card">
+      <article class="league-info-card rr-stat-card">
         <span>Roster Format</span>
         <strong>14 Active + 3 Bench + 3 IR</strong>
       </article>
     </section>
 
     @if (shouldShowDraftStatus()) {
-      <section class="draft-status-card">
+      <section class="draft-status-card rr-card rr-card--padded">
         <div class="draft-status-heading">
           <div>
             <span class="draft-section-eyebrow">League Draft</span>
@@ -258,7 +259,7 @@
           </div>
 
           <span
-            class="draft-status-badge"
+            class="draft-status-badge rr-badge"
             [class.status-scheduled]="draft()?.status === 'scheduled' && !startTimeReached()"
             [class.status-ready]="startTimeReached()"
             [class.status-live]="draft()?.status === 'live'"
@@ -285,7 +286,7 @@
         }
 
         <div
-          class="draft-injury-sync-card"
+          class="draft-injury-sync-card rr-notice rr-notice--info"
           [class.sync-running]="
             draftInjurySyncInProgress() || injurySyncState()?.status === 'running'
           "
@@ -303,7 +304,7 @@
       </section>
     }
 
-    <section class="quick-actions-card">
+    <section class="quick-actions-card rr-card rr-card--padded">
       <div class="quick-actions-heading">
         <div>
           <span class="draft-section-eyebrow">League Hub</span>
@@ -314,7 +315,7 @@
       </div>
 
       <div class="quick-actions-grid primary-actions-grid">
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'team']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
           <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Team</strong>
@@ -322,7 +323,7 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="getCurrentOwnerMatchupLink()">
+        <a class="hub-action rr-action-tile" [routerLink]="getCurrentOwnerMatchupLink()">
           <span class="hub-action-icon pixel-icon icon-matchup icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Matchup</strong>
@@ -330,7 +331,7 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'free-agents']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
           <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Players</strong>
@@ -338,7 +339,7 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'standings']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
           <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Standings</strong>
@@ -346,7 +347,7 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'leaders']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
           <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Point Leaders</strong>
@@ -354,7 +355,7 @@
           </span>
         </a>
 
-        <a class="hub-action" [routerLink]="['/leagues', leagueId, 'playoffs']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
           <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Playoffs</strong>
@@ -363,7 +364,7 @@
         </a>
 
         @if (draft()?.status !== 'complete') {
-          <a class="hub-action hub-action-highlight" [routerLink]="['/leagues', leagueId, 'draft']">
+          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
             <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
             <span class="hub-action-copy">
               <strong>Draft Room</strong>
@@ -385,7 +386,7 @@
 
         <div class="league-tools-grid">
           <a
-            class="tool-link"
+            class="tool-link rr-action-tile"
             [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
           >
             <span aria-hidden="true">🗂</span>
@@ -395,7 +396,7 @@
             </span>
           </a>
 
-          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
+          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
             <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Full Schedule</strong>
@@ -403,7 +404,7 @@
             </span>
           </a>
 
-          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
+          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
             <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Playoff Bracket</strong>
@@ -411,7 +412,7 @@
             </span>
           </a>
 
-          <a class="tool-link" [routerLink]="['/leagues', leagueId, 'projections']">
+          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'projections']">
             <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Projection Lab</strong>
@@ -420,7 +421,7 @@
           </a>
 
           @if (isCommissioner()) {
-            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'player-availability']">
+            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'player-availability']">
               <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Player Availability</strong>
@@ -428,7 +429,7 @@
               </span>
             </a>
 
-            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'live-scoring']">
+            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'live-scoring']">
               <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Scoring Diagnostics</strong>
@@ -436,7 +437,7 @@
               </span>
             </a>
 
-            <a class="tool-link" [routerLink]="['/leagues', leagueId, 'release-readiness']">
+            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'release-readiness']">
               <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
               <span>
                 <strong>Release Readiness</strong>
@@ -448,7 +449,7 @@
       </details>
     </section>
 
-    <section class="cycle-status-card">
+    <section class="cycle-status-card rr-card rr-card--padded">
       <div class="cycle-status-heading">
         <div>
           <span class="draft-section-eyebrow">Fantasy Season</span>
@@ -456,7 +457,7 @@
         </div>
 
         <span
-          class="cycle-status-badge"
+          class="cycle-status-badge rr-badge"
           [class.status-live]="cycle()?.status === 'active'"
           [class.status-complete]="cycle()?.status === 'complete'"
           [class.status-ready]="!cycle() && draft()?.status === 'complete'"
@@ -472,14 +473,14 @@
       @if (cycle()) {
         <div class="cycle-link-row">
           <a
-            class="view-cycle-link"
+            class="view-cycle-link rr-button rr-button--primary"
             [routerLink]="getCurrentOwnerMatchupLink()"
           >
             View Current Matchup
           </a>
 
           <a
-            class="view-cycle-link secondary-cycle-link"
+            class="view-cycle-link secondary-cycle-link rr-button rr-button--secondary"
             [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
           >
             View All Matchups
@@ -489,7 +490,7 @@
         <div class="matchup-list">
           @for (matchup of matchups(); track matchup.id) {
             <article
-              class="matchup-card"
+              class="matchup-card rr-card rr-card--padded"
               [class.matchup-complete-card]="matchup.status === 'complete'"
             >
               <header>
@@ -519,7 +520,7 @@
         </div>
       } @else if (draft()?.status === 'complete') {
         @if (shouldShowSeasonStartCard()) {
-          <section class="season-start-card" aria-live="polite">
+          <section class="season-start-card rr-notice rr-notice--info" aria-live="polite">
             <div class="season-start-copy">
               <span class="draft-section-eyebrow">Preparing the Season</span>
               <h3>Creating Cycle 1 and your matchups…</h3>
@@ -540,7 +541,7 @@
     </section>
 
     @if (shouldShowInviteCode()) {
-      <section class="invite-card">
+      <section class="invite-card rr-card rr-card--padded">
         <div>
           <h2>Invite Code</h2>
           <strong class="invite-code">
@@ -549,7 +550,7 @@
         </div>
 
         <div>
-          <button (click)="copyInviteCode()">Copy Invite Code</button>
+          <button class="rr-button rr-button--secondary" (click)="copyInviteCode()">Copy Invite Code</button>
 
           @if (copyMessage()) {
             <span class="copy-message">
@@ -561,20 +562,20 @@
     }
 
     <section class="teams-section">
-      <div class="section-heading">
+      <div class="section-heading rr-section-heading">
         <div>
           <span class="draft-section-eyebrow">League Teams</span>
           <h2>Teams</h2>
         </div>
 
-        <a class="standings-link" [routerLink]="['/leagues', leagueId, 'standings']">
+        <a class="standings-link rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'standings']">
           Full Standings
         </a>
       </div>
 
       <div class="teams-grid">
         @for (team of sortedTeams(); track team.id) {
-          <article class="team-card">
+          <article class="team-card rr-card rr-card--padded">
             <div class="team-card-heading">
               <span class="manager-name-with-avatar">
                 <app-manager-avatar [profileIconId]="getTeamProfileIconId(team.ownerId)" [label]="getTeamManagerLabel(team.ownerId)" size="sm" />
@@ -616,7 +617,7 @@
 
 
     @if (isCommissioner()) {
-      <section class="commissioner-danger-zone" aria-labelledby="delete-league-title">
+      <section class="commissioner-danger-zone rr-danger-zone" aria-labelledby="delete-league-title">
         <div class="danger-zone-heading">
           <div>
             <span class="draft-section-eyebrow">Commissioner Only</span>
@@ -629,7 +630,7 @@
 
           <button
             type="button"
-            class="danger-zone-toggle"
+            class="danger-zone-toggle rr-button rr-button--danger"
             (click)="toggleDeleteLeaguePanel()"
             [disabled]="deleteLeagueInProgress()"
             [attr.aria-expanded]="deleteLeaguePanelOpen()"
@@ -641,7 +642,7 @@
 
         @if (deleteLeaguePanelOpen()) {
           <div id="delete-league-confirmation" class="delete-league-confirmation">
-            <div class="delete-league-warning" role="note">
+            <div class="delete-league-warning rr-notice rr-notice--danger" role="note">
               <span class="delete-league-warning-icon" aria-hidden="true">!</span>
               <div>
                 <strong>This cannot be undone.</strong>
@@ -659,6 +660,7 @@
 
             <input
               id="delete-league-name-confirmation"
+              class="rr-field"
               type="text"
               maxlength="80"
               autocomplete="off"
@@ -672,7 +674,7 @@
             <div class="delete-league-actions">
               <button
                 type="button"
-                class="permanent-delete-league-button"
+                class="permanent-delete-league-button rr-button rr-button--danger"
                 (click)="permanentlyDeleteLeague()"
                 [disabled]="!canDeleteLeague()"
               >
@@ -681,7 +683,7 @@
 
               <button
                 type="button"
-                class="cancel-delete-league-button"
+                class="cancel-delete-league-button rr-button rr-button--quiet"
                 (click)="toggleDeleteLeaguePanel()"
                 [disabled]="deleteLeagueInProgress()"
               >
@@ -690,7 +692,7 @@
             </div>
 
             @if (deleteLeagueError()) {
-              <p class="delete-league-error" role="alert">
+              <p class="delete-league-error rr-notice rr-notice--danger" role="alert">
                 {{ deleteLeagueError() }}
               </p>
             }
@@ -709,7 +711,7 @@
       appDialogFocusTrap
       [dialogCloseOnEscape]="false"
     >
-      <section class="draft-live-modal">
+      <section class="draft-live-modal rr-card rr-card--padded">
         <span class="draft-live-icon pixel-icon icon-rat icon-lg" aria-hidden="true"></span>
         <span class="draft-live-eyebrow">Draft Is Live</span>
 
@@ -717,7 +719,7 @@
 
         <p>Opening the Draft Room automatically.</p>
 
-        <button type="button" (click)="enterDraftRoom()">Enter Draft Now</button>
+        <button type="button" class="rr-button rr-button--primary" (click)="enterDraftRoom()">Enter Draft Now</button>
       </section>
     </div>
   }
