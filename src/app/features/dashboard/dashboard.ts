@@ -7,6 +7,7 @@ import { getUserProfile, UserProfile } from '../../core/user/user.service';
 import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.service';
 import { getLeagueLogoAssetPath } from '../../shared/league-logo/league-logo.data';
 import { getPixelTeamTheme } from '../../shared/pixel-theme/pixel-theme.data';
+import { NhlScoreboard } from './nhl-scoreboard/nhl-scoreboard';
 
 interface DashboardCache {
   userId: string;
@@ -61,7 +62,7 @@ function writeDashboardCache(cache: DashboardCache): void {
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink],
+  imports: [RouterLink, NhlScoreboard],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
 })

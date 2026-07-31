@@ -1,0 +1,90 @@
+<section class="nhl-scoreboard rr-card" aria-labelledby="nhl-scoreboard-title">
+  <div class="nhl-scoreboard-heading">
+    <div>
+      <span class="nhl-scoreboard-eyebrow">Around the NHL</span>
+      <h2 id="nhl-scoreboard-title">{{ heading() }}</h2>
+      <p>
+        @if (hasLiveGames()) {
+          Live scores update automatically.
+        } @else {
+          Scores and upcoming puck drops from around the league.
+        }
+      </p>
+    </div>
+
+    <div class="nhl-scoreboard-status" aria-live="polite">
+      @if (refreshing()) {
+        <span>Updating…</span>
+      } @else if (lastUpdatedAt()) {
+        <span>Updated {{ getUpdatedLabel() }}</span>
+      }
+
+      <button
+        type="button"
+        class="rr-button rr-button--quiet nhl-scoreboard-refresh"
+        [disabled]="loading() || refreshing()"
+        (click)="refreshScores()"
+      >
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="nhl-scoreboard-loading" aria-live="polite">
+      <span class="pixel-icon icon-loading icon-sm" aria-hidden="true"></span>
+      Loading NHL games…
+    </div>
+  } @else if (errorMessage() && games().length === 0) {
+    <div class="nhl-scoreboard-error rr-notice rr-notice--warning" role="status">
+      <strong>Scoreboard unavailable</strong>
+      <span>Fantasy league tools are unaffected. Try refreshing this panel in a moment.</span>
+    </div>
+  } @else if (visibleGames().length === 0) {
+    <div class="nhl-scoreboard-empty rr-state">
+      No NHL games are available on the current scoreboard.
+    </div>
+  } @else {
+    <div class="nhl-game-strip" [attr.aria-label]="heading()">
+      @for (game of visibleGames(); track game.id) {
+        <article
+          class="nhl-game-card"
+          [class.nhl-game-card--live]="isLive(game)"
+          [class.nhl-game-card--final]="isFinal(game)"
+          [class.nhl-game-card--favorite]="isFavoriteGame(game)"
+        >
+          <div class="nhl-game-meta">
+            <span [class.nhl-game-live-label]="isLive(game)">{{ getGameStatus(game) }}</span>
+            @if (getBroadcastLabel(game); as broadcast) {
+              <small>{{ broadcast }}</small>
+            }
+          </div>
+
+          <div class="nhl-team-row">
+            <img [src]="game.awayTeam.logo || ''" alt="" width="34" height="34" decoding="async" />
+            <div>
+              <strong>{{ game.awayTeam.abbrev }}</strong>
+              <span>{{ game.awayTeam.record || 'Away' }}</span>
+            </div>
+            <b>{{ getTeamScore(game, 'away') }}</b>
+          </div>
+
+          <div class="nhl-team-row">
+            <img [src]="game.homeTeam.logo || ''" alt="" width="34" height="34" decoding="async" />
+            <div>
+              <strong>{{ game.homeTeam.abbrev }}</strong>
+              <span>{{ game.homeTeam.record || 'Home' }}</span>
+            </div>
+            <b>{{ getTeamScore(game, 'home') }}</b>
+          </div>
+        </article>
+      }
+    </div>
+
+    @if (games().length > visibleGames().length) {
+      <p class="nhl-scoreboard-count">
+        Showing {{ visibleGames().length }} of {{ games().length }} games, with live and favorite-team games first.
+      </p>
+    }
+  }
+</section>

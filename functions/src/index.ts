@@ -49,6 +49,7 @@ const NHL_PROXY_PATH_PATTERNS = [
   /^\/v1\/player\/\d+\/game-log\/\d{8}\/2$/,
   /^\/v1\/club-schedule-season\/[a-z]{3}\/\d{8}$/,
   /^\/v1\/gamecenter\/\d+\/(boxscore|play-by-play)$/,
+  /^\/v1\/score\/now$/,
   /^\/v1\/roster\/[a-z]{3}\/(current|\d{8})$/,
   /^\/stats\/rest\/en\/skater\/(summary|realtime)$/,
   /^\/stats\/rest\/en\/goalie\/summary$/,
@@ -81,6 +82,10 @@ function getNhlProxyTarget(originalUrl: string): URL | null {
 }
 
 function getNhlProxyCacheControl(path: string): string {
+  if (path === '/v1/score/now') {
+    return 'public, max-age=15, s-maxage=20';
+  }
+
   if (path.includes('/gamecenter/')) {
     return 'public, max-age=8, s-maxage=12';
   }
@@ -101,6 +106,10 @@ function getNhlProxyCacheControl(path: string): string {
 }
 
 function getNhlProxyFreshCacheMilliseconds(path: string): number {
+  if (path === '/v1/score/now') {
+    return 15_000;
+  }
+
   if (path.includes('/gamecenter/')) {
     return 8_000;
   }
@@ -121,6 +130,10 @@ function getNhlProxyFreshCacheMilliseconds(path: string): number {
 }
 
 function getNhlProxyStaleCacheMilliseconds(path: string): number {
+  if (path === '/v1/score/now') {
+    return 2 * 60 * 1000;
+  }
+
   // Never serve stale live boxscores or play-by-play into the scoring engine.
   if (path.includes('/gamecenter/')) {
     return 0;
@@ -184,6 +197,76 @@ async function fetchNhlProxyUpstream(target: URL): Promise<Response> {
   throw lastError instanceof Error
     ? lastError
     : new Error('Unknown NHL API proxy error.');
+}
+
+function getPlainObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function compactNhlScoreTeam(value: unknown): Record<string, unknown> {
+  const team = getPlainObject(value) ?? {};
+
+  return {
+    id: team['id'],
+    abbrev: team['abbrev'],
+    name: team['name'],
+    commonName: team['commonName'],
+    logo: team['logo'],
+    score: team['score'],
+    record: team['record']
+  };
+}
+
+function compactNhlScoreNowBody(body: Buffer): Buffer {
+  try {
+    const source = getPlainObject(JSON.parse(body.toString('utf8')));
+
+    if (!source) {
+      return body;
+    }
+
+    const games = Array.isArray(source['games'])
+      ? source['games'].map((value) => {
+          const game = getPlainObject(value) ?? {};
+          const broadcasts = Array.isArray(game['tvBroadcasts'])
+            ? game['tvBroadcasts'].map((broadcastValue) => {
+                const broadcast = getPlainObject(broadcastValue) ?? {};
+                return {
+                  network: broadcast['network'],
+                  countryCode: broadcast['countryCode'],
+                  market: broadcast['market']
+                };
+              })
+            : [];
+
+          return {
+            id: game['id'],
+            gameDate: game['gameDate'],
+            startTimeUTC: game['startTimeUTC'],
+            gameState: game['gameState'],
+            gameScheduleState: game['gameScheduleState'],
+            period: game['period'],
+            periodDescriptor: game['periodDescriptor'],
+            clock: game['clock'],
+            gameOutcome: game['gameOutcome'],
+            awayTeam: compactNhlScoreTeam(game['awayTeam']),
+            homeTeam: compactNhlScoreTeam(game['homeTeam']),
+            tvBroadcasts: broadcasts
+          };
+        })
+      : [];
+
+    return Buffer.from(JSON.stringify({
+      prevDate: source['prevDate'],
+      currentDate: source['currentDate'],
+      nextDate: source['nextDate'],
+      games
+    }));
+  } catch {
+    return body;
+  }
 }
 
 function trimNhlProxyResponseCache(): void {
@@ -1329,7 +1412,11 @@ export const nhlApiProxy = onRequest(
         return;
       }
 
-      const responseBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      const responseBody =
+        upstreamResponse.ok && target.pathname === '/v1/score/now'
+          ? compactNhlScoreNowBody(upstreamBody)
+          : upstreamBody;
       const contentType =
         upstreamResponse.headers.get('content-type') ??
         'application/json; charset=utf-8';

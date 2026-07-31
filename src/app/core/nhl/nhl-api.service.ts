@@ -11,6 +11,7 @@ const MAX_API_RESPONSE_CACHE_ENTRIES = 2500;
 
 const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
 const NHL_GAME_DATA_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_SCOREBOARD_CACHE_MILLISECONDS = 20 * 1000;
 const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 15 * 60 * 1000;
 const NHL_STATS_CACHE_MILLISECONDS = 5 * 60 * 1000;
 
@@ -174,6 +175,76 @@ export function clearNhlProjectionApiCache(): void {
       apiResponseCache.delete(cacheKey);
     }
   }
+}
+
+export interface NhlScoreLocalizedName {
+  default: string;
+}
+
+export interface NhlScoreTeam {
+  id?: number;
+  abbrev: string;
+  name?: NhlScoreLocalizedName;
+  commonName?: NhlScoreLocalizedName;
+  logo?: string;
+  score?: number;
+  record?: string;
+}
+
+export interface NhlScoreClock {
+  timeRemaining?: string;
+  secondsRemaining?: number;
+  running?: boolean;
+  inIntermission?: boolean;
+}
+
+export interface NhlScorePeriodDescriptor {
+  number?: number;
+  periodType?: string;
+  maxRegulationPeriods?: number;
+}
+
+export interface NhlScoreGameOutcome {
+  lastPeriodType?: string;
+}
+
+export interface NhlScoreBroadcast {
+  network?: string;
+  countryCode?: string;
+  market?: string;
+}
+
+export interface NhlScoreGame {
+  id: number;
+  gameDate: string;
+  startTimeUTC: string;
+  gameState: string;
+  gameScheduleState?: string;
+  period?: number;
+  periodDescriptor?: NhlScorePeriodDescriptor;
+  clock?: NhlScoreClock;
+  gameOutcome?: NhlScoreGameOutcome;
+  awayTeam: NhlScoreTeam;
+  homeTeam: NhlScoreTeam;
+  tvBroadcasts?: NhlScoreBroadcast[];
+}
+
+export interface NhlScoreNowResponse {
+  prevDate?: string;
+  currentDate?: string;
+  nextDate?: string;
+  games?: NhlScoreGame[];
+}
+
+export async function getNhlScoreNow(
+  forceRefresh: boolean = false
+): Promise<NhlScoreNowResponse> {
+  return getCachedApiJson<NhlScoreNowResponse>(
+    `${NHL_API_BASE_URL}/score/now`,
+    NHL_SCOREBOARD_CACHE_MILLISECONDS,
+    'NHL scoreboard request failed',
+    forceRefresh
+  );
 }
 
 export interface NhlPlayerGameLogEntry {

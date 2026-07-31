@@ -236,9 +236,9 @@
 }
 .league-card-top {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
 }
 .league-identity {
   display: flex;
@@ -266,17 +266,23 @@
 }
 .league-identity div {
   min-width: 0;
+  flex: 1 1 auto;
 }
-.league-identity h3,
 .league-identity p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .league-identity h3 {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 0;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .league-identity p {
   margin: 5px 0 0;
@@ -764,10 +770,11 @@
 
 .league-card-badges {
   display: flex;
-  max-width: 46%;
+  width: 100%;
+  max-width: none;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 
@@ -925,19 +932,6 @@
 }
 
 @media (max-width: 560px) {
-  .league-card-top {
-    align-items: flex-start;
-  }
-
-  .league-card-badges {
-    max-width: 100%;
-    justify-content: flex-start;
-  }
-
-  .league-card-top {
-    flex-direction: column;
-  }
-
   .league-summary-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

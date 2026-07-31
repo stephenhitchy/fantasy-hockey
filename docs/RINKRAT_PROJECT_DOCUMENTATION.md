@@ -6419,3 +6419,60 @@ The Batch 8A suite adds 11 checks covering draft authority, scheduled/live draft
 6. Confirm the league name opens League HQ and the team shortcut opens My Team.
 7. Check Rink Dark, Light Ice, and a viewport near 390 pixels wide.
 8. Confirm no new console errors or horizontal scrolling appear.
+
+---
+
+## Batch 8A.1 — Readable League Names and Around-the-NHL Scoreboard
+
+### Goal
+
+Give league names enough room to remain recognizable and add a lightweight NHL-wide dashboard feature that is separate from each user's fantasy competitions.
+
+### Changes
+
+- League-card badges now sit on their own row instead of competing with the league title for horizontal space.
+- League titles use the full identity area and may occupy up to two lines before truncating.
+- League-title typography increased slightly while team names remain compact.
+- Added a standalone **Around the NHL** scoreboard above My Leagues.
+- The scoreboard uses RinkRat's existing server-side NHL proxy and the NHL web score feed at `/v1/score/now`; no browser request is sent directly to the upstream service.
+- Live games appear first, followed by the user's favorite-team game, then the remaining games by puck-drop time.
+- The panel shows up to six games in a horizontally scrollable strip, including team logos, records, scores, game state, time/period, and available broadcast label.
+- During live games the panel refreshes every 30 seconds. Outside live games it refreshes every five minutes.
+- NHL scoreboard failures remain isolated from fantasy league loading and never block Dashboard or league actions.
+- The proxy caches the shared score response for 15 seconds to prevent every dashboard visitor from creating a separate upstream request.
+
+### Authority and cost behavior
+
+- No Firestore data, league records, scoring records, roster windows, or user profiles are written.
+- The NHL feed remains read-only and is shared through the existing `nhlApiProxy` Cloud Function.
+- The scoreboard does not add a paid API dependency or an API key.
+
+### Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch8a1
+```
+
+### Manual checks
+
+1. Confirm league names receive the full card width and display up to two readable lines.
+2. Confirm Matchup Active and Commissioner badges appear beneath the identity instead of covering the title.
+3. Confirm the Around-the-NHL panel loads independently from fantasy league cards.
+4. Confirm future games show a local puck-drop time, live games show period/time remaining, and finished games show Final/OT/SO when applicable.
+5. Confirm the favorite-team game is prioritized when no game is live.
+6. Confirm Refresh updates only the NHL panel and does not reload league summaries.
+7. Confirm the panel scrolls horizontally without causing page-level horizontal overflow on mobile.
+8. Confirm a temporarily unavailable NHL feed leaves all fantasy tools usable.
+
+### Deployment
+
+This batch adds the `/v1/score/now` route to the existing NHL proxy, so deploy the proxy Function and hosting:
+
+```bash
+firebase deploy --only functions:nhlApiProxy,hosting:app -m "Add NHL dashboard scoreboard and readable league names"
+```

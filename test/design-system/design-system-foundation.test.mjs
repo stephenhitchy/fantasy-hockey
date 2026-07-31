@@ -147,6 +147,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/free-agents/free-agents.html',
     'src/app/features/team/team-settings/team-settings.html',
     'src/app/features/dashboard/dashboard.html',
+    'src/app/features/dashboard/nhl-scoreboard/nhl-scoreboard.html',
     'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/errors/access-denied/access-denied.html',
     'src/app/features/leagues/create-league/create-league.html',
