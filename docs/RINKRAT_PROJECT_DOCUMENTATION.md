@@ -6614,3 +6614,27 @@ This batch is frontend-only:
 firebase deploy --only hosting:app -m "Batch 8C Free Agent Decision Center simplification"
 ```
 
+
+---
+
+## Batch 8C.1 — Owner-only historical replay controls
+
+The Game Center keeps the preseason historical replay button available without exposing it to ordinary league commissioners.
+
+- The historical **Advance One NHL Day** control is rendered only after the signed-in account is verified through the existing RinkRat platform-admin authority service.
+- The server callable independently requires either the platform-admin custom claim or an enabled `platformAdmins/{uid}` record. Hiding the button is not the security boundary.
+- A platform administrator can use the replay control in a dedicated test league even when they are not that league's commissioner.
+- Ordinary commissioner recovery actions remain commissioner-only.
+- No production scoring automation, six-game windows, standings, roster rules, or playoff behavior changed.
+
+Verification command:
+
+```bash
+npm run verify:batch8c-owner-controls
+```
+
+Deployment requires the updated historical replay Function and hosting:
+
+```bash
+firebase deploy --only functions:advanceHistoricalReplayDay,hosting:app -m "Restrict historical replay controls to platform admin"
+```

@@ -225,7 +225,7 @@ describe('Batch 6A Game Center component boundaries', () => {
 
     assert.equal(
       digest,
-      '2b26fb7750ef33938f05ca98e2af01d215ee1f5c2e5e3e759fbd78c264a9df3e',
+      '1f247f0c8fc45146947cadb40eeea524d1af926536a342aeb596844de5283677',
       'The component expansion must preserve the approved Game Center markup, including the full-width six-game marker row.',
     );
   });

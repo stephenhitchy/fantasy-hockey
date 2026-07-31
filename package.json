@@ -61,7 +61,9 @@
     "test:league-hq-organization:run": "node --test --test-concurrency=1 test/league-hq-organization/*.test.mjs",
     "verify:batch8b": "npm run verify:batch8a1 && npm run test:league-hq-organization:run",
     "test:free-agent-simplification:run": "node --test --test-concurrency=1 test/free-agent-simplification/*.test.mjs",
-    "verify:batch8c": "npm run verify:batch8b && npm run test:free-agent-simplification:run"
+    "test:platform-admin-replay-controls:run": "node --test --test-concurrency=1 test/platform-admin-replay-controls/*.test.mjs",
+    "verify:batch8c": "npm run verify:batch8b && npm run test:free-agent-simplification:run",
+    "verify:batch8c-owner-controls": "npm run verify:batch8c && npm run test:platform-admin-replay-controls:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

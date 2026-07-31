@@ -136,6 +136,34 @@ interface ReplayRunContext {
 }
 
 
+async function requireHistoricalReplayPlatformAdmin(request: {
+  auth?: {
+    uid: string;
+    token: Record<string, unknown>;
+  } | null;
+}): Promise<string> {
+  const userId = request.auth?.uid;
+
+  if (!userId) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to advance the replay.');
+  }
+
+  if (request.auth?.token?.['platformAdmin'] === true) {
+    return userId;
+  }
+
+  const adminSnapshot = await db.doc(`platformAdmins/${userId}`).get();
+
+  if (!adminSnapshot.exists || adminSnapshot.data()?.['enabled'] !== true) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only a RinkRat platform administrator can advance historical replay time.',
+    );
+  }
+
+  return userId;
+}
+
 function getHistoricalReplayControlRef(leagueId: string) {
   return db.doc(`leagues/${leagueId}/historicalReplay/control`);
 }
@@ -1861,15 +1889,11 @@ export const advanceHistoricalReplayDay = onCall(
     cors: TRUSTED_WEB_ORIGINS,
   },
   async (request) => {
-    const userId = request.auth?.uid;
+    const userId = await requireHistoricalReplayPlatformAdmin(request);
     const leagueId =
       request.data && typeof request.data.leagueId === 'string'
         ? request.data.leagueId.trim()
         : '';
-
-    if (!userId) {
-      throw new HttpsError('unauthenticated', 'You must be signed in to advance the replay.');
-    }
 
     if (!leagueId) {
       throw new HttpsError('invalid-argument', 'A league id is required.');
@@ -1879,13 +1903,6 @@ export const advanceHistoricalReplayDay = onCall(
 
     if (!league) {
       throw new HttpsError('not-found', 'League not found.');
-    }
-
-    if (league.commissionerId !== userId) {
-      throw new HttpsError(
-        'permission-denied',
-        'Only the league commissioner can advance historical replay time.',
-      );
     }
 
     const draftSnapshot = await db.doc(`leagues/${leagueId}/draft/current`).get();

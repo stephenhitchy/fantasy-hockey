@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal, ViewEncapsulation } from '@angular/core';
+import { Component, computed, inject, OnDestroy, signal, ViewEncapsulation } from '@angular/core';
 
 import {
   CycleAssetScoreSummary,
@@ -93,6 +93,7 @@ import {
   startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
 import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
+import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 
 import { CycleExplainer } from './components/cycle-explainer/cycle-explainer';
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
@@ -136,8 +137,11 @@ import {
   encapsulation: ViewEncapsulation.None,
 })
 export class CycleOne implements OnDestroy {
+  private readonly platformAdminService = inject(PlatformAdminService);
+
   readonly presenter = this;
   readonly developerToolsEnabled = areDeveloperToolsEnabled();
+  readonly isPlatformAdmin = this.platformAdminService.isAdmin;
   leagueId = '';
   userId = '';
   cycleNumber = 1;
@@ -1731,6 +1735,7 @@ export class CycleOne implements OnDestroy {
     this.cycleNumber = cycleNumber;
     this.matchupId = matchupId;
     this.userId = user.uid;
+    void this.platformAdminService.refreshAccess(true);
     startPlayerAvailabilityListenerForLeague(leagueId);
 
     try {
