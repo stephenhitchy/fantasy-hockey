@@ -2439,19 +2439,24 @@
 }
 
 .g .window-game-markers {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 9px;
-  margin-left: 0;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  max-width: 166px;
+  margin: 9px auto 0;
 }
 
 .g .window-game-marker {
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  width: 23px;
-  height: 23px;
+  width: 100%;
+  max-width: 23px;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 1;
+  justify-self: center;
   border: 1px solid transparent;
   border-radius: 50%;
   color: #05070a;

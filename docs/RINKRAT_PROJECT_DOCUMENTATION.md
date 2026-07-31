@@ -6329,3 +6329,19 @@ npm run verify:batch7c3
 ```
 
 A small warning near the 42 kB preferred Game Center budget may remain, but the stylesheet stays below the 45 kB error budget and the production build completes.
+
+## Batch 7C.3.2 — Game Center Six-Game Marker Layout Hotfix
+
+The six numbered game markers inside each active Game Center player card were still rendered inside the narrow player-name column. In the two-team view, that column can become too narrow and force the six markers into a tall one-per-line stack.
+
+This hotfix moves the marker group to its own full-width row inside every forward, defense, and goalie card. The row uses a fixed six-column responsive grid, so games 1–6 remain ordered left to right while the marker circles scale to the available card width. Single-team mode no longer applies the old negative horizontal offset to this row.
+
+No game results, marker statuses, player scores, projections, roster windows, Firebase data, Cloud Functions, or Firestore rules changed. The update is presentation-only.
+
+Run the normal verification command:
+
+```bash
+npm run verify:batch7c3
+```
+
+After deployment, check Game Center in Team A, Both, and Team B views on desktop and mobile. Confirm every active player card shows games 1–6 as one compact ordered row and that played, missed, upcoming, and unavailable colors remain correct.

@@ -155,30 +155,6 @@
                                           {{ presenter.getPendingWindowCallout(pick) }}
                                         </em>
                                       }
-
-                                      <div
-                                        class="window-game-markers"
-                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
-                                      >
-                                        @for (
-                                          marker of presenter.getWindowGameMarkers(pick);
-                                          track marker.index
-                                        ) {
-                                          <span
-                                            class="window-game-marker"
-                                            [class.marker-played]="marker.status === 'played'"
-                                            [class.marker-missed]="marker.status === 'missed'"
-                                            [class.marker-upcoming]="marker.status === 'upcoming'"
-                                            [class.marker-unavailable]="
-                                              marker.status === 'unavailable'
-                                            "
-                                            [title]="marker.title"
-                                          >
-                                            {{ marker.index }}
-                                          </span>
-                                        }
-                                      </div>
-
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
@@ -216,6 +192,28 @@
                                         </strong>
                                         <span>Proj</span>
                                       </div>
+                                    </div>
+                                    <div
+                                      class="window-game-markers"
+                                      [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                    >
+                                      @for (
+                                        marker of presenter.getWindowGameMarkers(pick);
+                                        track marker.index
+                                      ) {
+                                        <span
+                                          class="window-game-marker"
+                                          [class.marker-played]="marker.status === 'played'"
+                                          [class.marker-missed]="marker.status === 'missed'"
+                                          [class.marker-upcoming]="marker.status === 'upcoming'"
+                                          [class.marker-unavailable]="
+                                            marker.status === 'unavailable'
+                                          "
+                                          [title]="marker.title"
+                                        >
+                                          {{ marker.index }}
+                                        </span>
+                                      }
                                     </div>
                                   </article>
                                 }
@@ -317,30 +315,6 @@
                                           {{ presenter.getPendingWindowCallout(pick) }}
                                         </em>
                                       }
-
-                                      <div
-                                        class="window-game-markers"
-                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
-                                      >
-                                        @for (
-                                          marker of presenter.getWindowGameMarkers(pick);
-                                          track marker.index
-                                        ) {
-                                          <span
-                                            class="window-game-marker"
-                                            [class.marker-played]="marker.status === 'played'"
-                                            [class.marker-missed]="marker.status === 'missed'"
-                                            [class.marker-upcoming]="marker.status === 'upcoming'"
-                                            [class.marker-unavailable]="
-                                              marker.status === 'unavailable'
-                                            "
-                                            [title]="marker.title"
-                                          >
-                                            {{ marker.index }}
-                                          </span>
-                                        }
-                                      </div>
-
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
@@ -378,6 +352,28 @@
                                         </strong>
                                         <span>Proj</span>
                                       </div>
+                                    </div>
+                                    <div
+                                      class="window-game-markers"
+                                      [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                    >
+                                      @for (
+                                        marker of presenter.getWindowGameMarkers(pick);
+                                        track marker.index
+                                      ) {
+                                        <span
+                                          class="window-game-marker"
+                                          [class.marker-played]="marker.status === 'played'"
+                                          [class.marker-missed]="marker.status === 'missed'"
+                                          [class.marker-upcoming]="marker.status === 'upcoming'"
+                                          [class.marker-unavailable]="
+                                            marker.status === 'unavailable'
+                                          "
+                                          [title]="marker.title"
+                                        >
+                                          {{ marker.index }}
+                                        </span>
+                                      }
                                     </div>
                                   </article>
                                 }
@@ -477,30 +473,6 @@
                                           {{ presenter.getPendingWindowCallout(pick) }}
                                         </em>
                                       }
-
-                                      <div
-                                        class="window-game-markers"
-                                        [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
-                                      >
-                                        @for (
-                                          marker of presenter.getWindowGameMarkers(pick);
-                                          track marker.index
-                                        ) {
-                                          <span
-                                            class="window-game-marker"
-                                            [class.marker-played]="marker.status === 'played'"
-                                            [class.marker-missed]="marker.status === 'missed'"
-                                            [class.marker-upcoming]="marker.status === 'upcoming'"
-                                            [class.marker-unavailable]="
-                                              marker.status === 'unavailable'
-                                            "
-                                            [title]="marker.title"
-                                          >
-                                            {{ marker.index }}
-                                          </span>
-                                        }
-                                      </div>
-
                                     </div>
 
                                     <div class="fantasy-player-score-stack">
@@ -538,6 +510,28 @@
                                         </strong>
                                         <span>Proj</span>
                                       </div>
+                                    </div>
+                                    <div
+                                      class="window-game-markers"
+                                      [attr.aria-label]="presenter.getWindowStatusLabel(pick)"
+                                    >
+                                      @for (
+                                        marker of presenter.getWindowGameMarkers(pick);
+                                        track marker.index
+                                      ) {
+                                        <span
+                                          class="window-game-marker"
+                                          [class.marker-played]="marker.status === 'played'"
+                                          [class.marker-missed]="marker.status === 'missed'"
+                                          [class.marker-upcoming]="marker.status === 'upcoming'"
+                                          [class.marker-unavailable]="
+                                            marker.status === 'unavailable'
+                                          "
+                                          [title]="marker.title"
+                                        >
+                                          {{ marker.index }}
+                                        </span>
+                                      }
                                     </div>
                                   </article>
                                 }

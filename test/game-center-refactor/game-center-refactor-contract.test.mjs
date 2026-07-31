@@ -84,6 +84,41 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.match(teamPanel, /Does not score while on the bench/);
   });
 
+  test('six-game markers use a full-width six-column row inside every active player card', async () => {
+    const teamPanel = await read(
+      'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
+    );
+    const stylesheet = await read('src/app/features/cycles/cycle-one/cycle-one.css');
+    const globalStyles = await read('src/styles.css');
+
+    assert.equal(
+      (teamPanel.match(/class="window-game-markers"/g) ?? []).length,
+      3,
+      'Forward, defense, and goalie cards should each render the same marker row.',
+    );
+    const playerMainBlocks = [
+      ...teamPanel.matchAll(
+        /<div class="fantasy-player-main">([\s\S]*?)<\/div>\s*<div class="fantasy-player-score-stack">/g,
+      ),
+    ];
+    assert.ok(playerMainBlocks.length >= 3, 'Expected to find the active player-name columns.');
+    for (const [, playerMain] of playerMainBlocks) {
+      assert.doesNotMatch(
+        playerMain,
+        /class="window-game-markers"/,
+        'The marker row must not be trapped inside the narrow player-name column.',
+      );
+    }
+    assert.match(stylesheet, /\.g \.window-game-markers \{[\s\S]*?grid-column:\s*1 \/ -1;/);
+    assert.match(stylesheet, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/);
+    assert.match(stylesheet, /\.g \.window-game-marker \{[\s\S]*?aspect-ratio:\s*1;/);
+    assert.doesNotMatch(
+      globalStyles,
+      /single-team-view \.window-game-markers,\s*app-cycle-one \.single-team-view \.window-status-copy[\s\S]*?margin-left:\s*-64px/,
+      'Single-team mode must not pull the full-width marker row out of alignment.',
+    );
+  });
+
   test('the visual stylesheet is globally emitted but scoped to the Game Center host', async () => {
     const component = await read('src/app/features/cycles/cycle-one/cycle-one.ts');
     const stylesheet = await read('src/app/features/cycles/cycle-one/cycle-one.css');
@@ -110,7 +145,7 @@ describe('Batch 6A Game Center component boundaries', () => {
   });
 
 
-  test('expanding the new component boundaries reproduces the pre-refactor markup exactly', async () => {
+  test('expanding the component boundaries reproduces the approved Game Center markup', async () => {
     const componentRoot = 'src/app/features/cycles/cycle-one/components';
     const stripPresenter = (source) => source.replaceAll('presenter.', '');
     const replaceComponent = (source, selector, replacement) =>
@@ -190,8 +225,8 @@ describe('Batch 6A Game Center component boundaries', () => {
 
     assert.equal(
       digest,
-      '008c90217fd6ae93daf2dfd6c22c1b3cc13fb3b22d29f4b0e8d963d566a11033',
-      'The structural refactor must preserve the exact pre-Batch-6A Game Center markup.',
+      '2b26fb7750ef33938f05ca98e2af01d215ee1f5c2e5e3e759fbd78c264a9df3e',
+      'The component expansion must preserve the approved Game Center markup, including the full-width six-game marker row.',
     );
   });
 
