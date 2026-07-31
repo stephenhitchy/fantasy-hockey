@@ -2245,3 +2245,72 @@
 .league-status-grid > .cycle-status-card {
   margin-top: 0;
 }
+
+/* Batch M1: mobile readability and touch-target pass. */
+@media (max-width: 720px) {
+  .league-info-card,
+  .draft-status-card,
+  .quick-actions-card,
+  .cycle-status-card,
+  .invite-card,
+  .top-invite-card,
+  .my-team-card,
+  .league-overview-section {
+    padding: 14px;
+    border-width: 1px;
+  }
+
+  .hub-action {
+    min-height: 96px;
+    padding: 10px;
+    border-width: 1px;
+  }
+
+  .league-info-card span,
+  .hub-action-copy > span,
+  .league-tools summary small,
+  .tool-link small,
+  .daily-injury-status > small,
+  .my-team-identity span,
+  .rename-team-panel label,
+  .league-profile-icon-category-heading > span,
+  .league-profile-icon-option,
+  .invite-progress-copy,
+  .cycle-matchup-preview > summary small {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .league-header p,
+  .quick-actions-heading p,
+  .daily-injury-copy p,
+  .my-team-card > .section-heading p,
+  .league-overview-section > .section-heading p {
+    font-size: var(--rr-mobile-text-body);
+  }
+
+  .daily-injury-status,
+  .my-team-identity,
+  .rename-team-panel,
+  .league-tools,
+  .cycle-matchup-preview {
+    border-radius: var(--rr-radius-md);
+  }
+
+  .daily-injury-status {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .daily-injury-refresh-button,
+  .rename-team-trigger,
+  .change-profile-icon-trigger,
+  .save-team-name-button,
+  .cancel-team-name-button,
+  .copy-invite-button,
+  .close-profile-icon-picker,
+  .rename-team-controls input {
+    min-height: var(--rr-mobile-control-min-height);
+    font-size: var(--rr-mobile-text-label);
+  }
+}
+

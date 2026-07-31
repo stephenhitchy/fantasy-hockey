@@ -1642,3 +1642,84 @@
     scroll-snap-align: start;
   }
 }
+
+/* Batch M1: readable draft state and one-handed controls. */
+@media (max-width: 760px) {
+  .draft-room-page {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .draft-clock-bar,
+  .draft-pick-track-card,
+  .draft-asset-card,
+  .turn-card,
+  .sidebar-card,
+  .draft-roster-needs {
+    border-width: 1px;
+  }
+
+  .draft-clock-bar {
+    padding: 9px 10px;
+  }
+
+  .eyebrow,
+  .header-auto-draft-toggle,
+  .draft-state-badge,
+  .recent-pick-row > span,
+  .recent-pick-row small,
+  .asset-projection-strip small,
+  .drafted-player-row span,
+  .drafted-player-projections small,
+  .draft-news-note,
+  .player-availability-pill,
+  .ir-eligible-copy,
+  .player-availability-note,
+  .draft-injury-sync-banner span,
+  .draft-pick-track-heading > span,
+  .draft-pick-number,
+  .draft-pick-track-copy small,
+  .draft-clock-team span,
+  .draft-clock-time span,
+  .draft-clock-time small,
+  .turn-clock-summary span,
+  .queue-rank,
+  .queue-copy small,
+  .draft-roster-need span {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .asset-copy strong,
+  .queue-copy strong {
+    font-size: var(--rr-mobile-text-player);
+  }
+
+  .asset-copy span {
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .header-auto-draft-toggle,
+  .clock-control-button,
+  .auto-draft-toggle,
+  .queue-button,
+  .draft-button,
+  .draft-asset-card button,
+  .queue-row-actions button,
+  .retry-pool-button,
+  .pool-controls input,
+  .pool-controls select {
+    min-height: var(--rr-mobile-control-min-height);
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .queue-row-actions button {
+    min-width: var(--rr-mobile-control-min-height);
+  }
+
+  .draft-asset-card,
+  .draft-roster-needs {
+    padding: 10px;
+    border-radius: var(--rr-radius-md);
+  }
+}
+

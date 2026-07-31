@@ -937,6 +937,55 @@
   }
 }
 
+
+/* Batch M1: calm, readable mobile league summaries. */
+@media (max-width: 560px) {
+  .league-card {
+    padding: 14px;
+  }
+
+  .league-command {
+    gap: 10px;
+    padding: 10px;
+    border-width: 1px;
+  }
+
+  .league-summary-row div,
+  .mini-scoreboard div {
+    padding: 10px;
+    border-width: 1px;
+  }
+
+  .commissioner-badge,
+  .league-summary-row span,
+  .mini-scoreboard span,
+  .league-activity-badge,
+  .league-command-copy > span,
+  .dashboard-matchup-progress-copy span,
+  .dashboard-matchup-score > span,
+  .dashboard-matchup-progress-copy strong,
+  .league-attention-chip {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .league-command-copy > strong {
+    font-size: var(--rr-text-md);
+  }
+
+  .league-command-copy p {
+    font-size: var(--rr-mobile-text-body);
+  }
+
+  .dashboard-matchup-score > strong {
+    font-size: var(--rr-mobile-text-score);
+  }
+
+  .league-attention-chip {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dashboard-matchup-progress-track > span {
     transition: none;

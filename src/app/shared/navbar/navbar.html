@@ -149,12 +149,19 @@
 
   @if (leagueId(); as activeLeagueId) {
     <a
-      [routerLink]="['/leagues', activeLeagueId]"
+      [routerLink]="mobileLeaguePrimary().route"
       class="rr-nav-item rr-nav-item--stacked"
-      [class.active]="isLeagueHomeActive()"
+      [class.active]="isMobileLeaguePrimaryActive()"
+      [attr.aria-label]="'Open ' + mobileLeaguePrimary().label"
     >
-      <span class="nav-icon pixel-icon icon-league" aria-hidden="true"></span>
-      <span>League</span>
+      <span
+        class="nav-icon pixel-icon"
+        [class.icon-league]="mobileLeaguePrimary().kind === 'league'"
+        [class.icon-draft]="mobileLeaguePrimary().kind === 'draft'"
+        [class.icon-matchup]="mobileLeaguePrimary().kind === 'matchup'"
+        aria-hidden="true"
+      ></span>
+      <span>{{ mobileLeaguePrimary().label }}</span>
     </a>
 
     <a
@@ -250,6 +257,17 @@
       @if (leagueId(); as activeLeagueId) {
         <div class="mobile-menu-group">
           <span class="menu-label">Current league</span>
+
+          <a
+            [routerLink]="['/leagues', activeLeagueId]"
+            (click)="closeMore()"
+          >
+            <span class="pixel-icon icon-league icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>League HQ</strong>
+              <small>Overview, invites, and commissioner tools</small>
+            </span>
+          </a>
 
           <a
             [routerLink]="['/leagues', activeLeagueId, 'draft']"

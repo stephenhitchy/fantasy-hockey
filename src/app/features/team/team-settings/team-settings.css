@@ -2477,3 +2477,95 @@
     min-height: 112px;
   }
 }
+
+/* Batch M1: readable roster cards and dependable one-handed actions. */
+@media (max-width: 680px) {
+  .quick-actions-card,
+  .transaction-ledger-card,
+  .fantasy-player-card,
+  .ir-slot-card {
+    border-width: 1px;
+    border-radius: var(--rr-radius-md);
+  }
+
+  .eyebrow,
+  .team-record-chip span,
+  .team-stat-grid span,
+  .projection-strip span,
+  .score-team-card span,
+  .risk-pill,
+  .risk-row small,
+  .roster-status-pill,
+  .fantasy-player-main span,
+  .fantasy-player-main em,
+  .fantasy-player-score-stack span,
+  .roster-card-actions small,
+  .mini-roster-action,
+  .ir-player-main span,
+  .ir-player-main em,
+  .lineup-change-pill,
+  .lineup-change-target-pill,
+  .player-availability-pill,
+  .ir-availability-note,
+  .ir-activation-player-summary span,
+  .ir-activation-target-copy small,
+  .ir-waiver-warning,
+  .ir-open-slot-label,
+  .ir-activation-cycle-note,
+  .pending-slot-move-pill,
+  .team-stat-bar span,
+  .quick-actions-card .eyebrow,
+  .transaction-ledger-heading small,
+  .transaction-ledger-row time,
+  .transaction-player > span,
+  .transaction-player small,
+  .transaction-empty-state,
+  .player-injury-banner strong,
+  .player-injury-banner small,
+  .availability-policy-note,
+  .roster-drop-warning span {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .fantasy-player-main strong {
+    font-size: var(--rr-mobile-text-player);
+  }
+
+  .fantasy-player-score-stack strong {
+    font-size: var(--rr-text-md);
+  }
+
+  .transaction-player strong {
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .mini-roster-action,
+  .ir-slot-actions .mini-roster-action,
+  .primary-action,
+  .secondary-action,
+  .hero-add-drop-action,
+  .ir-activation-close,
+  .roster-drop-close,
+  .ir-activation-cancel,
+  .ir-activation-confirm,
+  .roster-drop-confirm {
+    min-height: var(--rr-mobile-control-min-height);
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .ir-activation-close,
+  .roster-drop-close {
+    width: var(--rr-mobile-control-min-height);
+    height: var(--rr-mobile-control-min-height);
+  }
+
+  .quick-actions-card,
+  .transaction-ledger-card {
+    padding: 12px;
+  }
+
+  .ir-activation-dialog {
+    padding: 16px;
+  }
+}
+

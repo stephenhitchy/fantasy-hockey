@@ -178,7 +178,7 @@
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     min-height: calc(70px + env(safe-area-inset-bottom));
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
     border-top: 2px solid var(--user-team-secondary);
     background: var(--rr-nav-background);
     box-shadow: var(--rr-nav-bottom-shadow);
@@ -188,7 +188,7 @@
     --rr-nav-item-min-height: 56px;
     --rr-nav-item-padding: 5px 2px;
     --rr-nav-item-gap: 3px;
-    --rr-nav-item-font-size: 10px;
+    --rr-nav-item-font-size: var(--rr-mobile-text-micro);
     --rr-nav-item-font-weight: 900;
     --rr-nav-item-color: var(--rr-nav-text-muted);
   }
@@ -220,10 +220,10 @@
   .mobile-menu-panel {
     width: min(100%, 560px);
     max-height: min(72dvh, 720px);
-    padding: 16px;
+    padding: 12px;
     overflow-y: auto;
     border: 1px solid var(--rr-nav-border-strong);
-    border-top: 4px solid var(--user-team-primary);
+    border-top: 3px solid var(--user-team-primary);
     border-radius: 0;
     background: var(--rr-nav-panel);
     box-shadow: var(--rr-nav-dialog-shadow);
@@ -245,7 +245,7 @@
   .mobile-menu-header span,
   .menu-label {
     color: var(--rr-nav-text-muted);
-    font-size: 10px;
+    font-size: var(--rr-mobile-text-micro);
     font-weight: 950;
     letter-spacing: 0.13em;
     text-transform: uppercase;
@@ -273,8 +273,8 @@
 
   .mobile-menu-group {
     display: grid;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 6px;
+    margin-top: 14px;
   }
 
   .menu-label {
@@ -287,7 +287,7 @@
     gap: 10px;
     align-items: center;
     min-height: 58px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     border: 1px solid var(--rr-nav-item-border);
     border-radius: 0;
     background: var(--rr-nav-item-background);
@@ -324,8 +324,8 @@
   .mobile-menu-group a small {
     margin-top: 3px;
     color: var(--rr-nav-text-detail);
-    font-size: 11px;
-    line-height: 1.3;
+    font-size: var(--rr-mobile-text-micro);
+    line-height: 1.35;
   }
 
   .mobile-logout-button {
@@ -345,7 +345,7 @@
 @media (max-width: 380px) {
   .mobile-bottom-nav a,
   .mobile-bottom-nav button {
-    font-size: 9px;
+    font-size: var(--rr-mobile-text-micro);
   }
 
   .nav-icon {

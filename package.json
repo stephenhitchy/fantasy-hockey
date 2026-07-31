@@ -65,7 +65,10 @@
     "verify:batch8c": "npm run verify:batch8b && npm run test:free-agent-simplification:run",
     "verify:batch8c-owner-controls": "npm run verify:batch8c && npm run test:platform-admin-replay-controls:run",
     "test:release-facing-cleanup:run": "node --test --test-concurrency=1 test/release-facing-cleanup/*.test.mjs",
-    "verify:batch8d": "npm run verify:batch8c-owner-controls && npm run test:release-facing-cleanup:run"
+    "verify:batch8d": "npm run verify:batch8c-owner-controls && npm run test:release-facing-cleanup:run",
+    "test:mobile-readability:run": "node --test --test-concurrency=1 test/mobile-readability/*.test.mjs",
+    "audit:mobile-readability": "node scripts/audit-mobile-readability.mjs",
+    "verify:batchm1": "npm run verify:batch8d && npm run test:mobile-readability:run && npm run audit:mobile-readability"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

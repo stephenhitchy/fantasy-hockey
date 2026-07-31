@@ -2570,3 +2570,121 @@
     box-shadow: inset 3px 0 0 rgba(255, 201, 92, 0.84);
   }
 }
+
+/* Batch M1: live-game information stays legible on a phone. */
+@media (max-width: 780px) {
+  .g .mobile-matchup-scorebar {
+    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    gap: 4px;
+    margin: 18px 0 14px;
+    padding: 10px 6px 7px;
+    border-radius: var(--rr-radius-md);
+  }
+
+  .g .mobile-matchup-scorebar::before {
+    top: -13px;
+    padding: 3px 9px;
+    font-size: var(--rr-mobile-text-micro);
+    letter-spacing: 0.08em;
+  }
+
+  .g .mobile-score-team {
+    min-height: 76px;
+    padding: 7px 4px;
+    border-radius: var(--rr-radius-sm);
+  }
+
+  .g .mobile-score-team > span {
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .g .mobile-score-team > strong {
+    font-size: var(--rr-mobile-text-score);
+  }
+
+  .g .mobile-score-team > small,
+  .g .mobile-score-center span,
+  .g .mobile-score-center small {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .g .mobile-score-center strong {
+    font-size: var(--rr-mobile-text-body);
+  }
+
+  .g .mobile-score-center small {
+    max-width: 72px;
+    line-height: 1.2;
+  }
+
+  .g .cycle-picker-control {
+    padding: 8px 10px;
+    border-radius: var(--rr-radius-md);
+  }
+
+  .g .cycle-picker-control span,
+  .g .matchup-arrow-nav small,
+  .g .fantasy-position-header,
+  .g .fantasy-player-main span,
+  .g .fantasy-player-main em,
+  .g .fantasy-player-score-stack span,
+  .g .position-total-row > span,
+  .g .position-total-row strong,
+  .g .position-total-row small,
+  .g .position-total-row em,
+  .g .future-window-callout,
+  .g .result-badge,
+  .g .scoreboard-result-badge,
+  .g .matchup-readiness-badge,
+  .g .auto-status-card small,
+  .g .projection-accuracy-save-status small,
+  .g .matchup-bench-heading p,
+  .g .matchup-bench-note,
+  .g .matchup-bench-card .fantasy-player-main em,
+  .g .matchup-bench-empty-copy strong,
+  .g .matchup-bench-empty-copy span,
+  .g .window-game-details summary,
+  .g .window-game-detail-list span,
+  .g .window-game-detail-list small {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .g .fantasy-player-main strong {
+    font-size: var(--rr-mobile-text-player);
+  }
+
+  .g .fantasy-player-score-stack strong {
+    font-size: var(--rr-text-md);
+  }
+
+  .g .cycle-picker-control select,
+  .g .matchup-arrow-nav button {
+    min-height: var(--rr-mobile-control-min-height);
+  }
+
+  .g .matchup-arrow-nav {
+    padding: 6px 8px;
+    border-width: 1px;
+    border-radius: var(--rr-radius-md);
+  }
+
+  .g .fantasy-player-card,
+  .g .position-total-row,
+  .g .window-game-detail-list {
+    border-radius: var(--rr-radius-sm);
+  }
+
+  .g .window-game-markers {
+    width: 92px;
+  }
+
+  .g .window-game-marker {
+    max-width: 26px;
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .g .window-game-detail-list strong {
+    font-size: var(--rr-mobile-text-label);
+  }
+}
+

@@ -218,6 +218,14 @@
   --rr-line-normal: 1.5;
   --rr-line-relaxed: 1.65;
 
+  /* Mobile readability scale: essential labels never drop below 12px. */
+  --rr-mobile-text-micro: var(--rr-text-xs);
+  --rr-mobile-text-label: 0.8125rem;
+  --rr-mobile-text-body: var(--rr-text-sm);
+  --rr-mobile-text-player: 0.9375rem;
+  --rr-mobile-text-score: clamp(1.75rem, 8vw, 2.5rem);
+  --rr-mobile-control-min-height: var(--rr-touch-target);
+
   /* Four-pixel spacing rhythm. */
   --rr-space-0: 0;
   --rr-space-1: 0.25rem;

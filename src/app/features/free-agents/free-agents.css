@@ -1901,3 +1901,125 @@ button:disabled {
     font-size: 17px;
   }
 }
+
+/* Batch M1: readable player decisions and full-size mobile controls. */
+@media (max-width: 820px) {
+  .free-agents-page {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .free-agent-hero,
+  .free-agent-list-card,
+  .roster-slot-step,
+  .pending-moves-card,
+  .selected-player-card,
+  .decision-asset-card,
+  .slot-choice-card,
+  .move-comparison-panel {
+    border-width: 1px;
+    border-radius: var(--rr-radius-md);
+  }
+
+  .free-agent-hero,
+  .free-agent-list-card,
+  .roster-slot-step,
+  .pending-moves-card {
+    padding: 12px;
+  }
+
+  .asset-row,
+  .decision-asset-card,
+  .slot-choice-card,
+  .move-comparison-panel {
+    padding: 10px;
+  }
+
+  .eyebrow,
+  .status-card span,
+  .filter-row label,
+  .asset-main em,
+  .selected-availability-pill,
+  .asset-projection span,
+  .selected-player-rank span,
+  .fairness-note,
+  .slot-label,
+  .slot-choice-asset small,
+  .slot-window-progress span,
+  .slot-window-progress small,
+  .slot-select-indicator,
+  .pending-slot-label,
+  .pending-status,
+  .player-availability-pill,
+  .projection-rank-pill,
+  .recent-form-pill,
+  .ir-eligible-copy,
+  .player-availability-note,
+  .cycle-dot-legend,
+  .cycle-decision-heading span,
+  .decision-metric-grid span,
+  .detail-label,
+  .cycle-decision-block > small,
+  .performance-pill,
+  .decision-details summary,
+  .decision-detail-grid p,
+  .pace-grid span,
+  .stat-breakdown-heading > small,
+  .stat-breakdown-item span,
+  .stat-breakdown-item small,
+  .decision-data-note,
+  .selected-performance-column small,
+  .slot-choice-decision-metrics > span,
+  .move-delta-summary span,
+  .comparison-role,
+  .comparison-player-card > small,
+  .comparison-metrics > span,
+  .season-total-row span,
+  .season-total-row small {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .asset-main strong,
+  .slot-choice-asset strong,
+  .comparison-player-card > strong {
+    font-size: var(--rr-mobile-text-player);
+  }
+
+  .asset-main > span,
+  .selected-player-main p,
+  .eligibility-card p {
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .refresh-button,
+  .change-player-button,
+  .retry-button,
+  .confirm-move-button,
+  .filter-row input,
+  .filter-row select,
+  .asset-row > button,
+  .claim-button,
+  .process-waiver-button,
+  .cancel-pending-button,
+  .choose-slot-button,
+  .decision-action-column .claim-button,
+  .decision-action-column .process-waiver-button {
+    min-height: var(--rr-mobile-control-min-height);
+    font-size: var(--rr-mobile-text-label);
+  }
+
+  .cycle-marker-row {
+    grid-template-columns: repeat(6, 26px);
+  }
+
+  .cycle-game-marker {
+    width: 26px;
+    height: 26px;
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  .cycle-dot-legend .cycle-game-marker {
+    width: 18px;
+    height: 18px;
+  }
+}

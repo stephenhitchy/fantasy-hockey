@@ -263,3 +263,31 @@
     margin-bottom: 140px;
   }
 }
+
+/* Batch M1: quieter decorative ribbon on narrow phones. */
+@media (max-width: 430px) {
+  .global-team-ribbon {
+    padding: 3px 0;
+    border-width: 1px 0;
+  }
+
+  .global-team-ribbon-track {
+    gap: 6px;
+  }
+
+  .global-team-logo-chip {
+    min-width: 38px;
+    height: 30px;
+    padding: 0 7px;
+    border-width: 1px;
+  }
+
+  .global-team-logo-chip img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .global-team-logo-chip small {
+    display: none;
+  }
+}

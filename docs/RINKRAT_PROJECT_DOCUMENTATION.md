@@ -6654,3 +6654,95 @@ This batch was rebuilt from the approved Batch 8C.1 baseline as one clean update
 - No automatic scoring, roster, draft, waiver, cycle, standings, playoff, or scheduled server behavior changed.
 
 Verification command: `npm run verify:batch8d`.
+
+---
+
+## Batch M1 — Mobile Readability and Adaptive Navigation
+
+### Goal
+
+Make the primary phone experience readable and easy to navigate during every league phase without changing scoring, six-game windows, roster rules, Firestore data, Cloud Function authority, or the approved desktop information architecture.
+
+### Adaptive mobile navigation
+
+The second bottom-navigation destination now follows the signed-in manager's real league state:
+
+| League state | Mobile destination | Route behavior |
+| --- | --- | --- |
+| Draft not yet scheduled (`setup`) or draft state still loading | **League** | Opens League HQ. |
+| Draft scheduled or live | **Draft** | Opens the league Draft Room directly. |
+| Draft complete and an owner matchup is available | **Matchup** | Opens that exact cycle and matchup. |
+| Draft complete but no owner matchup exists yet | **League** | Uses League HQ as a safe fallback while initialization finishes. |
+
+The matchup listener intentionally uses `listenToEarliestUnfinishedOwnerMatchup`. It searches across all active fantasy periods for the signed-in owner instead of assuming one league-wide cycle timestamp. This preserves RinkRat's asynchronous six-game roster-slot architecture when different NHL schedules cause multiple fantasy periods to overlap.
+
+`/leagues/create` and `/leagues/join` are explicitly excluded from league-ID detection. League HQ remains directly available in the **More** menu even while Draft or Matchup occupies the adaptive tab.
+
+### Shared phone readability scale
+
+The design-token layer now provides one restrained mobile scale:
+
+- Essential microcopy: 12px minimum.
+- Labels and controls: 13px.
+- Body copy: 14px.
+- Player names: 15px.
+- Matchup scores: responsive 28–40px.
+- Frequent action targets: 44px minimum.
+
+The pass applies these tokens to the mobile bottom navigation and the six highest-use league surfaces:
+
+- Dashboard
+- League HQ
+- Draft Room
+- Game Center
+- My Team
+- Free Agents
+
+Repeated utility cards use lighter one-pixel borders, smaller mobile padding, and calmer radii where appropriate. On phones at 430px or narrower, the decorative team ribbon keeps the logos but hides the redundant abbreviations and reduces its height. No desktop Game Center redesign or M3–M5 task-flow restructuring is included in this batch.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm1
+```
+
+The M1 suite verifies:
+
+- Reserved create/join routes are not interpreted as league IDs.
+- Setup, scheduled, live, and complete draft states resolve to the correct mobile destination.
+- A completed draft routes to the exact owner matchup when one exists.
+- Navbar state is backed by the real draft and cross-active-cycle owner-matchup listeners.
+- The shared 12px essential-text floor and 44px frequent-action target exist.
+- Dashboard, League HQ, Draft Room, Game Center, My Team, and Free Agents include their M1 mobile contracts.
+- The narrow-phone decorative ribbon reduction remains in place.
+
+### Manual mobile checklist
+
+Run the following checks in portrait at **320px, 360px, 390px, and 430px**, with mobile Safari and mobile Chrome represented before beta release.
+
+1. **Global navigation:** Confirm Home, the adaptive League/Draft/Matchup tab, Team, Players, and More remain visible above the safe area without horizontal scrolling. Confirm `/leagues/create` and `/leagues/join` show the non-league navigation.
+2. **Pre-draft:** Confirm the second tab reads League during setup, changes to Draft when scheduled or live, and opens the Draft Room directly.
+3. **Active season:** Confirm the second tab reads Matchup and opens the signed-in owner's earliest unfinished matchup even when roster-slot windows span overlapping periods. Confirm League HQ remains available in More.
+4. **Dashboard:** Confirm league names, state, score, matchup progress, attention chips, and the primary action are readable without zooming.
+5. **League HQ:** Confirm invite, copy, team identity, quick actions, injury refresh, rename, and profile controls are readable and the frequent controls are at least 44px high.
+6. **Draft Room:** Confirm turn state, clock, player names, queue rows, filters, Auto Draft, and Draft actions are readable and comfortably tappable.
+7. **Game Center:** Confirm both team names, scores, projections, readiness copy, player names, current points, and game markers 1–6 remain legible. Confirm no desktop hierarchy or scoring behavior changed.
+8. **My Team:** Confirm roster names, scores, injury state, transactions, Add/Drop, IR, bench, and confirmation controls are readable and easy to tap.
+9. **Free Agents:** Confirm search/filter fields, player cards, Season/Next 6/Rest of Season metrics, cycle markers, Add/Claim actions, slot comparison, and the confirmation dock remain readable. Test one legal add/drop and one waiver claim in a disposable league.
+10. **Themes and accessibility:** Repeat representative screens in Rink Dark, Light Ice, and OLED Black. Check reduced motion, keyboard focus where available, 200% browser text zoom, and the iPhone home-indicator safe area.
+11. **Stability:** Confirm no new console errors, clipped dialogs, accidental double actions, or horizontal page scrolling appear at any required width.
+
+### Deployment
+
+This batch changes the frontend, documentation, and local verification only. It does not require Firestore rule, index, or Cloud Function deployment.
+
+```bash
+npm run build
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M1 mobile readability and adaptive navigation"
+```
