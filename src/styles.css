@@ -383,11 +383,11 @@ app-cycle-one .window-game-marker {
   app-cycle-one .window-game-markers,
   app-cycle-one .single-team-view .window-game-markers {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
-    width: 100%;
-    max-width: 166px;
-    margin: 9px 0 0;
+    width: 82px;
+    max-width: 100%;
+    margin: 9px auto 0;
   }
 
   app-cycle-one .window-game-marker,

@@ -6345,3 +6345,20 @@ npm run verify:batch7c3
 ```
 
 After deployment, check Game Center in Team A, Both, and Team B views on desktop and mobile. Confirm every active player card shows games 1–6 as one compact ordered row and that played, missed, upcoming, and unavailable colors remain correct.
+
+
+## Batch 7C.3.3 — Wider Game Center Cards and Two-Row Game Markers
+
+The active-player cards now reserve more room for names, NHL team/position details, and current/projected scores. The Game Center shell can expand to 1,760 pixels on large displays, uses smaller internal gutters, and switches the two-team comparison to full-width stacked team panels at 1,180 pixels or below instead of squeezing both rosters into narrow columns.
+
+Each six-game indicator is now arranged as a compact 3-by-2 grid: games 1–3 on the first row and games 4–6 directly beneath them. This layout is used consistently in Team A, Both, Team B, single-team, and narrow-card fallbacks. Player names may wrap naturally instead of being forced into a single truncated line, and score numerals and supporting information are slightly larger.
+
+No game status, scoring, projection, roster-window, Firebase, Cloud Function, or Firestore behavior changed. The update is presentation-only.
+
+Run the normal verification command:
+
+```bash
+npm run verify:batch7c3
+```
+
+After deployment, check Game Center on a wide monitor and near 1,068 pixels. Above 1,180 pixels, both teams remain side by side with more room. At 1,180 pixels and below, the teams stack so every roster card remains readable. Confirm each active player shows games 1–3 above games 4–6 and that all played, missed, upcoming, and unavailable colors remain unchanged.

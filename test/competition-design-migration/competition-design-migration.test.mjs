@@ -130,6 +130,20 @@ test('Game Center composes shared shell, matchup cards, progress, badges, and co
   assert.doesNotMatch(combined, /cycle-matchup-overview|matchup-summary-stage|combined matchup progress/i);
 });
 
+
+
+test('Game Center uses a wider responsive roster and a compact two-row six-game marker grid', async () => {
+  const css = await source('src/app/features/cycles/cycle-one/cycle-one.css');
+  const globalCss = await source('src/styles.css');
+
+  assert.match(css, /\.g \.cycle-page \{[\s\S]*?width: 100%;[\s\S]*?max-width: 1760px;[\s\S]*?padding: 28px 10px 48px;/);
+  assert.match(css, /\.g \.teams-comparison \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 20px minmax\(0, 1fr\);/);
+  assert.match(css, /@media \(max-width: 1180px\) \{[\s\S]*?\.g \.teams-comparison \{[\s\S]*?grid-template-columns: 1fr;/);
+  assert.match(css, /\.g \.fantasy-player-main strong \{[\s\S]*?font-size: 14px;[\s\S]*?white-space: normal;/);
+  assert.match(css, /\.g \.window-game-markers \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*?width: 82px;/);
+  assert.match(globalCss, /app-cycle-one \.single-team-view \.window-game-markers \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+});
+
 test('competition palettes consolidate repeated literals without raising important debt', async () => {
   const expectations = [
     ['src/app/features/team/team-settings/team-settings.css', 224, 4, '--rr-team-migration-color-'],

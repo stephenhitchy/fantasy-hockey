@@ -84,7 +84,7 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.match(teamPanel, /Does not score while on the bench/);
   });
 
-  test('six-game markers use a full-width six-column row inside every active player card', async () => {
+  test('six-game markers use a full-width three-column two-row grid inside every active player card', async () => {
     const teamPanel = await read(
       'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
     );
@@ -94,7 +94,7 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.equal(
       (teamPanel.match(/class="window-game-markers"/g) ?? []).length,
       3,
-      'Forward, defense, and goalie cards should each render the same marker row.',
+      'Forward, defense, and goalie cards should each render the same marker grid.',
     );
     const playerMainBlocks = [
       ...teamPanel.matchAll(
@@ -110,7 +110,7 @@ describe('Batch 6A Game Center component boundaries', () => {
       );
     }
     assert.match(stylesheet, /\.g \.window-game-markers \{[\s\S]*?grid-column:\s*1 \/ -1;/);
-    assert.match(stylesheet, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/);
+    assert.match(stylesheet, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/);
     assert.match(stylesheet, /\.g \.window-game-marker \{[\s\S]*?aspect-ratio:\s*1;/);
     assert.doesNotMatch(
       globalStyles,
