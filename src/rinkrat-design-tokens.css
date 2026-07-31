@@ -137,6 +137,74 @@
   --rr-color-danger: var(--rr-danger);
   --rr-color-info: var(--rr-info);
 
+  /*
+   * Compatibility aliases for pages migrating from the legacy visual layers.
+   * These remain semantic aliases rather than independent theme values.
+   */
+  --surface-raised: var(--rr-color-surface);
+  --surface-inset: var(--rr-color-surface-raised);
+  --text-main: var(--rr-color-text);
+  --text-strong: var(--rr-color-text);
+  --button-bg: var(--rr-color-surface-raised);
+  --button-text: var(--rr-color-text);
+  --status-success-text: var(--rr-color-success);
+  --status-danger-text: var(--rr-color-danger);
+
+  /* Shared navigation palette. */
+  --rr-nav-background: #111c29;
+  --rr-nav-surface: #172230;
+  --rr-nav-panel: #182536;
+  --rr-nav-item-background: #1d2c3d;
+  --rr-nav-border: #2a3949;
+  --rr-nav-border-strong: #3b4d60;
+  --rr-nav-border-muted: #35465a;
+  --rr-nav-item-border: #2c3b4b;
+  --rr-nav-logo-border: #30465c;
+  --rr-nav-text: #ffffff;
+  --rr-nav-text-secondary: #b7c4d2;
+  --rr-nav-text-muted: #8f9fb0;
+  --rr-nav-text-detail: #9cabb9;
+  --rr-nav-danger-background: #321d27;
+  --rr-nav-danger-border: #76505a;
+  --rr-nav-danger-text: #ffd7df;
+  --rr-nav-backdrop: rgba(1, 7, 16, 0.76);
+  --rr-nav-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  --rr-nav-mobile-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  --rr-nav-bottom-shadow: 0 -12px 28px rgba(0, 0, 0, 0.34);
+  --rr-nav-dialog-shadow: 0 26px 70px rgba(0, 0, 0, 0.58);
+
+  /* Shared create/join shell palette. */
+  --rr-shell-text: #eff6ff;
+  --rr-shell-page-top-glow: rgba(86, 146, 242, 0.18);
+  --rr-shell-page-bottom-glow: rgba(53, 198, 255, 0.12);
+  --rr-shell-page-top: #07111d;
+  --rr-shell-page-middle: #091728;
+  --rr-shell-grid-line: rgba(255, 255, 255, 0.02);
+  --rr-shell-panel-border: #37557b;
+  --rr-shell-panel-top: rgba(17, 31, 47, 0.96);
+  --rr-shell-panel-bottom: rgba(12, 24, 42, 0.92);
+  --rr-shell-panel-outline: rgba(6, 14, 24, 0.9);
+  --rr-shell-panel-shadow: rgba(0, 0, 0, 0.28);
+  --rr-shell-kicker: #8ecfff;
+  --rr-shell-copy: #b3c7dd;
+  --rr-shell-field-label: #9cb2cb;
+  --rr-shell-field-background: #101d30;
+  --rr-shell-field-border: #344d70;
+  --rr-shell-field-focus: #77cfff;
+  --rr-shell-field-inset: rgba(4, 11, 20, 0.72);
+  --rr-shell-submit-border: #355070;
+  --rr-shell-submit-top: #ffe593;
+  --rr-shell-submit-bottom: #efc04b;
+  --rr-shell-submit-text: #241700;
+  --rr-shell-error-border: #b95e68;
+  --rr-shell-error-background: rgba(76, 28, 36, 0.92);
+  --rr-shell-error-text: #ffd9df;
+  --rr-shell-mascot-skin: #e7c2a3;
+  --rr-shell-mascot-shadow: #bb8f71;
+  --rr-shell-mascot-outline: #1f252d;
+  --rr-shell-mascot-stripe: #f7f8fb;
+  --rr-shell-mascot-dark: #232833;
+
   /* Type scale. */
   --rr-text-xs: 0.75rem;
   --rr-text-sm: 0.875rem;

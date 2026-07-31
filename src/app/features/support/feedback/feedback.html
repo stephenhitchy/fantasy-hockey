@@ -1,22 +1,22 @@
 <section class="feedback-page">
-  <header class="feedback-hero">
+  <header class="feedback-hero rr-card rr-card--raised rr-card--padded">
     <span class="eyebrow">Beta Bench</span>
     <h1>Send RinkRat Feedback</h1>
     <p>Your report includes the generalized page route and basic technical context. Do not include passwords, invite codes, or private personal information.</p>
   </header>
 
-  <article class="feedback-card">
+  <article class="feedback-card rr-card rr-card--raised rr-card--padded">
     @if (successMessage()) {
-      <p class="feedback-status success" role="status">{{ successMessage() }}</p>
+      <p class="feedback-status success rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
     }
 
     @if (errorMessage()) {
-      <p class="feedback-status error" role="alert">{{ errorMessage() }}</p>
+      <p class="feedback-status error rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
     }
 
-    <label class="feedback-field">
+    <label class="feedback-field rr-field-group">
       <span>Type of feedback</span>
-      <select [(ngModel)]="category" [disabled]="submitting()">
+      <select class="rr-select" [(ngModel)]="category" [disabled]="submitting()">
         <option value="bug">Something is broken</option>
         <option value="confusing">A screen or rule is confusing</option>
         <option value="incorrect-result">A fantasy result looks incorrect</option>
@@ -26,9 +26,10 @@
       </select>
     </label>
 
-    <label class="feedback-field">
+    <label class="feedback-field rr-field-group">
       <span>What happened?</span>
       <textarea
+        class="rr-textarea"
         [(ngModel)]="message"
         maxlength="2000"
         rows="10"
@@ -47,10 +48,10 @@
     </label>
 
     <div class="feedback-actions">
-      <button type="button" class="secondary-button" (click)="returnToPreviousPage()">
+      <button type="button" class="secondary-button rr-button rr-button--secondary" (click)="returnToPreviousPage()">
         Go Back
       </button>
-      <button type="button" class="primary-button" [disabled]="submitting()" (click)="submit()">
+      <button type="button" class="primary-button rr-button rr-button--primary" [disabled]="submitting()" (click)="submit()">
         {{ submitting() ? 'Sending Report...' : 'Send Feedback' }}
       </button>
     </div>

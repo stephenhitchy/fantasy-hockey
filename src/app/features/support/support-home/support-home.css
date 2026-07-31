@@ -1,8 +1,8 @@
 .support-shell {
   min-height: 100vh;
   padding: 28px 16px 60px;
-  background: var(--page-bg, #0d1724);
-  color: var(--text-main, #dce8f6);
+  background: var(--page-bg);
+  color: var(--text-main);
 }
 
 .support-back,
@@ -16,7 +16,7 @@
 .support-back {
   display: block;
   margin-bottom: 16px;
-  color: var(--text-main, #dce8f6);
+  color: var(--text-main);
   font-weight: 800;
   text-decoration: none;
 }
@@ -24,24 +24,25 @@
 .support-hero,
 .support-checklist,
 .support-grid article {
-  border: 3px solid var(--border-strong, #5d718a);
-  background: var(--surface-raised, #162336);
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, .3);
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-scoreboard) 72%, transparent);
 }
 
 .support-hero {
-  padding: 28px;
+  --rr-card-padding: 28px;
 }
 
 .support-hero h1 {
   margin: 8px 0;
-  color: var(--text-strong, #fff);
+  color: var(--text-strong);
 }
 
 .support-hero p,
 .support-grid p,
 .support-checklist li {
-  color: var(--text-muted, #b7c5d7);
+  color: var(--text-muted);
   line-height: 1.55;
 }
 
@@ -53,7 +54,7 @@
 }
 
 .support-grid article {
-  padding: 22px;
+  --rr-card-padding: 22px;
 }
 
 .support-grid article > span {
@@ -62,19 +63,19 @@
 
 .support-grid h2,
 .support-checklist h2 {
-  color: var(--text-strong, #fff);
+  color: var(--text-strong);
 }
 
 .support-grid a {
   display: inline-block;
   margin-top: 10px;
-  color: var(--user-team-secondary, #f1c36a);
+  color: var(--user-team-secondary);
   font-weight: 900;
 }
 
 .support-checklist {
   margin-top: 18px;
-  padding: 24px;
+  --rr-card-padding: 24px;
 }
 
 .support-checklist li + li {

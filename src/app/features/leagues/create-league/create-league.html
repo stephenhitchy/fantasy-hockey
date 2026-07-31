@@ -1,7 +1,7 @@
-<section class="pixel-shell-page">
-  <div class="shell-stage">
-    <section class="shell-copy">
-      <span class="eyebrow">Commissioner Setup</span>
+<section class="pixel-shell-page rr-pixel-shell-page">
+  <div class="shell-stage rr-pixel-shell-stage">
+    <section class="shell-copy rr-pixel-shell-panel rr-pixel-shell-copy">
+      <span class="eyebrow rr-pixel-shell-kicker">Commissioner Setup</span>
       <h1>Create a League</h1>
       <p>Launch a new competition, invite your friends, and get the season ready before opening night.</p>
 
@@ -12,21 +12,21 @@
         <li>Share the invite code after the league is created.</li>
       </ul>
 
-      <a routerLink="/dashboard" class="back-link">← Back to Dashboard</a>
+      <a routerLink="/dashboard" class="back-link rr-pixel-shell-back-link">← Back to Dashboard</a>
     </section>
 
-    <section class="shell-card">
-      <div class="card-header">
-        <span class="card-label">New League</span>
+    <section class="shell-card rr-pixel-shell-panel rr-pixel-shell-form">
+      <div class="card-header rr-pixel-shell-card-header">
+        <span class="card-label rr-pixel-shell-kicker">New League</span>
         <strong>Commissioner Panel</strong>
       </div>
 
-      <label class="form-field">
+      <label class="form-field rr-pixel-shell-field">
         <span>League Name</span>
         <input [(ngModel)]="name" placeholder="Ex: Saturday Night Skaters" />
       </label>
 
-      <label class="form-field">
+      <label class="form-field rr-pixel-shell-field">
         <span>Maximum Teams</span>
         <select [(ngModel)]="maxTeams">
           @for (option of teamOptions(); track option) {
@@ -93,17 +93,17 @@
         </div>
       </fieldset>
 
-      <button type="button" class="primary-submit" (click)="submit()" [disabled]="loading()">
+      <button type="button" class="primary-submit rr-button rr-pixel-shell-submit" (click)="submit()" [disabled]="loading()">
         {{ loading() ? 'Creating League...' : 'Create League' }}
       </button>
 
       @if (errorMessage()) {
-        <p class="status-message error">{{ errorMessage() }}</p>
+        <p class="status-message error rr-notice rr-notice--danger rr-pixel-shell-error">{{ errorMessage() }}</p>
       }
     </section>
 
-    <section class="pixel-mascot-card league-logo-preview" aria-label="League logo preview">
-      <div class="mascot-scoreboard">
+    <section class="pixel-mascot-card rr-pixel-shell-panel rr-pixel-shell-mascot league-logo-preview" aria-label="League logo preview">
+      <div class="mascot-scoreboard rr-pixel-shell-card-header">
         <span>League Preview</span>
         <strong>{{ name.trim() || 'Your League' }}</strong>
       </div>

@@ -6157,3 +6157,56 @@ Batch 7B is frontend-only. It does not require Firestore rules, indexes, Functio
 ```bash
 firebase deploy --only hosting:app -m "Batch 7B accessibility foundations"
 ```
+
+# Batch 7C.1 — Shared UI Migration
+
+Batch 7C.1 begins applying the approved Batch 7A design system to low-risk shared surfaces while preserving the established RinkRat appearance and all fantasy behavior.
+
+## What changed
+
+- Migrated the desktop and mobile primary navigation to the shared `.rr-nav-item` primitive.
+- Replaced every literal color in `navbar.css` with semantic navigation tokens from `rinkrat-design-tokens.css`.
+- Moved the duplicated Create League and Join League page shell into shared token-driven `.rr-pixel-shell-*` primitives.
+- Reduced `join-league.css` to feature-specific grid settings instead of keeping a second copy of the page, panel, form, button, error, and mascot styling.
+- Migrated Support, Feedback, Access Denied, Privacy, and Terms surfaces to shared card primitives.
+- Migrated Feedback controls to shared select, textarea, button, and notice primitives.
+- Added compatibility aliases for older `--text-main`, `--text-strong`, `--surface-raised`, and status variables so migrated pages use the same theme source as newer pages.
+- Added customization hooks to cards, buttons, fields, and notices so individual pages can preserve their approved spacing and presentation without duplicating the full implementation.
+- Lowered the tracked CSS debt ceiling from 597 to 595 `!important` declarations and from 3,295 to 3,216 literal colors.
+- Added nine migration contract tests and a shared UI migration audit.
+
+No TypeScript business logic, Firebase configuration, Firestore rules, Cloud Functions, scoring, drafting, roster processing, cycles, standings, injuries, or playoffs changed.
+
+## Batch 7C.1 verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch7c1
+```
+
+The command runs every approved Batch 7B check, nine shared UI migration tests, the design-system debt audit, the accessibility audit, and the new migration audit.
+
+## Manual appearance checklist
+
+Review the following in Rink Dark and Light Ice:
+
+1. Desktop navigation: active link, hover, Account, and Logout.
+2. Mobile navigation: all five bottom items, More panel, close control, and logout.
+3. Create League: copy panel, form panel, emblem/palette selection, error notice, and preview panel.
+4. Join League: invite field, submit button, error notice, and mascot panel.
+5. Support home, Feedback, Access Denied, Privacy, and Terms cards.
+6. Feedback success/error notices, fields, buttons, checkbox, and mobile stacking.
+7. Keyboard focus states on navigation, fields, buttons, and links.
+8. A mobile viewport around 390 pixels with no horizontal scrolling.
+
+## Deployment
+
+Batch 7C.1 is frontend-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch 7C.1 shared UI migration"
+```

@@ -1,57 +1,58 @@
 .legal-shell {
   min-height: 100vh;
   padding: 28px 16px 56px;
-  background: var(--page-bg, #0d1724);
-  color: var(--text-main, #dce8f6);
+  background: var(--page-bg);
+  color: var(--text-main);
 }
 
 .legal-back {
   display: inline-block;
   max-width: 900px;
   margin: 0 auto 16px;
-  color: var(--text-main, #dce8f6);
+  color: var(--text-main);
   font-weight: 800;
   text-decoration: none;
 }
 
 .legal-card {
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-shadow: 7px 7px 0 color-mix(in srgb, var(--rr-scoreboard) 72%, transparent);
+  --rr-card-padding: clamp(22px, 4vw, 42px);
   width: min(900px, 100%);
   margin: 0 auto;
-  padding: clamp(22px, 4vw, 42px);
-  border: 3px solid var(--border-strong, #5d718a);
-  background: var(--surface-raised, #162336);
-  box-shadow: 7px 7px 0 rgba(0, 0, 0, .32);
 }
 
 .legal-card h1 {
   margin: 8px 0 4px;
-  color: var(--text-strong, #fff);
+  color: var(--text-strong);
 }
 
 .legal-updated {
   margin: 0 0 26px;
-  color: var(--text-muted, #aebdd0);
+  color: var(--text-muted);
 }
 
 .legal-card section + section {
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 2px solid color-mix(in srgb, var(--border-strong, #5d718a) 55%, transparent);
+  border-top: 2px solid color-mix(in srgb, var(--border-strong) 55%, transparent);
 }
 
 .legal-card h2 {
   margin: 0 0 8px;
-  color: var(--text-strong, #fff);
+  color: var(--text-strong);
   font-size: 1.25rem;
 }
 
 .legal-card p {
   margin: 0;
-  color: var(--text-main, #dce8f6);
+  color: var(--text-main);
   line-height: 1.7;
 }
 
 .legal-card a {
-  color: var(--user-team-secondary, #f1c36a);
+  color: var(--user-team-secondary);
   font-weight: 800;
 }

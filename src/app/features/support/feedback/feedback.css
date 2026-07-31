@@ -5,15 +5,16 @@
 
 .feedback-hero,
 .feedback-card {
-  border: 3px solid var(--border-strong);
-  background: var(--surface-raised, var(--surface-1));
-  color: var(--text-main);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--border-strong) 30%, transparent);
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-color: var(--text-main);
+  --rr-card-shadow: 6px 6px 0 color-mix(in srgb, var(--border-strong) 30%, transparent);
 }
 
 .feedback-hero {
   margin-bottom: 18px;
-  padding: 26px;
+  --rr-card-padding: 26px;
 }
 
 .feedback-hero h1 {
@@ -27,12 +28,10 @@
 }
 
 .feedback-card {
-  padding: 26px;
+  --rr-card-padding: 26px;
 }
 
 .feedback-field {
-  display: grid;
-  gap: 8px;
   margin-bottom: 20px;
 }
 
@@ -41,14 +40,11 @@
   font-weight: 900;
 }
 
-.feedback-field select,
-.feedback-field textarea {
-  width: 100%;
-  border: 2px solid var(--border-strong);
-  background: var(--surface-inset, var(--surface-2));
-  color: var(--text-main);
-  padding: 12px;
-  font: inherit;
+.feedback-card {
+  --rr-field-border-color: var(--border-strong);
+  --rr-field-background: var(--surface-inset);
+  --rr-field-color: var(--text-main);
+  --rr-field-padding: 12px;
 }
 
 .feedback-field textarea {
@@ -89,23 +85,24 @@
 }
 
 .feedback-actions button {
-  min-height: 44px;
-  padding-inline: 18px;
+  --rr-button-min-height: 44px;
+  --rr-button-padding: var(--rr-space-2) 18px;
 }
 
 .feedback-status {
+  --rr-notice-padding: 12px;
+  --rr-notice-border-color: currentColor;
+  --rr-notice-background: transparent;
   margin: 0 0 18px;
-  padding: 12px;
-  border: 2px solid currentColor;
   font-weight: 800;
 }
 
 .feedback-status.success {
-  color: var(--status-success-text, #70e79d);
+  color: var(--status-success-text);
 }
 
 .feedback-status.error {
-  color: var(--status-danger-text, #ff93a2);
+  color: var(--status-danger-text);
 }
 
 .feedback-links {
@@ -127,7 +124,7 @@
 
   .feedback-hero,
   .feedback-card {
-    padding: 18px;
+    --rr-card-padding: 18px;
   }
 
   .feedback-actions {

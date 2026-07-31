@@ -131,15 +131,31 @@ test('keeps shared primitives free of hard-coded colors and important overrides'
   assert.doesNotMatch(css, /\b(?:rgb|rgba|hsl|hsla)\([^)]*\)/);
 });
 
-test('does not silently restyle existing templates during the foundation batch', async () => {
+test('keeps primitive adoption limited to deliberately reviewed templates', async () => {
+  const approved = new Set([
+    'src/app/features/errors/access-denied/access-denied.html',
+    'src/app/features/leagues/create-league/create-league.html',
+    'src/app/features/leagues/join-league/join-league.html',
+    'src/app/features/legal/privacy/privacy.html',
+    'src/app/features/legal/terms/terms.html',
+    'src/app/features/support/feedback/feedback.html',
+    'src/app/features/support/support-home/support-home.html',
+  ]);
   const appFiles = (await walk(path.join(sourceRoot, 'app'))).filter((filePath) => filePath.endsWith('.html'));
-  const html = (await Promise.all(appFiles.map((filePath) => readFile(filePath, 'utf8')))).join('\n');
 
-  assert.doesNotMatch(
-    html,
-    /\brr-(?:card|button|field|select|textarea|badge|notice|progress|state|spinner)\b/,
-    'Batch 7A primitives must remain opt-in until a page is deliberately migrated and manually reviewed.',
-  );
+  for (const filePath of appFiles) {
+    const html = await readFile(filePath, 'utf8');
+    const usesMigratedPrimitive =
+      /\brr-(?:card|button|field|select|textarea|badge|notice|progress|state|spinner)\b/.test(html);
+    if (!usesMigratedPrimitive) continue;
+
+    const relativePath = path.relative(root, filePath);
+    assert.equal(
+      approved.has(relativePath),
+      true,
+      `${relativePath} uses a visual primitive without being in the reviewed migration allowlist.`,
+    );
+  }
 });
 
 test('keeps every stylesheet structurally balanced', async () => {

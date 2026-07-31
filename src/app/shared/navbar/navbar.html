@@ -15,6 +15,7 @@
     <div class="desktop-links">
       <a
         routerLink="/dashboard"
+        class="rr-nav-item"
         routerLinkActive="active"
         [routerLinkActiveOptions]="{ exact: true }"
       >
@@ -24,6 +25,7 @@
       @if (leagueId(); as activeLeagueId) {
         <a
           [routerLink]="['/leagues', activeLeagueId]"
+          class="rr-nav-item"
           [class.active]="isLeagueHomeActive()"
         >
           Current League
@@ -32,6 +34,7 @@
 
       <a
         routerLink="/leagues/create"
+        class="rr-nav-item"
         routerLinkActive="active"
       >
         Create
@@ -39,6 +42,7 @@
 
       <a
         routerLink="/leagues/join"
+        class="rr-nav-item"
         routerLinkActive="active"
       >
         Join
@@ -46,6 +50,7 @@
 
       <a
         routerLink="/training-camp"
+        class="rr-nav-item"
         routerLinkActive="active"
       >
         Training Camp
@@ -54,6 +59,7 @@
       @if (leagueId(); as activeLeagueId) {
         <a
           [routerLink]="['/leagues', activeLeagueId, 'scoring']"
+          class="rr-nav-item"
           [class.active]="isLeagueSectionActive('scoring')"
         >
           Scoring
@@ -61,6 +67,7 @@
       } @else {
         <a
           routerLink="/scoring"
+          class="rr-nav-item"
           routerLinkActive="active"
         >
           Scoring
@@ -69,6 +76,7 @@
 
       <a
         routerLink="/support/feedback"
+        class="rr-nav-item"
         [queryParams]="leagueId() ? { leagueId: leagueId(), from: currentUrl() } : { from: currentUrl() }"
         routerLinkActive="active"
       >
@@ -78,6 +86,7 @@
       @if (isPlatformAdmin()) {
         <a
           routerLink="/admin"
+          class="rr-nav-item"
           routerLinkActive="active"
         >
           Admin
@@ -87,7 +96,7 @@
       <a
         routerLink="/account/settings"
         routerLinkActive="active"
-        class="account-nav-link"
+        class="account-nav-link rr-nav-item"
       >
         <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
         <span>Account</span>
@@ -95,7 +104,7 @@
 
       <button
         type="button"
-        class="logout-button"
+        class="logout-button rr-nav-item"
         (click)="logout()"
       >
         Logout
@@ -131,6 +140,7 @@
 >
   <a
     routerLink="/dashboard"
+    class="rr-nav-item rr-nav-item--stacked"
     [class.active]="isExactRoute('/dashboard')"
   >
     <span class="nav-icon pixel-icon icon-home" aria-hidden="true"></span>
@@ -140,6 +150,7 @@
   @if (leagueId(); as activeLeagueId) {
     <a
       [routerLink]="['/leagues', activeLeagueId]"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isLeagueHomeActive()"
     >
       <span class="nav-icon pixel-icon icon-league" aria-hidden="true"></span>
@@ -148,6 +159,7 @@
 
     <a
       [routerLink]="['/leagues', activeLeagueId, 'team']"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isLeagueSectionActive('team')"
     >
       <span class="nav-icon pixel-icon icon-team" aria-hidden="true"></span>
@@ -156,6 +168,7 @@
 
     <a
       [routerLink]="['/leagues', activeLeagueId, 'free-agents']"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isLeagueSectionActive('free-agents')"
     >
       <span class="nav-icon pixel-icon icon-players" aria-hidden="true"></span>
@@ -164,6 +177,7 @@
   } @else {
     <a
       routerLink="/leagues/create"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isExactRoute('/leagues/create')"
     >
       <span class="nav-icon pixel-icon icon-create" aria-hidden="true"></span>
@@ -172,6 +186,7 @@
 
     <a
       routerLink="/leagues/join"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isExactRoute('/leagues/join')"
     >
       <span class="nav-icon pixel-icon icon-join" aria-hidden="true"></span>
@@ -180,6 +195,7 @@
 
     <a
       routerLink="/account/settings"
+      class="rr-nav-item rr-nav-item--stacked"
       [class.active]="isExactRoute('/account/settings')"
     >
       <span class="nav-icon pixel-icon icon-account" aria-hidden="true"></span>
@@ -189,6 +205,7 @@
 
   <button
     type="button"
+    class="rr-nav-item rr-nav-item--stacked"
     [class.active]="moreOpen()"
     [attr.aria-expanded]="moreOpen()"
     aria-controls="mobile-more-menu"

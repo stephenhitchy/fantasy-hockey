@@ -6,13 +6,14 @@
 }
 
 .access-card {
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-color: var(--text-main);
+  --rr-card-shadow: 6px 6px 0 color-mix(in srgb, var(--border-strong) 35%, transparent);
+  --rr-card-padding: 30px;
   width: min(620px, 100%);
-  padding: 30px;
   text-align: center;
-  border: 3px solid var(--border-strong);
-  background: var(--surface-raised, var(--surface-1));
-  color: var(--text-main);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--border-strong) 35%, transparent);
 }
 
 .access-icon {
@@ -43,8 +44,8 @@
 .access-actions a {
   padding: 10px 16px;
   border: 2px solid var(--border-strong);
-  background: var(--button-bg, var(--surface-2));
-  color: var(--button-text, var(--text-strong));
+  background: var(--button-bg);
+  color: var(--button-text);
   text-decoration: none;
   font-weight: 800;
 }

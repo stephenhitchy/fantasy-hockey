@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "description": "Batch 7A baseline. Future visual work may reduce these values but should not increase them without an explicit migration decision.",
-  "allCssImportantDeclarations": 597,
-  "allCssLiteralColors": 3295,
+  "description": "Batch 7C.1 migration baseline. Shared navigation, onboarding shells, support cards, forms, and notices have moved to token-driven primitives; future visual work should maintain or reduce these values.",
+  "allCssImportantDeclarations": 595,
+  "allCssLiteralColors": 3216,
   "globalCssLiteralColorsOutsideTokenFile": 420,
   "globalRootSelectorsOutsideTokenFile": 0,
   "sharedPrimitiveImportantDeclarations": 0,
