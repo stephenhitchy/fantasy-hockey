@@ -6476,3 +6476,67 @@ This batch adds the `/v1/score/now` route to the existing NHL proxy, so deploy t
 ```bash
 firebase deploy --only functions:nhlApiProxy,hosting:app -m "Add NHL dashboard scoreboard and readable league names"
 ```
+
+---
+
+## Batch 8B — Task-First League HQ Organization
+
+### Goal
+
+Make League HQ read in the same order a manager or commissioner naturally thinks: invite people, take the current action, manage their team, understand league status, review teams, then open less-common management tools.
+
+### Changes
+
+- The league invite code now appears in the top-right priority area beside the league name whenever the pre-draft invite period is open.
+- The invite card includes a large readable code, one-click copy action, joined-team count, open-slot label, and semantic fill progress.
+- The single top action adapts to league state:
+  - Enter Live Draft during a live draft.
+  - Draft Setup for a commissioner before draft completion.
+  - Draft Room for an ordinary pre-draft manager.
+  - My Matchup after the fantasy season begins.
+  - My Team while the completed draft is still being converted into the opening cycle.
+- The first full-width section is now **League Essentials**. It keeps My Team, Players, Standings, Point Leaders, and Playoffs in a stable manager-friendly order. A commissioner also receives Draft Room before the draft begins, while the state-critical action remains in the header.
+- League-specific team name and profile-picture controls moved into a dedicated **Your Team** section rather than expanding the page header.
+- Draft status, season status, league format, and the shared injury report are grouped into one **League Overview** area.
+- The complete matchup-card list is preserved but moved behind an optional cycle preview. Direct My Matchup and All Matchups buttons remain visible.
+- Schedule and projection pages moved into a less-prominent **Schedule and analysis** disclosure.
+- Commissioner tools are now separated into:
+  - League management: Draft Setup and Player Availability.
+  - Technical and testing: Scoring Diagnostics and Release Readiness.
+- League deletion remains isolated at the very bottom of the page.
+
+No scoring, draft, roster, cycle, standings, injury, Firebase, Cloud Function, or Firestore authority behavior changed.
+
+### Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch8b
+```
+
+### Manual checks
+
+1. Open a pre-draft league and confirm the invite code is immediately visible beside the league title.
+2. Copy the code and confirm the success message is announced and the code is placed on the clipboard.
+3. Confirm joined teams, open spots, and the capacity progress bar match the league.
+4. Confirm commissioners see Draft Setup before Draft Room and ordinary managers see Draft Room without commissioner tools.
+5. Confirm a live draft prioritizes Enter Live Draft.
+6. Confirm an active season prioritizes My Matchup and My Team.
+7. Test every League Essentials tile.
+8. Rename the team and change the league-specific profile picture from the Your Team section.
+9. Expand the cycle matchup preview, Schedule and analysis, and Commissioner tools disclosures.
+10. Confirm technical diagnostics remain separated from everyday league management.
+11. Check Rink Dark, Light Ice, and a viewport near 390 pixels wide for readable code layout and no horizontal scrolling.
+12. Confirm the Danger Zone remains last and still requires the full league-name confirmation.
+
+### Deployment
+
+This batch is frontend-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch 8B task-first League HQ"
+```

@@ -217,6 +217,31 @@ export class LeagueDetail implements OnDestroy {
 
   readonly shouldShowInviteCode = computed(() => this.draft()?.status !== 'complete');
 
+  readonly openTeamSpots = computed(() => {
+    const maximumTeams = this.league()?.maxTeams ?? 0;
+    return Math.max(0, maximumTeams - this.teams().length);
+  });
+
+  readonly leagueFillPercentage = computed(() => {
+    const maximumTeams = this.league()?.maxTeams ?? 0;
+
+    if (maximumTeams <= 0) {
+      return 0;
+    }
+
+    return Math.min(100, Math.round((this.teams().length / maximumTeams) * 100));
+  });
+
+  readonly inviteAvailabilityLabel = computed(() => {
+    const openSpots = this.openTeamSpots();
+
+    if (openSpots === 0) {
+      return 'League is full';
+    }
+
+    return `${openSpots} open ${openSpots === 1 ? 'spot' : 'spots'}`;
+  });
+
   readonly draftStatusLabel = computed(() => {
     const draft = this.draft();
     const scheduledStart = this.scheduledStartDate();

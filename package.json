@@ -57,7 +57,9 @@
     "test:dashboard-command-center:run": "node --test --test-concurrency=1 test/dashboard-command-center/*.test.mjs",
     "verify:batch8a": "npm run verify:batch7c3 && npm run test:dashboard-command-center:run",
     "test:dashboard-scoreboard:run": "node --test --test-concurrency=1 test/dashboard-scoreboard/*.test.mjs",
-    "verify:batch8a1": "npm run verify:batch8a && npm run test:dashboard-scoreboard:run"
+    "verify:batch8a1": "npm run verify:batch8a && npm run test:dashboard-scoreboard:run",
+    "test:league-hq-organization:run": "node --test --test-concurrency=1 test/league-hq-organization/*.test.mjs",
+    "verify:batch8b": "npm run verify:batch8a1 && npm run test:league-hq-organization:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

@@ -1884,3 +1884,360 @@
     width: 100%;
   }
 }
+
+/* Batch 8B: task-first League HQ information architecture. */
+.league-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+  align-items: start;
+}
+
+.league-header-copy {
+  min-width: 0;
+}
+
+.league-header-copy h1 > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.league-header-priority {
+  display: grid;
+  gap: 12px;
+}
+
+.top-invite-card {
+  padding: 16px;
+  border-color: var(--user-team-outline);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--user-team-primary) 24%, var(--rr-color-surface-raised)),
+      var(--rr-color-surface-raised)
+    );
+  box-shadow: var(--rr-shadow-card);
+}
+
+.top-invite-heading,
+.top-invite-code-row,
+.invite-progress-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.top-invite-heading h2 {
+  margin: 0;
+  color: var(--rr-color-text);
+  font-size: 20px;
+}
+
+.invite-slots-badge {
+  flex: 0 0 auto;
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text-muted);
+}
+
+.top-invite-card > p {
+  margin: 8px 0 12px;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.top-invite-code-row {
+  align-items: stretch;
+}
+
+.top-invite-code-row .invite-code {
+  display: flex;
+  min-height: 48px;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--user-team-accent);
+  background: var(--rr-color-page);
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-display);
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-align: center;
+}
+
+.copy-invite-button {
+  flex: 0 0 auto;
+}
+
+.invite-progress-copy {
+  margin-top: 11px;
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.invite-progress {
+  height: 8px;
+  margin-top: 6px;
+}
+
+.invite-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--user-team-primary), var(--user-team-accent));
+  transition: width var(--rr-duration-normal) ease;
+}
+
+.top-invite-card .copy-message {
+  display: block;
+  margin-top: 8px;
+  color: var(--rr-color-success);
+  text-align: left;
+}
+
+.league-header-priority .league-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.league-header-priority .league-actions a {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.league-header-priority .league-actions a:only-child {
+  grid-column: 1 / -1;
+}
+
+.league-essentials-card {
+  margin-top: 18px;
+}
+
+.league-essentials-card .hub-action-highlight {
+  order: -1;
+}
+
+.my-team-card,
+.league-overview-section,
+.league-secondary-tools {
+  margin-top: 18px;
+}
+
+.my-team-card {
+  border-color: var(--user-team-outline-soft);
+}
+
+.my-team-card > .section-heading p,
+.league-overview-section > .section-heading p {
+  max-width: 440px;
+  margin: 0;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.my-team-card .my-team-identity {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 14px;
+  background: var(--rr-color-surface-strong);
+}
+
+.my-team-card .my-team-identity > div:first-child {
+  min-width: 0;
+}
+
+.league-overview-section > .league-info-grid {
+  margin-top: 14px;
+}
+
+.league-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.league-status-grid > .draft-status-card,
+.league-status-grid > .cycle-status-card {
+  min-width: 0;
+  height: fit-content;
+}
+
+.league-status-grid > .cycle-status-card:only-child {
+  grid-column: 1 / -1;
+}
+
+.league-overview-section .daily-injury-status {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+
+.cycle-matchup-preview {
+  margin-top: 14px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-strong);
+  overflow: hidden;
+}
+
+.cycle-matchup-preview > summary {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cycle-matchup-preview > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cycle-matchup-preview > summary strong,
+.cycle-matchup-preview > summary small {
+  display: block;
+}
+
+.cycle-matchup-preview > summary strong {
+  color: var(--rr-color-text);
+  font-size: 13px;
+}
+
+.cycle-matchup-preview > summary small {
+  margin-top: 3px;
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+}
+
+.cycle-matchup-preview[open] .summary-chevron {
+  transform: rotate(180deg);
+}
+
+.cycle-matchup-preview .matchup-list {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.league-secondary-tools {
+  display: grid;
+  gap: 12px;
+}
+
+.league-secondary-tools .league-tools {
+  margin-top: 0;
+}
+
+.commissioner-tools {
+  border-color: var(--user-team-outline-soft);
+}
+
+.commissioner-tools-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 12px 12px;
+}
+
+.commissioner-tool-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rr-color-border);
+}
+
+.commissioner-tool-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.commissioner-tool-section h3 {
+  margin: 0;
+  color: var(--rr-color-text);
+  font-size: 15px;
+}
+
+.technical-tool-section {
+  opacity: 0.9;
+}
+
+.teams-section {
+  margin-top: 22px;
+}
+
+@media (max-width: 980px) {
+  .league-header,
+  .league-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .league-header-priority {
+    width: 100%;
+  }
+
+  .my-team-card > .section-heading,
+  .league-overview-section > .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .my-team-card > .section-heading p,
+  .league-overview-section > .section-heading p {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-invite-heading,
+  .top-invite-code-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .invite-slots-badge {
+    align-self: flex-start;
+  }
+
+  .copy-invite-button {
+    width: 100%;
+  }
+
+  .league-header-priority .league-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .my-team-card,
+  .league-overview-section,
+  .league-secondary-tools,
+  .league-essentials-card {
+    margin-top: 12px;
+  }
+
+  .my-team-card {
+    padding: 16px;
+  }
+
+  .my-team-card .my-team-identity {
+    align-items: stretch;
+  }
+
+  .cycle-matchup-preview .matchup-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.league-status-grid > .draft-status-card,
+.league-status-grid > .cycle-status-card {
+  margin-top: 0;
+}

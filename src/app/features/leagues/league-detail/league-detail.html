@@ -5,7 +5,7 @@
 } @else {
   <section class="league-page">
     <header class="league-header">
-      <div>
+      <div class="league-header-copy">
         <span class="eyebrow">Fantasy Hockey League</span>
         <h1>
           <span class="league-title-logo" aria-hidden="true">
@@ -17,13 +17,174 @@
           Cycle Matchups ·
           {{ teams().length }} / {{ league()?.maxTeams }} Teams
         </p>
+      </div>
+
+      <div class="league-header-priority">
+        @if (shouldShowInviteCode()) {
+          <section class="top-invite-card rr-card rr-card--padded" aria-labelledby="invite-code-title">
+            <div class="top-invite-heading">
+              <div>
+                <span class="draft-section-eyebrow">Invite Managers</span>
+                <h2 id="invite-code-title">League Code</h2>
+              </div>
+
+              <span class="invite-slots-badge rr-badge">
+                {{ teams().length }} / {{ league()?.maxTeams }} joined
+              </span>
+            </div>
+
+            <p>Share this code with the people joining your league.</p>
+
+            <div class="top-invite-code-row">
+              <strong class="invite-code">{{ league()?.inviteCode }}</strong>
+              <button
+                type="button"
+                class="copy-invite-button rr-button rr-button--primary"
+                (click)="copyInviteCode()"
+              >
+                Copy Code
+              </button>
+            </div>
+
+            <div class="invite-progress-copy">
+              <span>{{ inviteAvailabilityLabel() }}</span>
+              <span>{{ leagueFillPercentage() }}% filled</span>
+            </div>
+
+            <div
+              class="invite-progress rr-progress"
+              role="progressbar"
+              aria-label="League team slots filled"
+              aria-valuemin="0"
+              [attr.aria-valuemax]="league()?.maxTeams ?? 0"
+              [attr.aria-valuenow]="teams().length"
+            >
+              <span [style.width.%]="leagueFillPercentage()"></span>
+            </div>
+
+            @if (copyMessage()) {
+              <span class="copy-message" aria-live="polite">{{ copyMessage() }}</span>
+            }
+          </section>
+        }
+
+        <nav class="league-actions" aria-label="Primary league actions">
+          @if (draft()?.status === 'live') {
+            <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
+              Enter Live Draft
+            </a>
+          } @else if (draft()?.status !== 'complete') {
+            @if (isCommissioner()) {
+              <a
+                class="primary-action commissioner-action rr-button rr-button--primary"
+                [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
+              >
+                Draft Setup
+              </a>
+            } @else {
+              <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
+                Draft Room
+              </a>
+            }
+          } @else if (cycle()) {
+            <a class="primary-action rr-button rr-button--primary" [routerLink]="getCurrentOwnerMatchupLink()">
+              Open My Matchup
+            </a>
+          } @else {
+            <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'team']">
+              My Team
+            </a>
+          }
+        </nav>
+      </div>
+    </header>
+
+    @if (errorMessage()) {
+      <section class="error-card rr-notice rr-notice--danger">
+        {{ errorMessage() }}
+      </section>
+    }
+
+    <section class="quick-actions-card league-essentials-card rr-card rr-card--padded" aria-labelledby="league-essentials-title">
+      <div class="quick-actions-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Essentials</span>
+          <h2 id="league-essentials-title">Most-used league pages</h2>
+        </div>
+
+        <p>The top button follows the current phase; these are the pages managers use most.</p>
+      </div>
+
+      <div class="quick-actions-grid primary-actions-grid">
+        @if (isCommissioner() && draft()?.status !== 'complete' && draft()?.status !== 'live') {
+          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
+            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
+            <span class="hub-action-copy">
+              <strong>Draft Room</strong>
+              <span>Enter or review the league draft.</span>
+            </span>
+          </a>
+        }
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
+          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>My Team</strong>
+            <span>Roster, IR, waivers, and moves.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
+          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Players</strong>
+            <span>Browse free agents and availability.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
+          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Standings</strong>
+            <span>Records, points, and league rank.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
+          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Point Leaders</strong>
+            <span>Top forwards, defensemen, and goalie units.</span>
+          </span>
+        </a>
+
+        @if (draft()?.status === 'complete') {
+          <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
+            <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
+            <span class="hub-action-copy">
+              <strong>Playoffs</strong>
+              <span>Seeds, bracket, consolation, and final placements.</span>
+            </span>
+          </a>
+        }
+      </div>
+    </section>
+
+    <section class="my-team-card rr-card rr-card--padded" aria-labelledby="my-league-team-title">
+      <div class="section-heading rr-section-heading">
+        <div>
+          <span class="draft-section-eyebrow">Your Team</span>
+          <h2 id="my-league-team-title">Team identity</h2>
+        </div>
+        <p>Manage the name and profile picture used only in this league.</p>
+      </div>
 
         @if (myTeam(); as currentTeam) {
           <div class="my-team-identity">
             <div class="manager-name-stack">
               <app-manager-avatar [profileIconId]="getTeamProfileIconId(currentTeam.ownerId)" [label]="getTeamManagerLabel(currentTeam.ownerId)" size="md" />
               <div>
-                <span>Your Team</span>
+                <span>League Team</span>
                 <strong>{{ currentTeam.teamName }}</strong>
               </div>
             </div>
@@ -161,70 +322,16 @@
             </small>
           }
         }
-      </div>
-
-      <div class="league-actions">
-        @if (draft()?.status === 'live') {
-          <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
-            Enter Live Draft
-          </a>
-        } @else if (draft()?.status !== 'complete') {
-          <a class="secondary-action rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'draft']">
-            Draft Room
-          </a>
-        }
-
-        @if (isCommissioner() && draft()?.status !== 'complete') {
-          <a
-            class="secondary-action commissioner-action rr-button rr-button--secondary"
-            [routerLink]="['/leagues', leagueId, 'draft', 'setup']"
-          >
-            Draft Setup
-          </a>
-        }
-      </div>
-    </header>
-
-    @if (errorMessage()) {
-      <section class="error-card rr-notice rr-notice--danger">
-        {{ errorMessage() }}
-      </section>
-    }
-
-    <section
-      class="daily-injury-status rr-notice rr-notice--info"
-      [class.daily-status-running]="
-        dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'
-      "
-      [class.daily-status-success]="injurySyncState()?.lastDailySyncKey === getUtcDailyKey()"
-      [class.daily-status-warning]="
-        dailyInjuryRefreshError() || injurySyncState()?.status === 'error'
-      "
-      aria-live="polite"
-    >
-      <span class="daily-injury-icon pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
-
-      <div class="daily-injury-copy">
-        <span class="draft-section-eyebrow">Daily Injury Report</span>
-        <strong>{{ getDailyInjuryStatusLabel() }}</strong>
-        <p>{{ getDailyInjuryStatusDescription() }}</p>
-      </div>
-
-      <div class="daily-injury-meta">
-        <small>{{ getDailyInjuryStatusTimeLabel() }}</small>
-
-        @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
-          <button
-            type="button"
-            class="daily-injury-refresh-button rr-button rr-button--secondary"
-            (click)="requestTodayInjuryRefresh()"
-            [disabled]="dailyInjuryRefreshInProgress()"
-          >
-            {{ dailyInjuryRefreshInProgress() ? 'Refreshing…' : 'Refresh Today' }}
-          </button>
-        }
-      </div>
     </section>
+
+    <section class="league-overview-section" aria-labelledby="league-status-title">
+      <div class="section-heading rr-section-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Overview</span>
+          <h2 id="league-status-title">Status and settings</h2>
+        </div>
+        <p>Draft, season, roster format, and the shared injury report.</p>
+      </div>
 
     <section class="league-info-grid rr-stat-grid">
       <article class="league-info-card rr-stat-card">
@@ -250,6 +357,7 @@
       </article>
     </section>
 
+      <div class="league-status-grid">
     @if (shouldShowDraftStatus()) {
       <section class="draft-status-card rr-card rr-card--padded">
         <div class="draft-status-heading">
@@ -304,151 +412,6 @@
       </section>
     }
 
-    <section class="quick-actions-card rr-card rr-card--padded">
-      <div class="quick-actions-heading">
-        <div>
-          <span class="draft-section-eyebrow">League Hub</span>
-          <h2>Where do you want to go?</h2>
-        </div>
-
-        <p>The most common league actions are kept up front.</p>
-      </div>
-
-      <div class="quick-actions-grid primary-actions-grid">
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
-          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>My Team</strong>
-            <span>Roster, IR, waivers, and moves.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="getCurrentOwnerMatchupLink()">
-          <span class="hub-action-icon pixel-icon icon-matchup icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>My Matchup</strong>
-            <span>Open your earliest unfinished matchup.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
-          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Players</strong>
-            <span>Browse free agents and availability.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
-          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Standings</strong>
-            <span>Records, points, and league rank.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
-          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Point Leaders</strong>
-            <span>Top forwards, defensemen, and goalie units.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
-          <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Playoffs</strong>
-            <span>Projected seeds, bracket, and final placements.</span>
-          </span>
-        </a>
-
-        @if (draft()?.status !== 'complete') {
-          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
-            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
-            <span class="hub-action-copy">
-              <strong>Draft Room</strong>
-              <span>Enter or review the league draft.</span>
-            </span>
-          </a>
-        }
-      </div>
-
-      <details class="league-tools">
-        <summary>
-          <span>
-            <strong>More league tools</strong>
-            <small>Schedule, projections, and league management</small>
-          </span>
-
-          <span class="summary-chevron" aria-hidden="true">⌄</span>
-        </summary>
-
-        <div class="league-tools-grid">
-          <a
-            class="tool-link rr-action-tile"
-            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
-          >
-            <span aria-hidden="true">🗂</span>
-            <span>
-              <strong>All Matchups</strong>
-              <small>Every matchup in this cycle</small>
-            </span>
-          </a>
-
-          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
-            <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
-            <span>
-              <strong>Full Schedule</strong>
-              <small>Round-robin schedule and history</small>
-            </span>
-          </a>
-
-          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
-            <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
-            <span>
-              <strong>Playoff Bracket</strong>
-              <small>Seeds, rounds, consolation, and placements</small>
-            </span>
-          </a>
-
-          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'projections']">
-            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
-            <span>
-              <strong>Projection Lab</strong>
-              <small>Ratings and reliability checks</small>
-            </span>
-          </a>
-
-          @if (isCommissioner()) {
-            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'player-availability']">
-              <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
-              <span>
-                <strong>Player Availability</strong>
-                <small>Injury statuses and IR eligibility</small>
-              </span>
-            </a>
-
-            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'live-scoring']">
-              <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
-              <span>
-                <strong>Scoring Diagnostics</strong>
-                <small>Worker lease, snapshots, and write checks</small>
-              </span>
-            </a>
-
-            <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'release-readiness']">
-              <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
-              <span>
-                <strong>Release Readiness</strong>
-                <small>Full-season validation and safe recovery</small>
-              </span>
-            </a>
-          }
-        </div>
-      </details>
-    </section>
-
     <section class="cycle-status-card rr-card rr-card--padded">
       <div class="cycle-status-heading">
         <div>
@@ -487,8 +450,17 @@
           </a>
         </div>
 
-        <div class="matchup-list">
-          @for (matchup of matchups(); track matchup.id) {
+        <details class="cycle-matchup-preview">
+          <summary>
+            <span>
+              <strong>Preview every matchup</strong>
+              <small>{{ matchups().length }} in {{ currentCycleLabel() }}</small>
+            </span>
+            <span class="summary-chevron" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="matchup-list">
+            @for (matchup of matchups(); track matchup.id) {
             <article
               class="matchup-card rr-card rr-card--padded"
               [class.matchup-complete-card]="matchup.status === 'complete'"
@@ -516,8 +488,9 @@
                 <span>{{ getDisplayNumber(matchup.teamBScore) }}</span>
               </div>
             </article>
-          }
-        </div>
+            }
+          </div>
+        </details>
       } @else if (draft()?.status === 'complete') {
         @if (shouldShowSeasonStartCard()) {
           <section class="season-start-card rr-notice rr-notice--info" aria-live="polite">
@@ -539,27 +512,43 @@
       }
 
     </section>
+      </div>
 
-    @if (shouldShowInviteCode()) {
-      <section class="invite-card rr-card rr-card--padded">
-        <div>
-          <h2>Invite Code</h2>
-          <strong class="invite-code">
-            {{ league()?.inviteCode }}
-          </strong>
-        </div>
+    <section
+      class="daily-injury-status rr-notice rr-notice--info"
+      [class.daily-status-running]="
+        dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'
+      "
+      [class.daily-status-success]="injurySyncState()?.lastDailySyncKey === getUtcDailyKey()"
+      [class.daily-status-warning]="
+        dailyInjuryRefreshError() || injurySyncState()?.status === 'error'
+      "
+      aria-live="polite"
+    >
+      <span class="daily-injury-icon pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
 
-        <div>
-          <button class="rr-button rr-button--secondary" (click)="copyInviteCode()">Copy Invite Code</button>
+      <div class="daily-injury-copy">
+        <span class="draft-section-eyebrow">Daily Injury Report</span>
+        <strong>{{ getDailyInjuryStatusLabel() }}</strong>
+        <p>{{ getDailyInjuryStatusDescription() }}</p>
+      </div>
 
-          @if (copyMessage()) {
-            <span class="copy-message">
-              {{ copyMessage() }}
-            </span>
-          }
-        </div>
-      </section>
-    }
+      <div class="daily-injury-meta">
+        <small>{{ getDailyInjuryStatusTimeLabel() }}</small>
+
+        @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
+          <button
+            type="button"
+            class="daily-injury-refresh-button rr-button rr-button--secondary"
+            (click)="requestTodayInjuryRefresh()"
+            [disabled]="dailyInjuryRefreshInProgress()"
+          >
+            {{ dailyInjuryRefreshInProgress() ? 'Refreshing…' : 'Refresh Today' }}
+          </button>
+        }
+      </div>
+    </section>
+    </section>
 
     <section class="teams-section">
       <div class="section-heading rr-section-heading">
@@ -615,6 +604,114 @@
       </div>
     </section>
 
+    <section class="league-secondary-tools" aria-labelledby="league-tools-title">
+      <details class="league-tools general-league-tools">
+        <summary>
+          <span>
+            <strong id="league-tools-title">Schedule and analysis</strong>
+            <small>Less-frequent league pages stay available without crowding the top.</small>
+          </span>
+          <span class="summary-chevron" aria-hidden="true">⌄</span>
+        </summary>
+
+        <div class="league-tools-grid">
+          @if (cycle()) {
+            <a
+              class="tool-link rr-action-tile"
+              [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
+            >
+              <span aria-hidden="true">🗂</span>
+              <span>
+                <strong>All Matchups</strong>
+                <small>Every matchup in the current period</small>
+              </span>
+            </a>
+          }
+
+          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']">
+            <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>Full Schedule</strong>
+              <small>Round-robin schedule and history</small>
+            </span>
+          </a>
+
+          <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'projections']">
+            <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>Projection Lab</strong>
+              <small>Ratings and reliability checks</small>
+            </span>
+          </a>
+        </div>
+      </details>
+
+      @if (isCommissioner()) {
+        <details class="league-tools commissioner-tools">
+          <summary>
+            <span>
+              <strong>Commissioner tools</strong>
+              <small>League management, diagnostics, and release testing</small>
+            </span>
+            <span class="summary-chevron" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="commissioner-tools-body">
+            <section class="commissioner-tool-section" aria-labelledby="league-management-tools-title">
+              <div>
+                <span class="draft-section-eyebrow">League Management</span>
+                <h3 id="league-management-tools-title">Manage the competition</h3>
+              </div>
+
+              <div class="league-tools-grid">
+                @if (draft()?.status !== 'complete') {
+                  <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
+                    <span class="pixel-icon icon-draft icon-sm" aria-hidden="true"></span>
+                    <span>
+                      <strong>Draft Setup</strong>
+                      <small>Schedule, clock, and draft order</small>
+                    </span>
+                  </a>
+                }
+
+                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'player-availability']">
+                  <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
+                  <span>
+                    <strong>Player Availability</strong>
+                    <small>Injury statuses and IR eligibility</small>
+                  </span>
+                </a>
+              </div>
+            </section>
+
+            <section class="commissioner-tool-section technical-tool-section" aria-labelledby="technical-tools-title">
+              <div>
+                <span class="draft-section-eyebrow">Technical and Testing</span>
+                <h3 id="technical-tools-title">Diagnostics</h3>
+              </div>
+
+              <div class="league-tools-grid">
+                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'live-scoring']">
+                  <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
+                  <span>
+                    <strong>Scoring Diagnostics</strong>
+                    <small>Worker lease, snapshots, and write checks</small>
+                  </span>
+                </a>
+
+                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'release-readiness']">
+                  <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
+                  <span>
+                    <strong>Release Readiness</strong>
+                    <small>Full-season validation and safe recovery</small>
+                  </span>
+                </a>
+              </div>
+            </section>
+          </div>
+        </details>
+      }
+    </section>
 
     @if (isCommissioner()) {
       <section class="commissioner-danger-zone rr-danger-zone" aria-labelledby="delete-league-title">
