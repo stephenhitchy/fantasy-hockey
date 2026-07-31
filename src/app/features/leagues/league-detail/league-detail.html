@@ -105,71 +105,6 @@
       </section>
     }
 
-    <section class="quick-actions-card league-essentials-card rr-card rr-card--padded" aria-labelledby="league-essentials-title">
-      <div class="quick-actions-heading">
-        <div>
-          <span class="draft-section-eyebrow">League Essentials</span>
-          <h2 id="league-essentials-title">Most-used league pages</h2>
-        </div>
-
-        <p>The top button follows the current phase; these are the pages managers use most.</p>
-      </div>
-
-      <div class="quick-actions-grid primary-actions-grid">
-        @if (isCommissioner() && draft()?.status !== 'complete' && draft()?.status !== 'live') {
-          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
-            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
-            <span class="hub-action-copy">
-              <strong>Draft Room</strong>
-              <span>Enter or review the league draft.</span>
-            </span>
-          </a>
-        }
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
-          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>My Team</strong>
-            <span>Roster, IR, waivers, and moves.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
-          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Players</strong>
-            <span>Browse free agents and availability.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
-          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Standings</strong>
-            <span>Records, points, and league rank.</span>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
-          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Point Leaders</strong>
-            <span>Top forwards, defensemen, and goalie units.</span>
-          </span>
-        </a>
-
-        @if (draft()?.status === 'complete') {
-          <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
-            <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
-            <span class="hub-action-copy">
-              <strong>Playoffs</strong>
-              <span>Seeds, bracket, consolation, and final placements.</span>
-            </span>
-          </a>
-        }
-      </div>
-    </section>
-
     <section class="my-team-card rr-card rr-card--padded" aria-labelledby="my-league-team-title">
       <div class="section-heading rr-section-heading">
         <div>
@@ -322,6 +257,72 @@
             </small>
           }
         }
+    </section>
+
+
+    <section class="quick-actions-card league-essentials-card rr-card rr-card--padded" aria-labelledby="league-essentials-title">
+      <div class="quick-actions-heading">
+        <div>
+          <span class="draft-section-eyebrow">League Essentials</span>
+          <h2 id="league-essentials-title">Most-used league pages</h2>
+        </div>
+
+        <p>The top button follows the current phase; these are the pages managers use most.</p>
+      </div>
+
+      <div class="quick-actions-grid primary-actions-grid">
+        @if (isCommissioner() && draft()?.status !== 'complete' && draft()?.status !== 'live') {
+          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
+            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
+            <span class="hub-action-copy">
+              <strong>Draft Room</strong>
+              <span>Enter or review the league draft.</span>
+            </span>
+          </a>
+        }
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
+          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>My Team</strong>
+            <span>Roster, IR, waivers, and moves.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
+          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Players</strong>
+            <span>Browse free agents and availability.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
+          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Standings</strong>
+            <span>Records, points, and league rank.</span>
+          </span>
+        </a>
+
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
+          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
+          <span class="hub-action-copy">
+            <strong>Point Leaders</strong>
+            <span>Top forwards, defensemen, and goalie units.</span>
+          </span>
+        </a>
+
+        @if (draft()?.status === 'complete') {
+          <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
+            <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
+            <span class="hub-action-copy">
+              <strong>Playoffs</strong>
+              <span>Seeds, bracket, consolation, and final placements.</span>
+            </span>
+          </a>
+        }
+      </div>
     </section>
 
     <section class="league-overview-section" aria-labelledby="league-status-title">

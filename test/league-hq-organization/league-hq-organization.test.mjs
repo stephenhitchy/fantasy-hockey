@@ -31,9 +31,23 @@ test('the invite code is promoted into the top header priority area', async () =
   expectOrder(html, [
     'class="league-header"',
     'class="top-invite-card',
-    'league-essentials-card',
     'class="my-team-card',
+    'league-essentials-card',
   ]);
+});
+
+
+
+test('the invite code uses a clear monospaced font for ambiguous letters and numbers', async () => {
+  const [css, tokens] = await Promise.all([
+    source(cssPath),
+    source('src/rinkrat-design-tokens.css'),
+  ]);
+
+  assert.match(tokens, /--rr-font-code:\s*ui-monospace/);
+  assert.match(css, /\.top-invite-code-row \.invite-code\s*\{[\s\S]*font-family:\s*var\(--rr-font-code\)/);
+  assert.match(css, /font-variant-numeric:\s*tabular-nums slashed-zero/);
+  assert.match(css, /letter-spacing:\s*0\.08em/);
 });
 
 test('the invite card communicates capacity with semantic progress', async () => {
@@ -77,17 +91,17 @@ test('primary header actions adapt to draft and season state', async () => {
   assert.doesNotMatch(primaryNav, /secondary-action/);
 });
 
-test('the most-used pages appear before identity, status, teams, and tools', async () => {
+test('team identity appears before the most-used pages, followed by status, teams, and tools', async () => {
   const html = await source(htmlPath);
 
   expectOrder(html, [
+    'id="my-league-team-title"',
     'id="league-essentials-title"',
     '>Draft Room<',
     '>My Team<',
     '>Players<',
     '>Standings<',
     '>Point Leaders<',
-    'id="my-league-team-title"',
     'id="league-status-title"',
     'class="teams-section"',
     'class="league-secondary-tools"',

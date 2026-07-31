@@ -6540,3 +6540,77 @@ This batch is frontend-only:
 ```bash
 firebase deploy --only hosting:app -m "Batch 8B task-first League HQ"
 ```
+
+---
+
+## Batch 8B.1 — League HQ Identity Order and Clear Invite Code
+
+### Goal
+
+Keep league-specific team identity visible before the navigation grid and make invite codes unmistakable when read aloud or copied manually.
+
+### Changes
+
+- The **Your Team Identity** section now appears immediately after the League HQ header and invite card, before **Most-used league pages**.
+- The league invite code now uses a system monospaced code font instead of the decorative display font.
+- The code uses tabular numerals, a slashed-zero font feature where supported, slightly tighter spacing, and a larger minimum size.
+- The copy button and all invite-capacity behavior remain unchanged.
+
+No league, roster, draft, scoring, Firebase, or Firestore behavior changed.
+
+### Manual checks
+
+1. Confirm Your Team Identity appears before League Essentials.
+2. Confirm the invite code clearly distinguishes characters such as `0/O`, `1/I`, and `5/S` as well as the available system font permits.
+3. Confirm the code remains readable in Rink Dark, Light Ice, and at approximately 390 pixels wide.
+4. Confirm Copy Code still places the exact code on the clipboard.
+
+---
+
+## Batch 8C — Free Agents and Decision Center Simplification
+
+### Goal
+
+Make free-agent and waiver decisions easier to scan without removing the deeper six-game-window and scoring information advanced managers rely on.
+
+### Changes
+
+- Free-agent and waiver cards now lead with three primary values:
+  - Current season fantasy points
+  - Projected points over the next six games
+  - Remaining-season projection
+- The estimated final total, current six-game cycle number, game markers, fantasy points per appearance, and full scoring-category breakdown remain available under **View cycle status & full stats**.
+- The performance indicator, next-cycle rank, waiver priority, and primary Add/Claim action remain visible without expanding the card.
+- The desktop card layout was reduced from four dense columns to three clearer regions: identity, decision metrics, and action.
+- Tablet and mobile layouts collapse cleanly to one column while preserving the three primary metrics in a compact row.
+- The change is presentation-only. Existing add/drop, waiver, IR, queue, eligibility, and asynchronous slot-window rules are unchanged.
+
+### Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch8c
+```
+
+### Manual checks
+
+1. Search and filter the free-agent pool and confirm results remain unchanged.
+2. Confirm each free-agent and waiver card shows Season points, Next 6 games, and Rest of season before expansion.
+3. Expand **View cycle status & full stats** and confirm the six game markers, cycle label, estimated final total, per-appearance value, and stat contribution table remain available.
+4. Test one legal add/drop and one waiver claim in a disposable league.
+5. Confirm performance labels and next-cycle ranks still display.
+6. Check desktop, tablet, and approximately 390-pixel mobile layouts for readable names, metrics, and action buttons.
+7. Confirm no new console errors or horizontal page scrolling appear.
+
+### Deployment
+
+This batch is frontend-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch 8C Free Agent Decision Center simplification"
+```
+

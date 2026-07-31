@@ -53,6 +53,7 @@
   --rr-font-interface: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
   --rr-font-micro: 'Silkscreen', ui-monospace, 'SFMono-Regular', Consolas, monospace;
   --rr-font-numeric: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+  --rr-font-code: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 
   --rr-scoreboard: #07111d;
   --rr-scoreboard-raised: #101f31;

@@ -203,48 +203,18 @@
                     </div>
                   </div>
 
-                  <div class="cycle-decision-block">
-                    <div class="cycle-decision-heading">
-                      <span>Current block</span>
-                      <strong>
-                        {{ getCurrentTeamCycleNumber(waiver.asset) ? 'Cycle ' + getCurrentTeamCycleNumber(waiver.asset) : 'Cycle —' }}
-                      </strong>
-                    </div>
-                    <div class="cycle-marker-row" aria-label="Current six-game cycle status">
-                      @for (dotIndex of cycleDotSlots; track dotIndex) {
-                        @if (getCurrentCycleMarker(waiver.asset, dotIndex); as marker) {
-                          <span
-                            [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
-                            [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                            [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
-                          >{{ dotIndex + 1 }}</span>
-                        } @else {
-                          <span
-                            class="cycle-game-marker cycle-marker-unavailable"
-                            [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
-                          >{{ dotIndex + 1 }}</span>
-                        }
-                      }
-                    </div>
-                    <small>{{ getCycleProgressLabel(waiver.asset) }}</small>
-                  </div>
-
-                  <div class="decision-metric-grid">
+                  <div class="decision-metric-grid decision-metric-grid--primary" aria-label="Waiver decision snapshot">
                     <div>
                       <span>Season points</span>
                       <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }}</strong>
                     </div>
                     <div>
-                      <span>Rest estimate</span>
-                      <strong>{{ getDisplayNumber(getRestOfSeasonProjection(waiver.asset)) }}</strong>
-                    </div>
-                    <div>
-                      <span>Next cycle</span>
+                      <span>Next 6 games</span>
                       <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
                     </div>
                     <div>
-                      <span>Estimated final</span>
-                      <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(waiver.asset)) }}</strong>
+                      <span>Rest of season</span>
+                      <strong>{{ getDisplayNumber(getRestOfSeasonProjection(waiver.asset)) }}</strong>
                     </div>
                   </div>
 
@@ -279,23 +249,52 @@
                   </div>
 
                   <details class="decision-details season-stats-details">
-                    <summary>View current-season stats</summary>
-                    <div class="decision-detail-grid season-summary-grid">
-                      <section>
-                        <span class="detail-label">Current fantasy total</span>
-                        <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }} points</strong>
-                        <p>The stat contributions below combine to create this season total.</p>
+                    <summary>View cycle status &amp; full stats</summary>
+
+                    <div class="decision-detail-overview">
+                      <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game cycle status">
+                        <div class="cycle-decision-heading">
+                          <span>Current six-game block</span>
+                          <strong>
+                            {{ getCurrentTeamCycleNumber(waiver.asset) ? 'Cycle ' + getCurrentTeamCycleNumber(waiver.asset) : 'Cycle —' }}
+                          </strong>
+                        </div>
+                        <div class="cycle-marker-row">
+                          @for (dotIndex of cycleDotSlots; track dotIndex) {
+                            @if (getCurrentCycleMarker(waiver.asset, dotIndex); as marker) {
+                              <span
+                                [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                                [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                                [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
+                              >{{ dotIndex + 1 }}</span>
+                            } @else {
+                              <span
+                                class="cycle-game-marker cycle-marker-unavailable"
+                                [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
+                              >{{ dotIndex + 1 }}</span>
+                            }
+                          }
+                        </div>
+                        <small>{{ getCycleProgressLabel(waiver.asset) }}</small>
                       </section>
-                      <section>
-                        <span class="detail-label">Fantasy points per appearance</span>
-                        <strong>{{ getSeasonFantasyPointsPerGame(waiver.asset) }}</strong>
-                        <p>{{ getSeasonGamesLabel(waiver.asset) }}</p>
-                      </section>
-                      <section>
-                        <span class="detail-label">Scoring categories</span>
-                        <strong>{{ getStatBreakdown(waiver.asset).length }} contributing stats</strong>
-                        <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
-                      </section>
+
+                      <div class="decision-detail-grid season-summary-grid">
+                        <section>
+                          <span class="detail-label">Estimated final total</span>
+                          <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(waiver.asset)) }} points</strong>
+                          <p>Current points plus the remaining-season estimate.</p>
+                        </section>
+                        <section>
+                          <span class="detail-label">Fantasy points per appearance</span>
+                          <strong>{{ getSeasonFantasyPointsPerGame(waiver.asset) }}</strong>
+                          <p>{{ getSeasonGamesLabel(waiver.asset) }}</p>
+                        </section>
+                        <section>
+                          <span class="detail-label">Scoring categories</span>
+                          <strong>{{ getStatBreakdown(waiver.asset).length }} contributing stats</strong>
+                          <p>Each category shows the NHL stat total and fantasy-point contribution.</p>
+                        </section>
+                      </div>
                     </div>
 
                     <div class="stat-breakdown-heading">
@@ -380,48 +379,18 @@
                   </div>
                 </div>
 
-                <div class="cycle-decision-block">
-                  <div class="cycle-decision-heading">
-                    <span>Current block</span>
-                    <strong>
-                      {{ getCurrentTeamCycleNumber(asset) ? 'Cycle ' + getCurrentTeamCycleNumber(asset) : 'Cycle —' }}
-                    </strong>
-                  </div>
-                  <div class="cycle-marker-row" aria-label="Current six-game cycle status">
-                    @for (dotIndex of cycleDotSlots; track dotIndex) {
-                      @if (getCurrentCycleMarker(asset, dotIndex); as marker) {
-                        <span
-                          [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
-                          [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                          [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
-                        >{{ dotIndex + 1 }}</span>
-                      } @else {
-                        <span
-                          class="cycle-game-marker cycle-marker-unavailable"
-                          [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
-                        >{{ dotIndex + 1 }}</span>
-                      }
-                    }
-                  </div>
-                  <small>{{ getCycleProgressLabel(asset) }}</small>
-                </div>
-
-                <div class="decision-metric-grid">
+                <div class="decision-metric-grid decision-metric-grid--primary" aria-label="Free-agent decision snapshot">
                   <div>
                     <span>Season points</span>
                     <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }}</strong>
                   </div>
                   <div>
-                    <span>Rest estimate</span>
-                    <strong>{{ getDisplayNumber(getRestOfSeasonProjection(asset)) }}</strong>
-                  </div>
-                  <div>
-                    <span>Next cycle</span>
+                    <span>Next 6 games</span>
                     <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
                   </div>
                   <div>
-                    <span>Estimated final</span>
-                    <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(asset)) }}</strong>
+                    <span>Rest of season</span>
+                    <strong>{{ getDisplayNumber(getRestOfSeasonProjection(asset)) }}</strong>
                   </div>
                 </div>
 
@@ -443,23 +412,52 @@
                 </div>
 
                 <details class="decision-details season-stats-details">
-                  <summary>View current-season stats</summary>
-                  <div class="decision-detail-grid season-summary-grid">
-                    <section>
-                      <span class="detail-label">Current fantasy total</span>
-                      <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }} points</strong>
-                      <p>The stat contributions below combine to create this season total.</p>
+                  <summary>View cycle status &amp; full stats</summary>
+
+                  <div class="decision-detail-overview">
+                    <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game cycle status">
+                      <div class="cycle-decision-heading">
+                        <span>Current six-game block</span>
+                        <strong>
+                          {{ getCurrentTeamCycleNumber(asset) ? 'Cycle ' + getCurrentTeamCycleNumber(asset) : 'Cycle —' }}
+                        </strong>
+                      </div>
+                      <div class="cycle-marker-row">
+                        @for (dotIndex of cycleDotSlots; track dotIndex) {
+                          @if (getCurrentCycleMarker(asset, dotIndex); as marker) {
+                            <span
+                              [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                              [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                              [attr.aria-label]="getCycleMarkerTooltip(marker, dotIndex)"
+                            >{{ dotIndex + 1 }}</span>
+                          } @else {
+                            <span
+                              class="cycle-game-marker cycle-marker-unavailable"
+                              [attr.title]="getCycleMarkerTooltip(null, dotIndex)"
+                            >{{ dotIndex + 1 }}</span>
+                          }
+                        }
+                      </div>
+                      <small>{{ getCycleProgressLabel(asset) }}</small>
                     </section>
-                    <section>
-                      <span class="detail-label">Fantasy points per appearance</span>
-                      <strong>{{ getSeasonFantasyPointsPerGame(asset) }}</strong>
-                      <p>{{ getSeasonGamesLabel(asset) }}</p>
-                    </section>
-                    <section>
-                      <span class="detail-label">Scoring categories</span>
-                      <strong>{{ getStatBreakdown(asset).length }} contributing stats</strong>
-                      <p>Each category shows the NHL stat total and its fantasy-point contribution.</p>
-                    </section>
+
+                    <div class="decision-detail-grid season-summary-grid">
+                      <section>
+                        <span class="detail-label">Estimated final total</span>
+                        <strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(asset)) }} points</strong>
+                        <p>Current points plus the remaining-season estimate.</p>
+                      </section>
+                      <section>
+                        <span class="detail-label">Fantasy points per appearance</span>
+                        <strong>{{ getSeasonFantasyPointsPerGame(asset) }}</strong>
+                        <p>{{ getSeasonGamesLabel(asset) }}</p>
+                      </section>
+                      <section>
+                        <span class="detail-label">Scoring categories</span>
+                        <strong>{{ getStatBreakdown(asset).length }} contributing stats</strong>
+                        <p>Each category shows the NHL stat total and fantasy-point contribution.</p>
+                      </section>
+                    </div>
                   </div>
 
                   <div class="stat-breakdown-heading">

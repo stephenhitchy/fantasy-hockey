@@ -1961,11 +1961,15 @@
   border: 2px solid var(--user-team-accent);
   background: var(--rr-color-page);
   color: var(--rr-color-text);
-  font-family: var(--rr-font-display);
-  font-size: clamp(24px, 3vw, 34px);
-  letter-spacing: 0.13em;
+  font-family: var(--rr-font-code);
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: 'zero' 1;
+  letter-spacing: 0.08em;
   line-height: 1;
   text-align: center;
+  text-transform: uppercase;
 }
 
 .copy-invite-button {
