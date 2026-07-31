@@ -95,7 +95,6 @@ import {
 import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 
-import { CycleExplainer } from './components/cycle-explainer/cycle-explainer';
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
 import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
 import { CycleMobileScorebar } from './components/cycle-mobile-scorebar/cycle-mobile-scorebar';
@@ -128,7 +127,6 @@ import {
     CycleMobileScorebar,
     CyclePageHeader,
     CycleStatusBanners,
-    CycleExplainer,
     CycleMatchupToolbar,
     CycleMatchupCard,
   ],

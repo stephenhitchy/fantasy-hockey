@@ -4,7 +4,6 @@ import { authChildGuard, authGuard } from './core/guards/auth.guard';
 import { platformAdminGuard } from './core/guards/platform-admin.guard';
 import {
   commissionerGuard,
-  developerToolsGuard,
   leagueMemberGuard,
 } from './core/guards/league-access.guard';
 
@@ -113,7 +112,7 @@ export const routes: Routes = [
       {
         path: 'scoring-test',
         title: 'Scoring Test Lab',
-        canActivate: [developerToolsGuard],
+        canActivate: [platformAdminGuard],
         loadComponent: () =>
           import('./features/scoring-test/scoring-test').then((module) => module.ScoringTest),
       },
@@ -178,7 +177,7 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/live-scoring',
         title: 'Live Scoring Diagnostics',
-        canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
+        canActivate: [leagueMemberGuard, platformAdminGuard],
         loadComponent: () =>
           import('./features/live-scoring/live-scoring-diagnostics/live-scoring-diagnostics').then(
             (module) => module.LiveScoringDiagnostics,
@@ -187,7 +186,7 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/release-readiness',
         title: 'Release Readiness',
-        canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
+        canActivate: [leagueMemberGuard, platformAdminGuard],
         loadComponent: () =>
           import('./features/release/release-readiness/release-readiness').then(
             (module) => module.ReleaseReadiness,
@@ -223,7 +222,7 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/playoffs/simulator',
         title: 'Playoff Window Simulator',
-        canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
+        canActivate: [leagueMemberGuard, platformAdminGuard],
         loadComponent: () =>
           import('./features/playoffs/playoff-window-simulator/playoff-window-simulator').then(
             (module) => module.PlayoffWindowSimulator,
@@ -250,7 +249,7 @@ export const routes: Routes = [
       {
         path: 'leagues/:leagueId/cycles/simulator',
         title: 'Cycle Simulator',
-        canActivate: [leagueMemberGuard, commissionerGuard, developerToolsGuard],
+        canActivate: [leagueMemberGuard, platformAdminGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-simulator/cycle-simulator').then(
             (module) => module.CycleSimulator,

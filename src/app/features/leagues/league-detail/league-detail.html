@@ -685,30 +685,32 @@
               </div>
             </section>
 
-            <section class="commissioner-tool-section technical-tool-section" aria-labelledby="technical-tools-title">
-              <div>
-                <span class="draft-section-eyebrow">Technical and Testing</span>
-                <h3 id="technical-tools-title">Diagnostics</h3>
-              </div>
+            @if (isPlatformAdmin()) {
+              <section class="commissioner-tool-section technical-tool-section" aria-labelledby="technical-tools-title">
+                <div>
+                  <span class="draft-section-eyebrow">Owner Tools</span>
+                  <h3 id="technical-tools-title">Private diagnostics</h3>
+                </div>
 
-              <div class="league-tools-grid">
-                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'live-scoring']">
-                  <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
-                  <span>
-                    <strong>Scoring Diagnostics</strong>
-                    <small>Worker lease, snapshots, and write checks</small>
-                  </span>
-                </a>
+                <div class="league-tools-grid">
+                  <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'live-scoring']">
+                    <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
+                    <span>
+                      <strong>Scoring Diagnostics</strong>
+                      <small>Worker lease, snapshots, and write checks</small>
+                    </span>
+                  </a>
 
-                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'release-readiness']">
-                  <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
-                  <span>
-                    <strong>Release Readiness</strong>
-                    <small>Full-season validation and safe recovery</small>
-                  </span>
-                </a>
-              </div>
-            </section>
+                  <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'release-readiness']">
+                    <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
+                    <span>
+                      <strong>Release Readiness</strong>
+                      <small>Full-season validation and safe recovery</small>
+                    </span>
+                  </a>
+                </div>
+              </section>
+            }
           </div>
         </details>
       }

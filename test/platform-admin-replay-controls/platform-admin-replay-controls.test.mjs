@@ -8,18 +8,23 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, root), 'utf8');
 }
 
-test('historical replay controls are visible only to a verified platform administrator', async () => {
+test('all Game Center testing controls are visible only to a verified platform administrator', async () => {
   const template = await read('src/app/features/cycles/cycle-one/cycle-one.html');
+  const start = template.indexOf('Testing Controls');
+  const end = template.indexOf('<app-cycle-matchup-toolbar', start);
 
-  assert.match(template, /@if \(isCommissioner\(\) \|\| isPlatformAdmin\(\)\)/);
-  assert.match(
-    template,
-    /@if \(isPlatformAdmin\(\)\) \{[\s\S]*?historical-replay-control[\s\S]*?Advance One NHL Day[\s\S]*?\n\s*\}/,
-  );
-  assert.match(
-    template,
-    /@if \(isCommissioner\(\)\) \{[\s\S]*?Refresh Shared Scores[\s\S]*?Finalize Ready/,
-  );
+  assert.notEqual(start, -1, 'Testing Controls summary is missing.');
+  assert.notEqual(end, -1, 'Unable to isolate the Testing Controls block.');
+
+  const controls = template.slice(Math.max(0, start - 300), end);
+
+  assert.match(controls, /@if \(isPlatformAdmin\(\)\)/);
+  assert.doesNotMatch(controls, /isCommissioner\(\)/);
+  assert.match(controls, /Advance One NHL Day/);
+  assert.match(controls, /Send Test Injury Email/);
+  assert.match(controls, /Refresh Shared Scores/);
+  assert.match(controls, /Finalize Ready/);
+  assert.match(controls, /Open .*getNextCycleLabel/);
 });
 
 test('Game Center verifies platform-admin access through the shared authority service', async () => {

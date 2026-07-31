@@ -17,18 +17,16 @@
 
     <app-cycle-status-banners [presenter]="presenter"></app-cycle-status-banners>
 
-    <app-cycle-explainer [presenter]="presenter"></app-cycle-explainer>
 
-    @if (isCommissioner() || isPlatformAdmin()) {
+    @if (isPlatformAdmin()) {
       <details class="dev-controls-card rr-card">
         <summary>
           <span>Testing Controls</span>
-          <small>Owner-only replay tools and commissioner recovery actions</small>
+          <small>Private owner tools for controlled preseason testing</small>
         </summary>
 
         <div class="dev-controls-body">
-          @if (isPlatformAdmin()) {
-            <section class="historical-replay-control rr-data-panel" aria-labelledby="historical-replay-heading">
+          <section class="historical-replay-control rr-data-panel" aria-labelledby="historical-replay-heading">
             <div class="historical-replay-heading-row">
               <div>
                 <span class="eyebrow">2026–27 Historical Season Replay</span>
@@ -103,9 +101,7 @@
               </small>
             }
           </section>
-          }
 
-          @if (isCommissioner()) {
           <section class="test-injury-email-control rr-data-panel" aria-labelledby="test-injury-email-heading">
             <div>
               <span class="eyebrow">Email Preview</span>
@@ -267,7 +263,6 @@
                 </small>
               }
             </div>
-          }
           }
         </div>
       </details>

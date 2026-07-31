@@ -6638,3 +6638,19 @@ Deployment requires the updated historical replay Function and hosting:
 ```bash
 firebase deploy --only functions:advanceHistoricalReplayDay,hosting:app -m "Restrict historical replay controls to platform admin"
 ```
+
+
+
+## Batch 8D — Streamlined Game Center and owner-only testing tools (clean rebuild)
+
+This batch was rebuilt from the approved Batch 8C.1 baseline as one clean update rather than stacking the earlier patch and test correction.
+
+- Removed the embedded six-game cycle explainer from Game Center. Training Camp, Ask Coach, and the scoring guide remain the dedicated educational surfaces.
+- Deleted the unused explainer component and its Game Center CSS, reducing dead frontend code and lowering the Game Center component-style bundle.
+- Restricted the complete Game Center Testing Controls panel to verified platform administrators. Ordinary commissioners and managers no longer see replay, test-email, manual score-refresh, cycle-finalization, next-period, or projection-validation controls.
+- Restricted Scoring Test Lab, Live Scoring Diagnostics, Release Readiness, Cycle Simulator, and Playoff Window Simulator routes to the platform-admin guard.
+- Hid League HQ technical/testing links from ordinary commissioners while preserving normal draft, availability, invitation, team-management, and league-deletion controls.
+- Replaced the brittle whole-template hash test with structural regression checks so approved Game Center changes no longer create false failures.
+- No automatic scoring, roster, draft, waiver, cycle, standings, playoff, or scheduled server behavior changed.
+
+Verification command: `npm run verify:batch8d`.

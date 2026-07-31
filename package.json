@@ -63,7 +63,9 @@
     "test:free-agent-simplification:run": "node --test --test-concurrency=1 test/free-agent-simplification/*.test.mjs",
     "test:platform-admin-replay-controls:run": "node --test --test-concurrency=1 test/platform-admin-replay-controls/*.test.mjs",
     "verify:batch8c": "npm run verify:batch8b && npm run test:free-agent-simplification:run",
-    "verify:batch8c-owner-controls": "npm run verify:batch8c && npm run test:platform-admin-replay-controls:run"
+    "verify:batch8c-owner-controls": "npm run verify:batch8c && npm run test:platform-admin-replay-controls:run",
+    "test:release-facing-cleanup:run": "node --test --test-concurrency=1 test/release-facing-cleanup/*.test.mjs",
+    "verify:batch8d": "npm run verify:batch8c-owner-controls && npm run test:release-facing-cleanup:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

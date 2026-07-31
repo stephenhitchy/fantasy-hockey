@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -53,6 +53,7 @@ import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/
 
 import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
 import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.service';
+import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
@@ -82,6 +83,9 @@ function waitForAuthUser(): Promise<User | null> {
   styleUrl: './league-detail.css',
 })
 export class LeagueDetail implements OnDestroy {
+  private readonly platformAdminService = inject(PlatformAdminService);
+  readonly isPlatformAdmin = this.platformAdminService.isAdmin;
+
   leagueId = '';
   userId = '';
   teamNameDraft = '';
@@ -334,6 +338,7 @@ export class LeagueDetail implements OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
   ) {
+    void this.platformAdminService.refreshAccess();
     this.loadLeague();
   }
 

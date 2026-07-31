@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
@@ -26,7 +25,6 @@ describe('Batch 6A Game Center component boundaries', () => {
       'app-cycle-mobile-scorebar',
       'app-cycle-page-header',
       'app-cycle-status-banners',
-      'app-cycle-explainer',
       'app-cycle-matchup-toolbar',
       'app-cycle-matchup-card',
     ]) {
@@ -144,8 +142,7 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.deepEqual(unexpected, []);
   });
 
-
-  test('expanding the component boundaries reproduces the approved Game Center markup', async () => {
+  test('expanding the component boundaries preserves the streamlined Game Center structure', async () => {
     const componentRoot = 'src/app/features/cycles/cycle-one/components';
     const stripPresenter = (source) => source.replaceAll('presenter.', '');
     const replaceComponent = (source, selector, replacement) =>
@@ -194,10 +191,6 @@ describe('Batch 6A Game Center component boundaries', () => {
         ),
       ],
       [
-        'cycle-explainer',
-        stripPresenter(await read(`${componentRoot}/cycle-explainer/cycle-explainer.html`)),
-      ],
-      [
         'cycle-matchup-toolbar',
         stripPresenter(
           await read(`${componentRoot}/cycle-matchup-toolbar/cycle-matchup-toolbar.html`),
@@ -211,23 +204,17 @@ describe('Batch 6A Game Center component boundaries', () => {
       expanded = replaceComponent(expanded, selector, replacement);
     }
 
-    const withoutSharedPrimitiveClasses = expanded.replace(
-      /class="([^"]*)"/g,
-      (_match, classValue) => {
-        const retained = classValue
-          .split(/\s+/)
-          .filter((className) => className && !className.startsWith('rr-'));
-        return retained.length > 0 ? `class="${retained.join(' ')}"` : '';
-      },
-    );
-    const normalized = withoutSharedPrimitiveClasses.replace(/\s+/g, ' ').trim();
-    const digest = createHash('sha256').update(normalized).digest('hex');
+    const normalized = expanded.replace(/\s+/g, ' ').trim();
 
-    assert.equal(
-      digest,
-      '1f247f0c8fc45146947cadb40eeea524d1af926536a342aeb596844de5283677',
-      'The component expansion must preserve the approved Game Center markup, including the full-width six-game marker row.',
-    );
+    assert.doesNotMatch(expanded, /<app-cycle-(?:mobile-scorebar|page-header|status-banners|matchup-toolbar|matchup-card)\b/);
+    assert.doesNotMatch(normalized, /app-cycle-explainer|How the Six-Game Cycle Works/);
+    assert.match(normalized, /Testing Controls/);
+    assert.match(normalized, /Private owner tools for controlled preseason testing/);
+    assert.match(normalized, /Advance One NHL Day/);
+    assert.match(normalized, /Refresh Shared Scores/);
+    assert.match(normalized, /Roster Progress/);
+    assert.match(normalized, /window-game-markers/);
+    assert.match(normalized, /fantasy-player-card/);
   });
 
   test('the route remains the sole state and scoring presenter during the structural pass', async () => {

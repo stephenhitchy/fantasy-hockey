@@ -116,7 +116,8 @@ test('less-frequent and commissioner tools are separated from essential navigati
   assert.match(html, /<strong id="league-tools-title">Schedule and analysis<\/strong>/);
   assert.match(html, /class="league-tools commissioner-tools"/);
   assert.match(html, /League Management/);
-  assert.match(html, /Technical and Testing/);
+  assert.match(html, /Owner Tools/);
+  assert.match(html, /Private diagnostics/);
   assert.match(html, /Scoring Diagnostics/);
   assert.match(html, /Release Readiness/);
 
