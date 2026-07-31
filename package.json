@@ -53,7 +53,9 @@
     "verify:batch7c2": "npm run verify:batch7c1 && npm run test:page-design-migration:run && npm run audit:page-design-migration",
     "test:competition-design-migration:run": "node --test --test-concurrency=1 test/competition-design-migration/*.test.mjs",
     "audit:competition-design-migration": "node scripts/audit-competition-design-migration.mjs",
-    "verify:batch7c3": "npm run verify:batch7c2 && npm run test:competition-design-migration:run && npm run audit:competition-design-migration"
+    "verify:batch7c3": "npm run verify:batch7c2 && npm run test:competition-design-migration:run && npm run audit:competition-design-migration",
+    "test:dashboard-command-center:run": "node --test --test-concurrency=1 test/dashboard-command-center/*.test.mjs",
+    "verify:batch8a": "npm run verify:batch7c3 && npm run test:dashboard-command-center:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

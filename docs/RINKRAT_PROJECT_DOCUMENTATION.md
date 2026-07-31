@@ -6362,3 +6362,60 @@ npm run verify:batch7c3
 ```
 
 After deployment, check Game Center on a wide monitor and near 1,068 pixels. Above 1,180 pixels, both teams remain side by side with more room. At 1,180 pixels and below, the teams stack so every roster card remains readable. Confirm each active player shows games 1–3 above games 4–6 and that all played, missed, upcoming, and unavailable colors remain unchanged.
+
+---
+
+## Batch 8A — Dashboard League Command Cards
+
+### Goal
+
+Turn the Dashboard from a league selector into a restrained daily command center without repeating the same information in multiple places.
+
+### Changes
+
+- Each league card now shows one compact **Next Up** panel.
+- The panel chooses one state-specific action:
+  - Invite managers / open League HQ
+  - Set up the draft
+  - Open a scheduled draft
+  - Enter a live draft
+  - Open the user's active Game Center
+  - Review the most recently completed period
+- Active matchup cards show the user's score, opponent score, lead/tie/trail state, and combined counted starter-game progress.
+- Matchup discovery checks every currently active cycle and selects the user's earliest unfinished matchup. It does not assume one league-wide cycle timestamp.
+- The duplicated **Your Club** stat was replaced with the team's record.
+- Compact chips appear only when an active starter is unavailable or a roster move is waiting for its slot boundary.
+- League names remain direct links to League HQ, so the state-specific primary action does not remove normal navigation.
+- Dashboard activity reads are opt-in. Account Settings continues using the lightweight league summary path and does not pay for draft, cycle, matchup, window, or roster reads.
+- Dashboard cache version 5 prevents older cached league cards from mixing with the new activity shape.
+
+### Data behavior
+
+- No Firestore rules, Functions, scoring, drafts, rosters, cycles, standings, or playoff documents were changed.
+- Activity reads are read-only and fail safely. If a summary cannot load, the league card still opens League HQ.
+- Roster progress is calculated from immutable per-slot team-window documents.
+- Unavailable starter counts include day-to-day, out, IR, LTIR, suspended, personal-leave, and roster-marked injured assets.
+
+### Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch8a
+```
+
+The Batch 8A suite adds 11 checks covering draft authority, scheduled/live draft actions, asynchronous matchup selection, score perspective, roster-window progress, compact attention counts, completed-period fallback, opt-in reads, semantic progress, and duplicate-data removal.
+
+### Manual checks
+
+1. Open the Dashboard with a league still forming. Confirm the commissioner and ordinary manager receive appropriate actions.
+2. Open a league with a scheduled or live draft. Confirm the primary action goes to the Draft Room.
+3. Open an active league and compare the Dashboard score and counted-game progress with Game Center.
+4. Confirm the Dashboard follows the earliest unfinished matchup when several cycle numbers remain active.
+5. Confirm unavailable starters and queued moves appear only when their counts are greater than zero.
+6. Confirm the league name opens League HQ and the team shortcut opens My Team.
+7. Check Rink Dark, Light Ice, and a viewport near 390 pixels wide.
+8. Confirm no new console errors or horizontal scrolling appear.

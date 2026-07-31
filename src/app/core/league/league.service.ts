@@ -21,6 +21,7 @@ import {
 } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
 import { ensureFantasyRoster } from '../transactions/roster-authority.service';
+import type { DashboardLeagueActivity } from './dashboard-league-activity.models';
 import {
   DEFAULT_LEAGUE_LOGO_ID,
   DEFAULT_LEAGUE_LOGO_PALETTE_ID,
@@ -91,6 +92,10 @@ export interface LeagueSummary {
   maxTeams: number;
 
   isCommissioner: boolean;
+  wins: number;
+  losses: number;
+  ties: number;
+  dashboardActivity?: DashboardLeagueActivity;
 
   topOffensivePlayer?: {
     name: string;
@@ -541,7 +546,9 @@ export async function getLeagueById(leagueId: string): Promise<League | null> {
   return league;
 }
 
-export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
+export async function getMyLeagueSummaries(
+  options: { includeDashboardActivity?: boolean } = {},
+): Promise<LeagueSummary[]> {
   const user = auth.currentUser;
 
   if (!user) {
@@ -549,6 +556,9 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
   }
 
   const leagues = await getMyLeagues();
+  const dashboardActivityModule = options.includeDashboardActivity
+    ? import('./dashboard-league-activity.service')
+    : null;
 
   // Team collections are independent, so fetch them together instead of
   // paying one mobile network round trip per league in sequence.
@@ -556,6 +566,18 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
     leagues.map(async (league): Promise<LeagueSummary> => {
       const teams = await getLeagueTeams(league.id);
       const myTeam = teams.find((team) => team.ownerId === user.uid);
+
+      const isCommissioner = league.commissionerId === user.uid;
+      const dashboardActivity = dashboardActivityModule
+        ? await (await dashboardActivityModule).getDashboardLeagueActivity({
+            leagueId: league.id,
+            ownerId: user.uid,
+            isCommissioner,
+            teamCount: teams.length,
+            maxTeams: league.maxTeams,
+            teams,
+          })
+        : undefined;
 
       return {
         leagueId: league.id,
@@ -566,7 +588,11 @@ export async function getMyLeagueSummaries(): Promise<LeagueSummary[]> {
         myTeamName: myTeam?.teamName ?? 'Unnamed Team',
         teamCount: teams.length,
         maxTeams: league.maxTeams,
-        isCommissioner: league.commissionerId === user.uid,
+        isCommissioner,
+        wins: myTeam?.wins ?? 0,
+        losses: myTeam?.losses ?? 0,
+        ties: myTeam?.ties ?? 0,
+        dashboardActivity,
         topOffensivePlayer: {
           name: 'TBD',
           teamLogo: '🏒',

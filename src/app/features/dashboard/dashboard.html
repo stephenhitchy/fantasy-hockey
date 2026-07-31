@@ -159,33 +159,111 @@
                     </span>
 
                     <div>
-                      <h3>{{ league.leagueName }}</h3>
+                      <a class="league-title-link" [routerLink]="['/leagues', league.leagueId]">
+                        <h3>{{ league.leagueName }}</h3>
+                      </a>
                       <p>{{ league.myTeamName }}</p>
                     </div>
                   </div>
 
-                  @if (league.isCommissioner) {
-                    <span class="commissioner-badge rr-badge rr-badge--info"> Commissioner </span>
-                  }
+                  <div class="league-card-badges">
+                    @if (league.dashboardActivity; as activity) {
+                      <span
+                        class="league-activity-badge rr-badge"
+                        [class.league-activity-badge--neutral]="activity.tone === 'neutral'"
+                        [class.league-activity-badge--info]="activity.tone === 'info'"
+                        [class.league-activity-badge--warning]="activity.tone === 'warning'"
+                        [class.league-activity-badge--success]="activity.tone === 'success'"
+                      >
+                        {{ activity.statusLabel }}
+                      </span>
+                    }
+
+                    @if (league.isCommissioner) {
+                      <span class="commissioner-badge rr-badge rr-badge--info"> Commissioner </span>
+                    }
+                  </div>
                 </div>
 
                 <div class="league-summary-row">
                   <div>
                     <span>Teams</span>
-                    <strong> {{ league.teamCount }} / {{ league.maxTeams }} </strong>
+                    <strong>{{ league.teamCount }} / {{ league.maxTeams }}</strong>
                   </div>
 
                   <div>
-                    <span>Your Club</span>
-                    <strong>{{ league.myTeamName }}</strong>
+                    <span>Record</span>
+                    <strong>{{ getRecordLabel(league) }}</strong>
                   </div>
                 </div>
 
+                @if (league.dashboardActivity; as activity) {
+                  <section class="league-command" [attr.aria-label]="activity.statusLabel">
+                    <div class="league-command-copy">
+                      <span>Next Up</span>
+                      <strong>{{ activity.headline }}</strong>
+                      <p>{{ activity.detail }}</p>
+                    </div>
+
+                    @if (activity.matchup; as matchup) {
+                      <div class="dashboard-matchup-score" aria-label="Current matchup score">
+                        <span>{{ matchup.scoreStatusLabel }}</span>
+                        <strong>
+                          {{ formatScore(matchup.myScore) }}
+                          <small aria-hidden="true">–</small>
+                          {{ formatScore(matchup.opponentScore) }}
+                        </strong>
+                      </div>
+
+                      @if (matchup.totalGames > 0) {
+                        <div class="dashboard-matchup-progress">
+                          <div class="dashboard-matchup-progress-copy">
+                            <span>Matchup progress</span>
+                            <strong>{{ matchup.gamesPlayed }} / {{ matchup.totalGames }}</strong>
+                          </div>
+                          <div
+                            class="rr-progress dashboard-matchup-progress-track"
+                            role="progressbar"
+                            [attr.aria-label]="matchup.gamesPlayed + ' of ' + matchup.totalGames + ' starter games counted'"
+                            aria-valuemin="0"
+                            [attr.aria-valuemax]="matchup.totalGames"
+                            [attr.aria-valuenow]="matchup.gamesPlayed"
+                          >
+                            <span [style.width.%]="matchup.progressPercent"></span>
+                          </div>
+                        </div>
+                      }
+                    }
+
+                    @if (activity.injuredStarterCount > 0 || activity.queuedMoveCount > 0) {
+                      <div class="league-attention-list" aria-label="Roster items needing attention">
+                        @if (activity.injuredStarterCount > 0) {
+                          <span class="league-attention-chip league-attention-chip--injury">
+                            {{ activity.injuredStarterCount }} starter{{ activity.injuredStarterCount === 1 ? '' : 's' }} unavailable
+                          </span>
+                        }
+                        @if (activity.queuedMoveCount > 0) {
+                          <span class="league-attention-chip league-attention-chip--move">
+                            {{ activity.queuedMoveCount }} queued move{{ activity.queuedMoveCount === 1 ? '' : 's' }}
+                          </span>
+                        }
+                      </div>
+                    }
+                  </section>
+                }
+
                 <div class="league-actions">
-                  <a class="open-league rr-button rr-button--primary" [routerLink]="['/leagues', league.leagueId]">
-                    Open League
-                    <span aria-hidden="true">→</span>
-                  </a>
+                  @if (league.dashboardActivity; as activity) {
+                    <a class="open-league rr-button rr-button--primary" [routerLink]="activity.primaryActionRoute">
+                      {{ activity.primaryActionLabel }}
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  } @else {
+                    <a class="open-league rr-button rr-button--primary" [routerLink]="['/leagues', league.leagueId]">
+                      Open League
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  }
 
                   <a
                     class="team-shortcut rr-button rr-button--quiet"

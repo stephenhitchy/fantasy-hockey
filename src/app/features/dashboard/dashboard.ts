@@ -15,7 +15,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 4;
+const DASHBOARD_CACHE_VERSION = 5;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
@@ -186,7 +186,7 @@ export class Dashboard {
         );
       });
 
-    const leagueRefresh = getMyLeagueSummaries()
+    const leagueRefresh = getMyLeagueSummaries({ includeDashboardActivity: true })
       .then((leagueSummaries) => {
         if (generation !== this.loadGeneration) {
           return;
@@ -246,6 +246,15 @@ export class Dashboard {
       leagueSummaries: this.leagueSummaries(),
       cachedAt: Date.now(),
     });
+  }
+
+
+  getRecordLabel(league: LeagueSummary): string {
+    return `${league.wins}-${league.losses}-${league.ties}`;
+  }
+
+  formatScore(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(1) : '0.0';
   }
 
   getLeagueLogoPath(league: LeagueSummary): string {

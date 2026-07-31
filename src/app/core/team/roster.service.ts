@@ -135,6 +135,19 @@ export function getFantasyRosterRef(
   );
 }
 
+export async function getFantasyRosterOnce(
+  leagueId: string,
+  ownerId: string
+): Promise<FantasyRoster | null> {
+  const snapshot = await getDoc(getFantasyRosterRef(leagueId, ownerId));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeFantasyRoster(snapshot.data() as Partial<FantasyRoster>);
+}
+
 export async function getOrCreateFantasyRoster(
   leagueId: string,
   ownerId: string
