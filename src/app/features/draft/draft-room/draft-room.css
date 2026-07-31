@@ -1,3 +1,28 @@
+:host {
+  /* Transitional aliases preserve the approved page palette during Batch 7C.3. */
+  --rr-draft-room-migration-color-01: #dce5ed;
+  --rr-draft-room-migration-color-02: #1b2d45;
+  --rr-draft-room-migration-color-03: #65778c;
+  --rr-draft-room-migration-color-04: #9fb9d3;
+  --rr-draft-room-migration-color-05: #fbfcfe;
+  --rr-draft-room-migration-color-06: #e9f0f7;
+  --rr-draft-room-migration-color-07: #395877;
+  --rr-draft-room-migration-color-08: #203956;
+  --rr-draft-room-migration-color-09: #1e344e;
+  --rr-draft-room-migration-color-10: #718399;
+  --rr-draft-room-migration-color-11: #ffffff;
+  --rr-draft-room-migration-color-12: #66798e;
+  --rr-draft-room-migration-color-13: #16243a;
+  --rr-draft-room-migration-color-14: #edf1f5;
+  --rr-draft-room-migration-color-15: #d8e2eb;
+  --rr-draft-room-migration-color-16: #61758b;
+  --rr-draft-room-migration-color-17: #f5f9ff;
+  --rr-draft-room-migration-color-18: #697b90;
+  --rr-draft-room-migration-color-19: #294563;
+  --rr-draft-room-migration-color-20: #516a85;
+
+}
+
 .draft-room-page {
   max-width: 1280px;
   margin: 0 auto;
@@ -48,7 +73,7 @@
 .eyebrow {
   display: block;
   margin-bottom: 6px;
-  color: #66798e;
+  color: var(--rr-draft-room-migration-color-12);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -57,7 +82,7 @@
 
 .draft-room-header h1 {
   margin: 0;
-  color: #16243a;
+  color: var(--rr-draft-room-migration-color-13);
   font-size: 31px;
 }
 
@@ -69,7 +94,7 @@
 .draft-state-badge {
   padding: 9px 12px;
   border-radius: 999px;
-  background: #edf1f5;
+  background: var(--rr-draft-room-migration-color-14);
   color: #5f7082;
   font-size: 13px;
   font-weight: 800;
@@ -115,7 +140,7 @@
 .player-pool-panel,
 .turn-card,
 .sidebar-card {
-  border: 1px solid #d8e2eb;
+  border: 1px solid var(--rr-draft-room-migration-color-15);
   border-radius: 13px;
   background: white;
   box-shadow: 0 6px 18px rgba(22, 36, 58, 0.06);
@@ -127,25 +152,25 @@
 
 .waiting-card h2 {
   margin: 0;
-  color: #1b2d45;
+  color: var(--rr-draft-room-migration-color-02);
   font-size: 23px;
 }
 
 .waiting-card p {
   margin: 8px 0 0;
-  color: #65778c;
+  color: var(--rr-draft-room-migration-color-03);
 }
 
 .waiting-card > span:last-child {
   display: block;
   margin-top: 14px;
-  color: #61758b;
+  color: var(--rr-draft-room-migration-color-16);
   font-size: 13px;
 }
 
 .scheduled-card {
   border-color: #bdd5ed;
-  background: #f5f9ff;
+  background: var(--rr-draft-room-migration-color-17);
 }
 
 .complete-card {
@@ -175,13 +200,13 @@
 .turn-card h2,
 .sidebar-card h2 {
   margin: 0;
-  color: #1b2d45;
+  color: var(--rr-draft-room-migration-color-02);
   font-size: 20px;
 }
 
 .panel-heading p {
   margin: 6px 0 0;
-  color: #65778c;
+  color: var(--rr-draft-room-migration-color-03);
   font-size: 13px;
 }
 
@@ -200,7 +225,7 @@
 }
 
 .waiting-turn-badge {
-  background: #edf1f5;
+  background: var(--rr-draft-room-migration-color-14);
   color: #617286;
 }
 
@@ -224,7 +249,7 @@
 
 .pool-controls input:focus,
 .pool-controls select:focus {
-  outline: 2px solid #9fb9d3;
+  outline: 2px solid var(--rr-draft-room-migration-color-04);
   outline-offset: 1px;
 }
 
@@ -242,9 +267,9 @@
   align-items: center;
   gap: 16px;
   padding: 10px;
-  border: 1px solid #dce5ed;
+  border: 1px solid var(--rr-draft-room-migration-color-01);
   border-radius: 9px;
-  background: #fbfcfe;
+  background: var(--rr-draft-room-migration-color-05);
 }
 
 .draft-asset-card.has-team-change-logo {
@@ -265,8 +290,8 @@
 
 .asset-logo-fallback {
   border-radius: 6px;
-  background: #e9f0f7;
-  color: #395877;
+  background: var(--rr-draft-room-migration-color-06);
+  color: var(--rr-draft-room-migration-color-07);
   font-size: 8px;
   font-weight: 800;
 }
@@ -317,7 +342,7 @@
 
 .asset-copy span {
   margin-top: 3px;
-  color: #697b90;
+  color: var(--rr-draft-room-migration-color-18);
   font-size: 12px;
   font-weight: 700;
 }
@@ -335,7 +360,7 @@
 }
 
 .draft-asset-card button:hover:not(:disabled) {
-  background: #294563;
+  background: var(--rr-draft-room-migration-color-19);
 }
 
 .draft-asset-card button:disabled {
@@ -347,7 +372,7 @@
 .pool-error {
   margin: 0;
   padding: 18px 0;
-  color: #697b90;
+  color: var(--rr-draft-room-migration-color-18);
   text-align: center;
 }
 
@@ -379,7 +404,7 @@
 .current-team-name {
   display: block;
   margin-top: 14px;
-  color: #203956;
+  color: var(--rr-draft-room-migration-color-08);
   font-size: 18px;
 }
 
@@ -420,7 +445,7 @@
 
 .roster-progress-row strong,
 .upcoming-row strong {
-  color: #1e344e;
+  color: var(--rr-draft-room-migration-color-09);
 }
 
 .current-upcoming {
@@ -457,7 +482,7 @@
 
 .recent-pick-row small {
   margin-top: 3px;
-  color: #718399;
+  color: var(--rr-draft-room-migration-color-10);
   font-size: 11px;
 }
 
@@ -552,7 +577,7 @@
   border: 1px solid #9db4ca;
   border-radius: 8px;
   background: white;
-  color: #294563;
+  color: var(--rr-draft-room-migration-color-19);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -571,14 +596,14 @@
 }
 
 .asset-projection-strip small {
-  color: #516a85;
+  color: var(--rr-draft-room-migration-color-20);
   font-size: 11px;
   font-weight: 800;
 }
 
 .asset-projection-strip .rank-pill,
 .drafted-player-projections .rank-pill {
-  color: #203956;
+  color: var(--rr-draft-room-migration-color-08);
   font-weight: 900;
 }
 
@@ -604,11 +629,11 @@
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #dce5ed;
+  border-bottom: 1px solid var(--rr-draft-room-migration-color-01);
 }
 
 .drafted-position-header strong {
-  color: #1e344e;
+  color: var(--rr-draft-room-migration-color-09);
   font-size: 14px;
 }
 
@@ -624,9 +649,9 @@
   align-items: center;
   gap: 13px;
   padding: 10px;
-  border: 1px solid #dce5ed;
+  border: 1px solid var(--rr-draft-room-migration-color-01);
   border-radius: 9px;
-  background: #fbfcfe;
+  background: var(--rr-draft-room-migration-color-05);
 }
 
 .drafted-player-row.has-team-change-logo {
@@ -647,8 +672,8 @@
 
 .drafted-player-logo-fallback {
   border-radius: 7px;
-  background: #e9f0f7;
-  color: #395877;
+  background: var(--rr-draft-room-migration-color-06);
+  color: var(--rr-draft-room-migration-color-07);
   font-size: 8px;
   font-weight: 800;
 }
@@ -694,7 +719,7 @@
 }
 
 .drafted-player-projections small {
-  color: #516a85;
+  color: var(--rr-draft-room-migration-color-20);
   font-size: 11px;
   font-weight: 800;
 }
@@ -835,9 +860,9 @@
 
 /* Draft-start shared injury synchronization */
 .injury-sync-waiting-card {
-  border-color: #9fb9d3;
+  border-color: var(--rr-draft-room-migration-color-04);
   background:
-    radial-gradient(circle at top left, rgba(74, 125, 184, 0.12), transparent 40%), #f5f9ff;
+    radial-gradient(circle at top left, rgba(74, 125, 184, 0.12), transparent 40%), var(--rr-draft-room-migration-color-17);
 }
 
 .injury-sync-waiting-card > span:last-child {
@@ -858,12 +883,12 @@
 }
 
 .draft-injury-sync-banner strong {
-  color: #203956;
+  color: var(--rr-draft-room-migration-color-08);
   font-size: 13px;
 }
 
 .draft-injury-sync-banner span {
-  color: #718399;
+  color: var(--rr-draft-room-migration-color-10);
   font-size: 11px;
   font-weight: 800;
   text-align: right;
@@ -897,7 +922,7 @@
   padding: 13px 14px 12px;
   border: 1px solid #cbd7e3;
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--rr-draft-room-migration-color-11);
   box-shadow: 0 7px 20px rgba(22, 36, 58, 0.07);
 }
 
@@ -915,12 +940,12 @@
 
 .draft-pick-track-heading h2 {
   margin: 0;
-  color: #1b2d45;
+  color: var(--rr-draft-room-migration-color-02);
   font-size: 16px;
 }
 
 .draft-pick-track-heading > span {
-  color: #718399;
+  color: var(--rr-draft-room-migration-color-10);
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
@@ -962,7 +987,7 @@
   gap: 9px;
   min-height: 70px;
   padding: 20px 10px 10px;
-  border: 1px solid #d8e2eb;
+  border: 1px solid var(--rr-draft-room-migration-color-15);
   border-radius: 11px;
   background: #f7f9fc;
   scroll-snap-align: center;
@@ -1033,7 +1058,7 @@
 }
 
 .draft-pick-track-copy strong {
-  color: #1e344e;
+  color: var(--rr-draft-room-migration-color-09);
   font-size: 12px;
 }
 
@@ -1046,7 +1071,7 @@
 
 /* Draft clock, queue, and auto-draft */
 .auto-pick-message {
-  border: 1px solid #9fb9d3;
+  border: 1px solid var(--rr-draft-room-migration-color-04);
   background: #eef6ff;
   color: #264e75;
 }
@@ -1115,7 +1140,7 @@
 }
 
 .draft-clock-controls > span {
-  color: #61758b;
+  color: var(--rr-draft-room-migration-color-16);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1173,7 +1198,7 @@
 .clock-start-button {
   border-color: #527eaa;
   background: #173452;
-  color: #ffffff;
+  color: var(--rr-draft-room-migration-color-11);
 }
 
 .clock-start-button:hover:not(:disabled) {
@@ -1199,7 +1224,7 @@
 
 .draft-button {
   border: 0;
-  background: #16243a;
+  background: var(--rr-draft-room-migration-color-13);
   color: white;
 }
 
@@ -1272,7 +1297,7 @@
 
 .queue-help {
   margin: 10px 0 12px;
-  color: #65778c;
+  color: var(--rr-draft-room-migration-color-03);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1288,9 +1313,9 @@
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border: 1px solid #dce5ed;
+  border: 1px solid var(--rr-draft-room-migration-color-01);
   border-radius: 9px;
-  background: #fbfcfe;
+  background: var(--rr-draft-room-migration-color-05);
 }
 
 .queue-rank {
@@ -1299,8 +1324,8 @@
   height: 26px;
   place-items: center;
   border-radius: 7px;
-  background: #e9f0f7;
-  color: #395877;
+  background: var(--rr-draft-room-migration-color-06);
+  color: var(--rr-draft-room-migration-color-07);
   font-size: 11px;
   font-weight: 950;
 }
@@ -1443,7 +1468,7 @@
 
 .recent-form-pill.form-neutral {
   background: #eef2f6;
-  color: #66798e;
+  color: var(--rr-draft-room-migration-color-12);
 }
 
 .availability-projection-pill {
@@ -1476,7 +1501,7 @@
 
 .retry-pool-button {
   border: 1px solid #9db4cc;
-  background: #ffffff;
+  background: var(--rr-draft-room-migration-color-11);
   color: #29435f;
 }
 

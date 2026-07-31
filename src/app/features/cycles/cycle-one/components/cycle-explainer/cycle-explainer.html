@@ -1,5 +1,5 @@
     @if (presenter.cycle()) {
-      <section class="cycle-explainer-card">
+      <section class="cycle-explainer-card rr-card rr-card--padded">
         <div class="cycle-explainer-heading">
           <div>
             <span class="eyebrow">How Fantasy Cycles Work</span>
@@ -23,7 +23,7 @@
           <div class="cycle-explainer-expanded-content">
             @if (presenter.isCommissioner() && presenter.developerToolsEnabled) {
               <a
-                class="cycle-simulator-link"
+                class="cycle-simulator-link rr-button rr-button--secondary"
                 [routerLink]="['/leagues', presenter.leagueId, 'cycles', 'simulator']"
               >
                 Run 7-vs-4 Simulator
@@ -76,7 +76,7 @@
               </article>
             </div>
 
-            <div class="cycle-example-card">
+            <div class="cycle-example-card rr-data-panel">
               <strong>Simple example</strong>
               <p>
                 If Player A has finished six games and Player B has only finished four, Player A's

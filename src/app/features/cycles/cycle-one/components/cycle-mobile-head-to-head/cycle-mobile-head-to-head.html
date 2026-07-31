@@ -50,7 +50,7 @@
                         </div>
 
                         <div
-                          class="team-roster-progress-track"
+                          class="team-roster-progress-track rr-progress"
                           role="progressbar"
                           [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
                           [attr.aria-valuemin]="0"
@@ -58,7 +58,7 @@
                           [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
                         >
                           <span
-                            class="team-roster-progress-fill"
+                            class="team-roster-progress-fill rr-progress__value"
                             [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamAOwnerId)"
                           ></span>
                         </div>
@@ -117,7 +117,7 @@
                         </div>
 
                         <div
-                          class="team-roster-progress-track"
+                          class="team-roster-progress-track rr-progress"
                           role="progressbar"
                           [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
                           [attr.aria-valuemin]="0"
@@ -125,7 +125,7 @@
                           [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
                         >
                           <span
-                            class="team-roster-progress-fill"
+                            class="team-roster-progress-fill rr-progress__value"
                             [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamBOwnerId)"
                           ></span>
                         </div>

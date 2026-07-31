@@ -3,7 +3,7 @@
 } @else if (!league()) {
   <p>{{ errorMessage() || 'League not found.' }}</p>
 } @else {
-  <section class="draft-setup-page">
+  <section class="draft-setup-page rr-page-shell">
     <a
       class="back-link"
       [routerLink]="['/leagues', leagueId]"
@@ -18,40 +18,40 @@
         <p>{{ league()?.name }}</p>
       </div>
 
-      <div class="draft-badge">
+      <div class="draft-badge rr-badge rr-badge--info">
         <strong>{{ totalRounds }}</strong>
         <span>Rounds</span>
       </div>
     </header>
 
-    <section class="draft-summary">
-      <div class="summary-card">
+    <section class="draft-summary rr-stat-grid">
+      <div class="summary-card rr-stat-card">
         <span>Format</span>
         <strong>Snake Draft</strong>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card rr-stat-card">
         <span>Teams</span>
         <strong>{{ teams().length }}</strong>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card rr-stat-card">
         <span>Roster Size</span>
         <strong>14 Active + 3 Bench</strong>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card rr-stat-card">
         <span>Goalie Rule</span>
         <strong>1 Team Unit</strong>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card rr-stat-card">
         <span>Pick Clock</span>
         <strong>{{ pickSecondsInput }} Seconds</strong>
       </div>
     </section>
 
-    <section class="requirements-card">
+    <section class="requirements-card rr-card rr-card--padded">
       <h2>Draft Requirements</h2>
       <p>
         Managers can draft any eligible position on each turn. Required starters
@@ -69,8 +69,8 @@
       </div>
     </section>
 
-    <section class="schedule-card">
-      <div class="section-title-row">
+    <section class="schedule-card rr-card rr-card--padded">
+      <div class="section-title-row rr-section-heading">
         <div>
           <h2>Draft Start Time</h2>
           <p>
@@ -79,7 +79,7 @@
         </div>
 
         <span
-          class="schedule-status"
+          class="schedule-status rr-badge"
           [class.status-scheduled]="savedStartDate() && !startTimeReached()"
           [class.status-ready]="startTimeReached()"
         >
@@ -88,22 +88,23 @@
       </div>
 
       @if (savedStartDate()) {
-        <div class="saved-schedule">
+        <div class="saved-schedule rr-notice rr-notice--info">
           <strong>{{ formatScheduledStart() }}</strong>
           <span>{{ countdownText() }}</span>
         </div>
       } @else {
-        <div class="saved-schedule empty-schedule">
+        <div class="saved-schedule empty-schedule rr-notice rr-notice--info">
           <strong>No draft time scheduled</strong>
           <span>Save a future date and time when you are ready.</span>
         </div>
       }
 
-      <label class="schedule-input-group">
+      <label class="schedule-input-group rr-field-group">
         <span>Draft date and time</span>
 
         <input
           type="datetime-local"
+          class="rr-field"
           [(ngModel)]="draftStartInput"
           [min]="minimumStartInput"
           [disabled]="isDraftLocked()"
@@ -117,10 +118,11 @@
         refreshes it again shortly before the draft starts.
       </p>
 
-      <label class="schedule-input-group pick-clock-input-group">
+      <label class="schedule-input-group pick-clock-input-group rr-field-group">
         <span>Time allowed per pick</span>
 
         <select
+          class="rr-select"
           [(ngModel)]="pickSecondsInput"
           [disabled]="isDraftLocked()"
         >
@@ -140,7 +142,7 @@
 
       <button
         type="button"
-        class="clear-schedule-button"
+        class="clear-schedule-button rr-button rr-button--quiet"
         (click)="clearDraftStartTime()"
         [disabled]="isDraftLocked() || !draftStartInput"
       >
@@ -149,35 +151,35 @@
     </section>
 
     @if (draft()?.status === 'live' || draft()?.status === 'complete') {
-      <p class="locked-message">
+      <p class="locked-message rr-notice rr-notice--warning">
         This draft is already in progress or complete. Draft settings are locked.
       </p>
     } @else if (startTimeReached()) {
-      <p class="locked-message">
+      <p class="locked-message rr-notice rr-notice--warning">
         The scheduled draft start time has arrived. Draft settings are now locked.
       </p>
     }
 
     @if (errorMessage()) {
-      <p class="form-message error-message">
+      <p class="form-message error-message rr-notice rr-notice--danger">
         {{ errorMessage() }}
       </p>
     }
 
     @if (successMessage()) {
-      <p class="form-message success-message">
+      <p class="form-message success-message rr-notice rr-notice--success">
         {{ successMessage() }}
       </p>
     }
 
     @if (projectionPreparationWarning()) {
-      <p class="form-message projection-warning-message">
+      <p class="form-message projection-warning-message rr-notice rr-notice--warning">
         {{ projectionPreparationWarning() }}
       </p>
     }
 
-    <section class="order-card">
-      <div class="section-title-row">
+    <section class="order-card rr-card rr-card--padded">
+      <div class="section-title-row rr-section-heading">
         <div>
           <h2>Round 1 Order</h2>
           <p>
@@ -185,10 +187,10 @@
           </p>
         </div>
 
-        <div class="order-actions">
+        <div class="order-actions rr-toolbar">
           <button
             type="button"
-            class="secondary-button"
+            class="secondary-button rr-button rr-button--secondary"
             (click)="resetOrder()"
             [disabled]="isDraftLocked()"
           >
@@ -197,7 +199,7 @@
 
           <button
             type="button"
-            class="secondary-button"
+            class="secondary-button rr-button rr-button--secondary"
             (click)="randomizeOrder()"
             [disabled]="isDraftLocked()"
           >
@@ -211,7 +213,7 @@
       } @else {
         <div class="order-list">
           @for (ownerId of roundOneOrder(); track ownerId; let index = $index) {
-            <article class="order-row">
+            <article class="order-row rr-list-row">
               <div class="pick-number">
                 {{ index + 1 }}
               </div>
@@ -227,6 +229,7 @@
               <div class="move-buttons">
                 <button
                   type="button"
+                  class="rr-button rr-button--quiet"
                   aria-label="Move team up"
                   (click)="moveTeam(index, -1)"
                   [disabled]="index === 0 || isDraftLocked()"
@@ -236,6 +239,7 @@
 
                 <button
                   type="button"
+                  class="rr-button rr-button--quiet"
                   aria-label="Move team down"
                   (click)="moveTeam(index, 1)"
                   [disabled]="index === roundOneOrder().length - 1 || isDraftLocked()"
@@ -250,7 +254,7 @@
 
       <button
         type="button"
-        class="save-button"
+        class="save-button rr-button rr-button--primary"
         (click)="saveDraftOrder()"
         [disabled]="saving() || isDraftLocked() || roundOneOrder().length === 0"
       >
@@ -262,8 +266,8 @@
       </button>
     </section>
 
-    <section class="preview-card">
-      <div class="section-title-row">
+    <section class="preview-card rr-card rr-card--padded">
+      <div class="section-title-row rr-section-heading">
         <div>
           <h2>Snake Draft Preview</h2>
           <p>
@@ -274,7 +278,7 @@
 
       <div class="round-preview-grid">
         @for (round of previewRounds(); track round.round) {
-          <section class="round-card">
+          <section class="round-card rr-data-panel">
             <h3>Round {{ round.round }}</h3>
 
             <ol>

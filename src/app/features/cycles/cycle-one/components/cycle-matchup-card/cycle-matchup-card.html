@@ -1,5 +1,5 @@
               <article
-                class="matchup-detail-card"
+                class="matchup-detail-card rr-card rr-card--padded"
                 [class.my-matchup-outline]="presenter.isMyMatchup(matchup)"
                 [class.matchup-ready-outline]="
                   presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
@@ -15,11 +15,11 @@
 
                   <div class="matchup-heading-statuses">
                     @if (presenter.isMyMatchup(matchup)) {
-                      <span class="your-matchup-badge">Your Matchup</span>
+                      <span class="your-matchup-badge rr-badge rr-badge--info">Your Matchup</span>
                     }
 
                     <span
-                      class="matchup-cycle-state-badge"
+                      class="matchup-cycle-state-badge rr-badge"
                       [class.matchup-cycle-active]="presenter.cycle()?.status === 'active'"
                       [class.matchup-cycle-complete]="presenter.cycle()?.status === 'complete'"
                     >
@@ -33,7 +33,7 @@
                     </span>
 
                     <span
-                      class="matchup-readiness-badge"
+                      class="matchup-readiness-badge rr-badge"
                       [class.readiness-complete]="presenter.isMatchupComplete(matchup)"
                       [class.readiness-ready]="
                         presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)

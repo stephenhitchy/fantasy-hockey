@@ -134,6 +134,18 @@ test('keeps shared primitives free of hard-coded colors and important overrides'
 test('keeps primitive adoption limited to deliberately reviewed templates', async () => {
   const approved = new Set([
     'src/app/features/account/account-settings/account-settings.html',
+    'src/app/features/cycles/cycle-one/components/cycle-explainer/cycle-explainer.html',
+    'src/app/features/cycles/cycle-one/components/cycle-matchup-breakdown/cycle-matchup-breakdown.html',
+    'src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html',
+    'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
+    'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html',
+    'src/app/features/cycles/cycle-one/components/cycle-page-header/cycle-page-header.html',
+    'src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.html',
+    'src/app/features/cycles/cycle-one/cycle-one.html',
+    'src/app/features/draft/draft-room/draft-room.html',
+    'src/app/features/draft/draft-setup/draft-setup.html',
+    'src/app/features/free-agents/free-agents.html',
+    'src/app/features/team/team-settings/team-settings.html',
     'src/app/features/dashboard/dashboard.html',
     'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/errors/access-denied/access-denied.html',

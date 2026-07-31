@@ -1,13 +1,18 @@
 {
   "version": 1,
-  "description": "Batch 7C.2 migration baseline. Dashboard, League HQ, and Account Settings now compose shared primitives, while repeated feature-palette literals are consolidated without changing approved values.",
+  "description": "Batch 7C.3 budget-safe migration baseline. My Team, Free Agents, Draft Setup, and Draft Room consolidate approved palette values into transitional aliases. Game Center composes the shared primitives but keeps its approved local palette literals to remain below Angular's component-style error budget.",
   "allCssImportantDeclarations": 595,
-  "allCssLiteralColors": 3079,
+  "allCssLiteralColors": 2862,
   "globalCssLiteralColorsOutsideTokenFile": 420,
   "globalRootSelectorsOutsideTokenFile": 0,
   "sharedPrimitiveImportantDeclarations": 0,
   "sharedPrimitiveLiteralColors": 0,
   "dashboardCssLiteralColors": 29,
   "leagueHqCssLiteralColors": 140,
-  "accountSettingsCssLiteralColors": 111
+  "accountSettingsCssLiteralColors": 111,
+  "teamSettingsCssLiteralColors": 224,
+  "freeAgentsCssLiteralColors": 168,
+  "draftSetupCssLiteralColors": 91,
+  "draftRoomCssLiteralColors": 189,
+  "gameCenterCssLiteralColors": 392
 }

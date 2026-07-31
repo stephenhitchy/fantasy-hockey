@@ -176,7 +176,16 @@ describe('Batch 6A Game Center component boundaries', () => {
       expanded = replaceComponent(expanded, selector, replacement);
     }
 
-    const normalized = expanded.replace(/\s+/g, ' ').trim();
+    const withoutSharedPrimitiveClasses = expanded.replace(
+      /class="([^"]*)"/g,
+      (_match, classValue) => {
+        const retained = classValue
+          .split(/\s+/)
+          .filter((className) => className && !className.startsWith('rr-'));
+        return retained.length > 0 ? `class="${retained.join(' ')}"` : '';
+      },
+    );
+    const normalized = withoutSharedPrimitiveClasses.replace(/\s+/g, ' ').trim();
     const digest = createHash('sha256').update(normalized).digest('hex');
 
     assert.equal(

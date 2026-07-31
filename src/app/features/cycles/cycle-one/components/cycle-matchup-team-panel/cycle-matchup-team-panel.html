@@ -1,5 +1,5 @@
                     <section
-                      class="team-matchup-panel"
+                      class="team-matchup-panel rr-data-panel"
                       [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
                       [class.matchup-winner-panel]="presenter.isWinningTeam(matchup, ownerId)"
                       [class.matchup-loser-panel]="presenter.isLosingTeam(matchup, ownerId)"
@@ -79,7 +79,7 @@
                           </div>
 
                           <div
-                            class="team-roster-progress-track"
+                            class="team-roster-progress-track rr-progress"
                             role="progressbar"
                             [attr.aria-label]="presenter.getTeamRosterProgressLabel(ownerId)"
                             [attr.aria-valuemin]="0"
@@ -87,7 +87,7 @@
                             [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(ownerId)"
                           >
                             <span
-                              class="team-roster-progress-fill"
+                              class="team-roster-progress-fill rr-progress__value"
                               [style.width.%]="presenter.getTeamRosterProgressPercent(ownerId)"
                             ></span>
                           </div>
@@ -97,7 +97,7 @@
                       <div class="fantasy-roster-board">
                         <div class="forward-row">
                           @for (position of presenter.forwardPositions; track position) {
-                            <section class="fantasy-position-group">
+                            <section class="fantasy-position-group rr-data-panel">
                               <div class="fantasy-position-header">
                                 {{ presenter.getPositionLabel(position) }}
                               </div>
@@ -108,7 +108,7 @@
                                   track pick.overallPick
                                 ) {
                                   <article
-                                    class="fantasy-player-card"
+                                    class="fantasy-player-card rr-card"
                                     [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
                                     [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
                                     [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
@@ -259,7 +259,7 @@
 
                         <div class="defense-goalie-row">
                           @for (position of presenter.defensePositions; track position) {
-                            <section class="fantasy-position-group defense-group">
+                            <section class="fantasy-position-group defense-group rr-data-panel">
                               <div class="fantasy-position-header">
                                 {{ presenter.getPositionLabel(position) }}
                               </div>
@@ -270,7 +270,7 @@
                                   track pick.overallPick
                                 ) {
                                   <article
-                                    class="fantasy-player-card"
+                                    class="fantasy-player-card rr-card"
                                     [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
                                     [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
                                     [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
@@ -419,7 +419,7 @@
                           }
 
                           @for (position of presenter.goaliePositions; track position) {
-                            <section class="fantasy-position-group goalie-group">
+                            <section class="fantasy-position-group goalie-group rr-data-panel">
                               <div class="fantasy-position-header">
                                 {{ presenter.getPositionLabel(position) }}
                               </div>
@@ -430,7 +430,7 @@
                                   track pick.overallPick
                                 ) {
                                   <article
-                                    class="fantasy-player-card goalie-card"
+                                    class="fantasy-player-card goalie-card rr-card"
                                     [class.injured-player-card]="presenter.isAssetInjured(pick.asset)"
                                     [class.suspended-player-card]="presenter.isAssetSuspended(pick.asset)"
                                     [class.future-window-player-card]="presenter.isFutureWindowPending(pick)"
@@ -596,7 +596,7 @@
                         <div class="matchup-bench-grid">
                           @for (slot of presenter.getTeamBenchSlots(ownerId); track slot.slotId) {
                             <article
-                              class="fantasy-player-card matchup-bench-card"
+                              class="fantasy-player-card matchup-bench-card rr-card"
                               [class.matchup-bench-empty-card]="!slot.asset"
                               [class.injured-player-card]="slot.asset ? presenter.isBenchAssetInjured(slot.asset) : false"
                               [class.suspended-player-card]="slot.asset ? presenter.isBenchAssetSuspended(slot.asset) : false"

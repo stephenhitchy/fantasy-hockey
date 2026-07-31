@@ -1,9 +1,9 @@
-                <p class="matchup-projection-note">
+                <p class="matchup-projection-note rr-notice rr-notice--info">
                   {{ presenter.getProjectedWinnerLabel(matchup) }}
                 </p>
 
                 @if (presenter.isMatchupComplete(matchup)) {
-                  <section class="matchup-breakdown-card">
+                  <section class="matchup-breakdown-card rr-card rr-card--padded">
                     <div class="breakdown-heading">
                       <div>
                         <span class="eyebrow">Balance Audit</span>
@@ -20,7 +20,7 @@
                       </p>
                     } @else {
                       <div class="breakdown-team-grid">
-                        <article class="breakdown-team-card">
+                        <article class="breakdown-team-card rr-data-panel">
                           <div class="breakdown-team-title">
                             <strong>{{ presenter.getTeamName(matchup.teamAOwnerId) }}</strong>
                             <span>{{ presenter.getTeamRecord(matchup.teamAOwnerId) }}</span>
@@ -116,7 +116,7 @@
                         </article>
 
                         @if (matchup.teamBOwnerId) {
-                          <article class="breakdown-team-card">
+                          <article class="breakdown-team-card rr-data-panel">
                             <div class="breakdown-team-title">
                               <strong>{{ presenter.getTeamName(matchup.teamBOwnerId) }}</strong>
                               <span>{{ presenter.getTeamRecord(matchup.teamBOwnerId) }}</span>
@@ -222,7 +222,7 @@
                       </div>
 
                       <div class="impact-grid">
-                        <article class="impact-card">
+                        <article class="impact-card rr-data-panel">
                           <h4>Top Contributors</h4>
 
                           @for (
@@ -247,7 +247,7 @@
                           }
                         </article>
 
-                        <article class="impact-card">
+                        <article class="impact-card rr-data-panel">
                           <h4>Biggest Overperformers</h4>
 
                           @for (
@@ -276,7 +276,7 @@
                           }
                         </article>
 
-                        <article class="impact-card">
+                        <article class="impact-card rr-data-panel">
                           <h4>Biggest Underperformers</h4>
 
                           @for (

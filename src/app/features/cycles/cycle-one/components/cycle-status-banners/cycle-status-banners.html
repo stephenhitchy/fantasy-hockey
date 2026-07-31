@@ -1,6 +1,6 @@
     @if (presenter.shouldShowCompactAutoStatus()) {
       <section
-        class="compact-auto-status"
+        class="compact-auto-status rr-notice rr-notice--info"
         [class.compact-status-error]="presenter.getAutoLeagueStatusClass() === 'auto-status-error'"
         [class.compact-status-working]="
           presenter.getAutoLeagueStatusClass() === 'auto-status-working' || presenter.scoringLoading()
@@ -18,7 +18,7 @@
     }
 
     <section
-      class="shared-scoring-status-card"
+      class="shared-scoring-status-card rr-notice rr-notice--info"
       [class.shared-scoring-refreshing]="presenter.liveScoringControl()?.status === 'refreshing'"
       [class.shared-scoring-error]="presenter.liveScoringControl()?.status === 'error'"
       role="status"

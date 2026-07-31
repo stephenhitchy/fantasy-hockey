@@ -801,3 +801,77 @@ html[data-background-theme='light-ice'] :is(.rr-field, .rr-textarea)::placeholde
     align-items: flex-start;
   }
 }
+
+
+/* Competition and roster composition patterns — Batch 7C.3 ------------- */
+
+.rr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rr-toolbar-gap, var(--rr-space-3));
+}
+
+.rr-list-row {
+  min-width: 0;
+  padding: var(--rr-list-row-padding, var(--rr-space-3));
+  border: var(--rr-border-width) solid var(--rr-list-row-border, var(--rr-color-border));
+  background: var(--rr-list-row-background, var(--rr-color-surface-raised));
+  color: var(--rr-list-row-color, var(--rr-color-text));
+}
+
+.rr-data-panel {
+  min-width: 0;
+  border: var(--rr-border-width) solid var(--rr-data-panel-border, var(--rr-color-border));
+  background: var(--rr-data-panel-background, var(--rr-color-surface));
+  color: var(--rr-data-panel-color, var(--rr-color-text));
+}
+
+.rr-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--rr-dialog-backdrop-padding, var(--rr-space-4));
+  background: color-mix(in srgb, var(--rr-scoreboard) 78%, transparent);
+  z-index: var(--rr-z-dialog);
+}
+
+.rr-dialog {
+  width: min(100%, var(--rr-dialog-width, 42rem));
+  max-height: min(90dvh, var(--rr-dialog-max-height, 52rem));
+  overflow: auto;
+  border: var(--rr-border-width-strong) solid var(--rr-dialog-border, var(--rr-color-border-strong));
+  background: var(--rr-dialog-background, var(--rr-color-surface-raised));
+  color: var(--rr-dialog-color, var(--rr-color-text));
+  box-shadow: var(--rr-dialog-shadow, var(--rr-shadow-deep));
+}
+
+.rr-dialog__header,
+.rr-dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+}
+
+.rr-dialog__actions {
+  justify-content: flex-end;
+}
+
+.rr-score-number {
+  font-family: var(--rr-font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .rr-toolbar,
+  .rr-dialog__header,
+  .rr-dialog__actions {
+    align-items: stretch;
+  }
+
+  .rr-dialog__actions {
+    flex-direction: column-reverse;
+  }
+}

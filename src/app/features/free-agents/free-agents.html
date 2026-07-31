@@ -3,10 +3,10 @@
 } @else if (!league()) {
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
-  <section class="free-agents-page">
+  <section class="free-agents-page rr-page-shell">
     <a class="back-link" [routerLink]="['/leagues', leagueId, 'team']"> ← Back to My Team </a>
 
-    <header class="free-agent-hero">
+    <header class="free-agent-hero rr-card rr-card--padded">
       <div>
         <span class="eyebrow">Roster Moves</span>
         <h1>Add / Drop Player</h1>
@@ -17,7 +17,7 @@
       </div>
 
       <div
-        class="status-card"
+        class="status-card rr-badge"
         [class.status-open]="draft()?.status === 'complete'"
         [class.status-closed]="draft()?.status !== 'complete'"
       >
@@ -26,14 +26,14 @@
       </div>
     </header>
 
-    <section class="message-card fairness-card">
+    <section class="message-card fairness-card rr-notice rr-notice--info">
       No retroactive scoring: if the incoming player’s current six-game block has already started,
       that player is reserved but waits for the next untouched cycle.
     </section>
 
     @if (pendingRosterMoves().length > 0) {
-      <section class="pending-moves-card">
-        <div class="section-heading stacked-heading">
+      <section class="pending-moves-card rr-card rr-card--padded">
+        <div class="section-heading stacked-heading rr-section-heading">
           <div>
             <span class="eyebrow">Reserved Moves</span>
             <h2>Waiting for Fair Activation</h2>
@@ -46,7 +46,7 @@
 
         <div class="pending-move-list">
           @for (entry of pendingRosterMoves(); track entry.move.id; let index = $index) {
-            <article class="pending-move-row">
+            <article class="pending-move-row rr-list-row">
               <span class="pending-slot-label">{{ getPendingMoveSlotLabel(index) }}</span>
               <div>
                 <strong>{{ getPendingMoveIncomingName(index) }}</strong>
@@ -56,7 +56,7 @@
               @if (canCancelPendingMove(index)) {
                 <button
                   type="button"
-                  class="cancel-pending-button"
+                  class="cancel-pending-button rr-button rr-button--quiet"
                   (click)="cancelPendingMove(index)"
                   [disabled]="moving()"
                 >
@@ -72,16 +72,16 @@
     }
 
     @if (successMessage()) {
-      <section class="message-card success-card">{{ successMessage() }}</section>
+      <section class="message-card success-card rr-notice rr-notice--success">{{ successMessage() }}</section>
     }
 
     @if (errorMessage()) {
-      <section class="message-card error-card">{{ errorMessage() }}</section>
+      <section class="message-card error-card rr-notice rr-notice--danger">{{ errorMessage() }}</section>
     }
 
     @if (flowStep() === 'player-pool') {
-      <section class="free-agent-list-card player-pool-step">
-        <div class="step-heading-row">
+      <section class="free-agent-list-card player-pool-step rr-card rr-card--padded">
+        <div class="step-heading-row rr-section-heading">
           <div class="step-number">1</div>
           <div>
             <span class="eyebrow">Choose a Player</span>
@@ -91,7 +91,7 @@
 
           <button
             type="button"
-            class="refresh-button"
+            class="refresh-button rr-button rr-button--secondary"
             (click)="loadPlayerPool()"
             [disabled]="playerPoolLoading()"
           >
@@ -99,19 +99,20 @@
           </button>
         </div>
 
-        <div class="filter-row decision-filter-row">
+        <div class="filter-row decision-filter-row rr-toolbar">
           <label>
             Search
             <input
               [ngModel]="searchTerm()"
               (ngModelChange)="setSearchTerm($event)"
               placeholder="Search name or team"
+              class="rr-field"
             />
           </label>
 
           <label>
             Position
-            <select [ngModel]="positionFilter()" (ngModelChange)="setPositionFilter($event)">
+            <select class="rr-select" [ngModel]="positionFilter()" (ngModelChange)="setPositionFilter($event)">
               @for (position of positionFilters; track position) {
                 <option [value]="position">
                   {{ position === 'ALL' ? 'All Positions' : position }}
@@ -122,7 +123,7 @@
 
           <label>
             Sort by
-            <select [ngModel]="sortMode()" (ngModelChange)="setSortMode($event)">
+            <select class="rr-select" [ngModel]="sortMode()" (ngModelChange)="setSortMode($event)">
               @for (option of sortOptions; track option.value) {
                 <option [value]="option.value">{{ option.label }}</option>
               }
@@ -145,8 +146,8 @@
         </div>
 
         @if (availableWaivers().length > 0) {
-          <section class="waiver-queue-card">
-            <div class="section-heading stacked-heading">
+          <section class="waiver-queue-card rr-data-panel">
+            <div class="section-heading stacked-heading rr-section-heading">
               <div>
                 <span class="eyebrow">Waiver Queue</span>
                 <h2>Players on Waivers</h2>
@@ -160,7 +161,7 @@
             <div class="asset-list waiver-list">
               @for (waiver of availableWaivers(); track waiver.id) {
                 <article
-                  class="asset-row decision-asset-card waiver-row"
+                  class="asset-row decision-asset-card waiver-row rr-list-row"
                   [class.suspended-asset-row]="isPlayerAvailabilitySuspended(waiver.asset)"
                 >
                   <div class="asset-identity-block">
@@ -257,7 +258,7 @@
                     <div class="waiver-action-stack">
                       <button
                         type="button"
-                        class="claim-button"
+                        class="claim-button rr-button rr-button--primary"
                         (click)="selectWaiver(waiver)"
                         [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId"
                       >
@@ -267,7 +268,7 @@
                       @if (isCommissioner()) {
                         <button
                           type="button"
-                          class="process-waiver-button"
+                          class="process-waiver-button rr-button rr-button--secondary"
                           (click)="processLeagueWaiver(waiver)"
                           [disabled]="moving()"
                         >
@@ -334,16 +335,16 @@
 
 
         @if (playerPoolLoading()) {
-          <div class="empty-card">Loading NHL player pool...</div>
+          <div class="empty-card rr-state">Loading NHL player pool...</div>
         } @else if (availableAssets().length === 0) {
-          <div class="empty-card">
+          <div class="empty-card rr-state">
             No normal free agents match your filters. Players currently on waivers appear above.
           </div>
         } @else {
           <div class="asset-list">
             @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
               <article
-                class="asset-row decision-asset-card"
+                class="asset-row decision-asset-card rr-list-row"
                 [class.suspended-asset-row]="isPlayerAvailabilitySuspended(asset)"
               >
                 <div class="asset-identity-block">
@@ -433,7 +434,7 @@
                   }
                   <button
                     type="button"
-                    class="choose-slot-button"
+                    class="choose-slot-button rr-button rr-button--primary"
                     (click)="selectAddAsset(asset)"
                     [disabled]="draft()?.status !== 'complete'"
                   >
@@ -498,9 +499,9 @@
       </section>
     } @else {
       @if (selectedAddAsset(); as addAsset) {
-        <section class="roster-slot-step">
+        <section class="roster-slot-step rr-card rr-card--padded">
           <div class="slot-step-header">
-            <button type="button" class="change-player-button" (click)="returnToPlayerPool()">
+            <button type="button" class="change-player-button rr-button rr-button--secondary" (click)="returnToPlayerPool()">
               ← Change Player
             </button>
 
@@ -513,7 +514,7 @@
             </div>
           </div>
 
-          <section class="selected-player-card">
+          <section class="selected-player-card rr-card rr-card--padded">
             @if (getAssetLogoUrl(addAsset); as logoUrl) {
               <img [src]="logoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
             }
@@ -545,7 +546,7 @@
               <span>Cycle Rank</span>
             </div>
           </section>
-          <section class="selected-decision-overview">
+          <section class="selected-decision-overview rr-data-panel">
             <div class="cycle-decision-block">
               <div class="cycle-decision-heading">
                 <span>Incoming player block</span>
@@ -650,7 +651,7 @@
               <p>{{ getSelectedAssetCycleDetail() }}</p>
             </div>
             @if (eligibilityError()) {
-              <button type="button" class="retry-button" (click)="retryEligibilityCheck()">
+              <button type="button" class="retry-button rr-button rr-button--secondary" (click)="retryEligibilityCheck()">
                 Retry Check
               </button>
             }
@@ -672,7 +673,7 @@
               cycle…
             </div>
           } @else if (dropCandidates().length === 0) {
-            <div class="empty-card">
+            <div class="empty-card rr-state">
               No open {{ addAsset.position }} slot, flexible bench slot, or eligible roster player is available.
             </div>
           } @else {
@@ -680,7 +681,7 @@
               @for (candidate of dropCandidates(); track candidate.slotId) {
                 <button
                   type="button"
-                  class="slot-choice-card"
+                  class="slot-choice-card rr-choice-card"
                   [class.selected-slot-choice]="isSelectedDropCandidate(candidate)"
                   [class.open-slot-choice]="candidate.moveType === 'open-slot'"
                   [class.bench-slot-choice]="candidate.rosterArea === 'bench'"
@@ -737,7 +738,7 @@
             </div>
 
             @if (selectedDropCandidate(); as selectedCandidate) {
-              <section class="move-comparison-panel">
+              <section class="move-comparison-panel rr-data-panel">
                 <div class="move-comparison-heading">
                   <div>
                     <span class="eyebrow">Add / Drop Comparison</span>
@@ -750,7 +751,7 @@
                 </div>
 
                 <div class="move-comparison-grid">
-                  <article class="comparison-player-card comparison-incoming">
+                  <article class="comparison-player-card comparison-incoming rr-stat-card">
                     <span class="comparison-role">Incoming</span>
                     <strong>{{ getAssetName(addAsset) }}</strong>
                     <small>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</small>
@@ -764,7 +765,7 @@
                   </article>
 
                   @if (getDropCandidateProjectionAsset(selectedCandidate); as outgoingAsset) {
-                    <article class="comparison-player-card comparison-outgoing">
+                    <article class="comparison-player-card comparison-outgoing rr-stat-card">
                       <span class="comparison-role">Outgoing</span>
                       <strong>{{ getAssetName(outgoingAsset) }}</strong>
                       <small>{{ getAssetTeamLabel(outgoingAsset) }} · {{ outgoingAsset.position }}</small>
@@ -777,7 +778,7 @@
                       <span [class]="'performance-pill ' + getPerformanceClass(outgoingAsset)">{{ getPerformanceLabel(outgoingAsset) }}</span>
                     </article>
                   } @else {
-                    <article class="comparison-player-card comparison-open-slot">
+                    <article class="comparison-player-card comparison-open-slot rr-stat-card">
                       <span class="comparison-role">Outgoing</span>
                       <strong>Open roster slot</strong>
                       <small>No player or projection is being removed.</small>
@@ -847,7 +848,7 @@
             </div>
             <button
               type="button"
-              class="confirm-move-button"
+              class="confirm-move-button rr-button rr-button--primary"
               (click)="confirmAddDrop()"
               [disabled]="!canConfirmMove() || moving()"
             >
@@ -856,9 +857,9 @@
           </section>
         </section>
       } @else {
-        <section class="empty-card">
+        <section class="empty-card rr-state">
           The selected player is no longer available.
-          <button type="button" class="change-player-button" (click)="returnToPlayerPool()">
+          <button type="button" class="change-player-button rr-button rr-button--secondary" (click)="returnToPlayerPool()">
             Return to Player Pool
           </button>
         </section>

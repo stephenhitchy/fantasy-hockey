@@ -6260,3 +6260,72 @@ Batch 7C.2 is frontend-only:
 ```bash
 firebase deploy --only hosting:app -m "Batch 7C.2 page design migration"
 ```
+
+# Batch 7C.3 — Competition Surface Design Migration
+
+Batch 7C.3 applies the shared RinkRat design system to the remaining high-traffic fantasy surfaces while preserving their approved page structure and all competition behavior.
+
+## What changed
+
+- My Team now composes shared page shells, cards, statistic tiles, notices, roster panels, list rows, form controls, and accessible dialog surfaces.
+- Free Agents and the Add/Drop Decision Center now compose shared pool cards, filter controls, waiver rows, slot choices, notices, comparison panels, and confirmation actions.
+- Draft Setup now composes shared statistics, schedule and order cards, form controls, notices, list rows, and action buttons.
+- Draft Room now composes shared clock cards, roster-needs choices, player-pool controls, draft rows, queue and roster cards, badges, and actions.
+- Game Center now composes shared matchup cards, team panels, semantic progress bars, notices, badges, navigation actions, and commissioner tools while retaining the approved Batch 6A hierarchy. The duplicate Batch 6B overview remains removed.
+- Added shared toolbar, list-row, data-panel, dialog, and score-number primitives for future competition surfaces.
+- Consolidated repeated feature-specific palette literals into transitional aliases without changing their exact values.
+- Reduced the project-wide literal CSS color ceiling from 3,079 to 2,774 without increasing the existing 595 `!important` declarations.
+- Added eight contract tests and a dedicated competition-surface migration audit.
+
+No TypeScript business logic, Firebase configuration, Firestore rules, Cloud Functions, scoring, drafting, roster authority, cycle processing, standings, injuries, playoffs, or data structures changed.
+
+## Batch 7C.3 verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batch7c3
+```
+
+The command runs every approved Batch 7C.2 check, eight competition-surface migration tests, and the new migration audit.
+
+## Manual appearance and behavior checklist
+
+Review My Team, Free Agents, Draft Setup, Draft Room, and Game Center in Rink Dark and Light Ice, then repeat around 390 pixels wide.
+
+1. Confirm all page structures, favorite-team colors, roster cards, player rows, scores, and six-game markers remain familiar.
+2. On My Team, test team-name saving, active/bench/IR actions, every confirmation dialog, and recent transactions.
+3. In Free Agents, test search, position and sort filters, waiver actions, player selection, slot selection, comparison details, and the final confirmation dock.
+4. In Draft Setup, test scheduling, pick-clock selection, order movement, reset/randomize, save, and snake preview.
+5. In Draft Room, test search and filters, queue actions, manual picks, auto-draft, pause/resume, roster needs, and mobile layout.
+6. In Game Center, confirm scores, projections, roster progress, player markers, Team A/B/Both views, benches, and completed-matchup breakdowns remain unchanged.
+7. Confirm the rejected duplicate Game Center overview has not returned.
+8. Confirm keyboard focus, disabled states, Light Ice contrast, no horizontal scrolling, and no new console errors.
+
+## Deployment
+
+Batch 7C.3 is frontend-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch 7C.3 competition surface design migration"
+```
+
+
+## Batch 7C.3.1 — Game Center Component-Style Budget Hotfix
+
+The first Batch 7C.3 package replaced repeated Game Center color literals with long transitional custom-property references. Although the rendered values were unchanged, those longer references increased the compiled `cycle-one.css` component bundle from approximately 42.08 kB to 46.38 kB, exceeding Angular's 45 kB component-style error budget.
+
+This hotfix keeps all Batch 7C.3 shared primitive classes in the Game Center templates, including cards, data panels, semantic progress bars, notices, buttons, and score-number foundations. It restores only the approved local Game Center palette declarations from Batch 7C.2 so the compiled component stylesheet returns below the build-stopping threshold. My Team, Free Agents, Draft Setup, and Draft Room retain their palette-alias consolidation.
+
+No HTML hierarchy, visual values, TypeScript logic, Firebase behavior, scoring, roster windows, draft behavior, cycles, standings, injuries, or playoffs changed. The design-debt baseline was adjusted honestly from 2,774 to 2,862 literal colors because keeping Game Center below the Angular style budget is more important than reducing a static color-count metric.
+
+Run the normal verification command:
+
+```bash
+npm run verify:batch7c3
+```
+
+A small warning near the 42 kB preferred Game Center budget may remain, but the stylesheet stays below the 45 kB error budget and the production build completes.

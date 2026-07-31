@@ -3,7 +3,7 @@
 } @else if (!league()) {
   <p>{{ errorMessage() || 'Draft room not found.' }}</p>
 } @else {
-  <section class="draft-room-page">
+  <section class="draft-room-page rr-page-shell">
     <a
       class="back-link"
       [routerLink]="['/leagues', leagueId]"
@@ -22,7 +22,7 @@
         @if (draft()?.status === 'live') {
           <button
             type="button"
-            class="auto-draft-toggle header-auto-draft-toggle"
+            class="auto-draft-toggle header-auto-draft-toggle rr-button rr-button--secondary"
             [class.enabled]="myQueue().autoDraftEnabled"
             [class.forced-auto-draft]="myQueue().autoDraftActivatedByTimeout"
             (click)="toggleMyAutoDraft()"
@@ -33,7 +33,7 @@
         }
 
         <div
-          class="draft-state-badge"
+          class="draft-state-badge rr-badge"
           [class.state-live]="draft()?.status === 'live'"
           [class.state-scheduled]="draft()?.status === 'scheduled'"
           [class.state-complete]="draft()?.status === 'complete'"
@@ -52,26 +52,26 @@
     </header>
 
     @if (errorMessage()) {
-      <p class="message error-message">
+      <p class="message error-message rr-notice rr-notice--danger">
         {{ errorMessage() }}
       </p>
     }
 
     @if (successMessage()) {
-      <p class="message success-message">
+      <p class="message success-message rr-notice rr-notice--success">
         {{ successMessage() }}
       </p>
     }
 
     @if (!draft()) {
-      <section class="waiting-card">
+      <section class="waiting-card rr-card rr-card--padded">
         <h2>Draft Setup Needed</h2>
         <p>
           The commissioner must save a draft order and start time before the draft can open.
         </p>
       </section>
     } @else if (draft()?.status === 'setup') {
-      <section class="waiting-card">
+      <section class="waiting-card rr-card rr-card--padded">
         <h2>Draft Not Scheduled</h2>
         <p>
           The commissioner has not selected a draft start time yet.
@@ -99,14 +99,14 @@
       draft()?.status === 'scheduled' &&
       startTimeReached()
     ) {
-      <section class="waiting-card injury-sync-waiting-card">
+      <section class="waiting-card injury-sync-waiting-card rr-card rr-card--padded">
         <span class="eyebrow">Opening Draft</span>
         <h2>{{ getPreDraftPreparationStatusLabel() }}</h2>
         <p>{{ getPreDraftPreparationDescription() }}</p>
         <span>{{ getDraftInjurySyncTimeLabel() }}</span>
       </section>
     } @else if (draft()?.status === 'complete') {
-      <section class="waiting-card complete-card">
+      <section class="waiting-card complete-card rr-card rr-card--padded">
         <span class="eyebrow">Draft Complete</span>
         <h2>All picks are in.</h2>
         <p>
@@ -115,7 +115,7 @@
       </section>
     } @else {
       <section
-        class="draft-injury-sync-banner"
+        class="draft-injury-sync-banner rr-notice rr-notice--info"
         [class.sync-success]="injurySyncState()?.status === 'success'"
         [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
       >
@@ -124,7 +124,7 @@
       </section>
 
       <section
-        class="draft-clock-bar"
+        class="draft-clock-bar rr-card rr-card--padded"
         [class.clock-urgent]="draftClockIsUrgent()"
         [class.clock-paused]="draft()?.clockStatus === 'paused'"
         [class.clock-stopped]="draft()?.clockStatus === 'stopped'"
@@ -146,7 +146,7 @@
             @if (isMyTurn()) {
               <button
                 type="button"
-                class="clock-control-button clock-start-button"
+                class="clock-control-button clock-start-button rr-button rr-button--primary"
                 (click)="startMyDraftClock()"
                 [disabled]="
                   clockActionInProgress() ||
@@ -169,7 +169,7 @@
           } @else if (isCommissioner()) {
             <button
               type="button"
-              class="clock-control-button"
+              class="clock-control-button rr-button rr-button--secondary"
               (click)="toggleDraftClockPause()"
               [disabled]="clockActionInProgress() || draft()?.status !== 'live'"
             >
@@ -189,7 +189,7 @@
         </div>
       </section>
 
-      <section class="draft-roster-needs" aria-label="Your draft roster needs">
+      <section class="draft-roster-needs rr-card rr-card--padded" aria-label="Your draft roster needs">
         <div class="draft-roster-needs-heading">
           <div>
             <span class="eyebrow">Your Roster</span>
@@ -200,11 +200,11 @@
           </span>
         </div>
 
-        <div class="draft-roster-needs-track">
+        <div class="draft-roster-needs-track rr-toolbar">
           @for (position of rosterPositions; track position) {
             <button
               type="button"
-              class="draft-roster-need"
+              class="draft-roster-need rr-choice-card"
               [class.need-open]="getRosterNeedClass(position) === 'need-open'"
               [class.need-bench]="getRosterNeedClass(position) === 'need-bench'"
               [class.need-full]="getRosterNeedClass(position) === 'need-full'"
@@ -217,7 +217,7 @@
         </div>
       </section>
 
-      <section class="draft-pick-track-card">
+      <section class="draft-pick-track-card rr-card rr-card--padded">
         <div class="draft-pick-track-heading">
           <div>
             <span class="eyebrow">Draft Order</span>
@@ -233,7 +233,7 @@
         >
           @for (entry of draftTimeline(); track entry.preview.overallPick) {
             <article
-              class="draft-pick-track-item"
+              class="draft-pick-track-item rr-list-row"
               [class.completed-pick]="!!entry.pick"
               [class.current-pick]="entry.preview.overallPick === currentPick()?.overallPick"
               [attr.data-pick-number]="entry.preview.overallPick"
@@ -285,8 +285,8 @@
       </section>
 
       <section class="draft-layout">
-        <main class="player-pool-panel">
-          <div class="panel-heading">
+        <main class="player-pool-panel rr-card rr-card--padded">
+          <div class="panel-heading rr-section-heading">
             <div>
               <span class="eyebrow">Available Assets</span>
               <h2>Player Pool</h2>
@@ -294,21 +294,23 @@
             </div>
 
             @if (isMyTurn()) {
-              <span class="your-turn-badge">Your Turn</span>
+              <span class="your-turn-badge rr-badge rr-badge--success">Your Turn</span>
             } @else {
-              <span class="waiting-turn-badge">Waiting for Pick</span>
+              <span class="waiting-turn-badge rr-badge rr-badge--info">Waiting for Pick</span>
             }
           </div>
 
-          <div class="pool-controls">
+          <div class="pool-controls rr-toolbar">
   <input
     type="search"
+    class="rr-field"
     placeholder="Search player or NHL team..."
     [ngModel]="searchTerm()"
     (ngModelChange)="setSearchTerm($event)"
   />
 
   <select
+    class="rr-select"
     [ngModel]="positionFilter()"
     (ngModelChange)="setPositionFilter($event)"
   >
@@ -321,6 +323,7 @@
   </select>
 
   <select
+  class="rr-select"
   [ngModel]="sortMode()"
   (ngModelChange)="setSortMode($event)"
 >
@@ -338,12 +341,12 @@
           @if (playerPoolLoading()) {
             <p class="pool-loading">Loading NHL player pool...</p>
           } @else if (playerPoolError()) {
-            <div class="pool-error-block">
+            <div class="pool-error-block rr-notice rr-notice--danger">
                 <p class="pool-error">{{ playerPoolError() }}</p>
 
                 <button
                   type="button"
-                  class="retry-pool-button"
+                  class="retry-pool-button rr-button rr-button--secondary"
                   (click)="loadPlayerPool()"
                   [disabled]="playerPoolLoading()"
                 >
@@ -358,7 +361,7 @@
             <div class="asset-list">
               @for (asset of availableAssets(); track asset.assetKey) {
                 <article
-                  class="draft-asset-card"
+                  class="draft-asset-card rr-list-row"
                   [class.has-team-change-logo]="hasOffseasonTeamChange(asset)"
                 >
                   @if (hasOffseasonTeamChange(asset)) {
@@ -486,7 +489,7 @@
                   <div class="asset-actions">
                     <button
                       type="button"
-                      class="queue-button"
+                      class="queue-button rr-button rr-button--secondary"
                       [class.queued]="isAssetQueued(asset)"
                       (click)="toggleAssetInQueue(asset)"
                       [disabled]="queueSaving() || draft()?.status === 'complete'"
@@ -496,7 +499,7 @@
 
                     <button
                       type="button"
-                      class="draft-button"
+                      class="draft-button rr-button rr-button--primary"
                       (click)="selectAsset(asset)"
                       [disabled]="
                         !canDraftAsset(asset) ||
@@ -513,7 +516,7 @@
         </main>
 
         <aside class="draft-sidebar">
-          <section class="turn-card">
+          <section class="turn-card rr-card rr-card--padded">
             <span class="eyebrow">Current Pick</span>
 
             @if (currentPick(); as pick) {
@@ -549,7 +552,7 @@
 
           </section>
 
-          <section class="sidebar-card queue-card">
+          <section class="sidebar-card queue-card rr-card rr-card--padded">
             <div class="queue-card-heading">
               <div>
                 <span class="eyebrow">Your Draft List</span>
@@ -573,7 +576,7 @@
             } @else {
               <div class="queue-list">
                 @for (asset of queueAssets(); track asset.assetKey; let index = $index) {
-                  <article class="queue-row">
+                  <article class="queue-row rr-list-row">
                     <span class="queue-rank">{{ index + 1 }}</span>
 
                     <div class="queue-copy">
@@ -604,7 +607,7 @@
 
                       <button
                         type="button"
-                        class="remove-queue-button"
+                        class="remove-queue-button rr-button rr-button--quiet"
                         aria-label="Remove queued asset"
                         (click)="removeAssetFromQueue(asset.assetKey)"
                         [disabled]="queueSaving()"
@@ -618,7 +621,7 @@
             }
           </section>
 
-          <section class="sidebar-card roster-card">
+          <section class="sidebar-card roster-card rr-card rr-card--padded">
   <span class="eyebrow">Your Roster</span>
   <h2>Drafted Players</h2>
 
@@ -640,7 +643,7 @@
           track pick.overallPick
         ) {
           <article
-            class="drafted-player-row"
+            class="drafted-player-row rr-list-row"
             [class.has-team-change-logo]="hasOffseasonTeamChange(pick.asset)"
           >
   @if (hasOffseasonTeamChange(pick.asset)) {

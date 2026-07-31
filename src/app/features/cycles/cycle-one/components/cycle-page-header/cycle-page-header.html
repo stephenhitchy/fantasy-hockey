@@ -1,4 +1,4 @@
-    <header class="cycle-header">
+    <header class="cycle-header rr-section-heading">
       <div class="cycle-header-main">
         <span class="eyebrow">Fantasy Season</span>
 
@@ -24,43 +24,43 @@
 
       <div class="cycle-header-actions">
         <a
-          class="schedule-preview-header-link my-team-header-link"
+          class="schedule-preview-header-link my-team-header-link rr-button rr-button--primary"
           [routerLink]="['/leagues', presenter.leagueId, 'team']"
         >
           My Team
         </a>
 
         <a
-          class="schedule-preview-header-link"
+          class="schedule-preview-header-link rr-button rr-button--secondary"
           [routerLink]="['/leagues', presenter.leagueId, 'cycles', 'schedule-preview']"
         >
           Schedule Preview
         </a>
 
         <a
-          class="schedule-preview-header-link"
+          class="schedule-preview-header-link rr-button rr-button--secondary"
           [routerLink]="['/leagues', presenter.leagueId, 'cycles', presenter.cycleNumber, 'matchups']"
         >
           Matchup Overview
         </a>
 
-        <a class="schedule-preview-header-link" [routerLink]="['/leagues', presenter.leagueId, 'standings']">
+        <a class="schedule-preview-header-link rr-button rr-button--secondary" [routerLink]="['/leagues', presenter.leagueId, 'standings']">
           League Standings
         </a>
 
-        <a class="schedule-preview-header-link" [routerLink]="['/leagues', presenter.leagueId, 'playoffs']">
+        <a class="schedule-preview-header-link rr-button rr-button--secondary" [routerLink]="['/leagues', presenter.leagueId, 'playoffs']">
           Playoff Bracket
         </a>
 
         @if (presenter.cycle()?.overlapsPreviousCycle) {
-          <span class="cycle-status-badge overlap-status-badge"> Overlapping Cycle </span>
+          <span class="cycle-status-badge overlap-status-badge rr-badge rr-badge--warning"> Overlapping Cycle </span>
         }
 
         @if (
           presenter.cycle()?.status === 'active' &&
           (presenter.cycle()?.activeWindowCount ?? 0) < (presenter.cycle()?.totalExpectedWindowCount ?? 0)
         ) {
-          <span class="cycle-status-badge window-progress-badge">
+          <span class="cycle-status-badge window-progress-badge rr-badge rr-badge--info">
             {{ presenter.cycle()?.activeWindowCount ?? 0 }} /
             {{ presenter.cycle()?.totalExpectedWindowCount ?? 0 }} Slots Started
           </span>
