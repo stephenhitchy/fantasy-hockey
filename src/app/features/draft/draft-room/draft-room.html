@@ -288,7 +288,7 @@
         <main class="player-pool-panel rr-card rr-card--padded">
           <div class="panel-heading rr-section-heading">
             <div>
-              <span class="eyebrow">Available Assets</span>
+              <span class="eyebrow">Available Players</span>
               <h2>Player Pool</h2>
               <p>{{ availableAssetCount() }} players and goalie units available</p>
             </div>
@@ -330,7 +330,7 @@
 <option value="DRAFT_VALUE">Sort: Season Draft Rank</option>
 <option value="RELIABILITY">Sort: Reliability</option>
 <option value="RATING">Sort: Season Rating</option>
-<option value="PROJECTED_CYCLE">Sort: Next Cycle Projection</option>
+<option value="PROJECTED_CYCLE">Sort: Next 6 Games Projection</option>
 <option value="PROJECTED_SEASON">Sort: Season Outlook</option>
 <option value="NAME">Sort: Name</option>
 <option value="POSITION">Sort: Position</option>
@@ -355,7 +355,7 @@
             </div>
             }@else if (availableAssets().length === 0) {
             <p class="pool-loading">
-              No available assets match that search.
+              No available players or goalie units match that search.
             </p>
           } @else {
             <div class="asset-list">
@@ -427,7 +427,7 @@
     </span>
 
     @if (isPlayerAvailabilityIrEligible(asset)) {
-      <small class="ir-eligible-copy">IR eligible</small>
+      <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
     }
 
     @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
@@ -454,7 +454,7 @@
     [class]="'recent-form-pill ' + getAssetRecentFormClass(asset)"
     [attr.title]="getAssetProjectionDataLabel(asset)"
   >
-    Cycle {{ getAssetRecentFormLabel(asset) }}
+    {{ getAssetRecentFormLabel(asset) }}
   </small>
 
   @if (getAssetExpectedGamesDisplay(asset); as expectedGames) {
@@ -464,7 +464,7 @@
   }
 
   <small>
-    Next Cycle:
+    Next 6 Games:
     {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
   </small>
 
@@ -713,7 +713,7 @@
         </span>
 
         @if (isPlayerAvailabilityIrEligible(pick.asset)) {
-          <small class="ir-eligible-copy">IR eligible</small>
+          <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
         }
 
         @if (getPlayerAvailabilityNote(pick.asset); as availabilityNote) {
@@ -740,7 +740,7 @@
     [class]="'recent-form-pill ' + getAssetRecentFormClass(pick.asset)"
     [attr.title]="getAssetProjectionDataLabel(pick.asset)"
   >
-    Cycle {{ getAssetRecentFormLabel(pick.asset) }}
+    {{ getAssetRecentFormLabel(pick.asset) }}
   </small>
 
   @if (getAssetExpectedGamesDisplay(pick.asset); as expectedGames) {
@@ -750,7 +750,7 @@
   }
 
   <small>
-    Next Cycle:
+    Next 6 Games:
     {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
   </small>
 

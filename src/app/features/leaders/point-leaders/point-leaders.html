@@ -11,7 +11,7 @@
         <span class="eyebrow">League Scoreboard</span>
         <h1>Point Leaders</h1>
         <p>
-          Every fantasy point from each player’s frozen six-game windows is added together.
+          Every fantasy point from each player’s completed six-game matchups is added together.
           Forwards, defensemen, and goalie units are ranked separately.
         </p>
       </div>
@@ -21,7 +21,7 @@
         <select [value]="selectedCycleNumber()" (change)="setCycleScope($any($event.target).value)">
           <option value="0">Season total</option>
           @for (cycle of sortedCycles(); track cycle.cycleNumber) {
-            <option [value]="cycle.cycleNumber">Cycle {{ cycle.cycleNumber }}</option>
+            <option [value]="cycle.cycleNumber">Matchup {{ cycle.cycleNumber }}</option>
           }
         </select>
       </label>
@@ -119,7 +119,7 @@
                     {{ getAssetTeamLabel(row.asset) }} · {{ row.asset.position }} ·
                     {{ getFantasyTeamName(row.ownerId) }}
                   </span>
-                  <small>{{ row.cycleCount }} scoring {{ row.cycleCount === 1 ? 'window' : 'windows' }}</small>
+                  <small>{{ row.cycleCount }} completed {{ row.cycleCount === 1 ? 'matchup' : 'matchups' }}</small>
                 </div>
               </div>
 

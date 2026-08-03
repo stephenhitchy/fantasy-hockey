@@ -413,7 +413,7 @@ export class TeamSettings implements OnDestroy {
     this.stopLatestCycleListener = listenToLatestCycle(
       leagueId,
       (cycle) => {
-        this.clearLiveDataWarning('Current cycle');
+        this.clearLiveDataWarning('Current matchup');
         this.latestCycle.set(cycle);
         this.latestMatchups.set([]);
         this.cycleRosterPicks.set([]);
@@ -451,12 +451,12 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (picks) => {
-            this.clearLiveDataWarning('Cycle roster');
+            this.clearLiveDataWarning('Matchup roster');
             this.cycleRosterPicks.set(picks);
             void this.loadCurrentCycleScoringIfReady();
           },
           (error) => {
-            this.recordLiveDataWarning('Cycle roster', error);
+            this.recordLiveDataWarning('Matchup roster', error);
           },
         );
 
@@ -473,7 +473,7 @@ export class TeamSettings implements OnDestroy {
         );
       },
       (error) => {
-        this.recordLiveDataWarning('Current cycle', error);
+        this.recordLiveDataWarning('Current matchup', error);
       },
     );
   }
@@ -554,7 +554,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   getRosterMoveEffectiveLabel(): string {
-    return `Cycle ${this.getRosterMoveEffectiveCycleNumber()}`;
+    return `Matchup ${this.getRosterMoveEffectiveCycleNumber()}`;
   }
 
   getPlayerAvailability(asset: RosterAsset): PlayerAvailability | null {
@@ -603,7 +603,7 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (availability.irEligible) {
-      return `${availability.label} · IR eligible`;
+      return `${availability.label} · Injured Reserve (IR) eligible`;
     }
 
     return `${availability.label} · Activation recommended when a roster slot is available`;
@@ -626,11 +626,11 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (slot.pendingMove) {
-      return 'A move is already queued for this slot.';
+      return 'A move is already scheduled for this slot.';
     }
 
     if (slot.asset.assetType !== 'skater') {
-      return 'Goalie units cannot be moved to IR.';
+      return 'Goalie units cannot be moved to Injured Reserve (IR).';
     }
 
     const availability = this.getPlayerAvailability(slot.asset);
@@ -640,7 +640,7 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (this.getOpenIrSlotCount() <= 0) {
-      return 'No IR slots open.';
+      return 'No Injured Reserve (IR) slots are open.';
     }
 
     return '';
@@ -656,7 +656,7 @@ export class TeamSettings implements OnDestroy {
 
   getIrActivationHelp(slot: IrRosterSlot): string {
     if (!slot.asset) {
-      return 'Open IR slot';
+      return 'Open Injured Reserve (IR) slot';
     }
 
     const activeSlots = this.getActiveSlotsForIrAsset(slot.asset);
@@ -707,7 +707,7 @@ export class TeamSettings implements OnDestroy {
     const irSlot = this.getIrSlots().find((slot) => slot.slotId === irSlotId);
 
     if (!irSlot?.asset) {
-      this.rosterMoveError.set('That IR slot is empty.');
+      this.rosterMoveError.set('That Injured Reserve (IR) slot is empty.');
       return;
     }
 
@@ -816,7 +816,7 @@ export class TeamSettings implements OnDestroy {
     return {
       sourceRosterArea,
       slotId,
-      slotLabel: `IR Slot ${slot.slotNumber}`,
+      slotLabel: `Injured Reserve Slot ${slot.slotNumber}`,
       asset: slot.asset,
     };
   }
@@ -839,7 +839,7 @@ export class TeamSettings implements OnDestroy {
           ? 'That active roster slot is already empty.'
           : sourceRosterArea === 'bench'
             ? 'That bench slot is already empty.'
-            : 'That IR slot is already empty.',
+            : 'That Injured Reserve (IR) slot is already empty.',
       );
       return;
     }
@@ -904,9 +904,9 @@ export class TeamSettings implements OnDestroy {
 
       this.rosterMoveMessage.set(
         pendingDrop.sourceRosterArea === 'active' && execution.mode === 'immediate'
-          ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. Its untouched Cycle ${execution.effectiveCycleNumber} assignment was removed immediately, so the open slot can still be filled for that cycle.`
+          ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. Its untouched Matchup ${execution.effectiveCycleNumber} assignment was removed immediately, so the open slot can still be filled for that matchup.`
           : pendingDrop.sourceRosterArea === 'active'
-            ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. The player’s already-started individual window remains locked, and a replacement begins in ${effectiveLabel}.`
+            ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${effectiveCycleNumber}.`
             : `${assetName} was dropped from your ${sourceLabel} and placed on waivers immediately.`,
       );
 
@@ -952,11 +952,11 @@ export class TeamSettings implements OnDestroy {
         effectiveLabel: `Cycle ${effectiveCycleNumber}`,
       });
       this.rosterMoveMessage.set(
-        `${this.getRosterAssetName(slot.asset)} moved from the bench to IR. Bench assets do not score, so the ownership move is immediate.`,
+        `${this.getRosterAssetName(slot.asset)} moved from the bench to Injured Reserve (IR). Bench players do not score, so the ownership move is immediate.`,
       );
     } catch (error: unknown) {
       this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this bench player to IR.',
+        error instanceof Error ? error.message : 'Unable to move this bench player to Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
@@ -972,7 +972,7 @@ export class TeamSettings implements OnDestroy {
 
     const targets = this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove);
     if (targets.length === 0) {
-      this.rosterMoveError.set(`No ${benchSlot.asset.position} active slot is available for a queued swap.`);
+      this.rosterMoveError.set(`No ${benchSlot.asset.position} active slot is available for a scheduled swap.`);
       return;
     }
 
@@ -1025,7 +1025,7 @@ export class TeamSettings implements OnDestroy {
     );
 
     if (!benchSlot?.asset || !targetSlot) {
-      this.rosterMoveError.set('Choose a valid bench asset and active slot.');
+      this.rosterMoveError.set('Choose a valid bench player or goalie unit and an active slot.');
       return;
     }
 
@@ -1041,14 +1041,14 @@ export class TeamSettings implements OnDestroy {
 
       this.rosterMoveMessage.set(
         execution.mode === 'immediate'
-          ? `${this.getRosterAssetName(benchSlot.asset)} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither individual window had started, so the swap applies to Cycle ${execution.effectiveCycleNumber}.`
-          : `${this.getRosterAssetName(benchSlot.asset)} is queued for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one individual window has started, so the swap begins in Cycle ${execution.effectiveCycleNumber}.`,
+          ? `${this.getRosterAssetName(benchSlot.asset)} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${execution.effectiveCycleNumber}.`
+          : `${this.getRosterAssetName(benchSlot.asset)} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${execution.effectiveCycleNumber}.`,
       );
       this.benchSwapSlotId.set('');
       this.benchSwapTargetSlotId.set('');
     } catch (error: unknown) {
       this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to queue the bench swap.',
+        error instanceof Error ? error.message : 'Unable to schedule the bench swap.',
       );
     } finally {
       this.rosterMoveLoading.set(false);
@@ -1059,7 +1059,7 @@ export class TeamSettings implements OnDestroy {
     const roster = this.roster();
     const irSlot = roster?.irSlots.find((slot) => slot.slotId === irSlotId);
     if (!irSlot?.asset) {
-      this.rosterMoveError.set('That IR slot is empty.');
+      this.rosterMoveError.set('That Injured Reserve (IR) slot is empty.');
       return;
     }
 
@@ -1140,7 +1140,7 @@ export class TeamSettings implements OnDestroy {
       (slot) => slot.slotId === this.irBenchActivationTargetSlotId(),
     );
     if (!irSlot?.asset || !targetSlot) {
-      this.rosterMoveError.set('Choose a valid IR player and bench destination.');
+      this.rosterMoveError.set('Choose a valid Injured Reserve player and bench destination.');
       return;
     }
 
@@ -1158,13 +1158,13 @@ export class TeamSettings implements OnDestroy {
       });
       const replacedAsset = targetSlot.asset;
       this.rosterMoveMessage.set(replacedAsset
-        ? `${this.getRosterAssetName(irSlot.asset)} moved from IR to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
-        : `${this.getRosterAssetName(irSlot.asset)} moved from IR to ${targetSlot.slotId}.`);
+        ? `${this.getRosterAssetName(irSlot.asset)} moved from Injured Reserve (IR) to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
+        : `${this.getRosterAssetName(irSlot.asset)} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`);
       this.irBenchActivationSlotId.set('');
       this.irBenchActivationTargetSlotId.set('');
     } catch (error: unknown) {
       this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this player from IR to the bench.',
+        error instanceof Error ? error.message : 'Unable to move this player from Injured Reserve (IR) to the bench.',
       );
     } finally {
       this.rosterMoveLoading.set(false);
@@ -1185,7 +1185,7 @@ export class TeamSettings implements OnDestroy {
 
     if (!this.canMoveSlotToIr(slot)) {
       this.rosterMoveError.set(
-        this.getMoveToIrDisabledText(slot) || 'Unable to move that player to IR.',
+        this.getMoveToIrDisabledText(slot) || 'Unable to move that player to Injured Reserve (IR).',
       );
       return;
     }
@@ -1196,7 +1196,7 @@ export class TeamSettings implements OnDestroy {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const playerName = this.getRosterAssetName(slot.asset);
-      const availabilityLabel = this.getPlayerAvailability(slot.asset)?.label ?? 'IR eligible';
+      const availabilityLabel = this.getPlayerAvailability(slot.asset)?.label ?? 'Injured Reserve eligible';
 
       const execution = await moveRosterAssetToIr({
         leagueId: this.leagueId,
@@ -1208,12 +1208,12 @@ export class TeamSettings implements OnDestroy {
 
       this.rosterMoveMessage.set(
         execution.mode === 'immediate'
-          ? `${playerName} moved to IR with a ${availabilityLabel} designation. The untouched Cycle ${execution.effectiveCycleNumber} assignment was removed immediately, so a bench player or free agent can fill that slot now.`
-          : `${playerName} moved to IR with a ${availabilityLabel} designation. The player’s already-started individual window remains locked, and a replacement begins in ${effectiveLabel}.`,
+          ? `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The untouched Matchup ${execution.effectiveCycleNumber} assignment was removed immediately, so a bench player or free agent can fill that slot now.`
+          : `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${effectiveCycleNumber}.`,
       );
     } catch (error: unknown) {
       this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this player to IR.',
+        error instanceof Error ? error.message : 'Unable to move this player to Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
@@ -1228,7 +1228,7 @@ export class TeamSettings implements OnDestroy {
     const targetSlotId = this.irActivationTargetSlotId();
 
     if (!irSlot?.asset) {
-      this.rosterMoveError.set('That IR slot is empty.');
+      this.rosterMoveError.set('That Injured Reserve (IR) slot is empty.');
       this.cancelIrActivation();
       return;
     }
@@ -1259,17 +1259,15 @@ export class TeamSettings implements OnDestroy {
         effectiveLabel,
       });
 
-      const activationLabel = execution.effectiveCycleNumber
-        ? `Cycle ${execution.effectiveCycleNumber}`
-        : effectiveLabel;
+      const activationLabel = `Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}`;
 
       this.rosterMoveMessage.set(
         execution.mode === 'immediate'
           ? replacedPlayerName
-            ? `${playerName} activated from IR into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. ${replacedPlayerName} was placed on waivers, and the untouched individual window now belongs to ${playerName} in ${activationLabel}.`
-            : `${playerName} activated from IR into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately for ${activationLabel}.`
+            ? `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. ${replacedPlayerName} was placed on waivers, and the untouched six-game count now belongs to ${playerName} in ${activationLabel}.`
+            : `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately for ${activationLabel}.`
           : replacedPlayerName
-            ? `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} was placed on waivers, while the already-started scoring window remains unchanged until ${activationLabel}.`
+            ? `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} was placed on waivers, while the already-started six-game count remains unchanged until ${activationLabel}.`
             : `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. Scoring eligibility begins with ${activationLabel}.`,
       );
 
@@ -1277,7 +1275,7 @@ export class TeamSettings implements OnDestroy {
       this.irActivationTargetSlotId.set('');
     } catch (error: unknown) {
       this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to activate this player from IR.',
+        error instanceof Error ? error.message : 'Unable to activate this player from Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
@@ -1527,7 +1525,7 @@ export class TeamSettings implements OnDestroy {
     const matchup = this.currentMatchup();
 
     if (!cycle) {
-      return 'No cycle has started yet.';
+      return 'No matchup has started yet.';
     }
 
     if (!matchup) {
@@ -1544,7 +1542,7 @@ export class TeamSettings implements OnDestroy {
   getCycleLabel(): string {
     const cycle = this.latestCycle();
 
-    return cycle ? `Cycle ${cycle.cycleNumber}` : 'Current Cycle';
+    return cycle ? `Matchup ${cycle.cycleNumber}` : 'Current Matchup';
   }
 
   getRosterAssetName(asset: unknown): string {
@@ -1566,7 +1564,7 @@ export class TeamSettings implements OnDestroy {
       return `${rosterAsset.teamName ?? 'Unknown'} Goalie Unit`;
     }
 
-    return 'Unknown Asset';
+    return 'Unknown Roster Entry';
   }
 
   getRosterAssetTeamLabel(asset: unknown): string {
@@ -1900,7 +1898,7 @@ export class TeamSettings implements OnDestroy {
     } | null;
 
     if (rosterAsset?.rosterStatus === 'new') {
-      return `Scores starting Cycle ${(this.latestCycle()?.cycleNumber ?? 0) + 1}`;
+      return `Scores starting Matchup ${(this.latestCycle()?.cycleNumber ?? 0) + 1}`;
     }
 
     return '';
@@ -1915,12 +1913,12 @@ export class TeamSettings implements OnDestroy {
       return '';
     }
 
-    return `Next window: ${this.getRosterAssetName(slot.pendingMove.incomingAsset)}`;
+    return `Next matchup: ${this.getRosterAssetName(slot.pendingMove.incomingAsset)}`;
   }
 
   getTransactionAssetName(asset: DraftableAsset | RosterAsset | null | undefined): string {
     if (!asset) {
-      return 'Unknown Asset';
+      return 'Unknown Roster Entry';
     }
 
     if (asset.assetType === 'skater') {
@@ -1979,10 +1977,10 @@ export class TeamSettings implements OnDestroy {
           : `Added ${this.getTransactionAssetName(transaction.addedAsset)}`;
 
       case 'move-to-ir':
-        return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} to IR`;
+        return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} to Injured Reserve`;
 
       case 'activate-from-ir':
-        return `Activated ${this.getTransactionAssetName(transaction.activatedAsset)} from IR`;
+        return `Activated ${this.getTransactionAssetName(transaction.activatedAsset)} from Injured Reserve`;
 
       case 'drop-to-waivers':
         return `Dropped ${this.getTransactionAssetName(transaction.droppedAsset)}`;
@@ -1998,7 +1996,7 @@ export class TeamSettings implements OnDestroy {
 
       case 'queue-add-drop':
       case 'queue-add-open-slot':
-        return `Queued ${this.getTransactionAssetName(transaction.addedAsset)}`;
+        return `Scheduled ${this.getTransactionAssetName(transaction.addedAsset)}`;
 
       case 'queue-waiver-award':
         return `Reserved ${this.getTransactionAssetName(transaction.waiverAsset)} from waivers`;
@@ -2007,16 +2005,16 @@ export class TeamSettings implements OnDestroy {
         return `Activated ${this.getTransactionAssetName(transaction.addedAsset)}`;
 
       case 'queue-active-bench-swap':
-        return `Queued ${this.getTransactionAssetName(transaction.movedAsset)} to start`;
+        return `Scheduled ${this.getTransactionAssetName(transaction.movedAsset)} to start`;
 
       case 'active-bench-swap-activated':
         return `Started ${this.getTransactionAssetName(transaction.addedAsset)}`;
 
       case 'move-bench-to-ir':
-        return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} from bench to IR`;
+        return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} from bench to Injured Reserve`;
 
       case 'activate-ir-to-bench':
-        return `Moved ${this.getTransactionAssetName(transaction.activatedAsset)} from IR to bench`;
+        return `Moved ${this.getTransactionAssetName(transaction.activatedAsset)} from Injured Reserve to bench`;
 
       case 'cancel-queued-move':
         return `Canceled ${this.getTransactionAssetName(transaction.addedAsset)}`;
@@ -2035,17 +2033,17 @@ export class TeamSettings implements OnDestroy {
           : `Filled an open active roster slot with ${this.getTransactionAssetName(transaction.addedAsset)}.`;
 
       case 'move-to-ir':
-        return `${this.getTransactionAssetName(transaction.movedAsset)} moved from active roster to IR.`;
+        return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the active roster to Injured Reserve (IR).`;
 
       case 'activate-from-ir':
         return transaction.droppedAsset
-          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR to the active roster. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
-          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR back to active roster.`;
+          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) to the active roster. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) back to the active roster.`;
 
       case 'drop-to-waivers':
         return `${this.getTransactionAssetName(transaction.droppedAsset)} was released from the ${
           transaction.sourceRosterArea === 'ir'
-            ? 'IR'
+            ? 'Injured Reserve'
             : transaction.sourceRosterArea === 'bench'
               ? 'bench'
               : 'active roster'
@@ -2063,53 +2061,56 @@ export class TeamSettings implements OnDestroy {
         return 'No claim was awarded, so this player became a normal free agent.';
 
       case 'queue-add-drop':
-        return `${this.getTransactionAssetName(transaction.droppedAsset)} keeps the current six-game slot window. The incoming player is reserved until that slot advances.`;
+        return `${this.getTransactionAssetName(transaction.droppedAsset)} keeps the current six-game count. The incoming player is reserved until that slot begins its next matchup.`;
 
       case 'queue-add-open-slot':
-        return 'The incoming player is reserved and will activate when this active roster slot reaches its next boundary.';
+        return 'The incoming player is reserved and will activate when this active roster slot begins its next matchup.';
 
       case 'queue-waiver-award':
         return transaction.droppedAsset
-          ? `The waiver winner is reserved. ${this.getTransactionAssetName(transaction.droppedAsset)} remains in the current slot window until the boundary.`
-          : 'The waiver winner is reserved for the selected open slot boundary.';
+          ? `The waiver winner is reserved. ${this.getTransactionAssetName(transaction.droppedAsset)} remains in the current six-game count until the slot begins its next matchup.`
+          : 'The waiver winner is reserved until the selected open slot begins its next matchup.';
 
       case 'slot-move-activated':
         return transaction.droppedAsset
-          ? `${this.getTransactionAssetName(transaction.addedAsset)} started the new slot window. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
-          : `${this.getTransactionAssetName(transaction.addedAsset)} started the new slot window.`;
+          ? `${this.getTransactionAssetName(transaction.addedAsset)} started the slot’s new six-game count. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+          : `${this.getTransactionAssetName(transaction.addedAsset)} started the slot’s new six-game count.`;
 
       case 'queue-active-bench-swap':
-        return `${this.getTransactionAssetName(transaction.movedAsset)} remains on the bench until the active slot and incoming asset both reach a fair untouched cycle boundary. ${this.getTransactionAssetName(transaction.droppedAsset)} remains active until then.`;
+        return `${this.getTransactionAssetName(transaction.movedAsset)} remains on the bench until both roster spots can begin the same fair matchup. ${this.getTransactionAssetName(transaction.droppedAsset)} remains active until then.`;
 
       case 'active-bench-swap-activated':
-        return `${this.getTransactionAssetName(transaction.addedAsset)} began the active slot window. ${this.getTransactionAssetName(transaction.droppedAsset)} moved to the bench.`;
+        return `${this.getTransactionAssetName(transaction.addedAsset)} began the active slot’s new six-game count. ${this.getTransactionAssetName(transaction.droppedAsset)} moved to the bench.`;
 
       case 'move-bench-to-ir':
-        return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the bench to IR and opened a flexible bench spot.`;
+        return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the bench to Injured Reserve (IR) and opened a flexible bench spot.`;
 
       case 'activate-ir-to-bench':
         return transaction.droppedAsset
-          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR to the bench. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
-          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from IR into an open bench spot.`;
+          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) to the bench. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) into an open bench spot.`;
 
       case 'cancel-queued-move':
-        return `${this.getTransactionAssetName(transaction.addedAsset)} was released from its reservation before the slot boundary.`;
+        return `${this.getTransactionAssetName(transaction.addedAsset)} was released from its reservation before the slot began its next matchup.`;
 
       case 'add-drop':
       default:
         return transaction.sourceRosterArea === 'bench'
-          ? `${this.getTransactionAssetName(transaction.addedAsset)} replaced ${this.getTransactionAssetName(transaction.droppedAsset)} on the bench. The dropped asset was placed on waivers.`
+          ? `${this.getTransactionAssetName(transaction.addedAsset)} replaced ${this.getTransactionAssetName(transaction.droppedAsset)} on the bench. The dropped player or goalie unit was placed on waivers.`
           : `Dropped ${this.getTransactionAssetName(transaction.droppedAsset)}.`;
     }
   }
 
   getTransactionEffectiveLabel(transaction: FantasyTransaction): string {
-    return (
+    const storedLabel =
       transaction.effectiveLabel ||
       (typeof transaction.effectiveCycleNumber === 'number'
-        ? `Cycle ${transaction.effectiveCycleNumber}`
-        : 'Next cycle')
-    );
+        ? `Matchup ${transaction.effectiveCycleNumber}`
+        : 'Next matchup');
+
+    return storedLabel
+      .replace(/^Cycle\s+/i, 'Matchup ')
+      .replace(/^Next cycle$/i, 'Next matchup');
   }
 
   getTransactionDateLabel(value: unknown): string {

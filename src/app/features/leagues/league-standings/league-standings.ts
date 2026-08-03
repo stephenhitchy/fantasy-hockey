@@ -238,12 +238,12 @@ export class LeagueStandings {
     const cycle = activeCycle ?? latestCycle;
 
     if (!cycle) {
-      return 'Cycle 1';
+      return 'Matchup 1';
     }
 
     return cycle.phase === 'playoffs'
-      ? (cycle.playoffRoundLabel ?? `Playoff Cycle ${cycle.cycleNumber}`)
-      : `Cycle ${cycle.cycleNumber}`;
+      ? (cycle.playoffRoundLabel ?? `Playoff Matchup ${cycle.cycleNumber}`)
+      : `Matchup ${cycle.cycleNumber}`;
   }
 
   getLeagueStatusText(): string {
@@ -268,7 +268,7 @@ export class LeagueStandings {
       return `Latest matchup period: ${this.getCurrentPeriodLabel()}.`;
     }
 
-    return 'No cycles have started yet.';
+    return 'No matchups have started yet.';
   }
 
   getActiveMatchup(ownerId: string): StandingMatchupSummary | null {
@@ -345,7 +345,7 @@ export class LeagueStandings {
     const periodLabel =
       lastMatchup.phase === 'playoffs'
         ? (lastMatchup.playoffRoundLabel ?? `Playoffs`)
-        : `Cycle ${lastMatchup.cycleNumber}`;
+        : `Matchup ${lastMatchup.cycleNumber}`;
 
     if (lastMatchup.tieBrokenByHigherSeed) {
       return lastMatchup.winnerOwnerId === ownerId

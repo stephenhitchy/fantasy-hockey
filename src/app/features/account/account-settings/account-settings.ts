@@ -35,11 +35,18 @@ import {
   getNhlLogoUrl,
   getPixelTeamTheme,
   getTeamIdentityVariants,
-  NHL_PIXEL_TEAMS,
   PixelTeamTheme,
+  RINKRAT_NEUTRAL_ABBREVIATION,
   TEAM_IDENTITY_UNLOCK_DETAILS,
   TeamIdentityUnlockRequirement,
+  USER_SELECTABLE_PIXEL_THEMES,
 } from '../../../shared/pixel-theme/pixel-theme.data';
+import {
+  DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+  HOCKEY_EXPERIENCE_OPTIONS,
+  HockeyExperienceLevel,
+  normalizeHockeyExperienceLevel,
+} from '../../../shared/hockey-terms/hockey-terms.data';
 interface AccountAchievement {
   icon: string;
   title: string;
@@ -85,8 +92,9 @@ export class AccountSettings {
   >([]);
 
   username = '';
-  favoriteTeamAbbreviation = 'VGK';
+  favoriteTeamAbbreviation = RINKRAT_NEUTRAL_ABBREVIATION;
   favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+  hockeyExperience: HockeyExperienceLevel = DEFAULT_HOCKEY_EXPERIENCE_LEVEL;
   reducedMotion = false;
   defaultLandingPage: DefaultLandingPage = 'dashboard';
   injuryEmailEnabled = false;
@@ -95,7 +103,8 @@ export class AccountSettings {
   deletePassword = '';
   deleteAcknowledged = false;
 
-  readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
+  readonly teams: PixelTeamTheme[] = USER_SELECTABLE_PIXEL_THEMES;
+  readonly hockeyExperienceOptions = HOCKEY_EXPERIENCE_OPTIONS;
   readonly backgroundOptions: { value: BackgroundTheme; title: string; description: string }[] = [
     { value: 'rink-dark', title: 'Rink Dark', description: 'Neutral graphite with classic arena contrast.' },
     { value: 'oled-black', title: 'OLED Black', description: 'Deep black surfaces for a sharper, high-contrast look.' },
@@ -113,6 +122,16 @@ export class AccountSettings {
 
   availableTeamVariants(): PixelTeamTheme[] {
     return getTeamIdentityVariants(this.favoriteTeamAbbreviation);
+  }
+
+  isNeutralIdentity(): boolean {
+    return this.favoriteTeamAbbreviation === RINKRAT_NEUTRAL_ABBREVIATION;
+  }
+
+  selectedIdentityBadge(): string {
+    return this.isNeutralIdentity()
+      ? 'RinkRat · Neutral'
+      : `${this.selectedTeam().abbreviation} · ${this.selectedTeam().variantShortLabel}`;
   }
 
   managerInitials(): string {
@@ -170,7 +189,9 @@ export class AccountSettings {
 
       this.leagueSummaries.set(summaries);
       this.username = profile?.username ?? '';
-      this.favoriteTeamAbbreviation = profile?.favoriteTeamAbbreviation || 'VGK';
+      this.favoriteTeamAbbreviation =
+        profile?.favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION;
+      this.hockeyExperience = normalizeHockeyExperienceLevel(profile?.hockeyExperience);
       this.reducedMotion = Boolean(profile?.reducedMotion);
       this.defaultLandingPage =
         profile?.defaultLandingPage === 'lastLeague' ? 'lastLeague' : 'dashboard';
@@ -233,6 +254,7 @@ export class AccountSettings {
         reducedMotion: this.reducedMotion,
         defaultLandingPage: this.defaultLandingPage,
         backgroundTheme: this.backgroundTheme,
+        hockeyExperience: this.hockeyExperience,
       });
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -254,10 +276,15 @@ export class AccountSettings {
     this.favoriteTeamAbbreviation = team.abbreviation;
     this.favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
 
+    const successMessage =
+      team.abbreviation === RINKRAT_NEUTRAL_ABBREVIATION
+        ? 'Neutral RinkRat colors are now active. You can choose an NHL favorite at any time.'
+        : `${team.name} is now your saved favorite team. Choose a logo and color version below.`;
+
     await this.saveFavoriteTeamIdentity(
       previousTeam,
       previousVariant,
-      `${team.name} is now your saved favorite team. Choose a logo and color version below.`,
+      successMessage,
     );
   }
 
@@ -451,6 +478,7 @@ export class AccountSettings {
       reducedMotion: this.reducedMotion,
       defaultLandingPage: this.defaultLandingPage,
       backgroundTheme: this.backgroundTheme,
+      hockeyExperience: this.hockeyExperience,
     });
   }
 
@@ -483,6 +511,7 @@ export class AccountSettings {
         defaultLandingPage: this.defaultLandingPage,
         backgroundTheme: this.backgroundTheme,
         injuryEmailEnabled: this.emailVerified() && this.injuryEmailEnabled,
+        hockeyExperience: this.hockeyExperience,
       });
 
       await syncManagerNameAcrossLeagues(normalizedUsername);
@@ -499,6 +528,7 @@ export class AccountSettings {
               defaultLandingPage: this.defaultLandingPage,
               backgroundTheme: this.backgroundTheme,
               injuryEmailEnabled: this.emailVerified() && this.injuryEmailEnabled,
+              hockeyExperience: this.hockeyExperience,
             }
           : current,
       );

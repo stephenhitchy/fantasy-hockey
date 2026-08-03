@@ -212,7 +212,7 @@ export class CycleAssetDetail implements OnDestroy {
       return 'Back to Schedule Preview';
     }
 
-    return `Back to Cycle ${this.cycleNumber}`;
+    return `Back to Matchup ${this.cycleNumber}`;
   }
 
   private getSafeReturnUrl(value: string | null, leagueId: string): string {
@@ -357,7 +357,7 @@ export class CycleAssetDetail implements OnDestroy {
   getFrozenProjectionSourceLabel(asset: DraftableAsset): string {
     switch (asset.frozenProjectionSource) {
       case 'shared-snapshot':
-        return `Automatic window projection v${asset.frozenProjectionVersion ?? '—'}`;
+        return `Automatic six-game projection v${asset.frozenProjectionVersion ?? '—'}`;
       case 'draft-pick':
         return 'Draft projection fallback';
       case 'roster':
@@ -365,7 +365,7 @@ export class CycleAssetDetail implements OnDestroy {
       case 'legacy':
         return 'Stable season baseline fallback';
       default:
-        return 'Legacy cycle projection';
+        return 'Legacy matchup projection';
     }
   }
 

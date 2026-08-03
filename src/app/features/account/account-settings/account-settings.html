@@ -111,7 +111,7 @@
           <span class="eyebrow">Manager Education</span>
           <h2 id="account-training-camp-title">Training Camp</h2>
           <p>
-            Review six-game windows, roster moves, player cards, and automatic season flow at any time.
+            Review six-game matchups, roster moves, player cards, and automatic season flow at any time.
           </p>
         </div>
         <span class="training-camp-account-status" [class.complete]="trainingCampComplete()">
@@ -127,26 +127,26 @@
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Personalize the Arena</span>
-              <h2>Favorite Team</h2>
+              <h2>Favorite Team or RinkRat Colors</h2>
             </div>
 
             <span class="selected-team-badge rr-badge rr-badge--info">
-              {{ selectedTeam().abbreviation }} · {{ selectedTeam().variantShortLabel }}
+              {{ selectedIdentityBadge() }}
             </span>
           </div>
 
           <p class="panel-description">
-            Your selection controls the profile lighting and shared accent colors across the app.
+            Choose an NHL favorite, or keep the neutral RinkRat palette until you decide.
           </p>
 
-          <div class="team-selector-grid" role="list" aria-label="Choose a favorite NHL team">
+          <div class="team-selector-grid" role="list" aria-label="Choose an NHL team or neutral RinkRat colors">
             @for (team of teams; track team.abbreviation) {
               <button
                 type="button"
                 class="team-selector-button rr-choice-card"
                 [class.selected]="team.abbreviation === favoriteTeamAbbreviation"
                 [attr.aria-pressed]="team.abbreviation === favoriteTeamAbbreviation"
-                [title]="team.name"
+                [title]="team.abbreviation === 'RR' ? 'No favorite yet — use RinkRat colors' : team.name"
                 [disabled]="savingFavoriteTeam()"
                 (click)="selectFavoriteTeam(team)"
               >
@@ -155,11 +155,20 @@
                   [alt]="team.name + ' logo'"
                   (error)="handleTeamLogoError($event, team.abbreviation)"
                 />
-                <span>{{ team.abbreviation }}</span>
+                <span>{{ team.abbreviation === 'RR' ? 'RR' : team.abbreviation }}</span>
               </button>
             }
           </div>
 
+          @if (isNeutralIdentity()) {
+            <section class="neutral-identity-note rr-notice rr-notice--info">
+              <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+              <div>
+                <strong>Neutral RinkRat identity active</strong>
+                <span>Your account uses RinkRat colors without attaching your profile to an NHL team.</span>
+              </div>
+            </section>
+          } @else {
           <section class="team-identity-picker" aria-labelledby="team-identity-title">
             <div class="team-identity-heading">
               <div>
@@ -219,12 +228,13 @@
               }
             </div>
           </section>
+          }
 
           <p class="favorite-team-save-status" role="status" aria-live="polite">
             @if (savingFavoriteTeam()) {
               Saving {{ selectedTeam().name }}...
             } @else {
-              Favorite-team selections save automatically.
+              Team and neutral-color selections save automatically.
             }
           </p>
         </section>
@@ -241,6 +251,35 @@
             <span>Display Name</span>
             <input class="rr-field" [(ngModel)]="username" placeholder="Manager name" />
           </label>
+
+          <section class="hockey-experience-settings" aria-labelledby="hockey-experience-settings-title">
+            <div class="panel-heading compact">
+              <div>
+                <span class="eyebrow">Explanation Level</span>
+                <h3 id="hockey-experience-settings-title">Hockey Familiarity</h3>
+              </div>
+            </div>
+
+            <p class="panel-description">
+              This changes label detail and Coach Help explanations only. It never changes scoring or league rules.
+            </p>
+
+            <div class="hockey-experience-option-grid" role="radiogroup" aria-label="Choose hockey familiarity">
+              @for (option of hockeyExperienceOptions; track option.value) {
+                <button
+                  type="button"
+                  role="radio"
+                  class="hockey-experience-option rr-choice-card"
+                  [class.selected]="hockeyExperience === option.value"
+                  [attr.aria-checked]="hockeyExperience === option.value"
+                  (click)="hockeyExperience = option.value; previewPreferenceChanges()"
+                >
+                  <strong>{{ option.title }}</strong>
+                  <small>{{ option.description }}</small>
+                </button>
+              }
+            </div>
+          </section>
 
           <label class="toggle-row">
             <span>

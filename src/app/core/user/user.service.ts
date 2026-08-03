@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, db } from '../firebase';
 import { functions } from '../firebase-functions';
 import type { TeamIdentityUnlockRequirement } from '../../shared/pixel-theme/pixel-theme.data';
+import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-terms.data';
 
 export type DefaultLandingPage = 'dashboard' | 'lastLeague';
 export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-ice';
@@ -27,6 +28,7 @@ export interface UserProfile {
   defaultLandingPage?: DefaultLandingPage;
   backgroundTheme?: BackgroundTheme;
   injuryEmailEnabled?: boolean;
+  hockeyExperience?: HockeyExperienceLevel;
   trainingCampVersion?: number;
   trainingCampCompletedAt?: unknown;
   welcomeEmailSentAt?: unknown;
@@ -50,6 +52,7 @@ export interface UserAccountSettingsUpdate {
   defaultLandingPage: DefaultLandingPage;
   backgroundTheme: BackgroundTheme;
   injuryEmailEnabled: boolean;
+  hockeyExperience: HockeyExperienceLevel;
 }
 
 interface PublicManagerProfilesRequest {
@@ -62,6 +65,7 @@ interface PublicManagerProfilesResponse {
 }
 
 const PUBLIC_PROFILE_TEAM_ABBREVIATIONS = new Set([
+  'RR',
   'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
   'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
   'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
@@ -84,7 +88,7 @@ function normalizePublicProfile(
 
       return PUBLIC_PROFILE_TEAM_ABBREVIATIONS.has(abbreviation)
         ? abbreviation
-        : 'VGK';
+        : 'RR';
     })(),
     favoriteTeamVariantId:
       typeof profile.favoriteTeamVariantId === 'string' &&
@@ -269,6 +273,7 @@ export async function updateUserAccountSettings(
     defaultLandingPage: settings.defaultLandingPage,
     backgroundTheme: settings.backgroundTheme,
     injuryEmailEnabled: settings.injuryEmailEnabled,
+    hockeyExperience: settings.hockeyExperience,
   });
   batch.set(publicRef, getPublicProfileWrite(uid, settings), { merge: true });
 

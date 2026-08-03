@@ -52,10 +52,10 @@ test('waiver cards use the same compact decision hierarchy', async () => {
   assert.match(defaultView, /processLeagueWaiver\(waiver\)/);
 });
 
-test('cycle markers and estimated final totals remain available through progressive disclosure', async () => {
+test('six-game markers and estimated final totals remain available through progressive disclosure', async () => {
   const html = await source(htmlPath);
 
-  assert.equal((html.match(/View cycle status &amp; full stats/g) ?? []).length, 2);
+  assert.equal((html.match(/View six-game status &amp; full stats/g) ?? []).length, 2);
   assert.equal((html.match(/cycle-decision-block--details/g) ?? []).length, 2);
   assert.equal((html.match(/Estimated final total/g) ?? []).length, 2);
   assert.match(html, /getCurrentCycleMarker\(asset, dotIndex\)/);

@@ -230,10 +230,10 @@ export class CycleSchedulePreview implements OnDestroy {
     const cycle = this.existingCycles()[cycleNumber];
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ?? `Playoff Cycle ${cycleNumber}`;
+      return cycle.playoffRoundLabel ?? `Playoff Matchup ${cycleNumber}`;
     }
 
-    return `Cycle ${cycleNumber}`;
+    return `Matchup ${cycleNumber}`;
   }
 
   getCycleStatusLabel(cycleNumber: number): string {

@@ -6746,3 +6746,299 @@ npm run build
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only hosting:app -m "Batch M1 mobile readability and adaptive navigation"
 ```
+
+---
+
+## Batch M2 — Beginner Language and Neutral Onboarding
+
+### Goal
+
+Make RinkRat welcoming to managers who do not know much about hockey while preserving the exact competitive system experienced managers already use. This batch changes onboarding, terminology, explanations, and profile presentation. It does **not** change scoring values, roster authority, draft logic, waivers, standings, playoff advancement, NHL game ingestion, or the asynchronous six-game roster-slot model.
+
+### Neutral RinkRat identity
+
+A first-class neutral identity is now available under the stable abbreviation `RR`.
+
+- New accounts begin with **No favorite yet — Use neutral RinkRat colors** selected.
+- Choosing an NHL favorite is optional during registration and remains editable from Account Settings.
+- The neutral palette uses the RinkRat mascot and the colors `#26384C`, `#D6E2EE`, and `#C94F5D`, with `#74B9DF` as the accessible accent.
+- `RR` participates in the same theme and public-manager-profile paths as NHL abbreviations, so the UI never has to store an empty or invalid team value.
+- The decorative login marquee remains NHL-only; `RR` is a profile identity, not an NHL club.
+- Missing or invalid favorite-team values now fall back to `RR` rather than silently presenting a Vegas identity.
+
+The private user profile and display-safe public profile both allow `RR`. Public profiles still contain only the manager name, identity abbreviation, identity variant, and update timestamp.
+
+### Hockey-familiarity preference
+
+Registration and Account Settings now offer three explanation levels:
+
+| Stored value | Manager choice | Presentation behavior |
+| --- | --- | --- |
+| `new` | **New to hockey** | Shows fuller labels and additional plain-language context. |
+| `basic` | **I know the basics** | Uses familiar abbreviations with definitions one tap away. |
+| `experienced` | **Experienced fan** | Uses the most compact labels while retaining glossary access. |
+
+The private profile field is `hockeyExperience`. It is validated as `new`, `basic`, or `experienced`; it is never copied into `publicProfiles`. The browser also stores the active level under `rinkrat-hockey-experience` so glossary labels can render correctly before or between profile reads. This setting affects explanation density only and never changes scoring or league rules.
+
+### Contextual hockey glossary
+
+The reusable `app-hockey-term` control provides a labelled, keyboard-accessible definition popover. It exposes expanded state with `aria-expanded` and `aria-controls`, closes with its Close button or Escape, and uses a non-modal labelled region so ordinary page focus is preserved.
+
+The launch glossary covers:
+
+- `LW` — Left Wing
+- `C` — Center
+- `RW` — Right Wing
+- `D` — Defenseman
+- `G` — Team Goalie Unit
+- `SOG` — Shots on Goal
+- `BLK` — Blocked Shots
+- `PPP` — Power-Play Points
+- `SHP` — Short-Handed Points
+- `SV%` — Save Percentage
+- `TOI` — Time on Ice
+- `GWG` — Game-Winning Goal
+- `IR` — Injured Reserve
+- `Pts/Game` — Fantasy Points per Game
+
+Definitions are available contextually in Training Camp and the Scoring Guide, and the complete list is available through Coach Help.
+
+### Beginner-first language
+
+Primary manager screens now prefer the language below:
+
+| Previous engineering-oriented label | Manager-facing label |
+| --- | --- |
+| Asset | Player or goalie unit |
+| Active asset | Starter |
+| Current asset | Current player |
+| Incoming asset | New player |
+| Available Assets | Available Players |
+| Asset window | This roster spot's six games |
+| Cycle 3 | Matchup 3 |
+| Cycle total | Matchup total or six-game total |
+| Next-cycle projection | Next 6 Games |
+| Cycle boundary | After this roster spot finishes its six games |
+| Queued move | Scheduled move |
+| IR | Injured Reserve (IR) when first introduced |
+
+The pass covers registration, Account Settings, Training Camp, the Scoring Guide, Coach Help, Dashboard, League HQ, standings, join/setup/draft screens, Game Center, matchup details, My Team, Free Agents, player details, projections, leaders, playoffs, and support copy.
+
+Platform-administrator diagnostics and simulators intentionally retain internal terms where they describe implementation state rather than manager instructions.
+
+### Internal compatibility preserved
+
+Firestore collections, TypeScript models, transaction records, Cloud Function contracts, and asynchronous six-game calculations still use the established `cycle`, `asset`, and `window` names. In particular:
+
+- Historical transaction records continue to use labels such as `Cycle N` where compatibility requires them.
+- Each roster slot still owns an independent immutable six-game window.
+- A slot's seventh scheduled NHL team game still belongs to its next window even when other slots remain in the prior matchup.
+- Matchups, projections, roster moves, and playoff backfill continue to resolve across overlapping fantasy periods.
+
+No data migration is required.
+
+### Backend compatibility
+
+This batch updates both browser and server validation:
+
+- Firestore private-profile validation accepts `RR` and the optional `hockeyExperience` field.
+- Firestore public-profile validation accepts `RR` but rejects private familiarity data.
+- The safe public-manager-profile callable accepts `RR` and uses it as the fallback for missing or invalid identity data.
+- Existing NHL identities and accounts without `hockeyExperience` remain valid.
+- Firestore indexes are unchanged.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm2
+npm run build:all
+```
+
+The M2 suite verifies:
+
+- Neutral `RR` identity behavior and NHL-ribbon separation.
+- Familiarity normalization, browser persistence, and private-profile boundaries.
+- All 14 launch glossary terms and accessible popover controls.
+- Optional favorite-team registration and Account Settings behavior.
+- Firestore and Cloud Function compatibility for `RR` and familiarity values.
+- Beginner-first copy across primary manager templates.
+- Preservation of internal cycle labels required by existing transaction data.
+- All earlier mobile, accessibility, design-system, authority, and release-facing contracts.
+
+The Firestore emulator suite additionally checks that:
+
+- A manager can save `RR` plus a supported familiarity level.
+- An unsupported level such as `expert` is rejected.
+- A display-safe public profile can use `RR` without exposing familiarity.
+
+### Manual checklist
+
+1. Create a new account and confirm **No favorite yet** is selected by default.
+2. Create accounts with each familiarity level and confirm registration reaches Training Camp normally.
+3. Confirm a neutral account uses RinkRat colors, mascot art, and `RR` identity wherever a manager identity is shown.
+4. Select an NHL team during registration and confirm its theme still applies normally.
+5. In Account Settings, switch between neutral colors and multiple NHL teams; reload and confirm the choice persists.
+6. Change Hockey Familiarity, save, reload, and confirm the saved level remains selected.
+7. Confirm familiarity never appears in another manager's public identity or league member display.
+8. With **New to hockey** selected, check that contextual glossary controls use fuller labels where supported.
+9. Open every glossary term from Training Camp and the Scoring Guide; verify button activation, Escape, Close, focus visibility, mobile placement, and screen-reader labels.
+10. Open Coach Help and confirm all 14 glossary definitions are present.
+11. Review Dashboard, League HQ, Draft Room, Game Center, My Team, Free Agents, standings, leaders, and projections for manager-facing `asset`, `cycle`, or `queued move` jargon.
+12. Complete one legal add/drop, one waiver claim, one bench swap, and one Injured Reserve move to confirm only the wording changed.
+13. Confirm scheduled moves still activate only after the affected roster spot completes its six counted games.
+14. Confirm a live matchup with overlapping roster-slot periods still opens, scores, and advances normally.
+15. Repeat representative screens at 320px, 390px, and desktop width in Rink Dark, Light Ice, and OLED Black.
+16. Check keyboard navigation, 200% text zoom, reduced motion, console output, horizontal scrolling, and public-profile fallback behavior.
+
+### Staged deployment
+
+Because the new client writes `RR` and `hockeyExperience`, deploy the backward-compatible server and rule support **before** Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only functions:getPublicManagerProfiles -m "Batch M2 neutral onboarding compatibility"
+firebase deploy --only firestore:rules -m "Batch M2 neutral profile and familiarity validation"
+firebase deploy --only hosting:app -m "Batch M2 beginner language and neutral onboarding"
+
+# Smoke-test registration, Account Settings, public manager identity,
+# Training Camp, Game Center, My Team, and Free Agents.
+```
+
+No Firestore index deployment is required.
+
+### Rollback guidance
+
+The safest rollback is to redeploy only the approved Batch M1 Hosting build while leaving the M2 Functions and Firestore rules in place. Those server changes are backward-compatible and continue to protect any profile that has already saved `RR` or `hockeyExperience`. Revert the M2 Functions or rules only after confirming no such profiles remain, or after the older client/server has been updated to tolerate those values. No scoring, roster, transaction, or matchup data requires rollback or migration.
+
+---
+
+## Batch M2.1 — Asynchronous Roster-Slot Rollover and Scheduled-Move Recovery
+
+### Incident corrected
+
+The historical **Advance One Day** control could return HTTP `503` exactly when a roster slot completed its sixth counted NHL game and had a scheduled add/drop or bench swap waiting for its next six-game window.
+
+The regular-season lifecycle was already designed to open the next matchup asynchronously for each completed roster slot. The failure occurred inside the atomic Firestore transaction that both:
+
+1. creates that slot's Matchup N+1 snapshot,
+2. activates its scheduled roster move,
+3. updates the authoritative roster and waiver records, and
+4. records the activation in the league transaction log.
+
+The shared browser-shaped Firestore compatibility layer used by Cloud Functions supported `doc(collectionRef, explicitId)` but incorrectly rejected `doc(collectionRef)`, which is the valid auto-ID overload used by transaction-log writes. When the first scheduled move reached its boundary, that helper threw before the transaction could commit. `advanceHistoricalReplayDay` converted the uncaught server error to `unavailable`, which appeared in the browser as HTTP `503`.
+
+Because the Firestore operation is atomic, the exception rolled back both the roster move and the new Matchup N+1 roster-slot window. This made the site look as though it was waiting for every player in the league to finish six games, even though there was no intended league-wide completion gate in the asynchronous rollover path.
+
+### Corrections
+
+#### 1. Cloud Functions auto-ID compatibility
+
+`functions/src/shared/core/firebase-admin-compat.ts` now implements the browser Firestore SDK's zero-segment collection overload:
+
+```ts
+doc(collectionReference)
+```
+
+It delegates to the Admin SDK's `collectionReference.doc()` method. Explicit IDs continue to work unchanged. This repairs regular-season scheduled-move activation and the equivalent playoff-window transaction-log path.
+
+#### 2. Independent six-game rollover remains authoritative
+
+`advanceCompletedRegularSeasonAssetWindows` continues to inspect completed roster-slot windows rather than waiting for every roster slot or every team. As soon as one slot completes its sixth counted game:
+
+- Matchup N+1 may be created with `overlapsPreviousCycle: true`.
+- Only that completed slot receives its next immutable snapshot.
+- Its next scheduled NHL team game counts in Matchup N+1.
+- Slower roster slots remain in Matchup N until their own sixth game is complete.
+- A scheduled move for that slot activates in the same transaction as its next-window snapshot.
+
+No league-wide start date, league-wide completion timestamp, or all-rosters-complete gate was added.
+
+#### 3. Self-healing for a Matchup 2 already opened with the old roster
+
+`reconcilePendingRosterMovesForRegularSeasonCycle` repairs an active regular-season period that already contains a roster-slot snapshot but still has a ready scheduled move on the authoritative roster.
+
+The repair is deliberately slot-specific:
+
+- The exact roster slot must already have a snapshot in the active target matchup.
+- The move's requested effective matchup must be reached.
+- The target snapshot must have been created at or after the move was queued. A current-window snapshot that predates the reservation is never treated as a recovery target, so the move cannot activate before that slot's six-game boundary.
+- A faster slot can be repaired without advancing a slower slot.
+- The current outgoing player and any reserved bench player are revalidated inside a Firestore transaction.
+- The incoming player becomes active, the outgoing player moves to the correct bench or waiver destination, the pending reservation is cleared, and the target matchup snapshot is replaced.
+- Transaction history records the recovery source.
+- One manager's roster is processed independently so a malformed reservation does not require unrelated managers to be rewritten in the same recovery transaction.
+
+Server scoring runs this reconciliation before loading target-matchup picks. The commissioner manual next-period callable also runs it before returning. Therefore an existing test league does not need Matchup 2 deleted and does not need its scheduled moves recreated.
+
+#### 4. Score-cache identity guard
+
+A repaired roster slot retains its immutable roster-slot window ID but changes from the incorrectly snapshotted outgoing player to the scheduled incoming player. Both the server and browser scoring services now reuse a prior `windowScores[windowId]` entry only when its `assetKey` matches the currently snapshotted asset.
+
+This prevents the incoming player from inheriting the outgoing player's completed games or fantasy points. If the asset keys differ, scoring falls back only to a cache entry belonging to the incoming player and then recomputes from that player's NHL game ledger.
+
+#### 5. Historical replay retries the failed date
+
+Older builds wrote the attempted replay date before scoring and then returned `503`. Pressing **Advance One Day** again could otherwise skip that failed date. The replay control now records `lastFailedSimulatedDate` and retries the same simulated NHL date after an error.
+
+For a legacy error document created before this field existed, an `error` status with a saved simulated date is treated as a failed-date retry once. Retry behavior does not double-increment `daysAdvanced` or `totalReleasedGameCount`.
+
+### Existing-league recovery procedure
+
+After deploying Batch M2.1:
+
+1. Leave the existing Matchup 2 document and scheduled roster moves in place.
+2. Open the same test league as the verified platform administrator.
+3. Press **Advance One Day** once.
+4. The failed simulated NHL date is retried rather than skipped.
+5. Before scoring, ready scheduled moves are reconciled into the Matchup 2 snapshots that already exist.
+6. Confirm the new players are active on the roster and appear in their correct Matchup 2 roster slots.
+7. Confirm dropped players are on waivers, or on the bench for a scheduled active/bench swap.
+8. Confirm players still finishing Matchup 1 remain there until their own sixth counted game is complete.
+9. Advance until one repaired incoming player reaches a game and confirm only that player's NHL games and points appear in the repaired window.
+
+A move is skipped rather than forced if its outgoing player, incoming reservation, or reserved bench slot was manually changed after it was queued. This protects the current roster from an unsafe automatic overwrite.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm2-1
+npm run build:all
+```
+
+The focused hotfix suite verifies:
+
+- Admin Firestore auto-ID document support.
+- Per-slot regular-season rollover without an all-rosters-complete gate.
+- Scheduled-move activation in the same transaction as next-window assignment.
+- Self-healing of a previously opened target matchup.
+- Reconciliation before server scoring loads target-matchup picks.
+- Reconciliation from the manual next-period recovery path.
+- Asset-identity validation before prior window scores are reused.
+- Same-date retry after a historical replay failure.
+
+### Deployment
+
+This batch changes Cloud Functions and the browser scoring mirror. It does not change Firestore rules or indexes.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Batch M2.1 asynchronous rollover and scheduled move recovery"
+firebase deploy --only hosting:app -m "Batch M2.1 scoring cache identity guard"
+```
+
+Deploy Functions before pressing **Advance One Day** again. Hosting may be deployed immediately afterward. No data migration, rules deployment, or index deployment is required.
+
+### Rollback guidance
+
+Do not roll back the Functions fix after it has repaired a queued move unless the replacement build also supports auto-ID transaction records and the same per-slot rollover behavior. The repair writes ordinary roster, waiver, cycle-pick, and transaction documents that remain compatible with Batch M2. A Hosting-only rollback is safe because the server remains authoritative, but keeping the browser score-cache identity guard is recommended for consistent client-side displays.

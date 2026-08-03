@@ -12,12 +12,15 @@ import {
   stabilizeSignedInSession,
   withTimeout,
 } from './auth-session.service';
+import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-terms.data';
+import { RINKRAT_NEUTRAL_ABBREVIATION } from '../../shared/pixel-theme/pixel-theme.data';
 
 export async function registerUser(
   email: string,
   password: string,
   username: string,
   favoriteTeamAbbreviation: string,
+  hockeyExperience: HockeyExperienceLevel,
 ): Promise<User> {
   const credential = await withTimeout(
     createUserWithEmailAndPassword(auth, email, password),
@@ -39,13 +42,14 @@ export async function registerUser(
       email: user.email,
       username,
       createdAt: new Date(),
-      favoriteTeamAbbreviation,
+      favoriteTeamAbbreviation: favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION,
       favoriteTeamVariantId: 'current-home',
       teamIdentityUnlocks: [],
       reducedMotion: false,
       defaultLandingPage: 'dashboard',
       backgroundTheme: 'rink-dark',
       injuryEmailEnabled: false,
+      hockeyExperience,
       trainingCampVersion: 0,
     }),
     15_000,
@@ -59,7 +63,7 @@ export async function registerUser(
       setDoc(doc(db, 'publicProfiles', user.uid), {
         uid: user.uid,
         username,
-        favoriteTeamAbbreviation,
+        favoriteTeamAbbreviation: favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION,
         favoriteTeamVariantId: 'current-home',
         updatedAt: serverTimestamp(),
       }),

@@ -144,10 +144,10 @@ export class PlayoffBracket implements OnDestroy {
       side === 'A' ? matchup.teamAWindowCycleNumber : matchup.teamBWindowCycleNumber;
 
     if (!windowNumber || !cycleNumber) {
-      return 'Window pending';
+      return 'Six-game count pending';
     }
 
-    return `Window ${windowNumber} · block ${cycleNumber}`;
+    return `Six-game count ${windowNumber} · Matchup ${cycleNumber}`;
   }
 
   isPlayoffsStarted(): boolean {

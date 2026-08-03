@@ -1939,6 +1939,7 @@ interface PublicManagerProfileResult {
 }
 
 const PUBLIC_PROFILE_TEAM_ABBREVIATIONS = new Set([
+  'RR',
   'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
   'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
   'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
@@ -1957,7 +1958,7 @@ function normalizePublicManagerProfile(
     username: asString(source['username']) || 'Unknown Manager',
     favoriteTeamAbbreviation: PUBLIC_PROFILE_TEAM_ABBREVIATIONS.has(abbreviation)
       ? abbreviation
-      : 'VGK',
+      : 'RR',
     favoriteTeamVariantId: variantId || 'current-home'
   };
 }

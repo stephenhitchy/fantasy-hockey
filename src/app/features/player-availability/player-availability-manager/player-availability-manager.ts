@@ -94,42 +94,42 @@ export class PlayerAvailabilityManager {
     {
       value: 'active',
       label: 'Active',
-      description: 'Healthy and not eligible for IR.',
+      description: 'Healthy and not eligible for Injured Reserve (IR).',
     },
     {
       value: 'day-to-day',
       label: 'Day-to-Day',
-      description: 'Injured, but not eligible for IR under this league policy.',
+      description: 'Injured, but not eligible for Injured Reserve (IR) under this league policy.',
     },
     {
       value: 'out',
       label: 'Out',
-      description: 'Unavailable and eligible for IR.',
+      description: 'Unavailable and eligible for Injured Reserve (IR).',
     },
     {
       value: 'injured-reserve',
       label: 'Injured Reserve',
-      description: 'Official IR designation and eligible for IR.',
+      description: 'Official Injured Reserve designation and eligible for an Injured Reserve (IR) roster spot.',
     },
     {
       value: 'long-term-injured-reserve',
-      label: 'Long-Term IR',
-      description: 'Official LTIR designation and eligible for IR.',
+      label: 'Long-Term Injured Reserve',
+      description: 'Official Long-Term Injured Reserve designation and eligible for an Injured Reserve (IR) roster spot.',
     },
     {
       value: 'suspended',
       label: 'Suspended',
-      description: 'Unavailable, but not eligible for IR.',
+      description: 'Unavailable, but not eligible for Injured Reserve (IR).',
     },
     {
       value: 'personal-leave',
       label: 'Personal Leave',
-      description: 'Away from the team, but not eligible for IR.',
+      description: 'Away from the team, but not eligible for Injured Reserve (IR).',
     },
     {
       value: 'unknown',
       label: 'Unknown',
-      description: 'Status has not been verified and is not eligible for IR.',
+      description: 'Status has not been verified and is not eligible for Injured Reserve (IR).',
     },
   ];
 

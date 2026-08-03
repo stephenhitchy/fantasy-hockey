@@ -98,6 +98,16 @@ interface TeamIdentityVariantDefinition {
 
 const DARK_APP_SURFACE = '#0d1520';
 export const DEFAULT_TEAM_IDENTITY_VARIANT_ID = 'current-home';
+export const RINKRAT_NEUTRAL_ABBREVIATION = 'RR';
+
+const RINKRAT_NEUTRAL_PALETTE: PixelTeamPalette = {
+  abbreviation: RINKRAT_NEUTRAL_ABBREVIATION,
+  name: 'RinkRat Colors',
+  primaryColor: '#26384C',
+  secondaryColor: '#D6E2EE',
+  tertiaryColor: '#C94F5D',
+  logoUrl: '/assets/branding/rinkrat-headshot.png',
+};
 
 const NHL_TEAM_PALETTES: PixelTeamPalette[] = [
   team('ANA', 'Anaheim Ducks', '#FC4C02', '#B9975B', '#000000'),
@@ -307,6 +317,19 @@ const SPECIAL_TEAM_VARIANTS: Record<string, TeamIdentityVariantDefinition[]> = {
 
 const NHL_TEAM_VARIANTS = new Map<string, PixelTeamTheme[]>();
 
+NHL_TEAM_VARIANTS.set(RINKRAT_NEUTRAL_ABBREVIATION, [
+  buildTheme(RINKRAT_NEUTRAL_PALETTE, {
+    id: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+    label: 'RinkRat Neutral',
+    shortLabel: 'Neutral',
+    description: 'A clean RinkRat palette for managers who have not picked an NHL favorite.',
+    kind: 'home',
+    unlockRequirement: 'default',
+    eraLabel: 'RinkRat',
+    accentColor: '#74B9DF',
+  }),
+]);
+
 for (const palette of NHL_TEAM_PALETTES) {
   NHL_TEAM_VARIANTS.set(palette.abbreviation, [
     buildTheme(palette, {
@@ -344,6 +367,15 @@ for (const palette of NHL_TEAM_PALETTES) {
 export const NHL_PIXEL_TEAMS: PixelTeamTheme[] = NHL_TEAM_PALETTES.map(
   (palette) => NHL_TEAM_VARIANTS.get(palette.abbreviation)![0],
 );
+
+export const RINKRAT_NEUTRAL_THEME = NHL_TEAM_VARIANTS.get(
+  RINKRAT_NEUTRAL_ABBREVIATION,
+)![0];
+
+export const USER_SELECTABLE_PIXEL_THEMES: PixelTeamTheme[] = [
+  RINKRAT_NEUTRAL_THEME,
+  ...NHL_PIXEL_TEAMS,
+];
 
 const NHL_TEAM_ABBREVIATIONS = NHL_PIXEL_TEAMS.map((teamTheme) => teamTheme.abbreviation);
 
@@ -555,17 +587,23 @@ export function hexToRgba(hexColor: string, alpha: number): string {
 
 export function getNhlLogoUrl(abbreviation: string): string {
   const normalizedAbbreviation = abbreviation.trim().toUpperCase();
+
+  if (normalizedAbbreviation === RINKRAT_NEUTRAL_ABBREVIATION) {
+    return RINKRAT_NEUTRAL_PALETTE.logoUrl;
+  }
+
   return `/assets/team-identity-logos/${normalizedAbbreviation}_light.svg`;
 }
 
 export function getTeamIdentityVariants(
   abbreviation: string | null | undefined,
 ): PixelTeamTheme[] {
-  const normalizedAbbreviation = abbreviation?.toUpperCase() || 'VGK';
+  const normalizedAbbreviation =
+    abbreviation?.toUpperCase() || RINKRAT_NEUTRAL_ABBREVIATION;
 
   return (
     NHL_TEAM_VARIANTS.get(normalizedAbbreviation) ??
-    NHL_TEAM_VARIANTS.get('VGK')!
+    NHL_TEAM_VARIANTS.get(RINKRAT_NEUTRAL_ABBREVIATION)!
   );
 }
 

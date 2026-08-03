@@ -16,7 +16,14 @@ import {
   NHL_PIXEL_TEAMS,
   PixelLogoItem,
   PixelTeamTheme,
+  RINKRAT_NEUTRAL_ABBREVIATION,
+  RINKRAT_NEUTRAL_THEME,
 } from '../../shared/pixel-theme/pixel-theme.data';
+import {
+  DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+  HOCKEY_EXPERIENCE_OPTIONS,
+  HockeyExperienceLevel,
+} from '../../shared/hockey-terms/hockey-terms.data';
 
 @Component({
   selector: 'app-auth',
@@ -34,7 +41,10 @@ export class Auth {
   email = '';
   password = '';
   username = '';
-  readonly favoriteTeamAbbreviation = signal('');
+  readonly favoriteTeamAbbreviation = signal(RINKRAT_NEUTRAL_ABBREVIATION);
+  readonly hockeyExperience = signal<HockeyExperienceLevel>(
+    DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+  );
   readonly isRegistering = signal(false);
   readonly isResettingPassword = signal(false);
   readonly errorMessage = signal('');
@@ -44,11 +54,13 @@ export class Auth {
   readonly mascotCelebrating = signal(false);
 
   readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
+  readonly neutralTheme = RINKRAT_NEUTRAL_THEME;
+  readonly hockeyExperienceOptions = HOCKEY_EXPERIENCE_OPTIONS;
   readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
 
   readonly selectedRegistrationTeam = computed(() => {
     const abbreviation = this.favoriteTeamAbbreviation();
-    return abbreviation ? getPixelTeamTheme(abbreviation) : null;
+    return getPixelTeamTheme(abbreviation);
   });
 
   readonly pageTitle = computed(() => {
@@ -56,7 +68,7 @@ export class Auth {
       return 'Reset Your Password';
     }
 
-    return this.isRegistering() ? 'Create Your Franchise' : 'Enter the Rink';
+    return this.isRegistering() ? 'Build Your RinkRat Team' : 'Enter the Rink';
   });
 
   readonly pageSubtitle = computed(() => {
@@ -65,8 +77,8 @@ export class Auth {
     }
 
     return this.isRegistering()
-      ? 'Build your profile, choose your NHL club, and get ready for opening night.'
-      : 'Sign in to manage your roster, follow your six-game windows, and chase the Cup.';
+      ? 'Fair fantasy hockey, six games at a time—even if you are still learning the sport.'
+      : 'Sign in to manage your roster, follow each six-game matchup, and chase the Cup.';
   });
 
   readonly cardLabel = computed(() => {
@@ -150,6 +162,7 @@ export class Auth {
             this.password,
             this.username,
             this.favoriteTeamAbbreviation(),
+            this.hockeyExperience(),
           )
         : await loginUser(this.email, this.password);
 
@@ -253,9 +266,18 @@ export class Auth {
         ...loadStoredUserTheme(),
         favoriteTeamAbbreviation: team.abbreviation,
         favoriteTeamVariantId: 'current-home',
+        hockeyExperience: this.hockeyExperience(),
       },
       { persist: false },
     );
+  }
+
+  selectHockeyExperience(level: HockeyExperienceLevel): void {
+    if (this.loading()) {
+      return;
+    }
+
+    this.hockeyExperience.set(level);
   }
 
   handleTeamGridKeydown(event: KeyboardEvent, currentTeam: PixelTeamTheme): void {
@@ -302,14 +324,23 @@ export class Auth {
 
     this.isRegistering.set(nextMode);
     this.isResettingPassword.set(false);
-    this.favoriteTeamAbbreviation.set('');
+    this.favoriteTeamAbbreviation.set(RINKRAT_NEUTRAL_ABBREVIATION);
+    this.hockeyExperience.set(DEFAULT_HOCKEY_EXPERIENCE_LEVEL);
     this.password = '';
     this.errorMessage.set('');
     this.successMessage.set('');
     this.invalidField.set('');
     this.loading.set(false);
     this.mascotCelebrating.set(false);
-    applyUserTheme(loadStoredUserTheme(), { persist: false });
+    applyUserTheme(
+      {
+        ...loadStoredUserTheme(),
+        favoriteTeamAbbreviation: RINKRAT_NEUTRAL_ABBREVIATION,
+        favoriteTeamVariantId: 'current-home',
+        hockeyExperience: DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+      },
+      { persist: false },
+    );
   }
 
   beginPasswordReset(): void {
@@ -352,17 +383,6 @@ export class Auth {
         'username',
         'Enter a username with at least two characters.',
         this.usernameInput?.nativeElement,
-      );
-      return false;
-    }
-
-    if (this.isRegistering() && !this.favoriteTeamAbbreviation()) {
-      const firstTeamButton =
-        this.favoriteTeamGrid?.nativeElement.querySelector<HTMLButtonElement>('button');
-      this.setValidationError(
-        'team',
-        'Choose your favorite NHL team to finish creating your profile.',
-        firstTeamButton ?? this.favoriteTeamGrid?.nativeElement,
       );
       return false;
     }

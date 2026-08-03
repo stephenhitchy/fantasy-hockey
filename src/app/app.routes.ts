@@ -273,7 +273,7 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/cycles/:cycleNumber/assets/:assetKey',
-        title: 'Player Window',
+        title: 'Player Matchup Detail',
         canActivate: [leagueMemberGuard],
         loadComponent: () =>
           import('./features/cycles/cycle-asset-detail/cycle-asset-detail').then(

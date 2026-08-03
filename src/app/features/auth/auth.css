@@ -159,7 +159,9 @@
 }
 
 .form-field span,
-.team-picker-heading > div > span {
+.team-picker-heading > div > span,
+.experience-picker-heading > span,
+.team-grid-label {
   color: #c0ccd8;
   font-size: 12px;
   font-weight: 900;
@@ -208,6 +210,70 @@
   color: #8293a6;
   font-size: 10px;
   font-weight: 750;
+}
+
+.neutral-team-option {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 2px solid #2e4054;
+  background: #1b2a3a;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.neutral-team-option:hover:not(:disabled),
+.neutral-team-option:focus-visible,
+.neutral-team-option.selected {
+  border-color: var(--user-team-accent);
+  outline: none;
+}
+
+.neutral-team-option.selected {
+  background: color-mix(in srgb, var(--user-team-primary) 48%, #121d2a);
+  box-shadow: inset 0 -4px 0 var(--user-team-tertiary);
+}
+
+.neutral-team-option img {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #4b5d71;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.neutral-team-option > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.neutral-team-option strong {
+  font-size: 14px;
+}
+
+.neutral-team-option small,
+.experience-picker-heading small,
+.experience-choice small {
+  color: #98a9ba;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.neutral-team-option b {
+  color: var(--user-team-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-grid-label {
+  margin-top: 2px;
+  font-size: 10px;
 }
 
 .team-required-badge {
@@ -310,6 +376,55 @@
   letter-spacing: 0.08em;
 }
 
+.hockey-experience-picker {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 2px solid #2b3b4e;
+  background: #121d2a;
+}
+
+.experience-picker-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.experience-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.experience-choice {
+  display: grid;
+  align-content: start;
+  min-height: 88px;
+  gap: 5px;
+  padding: 10px;
+  border: 2px solid #2e4054;
+  background: #1b2a3a;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.experience-choice:hover:not(:disabled),
+.experience-choice:focus-visible,
+.experience-choice.selected {
+  border-color: var(--user-team-accent);
+  outline: none;
+}
+
+.experience-choice.selected {
+  background: color-mix(in srgb, var(--user-team-primary) 38%, #121d2a);
+  box-shadow: inset 0 -4px 0 var(--user-team-tertiary);
+}
+
+.experience-choice strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .primary-submit,
 .secondary-switch {
   min-height: 50px;
@@ -334,7 +449,9 @@
 
 .primary-submit:disabled,
 .secondary-switch:disabled,
-.auth-team-button:disabled {
+.auth-team-button:disabled,
+.neutral-team-option:disabled,
+.experience-choice:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -554,6 +671,14 @@
   .auth-team-grid {
     grid-template-columns: repeat(4, minmax(48px, 1fr));
     max-height: 250px;
+  }
+
+  .experience-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-choice {
+    min-height: 64px;
   }
 
   .pixel-logo-chip {

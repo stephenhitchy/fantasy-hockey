@@ -44,6 +44,7 @@ function validProfile(client, username) {
     defaultLandingPage: 'dashboard',
     backgroundTheme: 'rink-dark',
     injuryEmailEnabled: false,
+    hockeyExperience: 'basic',
     trainingCampVersion: 0,
     profileIconId: VALID_ICON,
   };
@@ -315,16 +316,36 @@ describe('account profile boundaries', () => {
     );
   });
 
-  test('an owner can update their own display-safe public profile', async () => {
+  test('an owner can update their private profile to neutral RinkRat colors and a familiarity level', async () => {
+    await expectAllowed(
+      updateDoc(doc(manager.db, 'users', manager.uid), {
+        favoriteTeamAbbreviation: 'RR',
+        favoriteTeamVariantId: 'current-home',
+        hockeyExperience: 'new',
+      }),
+      'Neutral identity and hockey familiarity update',
+    );
+  });
+
+  test('an owner cannot save an unsupported hockey familiarity level', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'users', manager.uid), {
+        hockeyExperience: 'expert',
+      }),
+      'Unsupported hockey familiarity update',
+    );
+  });
+
+  test('an owner can update their own display-safe public profile to the neutral RinkRat identity', async () => {
     await expectAllowed(
       setDoc(doc(manager.db, 'publicProfiles', manager.uid), {
         uid: manager.uid,
         username: 'Manager Updated',
-        favoriteTeamAbbreviation: 'VGK',
+        favoriteTeamAbbreviation: 'RR',
         favoriteTeamVariantId: 'current-home',
         updatedAt: serverTimestamp(),
       }),
-      'Own public profile update',
+      'Own neutral public profile update',
     );
   });
 

@@ -259,3 +259,31 @@
   border-color: var(--border-strong);
   box-shadow: 0 4px 0 color-mix(in srgb, var(--border-strong) 55%, #03070d);
 }
+
+.coach-glossary {
+  margin: 0 16px 18px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.coach-glossary summary {
+  min-height: 44px;
+  padding: 11px 13px;
+  color: var(--text-primary);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.coach-glossary > p {
+  margin: 0;
+  padding: 0 13px 10px;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.coach-glossary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 13px 14px;
+}

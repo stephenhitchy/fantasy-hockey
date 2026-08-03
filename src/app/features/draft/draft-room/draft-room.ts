@@ -1068,7 +1068,7 @@ export class DraftRoom implements OnDestroy {
     }
 
     if (this.preDraftPreparationReady()) {
-      return 'The shared season draft rankings, next-cycle projections, and injury report are ready. The draft can open immediately at the scheduled time.';
+      return 'The shared season draft rankings, next-six-game projections, and injury report are ready. The draft can open immediately at the scheduled time.';
     }
 
     return this.isCommissioner()
@@ -1103,7 +1103,7 @@ export class DraftRoom implements OnDestroy {
     this.playerPoolError.set('');
     this.preDraftPreparationReady.set(true);
     this.preDraftPreparationMessage.set(
-      'Shared draft rankings and injury-adjusted cycle projections are already prepared.',
+      'Shared draft rankings and injury-adjusted matchup projections are already prepared.',
     );
 
     return true;
@@ -1220,7 +1220,7 @@ export class DraftRoom implements OnDestroy {
       }
 
       this.preDraftPreparationMessage.set(
-        'Building the shared season draft ranking and next-cycle projection snapshot.',
+        'Building the shared season draft ranking and next-six-game projection snapshot.',
       );
 
       const sharedSnapshot = await generateSharedProjectionSnapshot({
@@ -1238,10 +1238,10 @@ export class DraftRoom implements OnDestroy {
       this.playerPoolError.set('');
       this.preDraftPreparationReady.set(true);
       this.preDraftPreparationMessage.set(
-        `Draft data ready: ${sharedSnapshot.metadata.assetCount} shared assets are prepared for every manager.`,
+        `Draft data ready: ${sharedSnapshot.metadata.assetCount} players and goalie units are prepared for every manager.`,
       );
       this.draftInjurySyncMessage.set(
-        `Shared Cycle ${sharedSnapshot.metadata.targetCycleNumber} projections are ready for every manager.`,
+        `Shared Matchup ${sharedSnapshot.metadata.targetCycleNumber} projections are ready for every manager.`,
       );
     } catch (error: unknown) {
       if (this.destroyed) {

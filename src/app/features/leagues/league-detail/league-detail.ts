@@ -203,10 +203,10 @@ export class LeagueDetail implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.currentCycleNumber()}`;
+      return cycle.playoffRoundLabel ?? `Playoff Matchup ${this.currentCycleNumber()}`;
     }
 
-    return `Cycle ${this.currentCycleNumber()}`;
+    return `Matchup ${this.currentCycleNumber()}`;
   });
 
   readonly scheduledStartDate = computed(() => getScheduledStartDate(this.draft()));
@@ -828,7 +828,7 @@ export class LeagueDetail implements OnDestroy {
 
     this.preDraftPreparationReady.set(true);
     this.draftInjurySyncMessage.set(
-      'Shared season draft rankings, next-cycle projections, and injury data are ready.',
+      'Shared season draft rankings, next-six-game projections, and injury data are ready.',
     );
 
     return true;
@@ -925,7 +925,7 @@ export class LeagueDetail implements OnDestroy {
 
       this.preDraftPreparationReady.set(true);
       this.draftInjurySyncMessage.set(
-        `Draft data ready: ${snapshot.metadata.assetCount} shared assets are prepared for every manager.`,
+        `Draft data ready: ${snapshot.metadata.assetCount} players and goalie units are prepared for every manager.`,
       );
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : 'Unable to build shared projections.';
@@ -1124,7 +1124,7 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.draft()?.status === 'complete') {
-      return 'The draft is complete. The server is creating Cycle 1 and the opening matchups automatically.';
+      return 'The draft is complete. The server is creating Matchup 1 and the opening schedule automatically.';
     }
 
     return 'Finish the draft before starting the fantasy season.';

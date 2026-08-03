@@ -140,7 +140,7 @@ export class FreeAgents implements OnDestroy {
   readonly positionFilters: FreeAgentPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
   readonly cycleDotSlots = [0, 1, 2, 3, 4, 5];
   readonly sortOptions: Array<{ value: FreeAgentSortMode; label: string }> = [
-    { value: 'NEXT_CYCLE', label: 'Next Cycle Projection' },
+    { value: 'NEXT_CYCLE', label: 'Next 6 Games Projection' },
     { value: 'SEASON_POINTS', label: 'Season Points' },
     { value: 'REST_OF_SEASON', label: 'Rest-of-Season Estimate' },
     { value: 'FINAL_OUTLOOK', label: 'Estimated Final Total' },
@@ -591,7 +591,7 @@ export class FreeAgents implements OnDestroy {
 
     if (!this.areRosterWindowsReady()) {
       this.errorMessage.set(
-        'Your current roster windows are still loading. Try again in a moment.',
+        'Your current six-game roster progress is still loading. Try again in a moment.',
       );
       return;
     }
@@ -613,7 +613,7 @@ export class FreeAgents implements OnDestroy {
       }
 
       if (!this.selectedAssetEligibility()) {
-        throw new Error(this.eligibilityError() || 'Unable to verify the player’s current cycle.');
+        throw new Error(this.eligibilityError() || 'Unable to verify the player’s current six-game status.');
       }
 
       const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
@@ -635,7 +635,7 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(
-          `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player is reserved for this slot and cannot activate before ${effectiveLabel}.`,
+          `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player is reserved for this slot and cannot activate before Matchup ${effectiveCycleNumber}.`,
         );
       } else if (dropCandidate.moveType === 'open-slot') {
         const execution = await addFreeAgentToOpenRosterSlot({
@@ -650,15 +650,15 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(dropCandidate.rosterArea === 'bench'
-          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before ${effectiveLabel}.`
+          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
           : execution.mode === 'immediate'
-            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Cycle ${execution.effectiveCycleNumber}.`
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Matchup ${execution.effectiveCycleNumber}.`
             : this.hasStartedCycleWindows()
-              ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in ${effectiveLabel}.`
+              ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in Matchup ${effectiveCycleNumber}.`
               : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`);
       } else {
         if (!dropCandidate.asset) {
-          throw new Error('The selected drop candidate is missing a roster asset.');
+          throw new Error('The selected drop option is missing a roster player or goalie unit.');
         }
 
         const execution = await addDropRosterAsset({
@@ -673,11 +673,11 @@ export class FreeAgents implements OnDestroy {
         });
 
         this.successMessage.set(dropCandidate.rosterArea === 'bench'
-          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before ${effectiveLabel}.`
+          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
           : execution.mode === 'immediate'
-            ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both individual windows were untouched, so the change applies to Cycle ${execution.effectiveCycleNumber}.`
+            ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both six-game counts were untouched, so the change applies to Matchup ${execution.effectiveCycleNumber}.`
             : this.hasStartedCycleWindows()
-              ? `Queued ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started window, and the move activates in ${effectiveLabel}.`
+              ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started six-game count, and the move activates in Matchup ${effectiveCycleNumber}.`
               : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`);
       }
 
@@ -726,7 +726,7 @@ export class FreeAgents implements OnDestroy {
       this.successMessage.set(
         claimCount > 0
           ? this.hasStartedCycleWindows()
-            ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winner is reserved for the selected slot and will activate at its next boundary.`
+            ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winner is reserved for the selected slot and will activate when that slot starts its next matchup.`
             : `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
           : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`,
       );
@@ -891,7 +891,7 @@ export class FreeAgents implements OnDestroy {
 
     if (typeof incomingValue !== 'number' || typeof outgoingValue !== 'number') {
       return metric === 'NEXT_CYCLE'
-        ? 'Next-cycle comparison unavailable'
+        ? 'Next-matchup comparison unavailable'
         : 'Rest-of-season comparison unavailable';
     }
 
@@ -899,7 +899,7 @@ export class FreeAgents implements OnDestroy {
     const direction = difference >= 0 ? 'Gain' : 'Lose';
 
     return `${direction} ${Math.abs(difference).toFixed(1)} projected ${
-      metric === 'NEXT_CYCLE' ? 'next-cycle' : 'rest-of-season'
+      metric === 'NEXT_CYCLE' ? 'next-six-games' : 'rest-of-season'
     } points`;
   }
 
@@ -978,7 +978,7 @@ export class FreeAgents implements OnDestroy {
     index: number,
   ): string {
     if (!marker) {
-      return `Game ${index + 1}: refresh shared projections for live cycle status.`;
+      return `Game ${index + 1}: refresh shared projections for live six-game status.`;
     }
 
     const venue = marker.venue === 'home' ? 'vs' : '@';
@@ -996,7 +996,7 @@ export class FreeAgents implements OnDestroy {
     const markers = this.getProjectionAsset(asset).currentTeamCycleGames ?? [];
 
     if (markers.length === 0) {
-      return 'Cycle schedule refresh needed';
+      return 'Six-game schedule refresh needed';
     }
 
     const played = markers.filter((marker) => marker.status === 'played').length;
@@ -1226,16 +1226,16 @@ export class FreeAgents implements OnDestroy {
     const candidate = this.selectedDropCandidate();
 
     if (!this.hasStartedCycleWindows()) {
-      return 'immediately before Cycle 1 begins';
+      return 'immediately before Matchup 1 begins';
     }
 
     if (candidate?.rosterArea === 'bench') {
-      return `owned now · first active eligibility Cycle ${candidate.effectiveCycleNumber}`;
+      return `owned now · first active eligibility Matchup ${candidate.effectiveCycleNumber}`;
     }
 
     return candidate
-      ? `in Cycle ${candidate.effectiveCycleNumber}`
-      : 'at the selected slot’s first fair cycle boundary';
+      ? `in Matchup ${candidate.effectiveCycleNumber}`
+      : 'after the selected slot finishes its current six games';
   }
 
   getRequiredGamesPerCycle(): number {
@@ -1250,13 +1250,13 @@ export class FreeAgents implements OnDestroy {
 
     if (!eligibility) {
       return this.eligibilityLoading()
-        ? 'Checking current NHL-team cycle…'
-        : 'Cycle check unavailable';
+        ? 'Checking current six-game status…'
+        : 'Six-game check unavailable';
     }
 
     const liveSuffix = eligibility.liveGamesInCurrentCycle > 0 ? ' · game live' : '';
 
-    return `Cycle ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} team games final${liveSuffix}`;
+    return `Matchup ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} NHL team games final${liveSuffix}`;
   }
 
   getSelectedAssetCycleDetail(): string {
@@ -1267,10 +1267,10 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (eligibility.currentCycleHasStarted) {
-      return `This player’s Cycle ${eligibility.currentCycleNumber} has already started. Those results cannot be acquired retroactively, so the earliest fair activation is Cycle ${eligibility.earliestEligibleCycleNumber}.`;
+      return `This player’s six-game count for Matchup ${eligibility.currentCycleNumber} has already started. Those results cannot be acquired retroactively, so the earliest fair activation is Matchup ${eligibility.earliestEligibleCycleNumber}.`;
     }
 
-    return `No game from this player’s Cycle ${eligibility.currentCycleNumber} has started. The player is eligible for Cycle ${eligibility.earliestEligibleCycleNumber}, subject to the selected roster slot’s boundary.`;
+    return `No game in this player’s Matchup ${eligibility.currentCycleNumber} count has started. The player is eligible for Matchup ${eligibility.earliestEligibleCycleNumber}, subject to the selected roster slot finishing its current six games.`;
   }
 
   getSelectedAssetCycleClass(): string {
@@ -1287,18 +1287,18 @@ export class FreeAgents implements OnDestroy {
     if (candidate.rosterArea === 'bench') {
       return candidate.asset
         ? 'Current location: flexible bench · no fantasy points counted'
-        : 'Open flexible bench slot · no scoring window';
+        : 'Open flexible bench slot · no active six-game count';
     }
 
     const window = candidate.currentWindow;
 
     if (!window) {
       return this.hasStartedCycleWindows()
-        ? `No active slot window · next opening Cycle ${candidate.slotNextCycleNumber}`
+        ? `No active six-game count · next opening Matchup ${candidate.slotNextCycleNumber}`
         : 'Season not started · available immediately';
     }
 
-    return `Current window: Cycle ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames || this.getRequiredGamesPerCycle()} team games final`;
+    return `Current count: Matchup ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames || this.getRequiredGamesPerCycle()} NHL team games final`;
   }
 
   getCandidateWindowAssetLabel(candidate: DropCandidate): string {
@@ -1317,31 +1317,31 @@ export class FreeAgents implements OnDestroy {
     const windowAssetName = this.getAssetName(window.asset);
 
     if (candidate.currentWindowUntouched) {
-      return `${windowAssetName} · individual window not started`;
+      return `${windowAssetName} · six-game count not started`;
     }
 
     if (!candidate.asset) {
-      return `Started window still belongs to ${windowAssetName}`;
+      return `Started six-game count still belongs to ${windowAssetName}`;
     }
 
     return window.assetKey === this.getRosterAssetKey(candidate.asset)
-      ? `${windowAssetName} keeps the started window`
-      : `Started window: ${windowAssetName}`;
+      ? `${windowAssetName} keeps the started six-game count`
+      : `Started six-game count: ${windowAssetName}`;
   }
 
   getCandidateActivationLabel(candidate: DropCandidate): string {
     if (candidate.rosterArea === 'bench') {
       return this.hasStartedCycleWindows()
-        ? `Active eligibility Cycle ${candidate.effectiveCycleNumber}`
+        ? `Active eligibility Matchup ${candidate.effectiveCycleNumber}`
         : 'Owned immediately';
     }
 
     if (candidate.canApplyImmediately) {
-      return `Applies now · Cycle ${candidate.effectiveCycleNumber}`;
+      return `Applies now · Matchup ${candidate.effectiveCycleNumber}`;
     }
 
     return this.hasStartedCycleWindows()
-      ? `Activates Cycle ${candidate.effectiveCycleNumber}`
+      ? `Activates Matchup ${candidate.effectiveCycleNumber}`
       : 'Activates immediately';
   }
 
@@ -1353,18 +1353,18 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (candidate.rosterArea === 'bench') {
-      return `The add or replacement happens immediately on your bench. This asset cannot move into an active scoring slot before Cycle ${candidate.effectiveCycleNumber}, so already-played games are never backfilled.`;
+      return `The add or replacement happens immediately on your bench. This player or goalie unit cannot move into an active scoring slot before Matchup ${candidate.effectiveCycleNumber}, so already-played games are never backfilled.`;
     }
 
     if (candidate.canApplyImmediately) {
-      return `Neither the outgoing slot window nor the incoming player's eligible window has started. The server will replace only this untouched Cycle ${candidate.effectiveCycleNumber} assignment.`;
+      return `Neither the outgoing slot’s six-game count nor the incoming player’s eligible count has started. The server will replace only this untouched Matchup ${candidate.effectiveCycleNumber} assignment.`;
     }
 
     if (eligibility && eligibility.earliestEligibleCycleNumber > candidate.slotNextCycleNumber) {
-      return `The slot could advance in Cycle ${candidate.slotNextCycleNumber}, but the incoming player’s current block has already started. The player is reserved and waits until Cycle ${candidate.effectiveCycleNumber}.`;
+      return `The slot could advance in Matchup ${candidate.slotNextCycleNumber}, but the incoming player’s current six-game count has already started. The player is reserved and waits until Matchup ${candidate.effectiveCycleNumber}.`;
     }
 
-    return `The move begins when this roster slot advances into Cycle ${candidate.effectiveCycleNumber}.`;
+    return `The move begins when this roster slot advances into Matchup ${candidate.effectiveCycleNumber}.`;
   }
 
   getPendingMoveIncomingName(index: number): string {
@@ -1402,7 +1402,7 @@ export class FreeAgents implements OnDestroy {
     this.errorMessage.set('');
 
     if (!entry) {
-      this.errorMessage.set('That queued roster move is no longer available.');
+      this.errorMessage.set('That scheduled roster move is no longer available.');
       return;
     }
 
@@ -1423,11 +1423,11 @@ export class FreeAgents implements OnDestroy {
       });
 
       this.successMessage.set(
-        `Canceled the queued move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`,
+        `Canceled the scheduled move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to cancel that queued roster move.',
+        error instanceof Error ? error.message : 'Unable to cancel that scheduled roster move.',
       );
     } finally {
       this.moving.set(false);
@@ -1454,7 +1454,7 @@ export class FreeAgents implements OnDestroy {
     if (!candidate.asset) {
       return candidate.rosterArea === 'bench'
         ? `Flexible Bench Slot ${candidate.slotNumber} · any position`
-        : `${candidate.position} Slot ${candidate.slotNumber} · opened by IR or roster move`;
+        : `${candidate.position} Slot ${candidate.slotNumber} · opened by Injured Reserve or a roster move`;
     }
 
     return candidate.rosterArea === 'bench'
@@ -1557,8 +1557,8 @@ export class FreeAgents implements OnDestroy {
     const targetCycle = entry.move.requestedEffectiveCycleNumber;
 
     return typeof targetCycle === 'number'
-      ? `Reserved · earliest activation Cycle ${targetCycle}`
-      : 'Reserved · activates at the next eligible slot boundary';
+      ? `Reserved · earliest activation Matchup ${targetCycle}`
+      : 'Reserved · activates after the roster spot finishes its current six games';
   }
 
   private async loadSelectedAssetEligibility(
@@ -1594,7 +1594,7 @@ export class FreeAgents implements OnDestroy {
       this.eligibilityError.set(
         error instanceof Error
           ? error.message
-          : 'Unable to verify the selected player’s current cycle.',
+          : 'Unable to verify the selected player’s current six-game status.',
       );
     } finally {
       if (this.eligibilityRequestKey === requestKey) {
@@ -1656,7 +1656,7 @@ export class FreeAgents implements OnDestroy {
           });
         },
         (error) => {
-          console.warn(`Unable to load Cycle ${cycleNumber} roster windows.`, error);
+          console.warn(`Unable to load Matchup ${cycleNumber} roster-spot progress.`, error);
           this.teamWindowLoadedByCycle.set({
             ...this.teamWindowLoadedByCycle(),
             [cycleNumber]: false,

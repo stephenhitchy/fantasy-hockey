@@ -51,6 +51,16 @@
         }
       </ol>
 
+      <details class="coach-glossary">
+        <summary>Hockey Terms</summary>
+        <p>Tap any term for a plain-language definition.</p>
+        <div class="coach-glossary-grid">
+          @for (term of glossaryTerms; track term.key) {
+            <app-hockey-term [term]="term.key" />
+          }
+        </div>
+      </details>
+
       <footer>
         <a routerLink="/training-camp" (click)="close()">
           Open Full Training Camp

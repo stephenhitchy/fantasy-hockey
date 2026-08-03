@@ -4,6 +4,8 @@ import { filter, Subscription } from 'rxjs';
 
 import { TelemetryService } from '../../core/observability/telemetry.service';
 import { DialogFocusTrapDirective } from '../accessibility/dialog-focus-trap.directive';
+import { HockeyTermChip } from '../hockey-terms/hockey-term-chip';
+import { HOCKEY_GLOSSARY_TERMS } from '../hockey-terms/hockey-terms.data';
 
 interface CoachGuide {
   id: string;
@@ -26,13 +28,14 @@ const DEFAULT_GUIDE: CoachGuide = {
 @Component({
   selector: 'app-coach-help',
   standalone: true,
-  imports: [RouterLink, DialogFocusTrapDirective],
+  imports: [RouterLink, DialogFocusTrapDirective, HockeyTermChip],
   templateUrl: './coach-help.html',
   styleUrl: './coach-help.css',
 })
 export class CoachHelp implements OnDestroy {
   readonly open = signal(false);
   readonly currentUrl = signal('');
+  readonly glossaryTerms = HOCKEY_GLOSSARY_TERMS;
 
   readonly guide = computed<CoachGuide>(() => this.buildGuide(this.currentUrl()));
 
@@ -137,8 +140,8 @@ export class CoachHelp implements OnDestroy {
         subtitle: 'Compare production, projection, availability, and timing before making a move.',
         tips: [
           'Open the season breakdown to see exactly how current fantasy points were earned.',
-          'Green, yellow, and red dots show played, upcoming, and missed games in the current window.',
-          'The confirmation screen tells you whether the transaction is immediate or queued.',
+          'Green, yellow, and red dots show played, upcoming, and missed games in the current six-game count.',
+          'The confirmation screen tells you whether the transaction happens now or after the affected roster spot finishes its six games.',
         ],
       };
     }
@@ -147,11 +150,11 @@ export class CoachHelp implements OnDestroy {
       return {
         id: 'my_team',
         title: 'Locker Room',
-        subtitle: 'Manage active slots, bench depth, IR, and queued changes.',
+        subtitle: 'Manage active slots, bench depth, Injured Reserve, and scheduled changes.',
         tips: [
-          'A slot can change immediately when neither involved asset has played in its current window.',
-          'Only eligible unavailable players can move into IR.',
-          'Bench and queued-move indicators show what will change at the next safe window boundary.',
+          'A slot can change immediately when neither involved player or goalie unit has played in its current six-game count.',
+          'Only eligible unavailable players can move into Injured Reserve (IR).',
+          'Bench and scheduled-move indicators show what will change after the affected roster spot finishes its six games.',
         ],
       };
     }
@@ -160,11 +163,11 @@ export class CoachHelp implements OnDestroy {
       return {
         id: 'matchup',
         title: 'Live Matchup',
-        subtitle: 'Each roster slot is following its own six-game NHL window.',
+        subtitle: 'Each roster slot is following its own six-game NHL count.',
         tips: [
           'Current is the score already earned; Projected estimates the completed matchup total.',
-          'Different players can be in different cycle numbers because NHL schedules are asynchronous.',
-          'A matchup finalizes automatically only after every required roster window is complete.',
+          'Different players can be in different matchup numbers because NHL team schedules do not move at the same pace.',
+          'A matchup finalizes automatically only after every required roster spot completes its six-game count.',
         ],
       };
     }
@@ -225,11 +228,11 @@ export class CoachHelp implements OnDestroy {
       return {
         id: 'league_home',
         title: 'League Headquarters',
-        subtitle: 'Your league’s current status, teams, draft, cycles, and commissioner tools live here.',
+        subtitle: 'Your league’s current status, teams, draft, matchups, and commissioner tools live here.',
         tips: [
           'Your league profile picture can be changed from the Your Team identity card.',
           'Commissioner controls appear only for the league owner.',
-          'Use the cycle and matchup links to follow scoring after the draft completes.',
+          'Use the matchup links to follow scoring after the draft completes.',
         ],
       };
     }
@@ -240,9 +243,9 @@ export class CoachHelp implements OnDestroy {
         title: 'Manager Preferences',
         subtitle: 'Personalize the arena without changing league-specific identities.',
         tips: [
-          'Favorite-team colors apply across the app, while each league keeps its own profile picture.',
+          'Favorite-team or neutral RinkRat colors apply across the app, while each league keeps its own profile picture.',
+          'Your Hockey Familiarity setting changes explanation detail without changing scoring or league rules.',
           'Challenge rewards unlock home, away, retro, and alternate identities for every NHL team.',
-          'Reduced Motion disables decorative animation while preserving important status changes.',
         ],
       };
     }

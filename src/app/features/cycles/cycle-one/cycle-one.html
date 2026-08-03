@@ -32,7 +32,7 @@
                 <span class="eyebrow">2026–27 Historical Season Replay</span>
                 <h3 id="historical-replay-heading">Advance the NHL calendar one day</h3>
                 <p>
-                  Only NHL teams scheduled on the simulated date advance. Every roster-slot window
+                  Only NHL teams scheduled on the simulated date advance. Every roster spot’s six-game count
                   remains independent, and the released performances come from the matching
                   2025–26 historical sequence.
                 </p>
@@ -84,9 +84,9 @@
             </div>
 
             <small class="historical-replay-safety-note">
-              Add/drop, queued activation, cycle completion, standings, and playoff progression use
-              the same stored window documents as live scoring. Use this only in a dedicated test
-              league because advancing the replay intentionally writes real cycle and standings data.
+              Add/drop, scheduled activation, matchup completion, standings, and playoff progression use
+              the same saved scoring records as live scoring. Use this only in a dedicated test
+              league because advancing the replay intentionally writes real matchup and standings data.
             </small>
 
             @if (historicalReplayMessage() || historicalReplayControl()?.message) {
@@ -180,7 +180,7 @@
                 completingCycle()
                   ? 'Finalizing on Server...'
                   : cycle()?.status === 'complete'
-                    ? 'Cycle Complete'
+                    ? 'Matchup Complete'
                     : 'Finalize Ready ' + getCycleLabel()
               }}
             </button>
@@ -221,7 +221,7 @@
                 {{
                   projectionAccuracyError() ||
                     projectionAccuracyMessage() ||
-                    'Comparing the frozen cycle projections with final results.'
+                    'Comparing the frozen matchup projections with final results.'
                 }}
               </small>
             </div>

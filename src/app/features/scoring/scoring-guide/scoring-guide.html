@@ -49,7 +49,7 @@
       <b>+</b>
       <span>Games 3–{{ cycleGameCount() }}</span>
       <b>=</b>
-      <strong>Cycle total</strong>
+      <strong>Six-game total</strong>
     </div>
   </section>
 
@@ -86,7 +86,13 @@
       </div>
       @for (row of forwardRows(); track row.label) {
         <div class="scoring-row" role="row">
-          <strong role="cell">{{ row.label }}</strong>
+          <strong role="cell">
+            @if (row.term) {
+              <app-hockey-term [term]="row.term" />
+            } @else {
+              {{ row.label }}
+            }
+          </strong>
           <b role="cell">{{ row.value }}</b>
           <span role="cell">{{ row.note }}</span>
         </div>
@@ -112,7 +118,13 @@
       </div>
       @for (row of defenseRows(); track row.label) {
         <div class="scoring-row" role="row">
-          <strong role="cell">{{ row.label }}</strong>
+          <strong role="cell">
+            @if (row.term) {
+              <app-hockey-term [term]="row.term" />
+            } @else {
+              {{ row.label }}
+            }
+          </strong>
           <b role="cell">{{ row.value }}</b>
           <span role="cell">{{ row.note }}</span>
         </div>
@@ -144,7 +156,13 @@
       </div>
       @for (row of goalieRows(); track row.label) {
         <div class="scoring-row" role="row">
-          <strong role="cell">{{ row.label }}</strong>
+          <strong role="cell">
+            @if (row.term) {
+              <app-hockey-term [term]="row.term" />
+            } @else {
+              {{ row.label }}
+            }
+          </strong>
           <b role="cell">{{ row.value }}</b>
           <span role="cell">{{ row.note }}</span>
         </div>
@@ -156,7 +174,7 @@
         <span class="eyebrow">Exact save-quality formula</span>
         <strong>
           {{ formatPoints(rules().goalieSavePercentageBasePoints) }} +
-          (((SV% × 100) − {{ (rules().goalieSavePercentageBaseline * 100).toFixed(1) }}) ×
+          (((Save percentage × 100) − {{ (rules().goalieSavePercentageBaseline * 100).toFixed(1) }}) ×
           {{ formatPoints(rules().goalieSavePercentagePointsPerPercentagePoint) }})
         </strong>
         <p>The result is limited to {{ signedPoints(rules().goalieSavePercentageMinimum) }} through +{{ formatPoints(rules().goalieSavePercentageMaximum) }} points.</p>
@@ -164,7 +182,7 @@
 
       <div class="save-quality-grid" aria-label="Save percentage quality examples">
         @for (example of saveQualityExamples(); track example.percentage) {
-          <span><small>{{ example.percentage }} SV%</small><strong>{{ example.points }}</strong></span>
+          <span><small>{{ example.percentage }} save percentage</small><strong>{{ example.points }}</strong></span>
         }
       </div>
     </div>
@@ -180,7 +198,13 @@
     <div class="bonus-grid">
       @for (row of commonBonusRows(); track row.label) {
         <article>
-          <span>{{ row.label }}</span>
+          <span>
+            @if (row.term) {
+              <app-hockey-term [term]="row.term" />
+            } @else {
+              {{ row.label }}
+            }
+          </span>
           <strong>{{ row.value }}</strong>
           <p>{{ row.note }}</p>
         </article>
@@ -197,7 +221,7 @@
 
     <div class="example-grid">
       <article class="example-card forward-example">
-        <header><span>F</span><div><small>Example forward game</small><strong>2 G · 1 primary A · 4 SOG</strong></div></header>
+        <header><span>F</span><div><small>Example forward game</small><strong>2 goals · 1 primary assist · 4 shots on goal</strong></div></header>
         <ul>
           @for (line of forwardExample().lines; track line.label) {
             <li><span>{{ line.label }}</span><b>{{ signedPoints(line.points) }}</b></li>
@@ -207,7 +231,7 @@
       </article>
 
       <article class="example-card defense-example">
-        <header><span>D</span><div><small>Example defense game</small><strong>1 G · 1 primary A · 3 BLK</strong></div></header>
+        <header><span>D</span><div><small>Example defense game</small><strong>1 goal · 1 primary assist · 3 blocked shots</strong></div></header>
         <ul>
           @for (line of defenseExample().lines; track line.label) {
             <li><span>{{ line.label }}</span><b>{{ signedPoints(line.points) }}</b></li>
@@ -237,9 +261,9 @@
     <div class="clarification-grid">
       <article><strong>Diminishing returns reset every NHL game</strong><p>A player’s first goal in tomorrow’s game is worth the full first-goal value again.</p></article>
       <article><strong>Special-teams points stack</strong><p>A power-play goal receives the normal goal points plus the power-play-point bonus.</p></article>
-      <article><strong>Only active slots score</strong><p>Bench and IR assets remain owned by the manager but do not add points while inactive.</p></article>
+      <article><strong>Only active slots score</strong><p>Bench players and injured-reserve players remain owned by the manager but do not add points while inactive.</p></article>
       <article><strong>Official NHL statistics are the source</strong><p>RinkRat uses credited goals, primary and secondary assists, shots, hits, blocks, time on ice, and goalie results from the NHL game record.</p></article>
-      <article><strong>Each slot has its own six-game window</strong><p>Scoring does not wait for the entire league to reach one shared calendar date.</p></article>
+      <article><strong>Each slot has its own six-game count</strong><p>Scoring does not wait for the entire league to reach one shared calendar date.</p></article>
       <article><strong>Completed scoring stays frozen</strong><p>Once a game is assigned and scored, later roster changes do not rewrite that game.</p></article>
     </div>
   </section>

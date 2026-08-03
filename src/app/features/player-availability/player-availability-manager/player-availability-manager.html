@@ -21,7 +21,7 @@
         <p>
           One ESPN injury report is shared across every league and account,
           and the app refreshes it at most once per UTC day. Commissioner overrides
-          remain league-specific and always take priority in My Team, IR eligibility,
+          remain league-specific and always take priority in My Team, Injured Reserve eligibility,
           Draft Room, Free Agents, and Waivers.
         </p>
       </div>
@@ -45,9 +45,9 @@
     </header>
 
     <section class="policy-card">
-      <strong>IR policy</strong>
+      <strong>Injured Reserve (IR) Policy</strong>
       <span>
-        Out, Injured Reserve, and Long-Term IR are eligible. Active, Day-to-Day,
+        Out, Injured Reserve, and Long-Term Injured Reserve are eligible. Active, Day-to-Day,
         Suspended, Personal Leave, and Unknown are not eligible.
       </span>
     </section>
@@ -265,7 +265,7 @@
             </span>
 
             <strong>
-              {{ selectedStatusIrEligible() ? 'IR Eligible' : 'Not IR Eligible' }}
+              {{ selectedStatusIrEligible() ? 'Injured Reserve Eligible' : 'Not Injured Reserve Eligible' }}
             </strong>
 
             <p>{{ getSelectedStatusDescription() }}</p>

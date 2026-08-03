@@ -12,18 +12,18 @@
 
     @if (!cycle()) {
       <section class="empty-card">
-        <h1>Cycle {{ cycleNumber }} has not started.</h1>
-        <p>This player detail page will work once the cycle exists.</p>
+        <h1>Matchup {{ cycleNumber }} has not started.</h1>
+        <p>This player detail page will work once the matchup is ready.</p>
       </section>
     } @else if (!picksLoaded()) {
       <section class="empty-card">
         <h1>Loading drafted player...</h1>
-        <p>Finding this asset in the league draft results.</p>
+        <p>Finding this player or goalie unit in the league draft results.</p>
       </section>
     } @else if (!asset()) {
       <section class="empty-card">
         <h1>Player not found.</h1>
-        <p>This asset was not found in the draft results.</p>
+        <p>This player or goalie unit was not found in the draft results.</p>
       </section>
     } @else {
       @if (asset(); as selectedAsset) {
@@ -34,7 +34,7 @@
             }
 
             <div>
-              <span class="eyebrow">Cycle {{ cycleNumber }} Detail</span>
+              <span class="eyebrow">Matchup {{ cycleNumber }} Detail</span>
               <h1>{{ getAssetName(selectedAsset) }}</h1>
               <p>
                 {{ getAssetTeamLabel(selectedAsset) }}
@@ -53,7 +53,7 @@
 
         <section class="summary-grid">
           <article>
-            <span>Cycle Range</span>
+            <span>Counted NHL Games</span>
             <strong>{{ getCycleGameRangeLabel() }}</strong>
           </article>
 
@@ -86,7 +86,7 @@
               )
             }}</strong>
             <small>
-              Window frozen {{ formatProjectionTimestamp(selectedAsset.frozenProjectionFrozenAt) }}
+              Projection frozen {{ formatProjectionTimestamp(selectedAsset.frozenProjectionFrozenAt) }}
             </small>
           </article>
         </section>
@@ -113,7 +113,7 @@
 
           @if (gameRows().length === 0 && !detailLoading()) {
             <p class="empty-copy">
-              No NHL team games were found for this asset in Cycle {{ cycleNumber }}.
+              No NHL team games were found for this player or goalie unit in Matchup {{ cycleNumber }}.
             </p>
           } @else {
             <div class="game-list">
@@ -127,7 +127,7 @@
                   <div class="game-main">
                     <div>
                       <strong>
-                        Cycle Game {{ row.cycleGameNumber }} · NHL Team Game
+                        Matchup Game {{ row.cycleGameNumber }} · NHL Team Game
                         {{ row.teamGameNumber }}
                         ·
                         {{ row.gameDate }}

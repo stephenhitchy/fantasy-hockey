@@ -545,8 +545,16 @@ function getPreviousWindowSummary(
   windowId: string,
   assetKey: string
 ): CycleAssetScoreSummary | undefined {
-  return previousResult?.windowScores?.[windowId] ??
-    previousResult?.assetScores?.[assetKey];
+  const previousWindow = previousResult?.windowScores?.[windowId];
+
+  // A recovery pass may replace an incorrectly snapshotted outgoing player
+  // with the queued incoming player while retaining the same roster-slot
+  // window id. Never reuse finalized game scores from a different asset.
+  if (previousWindow?.assetKey === assetKey) {
+    return previousWindow;
+  }
+
+  return previousResult?.assetScores?.[assetKey];
 }
 
 function getNextScheduledStart(

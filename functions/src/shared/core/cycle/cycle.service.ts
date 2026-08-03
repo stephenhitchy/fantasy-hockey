@@ -2206,6 +2206,432 @@ export async function advanceCompletedRegularSeasonAssetWindows(
   });
 }
 
+interface SavedCycleRosterPick extends DraftPick {
+  snapshotSource?: string;
+  snapshottedAt?: unknown;
+}
+
+function getStoredTimestampMilliseconds(value: unknown): number | null {
+  if (value instanceof Date) {
+    const milliseconds = value.getTime();
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const milliseconds = typeof value === 'number' ? value : Date.parse(value);
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const timestamp = value as {
+    toMillis?: () => number;
+    toDate?: () => Date;
+    seconds?: number;
+    nanoseconds?: number;
+    _seconds?: number;
+    _nanoseconds?: number;
+  };
+
+  if (typeof timestamp.toMillis === 'function') {
+    try {
+      const milliseconds = timestamp.toMillis();
+      return Number.isFinite(milliseconds) ? milliseconds : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof timestamp.toDate === 'function') {
+    try {
+      const milliseconds = timestamp.toDate().getTime();
+      return Number.isFinite(milliseconds) ? milliseconds : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const seconds = typeof timestamp.seconds === 'number'
+    ? timestamp.seconds
+    : timestamp._seconds;
+  const nanoseconds = typeof timestamp.nanoseconds === 'number'
+    ? timestamp.nanoseconds
+    : timestamp._nanoseconds ?? 0;
+
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return null;
+  }
+
+  return seconds * 1000 + (Number.isFinite(nanoseconds) ? nanoseconds / 1_000_000 : 0);
+}
+
+function wasPendingMoveQueuedBeforeCycleSnapshot(
+  pendingMove: PendingRosterSlotMove,
+  pick: SavedCycleRosterPick,
+): boolean {
+  const queuedAtMilliseconds = Date.parse(pendingMove.queuedAt);
+  const snapshottedAtMilliseconds = getStoredTimestampMilliseconds(pick.snapshottedAt);
+
+  // A current matchup snapshot normally predates a move queued during that
+  // matchup. Recovery is allowed only when the target snapshot was created
+  // after the reservation, which identifies the older/manual opener failure
+  // without activating a current-window move before its six-game boundary.
+  return Number.isFinite(queuedAtMilliseconds) &&
+    snapshottedAtMilliseconds !== null &&
+    snapshottedAtMilliseconds >= queuedAtMilliseconds;
+}
+
+export interface PendingRosterMoveReconciliationResult {
+  activatedMoveCount: number;
+  skippedMoveCount: number;
+  activatedOwnerIds: string[];
+}
+
+/**
+ * Repairs a regular-season period whose roster-slot snapshots were opened
+ * before a ready queued move was activated. This is primarily a recovery
+ * guard for older/manual lifecycle paths, but it also makes server scoring
+ * self-healing if a transient failure occurs between opening a slot window and
+ * updating the authoritative roster.
+ *
+ * A move is eligible only when this exact roster slot already has a snapshot
+ * in the requested cycle. That preserves asynchronous windows: a fast slot
+ * may activate its move in Matchup N while slower slots remain in Matchup
+ * N-1, and a slower slot is never pulled forward merely because the league
+ * period document exists.
+ */
+export async function reconcilePendingRosterMovesForRegularSeasonCycle(
+  leagueId: string,
+  teams: FantasyTeam[],
+  cycle: FantasyCycle,
+): Promise<PendingRosterMoveReconciliationResult> {
+  if (cycle.phase !== 'regular_season' || cycle.status !== 'active') {
+    return {
+      activatedMoveCount: 0,
+      skippedMoveCount: 0,
+      activatedOwnerIds: [],
+    };
+  }
+
+  const cyclePicks = await getCycleRosterPicksOnce(leagueId, cycle.cycleNumber);
+
+  if (cyclePicks.length === 0) {
+    return {
+      activatedMoveCount: 0,
+      skippedMoveCount: 0,
+      activatedOwnerIds: [],
+    };
+  }
+
+  const picksByOwnerId = new Map<string, DraftPick[]>();
+
+  for (const pick of cyclePicks) {
+    const ownerPicks = picksByOwnerId.get(pick.ownerId) ?? [];
+    ownerPicks.push(pick);
+    picksByOwnerId.set(pick.ownerId, ownerPicks);
+  }
+
+  const ownerEntries = [...picksByOwnerId.entries()];
+  const rosterPreflightSnapshots = await Promise.all(
+    ownerEntries.map(([ownerId]) => getDoc(getTeamRosterRef(leagueId, ownerId))),
+  );
+  const candidateOwnerIds = new Set<string>();
+
+  ownerEntries.forEach(([ownerId, ownerPicks], index) => {
+    const rosterSnapshot = rosterPreflightSnapshots[index];
+
+    if (!rosterSnapshot?.exists()) {
+      return;
+    }
+
+    const roster = normalizeFantasyRoster(
+      rosterSnapshot.data() as Partial<FantasyRoster>,
+    );
+    const pickBySlotId = new Map(
+      ownerPicks.map(
+        (pick) => [getRosterSlotIdFromPick(pick), pick as SavedCycleRosterPick] as const,
+      ),
+    );
+    const hasReadyMove = roster.activeSlots.some((slot) => {
+      const pick = pickBySlotId.get(slot.slotId);
+      const pendingMove = slot.pendingMove;
+
+      return Boolean(
+        pick &&
+        pendingMove &&
+        canActivatePendingMoveInCycle(pendingMove, cycle.cycleNumber) &&
+        wasPendingMoveQueuedBeforeCycleSnapshot(pendingMove, pick),
+      );
+    });
+
+    if (hasReadyMove) {
+      candidateOwnerIds.add(ownerId);
+    }
+  });
+
+  if (candidateOwnerIds.size === 0) {
+    return {
+      activatedMoveCount: 0,
+      skippedMoveCount: 0,
+      activatedOwnerIds: [],
+    };
+  }
+
+  const draftPicksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
+  const [draftPicksSnapshot, projectionAssetsByKey] = await Promise.all([
+    getDocs(draftPicksQuery),
+    loadWindowProjectionAssetsByKey(leagueId, teams.length, cycle.cycleNumber),
+  ]);
+  const draftPicks = draftPicksSnapshot.docs.map((snapshot) => snapshot.data() as DraftPick);
+  const draftPickByOwnerAndAssetKey = new Map(
+    draftPicks.map((pick) => [`${pick.ownerId}::${pick.asset.assetKey}`, pick] as const),
+  );
+
+  let activatedMoveCount = 0;
+  let skippedMoveCount = 0;
+  const activatedOwnerIds = new Set<string>();
+
+  // Process one roster at a time. A malformed reservation on one team must
+  // never prevent another team's ready slot from entering its next window.
+  for (const [ownerId, ownerPicks] of picksByOwnerId.entries()) {
+    if (!candidateOwnerIds.has(ownerId)) {
+      continue;
+    }
+
+    const rosterRef = getTeamRosterRef(leagueId, ownerId);
+    const pickRefs = ownerPicks.map((pick) =>
+      getCycleRosterSlotPickRef(
+        leagueId,
+        cycle.cycleNumber,
+        ownerId,
+        getRosterSlotIdFromPick(pick),
+      ),
+    );
+
+    const ownerResult = await runTransaction(db, async (transaction) => {
+      const snapshots = await Promise.all([
+        transaction.get(rosterRef),
+        ...pickRefs.map((reference) => transaction.get(reference)),
+      ]);
+      const rosterSnapshot = snapshots[0];
+
+      if (!rosterSnapshot.exists()) {
+        return { activated: 0, skipped: 0 };
+      }
+
+      const roster = normalizeFantasyRoster(
+        rosterSnapshot.data() as Partial<FantasyRoster>,
+      );
+      const savedPickSnapshots = snapshots.slice(1);
+      let activated = 0;
+      let skipped = 0;
+
+      ownerPicks.forEach((fallbackPick, index) => {
+        const pickSnapshot = savedPickSnapshots[index];
+
+        if (!pickSnapshot?.exists()) {
+          return;
+        }
+
+        const pick = pickSnapshot.data() as SavedCycleRosterPick;
+        const rosterSlotId = getRosterSlotIdFromPick(pick) || getRosterSlotIdFromPick(fallbackPick);
+        const slotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === rosterSlotId);
+
+        if (slotIndex < 0) {
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued move for ${ownerId}/${rosterSlotId}: roster slot is missing.`,
+          );
+          return;
+        }
+
+        const savedSlot = roster.activeSlots[slotIndex];
+        const pendingMove = savedSlot.pendingMove;
+
+        if (!canActivatePendingMoveInCycle(pendingMove, cycle.cycleNumber)) {
+          return;
+        }
+
+        if (!pendingMove) {
+          return;
+        }
+
+        if (!wasPendingMoveQueuedBeforeCycleSnapshot(pendingMove, pick)) {
+          // This is the current window that existed before the move was
+          // queued, not a target window opened with the wrong player.
+          return;
+        }
+
+        const incomingAssetKey = getRosterAssetKey(pendingMove.incomingAsset);
+        const outgoingAsset = savedSlot.asset;
+        const outgoingAssetKey = getRosterAssetKey(outgoingAsset);
+
+        if (!incomingAssetKey) {
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued move for ${ownerId}/${rosterSlotId}: incoming asset key is missing.`,
+          );
+          return;
+        }
+
+        if (
+          pendingMove.outgoingAssetKey &&
+          outgoingAssetKey !== pendingMove.outgoingAssetKey
+        ) {
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued move for ${ownerId}/${rosterSlotId}: the current asset changed.`,
+          );
+          return;
+        }
+
+        if (!pendingMove.outgoingAssetKey && outgoingAssetKey) {
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued open-slot move for ${ownerId}/${rosterSlotId}: the slot is no longer open.`,
+          );
+          return;
+        }
+
+        const sourceBenchSlotId = pendingMove.sourceBenchSlotId ?? null;
+
+        if (sourceBenchSlotId) {
+          const benchSlotIndex = roster.benchSlots.findIndex(
+            (benchSlot) => benchSlot.slotId === sourceBenchSlotId,
+          );
+
+          if (benchSlotIndex < 0) {
+            skipped += 1;
+            console.warn(
+              `Unable to reconcile queued bench swap for ${ownerId}/${rosterSlotId}: bench slot ${sourceBenchSlotId} is missing.`,
+            );
+            return;
+          }
+
+          const benchSlot = roster.benchSlots[benchSlotIndex];
+
+          if (getRosterAssetKey(benchSlot.asset) !== incomingAssetKey) {
+            skipped += 1;
+            console.warn(
+              `Unable to reconcile queued bench swap for ${ownerId}/${rosterSlotId}: reserved bench asset changed.`,
+            );
+            return;
+          }
+
+          roster.benchSlots[benchSlotIndex] = {
+            ...benchSlot,
+            asset: outgoingAsset
+              ? { ...outgoingAsset, rosterStatus: 'benched' }
+              : null,
+          };
+        }
+
+        roster.activeSlots[slotIndex] = {
+          ...savedSlot,
+          asset: { ...pendingMove.incomingAsset, rosterStatus: 'active' },
+          pendingMove: null,
+          openFromCycleNumber: null,
+        };
+
+        if (!sourceBenchSlotId && outgoingAsset) {
+          if (outgoingAssetKey && outgoingAssetKey !== incomingAssetKey) {
+            transaction.set(
+              getWaiverRef(leagueId, outgoingAssetKey),
+              buildActivatedDropWaiverPayload(
+                outgoingAsset,
+                ownerId,
+                cycle.cycleNumber,
+              ),
+            );
+          }
+        }
+
+        if (pendingMove.sourceWaiverId) {
+          transaction.set(
+            getWaiverRef(leagueId, pendingMove.sourceWaiverId),
+            {
+              effectiveCycleNumber: cycle.cycleNumber,
+              effectiveLabel: `Cycle ${cycle.cycleNumber}`,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+
+        const matchingDraftPick =
+          draftPickByOwnerAndAssetKey.get(`${ownerId}::${incomingAssetKey}`) ?? null;
+        const repairedAsset = createDraftableAssetFromRosterAsset(
+          pendingMove.incomingAsset,
+          projectionAssetsByKey.get(incomingAssetKey) ?? null,
+          matchingDraftPick?.asset ?? null,
+          cycle.cycleNumber,
+        );
+
+        transaction.set(pickRefs[index], {
+          ...pick,
+          ownerId,
+          rosterSlotId,
+          cycleWindowId: getCycleWindowId(ownerId, rosterSlotId, cycle.cycleNumber),
+          snapshotCycleNumber: cycle.cycleNumber,
+          snapshotSource: 'queued-slot-move-reconciled',
+          asset: repairedAsset,
+          snapshottedAt: serverTimestamp(),
+        });
+
+        transaction.set(doc(getTransactionsRef(leagueId)), {
+          type: sourceBenchSlotId ? 'active-bench-swap-activated' : 'slot-move-activated',
+          ownerId,
+          addedAsset: rosterAssetToDraftableAsset(pendingMove.incomingAsset),
+          droppedAsset: outgoingAsset,
+          waiverId: !sourceBenchSlotId && outgoingAsset ? outgoingAssetKey : null,
+          benchSlotId: sourceBenchSlotId,
+          rosterSlotId,
+          targetSlotId: rosterSlotId,
+          queuedMoveId: pendingMove.id,
+          effectiveCycleNumber: cycle.cycleNumber,
+          effectiveLabel: `Cycle ${cycle.cycleNumber}`,
+          recoverySource: 'active-cycle-pending-move-reconciliation',
+          authority: 'cloud-function',
+          createdAt: serverTimestamp(),
+        });
+
+        activated += 1;
+      });
+
+      if (activated > 0) {
+        transaction.set(
+          rosterRef,
+          {
+            schemaVersion: roster.schemaVersion,
+            activeSlots: roster.activeSlots,
+            benchSlots: roster.benchSlots,
+            irSlots: roster.irSlots,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      return { activated, skipped };
+    });
+
+    activatedMoveCount += ownerResult.activated;
+    skippedMoveCount += ownerResult.skipped;
+
+    if (ownerResult.activated > 0) {
+      activatedOwnerIds.add(ownerId);
+    }
+  }
+
+  return {
+    activatedMoveCount,
+    skippedMoveCount,
+    activatedOwnerIds: [...activatedOwnerIds].sort(),
+  };
+}
+
 /**
  * Reconciles regular-season matchup completion from the persisted per-team
  * slot-window documents. A matchup becomes final as soon as every expected

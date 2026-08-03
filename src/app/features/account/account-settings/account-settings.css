@@ -1904,3 +1904,123 @@
     width: 100%;
   }
 }
+
+/* Batch M2: neutral identity and explanation-level preferences */
+.neutral-identity-note {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.neutral-identity-note img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.neutral-identity-note div,
+.neutral-identity-note strong,
+.neutral-identity-note span {
+  display: block;
+}
+
+.neutral-identity-note span {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.hockey-experience-settings {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 2px solid var(--border-strong, var(--rr-account-migration-color-01));
+  background: var(--surface-2, var(--rr-account-migration-color-02));
+}
+
+.hockey-experience-settings h3 {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.hockey-experience-settings .panel-description {
+  margin-top: 0;
+}
+
+.hockey-experience-option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hockey-experience-option {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 112px;
+  gap: 7px;
+  padding: 12px;
+  border: 2px solid var(--border-strong, var(--rr-account-migration-color-01));
+  background: var(--surface-1, var(--rr-account-migration-color-04));
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hockey-experience-option strong,
+.hockey-experience-option small {
+  display: block;
+}
+
+.hockey-experience-option strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.hockey-experience-option small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.hockey-experience-option:hover,
+.hockey-experience-option:focus-visible,
+.hockey-experience-option.selected {
+  border-color: var(--user-team-accent);
+}
+
+.hockey-experience-option:focus-visible {
+  outline: 3px solid var(--focus-ring, var(--user-team-accent));
+  outline-offset: 2px;
+}
+
+.hockey-experience-option.selected {
+  background: var(--user-team-wash);
+  box-shadow: inset 0 -3px 0 var(--user-team-accent);
+}
+
+@media (max-width: 780px) {
+  .hockey-experience-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hockey-experience-option {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 430px) {
+  .neutral-identity-note {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .neutral-identity-note img {
+    width: 44px;
+    height: 44px;
+  }
+}

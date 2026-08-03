@@ -14,7 +14,7 @@
           <span>{{ league()?.name }}</span>
         </h1>
         <p>
-          Cycle Matchups ·
+          Six-Game Matchups ·
           {{ teams().length }} / {{ league()?.maxTeams }} Teams
         </p>
       </div>
@@ -285,7 +285,7 @@
           <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Team</strong>
-            <span>Roster, IR, waivers, and moves.</span>
+            <span>Roster, Injured Reserve (IR), waivers, and moves.</span>
           </span>
         </a>
 
@@ -337,16 +337,16 @@
     <section class="league-info-grid rr-stat-grid">
       <article class="league-info-card rr-stat-card">
         <span>Format</span>
-        <strong>Cycle Matchups</strong>
+        <strong>Six-Game Matchups</strong>
       </article>
 
       <article class="league-info-card rr-stat-card">
-        <span>Current Cycle</span>
+        <span>Current Matchup</span>
         <strong>{{ currentCycleLabel() }}</strong>
       </article>
 
       <article class="league-info-card rr-stat-card">
-        <span>Games Per Cycle</span>
+        <span>NHL Games Per Roster Spot</span>
         <strong>
           {{ league()?.scoringRules?.requiredGamesPerCycle ?? 6 }}
         </strong>
@@ -354,7 +354,7 @@
 
       <article class="league-info-card rr-stat-card">
         <span>Roster Format</span>
-        <strong>14 Active + 3 Bench + 3 IR</strong>
+        <strong>14 Active + 3 Bench + 3 Injured Reserve (IR)</strong>
       </article>
     </section>
 
@@ -497,7 +497,7 @@
           <section class="season-start-card rr-notice rr-notice--info" aria-live="polite">
             <div class="season-start-copy">
               <span class="draft-section-eyebrow">Preparing the Season</span>
-              <h3>Creating Cycle 1 and your matchups…</h3>
+              <h3>Creating Matchup 1 and the opening schedule…</h3>
               <p>
                 The server starts the season automatically as soon as the draft finishes.
                 This page will update when the matchup schedule is ready.
@@ -679,7 +679,7 @@
                   <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
                   <span>
                     <strong>Player Availability</strong>
-                    <small>Injury statuses and IR eligibility</small>
+                    <small>Injury statuses and Injured Reserve eligibility</small>
                   </span>
                 </a>
               </div>
@@ -723,7 +723,7 @@
             <span class="draft-section-eyebrow">Commissioner Only</span>
             <h2 id="delete-league-title">League Danger Zone</h2>
             <p>
-              Permanently remove this league, its teams, draft, rosters, cycles,
+              Permanently remove this league, its teams, draft, rosters, matchups,
               matchups, transactions, and invite code.
             </p>
           </div>

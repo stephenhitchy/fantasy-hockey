@@ -3,7 +3,7 @@
     <div>
       <span class="eyebrow">Fantasy Hockey</span>
       <h2>Active Roster</h2>
-      <p>Lineup changes activate at each slot’s next fair six-game boundary.</p>
+      <p>Lineup changes activate after the affected roster spot finishes its current six games.</p>
     </div>
 
     <div class="roster-summary">
@@ -15,7 +15,7 @@
   <section class="roster-section">
     <div class="section-heading">
       <h3>Forwards</h3>
-      <span>3 LW · 3 C · 3 RW</span>
+      <span>3 Left Wings · 3 Centers · 3 Right Wings</span>
     </div>
 
     <div class="forwards-grid">
@@ -62,7 +62,7 @@
 
                       <div class="asset-score">
                         <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
-                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                        <span>{{ getPointsPerGame(asset) }} Pts/Game</span>
                       </div>
                     </a>
                   }
@@ -83,7 +83,7 @@
   <section class="roster-section back-end-section">
     <div class="section-heading">
       <h3>Defense & Goaltending</h3>
-      <span>4 D · 1 Team Goalie Unit</span>
+      <span>4 Defensemen · 1 Team Goalie Unit</span>
     </div>
 
     <div class="back-end-grid">
@@ -134,7 +134,7 @@
 
                       <div class="asset-score">
                         <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
-                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                        <span>{{ getPointsPerGame(asset) }} Pts/Game</span>
                       </div>
                     </a>
                   } @else {
@@ -163,7 +163,7 @@
 
                       <div class="asset-score">
                         <strong>{{ asset.cycleScore.fantasyPoints }}</strong>
-                        <span>{{ getPointsPerGame(asset) }} PPG</span>
+                        <span>{{ getPointsPerGame(asset) }} Pts/Game</span>
                       </div>
                     </div>
                   }
@@ -185,7 +185,7 @@
     <div class="section-heading">
       <div>
         <h3>Bench</h3>
-        <span>Bench assets are owned but do not score until a legal cycle-boundary activation.</span>
+        <span>Bench players and goalie units remain owned but do not score until they enter an active roster spot.</span>
       </div>
 
       <strong>{{ benchSlotCount }} Bench Slots</strong>
@@ -229,10 +229,10 @@
     <div class="section-heading">
       <div>
         <h3>Injured Reserve</h3>
-        <span>Eligible injured skaters can be held here without changing frozen active windows.</span>
+        <span>Eligible injured skaters can be held here without rewriting games already assigned to active roster spots.</span>
       </div>
 
-      <strong>{{ irSlotCount }} IR Slots</strong>
+      <strong>{{ irSlotCount }} Injured Reserve (IR) Slots</strong>
     </div>
 
     <div class="ir-grid">

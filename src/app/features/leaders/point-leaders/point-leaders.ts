@@ -262,7 +262,7 @@ export class PointLeaders implements OnDestroy {
 
   getScopeLabel(): string {
     const cycleNumber = this.selectedCycleNumber();
-    return cycleNumber > 0 ? `Cycle ${cycleNumber}` : 'Season Total';
+    return cycleNumber > 0 ? `Matchup ${cycleNumber}` : 'Season Total';
   }
 
   getAssetName(asset: DraftableAsset): string {

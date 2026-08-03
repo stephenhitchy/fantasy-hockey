@@ -25,9 +25,9 @@
       <p>{{ pageSubtitle() }}</p>
 
       <ul class="hero-points">
-        <li>Asynchronous six-game windows keep every matchup fair.</li>
-        <li>Live scoring, frozen projections, and full playoff routing are ready to go.</li>
-        <li>Draft, create leagues, and jump straight into the action.</li>
+        <li>Every starter contributes exactly six scheduled NHL team games.</li>
+        <li>Build a competitive team even while you are learning hockey.</li>
+        <li>Plain-language definitions and Coach Help are available throughout the app.</li>
       </ul>
     </section>
 
@@ -70,23 +70,38 @@
               role="group"
               aria-labelledby="favorite-team-label"
               aria-describedby="favorite-team-help"
-              [attr.aria-invalid]="invalidField() === 'team' ? 'true' : null"
             >
               <div class="team-picker-heading">
                 <div>
                   <span id="favorite-team-label">Favorite NHL Team</span>
-                  <small id="favorite-team-help">Required · You can change this later</small>
+                  <small id="favorite-team-help">Optional · You can choose or change this later</small>
                 </div>
 
                 @if (selectedRegistrationTeam(); as selectedTeam) {
                   <div class="selected-team-preview">
                     <img [src]="selectedTeam.logoUrl" [alt]="selectedTeam.name + ' logo'" />
-                    <strong>{{ selectedTeam.abbreviation }}</strong>
+                    <strong>{{ selectedTeam.abbreviation === 'RR' ? 'RINKRAT' : selectedTeam.abbreviation }}</strong>
                   </div>
-                } @else {
-                  <span class="team-required-badge">Choose One</span>
                 }
               </div>
+
+              <button
+                type="button"
+                class="neutral-team-option"
+                [class.selected]="favoriteTeamAbbreviation() === neutralTheme.abbreviation"
+                [attr.aria-pressed]="favoriteTeamAbbreviation() === neutralTheme.abbreviation"
+                [disabled]="loading()"
+                (click)="selectRegistrationTeam(neutralTheme)"
+              >
+                <img [src]="neutralTheme.logoUrl" alt="" />
+                <span>
+                  <strong>No favorite yet</strong>
+                  <small>Use neutral RinkRat colors</small>
+                </span>
+                <b>{{ favoriteTeamAbbreviation() === neutralTheme.abbreviation ? 'Selected' : 'Choose' }}</b>
+              </button>
+
+              <span class="team-grid-label">Or choose an NHL team</span>
 
               <div
                 #favoriteTeamGrid
@@ -102,7 +117,7 @@
                     [class.selected]="team.abbreviation === favoriteTeamAbbreviation()"
                     [attr.aria-checked]="team.abbreviation === favoriteTeamAbbreviation()"
                     [attr.aria-label]="'Choose ' + team.name"
-                    [attr.tabindex]="team.abbreviation === favoriteTeamAbbreviation() || (!favoriteTeamAbbreviation() && first) ? 0 : -1"
+                    [attr.tabindex]="team.abbreviation === favoriteTeamAbbreviation() || (favoriteTeamAbbreviation() === neutralTheme.abbreviation && first) ? 0 : -1"
                     [title]="team.name"
                     [disabled]="loading()"
                     (click)="selectRegistrationTeam(team)"
@@ -110,6 +125,30 @@
                   >
                     <img [src]="team.logoUrl" [alt]="''" width="34" height="34" />
                     <span>{{ team.abbreviation }}</span>
+                  </button>
+                }
+              </div>
+            </section>
+
+            <section class="hockey-experience-picker" aria-labelledby="hockey-experience-label">
+              <div class="experience-picker-heading">
+                <span id="hockey-experience-label">How familiar are you with hockey?</span>
+                <small>This only changes how much explanation RinkRat shows.</small>
+              </div>
+
+              <div class="experience-choice-grid" role="radiogroup" aria-label="Choose hockey familiarity">
+                @for (option of hockeyExperienceOptions; track option.value) {
+                  <button
+                    type="button"
+                    role="radio"
+                    class="experience-choice"
+                    [class.selected]="hockeyExperience() === option.value"
+                    [attr.aria-checked]="hockeyExperience() === option.value"
+                    [disabled]="loading()"
+                    (click)="selectHockeyExperience(option.value)"
+                  >
+                    <strong>{{ option.title }}</strong>
+                    <small>{{ option.description }}</small>
                   </button>
                 }
               </div>

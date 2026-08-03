@@ -58,6 +58,7 @@ import {
   PixelTeamTheme,
   getPixelTeamTheme,
   hexToRgba,
+  RINKRAT_NEUTRAL_ABBREVIATION,
 } from '../../../shared/pixel-theme/pixel-theme.data';
 
 import {
@@ -446,7 +447,7 @@ export class CycleOne implements OnDestroy {
   }
 
   getNoMoreGamesMessage(): string {
-    return `${this.getCycleLabel()} has no NHL team games left to score. The app will stop creating new cycles until more games are available.`;
+    return `${this.getCycleLabel()} has no NHL team games left to score. The app will stop creating new matchups until more games are available.`;
   }
 
   setMatchupView(viewMode: MatchupViewMode): void {
@@ -518,7 +519,7 @@ export class CycleOne implements OnDestroy {
       await this.saveCurrentCycleProjectionAccuracy();
 
       this.completeCycleMessage.set(
-        'Server scoring was refreshed. Any completed matchups, standings, roster windows, and playoff advancement were reconciled securely.',
+        'Server scoring was refreshed. Any completed matchups, standings, six-game roster counts, and playoff advancement were reconciled securely.',
       );
     } catch (error: unknown) {
       this.completeCycleError.set(
@@ -687,7 +688,7 @@ export class CycleOne implements OnDestroy {
     const cycle = this.cycle();
 
     if (!cycle) {
-      return `${this.getCycleLabel()} readiness will appear once the cycle starts.`;
+      return `${this.getCycleLabel()} readiness will appear once the matchup starts.`;
     }
 
     if (cycle.status === 'complete') {
@@ -1410,14 +1411,14 @@ export class CycleOne implements OnDestroy {
       });
 
       this.projectionAccuracyMessage.set(
-        `Projection accuracy saved for ${result.summary.gradedAssetCount} assets. Average error: ${result.summary.meanAbsoluteError.toFixed(1)} points.`,
+        `Projection accuracy saved for ${result.summary.gradedAssetCount} players and goalie units. Average error: ${result.summary.meanAbsoluteError.toFixed(1)} points.`,
       );
     } catch (error: unknown) {
       this.projectionAccuracyAttemptKey = null;
       this.projectionAccuracyError.set(
         error instanceof Error
           ? error.message
-          : 'Unable to save projection accuracy for this cycle.',
+          : 'Unable to save projection accuracy for this matchup.',
       );
     } finally {
       this.projectionAccuracySaving.set(false);
@@ -1452,7 +1453,7 @@ export class CycleOne implements OnDestroy {
           return true;
         }
       } catch (error: unknown) {
-        console.warn(`Unable to check next-cycle games for ${teamAbbreviation}.`, error);
+        console.warn(`Unable to check next-six-game availability for ${teamAbbreviation}.`, error);
       }
     }
 
@@ -1952,10 +1953,10 @@ export class CycleOne implements OnDestroy {
 
   private getFallbackFavoriteTeam(ownerId: string | null | undefined): string {
     if (typeof document !== 'undefined' && ownerId === this.userId) {
-      return document.documentElement.dataset['favoriteTeam'] || 'VGK';
+      return document.documentElement.dataset['favoriteTeam'] || RINKRAT_NEUTRAL_ABBREVIATION;
     }
 
-    return 'VGK';
+    return RINKRAT_NEUTRAL_ABBREVIATION;
   }
 
   private getFallbackFavoriteTeamVariant(ownerId: string | null | undefined): string {
@@ -2072,10 +2073,10 @@ export class CycleOne implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.cycleNumber}`;
+      return cycle.playoffRoundLabel ?? `Playoff Matchup ${this.cycleNumber}`;
     }
 
-    return `Cycle ${this.cycleNumber}`;
+    return `Matchup ${this.cycleNumber}`;
   }
 
   getNextCycleLabel(): string {
@@ -2102,7 +2103,7 @@ export class CycleOne implements OnDestroy {
       return getPlayoffRoundLabel(1, playoffRoundCount);
     }
 
-    return `Cycle ${this.cycleNumber + 1}`;
+    return `Matchup ${this.cycleNumber + 1}`;
   }
 
   isFinalPlayoffRound(): boolean {
@@ -2118,14 +2119,14 @@ export class CycleOne implements OnDestroy {
 
   getDetailedMatchupHeading(): string {
     if (this.matchupId) {
-      return `${this.getCycleLabel()} ${this.matchupId}`;
+      return `${this.getCycleLabel()} · ${this.matchupId}`;
     }
 
     if (this.myMatchup()) {
-      return `Your ${this.getCycleLabel()} Matchup`;
+      return `Your ${this.getCycleLabel()}`;
     }
 
-    return `${this.getCycleLabel()} Matchup Detail`;
+    return `${this.getCycleLabel()} Details`;
   }
 
   private getDisplayedMatchupsFrom(matchups: FantasyMatchup[]): FantasyMatchup[] {
@@ -2441,13 +2442,13 @@ export class CycleOne implements OnDestroy {
   getPendingWindowCallout(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
     const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
-    return `Cycle ${cycleNumber} has not started for this roster slot yet.`;
+    return `Matchup ${cycleNumber} has not started for this roster slot yet.`;
   }
 
   getPendingWindowTooltip(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
     const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
-    return `This player appears here early so you can track the whole roster. ${this.getCycleLabel()} will begin for this slot once ${this.getAssetName(pick.asset)} reaches the first scheduled NHL team game of that window.`;
+    return `This player appears here early so you can track the whole roster. ${this.getCycleLabel()} will begin for this slot when ${this.getAssetName(pick.asset)} reaches the first NHL team game in this six-game count.`;
   }
 
   getWindowStatusLabel(pick: DraftPick): string {
@@ -2458,14 +2459,14 @@ export class CycleOne implements OnDestroy {
     }
 
     if (window.status === 'complete') {
-      return `Cycle ${window.cycleNumber} window complete`;
+      return `Matchup ${window.cycleNumber} · six-game count complete`;
     }
 
     if (window.status === 'active') {
-      return `Cycle ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames} counted`;
+      return `Matchup ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames} games counted`;
     }
 
-    return `Cycle ${window.cycleNumber} · waiting for first game`;
+    return `Matchup ${window.cycleNumber} · waiting for first game`;
   }
 
   stopCardNavigation(event: Event): void {
@@ -2830,7 +2831,7 @@ export class CycleOne implements OnDestroy {
 
   getMatchupBreakdownSummary(matchup: FantasyMatchup): string {
     if (!matchup.teamBOwnerId) {
-      return `${this.getTeamName(matchup.teamAOwnerId)} had a bye this cycle.`;
+      return `${this.getTeamName(matchup.teamAOwnerId)} had a bye this matchup.`;
     }
 
     const teamADelta = this.getMatchupTeamProjectionDelta(matchup, matchup.teamAOwnerId);
@@ -2985,7 +2986,7 @@ export class CycleOne implements OnDestroy {
     const firstGameNumber = (this.cycleNumber - 1) * requiredGamesPerCycle + 1;
     const lastGameNumber = this.cycleNumber * requiredGamesPerCycle;
 
-    return `Current scores use each asset's NHL team games ${firstGameNumber}-${lastGameNumber}. Missed games count as 0-point counted games.`;
+    return `Current scores use NHL team games ${firstGameNumber}-${lastGameNumber} for each roster spot. Missed games count as 0-point games.`;
   }
 
   getAssetScheduledGames(asset: DraftableAsset): number {
@@ -3047,7 +3048,7 @@ export class CycleOne implements OnDestroy {
     const endDate = this.getProjectionWindowEndDate();
 
     if (!startDate || !endDate) {
-      return `Projection window will appear once ${this.getCycleLabel()} has a start time.`;
+      return `The projection date range will appear once ${this.getCycleLabel()} has a start time.`;
     }
 
     return `${startDate.toLocaleDateString()} – ${endDate.toLocaleDateString()}`;
@@ -3065,10 +3066,10 @@ export class CycleOne implements OnDestroy {
     if (!this.scheduleHasGamesInWindow()) {
       const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
-      return `No NHL games found in this window. Using ${requiredGames} projected games per player until games are available.`;
+      return `No NHL games were found in this date range. Using ${requiredGames} projected games per player until games are available.`;
     }
 
-    return 'NHL schedules are loaded for game progress. Projections remain frozen at the value saved when the cycle started.';
+    return 'NHL schedules are loaded for game progress. Projections stay frozen at the value saved when the matchup started.';
   }
 
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {

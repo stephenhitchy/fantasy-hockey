@@ -425,11 +425,17 @@ service cloud.firestore {
       function validFavoriteTeam(data) {
         return !data.keys().hasAny(['favoriteTeamAbbreviation']) ||
           data.favoriteTeamAbbreviation in [
+            'RR',
             'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
             'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
             'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
             'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK', 'WSH', 'WPG'
           ];
+      }
+
+      function validHockeyExperience(data) {
+        return !data.keys().hasAny(['hockeyExperience']) ||
+          data.hockeyExperience in ['new', 'basic', 'experienced'];
       }
 
       function validTeamIdentityVariant(data) {
@@ -461,6 +467,7 @@ service cloud.firestore {
           validTeamIdentityVariant(data) &&
           validTeamIdentityUnlocks(data) &&
           validProfileIcon(data) &&
+          validHockeyExperience(data) &&
           (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
           (!data.keys().hasAny(['defaultLandingPage']) ||
             data.defaultLandingPage in ['dashboard', 'lastLeague']) &&
@@ -490,6 +497,7 @@ service cloud.firestore {
             'defaultLandingPage',
             'backgroundTheme',
             'injuryEmailEnabled',
+            'hockeyExperience',
             'trainingCampVersion',
             'trainingCampCompletedAt'
           ]) &&
@@ -552,6 +560,7 @@ service cloud.firestore {
     match /publicProfiles/{userId} {
       function validPublicFavoriteTeam(data) {
         return data.favoriteTeamAbbreviation in [
+          'RR',
           'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
           'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
           'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',

@@ -18,7 +18,7 @@
         <p>
           {{ league()?.name }}
           ·
-          Compare a stable season-long draft board with a separate injury-adjusted next-cycle outlook.
+          Compare a stable season-long draft board with a separate injury-adjusted next-six-game outlook.
         </p>
       </div>
 
@@ -54,7 +54,7 @@
       </div>
 
       <div class="shared-snapshot-meta">
-        <span>{{ snapshotMetadata()?.assetCount ?? 0 }} assets</span>
+        <span>{{ snapshotMetadata()?.assetCount ?? 0 }} players and goalie units</span>
         <strong>{{ getSnapshotGeneratedLabel() }}</strong>
       </div>
     </section>
@@ -63,9 +63,9 @@
       <div class="projection-accuracy-heading">
         <div>
           <span class="eyebrow">Projection Accuracy Tracking</span>
-          <h2>How close are the cycle projections?</h2>
+          <h2>How close are the matchup projections?</h2>
           <p>
-            Completed cycles compare the exact matchup-page projection with the final fantasy score. Positive bias means the model under-projected; negative bias means it over-projected.
+            Completed matchups compare the exact matchup-page projection with the final fantasy score. Positive bias means the model under-projected; negative bias means it over-projected.
           </p>
         </div>
 
@@ -85,7 +85,7 @@
         </div>
       } @else if (accuracyLoading()) {
         <div class="accuracy-state">
-          Loading completed-cycle projection results...
+          Loading completed-matchup projection results...
         </div>
       } @else if (accuracySummary(); as accuracy) {
         @if (accuracy.assetCount > 0) {
@@ -115,7 +115,7 @@
             <article>
               <span>Tracked Sample</span>
               <strong>{{ accuracy.assetCount }}</strong>
-              <small>{{ accuracyCycleRows().length }} completed cycles</small>
+              <small>{{ accuracyCycleRows().length }} completed matchups</small>
             </article>
           </div>
 
@@ -152,7 +152,7 @@
                 @for (group of accuracyVersionRows(); track group.key) {
                   <article class="accuracy-breakdown-row accuracy-version-row">
                     <strong>{{ group.label }}</strong>
-                    <span>{{ group.assetCount }} assets</span>
+                    <span>{{ group.assetCount }} players and goalie units</span>
                     <span>{{ group.meanAbsoluteError.toFixed(1) }} MAE</span>
                     <span>{{ group.within10Percent.toFixed(0) }}% within 10</span>
                   </article>
@@ -163,15 +163,15 @@
 
           <section class="accuracy-cycle-panel">
             <div class="accuracy-panel-heading">
-              <strong>Recent Completed Cycles</strong>
-              <span>Up to 30 cycles are retained in this view</span>
+              <strong>Recent Completed Matchups</strong>
+              <span>Up to 30 matchups are retained in this view</span>
             </div>
 
             <div class="accuracy-cycle-table" role="table">
               <div class="accuracy-cycle-row accuracy-cycle-header" role="row">
-                <span>Cycle</span>
+                <span>Matchup</span>
                 <span>Version</span>
-                <span>Assets</span>
+                <span>Players / Goalie Units</span>
                 <span>MAE</span>
                 <span>Bias</span>
                 <span>Within 10</span>
@@ -180,7 +180,7 @@
 
               @for (cycleHistory of accuracyCycleRows(); track cycleHistory.summary.cycleId) {
                 <div class="accuracy-cycle-row" role="row">
-                  <strong>Cycle {{ cycleHistory.summary.cycleNumber }}</strong>
+                  <strong>Matchup {{ cycleHistory.summary.cycleNumber }}</strong>
                   <span>{{ getAccuracyCycleVersionLabel(cycleHistory.summary) }}</span>
                   <span>{{ cycleHistory.summary.gradedAssetCount }}</span>
                   <span>{{ cycleHistory.summary.meanAbsoluteError.toFixed(1) }}</span>
@@ -197,12 +197,12 @@
           </section>
         } @else {
           <div class="accuracy-state">
-            No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a cycle.
+            No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a matchup.
           </div>
         }
       } @else {
         <div class="accuracy-state">
-          No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a cycle.
+          No projection accuracy has been recorded yet. The first report is saved automatically when a commissioner completes a matchup.
         </div>
       }
     </section>
@@ -232,14 +232,14 @@
       <article>
         <strong>Reliability</strong>
         <span>
-          Estimates how safe the projection is. Balanced Value uses this to slightly penalize risky assets.
+          Estimates how safe the projection is. Balanced Value uses this to slightly penalize risky players and goalie units.
         </span>
       </article>
 
       <article>
         <strong>Recent Form</strong>
         <span>
-          Uses the latest 10 and 20 appearances for next-cycle form. The 3- and 5-game windows are display-only and do not drive the draft ranking.
+          Uses the latest 10 and 20 appearances for next-six-game form. The 3- and 5-game samples are display-only and do not drive the draft ranking.
         </span>
       </article>
 
@@ -253,7 +253,7 @@
       <article>
         <strong>Availability</strong>
         <span>
-          Healthy skill remains separate from expected Cycle points. Injury status and return timing reduce only the games the player is expected to play.
+          Healthy skill remains separate from expected matchup points. Injury status and return timing reduce only the games the player is expected to play.
         </span>
       </article>
     </section>
@@ -294,14 +294,14 @@
           (ngModelChange)="setSortMode($event)"
         >
           <option value="DRAFT_RANK">Season Draft Rank</option>
-          <option value="CYCLE_RANK">Next Cycle Rank</option>
+          <option value="CYCLE_RANK">Next 6 Games Rank</option>
           <option value="FLOOR_DRAFT_VALUE">Draft Score</option>
           <option value="DRAFT_VALUE">Draft Value Above Replacement</option>
           <option value="VALUE_RATING">Value Rating</option>
           <option value="RELIABILITY">Reliability</option>
           <option value="RECENT_FORM">Recent Form Adjustment</option>
           <option value="RATING">Rating</option>
-          <option value="PROJECTED_CYCLE">Next Cycle Projection</option>
+          <option value="PROJECTED_CYCLE">Next 6 Games Projection</option>
           <option value="PROJECTED_SEASON">Season Outlook</option>
           <option value="POSITION_RANK">Position Rank</option>
           <option value="NAME">Name</option>
@@ -360,7 +360,7 @@
       </article>
 
       <article>
-        <span>Cycle Games</span>
+        <span>Matchup Games</span>
         <strong>{{ projectedGamesPerCycle() }}</strong>
       </article>
 
@@ -454,11 +454,11 @@
       <div class="table-heading">
         <div>
           <span class="eyebrow">Projection Board</span>
-          <h2>Season Draft Board & Next-Cycle Outlook</h2>
+          <h2>Season Draft Board & Next-6-Games Outlook</h2>
         </div>
 
         <p>
-          Showing {{ visibleRows().length }} assets.
+          Showing {{ visibleRows().length }} players and goalie units.
         </p>
       </div>
 
@@ -467,29 +467,29 @@
           <thead>
             <tr>
               <th>Draft Rank</th>
-              <th>Cycle Rank</th>
-              <th>Asset</th>
+              <th>Matchup Rank</th>
+              <th>Player / Goalie Unit</th>
               <th>Pos</th>
               <th>NHL</th>
               <th>Draft Rating</th>
               <th>Draft 6-Game</th>
-              <th>Next Cycle</th>
-              <th>Healthy Cycle</th>
+              <th>Next 6 Games</th>
+              <th>Healthy Matchup</th>
               <th>Availability</th>
               <th>Recent Appearances</th>
               <th>Baseline</th>
               <th>Recent Form</th>
               <th>Role</th>
               <th>Schedule</th>
-              <th>10 / 20 Game PPG</th>
-              <th>Floor Cycle</th>
+              <th>10 / 20 Game Pts/Game</th>
+              <th>Floor Matchup</th>
               <th>Reliability</th>
               <th>Replacement</th>
               <th>Value Rating</th>
               <th>Draft Score</th>
               <th>Draft VORP</th>
               <th>Season Outlook</th>
-              <th>PPG</th>
+              <th>Pts/Game</th>
               <th>Tier</th>
             </tr>
           </thead>

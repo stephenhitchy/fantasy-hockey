@@ -12,7 +12,7 @@
         <h1>Add / Drop Player</h1>
         <p>
           Choose a player first, then choose the exact roster slot. The app checks both six-game
-          windows before allowing the move.
+          counts before allowing the move.
         </p>
       </div>
 
@@ -28,7 +28,7 @@
 
     <section class="message-card fairness-card rr-notice rr-notice--info">
       No retroactive scoring: if the incoming player’s current six-game block has already started,
-      that player is reserved but waits for the next untouched cycle.
+      that player is reserved but waits for the next untouched matchup.
     </section>
 
     @if (pendingRosterMoves().length > 0) {
@@ -40,7 +40,7 @@
           </div>
           <p>
             Each move stays attached to its roster slot and activates only after the slot boundary
-            and the incoming player’s eligibility cycle are both ready.
+            and the incoming player’s eligible matchup are both ready.
           </p>
         </div>
 
@@ -131,7 +131,7 @@
           </label>
         </div>
 
-        <div class="cycle-dot-legend" aria-label="Cycle game marker legend">
+        <div class="cycle-dot-legend" aria-label="Six-game marker legend">
           <strong>Current six-game block:</strong>
           <span><i class="cycle-game-marker cycle-marker-played"></i> Played</span>
           <span><i class="cycle-game-marker cycle-marker-missed"></i> Missed</span>
@@ -153,7 +153,7 @@
                 <h2>Players on Waivers</h2>
               </div>
               <p>
-                Choose the roster slot now. If your claim wins, the same cycle-protection rules
+                Choose the roster slot now. If your claim wins, the same six-game protection rules
                 apply before activation.
               </p>
             </div>
@@ -194,7 +194,7 @@
                             {{ getPlayerAvailabilityLabel(waiver.asset) }}
                           </span>
                           @if (isPlayerAvailabilityIrEligible(waiver.asset)) {
-                            <small class="ir-eligible-copy">IR eligible</small>
+                            <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
                           }
                         </div>
                       }
@@ -223,7 +223,7 @@
                       {{ getPerformanceLabel(waiver.asset) }}
                     </span>
                     @if (getCycleRank(waiver.asset); as cycleRank) {
-                      <small class="projection-rank-pill">Next-cycle rank #{{ cycleRank }}</small>
+                      <small class="projection-rank-pill">Next-matchup rank #{{ cycleRank }}</small>
                     }
                     <div class="waiver-action-stack">
                       <button
@@ -249,14 +249,14 @@
                   </div>
 
                   <details class="decision-details season-stats-details">
-                    <summary>View cycle status &amp; full stats</summary>
+                    <summary>View six-game status &amp; full stats</summary>
 
                     <div class="decision-detail-overview">
-                      <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game cycle status">
+                      <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game status">
                         <div class="cycle-decision-heading">
                           <span>Current six-game block</span>
                           <strong>
-                            {{ getCurrentTeamCycleNumber(waiver.asset) ? 'Cycle ' + getCurrentTeamCycleNumber(waiver.asset) : 'Cycle —' }}
+                            {{ getCurrentTeamCycleNumber(waiver.asset) ? 'Matchup ' + getCurrentTeamCycleNumber(waiver.asset) : 'Matchup —' }}
                           </strong>
                         </div>
                         <div class="cycle-marker-row">
@@ -323,7 +323,7 @@
                         <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }} pts</strong>
                       </div>
                     } @else {
-                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and cycle dots.</p>
+                      <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and six-game markers.</p>
                     }
                   </details>
                 </article>
@@ -369,7 +369,7 @@
                           {{ getPlayerAvailabilityLabel(asset) }}
                         </span>
                         @if (isPlayerAvailabilityIrEligible(asset)) {
-                          <small class="ir-eligible-copy">IR eligible</small>
+                          <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
                         }
                         @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
                           <small class="player-availability-note">{{ availabilityNote }}</small>
@@ -399,7 +399,7 @@
                     {{ getPerformanceLabel(asset) }}
                   </span>
                   @if (getCycleRank(asset); as cycleRank) {
-                    <small class="projection-rank-pill">Next-cycle rank #{{ cycleRank }}</small>
+                    <small class="projection-rank-pill">Next-matchup rank #{{ cycleRank }}</small>
                   }
                   <button
                     type="button"
@@ -412,14 +412,14 @@
                 </div>
 
                 <details class="decision-details season-stats-details">
-                  <summary>View cycle status &amp; full stats</summary>
+                  <summary>View six-game status &amp; full stats</summary>
 
                   <div class="decision-detail-overview">
-                    <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game cycle status">
+                    <section class="cycle-decision-block cycle-decision-block--details" aria-label="Current six-game status">
                       <div class="cycle-decision-heading">
                         <span>Current six-game block</span>
                         <strong>
-                          {{ getCurrentTeamCycleNumber(asset) ? 'Cycle ' + getCurrentTeamCycleNumber(asset) : 'Cycle —' }}
+                          {{ getCurrentTeamCycleNumber(asset) ? 'Matchup ' + getCurrentTeamCycleNumber(asset) : 'Matchup —' }}
                         </strong>
                       </div>
                       <div class="cycle-marker-row">
@@ -486,7 +486,7 @@
                       <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }} pts</strong>
                     </div>
                   } @else {
-                    <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and cycle dots.</p>
+                    <p class="decision-data-note">Refresh the shared projection snapshot to load the current-season stat totals and six-game markers.</p>
                   }
                 </details>
               </article>
@@ -541,7 +541,7 @@
             </div>
             <div class="selected-player-rank">
               <strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong>
-              <span>Cycle Rank</span>
+              <span>Next 6 Games Rank</span>
             </div>
           </section>
           <section class="selected-decision-overview rr-data-panel">
@@ -549,10 +549,10 @@
               <div class="cycle-decision-heading">
                 <span>Incoming player block</span>
                 <strong>
-                  {{ getCurrentTeamCycleNumber(addAsset) ? 'Cycle ' + getCurrentTeamCycleNumber(addAsset) : 'Cycle —' }}
+                  {{ getCurrentTeamCycleNumber(addAsset) ? 'Matchup ' + getCurrentTeamCycleNumber(addAsset) : 'Matchup —' }}
                 </strong>
               </div>
-              <div class="cycle-marker-row" aria-label="Selected player current six-game cycle status">
+              <div class="cycle-marker-row" aria-label="Selected player current six-game status">
                 @for (dotIndex of cycleDotSlots; track dotIndex) {
                   @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
                     <span
@@ -570,7 +570,7 @@
             <div class="decision-metric-grid">
               <div><span>Season points</span><strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></div>
               <div><span>Rest estimate</span><strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></div>
-              <div><span>Next cycle</span><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></div>
+              <div><span>Next matchup</span><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></div>
               <div><span>Estimated final</span><strong>{{ getDisplayNumber(getProjectedFinalSeasonPoints(addAsset)) }}</strong></div>
             </div>
 
@@ -644,7 +644,7 @@
               }
             </div>
             <div>
-              <span class="eyebrow">Incoming Player Window</span>
+              <span class="eyebrow">Incoming Player Six-Game Status</span>
               <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
               <p>{{ getSelectedAssetCycleDetail() }}</p>
             </div>
@@ -661,14 +661,14 @@
               <h3>Select one slot</h3>
             </div>
             <span class="fairness-note"
-              >The cycle shown on each card is the actual activation cycle.</span
+              >The matchup shown on each card is the actual activation matchup.</span
             >
           </div>
 
           @if (!areRosterWindowsReady()) {
             <div class="empty-card roster-window-loading">
-              Loading your active six-game roster windows before calculating the fair activation
-              cycle…
+              Loading your active six-game roster progress before calculating the fair activation
+              matchup…
             </div>
           } @else if (dropCandidates().length === 0) {
             <div class="empty-card rr-state">
@@ -713,7 +713,7 @@
                         <strong>{{ getDisplayNumber(getCurrentSeasonPoints(candidateProjection)) }}</strong>
                       </span>
                       <span>
-                        Next cycle
+                        Next matchup
                         <strong>{{ getDisplayNumber(getProjectedCyclePoints(candidateProjection)) }}</strong>
                       </span>
                       <span [class]="getPerformanceClass(candidateProjection)">

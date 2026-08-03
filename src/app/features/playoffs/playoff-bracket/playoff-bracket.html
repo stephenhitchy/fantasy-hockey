@@ -11,7 +11,7 @@
         <span class="eyebrow">Fantasy Postseason</span>
         <h1>{{ league()?.name }} Playoffs</h1>
         <p>
-          One complete six-game cycle per round. The regular-season standings lock after Cycle
+          One complete six-game matchup per round. The regular-season standings lock after Matchup
           {{ regularSeasonCycleCount() }}, and tied playoff matchups advance the higher seed.
         </p>
       </div>
@@ -37,7 +37,7 @@
     <section class="format-grid">
       <article>
         <span>Regular Season</span>
-        <strong>{{ regularSeasonCycleCount() }} cycles</strong>
+        <strong>{{ regularSeasonCycleCount() }} matchups</strong>
       </article>
       <article>
         <span>Championship Field</span>
@@ -59,7 +59,7 @@
         <div>
           <span class="eyebrow">League Champion</span>
           <h2>{{ getChampionName() }}</h2>
-          <p>The final six-game championship cycle is complete.</p>
+          <p>The final six-game championship matchup is complete.</p>
         </div>
       </section>
     }
@@ -76,7 +76,7 @@
         <p>
           {{ getFormatSummary() }} Seeding is based on win percentage, then Points For, point
           differential, wins, and team name. The field shown below remains live until the final
-          regular-season cycle is completed.
+          regular-season matchup is completed.
         </p>
 
         <div class="seed-subsection">
@@ -205,7 +205,7 @@
               class="simulator-link"
               [routerLink]="['/leagues', leagueId, 'playoffs', 'simulator']"
             >
-              Test Banked Windows
+              Test Saved Six-Game Counts
             </a>
           }
         </div>
@@ -225,7 +225,7 @@
                   [class.final-round]="roundNumber === playoffRoundCount()"
                 >
                   <header class="round-header">
-                    <span>Cycle {{ getRoundCycleNumber(roundNumber) }}</span>
+                    <span>Matchup {{ getRoundCycleNumber(roundNumber) }}</span>
                     <h3>{{ getRoundLabel(roundNumber) }}</h3>
                   </header>
 

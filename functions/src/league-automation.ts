@@ -17,6 +17,7 @@ import {
   getActiveLeagueCycles,
   getCycleMatchupsOnce,
   getCycleRosterPicksOnce,
+  reconcilePendingRosterMovesForRegularSeasonCycle,
   reconcileRegularSeasonCycleMatchupCompletion,
   startCycleOne,
   startNextCycle,
@@ -1171,6 +1172,17 @@ async function runLeagueAutomation(
       let passTransitionOccurred = false;
 
       for (const cycle of activeCycles) {
+        const pendingMoveReconciliation =
+          await reconcilePendingRosterMovesForRegularSeasonCycle(
+            leagueId,
+            teams,
+            cycle,
+          );
+
+        if (pendingMoveReconciliation.activatedMoveCount > 0) {
+          passTransitionOccurred = true;
+        }
+
         const picks = await getCycleRosterPicksOnce(
           leagueId,
           cycle.cycleNumber,
@@ -1726,6 +1738,16 @@ export const openNextCompetitionPeriod = onCall(
         };
       }
 
+      // `startNextCycle` is also used as a manual recovery path. Older builds
+      // could create the next period from the outgoing roster before applying
+      // queued slot-boundary moves. Reconcile immediately so the roster and
+      // the immutable slot snapshot agree before the manager enters the page.
+      await reconcilePendingRosterMovesForRegularSeasonCycle(
+        leagueId,
+        teams,
+        nextCycle,
+      );
+
       return {
         status: 'opened',
         currentCycleNumber,
@@ -1916,19 +1938,44 @@ export const advanceHistoricalReplayDay = onCall(
 
     const controlRef = getHistoricalReplayControlRef(leagueId);
     const controlSnapshot = await controlRef.get();
+    const savedControl = controlSnapshot.data() ?? {};
     const previous = normalizeReplayControl(controlSnapshot.data());
+    const savedFailedSimulatedDate =
+      typeof savedControl['lastFailedSimulatedDate'] === 'string'
+        ? savedControl['lastFailedSimulatedDate']
+        : null;
+    const retryLegacyFailedDate =
+      previous.status === 'error' &&
+      Boolean(previous.simulatedDate) &&
+      !Object.prototype.hasOwnProperty.call(savedControl, 'lastFailedSimulatedDate');
+    const retryFailedDate =
+      previous.status === 'error' &&
+      Boolean(previous.simulatedDate) &&
+      (savedFailedSimulatedDate === previous.simulatedDate || retryLegacyFailedDate);
+    let attemptedDate: string | null = null;
 
     try {
       const seasonStartDate = previous.seasonStartDate ??
         await getHistoricalReplaySeasonStartDate(HISTORICAL_REPLAY_TARGET_SEASON);
-      const currentDate = previous.enabled && previous.simulatedDate
-        ? previous.simulatedDate
-        : addUtcDays(seasonStartDate, -1);
+      const currentDate = retryFailedDate && previous.simulatedDate
+        ? addUtcDays(previous.simulatedDate, -1)
+        : previous.enabled && previous.simulatedDate
+          ? previous.simulatedDate
+          : addUtcDays(seasonStartDate, -1);
       const nextDate = addUtcDays(currentDate, 1);
+      attemptedDate = nextDate;
       const releasedGameCount = await countNhlGamesOnReplayDate(
         nextDate,
         HISTORICAL_REPLAY_TARGET_SEASON,
       );
+      const nextDaysAdvanced = retryFailedDate
+        ? Math.max(1, previous.daysAdvanced)
+        : previous.enabled
+          ? previous.daysAdvanced + 1
+          : 1;
+      const nextTotalReleasedGameCount = retryFailedDate
+        ? previous.totalReleasedGameCount
+        : (previous.enabled ? previous.totalReleasedGameCount : 0) + releasedGameCount;
 
       await Promise.all([
         controlRef.set(
@@ -1940,14 +1987,16 @@ export const advanceHistoricalReplayDay = onCall(
             sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
             seasonStartDate,
             simulatedDate: nextDate,
-            daysAdvanced: previous.enabled ? previous.daysAdvanced + 1 : 1,
+            daysAdvanced: nextDaysAdvanced,
             lastReleasedGameCount: releasedGameCount,
-            totalReleasedGameCount:
-              (previous.enabled ? previous.totalReleasedGameCount : 0) + releasedGameCount,
+            totalReleasedGameCount: nextTotalReleasedGameCount,
             requestedBy: userId,
             lastAdvanceStartedAt: FieldValue.serverTimestamp(),
-            message: `Processing the simulated NHL date ${nextDate}.`,
+            message: retryFailedDate
+              ? `Retrying the simulated NHL date ${nextDate}.`
+              : `Processing the simulated NHL date ${nextDate}.`,
             lastError: '',
+            lastFailedSimulatedDate: null,
             createdAt: controlSnapshot.exists
               ? controlSnapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
               : FieldValue.serverTimestamp(),
@@ -1998,6 +2047,7 @@ export const advanceHistoricalReplayDay = onCall(
           lastPublishedSnapshotCount: result.publishedSnapshotCount,
           message,
           lastError: '',
+          lastFailedSimulatedDate: null,
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -2010,7 +2060,7 @@ export const advanceHistoricalReplayDay = onCall(
         seasonStartDate,
         targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
         sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
-        daysAdvanced: previous.enabled ? previous.daysAdvanced + 1 : 1,
+        daysAdvanced: nextDaysAdvanced,
         releasedGameCount,
         activeCycleNumbers: result.activeCycleNumbers,
         message,
@@ -2026,6 +2076,7 @@ export const advanceHistoricalReplayDay = onCall(
           status: 'error',
           message,
           lastError: message.slice(0, 500),
+          lastFailedSimulatedDate: attemptedDate,
           lastAdvanceFailedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },

@@ -3,8 +3,15 @@ import {
   DEFAULT_TEAM_IDENTITY_VARIANT_ID,
   getPixelTeamTheme,
   hexToRgba,
+  RINKRAT_NEUTRAL_ABBREVIATION,
   TeamIdentityUnlockRequirement,
 } from '../../shared/pixel-theme/pixel-theme.data';
+import {
+  DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+  HockeyExperienceLevel,
+  normalizeHockeyExperienceLevel,
+  storeHockeyExperienceLevel,
+} from '../../shared/hockey-terms/hockey-terms.data';
 
 const THEME_STORAGE_KEY = 'fantasy-hockey-user-theme';
 const LAST_LEAGUE_STORAGE_KEY = 'fantasy-hockey-last-league';
@@ -18,6 +25,7 @@ export interface StoredUserTheme {
   reducedMotion: boolean;
   defaultLandingPage: 'dashboard' | 'lastLeague';
   backgroundTheme: BackgroundTheme;
+  hockeyExperience: HockeyExperienceLevel;
 }
 
 export interface ApplyUserThemeOptions {
@@ -32,7 +40,8 @@ export function applyUserTheme(
   theme: Partial<StoredUserTheme> | UserProfile | null,
   options: ApplyUserThemeOptions = {},
 ): void {
-  const favoriteTeamAbbreviation = theme?.favoriteTeamAbbreviation || 'VGK';
+  const favoriteTeamAbbreviation =
+    theme?.favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION;
   const requestedVariantId =
     theme?.favoriteTeamVariantId || DEFAULT_TEAM_IDENTITY_VARIANT_ID;
   const reducedMotion = Boolean(theme?.reducedMotion);
@@ -44,6 +53,9 @@ export function applyUserTheme(
     theme?.backgroundTheme === 'light-ice'
       ? theme.backgroundTheme
       : 'rink-dark';
+  const hockeyExperience = normalizeHockeyExperienceLevel(
+    theme?.hockeyExperience ?? DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
+  );
   const identityUnlocks = Array.isArray(theme?.teamIdentityUnlocks)
     ? theme.teamIdentityUnlocks.filter(
         (value): value is TeamIdentityUnlockRequirement =>
@@ -85,6 +97,10 @@ export function applyUserTheme(
     root.dataset['backgroundTheme'] = backgroundTheme;
   }
 
+  storeHockeyExperienceLevel(hockeyExperience, {
+    persist: options.persist !== false,
+  });
+
   if (options.persist !== false && typeof localStorage !== 'undefined') {
     const stored: StoredUserTheme = {
       favoriteTeamAbbreviation: team.abbreviation,
@@ -93,6 +109,7 @@ export function applyUserTheme(
       reducedMotion,
       defaultLandingPage,
       backgroundTheme,
+      hockeyExperience,
     };
 
     localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(stored));
@@ -101,12 +118,13 @@ export function applyUserTheme(
 
 export function loadStoredUserTheme(): StoredUserTheme {
   const fallback: StoredUserTheme = {
-    favoriteTeamAbbreviation: 'VGK',
+    favoriteTeamAbbreviation: RINKRAT_NEUTRAL_ABBREVIATION,
     favoriteTeamVariantId: DEFAULT_TEAM_IDENTITY_VARIANT_ID,
     teamIdentityUnlocks: [],
     reducedMotion: false,
     defaultLandingPage: 'dashboard',
     backgroundTheme: 'rink-dark',
+    hockeyExperience: DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
   };
 
   if (typeof localStorage === 'undefined') {
@@ -117,7 +135,7 @@ export function loadStoredUserTheme(): StoredUserTheme {
     const raw = localStorage.getItem(THEME_STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Partial<StoredUserTheme>) : null;
     const normalizedTeam = getPixelTeamTheme(
-      parsed?.favoriteTeamAbbreviation || 'VGK',
+      parsed?.favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION,
       parsed?.favoriteTeamVariantId || DEFAULT_TEAM_IDENTITY_VARIANT_ID,
     );
 
@@ -151,6 +169,7 @@ export function loadStoredUserTheme(): StoredUserTheme {
         parsed?.backgroundTheme === 'light-ice'
           ? parsed.backgroundTheme
           : 'rink-dark',
+      hockeyExperience: normalizeHockeyExperienceLevel(parsed?.hockeyExperience),
     };
   } catch {
     return fallback;

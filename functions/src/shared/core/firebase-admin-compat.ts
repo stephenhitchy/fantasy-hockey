@@ -105,8 +105,16 @@ export function doc(
   ...pathSegments: string[]
 ): DocumentReference {
   if (parent instanceof AdminCollectionReference) {
+    if (pathSegments.length === 0) {
+      // Match the browser Firestore SDK's `doc(collectionRef)` overload. The
+      // Admin SDK exposes the same behavior through `collectionRef.doc()`.
+      // Queued roster activations depend on this to create transaction-log
+      // records without inventing client-side IDs.
+      return parent.doc();
+    }
+
     if (pathSegments.length !== 1) {
-      throw new Error('Document references from a collection require exactly one id.');
+      throw new Error('Document references from a collection require zero or one id.');
     }
 
     return parent.doc(pathSegments[0]);

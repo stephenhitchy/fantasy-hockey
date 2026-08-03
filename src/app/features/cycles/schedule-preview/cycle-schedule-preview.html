@@ -23,7 +23,7 @@
           class="open-cycle-link"
           [routerLink]="['/leagues', leagueId, 'cycles', 1]"
         >
-          Open Cycle 1
+          Open Matchup 1
         </a>
 
         <a
@@ -64,12 +64,12 @@
       </article>
 
       <article>
-        <span>Regular-Season Cycles</span>
+        <span>Regular-Season Matchups</span>
         <strong>{{ regularSeasonCycleCount() }}</strong>
       </article>
 
       <article>
-        <span>Matchups Per Cycle</span>
+        <span>League Games Per Matchup</span>
         <strong>{{ matchupsPerCycle() }}</strong>
       </article>
 
@@ -82,8 +82,8 @@
     <section class="schedule-note-card">
       <strong>Team schedule view</strong>
       <p>
-        This page shows the complete regular-season schedule. Completed cycles show actual scores and results,
-        while future cycles show the planned opponent and roster projection. After Cycle {{ regularSeasonCycleCount() }},
+        This page shows the complete regular-season schedule. Completed matchups show actual scores and results,
+        while future matchups show the planned opponent and roster projection. After Matchup {{ regularSeasonCycleCount() }},
         the standings lock and the seeded playoff bracket begins.
       </p>
     </section>

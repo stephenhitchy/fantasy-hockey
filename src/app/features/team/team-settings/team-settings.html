@@ -121,7 +121,7 @@
             class="secondary-action rr-button rr-button--secondary"
             [routerLink]="['/leagues', leagueId, 'cycles', latestCycle()?.cycleNumber, 'matchups']"
           >
-            Current Cycle Matchups
+            All Current Matchups
           </a>
         }
 
@@ -282,12 +282,12 @@
           <h2>Roster Board</h2>
         </div>
 
-        <p>{{ rosterFilledCount() }} / {{ rosterTotalCount() }} active · Bench {{ benchFilledCount() }} / {{ benchTotalCount() }} · IR {{ irFilledCount() }} / {{ irTotalCount() }}</p>
+        <p>{{ rosterFilledCount() }} / {{ rosterTotalCount() }} active · Bench {{ benchFilledCount() }} / {{ benchTotalCount() }} · Injured Reserve (IR) {{ irFilledCount() }} / {{ irTotalCount() }}</p>
       </div>
 
       <div class="availability-policy-note rr-notice rr-notice--info">
-        <strong>IR eligibility:</strong>
-        Only players listed as Out, Injured Reserve, or Long-Term IR can be moved to an IR slot.
+        <strong>Injured Reserve (IR) eligibility:</strong>
+        Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve can be moved to an Injured Reserve (IR) slot.
         Day-to-Day, suspended, active, and unverified players remain on the active roster.
       </div>
 
@@ -305,7 +305,7 @@
 
       @if (scoringLoading()) {
         <div class="roster-scoring-note rr-notice rr-notice--info">
-          Loading current cycle player stats...
+          Loading current matchup player stats...
         </div>
       }
 
@@ -426,7 +426,7 @@
                                 (click)="$event.stopPropagation(); moveActiveSlotToIr(slot.slotId)"
                                 [disabled]="!canMoveSlotToIr(slot)"
                               >
-                                {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                                {{ rosterMoveLoading() ? 'Saving...' : 'Move to Injured Reserve' }}
                               </button>
                             }
 
@@ -550,7 +550,7 @@
                               [disabled]="!canMoveSlotToIr(slot)"
                               [attr.title]="getMoveToIrDisabledText(slot) || null"
                             >
-                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to Injured Reserve' }}
                             </button>
                           }
 
@@ -671,7 +671,7 @@
                               [disabled]="!canMoveSlotToIr(slot)"
                               [attr.title]="getMoveToIrDisabledText(slot) || null"
                             >
-                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to IR' }}
+                              {{ rosterMoveLoading() ? 'Saving...' : 'Move to Injured Reserve' }}
                             </button>
                           }
 
@@ -710,8 +710,8 @@
       </div>
 
       <p class="bench-cycle-guidance">
-        Bench assets are owned but do not score. Starting a bench player creates a cycle-safe queued
-        swap; already-played NHL games are never backfilled.
+        Bench players and goalie units are owned but do not score. Starting a bench player schedules a fair
+        lineup swap; already-played NHL games are never backfilled.
       </p>
 
       <div class="bench-slot-grid">
@@ -756,9 +756,9 @@
               <div class="fantasy-player-main">
                 <strong>{{ getRosterAssetName(asset) }}</strong>
                 <span>{{ getRosterAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}</span>
-                <em>Bench asset · does not add points while benched</em>
+                <em>Bench player or goalie unit · does not add points while benched</em>
                 @if (asset.eligibleFromCycleNumber) {
-                  <em>Eligible to start in Cycle {{ asset.eligibleFromCycleNumber }}</em>
+                  <em>Eligible to start in Matchup {{ asset.eligibleFromCycleNumber }}</em>
                 } @else {
                   <em>Activation timing is checked when you press Start.</em>
                 }
@@ -794,7 +794,7 @@
                       (click)="$event.stopPropagation(); moveBenchSlotToIr(slot.slotId)"
                       [disabled]="!canMoveBenchSlotToIr(slot)"
                     >
-                      Move to IR
+                      Move to Injured Reserve
                     </button>
                   }
 
@@ -823,15 +823,15 @@
       <div class="section-heading rr-section-heading">
         <div>
           <span class="eyebrow">Injured Reserve</span>
-          <h2>IR Slots</h2>
+          <h2>Injured Reserve (IR) Slots</h2>
         </div>
 
-        <p>{{ irFilledCount() }} of {{ irTotalCount() }} IR spots filled</p>
+        <p>{{ irFilledCount() }} of {{ irTotalCount() }} Injured Reserve spots filled</p>
       </div>
 
       @if (!roster()) {
         <div class="empty-state-card rr-state">
-          IR is still loading.
+          Injured Reserve is still loading.
         </div>
       } @else {
         <div class="ir-slot-grid">
@@ -921,7 +921,7 @@
               } @else {
                 <div class="empty-slot-copy">
                   <strong>{{ slot.slotId }}</strong>
-                  <span>Open IR slot</span>
+                  <span>Open Injured Reserve slot</span>
                 </div>
               }
             </article>
@@ -948,7 +948,7 @@
           >
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
-                <span class="eyebrow">Activate From IR</span>
+                <span class="eyebrow">Activate From Injured Reserve</span>
                 <h2 id="ir-activation-title">
                   Where should {{ getRosterAssetName(activationAsset) }} go?
                 </h2>
@@ -1039,7 +1039,7 @@
             </div>
 
             <div class="ir-activation-cycle-note">
-              If this player and the selected slot have not started their individual windows, the move applies immediately. Otherwise, it waits for the first fair cycle boundary.
+              If this player and the selected slot have not started their six-game counts, the move applies immediately. Otherwise, it waits until the first matchup where both can change fairly.
             </div>
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
@@ -1071,11 +1071,11 @@
           <section class="ir-activation-dialog rr-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-bench-title" appDialogFocusTrap (dialogEscape)="cancelIrBenchActivation()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
-                <span class="eyebrow">IR Roster Move</span>
+                <span class="eyebrow">Injured Reserve Move</span>
                 <h2 id="ir-bench-title">Move {{ getRosterAssetName(irBenchAsset) }} to Bench</h2>
-                <p>Choose one of your three bench slots. Replacing an occupied slot sends that asset to waivers.</p>
+                <p>Choose one of your three bench slots. Replacing an occupied slot sends that player or goalie unit to waivers.</p>
               </div>
-              <button type="button" class="ir-activation-close rr-button rr-button--quiet" aria-label="Close IR bench move" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">×</button>
+              <button type="button" class="ir-activation-close rr-button rr-button--quiet" aria-label="Close Injured Reserve bench move" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">×</button>
             </header>
 
             <div class="ir-activation-target-list">
@@ -1085,7 +1085,7 @@
                   <span class="ir-activation-radio-mark"></span>
                   <span class="ir-activation-target-copy">
                     <strong>{{ targetSlot.slotId }}</strong>
-                    <small>{{ isBenchSlotReservedForActiveSwap(targetSlot) ? 'Reserved for a queued active-lineup swap' : targetSlot.asset ? getRosterAssetName(targetSlot.asset) + ' will be placed on waivers' : 'Open bench slot' }}</small>
+                    <small>{{ isBenchSlotReservedForActiveSwap(targetSlot) ? 'Reserved for a scheduled active-lineup swap' : targetSlot.asset ? getRosterAssetName(targetSlot.asset) + ' will be placed on waivers' : 'Open bench slot' }}</small>
                   </span>
                   @if (isBenchSlotReservedForActiveSwap(targetSlot)) {
                     <span class="ir-waiver-warning">Reserved</span>
@@ -1099,7 +1099,7 @@
             </div>
 
             <div class="ir-activation-cycle-note">
-              Bench assets are owned but do not score. This ownership move is immediate and does not change any frozen active cycle window.
+              Bench players and goalie units are owned but do not score. This ownership move is immediate and does not change any active six-game count.
             </div>
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
@@ -1118,9 +1118,9 @@
           <section class="ir-activation-dialog rr-dialog" role="dialog" aria-modal="true" aria-labelledby="bench-swap-title" appDialogFocusTrap (dialogEscape)="cancelBenchSwap()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
-                <span class="eyebrow">Cycle-Safe Lineup Change</span>
+                <span class="eyebrow">Fair Lineup Change</span>
                 <h2 id="bench-swap-title">Start {{ getRosterAssetName(benchSwapAsset) }}</h2>
-                <p>Choose the matching active slot. Untouched individual windows swap immediately; started windows wait for the first fair boundary.</p>
+                <p>Choose the matching active slot. If both six-game counts are untouched, the swap applies immediately; otherwise it waits until both spots can change fairly.</p>
               </div>
               <button type="button" class="ir-activation-close rr-button rr-button--quiet" aria-label="Close lineup swap" (click)="cancelBenchSwap()" [disabled]="rosterMoveLoading()">×</button>
             </header>
@@ -1138,8 +1138,8 @@
             </div>
 
             <div class="lineup-change-pill-row">
-              <span class="lineup-change-pill good">Moves now if both windows are untouched</span>
-              <span class="lineup-change-pill neutral">Queues safely if either window has started</span>
+              <span class="lineup-change-pill good">Moves now if both counts are untouched</span>
+              <span class="lineup-change-pill neutral">Schedules safely if either count has started</span>
             </div>
 
             <div class="ir-activation-target-list lineup-change-target-list">
@@ -1169,7 +1169,7 @@
             </div>
 
             <div class="ir-activation-cycle-note lineup-change-cycle-note">
-              The app checks only the two assets involved. If neither individual window has started, the swap applies now. Otherwise, it locks the first fair future cycle so already-played games can never be included.
+              The app checks only the two roster spots involved. If neither six-game count has started, the swap applies now. Otherwise, it waits for the first future matchup where both spots can change without counting already-played games.
             </div>
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
@@ -1205,7 +1205,7 @@
                 Drop {{ getRosterAssetName(pendingDrop.asset) }}?
               </h2>
               <p>
-                This removes the asset from your
+                This removes the player or goalie unit from your
                 {{ getRosterDropSourceLabel(pendingDrop.sourceRosterArea) }}
                 and sends it to waivers.
               </p>
@@ -1248,13 +1248,13 @@
           <div class="roster-drop-warning">
             <strong>This action opens the roster slot.</strong>
             <span>
-              Other managers can submit a claim while this asset is on waivers.
-              You cannot reclaim an asset you just dropped until it clears waivers.
+              Other managers can submit a claim while this player or goalie unit is on waivers.
+              You cannot reclaim a player or goalie unit you just dropped until it clears waivers.
             </span>
           </div>
 
           <div class="ir-activation-cycle-note">
-            If this player’s individual cycle window is untouched, the slot opens immediately and can still be refilled in that cycle. If it has started, that player’s frozen window remains until the next fair boundary.
+            If this player’s six-game count is untouched, the slot opens immediately and can still be refilled for the current matchup. If it has started, that count remains unchanged until the next matchup where the slot can change fairly.
           </div>
 
           <footer class="ir-activation-dialog-actions rr-dialog__actions">

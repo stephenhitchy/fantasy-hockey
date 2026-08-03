@@ -68,7 +68,12 @@
     "verify:batch8d": "npm run verify:batch8c-owner-controls && npm run test:release-facing-cleanup:run",
     "test:mobile-readability:run": "node --test --test-concurrency=1 test/mobile-readability/*.test.mjs",
     "audit:mobile-readability": "node scripts/audit-mobile-readability.mjs",
-    "verify:batchm1": "npm run verify:batch8d && npm run test:mobile-readability:run && npm run audit:mobile-readability"
+    "verify:batchm1": "npm run verify:batch8d && npm run test:mobile-readability:run && npm run audit:mobile-readability",
+    "test:beginner-onboarding:run": "node --test --test-concurrency=1 test/beginner-onboarding/*.test.mjs",
+    "audit:beginner-language": "node scripts/audit-beginner-language.mjs",
+    "verify:batchm2": "npm run verify:batchm1 && npm run test:beginner-onboarding:run && npm run audit:beginner-language",
+    "test:cycle-rollover-hotfix:run": "node --test --test-concurrency=1 test/cycle-rollover-hotfix/*.test.mjs",
+    "verify:batchm2-1": "npm run verify:batchm2 && npm run test:cycle-rollover-hotfix:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

@@ -227,6 +227,6 @@ test('Batch 8A source contracts', async (suite) => {
     assert.match(template, /role="progressbar"/);
     assert.match(template, /starter games counted/);
     assert.match(template, /starter.*unavailable/s);
-    assert.match(template, /queued move/);
+    assert.match(template, /scheduled move/);
   });
 });

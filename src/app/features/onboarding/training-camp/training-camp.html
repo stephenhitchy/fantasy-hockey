@@ -12,7 +12,7 @@
       <span class="eyebrow">Training Camp Complete</span>
       <h1 id="training-camp-step-title" tabindex="-1">You are ready for puck drop</h1>
       <p>
-        You now know how six-game windows, roster moves, player cards, and the season flow work.
+        You now know how six-game matchups, roster moves, player cards, and the season flow work.
         The Coach button remains available throughout RinkRat whenever you need a refresher.
       </p>
 
@@ -94,7 +94,7 @@
           <ul class="lesson-simple-list roster-simple-list" aria-label="RinkRat roster basics">
             <li><strong>14 active spots</strong> earn fantasy points.</li>
             <li><strong>3 bench spots</strong> give you backup options.</li>
-            <li><strong>3 IR spots</strong> hold eligible injured players.</li>
+            <li><strong>3 Injured Reserve (IR) spots</strong> hold eligible injured players.</li>
           </ul>
         }
 
@@ -112,7 +112,7 @@
       <div class="lesson-visual" [attr.data-step]="currentStep().id">
         @switch (currentStep().id) {
           @case ('cycles') {
-            <section class="cycle-demo" aria-label="Two players completing independent six-game windows">
+            <section class="cycle-demo" aria-label="Two players completing independent six-game counts">
               <div class="cycle-demo-team">
                 <div class="demo-player">
                   <span class="demo-logo">A</span>
@@ -163,16 +163,19 @@
           @case ('roster') {
             <section class="roster-demo" aria-label="RinkRat roster structure">
               <div class="roster-starters">
-                <div><span>LW</span><strong>3</strong></div>
-                <div><span>C</span><strong>3</strong></div>
-                <div><span>RW</span><strong>3</strong></div>
-                <div><span>D</span><strong>4</strong></div>
-                <div><span>G</span><strong>1</strong></div>
+                <div><app-hockey-term term="left-wing" [compact]="true" /><strong>3</strong></div>
+                <div><app-hockey-term term="center" [compact]="true" /><strong>3</strong></div>
+                <div><app-hockey-term term="right-wing" [compact]="true" /><strong>3</strong></div>
+                <div><app-hockey-term term="defenseman" [compact]="true" /><strong>4</strong></div>
+                <div><app-hockey-term term="team-goalie-unit" [compact]="true" /><strong>1</strong></div>
               </div>
+              <p class="term-help-note">
+                Tap any position label marked with a question mark for a plain-language definition.
+              </p>
               <div class="roster-support">
                 <article>
                   <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-                  <div><small>Active lineup</small><strong>14 scoring assets</strong></div>
+                  <div><small>Active lineup</small><strong>14 scoring spots</strong></div>
                 </article>
                 <article>
                   <span class="pixel-icon icon-bench icon-lg" aria-hidden="true"></span>
@@ -180,7 +183,7 @@
                 </article>
                 <article>
                   <span class="pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
-                  <div><small>Treatment room</small><strong>3 IR slots</strong></div>
+                  <div><small>Treatment room</small><strong>3 injured-reserve spots</strong></div>
                 </article>
               </div>
 
@@ -212,7 +215,7 @@
                     <span class="position-value-badge" aria-hidden="true">G</span>
                     <div>
                       <small>Team Goalie Unit</small>
-                      <strong>Usually your highest-scoring asset</strong>
+                      <strong>Usually your highest-scoring roster spot</strong>
                       <p>Your goalie slot counts the NHL team’s goalie appearances and is meant to carry extra weight.</p>
                       <em>One starting unit · Major lineup impact</em>
                     </div>
@@ -225,23 +228,23 @@
           }
 
           @case ('moves') {
-            <section class="move-demo" aria-label="Examples of immediate and queued roster moves">
+            <section class="move-demo" aria-label="Examples of immediate and scheduled roster moves">
               <article class="move-example immediate">
                 <span class="move-status">Immediate</span>
-                <strong>Neither asset has played</strong>
+                <strong>Neither player has played</strong>
                 <div class="move-path"><span>Outgoing</span><b>→</b><span>Incoming</span></div>
-                <small>The new player enters the open window now.</small>
+                <small>The new player enters the open six-game count now.</small>
               </article>
               <article class="move-example queued">
-                <span class="move-status">Queued</span>
-                <strong>A window already started</strong>
-                <div class="move-path"><span>Current asset</span><b>⏱</b><span>Next window</span></div>
+                <span class="move-status">Scheduled</span>
+                <strong>A six-game count already started</strong>
+                <div class="move-path"><span>Current player</span><b>⏱</b><span>Next matchup</span></div>
                 <small>Completed and scheduled games remain protected.</small>
               </article>
               <article class="move-example ir">
-                <span class="move-status">IR Move</span>
+                <span class="move-status">Injured Reserve Move</span>
                 <strong>Eligible injured player</strong>
-                <div class="move-path"><span>Active</span><b>+</b><span>IR space</span></div>
+                <div class="move-path"><span>Active</span><b>+</b><span>Injured Reserve</span></div>
                 <small>Open a lineup spot without discarding the player.</small>
               </article>
             </section>
@@ -251,12 +254,12 @@
             <section class="player-card-demo" aria-label="Example RinkRat player scouting card">
               <header>
                 <span class="demo-player-logo">RR</span>
-                <div><strong>Example Skater</strong><small>COL · C</small></div>
+                <div><strong>Example Skater</strong><small>COL · Center</small></div>
                 <span class="rank-chip">Rank #18</span>
               </header>
               <div class="player-metrics">
                 <article><small>Season</small><strong>286.4</strong></article>
-                <article><small>Next Cycle</small><strong>82.7</strong></article>
+                <article><small>Next 6 Games</small><strong>82.7</strong></article>
                 <article><small>Form</small><strong class="positive">+6.2%</strong></article>
               </div>
               <div class="demo-game-row" aria-label="Six-game schedule markers">
@@ -285,7 +288,7 @@
               </div>
               <div class="season-line"></div>
               <div class="season-stage">
-                <span>2</span><div><small>Regular season</small><strong>Cycle matchups</strong></div>
+                <span>2</span><div><small>Regular season</small><strong>Six-game matchups</strong></div>
               </div>
               <div class="season-line"></div>
               <div class="season-stage">

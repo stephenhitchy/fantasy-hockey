@@ -51,7 +51,7 @@ const STATUS_LABELS: Record<PlayerAvailabilityStatus, string> = {
   'day-to-day': 'Day-to-Day',
   out: 'Out',
   'injured-reserve': 'Injured Reserve',
-  'long-term-injured-reserve': 'Long-Term IR',
+  'long-term-injured-reserve': 'Long-Term Injured Reserve',
   suspended: 'Suspended',
   'personal-leave': 'Personal Leave',
   unknown: 'Unknown'

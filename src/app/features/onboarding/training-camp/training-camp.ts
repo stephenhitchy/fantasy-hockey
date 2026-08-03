@@ -10,6 +10,7 @@ import {
 } from '../../../core/onboarding/training-camp.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { getUserProfile } from '../../../core/user/user.service';
+import { HockeyTermChip } from '../../../shared/hockey-terms/hockey-term-chip';
 
 interface TrainingCampStep {
   id: string;
@@ -36,7 +37,7 @@ function waitForAuthUser(): Promise<User | null> {
 @Component({
   selector: 'app-training-camp',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, HockeyTermChip],
   templateUrl: './training-camp.html',
   styleUrl: './training-camp.css',
 })
@@ -58,7 +59,7 @@ export class TrainingCamp {
       eyebrow: 'Build Your Club',
       title: 'Build a balanced team',
       summary:
-        'Your team has 14 active scoring spots, 3 bench spots, and 3 IR spots. The positions are not meant to score the same way: forwards are explosive, defensemen are steady, and the team goalie unit usually scores the most.',
+        'Your team has 14 active scoring spots, 3 bench spots, and 3 Injured Reserve (IR) spots. The positions are not meant to score the same way: forwards are explosive, defensemen are steady, and the team goalie unit usually scores the most.',
       coachNote:
         'Do not judge every position by the same point total. Compare forwards with forwards, defensemen with defensemen, and goalie units with other goalie units.',
     },
@@ -68,9 +69,9 @@ export class TrainingCamp {
       eyebrow: 'Line Changes',
       title: 'Roster moves respect games already played',
       summary:
-        'A move can happen immediately when neither affected asset has begun its current window. Once either side has played, RinkRat queues the change for the correct boundary.',
+        'A move can happen immediately when neither affected roster spot has started its current six-game count. Once either side has played, RinkRat schedules the change for the first safe lineup boundary.',
       coachNote:
-        'The confirmation screen always tells you whether a move is immediate or queued before you submit it.',
+        'The confirmation screen always tells you whether a move happens now or after the affected roster spot finishes its six games.',
     },
     {
       id: 'cards',
@@ -86,11 +87,11 @@ export class TrainingCamp {
       id: 'season',
       number: '05',
       eyebrow: 'Road to the Cup',
-      title: 'Cycles become standings, playoffs, and placements',
+      title: 'Matchups become standings, playoffs, and placements',
       summary:
         'Completed matchups update the standings automatically. In the postseason, already-played NHL games are preserved and backfilled once each bracket destination becomes known.',
       coachNote:
-        'You never need to press a button to advance scoring. Server automation handles draft clocks, cycles, standings, and playoff routing.',
+        'You never need to press a button to advance scoring. Server automation handles draft clocks, six-game matchups, standings, and playoff routing.',
     },
   ];
 

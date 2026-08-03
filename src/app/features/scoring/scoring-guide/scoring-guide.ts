@@ -16,11 +16,14 @@ import {
   ScoringRules,
 } from '../../../core/scoring/scoring-rules';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
+import { HockeyTermChip } from '../../../shared/hockey-terms/hockey-term-chip';
+import { HockeyTermKey } from '../../../shared/hockey-terms/hockey-terms.data';
 
 interface ScoringRow {
   label: string;
   value: string;
   note?: string;
+  term?: HockeyTermKey;
 }
 
 interface SaveQualityExample {
@@ -31,7 +34,7 @@ interface SaveQualityExample {
 @Component({
   selector: 'app-scoring-guide',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, HockeyTermChip],
   templateUrl: './scoring-guide.html',
   styleUrl: './scoring-guide.css',
 })
@@ -67,12 +70,12 @@ export class ScoringGuide {
       diminishingRow('Goals', rules.goal),
       diminishingRow('Primary assists', rules.primaryAssist),
       diminishingRow('Secondary assists', rules.secondaryAssist),
-      perStatRow('Shot on goal', rules.shotOnGoal, 'Each official shot on goal'),
+      perStatRow('Shot on goal', rules.shotOnGoal, 'Each official shot on goal', 'shots-on-goal'),
       perStatRow('Hit', rules.hit, 'Each official credited hit'),
-      perStatRow('Blocked shot', rules.blockedShot, 'Each official blocked shot'),
-      bonusRow('Power-play point', rules.powerPlayPoint, 'Added on top of the goal or assist points'),
-      bonusRow('Short-handed point', rules.shortHandedPoint, 'Added on top of the goal or assist points'),
-      perStatRow('Time on ice', this.rules().forwardToiMultiplier, 'For every minute played'),
+      perStatRow('Blocked shot', rules.blockedShot, 'Each official blocked shot', 'blocked-shots'),
+      bonusRow('Power-play point', rules.powerPlayPoint, 'Added on top of the goal or assist points', 'power-play-points'),
+      bonusRow('Short-handed point', rules.shortHandedPoint, 'Added on top of the goal or assist points', 'short-handed-points'),
+      perStatRow('Time on ice', this.rules().forwardToiMultiplier, 'For every minute played', 'time-on-ice'),
     ];
   });
 
@@ -83,15 +86,16 @@ export class ScoringGuide {
       diminishingRow('Goals', rules.goal),
       diminishingRow('Primary assists', rules.primaryAssist),
       diminishingRow('Secondary assists', rules.secondaryAssist),
-      perStatRow('Shot on goal', rules.shotOnGoal, 'Each official shot on goal'),
+      perStatRow('Shot on goal', rules.shotOnGoal, 'Each official shot on goal', 'shots-on-goal'),
       perStatRow('Hit', rules.hit, 'Each official credited hit'),
-      perStatRow('Blocked shot', rules.blockedShot, 'Each official blocked shot'),
-      bonusRow('Power-play point', rules.powerPlayPoint, 'Added on top of the goal or assist points'),
-      bonusRow('Short-handed point', rules.shortHandedPoint, 'Added on top of the goal or assist points'),
+      perStatRow('Blocked shot', rules.blockedShot, 'Each official blocked shot', 'blocked-shots'),
+      bonusRow('Power-play point', rules.powerPlayPoint, 'Added on top of the goal or assist points', 'power-play-points'),
+      bonusRow('Short-handed point', rules.shortHandedPoint, 'Added on top of the goal or assist points', 'short-handed-points'),
       {
         label: 'Time on ice',
         value: `${formatPoints(this.rules().defenseToiFloor)}–${formatPoints(this.rules().defenseToiCeiling)} pts/min`,
         note: `Starts at ${formatPoints(this.rules().defenseToiBaseMultiplier)} per minute. Each +/− point changes the multiplier by ${formatPoints(this.rules().defenseToiPlusMinusModifier)}, within the displayed range.`,
+        term: 'time-on-ice',
       },
     ];
   });
@@ -102,7 +106,8 @@ export class ScoringGuide {
     {
       label: 'Save quality',
       value: `${signedPoints(this.rules().goalieSavePercentageMinimum)} to +${formatPoints(this.rules().goalieSavePercentageMaximum)} pts`,
-      note: `Starts at ${formatPoints(this.rules().goalieSavePercentageBasePoints)} points at ${(this.rules().goalieSavePercentageBaseline * 100).toFixed(1)} SV%. Each percentage point above or below that baseline changes the score by ${formatPoints(this.rules().goalieSavePercentagePointsPerPercentagePoint)}.`,
+      note: `Starts at ${formatPoints(this.rules().goalieSavePercentageBasePoints)} points at ${(this.rules().goalieSavePercentageBaseline * 100).toFixed(1)}% save percentage. Each percentage point above or below that baseline changes the score by ${formatPoints(this.rules().goalieSavePercentagePointsPerPercentagePoint)}.`,
+      term: 'save-percentage',
     },
     bonusRow('Win', this.rules().goalieWin, 'Awarded when the NHL team wins the game'),
     bonusRow('Shutout', this.rules().goalieShutout, 'Stacks with the win and all other goalie scoring'),
@@ -114,7 +119,7 @@ export class ScoringGuide {
   ]);
 
   readonly commonBonusRows = computed<ScoringRow[]>(() => [
-    bonusRow('Game-winning goal', this.rules().gameWinningGoal, 'Stacks with the goal and any special-teams points'),
+    bonusRow('Game-winning goal', this.rules().gameWinningGoal, 'Stacks with the goal and any special-teams points', 'game-winning-goal'),
     bonusRow('Overtime goal', this.rules().overtimeGoal, 'Stacks with the goal and game-winning-goal bonus when both apply'),
   ]);
 
@@ -249,19 +254,31 @@ function diminishingRow(label: string, values: DiminishingReturnValues): Scoring
   };
 }
 
-function perStatRow(label: string, points: number, note?: string): ScoringRow {
+function perStatRow(
+  label: string,
+  points: number,
+  note?: string,
+  term?: HockeyTermKey,
+): ScoringRow {
   return {
     label,
     value: `${signedPoints(points)} pts each`,
     note,
+    term,
   };
 }
 
-function bonusRow(label: string, points: number, note?: string): ScoringRow {
+function bonusRow(
+  label: string,
+  points: number,
+  note?: string,
+  term?: HockeyTermKey,
+): ScoringRow {
   return {
     label,
     value: `${signedPoints(points)} pts`,
     note,
+    term,
   };
 }
 

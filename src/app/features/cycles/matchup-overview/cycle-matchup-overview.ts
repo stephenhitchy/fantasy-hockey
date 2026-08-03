@@ -188,10 +188,10 @@ export class CycleMatchupOverview implements OnDestroy {
     const cycle = this.cycle();
 
     if (cycle?.phase === 'playoffs') {
-      return cycle.playoffRoundLabel ?? `Playoff Cycle ${this.cycleNumber}`;
+      return cycle.playoffRoundLabel ?? `Playoff Matchup ${this.cycleNumber}`;
     }
 
-    return `Cycle ${this.cycleNumber}`;
+    return `Matchup ${this.cycleNumber}`;
   }
 
   getCycleStatusLabel(): string {

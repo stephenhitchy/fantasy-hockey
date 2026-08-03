@@ -9,13 +9,13 @@
           </div>
 
           <label class="cycle-picker-control">
-            <span>Cycle Matchup</span>
+            <span>Matchup</span>
             <select [value]="presenter.cycleNumber" (change)="presenter.navigateToCycle($any($event.target).value)">
               @for (
                 availableCycleNumber of presenter.getAvailableCycleNumbers();
                 track availableCycleNumber
               ) {
-                <option [value]="availableCycleNumber">Cycle {{ availableCycleNumber }}</option>
+                <option [value]="availableCycleNumber">Matchup {{ availableCycleNumber }}</option>
               }
             </select>
           </label>
@@ -53,7 +53,7 @@
         </a>
 
         @if (presenter.cycle()?.overlapsPreviousCycle) {
-          <span class="cycle-status-badge overlap-status-badge rr-badge rr-badge--warning"> Overlapping Cycle </span>
+          <span class="cycle-status-badge overlap-status-badge rr-badge rr-badge--warning"> Overlapping Matchups </span>
         }
 
         @if (

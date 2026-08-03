@@ -1,0 +1,30 @@
+<span class="hockey-term-wrap">
+  <button
+    type="button"
+    class="hockey-term-button"
+    [class.expanded-label]="!compact && experience() === 'new'"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="panelId"
+    [attr.aria-label]="'Define ' + definition().label"
+    (click)="toggle()"
+  >
+    {{ displayLabel() }}
+    <span aria-hidden="true">?</span>
+  </button>
+
+  @if (open()) {
+    <span
+      class="hockey-term-popover"
+      role="region"
+      [id]="panelId"
+      [attr.aria-labelledby]="titleId"
+    >
+      <span class="hockey-term-title">
+        <strong [id]="titleId">{{ definition().label }}</strong>
+        <small>{{ definition().abbreviation }}</small>
+      </span>
+      <span>{{ definition().beginnerExplanation }}</span>
+      <button type="button" (click)="close()" aria-label="Close definition">Close</button>
+    </span>
+  }
+</span>

@@ -537,7 +537,7 @@ export class ProjectionLab {
   getSnapshotCycleLabel(): string {
     const cycleNumber = this.snapshotMetadata()?.targetCycleNumber;
 
-    return cycleNumber ? `Cycle ${cycleNumber}` : 'Upcoming cycle';
+    return cycleNumber ? `Matchup ${cycleNumber}` : 'Upcoming matchup';
   }
 
   getAvailabilityDescription(row: ProjectionRow): string {
