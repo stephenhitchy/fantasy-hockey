@@ -18,6 +18,7 @@ let hockeyTermChipInstanceId = 0;
 export class HockeyTermChip {
   @Input({ required: true }) term!: HockeyTermKey;
   @Input() compact = false;
+  @Input() popoverAlign: 'start' | 'center' | 'end' = 'start';
 
   readonly open = signal(false);
   readonly panelId = `hockey-term-panel-${++hockeyTermChipInstanceId}`;

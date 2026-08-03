@@ -163,11 +163,11 @@
           @case ('roster') {
             <section class="roster-demo" aria-label="RinkRat roster structure">
               <div class="roster-starters">
-                <div><app-hockey-term term="left-wing" [compact]="true" /><strong>3</strong></div>
-                <div><app-hockey-term term="center" [compact]="true" /><strong>3</strong></div>
-                <div><app-hockey-term term="right-wing" [compact]="true" /><strong>3</strong></div>
-                <div><app-hockey-term term="defenseman" [compact]="true" /><strong>4</strong></div>
-                <div><app-hockey-term term="team-goalie-unit" [compact]="true" /><strong>1</strong></div>
+                <div class="roster-position-slot forward-slot"><app-hockey-term term="left-wing" [compact]="true" /><strong>3</strong></div>
+                <div class="roster-position-slot forward-slot"><app-hockey-term term="center" [compact]="true" /><strong>3</strong></div>
+                <div class="roster-position-slot forward-slot"><app-hockey-term term="right-wing" [compact]="true" /><strong>3</strong></div>
+                <div class="roster-position-slot defense-slot"><app-hockey-term term="defenseman" [compact]="true" /><strong>4</strong></div>
+                <div class="roster-position-slot goalie-slot"><app-hockey-term term="team-goalie-unit" [compact]="true" popoverAlign="end" /><strong>1</strong></div>
               </div>
               <p class="term-help-note">
                 Tap any position label marked with a question mark for a plain-language definition.

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authChildGuard, authGuard } from './core/guards/auth.guard';
 import { platformAdminGuard } from './core/guards/platform-admin.guard';
+import { pendingDraftSaveGuard } from './core/guards/pending-draft-save.guard';
 import {
   commissionerGuard,
   leagueMemberGuard,
@@ -144,6 +145,7 @@ export const routes: Routes = [
         path: 'leagues/:leagueId/draft/setup',
         title: 'Draft Setup',
         canActivate: [leagueMemberGuard, commissionerGuard],
+        canDeactivate: [pendingDraftSaveGuard],
         loadComponent: () =>
           import('./features/draft/draft-setup/draft-setup').then(
             (module) => module.DraftSetup,

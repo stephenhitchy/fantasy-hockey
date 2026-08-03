@@ -1,4 +1,7 @@
 :host {
+  --rr-forward-position-accent: #efb04f;
+  --rr-defense-position-accent: #64c9db;
+  --rr-goalie-position-accent: #79a9ff;
   display: block;
 }
 
@@ -557,12 +560,28 @@
   background: var(--rr-scoreboard, #07111f);
 }
 
-.roster-starters div {
+.roster-starters .roster-position-slot {
+  --position-accent: var(--user-team-accent);
+  --hockey-term-accent: var(--position-accent);
+  --hockey-term-surface: color-mix(in srgb, var(--position-accent) 15%, #101b29);
   display: grid;
   min-height: 92px;
   place-items: center;
-  border: 2px solid color-mix(in srgb, var(--user-team-accent) 65%, #fff);
-  background: color-mix(in srgb, var(--user-team-primary) 18%, #101b29);
+  border: 2px solid var(--position-accent);
+  background: color-mix(in srgb, var(--position-accent) 11%, #101b29);
+  box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--position-accent) 82%, #fff 18%);
+}
+
+.roster-starters .forward-slot {
+  --position-accent: var(--rr-forward-position-accent);
+}
+
+.roster-starters .defense-slot {
+  --position-accent: var(--rr-defense-position-accent);
+}
+
+.roster-starters .goalie-slot {
+  --position-accent: var(--rr-goalie-position-accent);
 }
 
 .roster-starters span {
@@ -572,7 +591,7 @@
 }
 
 .roster-starters strong {
-  color: #fff;
+  color: var(--position-accent, #fff);
   font-family: var(--rr-font-display, inherit);
   font-size: 2.2rem;
 }
@@ -675,9 +694,9 @@
   font-weight: 950;
 }
 
-.position-value-card.forwards .position-value-badge { color: #efb04f; }
-.position-value-card.defense .position-value-badge { color: #64c9db; }
-.position-value-card.goalies .position-value-badge { color: #79a9ff; }
+.position-value-card.forwards .position-value-badge { color: var(--rr-forward-position-accent); }
+.position-value-card.defense .position-value-badge { color: var(--rr-defense-position-accent); }
+.position-value-card.goalies .position-value-badge { color: var(--rr-goalie-position-accent); }
 
 .position-value-card small,
 .position-value-card strong,

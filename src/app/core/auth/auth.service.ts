@@ -14,6 +14,7 @@ import {
 } from './auth-session.service';
 import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-terms.data';
 import { RINKRAT_NEUTRAL_ABBREVIATION } from '../../shared/pixel-theme/pixel-theme.data';
+import { initializeManagerProfile } from '../user/manager-profile-authority.service';
 
 export async function registerUser(
   email: string,
@@ -28,57 +29,84 @@ export async function registerUser(
     'Account creation took too long. Check your connection and try again.',
   );
   const user = await stabilizeSignedInSession(credential.user);
+  const normalizedFavoriteTeam =
+    favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION;
 
-  // Firestore is intentionally loaded only for registration. Normal sign-in
-  // no longer downloads the full database SDK before the login screen renders.
-  const [{ doc, serverTimestamp, setDoc }, { db }] = await Promise.all([
-    import('firebase/firestore'),
-    import('../firebase-firestore'),
-  ]);
-
-  await withTimeout(
-    setDoc(doc(db, 'users', user.uid), {
-      uid: user.uid,
-      email: user.email,
-      username,
-      createdAt: new Date(),
-      favoriteTeamAbbreviation: favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION,
-      favoriteTeamVariantId: 'current-home',
-      teamIdentityUnlocks: [],
-      reducedMotion: false,
-      defaultLandingPage: 'dashboard',
-      backgroundTheme: 'rink-dark',
-      injuryEmailEnabled: false,
-      hockeyExperience,
-      trainingCampVersion: 0,
-    }),
-    15_000,
-    'Your login was created, but the manager profile took too long to save.',
-  );
-
-  // The display-safe copy is repairable and must not make account creation
-  // fail during a staged rules/hosting deployment or a transient write error.
   try {
     await withTimeout(
-      setDoc(doc(db, 'publicProfiles', user.uid), {
-        uid: user.uid,
+      initializeManagerProfile({
         username,
-        favoriteTeamAbbreviation: favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION,
+        favoriteTeamAbbreviation: normalizedFavoriteTeam,
         favoriteTeamVariantId: 'current-home',
-        updatedAt: serverTimestamp(),
+        hockeyExperience,
       }),
-      8_000,
-      'The public manager profile took too long to save.',
+      20_000,
+      'Your login was created, but the manager profile took too long to save.',
     );
   } catch (error: unknown) {
-    console.warn(
-      'The account was created, but the public manager profile will be repaired after login.',
-      error,
+    if (!shouldUseLegacyRegistrationWrite(error)) {
+      throw error;
+    }
+
+    // A direct Firestore fallback keeps local emulators and staged deployments
+    // usable when the profile-authority callable has not been deployed yet.
+    const [{ doc, serverTimestamp, setDoc }, { db }] = await Promise.all([
+      import('firebase/firestore'),
+      import('../firebase-firestore'),
+    ]);
+
+    await withTimeout(
+      setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        username,
+        createdAt: serverTimestamp(),
+        favoriteTeamAbbreviation: normalizedFavoriteTeam,
+        favoriteTeamVariantId: 'current-home',
+        teamIdentityUnlocks: [],
+        reducedMotion: false,
+        defaultLandingPage: 'dashboard',
+        backgroundTheme: 'rink-dark',
+        injuryEmailEnabled: false,
+        hockeyExperience,
+        trainingCampVersion: 0,
+      }),
+      15_000,
+      'Your login was created, but the manager profile took too long to save.',
     );
+
+    try {
+      await withTimeout(
+        setDoc(doc(db, 'publicProfiles', user.uid), {
+          uid: user.uid,
+          username,
+          favoriteTeamAbbreviation: normalizedFavoriteTeam,
+          favoriteTeamVariantId: 'current-home',
+          updatedAt: serverTimestamp(),
+        }),
+        8_000,
+        'The public manager profile took too long to save.',
+      );
+    } catch (publicProfileError: unknown) {
+      console.warn(
+        'The account was created, but the public manager profile will be repaired after login.',
+        publicProfileError,
+      );
+    }
   }
 
-
   return user;
+}
+
+function shouldUseLegacyRegistrationWrite(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+
+  return code === 'functions/not-found' ||
+    code === 'functions/unavailable' ||
+    code === 'functions/unimplemented';
 }
 
 export async function loginUser(email: string, password: string): Promise<User> {

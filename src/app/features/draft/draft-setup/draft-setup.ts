@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -172,6 +172,20 @@ export class DraftSetup implements OnDestroy {
     clearInterval(this.clockTimer);
   }
 
+  canLeaveDraftSetup(): boolean {
+    return !this.saving();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  preventWindowExitWhileSaving(event: BeforeUnloadEvent): void {
+    if (!this.saving()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
   async loadDraftSetup(): Promise<void> {
     const leagueId = this.route.snapshot.paramMap.get('leagueId');
     const user = await waitForAuthUser();
@@ -305,6 +319,10 @@ export class DraftSetup implements OnDestroy {
   }
 
   async saveDraftOrder(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+
     this.errorMessage.set('');
     this.successMessage.set('');
     this.projectionPreparationWarning.set('');

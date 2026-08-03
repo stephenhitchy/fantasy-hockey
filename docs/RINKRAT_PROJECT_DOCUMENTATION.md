@@ -2,6 +2,32 @@
 
 _Consolidated 2026-07-30._
 
+
+## Batch M2.2 — neutral profile authority, Training Camp polish, and draft-save lock
+
+This hotfix removes the browser Firestore write path that produced a `400` / `Missing or insufficient permissions` failure when a manager selected the neutral `RR` RinkRat identity. Registration, automatic favorite-team changes, and full account-preference saves now use the authenticated `saveManagerProfile` callable. The callable validates the same supported teams and preferences, including `RR`, then writes the private `users/{uid}` profile and display-safe `publicProfiles/{uid}` copy atomically with Admin SDK authority. A narrowly scoped direct-registration fallback remains only for local or staged environments where the callable is not deployed; validation and permission failures are never silently retried through that fallback.
+
+Training Camp roster slots now share the same position accents as the value guide: gold for LW/C/RW, cyan for D, and blue for the team goalie unit. Glossary popovers support start, center, and end alignment; the rightmost goalie definition uses end alignment so the lesson card no longer clips it.
+
+Draft Setup now enters a full-page saving state as soon as **Save Draft Settings** is pressed. Angular route changes are denied by `pendingDraftSaveGuard` while rankings and the draft time are being saved. A `beforeunload` warning covers browser refresh, tab close, and browser-level navigation. The page unlocks automatically after success or failure.
+
+Verification command:
+
+```bash
+npm run verify:batchm2-2
+npm run build:all
+```
+
+Deployment order:
+
+```bash
+firebase deploy --only functions:saveManagerProfile -m "Batch M2.2 manager profile authority"
+firebase deploy --only firestore:rules -m "Batch M2.2 neutral profile rule refresh"
+firebase deploy --only hosting:app -m "Batch M2.2 Training Camp and draft save lock"
+```
+
+Batch M2.2 does not introduce a new Firestore schema or index. The packaged rules already contain the `RR` validation added in Batch M2, but they are intentionally redeployed here so a stale production ruleset cannot reject later browser-owned profile updates such as Training Camp completion or identity-unlock persistence.
+
 This file combines the current project context, implementation notes, operational guides, and historical manual test checklists that previously lived as many loose files in the project root.
 
 ## Local browser-workflow email safety

@@ -3332,6 +3332,8 @@ export {
   makeSecureDraftPick,
 } from './draft-authority';
 
+export { saveManagerProfile } from './manager-profile-authority';
+
 export { applyImmediateRosterMove } from './roster-moves';
 
 export {

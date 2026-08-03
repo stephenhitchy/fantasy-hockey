@@ -743,3 +743,63 @@
   border-top-color: var(--rr-draft-setup-migration-color-18);
   color: #dceafe;
 }
+
+.draft-save-lock {
+  position: fixed;
+  z-index: 5000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--page-bg) 82%, transparent);
+  backdrop-filter: blur(5px);
+  cursor: progress;
+  touch-action: none;
+}
+
+.draft-save-lock-card {
+  display: grid;
+  width: min(460px, 100%);
+  justify-items: center;
+  gap: 10px;
+  padding: 26px 24px;
+  border: 3px solid var(--user-team-accent);
+  background: var(--surface-1);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--surface-1) 65%, white 35%),
+    7px 7px 0 color-mix(in srgb, var(--page-bg) 68%, black 32%);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.draft-save-lock-card strong {
+  font-family: var(--rr-font-display, inherit);
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  line-height: 1.1;
+}
+
+.draft-save-lock-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.draft-save-lock-card small {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+@media (max-width: 560px) {
+  .draft-save-lock {
+    padding: 16px;
+  }
+
+  .draft-save-lock-card {
+    padding: 22px 16px;
+  }
+}

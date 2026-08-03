@@ -12,6 +12,10 @@ import { auth, db } from '../firebase';
 import { functions } from '../firebase-functions';
 import type { TeamIdentityUnlockRequirement } from '../../shared/pixel-theme/pixel-theme.data';
 import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-terms.data';
+import {
+  saveManagerAccountSettings,
+  saveManagerIdentity,
+} from './manager-profile-authority.service';
 
 export type DefaultLandingPage = 'dashboard' | 'lastLeague';
 export type BackgroundTheme = 'rink-dark' | 'oled-black' | 'ice-gray' | 'light-ice';
@@ -227,22 +231,14 @@ export async function updateFavoriteTeam(
   favoriteTeamAbbreviation: string,
   favoriteTeamVariantId: string,
 ): Promise<void> {
-  const currentProfile = await loadPrivateProfileForPublicUpdate(uid);
-  const userRef = doc(db, 'users', uid);
-  const publicRef = doc(db, 'publicProfiles', uid);
-  const batch = writeBatch(db);
+  if (auth.currentUser?.uid !== uid) {
+    throw new Error('You must be logged in to save your team identity.');
+  }
 
-  batch.update(userRef, {
+  await saveManagerIdentity({
     favoriteTeamAbbreviation,
     favoriteTeamVariantId,
   });
-  batch.set(publicRef, getPublicProfileWrite(uid, {
-    ...currentProfile,
-    favoriteTeamAbbreviation,
-    favoriteTeamVariantId,
-  }));
-
-  await batch.commit();
 }
 
 export async function updateTeamIdentityUnlocks(
@@ -260,11 +256,11 @@ export async function updateUserAccountSettings(
   uid: string,
   settings: UserAccountSettingsUpdate,
 ): Promise<void> {
-  const userRef = doc(db, 'users', uid);
-  const publicRef = doc(db, 'publicProfiles', uid);
-  const batch = writeBatch(db);
+  if (auth.currentUser?.uid !== uid) {
+    throw new Error('You must be logged in to save your account settings.');
+  }
 
-  batch.update(userRef, {
+  await saveManagerAccountSettings({
     username: settings.username,
     favoriteTeamAbbreviation: settings.favoriteTeamAbbreviation,
     favoriteTeamVariantId: settings.favoriteTeamVariantId,
@@ -275,7 +271,4 @@ export async function updateUserAccountSettings(
     injuryEmailEnabled: settings.injuryEmailEnabled,
     hockeyExperience: settings.hockeyExperience,
   });
-  batch.set(publicRef, getPublicProfileWrite(uid, settings), { merge: true });
-
-  await batch.commit();
 }
