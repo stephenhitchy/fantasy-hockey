@@ -75,7 +75,9 @@
     "test:cycle-rollover-hotfix:run": "node --test --test-concurrency=1 test/cycle-rollover-hotfix/*.test.mjs",
     "verify:batchm2-1": "npm run verify:batchm2 && npm run test:cycle-rollover-hotfix:run",
     "test:batchm2-2:run": "node --test --test-concurrency=1 test/batchm2-2-polish/*.test.mjs",
-    "verify:batchm2-2": "npm run verify:batchm2-1 && npm run test:batchm2-2:run"
+    "verify:batchm2-2": "npm run verify:batchm2-1 && npm run test:batchm2-2:run",
+    "test:future-lineup-projection:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/future-lineup-projection/*.test.mjs",
+    "verify:batchm2-3": "npm run verify:batchm2-2 && npm run test:future-lineup-projection:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

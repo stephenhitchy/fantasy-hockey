@@ -119,6 +119,12 @@ import {
   PROJECTION_NEUTRAL_POINTS,
   ScoreDeltaAnimation,
 } from './cycle-one.models';
+import {
+  buildEffectiveCycleLineupPicks,
+  getCycleLineupPickIdentity,
+  isCycleWindowIdentityLocked,
+  isPendingMovePlannedForCycle,
+} from './cycle-lineup-preview.util';
 
 @Component({
   selector: 'app-cycle-one',
@@ -827,6 +833,8 @@ export class CycleOne implements OnDestroy {
   private stopLiveScoringControlListener: (() => void) | null = null;
   private stopHistoricalReplayListener: (() => void) | null = null;
   private stopRosterListeners = new Map<string, () => void>();
+  private displayedRosterOwnerIds = new Set<string>();
+  private loadedRosterOwnerIds = new Set<string>();
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
   private effectivePicksKey: string | null = null;
@@ -853,51 +861,47 @@ export class CycleOne implements OnDestroy {
   private observedScoreSaveChain: Promise<void> = Promise.resolve();
 
   private getCycleDisplayPickIdentity(pick: DraftPick): string {
-    return [pick.ownerId, pick.rosterSlotId ?? `${pick.asset.position}:${pick.overallPick}`].join('::');
+    return getCycleLineupPickIdentity(pick);
   }
 
-  private getActiveLineupPicks(picks: DraftPick[]): DraftPick[] {
-    return picks.filter((pick) => pick.rosterArea !== 'bench');
-  }
-
-  private buildEffectiveCyclePicks(snapshotPicks: DraftPick[], livePicks: DraftPick[]): DraftPick[] {
-    const activeSnapshotPicks = this.getActiveLineupPicks(snapshotPicks);
-
-    if (activeSnapshotPicks.length === 0) {
-      return this.getActiveLineupPicks(livePicks);
-    }
-
-    const effectiveByIdentity = new Map<string, DraftPick>();
-
-    for (const pick of activeSnapshotPicks) {
-      effectiveByIdentity.set(this.getCycleDisplayPickIdentity(pick), pick);
-    }
-
-    for (const livePick of this.getActiveLineupPicks(livePicks)) {
-      const identity = this.getCycleDisplayPickIdentity(livePick);
-
-      if (!effectiveByIdentity.has(identity)) {
-        effectiveByIdentity.set(identity, {
-          ...livePick,
-          rosterArea: livePick.rosterArea ?? 'active',
-        });
-      }
-    }
-
-    return Array.from(effectiveByIdentity.values());
+  private getCycleProjectionPreviewSignature(asset: DraftableAsset): string {
+    return [
+      asset.frozenCycleProjectionPoints ?? '',
+      asset.projectedCyclePoints ?? '',
+      asset.availabilityAdjustedCyclePoints ?? '',
+      asset.floorAdjustedCyclePoints ?? '',
+      asset.draftProjectedCyclePoints ?? '',
+      asset.targetProjectionCycleNumber ?? '',
+      asset.sharedProjectionSnapshotId ?? '',
+      asset.projectionGeneratedAt ?? '',
+    ].join(':');
   }
 
   private refreshEffectivePicks(): void {
     const snapshotPicks = this.cycleRosterSnapshotPicks;
     const livePicks = this.liveDraftPicks;
-    const effectivePicks = this.buildEffectiveCyclePicks(snapshotPicks, livePicks);
+    const effectivePicks = buildEffectiveCycleLineupPicks({
+      cycleNumber: this.cycleNumber,
+      snapshotPicks,
+      liveDraftPicks: livePicks,
+      rostersByOwner: this.teamRostersByOwner(),
+      projectionAssets: this.playerPool(),
+      teamWindowsByOwner: this.teamWindowsByOwner(),
+      rosterOwnerIdsExpected: this.displayedRosterOwnerIds,
+      rosterOwnerIdsLoaded: this.loadedRosterOwnerIds,
+    });
 
-    const source = snapshotPicks.length > 0 ? 'cycle-snapshot-plus-pending-slots' : 'live-draft-picks';
+    const source = snapshotPicks.length > 0
+      ? 'cycle-snapshot-plus-roster-preview'
+      : 'current-roster-preview';
 
     const nextKey = [
       source,
       effectivePicks
-        .map((pick) => `${this.getCycleDisplayPickIdentity(pick)}:${pick.asset.assetKey}`)
+        .map(
+          (pick) =>
+            `${this.getCycleDisplayPickIdentity(pick)}:${pick.asset.assetKey}:${this.getCycleProjectionPreviewSignature(pick.asset)}`,
+        )
         .join('|'),
     ].join('::');
 
@@ -1629,6 +1633,8 @@ export class CycleOne implements OnDestroy {
       stopRosterListener();
     }
     this.stopRosterListeners.clear();
+    this.displayedRosterOwnerIds.clear();
+    this.loadedRosterOwnerIds.clear();
 
     this.stopCyclesListener = null;
     this.stopCycleListener = null;
@@ -1649,6 +1655,8 @@ export class CycleOne implements OnDestroy {
     this.liveDraftPicks = [];
     this.cycleRosterSnapshotPicks = [];
     this.effectivePicksKey = null;
+    this.displayedRosterOwnerIds.clear();
+    this.loadedRosterOwnerIds.clear();
 
     this.league.set(null);
     this.teams.set([]);
@@ -1839,6 +1847,7 @@ export class CycleOne implements OnDestroy {
           this.teamWindowsByOwner.set(
             Object.fromEntries(teamWindows.map((entry) => [entry.ownerId, entry])),
           );
+          this.refreshEffectivePicks();
         },
       );
 
@@ -2152,6 +2161,8 @@ export class CycleOne implements OnDestroy {
       }
     }
 
+    this.displayedRosterOwnerIds = ownerIds;
+
     for (const [ownerId, stopListener] of this.stopRosterListeners.entries()) {
       if (ownerIds.has(ownerId)) {
         continue;
@@ -2159,6 +2170,7 @@ export class CycleOne implements OnDestroy {
 
       stopListener();
       this.stopRosterListeners.delete(ownerId);
+      this.loadedRosterOwnerIds.delete(ownerId);
       this.teamRostersByOwner.update((current) => {
         const next = { ...current };
         delete next[ownerId];
@@ -2171,26 +2183,41 @@ export class CycleOne implements OnDestroy {
         continue;
       }
 
+      this.loadedRosterOwnerIds.delete(ownerId);
+      this.teamRostersByOwner.update((current) => {
+        const next = { ...current };
+        delete next[ownerId];
+        return next;
+      });
+
       const stopListener = listenToFantasyRoster(
         this.leagueId,
         ownerId,
         (roster) => {
+          this.loadedRosterOwnerIds.add(ownerId);
           this.teamRostersByOwner.update((current) => ({
             ...current,
             [ownerId]: roster,
           }));
+          this.refreshEffectivePicks();
         },
         (error) => {
           console.error(`Unable to load bench for ${ownerId}.`, error);
+          this.loadedRosterOwnerIds.add(ownerId);
           this.teamRostersByOwner.update((current) => ({
             ...current,
             [ownerId]: null,
           }));
+          this.refreshEffectivePicks();
         },
       );
 
       this.stopRosterListeners.set(ownerId, stopListener);
     }
+
+    // Once a matchup identifies the roster owners, suppress the original-draft
+    // fallback until those live roster documents finish loading.
+    this.refreshEffectivePicks();
   }
 
   private createEmptyBenchSlots(): BenchRosterSlot[] {
@@ -2363,6 +2390,38 @@ export class CycleOne implements OnDestroy {
       : availability.label;
   }
 
+  private getActiveRosterSlotForPick(pick: DraftPick) {
+    if (!pick.rosterSlotId) {
+      return null;
+    }
+
+    return (
+      this.teamRostersByOwner()[pick.ownerId]?.activeSlots.find(
+        (slot) => slot.slotId === pick.rosterSlotId,
+      ) ?? null
+    );
+  }
+
+  private isQueuedIncomingPreview(pick: DraftPick): boolean {
+    const slot = this.getActiveRosterSlotForPick(pick);
+    const pendingMove = slot?.pendingMove;
+
+    if (!pendingMove || !isPendingMovePlannedForCycle(pendingMove, this.cycleNumber)) {
+      return false;
+    }
+
+    return this.getBenchAssetKey(pendingMove.incomingAsset) === pick.asset.assetKey;
+  }
+
+  private isPlannedFutureLineupPick(pick: DraftPick): boolean {
+    const identity = this.getCycleDisplayPickIdentity(pick);
+    const snapshotPick = this.cycleRosterSnapshotPicks.find(
+      (candidate) => this.getCycleDisplayPickIdentity(candidate) === identity,
+    );
+
+    return !snapshotPick || snapshotPick.asset.assetKey !== pick.asset.assetKey;
+  }
+
   getWindowForPick(pick: DraftPick): FantasyAssetCycleWindow | null {
     const teamWindows = this.teamWindowsByOwner()[pick.ownerId];
 
@@ -2376,6 +2435,15 @@ export class CycleOne implements OnDestroy {
       );
 
       if (slotWindow) {
+        if (
+          slotWindow.assetKey !== pick.asset.assetKey &&
+          !isCycleWindowIdentityLocked(slotWindow)
+        ) {
+          // A queued/current roster preview may replace an untouched stale
+          // snapshot. Do not show the outgoing player's NHL schedule markers.
+          return null;
+        }
+
         return slotWindow;
       }
     }
@@ -2442,12 +2510,30 @@ export class CycleOne implements OnDestroy {
   getPendingWindowCallout(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
     const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
+
+    if (this.isQueuedIncomingPreview(pick)) {
+      return `Scheduled move · Matchup ${cycleNumber}`;
+    }
+
+    if (this.isPlannedFutureLineupPick(pick)) {
+      return `Planned starter · Matchup ${cycleNumber}`;
+    }
+
     return `Matchup ${cycleNumber} has not started for this roster slot yet.`;
   }
 
   getPendingWindowTooltip(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
     const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
+
+    if (this.isQueuedIncomingPreview(pick)) {
+      return `${this.getAssetName(pick.asset)} is scheduled to take this roster slot as soon as the outgoing player's current six-game count ends. The Matchup ${cycleNumber} projection is an estimate until this slot starts, then it locks to the new player.`;
+    }
+
+    if (this.isPlannedFutureLineupPick(pick)) {
+      return `${this.getAssetName(pick.asset)} is the player currently assigned to this future roster slot. The Matchup ${cycleNumber} projection is an estimate until the slot's six-game count begins.`;
+    }
+
     return `This player appears here early so you can track the whole roster. ${this.getCycleLabel()} will begin for this slot when ${this.getAssetName(pick.asset)} reaches the first NHL team game in this six-game count.`;
   }
 
@@ -3075,6 +3161,7 @@ export class CycleOne implements OnDestroy {
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
       this.playerPool.set(await loadDraftPlayerPool(true));
+      this.refreshEffectivePicks();
     } catch (error: unknown) {
       console.warn('Unable to load player pool projection fallback.', error);
     }

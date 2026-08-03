@@ -3,6 +3,153 @@
 _Consolidated 2026-07-30._
 
 
+## Batch M2.3 — Future Matchup Lineup Integrity and Scoring Review
+
+### Future-lineup display defect corrected
+
+An overlapping future matchup could briefly or permanently display the player who originally occupied a starting roster slot even after that player had been replaced. The displayed identity corrected itself only after the incoming player recorded the first counted NHL game in the new six-game window.
+
+The server-authoritative roster and asynchronous window behavior were not the cause. The Game Center presentation layer combined two sources:
+
+1. immutable cycle roster snapshots for slots already represented in that matchup, and
+2. the original draft-pick collection for any slot that had not yet received a new snapshot.
+
+That fallback was safe immediately after the draft but stale after an add/drop. Future matchup documents are intentionally allowed to be partial while roster slots finish their prior six-game windows at different times. Therefore an untouched future slot could continue borrowing the original drafted player until the server created that slot's next immutable window after its first game.
+
+### Manager-facing lineup resolution
+
+Game Center now resolves each persistent active roster slot according to its lifecycle:
+
+- **Started or completed six-game window:** keep the immutable cycle snapshot and its frozen projection, even when the live roster has since changed.
+- **Untouched future window:** preview the authoritative current roster assignment.
+- **Scheduled add/drop, waiver award, open-slot addition, or active/bench change:** once the viewed matchup reaches the move's requested and eligibility matchup number, preview the incoming player immediately rather than the outgoing player.
+- **Move not eligible yet:** continue showing the player who legally owns the earlier matchup window.
+- **Authoritative empty slot:** do not resurrect the previously drafted player.
+- **Roster listener still loading:** suppress an unlocked stale snapshot rather than flashing the wrong player. If the roster read genuinely fails, fall back to the saved snapshot so the page remains usable.
+
+A scheduled incoming player is labelled **Scheduled move · Matchup N**. A current roster assignment that is waiting for its first game is labelled **Planned starter · Matchup N**.
+
+### Projection integrity
+
+A future-lineup preview is not yet an immutable scoring window. For that reason it:
+
+- clears frozen projection fields inherited from an older player or matchup;
+- prefers the latest shared projection for the incoming/current player when one is available for the viewed matchup;
+- refreshes when roster, cycle-window, or player-pool projection data changes;
+- includes projection values in the effective-lineup cache key so a new projection snapshot cannot be ignored merely because the player identity stayed the same; and
+- freezes normally through the existing server path when that roster slot actually begins its six-game window.
+
+When an untouched stale window belongs to the outgoing player, Game Center does not display that outgoing player's schedule markers beneath the incoming-player preview. The immutable window ID and actual scoring history remain unchanged until the server performs the legal slot transition.
+
+### Architecture and deployment impact
+
+This is a browser presentation/projection-integrity correction only. It does not change:
+
+- scoring values or Scoring V3;
+- Projection V9 model weights or manager-facing calibration multipliers;
+- roster authority, transaction activation, or waiver behavior;
+- Cloud Functions;
+- Firestore rules, indexes, or schemas;
+- asynchronous six-game rollover; or
+- playoff banking/backfill.
+
+Deployment is Hosting-only.
+
+### Scoring review conclusion
+
+The two supplied test matchups do not justify a scoring-rule change by themselves. The stronger roster was projected to win both and did win the completed matchup, while the actual margin was narrowed by an injury and an unusually strong individual six-game result. That is desirable fantasy variance rather than evidence that roster strength is absent.
+
+Several current design choices intentionally keep one roster from becoming unbeatable:
+
+- Fourteen scoring starters average out individual differences.
+- Forward and defense volume categories create useful floors.
+- Defense is deliberately steady through time on ice, blocks, hits, and shots.
+- Forward goals and assists use diminishing returns within an NHL game, limiting one explosive night without removing upside.
+- One team-goalie unit is important but capped at 28 points per NHL game.
+- Projection V9 blends multiple seasons, caps short-term form/role/schedule adjustments, and applies small manager-facing discounts instead of chasing every hot week.
+
+Increasing goal or assist values now would not reliably reward only the better draft. It would also magnify one-week breakout variance, making performances like the Cutter Gauthier test window even more decisive. If future evidence shows insufficient talent separation, the first calibration should be a narrow review of upper-tier projection/ranking compression—not a broad increase to earned scoring.
+
+Recommended evaluation targets for the historical calibration phase are product goals, not claims about current measured performance:
+
+- projected favorite wins roughly 60–70% of ordinary matchups;
+- clearly top-quartile versus bottom-quartile lineups win roughly 70–80%;
+- upsets remain common enough that lineup management and injuries matter;
+- projected margins meaningfully distinguish elite, average, and replacement-level starters without deciding the matchup in advance; and
+- position medians, volatility, replacement value, goalie share, and cap frequency remain consistent with the intended forward/defense/goalie identities.
+
+Do not tune from two matchups. Re-evaluate after at least 20–30 completed matchup pairs, and preferably a full historical season, using Projection Accuracy to compare projected margin, actual margin, favorite win rate, mean signed error, mean absolute error, and results by position. Re-run the current test after this future-lineup fix because the outgoing-player display defect could also have made the visible future team projection use the wrong player.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm2-3
+npm run build:all
+```
+
+The focused M2.3 suite verifies:
+
+- queued incoming players appear in their eligible future matchup before their first counted game;
+- the same move does not replace the current matchup early;
+- active and completed window identities remain immutable;
+- stale unlocked snapshots are hidden while live roster data loads;
+- a failed roster read falls back safely;
+- empty slots do not resurrect old drafted players;
+- `eligibleFromCycleNumber` prevents historical roster contamination;
+- requested and asset eligibility dates both constrain a scheduled move;
+- scheduled game IDs alone do not falsely lock a stale identity;
+- future previews refresh from roster, window, and projection changes; and
+- Scoring V3 and Projection V9 calibration files remain unchanged.
+
+### Verification completed for the packaged source
+
+The dependency-free verification available in the packaging workspace completed successfully:
+
+- **12/12** focused future-lineup/projection-integrity tests;
+- **188/188** available non-emulator, non-draft-authority regression tests;
+- focused strict TypeScript type-check for the new pure lineup resolver and its models;
+- syntax transpilation of **203 TypeScript files** with zero errors;
+- structural parsing of **46 CSS files** with zero errors;
+- parsing of **16 JSON/JSONC files** with zero errors; and
+- design-system, accessibility, shared-interface, page-interface, competition-interface, mobile-readability, and beginner-language audits.
+
+A complete Angular build, Functions build, Firestore emulator suite, and server draft-authority suite still need to run on the development Mac. The packaging workspace uses Node `22.16.0`, below the root requirement of Node `22.22.3` or newer, and does not contain installed frontend or Functions dependencies.
+
+### Manual regression checklist
+
+1. Queue an add/drop for a starter whose current six-game window is still active.
+2. Open the target future matchup before the outgoing player finishes.
+3. Confirm the incoming player already occupies that future slot and is labelled **Scheduled move**.
+4. Return to the current matchup and confirm the outgoing player remains there with all existing games and points.
+5. Cancel the scheduled move and confirm the future matchup reverts to the legal current roster player.
+6. Queue the move again and advance through the outgoing player's sixth game.
+7. Confirm the incoming player remains in the future matchup after activation and that the label changes from a preview to the normal window state.
+8. Confirm the incoming player inherits no games, points, or markers from the outgoing player.
+9. Change the shared projection snapshot without changing the player and confirm the future projected total refreshes.
+10. Test an empty active slot and confirm an old drafted player does not reappear.
+11. Test one active and one untouched slot in the same future matchup; the active slot must preserve its snapshot while the untouched slot follows the current/queued roster.
+12. Repeat on desktop and phone, then compare the corrected projected team totals with the original scoring screenshots.
+
+### Deployment
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M2.3 future lineup projection integrity"
+```
+
+No Function, Firestore-rule, index, or data-migration deployment is required.
+
+### Rollback guidance
+
+A Hosting-only rollback to Batch M2.2 is mechanically safe because this batch performs no writes or schema changes. The old Hosting build will, however, resume showing original/stale players in untouched future matchup slots until their new windows begin.
+
+---
+
 ## Batch M2.2 — neutral profile authority, Training Camp polish, and draft-save lock
 
 This hotfix removes the browser Firestore write path that produced a `400` / `Missing or insufficient permissions` failure when a manager selected the neutral `RR` RinkRat identity. Registration, automatic favorite-team changes, and full account-preference saves now use the authenticated `saveManagerProfile` callable. The callable validates the same supported teams and preferences, including `RR`, then writes the private `users/{uid}` profile and display-safe `publicProfiles/{uid}` copy atomically with Admin SDK authority. A narrowly scoped direct-registration fallback remains only for local or staged environments where the callable is not deployed; validation and permission failures are never silently retried through that fallback.
@@ -180,19 +327,19 @@ Scoring rules are frozen in league/cycle records so completed games remain repro
 
 PROJECTION ENGINE
 -----------------
-Current shared projection version: Projection V8.
+Current shared projection version: Projection V9.
 Projection snapshots are shared and stored in Firestore. Per-slot window projections are frozen when the window begins.
 
-Drafts must use a verified Projection V8 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
+Drafts must use a verified Projection V9 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
 
 A valid draft projection must:
-  use Projection V8;
+  use Projection V9;
   not have generationReason “server-emergency”;
   contain a healthy asset pool;
   be generated for the actual number of participating fantasy teams;
   remain available through the draft.
 
-If the current projection pointer is bad but a healthy recent V8 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
+If the current projection pointer is bad but a healthy recent V9 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
 
 DRAFT SYSTEM
 ------------
@@ -439,7 +586,7 @@ CURRENT HANDOFF STATUS
 The project includes:
   server-controlled draft opening and exact deadline tasks;
   per-league draft automation leases;
-  verified Projection V8 draft rankings with a frozen snapshot;
+  verified Projection V9 draft rankings with a frozen snapshot;
   automatic Cycle 1 creation immediately after draft completion;
   minute-by-minute Cycle 1 recovery;
   scheduled scoring/cycle/playoff automation;
@@ -4426,19 +4573,19 @@ Scoring rules are frozen in league/cycle records so completed games remain repro
 
 PROJECTION ENGINE
 -----------------
-Current shared projection version: Projection V8.
+Current shared projection version: Projection V9.
 Projection snapshots are shared and stored in Firestore. Per-slot window projections are frozen when the window begins.
 
-Drafts must use a verified Projection V8 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
+Drafts must use a verified Projection V9 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
 
 A valid draft projection must:
-  use Projection V8;
+  use Projection V9;
   not have generationReason “server-emergency”;
   contain a healthy asset pool;
   be generated for the actual number of participating fantasy teams;
   remain available through the draft.
 
-If the current projection pointer is bad but a healthy recent V8 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
+If the current projection pointer is bad but a healthy recent V9 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
 
 DRAFT SYSTEM
 ------------
@@ -4685,7 +4832,7 @@ CURRENT HANDOFF STATUS
 The project includes:
   server-controlled draft opening and exact deadline tasks;
   per-league draft automation leases;
-  verified Projection V8 draft rankings with a frozen snapshot;
+  verified Projection V9 draft rankings with a frozen snapshot;
   automatic Cycle 1 creation immediately after draft completion;
   minute-by-minute Cycle 1 recovery;
   scheduled scoring/cycle/playoff automation;
@@ -5080,19 +5227,19 @@ Scoring rules are frozen in league/cycle records so completed games remain repro
 
 PROJECTION ENGINE
 -----------------
-Current shared projection version: Projection V8.
+Current shared projection version: Projection V9.
 Projection snapshots are shared and stored in Firestore. Per-slot window projections are frozen when the window begins.
 
-Drafts must use a verified Projection V8 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
+Drafts must use a verified Projection V9 snapshot. The server must not silently use the old emergency low-value ranking board. A live draft pins the exact verified snapshot ID so the Draft Room and server auto-picks use the same rankings for the full draft.
 
 A valid draft projection must:
-  use Projection V8;
+  use Projection V9;
   not have generationReason “server-emergency”;
   contain a healthy asset pool;
   be generated for the actual number of participating fantasy teams;
   remain available through the draft.
 
-If the current projection pointer is bad but a healthy recent V8 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
+If the current projection pointer is bad but a healthy recent V9 snapshot exists, the server may restore the healthy pointer. If no verified snapshot exists, the draft should remain stopped rather than make inaccurate selections.
 
 DRAFT SYSTEM
 ------------
@@ -5339,7 +5486,7 @@ CURRENT HANDOFF STATUS
 The project includes:
   server-controlled draft opening and exact deadline tasks;
   per-league draft automation leases;
-  verified Projection V8 draft rankings with a frozen snapshot;
+  verified Projection V9 draft rankings with a frozen snapshot;
   automatic Cycle 1 creation immediately after draft completion;
   minute-by-minute Cycle 1 recovery;
   scheduled scoring/cycle/playoff automation;
