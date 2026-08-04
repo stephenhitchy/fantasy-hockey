@@ -4,8 +4,12 @@
   <p class="simulator-loading">{{ errorMessage() }}</p>
 } @else {
   <section class="simulator-page">
-    <a class="back-link" [routerLink]="['/leagues', leagueId, 'playoffs']">
-      ← Back to Playoffs
+    <a
+      class="league-return-link"
+      [routerLink]="['/leagues', leagueId, 'playoffs']"
+      aria-label="Back to Playoffs"
+    >
+      Back to Playoffs
     </a>
 
     <header class="simulator-hero">

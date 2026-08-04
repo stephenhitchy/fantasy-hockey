@@ -5,10 +5,11 @@
 } @else {
   <section class="matchup-overview-page">
     <a
-      class="back-link"
+      class="league-return-link"
       [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
+      [attr.aria-label]="'Back to ' + getCycleLabel()"
     >
-      ← Back to {{ getCycleLabel() }}
+      Back to {{ getCycleLabel() }}
     </a>
 
     <header class="matchup-overview-header">

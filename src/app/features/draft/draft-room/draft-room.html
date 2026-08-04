@@ -5,10 +5,10 @@
 } @else {
   <section class="draft-room-page rr-page-shell">
     <a
-      class="back-link"
+      class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-    >
-      ← Back to League
+     aria-label="Back to league home">
+      Back to League
     </a>
 
     <header class="draft-room-header">
@@ -241,17 +241,17 @@
         [class.clock-urgent]="draftClockIsUrgent()"
         aria-label="Live draft status"
       >
-        <div>
+        <div class="draft-mobile-command-owner">
           <span>{{ getCurrentPickNumberLabel() }}</span>
           <strong>{{ getCurrentPickTeamName() }}</strong>
+          <small [class]="'draft-mobile-command-connection ' + getRealtimeConnectionClass()">
+            <i aria-hidden="true"></i>
+            {{ getRealtimeConnectionLabel() }}
+          </small>
         </div>
         <div class="draft-mobile-command-clock">
           <strong>{{ draftClockDisplay() }}</strong>
           <span>{{ getDraftClockStatusLabel() }}</span>
-        </div>
-        <div [class]="'draft-mobile-command-connection ' + getRealtimeConnectionClass()">
-          <i aria-hidden="true"></i>
-          <span>{{ getRealtimeConnectionLabel() }}</span>
         </div>
 
         @if (draft()?.clockStatus === 'stopped' && isMyTurn()) {
@@ -982,7 +982,12 @@
       }
 
       @if (pickSubmissionPhase() !== 'idle') {
-        <div class="draft-pick-submission-shield" role="status" aria-live="assertive">
+        <div
+          class="draft-pick-submission-shield"
+          appViewportOverlayPortal
+          role="status"
+          aria-live="assertive"
+        >
           <div class="draft-pick-submission-card rr-card rr-card--padded">
             <span class="draft-submit-spinner" aria-hidden="true"></span>
             <strong>

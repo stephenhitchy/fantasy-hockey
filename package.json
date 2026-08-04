@@ -85,7 +85,9 @@
     "test:batchm3-m4:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm3-m4-mobile-live/*.test.mjs",
     "verify:batchm3-m4": "npm run verify:batchf1-1 && npm run test:batchm3-m4:run",
     "test:batchm5-v1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-v1-mobile-roster/*.test.mjs",
-    "verify:batchm5-v1": "npm run verify:batchm3-m4 && npm run test:batchm5-v1:run"
+    "verify:batchm5-v1": "npm run verify:batchm3-m4 && npm run test:batchm5-v1:run",
+    "test:batchm5-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-1-mobile-overlay-replay/*.test.mjs",
+    "verify:batchm5-1": "npm run verify:batchm5-v1 && npm run test:batchm5-1:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

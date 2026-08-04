@@ -6,8 +6,13 @@
   </p>
 } @else {
   <section class="asset-detail-page">
-    <a class="back-link" [href]="getBackUrl()" (click)="navigateBack($event)">
-      ← {{ getBackLinkLabel() }}
+    <a
+      class="league-return-link"
+      [href]="getBackUrl()"
+      (click)="navigateBack($event)"
+      [attr.aria-label]="getBackLinkLabel()"
+    >
+      {{ getBackLinkLabel() }}
     </a>
 
     @if (!cycle()) {
@@ -53,7 +58,7 @@
 
         <section class="summary-grid">
           <article>
-            <span>Counted NHL Games</span>
+            <span>Roster-Slot Schedule</span>
             <strong>{{ getCycleGameRangeLabel() }}</strong>
           </article>
 
@@ -91,6 +96,14 @@
           </article>
         </section>
 
+        <aside
+          class="detail-source-notice"
+          [class.historical-replay-notice]="isHistoricalReplayDetail()"
+        >
+          <strong>{{ isHistoricalReplayDetail() ? 'Historical Replay Detail' : 'Game Center Detail' }}</strong>
+          <span>{{ getDetailSourceNotice() }}</span>
+        </aside>
+
         @if (detailLoading()) {
           <p class="status-card">Loading game-by-game stats...</p>
         }
@@ -127,14 +140,13 @@
                   <div class="game-main">
                     <div>
                       <strong>
-                        Matchup Game {{ row.cycleGameNumber }} · NHL Team Game
-                        {{ row.teamGameNumber }}
+                        Roster-Slot Game {{ row.cycleGameNumber }}
                         ·
                         {{ row.gameDate }}
                       </strong>
 
                       <span>
-                        vs {{ row.opponentAbbreviation }}
+                        {{ row.scheduleLabel }}
                         ·
                         {{ row.scoreLabel }}
                       </span>

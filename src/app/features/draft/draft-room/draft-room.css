@@ -1861,7 +1861,7 @@
 
 .draft-pick-submission-shield {
   position: fixed;
-  z-index: 1200;
+  z-index: var(--rr-z-viewport-overlay, 2000);
   inset: 0;
   display: grid;
   place-items: center;
@@ -1938,33 +1938,35 @@
   .draft-mobile-command-bar {
     position: sticky;
     z-index: 42;
-    top: 6px;
+    top: max(4px, env(safe-area-inset-top));
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 6px 10px;
-    margin: 10px 0 8px;
-    padding: 10px;
+    gap: 8px;
+    min-height: 62px;
+    margin: 6px 0 8px;
+    padding: 7px 8px;
     border: 1px solid color-mix(in srgb, var(--rr-info) 42%, transparent);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--rr-scoreboard-raised) 96%, var(--rr-scoreboard));
-    box-shadow: 0 8px 22px color-mix(in srgb, var(--rr-scoreboard) 24%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--rr-scoreboard-raised) 98%, var(--rr-scoreboard));
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--rr-scoreboard) 22%, transparent);
     color: var(--rr-ice-white);
-    backdrop-filter: blur(9px);
   }
 
   .draft-mobile-command-bar.clock-urgent {
     border-color: color-mix(in srgb, var(--rr-danger) 76%, transparent);
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--rr-danger) 26%, transparent);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--rr-danger) 24%, transparent);
   }
 
-  .draft-mobile-command-bar > div:first-child,
+  .draft-mobile-command-owner,
   .draft-mobile-command-clock {
     min-width: 0;
   }
 
-  .draft-mobile-command-bar span,
-  .draft-mobile-command-bar strong {
+  .draft-mobile-command-owner > span,
+  .draft-mobile-command-owner > strong,
+  .draft-mobile-command-clock > span,
+  .draft-mobile-command-clock > strong {
     display: block;
     min-width: 0;
     overflow: hidden;
@@ -1972,16 +1974,18 @@
     white-space: nowrap;
   }
 
-  .draft-mobile-command-bar > div:first-child > span,
+  .draft-mobile-command-owner > span,
   .draft-mobile-command-clock > span {
     color: var(--user-team-subtext);
-    font-size: var(--rr-mobile-text-micro);
+    font-size: 10px;
     font-weight: 850;
+    line-height: 1.1;
   }
 
-  .draft-mobile-command-bar > div:first-child > strong {
-    margin-top: 2px;
-    font-size: 14px;
+  .draft-mobile-command-owner > strong {
+    margin-top: 1px;
+    font-size: 13px;
+    line-height: 1.1;
   }
 
   .draft-mobile-command-clock {
@@ -1990,37 +1994,42 @@
 
   .draft-mobile-command-clock > strong {
     color: var(--rr-ice-white);
-    font-size: 28px;
+    font-size: 23px;
     font-variant-numeric: tabular-nums;
-    line-height: 1;
+    line-height: 0.95;
   }
 
   .draft-mobile-command-connection {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-width: 0;
+    gap: 5px;
+    max-width: 100%;
+    margin-top: 4px;
     color: var(--rr-ice-blue);
-    font-size: var(--rr-mobile-text-micro);
+    font-size: 10px;
+    font-style: normal;
     font-weight: 850;
+    line-height: 1;
   }
 
   .draft-mobile-command-connection i {
     flex: 0 0 auto;
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
   }
 
   .draft-mobile-command-action {
     justify-self: end;
-    min-width: 104px;
-    min-height: var(--rr-mobile-control-min-height);
+    min-width: 76px;
+    min-height: 42px;
+    padding: 6px 9px;
+    font-size: 12px;
+    line-height: 1.05;
   }
 
   .draft-mobile-tabs {
-    position: sticky;
-    z-index: 40;
-    top: 91px;
+    position: static;
+    z-index: auto;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
@@ -2029,8 +2038,7 @@
     border: 1px solid color-mix(in srgb, var(--rr-info) 30%, transparent);
     border-radius: 13px;
     background: color-mix(in srgb, var(--rr-ice-blue) 66%, var(--rr-ice-white));
-    box-shadow: 0 5px 16px color-mix(in srgb, var(--rr-steel-dark) 14%, transparent);
-    backdrop-filter: blur(9px);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--rr-steel-dark) 10%, transparent);
   }
 
   .draft-mobile-tabs button {
@@ -2115,16 +2123,14 @@
   }
 
   .pool-controls {
-    position: sticky;
-    z-index: 30;
-    top: 150px;
+    position: static;
+    z-index: auto;
     margin: 0 -2px 8px;
     padding: 6px;
     border: 1px solid color-mix(in srgb, var(--rr-info) 24%, transparent);
     border-radius: 11px;
     background: color-mix(in srgb, var(--rr-ice-blue) 28%, var(--rr-ice-white));
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--rr-steel-dark) 10%, transparent);
-    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--rr-steel-dark) 8%, transparent);
   }
 
   .asset-list,
@@ -2249,25 +2255,18 @@
 
 @media (max-width: 430px) {
   .draft-mobile-command-bar {
-    grid-template-columns: minmax(0, 1fr) 94px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
   }
 
   .draft-mobile-command-clock > strong {
-    font-size: 25px;
+    font-size: 21px;
   }
 
   .draft-mobile-command-action {
-    min-width: 92px;
-    padding-right: 7px;
-    padding-left: 7px;
-  }
-
-  .draft-mobile-tabs {
-    top: 88px;
-  }
-
-  .pool-controls {
-    top: 147px;
+    min-width: 70px;
+    padding-right: 6px;
+    padding-left: 6px;
   }
 
   .queue-row {

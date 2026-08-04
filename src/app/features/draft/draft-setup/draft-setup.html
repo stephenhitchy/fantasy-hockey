@@ -6,6 +6,7 @@
   @if (saving()) {
     <div
       class="draft-save-lock"
+      appViewportOverlayPortal
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="draft-save-lock-title"
@@ -24,10 +25,10 @@
 
   <section class="draft-setup-page rr-page-shell" [attr.aria-busy]="saving()">
     <a
-      class="back-link"
+      class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-    >
-      ← Back to League
+     aria-label="Back to league home">
+      Back to League
     </a>
 
     <header class="draft-header">

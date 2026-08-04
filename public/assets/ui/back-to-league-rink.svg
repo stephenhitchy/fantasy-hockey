@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title desc">
+  <title id="title">Back to league</title>
+  <desc id="desc">A small hockey rink with a left-pointing return arrow.</desc>
+  <rect x="2.5" y="5.5" width="43" height="37" rx="10" fill="#0c1b2d" stroke="#f0bf55" stroke-width="2.5"/>
+  <path d="M24 7v34" stroke="#d95063" stroke-width="2" opacity=".9"/>
+  <path d="M10 7v34M38 7v34" stroke="#5da8df" stroke-width="1.5" opacity=".75"/>
+  <circle cx="24" cy="24" r="5.2" fill="none" stroke="#d95063" stroke-width="1.5" opacity=".85"/>
+  <circle cx="24" cy="24" r="1.45" fill="#f5f8fc"/>
+  <path d="M21 17.2 13.8 24 21 30.8" fill="none" stroke="#f5f8fc" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14.7 24h15.6c3.4 0 5.7 2 5.7 5.2" fill="none" stroke="#f5f8fc" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

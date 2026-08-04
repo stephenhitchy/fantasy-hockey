@@ -1,6 +1,11 @@
 <section class="player-detail">
-  <button class="back-button" type="button" (click)="goBack()">
-    ← Back to My Team
+  <button
+    class="league-return-link league-return-link--button"
+    type="button"
+    (click)="goBack()"
+    aria-label="Back to My Team"
+  >
+    Back to My Team
   </button>
 
   @if (playerDetail; as detail) {

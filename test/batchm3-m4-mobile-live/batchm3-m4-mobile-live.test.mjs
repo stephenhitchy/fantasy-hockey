@@ -378,7 +378,7 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   assert.match(source, /openBenchDetail\([\s\S]*ownerId:\s*string \| null/);
   assert.match(styles, /@media \(max-width:\s*780px\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(styles, /max-height:\s*min\(90dvh/);
+  assert.match(styles, /max-height:\s*min\((?:90|92)dvh/);
   assert.match(styles, /prefers-reduced-motion/);
   assert.ok(Buffer.byteLength(styles) < 45_000, 'Mobile Game Center component CSS exceeds 45 kB raw.');
 });

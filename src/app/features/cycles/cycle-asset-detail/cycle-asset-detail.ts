@@ -12,6 +12,8 @@ import { listenToDraftPicks } from '../../../core/draft/draft.service';
 
 import { FantasyCycle } from '../../../core/cycle/cycle.models';
 
+import { CycleAssetScoreSummary } from '../../../core/cycle/cycle-scoring.service';
+
 import { listenToCycle, listenToCycleRosterPicks } from '../../../core/cycle/cycle.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
@@ -26,6 +28,17 @@ import {
 } from '../../../core/scoring/scoring-engine';
 
 import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.config';
+
+import {
+  listenToSharedCycleScoring,
+} from '../../../core/live-scoring/live-scoring.service';
+
+import { SharedCycleScoringSnapshot } from '../../../core/live-scoring/live-scoring.models';
+
+import {
+  HistoricalReplayControl,
+  listenToHistoricalReplayControl,
+} from '../../../core/replay/historical-replay.service';
 
 import { defaultScoringRules, ScoringRules } from '../../../core/scoring/scoring-rules';
 
@@ -43,6 +56,13 @@ import {
   NhlTeamSeasonGame,
 } from '../../../core/nhl/nhl-api.service';
 
+import {
+  buildCycleAssetSnapshotGames,
+  parseReplaySnapshotSeason,
+  resolveCycleAssetDetailSeason,
+  resolveCycleAssetScoreSummary,
+} from './cycle-asset-detail-snapshot.util';
+
 interface DetailStatChip {
   label: string;
   value: string;
@@ -53,7 +73,7 @@ interface DetailBreakdownLine {
   points: number;
 }
 
-interface FinalGameData {
+interface GameDetailData {
   boxscore: NhlGameBoxscoreResponse;
   playByPlay: NhlGamePlayByPlayResponse;
 }
@@ -64,6 +84,7 @@ interface CycleAssetGameDetail {
   teamGameNumber: number;
   cycleGameNumber: number;
   opponentAbbreviation: string;
+  scheduleLabel: string;
   scoreLabel: string;
   statusLabel: string;
   final: boolean;
@@ -104,6 +125,8 @@ export class CycleAssetDetail implements OnDestroy {
   cycle = signal<FantasyCycle | null>(null);
   picks = signal<DraftPick[]>([]);
   picksLoaded = signal(false);
+  sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
+  historicalReplayControl = signal<HistoricalReplayControl | null>(null);
 
   loading = signal(true);
   detailLoading = signal(false);
@@ -115,6 +138,8 @@ export class CycleAssetDetail implements OnDestroy {
   private stopCycleListener: (() => void) | null = null;
   private stopPicksListener: (() => void) | null = null;
   private stopCycleRosterPicksListener: (() => void) | null = null;
+  private stopSharedScoringListener: (() => void) | null = null;
+  private stopHistoricalReplayListener: (() => void) | null = null;
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
   private effectivePicksKey: string | null = null;
@@ -127,21 +152,43 @@ export class CycleAssetDetail implements OnDestroy {
 
   readonly asset = computed(() => this.draftPick()?.asset ?? null);
 
-  readonly totalFantasyPoints = computed(() =>
-    Number(
-      this.gameRows()
-        .reduce((total, row) => total + (row.fantasyPoints ?? 0), 0)
-        .toFixed(1),
+  readonly scoreSummary = computed(() =>
+    resolveCycleAssetScoreSummary(
+      this.sharedScoringSnapshot(),
+      this.draftPick(),
+      this.assetKey,
     ),
   );
 
-  readonly countedGames = computed(() => this.gameRows().filter((row) => row.counted).length);
+  readonly totalFantasyPoints = computed(() => {
+    const summaryScore = this.scoreSummary()?.currentScore;
 
-  readonly actualGamesPlayed = computed(() => this.gameRows().filter((row) => row.appeared).length);
+    if (typeof summaryScore === 'number') {
+      return Number(summaryScore.toFixed(1));
+    }
 
-  readonly scheduledGames = computed(() => this.gameRows().length);
+    return Number(
+      this.gameRows()
+        .reduce((total, row) => total + (row.fantasyPoints ?? 0), 0)
+        .toFixed(1),
+    );
+  });
 
-  readonly gamesLeft = computed(() => Math.max(0, this.scheduledGames() - this.countedGames()));
+  readonly countedGames = computed(() =>
+    this.scoreSummary()?.gamesPlayed ?? this.gameRows().filter((row) => row.counted).length,
+  );
+
+  readonly actualGamesPlayed = computed(() =>
+    this.scoreSummary()?.actualGamesPlayed ?? this.gameRows().filter((row) => row.appeared).length,
+  );
+
+  readonly scheduledGames = computed(() =>
+    this.scoreSummary()?.scheduledGames ?? this.gameRows().length,
+  );
+
+  readonly gamesLeft = computed(() =>
+    this.scoreSummary()?.gamesLeft ?? Math.max(0, this.scheduledGames() - this.countedGames()),
+  );
 
   constructor(
     private route: ActivatedRoute,
@@ -154,6 +201,8 @@ export class CycleAssetDetail implements OnDestroy {
     this.stopCycleListener?.();
     this.stopPicksListener?.();
     this.stopCycleRosterPicksListener?.();
+    this.stopSharedScoringListener?.();
+    this.stopHistoricalReplayListener?.();
   }
 
   private refreshEffectivePicks(): void {
@@ -288,6 +337,31 @@ export class CycleAssetDetail implements OnDestroy {
         void this.loadAssetDetailsIfReady();
       });
 
+      this.stopSharedScoringListener = listenToSharedCycleScoring(
+        leagueId,
+        this.cycleNumber,
+        (snapshot) => {
+          this.sharedScoringSnapshot.set(snapshot);
+          this.detailLoadKey = null;
+          void this.loadAssetDetailsIfReady();
+        },
+        (error) => {
+          console.warn('Unable to load the saved Game Center scoring snapshot.', error);
+        },
+      );
+
+      this.stopHistoricalReplayListener = listenToHistoricalReplayControl(
+        leagueId,
+        (control) => {
+          this.historicalReplayControl.set(control);
+          this.detailLoadKey = null;
+          void this.loadAssetDetailsIfReady();
+        },
+        (error) => {
+          console.warn('Unable to load historical replay details.', error);
+        },
+      );
+
       this.stopCycleRosterPicksListener = listenToCycleRosterPicks(
         leagueId,
         this.cycleNumber,
@@ -389,13 +463,35 @@ export class CycleAssetDetail implements OnDestroy {
   }
 
   getCycleGameRangeLabel(): string {
-    const requiredGamesPerCycle = this.getRequiredGamesPerCycle();
+    const summary = this.scoreSummary();
+    const firstDate = summary?.firstScheduledGameDate;
+    const lastDate = summary?.lastScheduledGameDate;
 
-    const startGameNumber = (this.cycleNumber - 1) * requiredGamesPerCycle + 1;
+    if (firstDate && lastDate) {
+      return firstDate === lastDate
+        ? firstDate
+        : `${firstDate} – ${lastDate}`;
+    }
 
-    const endGameNumber = this.cycleNumber * requiredGamesPerCycle;
+    return `This roster spot's ${this.getRequiredGamesPerCycle()} scheduled NHL team games`;
+  }
 
-    return `NHL team games ${startGameNumber}–${endGameNumber}`;
+  getDetailSourceNotice(): string {
+    const replaySeason = this.getReplaySnapshotSeason();
+
+    if (replaySeason) {
+      return `Historical replay: matchup dates follow the ${this.formatSeasonLabel(replaySeason.targetSeason)} schedule, while the point details come from mapped ${this.formatSeasonLabel(replaySeason.sourceSeason)} NHL performances. This is the same saved server scoring snapshot used by Game Center.`;
+    }
+
+    if (!this.sharedScoringSnapshot()) {
+      return 'RinkRat is waiting for the saved Game Center scoring snapshot. Schedule-based details are shown temporarily and will refresh automatically.';
+    }
+
+    return 'This breakdown uses the same saved server scoring snapshot shown in Game Center and refreshes when that snapshot updates.';
+  }
+
+  isHistoricalReplayDetail(): boolean {
+    return this.getReplaySnapshotSeason() !== null;
   }
 
   getGameRowClass(row: CycleAssetGameDetail): string {
@@ -423,12 +519,13 @@ export class CycleAssetDetail implements OnDestroy {
       return;
     }
 
-    const season = this.getNhlSeasonForDate(this.getSeasonReferenceDate());
-
+    const snapshot = this.sharedScoringSnapshot();
+    const scoreSummary = this.scoreSummary();
+    const season = this.getScoringDataSeason();
     const scoringRules = league.scoringRules ?? defaultScoringRules;
-
     const requiredGamesPerCycle =
       scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
+    const replayControl = this.historicalReplayControl();
 
     const loadKey = [
       cycle.id,
@@ -436,6 +533,18 @@ export class CycleAssetDetail implements OnDestroy {
       asset.assetKey,
       season,
       requiredGamesPerCycle,
+      snapshot?.scoringFingerprint ?? 'no-shared-snapshot',
+      scoreSummary?.windowId ?? 'no-window-summary',
+      scoreSummary
+        ? scoreSummary.scheduledGameIds
+            .map((gameId) => {
+              const gameIdKey = String(gameId);
+              return `${gameId}:${scoreSummary.gameStates[gameIdKey] ?? 'scheduled'}:${scoreSummary.gameScores[gameIdKey] ?? ''}`;
+            })
+            .join('|')
+        : '',
+      replayControl?.simulatedDate ?? '',
+      replayControl?.sourceSeason ?? '',
     ].join('::');
 
     if (this.detailLoadKey === loadKey) {
@@ -449,14 +558,27 @@ export class CycleAssetDetail implements OnDestroy {
     const requestId = ++this.detailRequestId;
 
     try {
-      const schedule = await this.loadRegularSeasonSchedule(this.getAssetTeamLabel(asset), season);
+      let rows: CycleAssetGameDetail[];
 
-      const games = this.getCycleGamesFromSchedule(schedule, requiredGamesPerCycle);
+      if (scoreSummary && scoreSummary.scheduledGameIds.length > 0) {
+        rows = await this.loadSnapshotGameRows(
+          asset,
+          scoreSummary,
+          season,
+          scoringRules,
+        );
+      } else {
+        const schedule = await this.loadRegularSeasonSchedule(
+          this.getAssetTeamLabel(asset),
+          season,
+        );
+        const games = this.getCycleGamesFromSchedule(schedule, requiredGamesPerCycle);
 
-      const rows =
-        asset.assetType === 'skater'
-          ? await this.loadSkaterGameRows(asset, games, schedule, season, scoringRules)
-          : await this.loadGoalieUnitGameRows(asset, games, schedule, scoringRules);
+        rows =
+          asset.assetType === 'skater'
+            ? await this.loadSkaterGameRows(asset, games, schedule, season, scoringRules)
+            : await this.loadGoalieUnitGameRows(asset, games, schedule, scoringRules);
+      }
 
       if (requestId !== this.detailRequestId) {
         return;
@@ -474,6 +596,318 @@ export class CycleAssetDetail implements OnDestroy {
         this.detailLoading.set(false);
       }
     }
+  }
+
+  private async loadSnapshotGameRows(
+    asset: DraftableAsset,
+    summary: CycleAssetScoreSummary,
+    season: string,
+    scoringRules: ScoringRules,
+  ): Promise<CycleAssetGameDetail[]> {
+    return asset.assetType === 'skater'
+      ? this.loadSnapshotSkaterGameRows(asset, summary, season, scoringRules)
+      : this.loadSnapshotGoalieUnitGameRows(asset, summary, scoringRules);
+  }
+
+  private async loadSnapshotSkaterGameRows(
+    asset: DraftableAsset,
+    summary: CycleAssetScoreSummary,
+    season: string,
+    scoringRules: ScoringRules,
+  ): Promise<CycleAssetGameDetail[]> {
+    if (asset.assetType !== 'skater') {
+      return [];
+    }
+
+    const gameLogByGameId = new Map<number, NhlPlayerGameLogEntry>();
+
+    try {
+      const gameLogResponse = await getRegularSeasonGameLog(asset.player.id, season);
+
+      for (const gameLog of gameLogResponse.gameLog ?? []) {
+        gameLogByGameId.set(gameLog.gameId, gameLog);
+      }
+    } catch (error: unknown) {
+      console.warn('Unable to load the player game log for the saved scoring window.', error);
+    }
+
+    const rows: CycleAssetGameDetail[] = [];
+    const snapshotGames = buildCycleAssetSnapshotGames(summary);
+    const replayDetail = this.isHistoricalReplayDetail();
+
+    for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
+      const snapshotGame = snapshotGames[gameIndex];
+      const cycleGameNumber = gameIndex + 1;
+
+      if (snapshotGame.state === 'scheduled') {
+        rows.push(
+          this.createSnapshotGameRow({
+            gameId: snapshotGame.gameId,
+            gameDate: snapshotGame.gameDate,
+            cycleGameNumber,
+            scheduleLabel: snapshotGame.scheduleLabel,
+            scoreLabel: 'Scheduled NHL team game',
+            statusLabel: 'Scheduled',
+            final: false,
+            counted: false,
+            appeared: false,
+            fantasyPoints: null,
+            statChips: [],
+            breakdownLines: [],
+          }),
+        );
+        continue;
+      }
+
+      const gameData = await this.loadGameData(snapshotGame.gameId);
+      const gameLog = gameLogByGameId.get(snapshotGame.gameId);
+      const skaterLine = gameData
+        ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
+        : null;
+      const appeared = snapshotGame.appeared || Boolean(skaterLine || gameLog);
+      const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
+
+      if (!appeared && snapshotGame.state === 'final') {
+        rows.push(
+          this.createSnapshotGameRow({
+            gameId: snapshotGame.gameId,
+            gameDate: snapshotGame.gameDate,
+            cycleGameNumber,
+            scheduleLabel: snapshotGame.scheduleLabel,
+            scoreLabel: this.getSnapshotGameSourceLabel(snapshotGame.state, replayDetail),
+            statusLabel: 'Did Not Play — 0 pts counted',
+            final: true,
+            counted: true,
+            appeared: false,
+            fantasyPoints: authoritativeScore,
+            statChips: [
+              { label: 'Counted', value: 'Yes' },
+              { label: 'Appeared', value: 'No' },
+            ],
+            breakdownLines: [
+              {
+                label: 'Did not play / injured / scratched',
+                points: authoritativeScore,
+              },
+            ],
+          }),
+        );
+        continue;
+      }
+
+      if (!skaterLine && !gameLog) {
+        rows.push(
+          this.createSnapshotGameRow({
+            gameId: snapshotGame.gameId,
+            gameDate: snapshotGame.gameDate,
+            cycleGameNumber,
+            scheduleLabel: snapshotGame.scheduleLabel,
+            scoreLabel: this.getSnapshotGameSourceLabel(snapshotGame.state, replayDetail),
+            statusLabel:
+              snapshotGame.state === 'live'
+                ? 'Live — detailed NHL stats are still updating'
+                : 'Final — saved server score',
+            final: snapshotGame.state === 'final',
+            counted: snapshotGame.counted,
+            appeared,
+            fantasyPoints: authoritativeScore,
+            statChips: [
+              { label: 'Server Score', value: authoritativeScore.toFixed(1) },
+              { label: 'Detail Data', value: 'Pending' },
+            ],
+            breakdownLines: [
+              {
+                label: 'Saved Game Center score',
+                points: authoritativeScore,
+              },
+            ],
+          }),
+        );
+        continue;
+      }
+
+      const assistBreakdown = gameData
+        ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+        : {
+            primaryAssists: 0,
+            secondaryAssists: 0,
+          };
+      const totalAssists = skaterLine?.assists ?? gameLog?.assists ?? 0;
+      let primaryAssists = assistBreakdown.primaryAssists;
+      let secondaryAssists = assistBreakdown.secondaryAssists;
+
+      if (primaryAssists + secondaryAssists < totalAssists) {
+        secondaryAssists += totalAssists - primaryAssists - secondaryAssists;
+      }
+
+      const stats: SkaterGameStats = {
+        position: asset.position === 'D' ? 'D' : 'F',
+        goals: skaterLine?.goals ?? gameLog?.goals ?? 0,
+        primaryAssists,
+        secondaryAssists,
+        shotsOnGoal: skaterLine?.sog ?? gameLog?.shots ?? 0,
+        hits: skaterLine?.hits ?? 0,
+        blockedShots: skaterLine?.blockedShots ?? 0,
+        plusMinus: skaterLine?.plusMinus ?? gameLog?.plusMinus ?? 0,
+        powerPlayPoints: gameLog?.powerPlayPoints ?? skaterLine?.powerPlayGoals ?? 0,
+        shortHandedPoints: gameLog?.shorthandedPoints ?? 0,
+        gameWinningGoal: Boolean(gameLog?.gameWinningGoals),
+        overtimeGoal: Boolean(gameLog?.otGoals),
+        timeOnIceMinutes: this.getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi),
+      };
+      const breakdown = calculateSkaterGameBreakdown(stats, scoringRules);
+
+      rows.push(
+        this.createSnapshotGameRow({
+          gameId: snapshotGame.gameId,
+          gameDate: snapshotGame.gameDate,
+          cycleGameNumber,
+          scheduleLabel: snapshotGame.scheduleLabel,
+          scoreLabel: this.getSnapshotGameSourceLabel(snapshotGame.state, replayDetail),
+          statusLabel: snapshotGame.state === 'live' ? 'Live' : 'Played',
+          final: snapshotGame.state === 'final',
+          counted: snapshotGame.counted,
+          appeared: true,
+          fantasyPoints: authoritativeScore,
+          statChips: [
+            { label: 'G', value: stats.goals.toString() },
+            { label: '1A', value: stats.primaryAssists.toString() },
+            { label: '2A', value: stats.secondaryAssists.toString() },
+            { label: 'SOG', value: stats.shotsOnGoal.toString() },
+            { label: 'Hits', value: stats.hits.toString() },
+            { label: 'Blocks', value: stats.blockedShots.toString() },
+            { label: '+/-', value: stats.plusMinus.toString() },
+            { label: 'TOI', value: stats.timeOnIceMinutes.toFixed(1) },
+          ],
+          breakdownLines: this.reconcileBreakdownLines(
+            this.mapBreakdownLines(breakdown.lines),
+            breakdown.total,
+            authoritativeScore,
+          ),
+        }),
+      );
+    }
+
+    return rows;
+  }
+
+  private async loadSnapshotGoalieUnitGameRows(
+    asset: DraftableAsset,
+    summary: CycleAssetScoreSummary,
+    scoringRules: ScoringRules,
+  ): Promise<CycleAssetGameDetail[]> {
+    if (asset.assetType === 'skater') {
+      return [];
+    }
+
+    const rows: CycleAssetGameDetail[] = [];
+    const snapshotGames = buildCycleAssetSnapshotGames(summary);
+    const replayDetail = this.isHistoricalReplayDetail();
+
+    for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
+      const snapshotGame = snapshotGames[gameIndex];
+      const cycleGameNumber = gameIndex + 1;
+
+      if (snapshotGame.state === 'scheduled') {
+        rows.push(
+          this.createSnapshotGameRow({
+            gameId: snapshotGame.gameId,
+            gameDate: snapshotGame.gameDate,
+            cycleGameNumber,
+            scheduleLabel: snapshotGame.scheduleLabel,
+            scoreLabel: 'Scheduled NHL team game',
+            statusLabel: 'Scheduled',
+            final: false,
+            counted: false,
+            appeared: false,
+            fantasyPoints: null,
+            statChips: [],
+            breakdownLines: [],
+          }),
+        );
+        continue;
+      }
+
+      const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
+      const gameData = await this.loadGameData(snapshotGame.gameId);
+      const goalieResult = gameData
+        ? getTeamGoalieUnitResult(gameData.boxscore, asset.teamAbbreviation)
+        : null;
+
+      if (!goalieResult) {
+        rows.push(
+          this.createSnapshotGameRow({
+            gameId: snapshotGame.gameId,
+            gameDate: snapshotGame.gameDate,
+            cycleGameNumber,
+            scheduleLabel: snapshotGame.scheduleLabel,
+            scoreLabel: this.getSnapshotGameSourceLabel(snapshotGame.state, replayDetail),
+            statusLabel:
+              snapshotGame.state === 'live'
+                ? 'Live — goalie detail is still updating'
+                : 'Final — saved server score',
+            final: snapshotGame.state === 'final',
+            counted: snapshotGame.counted,
+            appeared: snapshotGame.appeared,
+            fantasyPoints: authoritativeScore,
+            statChips: [
+              { label: 'Server Score', value: authoritativeScore.toFixed(1) },
+              { label: 'Detail Data', value: 'Pending' },
+            ],
+            breakdownLines: [
+              {
+                label: 'Saved Game Center score',
+                points: authoritativeScore,
+              },
+            ],
+          }),
+        );
+        continue;
+      }
+
+      const savePercentage =
+        goalieResult.shotsAgainst > 0 ? goalieResult.saves / goalieResult.shotsAgainst : 0;
+      const stats: GoalieGameStats = {
+        saves: goalieResult.saves,
+        shotsAgainst: goalieResult.shotsAgainst,
+        won: goalieResult.won,
+        shutout: goalieResult.shutout,
+      };
+      const breakdown = calculateGoalieGameBreakdown(stats, scoringRules);
+
+      rows.push(
+        this.createSnapshotGameRow({
+          gameId: snapshotGame.gameId,
+          gameDate: snapshotGame.gameDate,
+          cycleGameNumber,
+          scheduleLabel: snapshotGame.scheduleLabel,
+          scoreLabel: this.getSnapshotGameSourceLabel(snapshotGame.state, replayDetail),
+          statusLabel:
+            snapshotGame.state === 'live'
+              ? 'Live'
+              : goalieResult.won
+                ? 'Win'
+                : 'Loss',
+          final: snapshotGame.state === 'final',
+          counted: snapshotGame.counted,
+          appeared: true,
+          fantasyPoints: authoritativeScore,
+          statChips: [
+            { label: 'Saves', value: goalieResult.saves.toString() },
+            { label: 'Shots', value: goalieResult.shotsAgainst.toString() },
+            { label: 'SV%', value: `${(savePercentage * 100).toFixed(1)}%` },
+            { label: 'SO', value: goalieResult.shutout ? 'Yes' : 'No' },
+          ],
+          breakdownLines: this.reconcileBreakdownLines(
+            this.mapBreakdownLines(breakdown.lines),
+            breakdown.total,
+            authoritativeScore,
+          ),
+        }),
+      );
+    }
+
+    return rows;
   }
 
   private async loadSkaterGameRows(
@@ -522,7 +956,7 @@ export class CycleAssetDetail implements OnDestroy {
         continue;
       }
 
-      const finalGameData = await this.loadFinalGameData(game.id);
+      const finalGameData = await this.loadGameData(game.id);
 
       const gameLog = gameLogByGameId.get(game.id);
 
@@ -658,7 +1092,7 @@ export class CycleAssetDetail implements OnDestroy {
         continue;
       }
 
-      const finalGameData = await this.loadFinalGameData(game.id);
+      const finalGameData = await this.loadGameData(game.id);
 
       if (!finalGameData) {
         rows.push(
@@ -787,7 +1221,7 @@ export class CycleAssetDetail implements OnDestroy {
     return schedule.findIndex((candidate) => candidate.id === game.id) + 1;
   }
 
-  private async loadFinalGameData(gameId: number): Promise<FinalGameData | null> {
+  private async loadGameData(gameId: number): Promise<GameDetailData | null> {
     try {
       const [boxscore, playByPlay] = await Promise.all([
         getGameBoxscore(gameId),
@@ -803,6 +1237,113 @@ export class CycleAssetDetail implements OnDestroy {
 
       return null;
     }
+  }
+
+  private createSnapshotGameRow(input: {
+    gameId: number;
+    gameDate: string;
+    cycleGameNumber: number;
+    scheduleLabel: string;
+    scoreLabel: string;
+    statusLabel: string;
+    final: boolean;
+    counted: boolean;
+    appeared: boolean;
+    fantasyPoints: number | null;
+    statChips: DetailStatChip[];
+    breakdownLines: DetailBreakdownLine[];
+  }): CycleAssetGameDetail {
+    return {
+      gameId: input.gameId,
+      gameDate: input.gameDate,
+      teamGameNumber: 0,
+      cycleGameNumber: input.cycleGameNumber,
+      opponentAbbreviation: input.scheduleLabel.replace(/^(?:vs|@)\s+/i, ''),
+      scheduleLabel: input.scheduleLabel,
+      scoreLabel: input.scoreLabel,
+      statusLabel: input.statusLabel,
+      final: input.final,
+      counted: input.counted,
+      appeared: input.appeared,
+      fantasyPoints: input.fantasyPoints,
+      statChips: input.statChips,
+      breakdownLines: input.breakdownLines,
+    };
+  }
+
+  private reconcileBreakdownLines(
+    lines: DetailBreakdownLine[],
+    calculatedScore: number,
+    authoritativeScore: number,
+  ): DetailBreakdownLine[] {
+    const difference = Number((authoritativeScore - calculatedScore).toFixed(1));
+
+    if (Math.abs(difference) < 0.05) {
+      return lines;
+    }
+
+    return [
+      ...lines,
+      {
+        label: 'Saved server scoring reconciliation',
+        points: difference,
+      },
+    ];
+  }
+
+  private getSnapshotGameSourceLabel(
+    state: 'scheduled' | 'live' | 'final',
+    replayDetail: boolean,
+  ): string {
+    if (state === 'scheduled') {
+      return 'Scheduled NHL team game';
+    }
+
+    if (replayDetail) {
+      return state === 'live'
+        ? 'Historical replay game is being released'
+        : 'Historical replay source game';
+    }
+
+    return state === 'live' ? 'Live NHL game' : 'Final NHL result';
+  }
+
+  private getScoringDataSeason(): string {
+    const fallbackSeason = this.getNhlSeasonForDate(this.getSeasonReferenceDate());
+
+    return resolveCycleAssetDetailSeason({
+      snapshotSeason: this.sharedScoringSnapshot()?.season,
+      replaySourceSeason:
+        this.historicalReplayControl()?.enabled === true
+          ? this.historicalReplayControl()?.sourceSeason
+          : null,
+      fallbackSeason,
+    });
+  }
+
+  private getReplaySnapshotSeason(): { targetSeason: string; sourceSeason: string } | null {
+    const control = this.historicalReplayControl();
+
+    if (
+      control?.enabled === true &&
+      /^\d{8}$/.test(control.targetSeason) &&
+      /^\d{8}$/.test(control.sourceSeason)
+    ) {
+      return {
+        targetSeason: control.targetSeason,
+        sourceSeason: control.sourceSeason,
+      };
+    }
+
+    return parseReplaySnapshotSeason(this.sharedScoringSnapshot()?.season);
+  }
+
+  private formatSeasonLabel(season: string): string {
+    if (!/^\d{8}$/.test(season)) {
+      return season;
+    }
+
+    return `${season.slice(0, 4)}–${season.slice(6)}`;
   }
 
   private createBaseGameRow(
@@ -824,6 +1365,7 @@ export class CycleAssetDetail implements OnDestroy {
       teamGameNumber,
       cycleGameNumber,
       opponentAbbreviation: this.getOpponentAbbreviation(asset, game),
+      scheduleLabel: this.getScheduleLabel(asset, game),
       scoreLabel: this.getGameScoreLabel(game),
       statusLabel,
       final,
@@ -852,6 +1394,14 @@ export class CycleAssetDetail implements OnDestroy {
       : game.homeTeam.abbrev;
   }
 
+  private getScheduleLabel(asset: DraftableAsset, game: NhlTeamSeasonGame): string {
+    const teamAbbreviation = this.getAssetTeamLabel(asset).toUpperCase();
+
+    return game.homeTeam.abbrev.toUpperCase() === teamAbbreviation
+      ? `vs ${game.awayTeam.abbrev}`
+      : `@ ${game.homeTeam.abbrev}`;
+  }
+
   private getGameScoreLabel(game: NhlTeamSeasonGame): string {
     const hasScore =
       typeof game.homeTeam.score === 'number' && typeof game.awayTeam.score === 'number';
@@ -878,6 +1428,16 @@ export class CycleAssetDetail implements OnDestroy {
   }
 
   private getSeasonReferenceDate(): Date {
+    const replayDate = this.historicalReplayControl()?.simulatedDate;
+
+    if (replayDate) {
+      const parsedReplayDate = new Date(`${replayDate}T12:00:00Z`);
+
+      if (!Number.isNaN(parsedReplayDate.getTime())) {
+        return parsedReplayDate;
+      }
+    }
+
     const historicalTestDate = getHistoricalScoringTestDate();
 
     if (historicalTestDate) {

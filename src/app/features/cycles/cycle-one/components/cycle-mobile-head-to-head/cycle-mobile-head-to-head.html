@@ -501,9 +501,14 @@
 </section>
 
 @if (selectedDetail(); as detail) {
-  <div class="mobile-asset-sheet-backdrop" (click)="closeDetail()">
+  <div
+    class="mobile-asset-sheet-backdrop"
+    appViewportOverlayPortal
+    (click)="closeDetail()"
+  >
     <section
       class="mobile-asset-sheet rr-dialog"
+      data-overlay-scroll-root
       role="dialog"
       aria-modal="true"
       [attr.aria-label]="getDetailName(detail) + ' matchup details'"

@@ -2,6 +2,7 @@
   <div
     class="rr-action-sheet-backdrop"
     role="presentation"
+    appViewportOverlayPortal
     (click)="requestClose()"
   >
     <section
@@ -36,7 +37,7 @@
         </button>
       </header>
 
-      <div class="rr-action-sheet__content">
+      <div class="rr-action-sheet__content" data-overlay-scroll-root>
         <ng-content></ng-content>
       </div>
 

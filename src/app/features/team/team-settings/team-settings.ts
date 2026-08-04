@@ -77,6 +77,7 @@ import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/t
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
 import { getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
+import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
 import {
   buildFreeAgentRosterTargetQuery,
@@ -117,7 +118,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ActionSheet],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective, ActionSheet],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })

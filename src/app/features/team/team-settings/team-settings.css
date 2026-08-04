@@ -1313,7 +1313,7 @@
 .ir-activation-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--rr-z-viewport-overlay, 2000);
   display: grid;
   place-items: center;
   padding: 22px;
@@ -1724,7 +1724,7 @@
 
 /* Standalone drop player confirmation */
 .roster-drop-backdrop {
-  z-index: 1100;
+  z-index: var(--rr-z-viewport-overlay, 2000);
   background: rgba(2, 8, 18, 0.82);
 }
 

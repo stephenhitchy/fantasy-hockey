@@ -5,6 +5,7 @@ import type { FantasyMatchup } from '../../../../../core/cycle/cycle.models';
 import type { DraftPick } from '../../../../../core/draft/draft.models';
 import type { RosterAsset } from '../../../../../core/team/roster.models';
 import { DialogFocusTrapDirective } from '../../../../../shared/accessibility/dialog-focus-trap.directive';
+import { ViewportOverlayPortalDirective } from '../../../../../shared/accessibility/viewport-overlay-portal.directive';
 import type { CycleOne } from '../../cycle-one';
 import type {
   CycleWindowGameMarker,
@@ -31,7 +32,7 @@ interface MobileMatchupDetailSelection {
 
 @Component({
   selector: 'app-cycle-mobile-head-to-head',
-  imports: [NgStyle, DialogFocusTrapDirective],
+  imports: [NgStyle, DialogFocusTrapDirective, ViewportOverlayPortalDirective],
   templateUrl: './cycle-mobile-head-to-head.html',
   styleUrl: './cycle-mobile-head-to-head.css',
 })

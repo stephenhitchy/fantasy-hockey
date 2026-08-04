@@ -14,7 +14,7 @@
 
     <div class="hero-actions">
       @if (leagueId()) {
-        <a [routerLink]="['/leagues', leagueId()]">Back to League</a>
+        <a class="league-return-link league-return-link--hero" [routerLink]="['/leagues', leagueId()]" aria-label="Back to league home">Back to League</a>
       } @else {
         <a routerLink="/dashboard">Back to Dashboard</a>
       }

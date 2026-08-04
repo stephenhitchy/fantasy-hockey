@@ -5,10 +5,10 @@
 } @else {
   <section class="team-page rr-page-shell">
     <a
-      class="back-link"
+      class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-    >
-      ← Back to League
+     aria-label="Back to league home">
+      Back to League
     </a>
 
     <header class="team-hero-card rr-card rr-card--padded">
@@ -1114,6 +1114,7 @@
       @if (activationIrSlot.asset; as activationAsset) {
         <div
           class="ir-activation-backdrop rr-dialog-backdrop"
+          appViewportOverlayPortal
           role="presentation"
           (click)="cancelIrActivation()"
         >
@@ -1247,7 +1248,7 @@
     }
     @if (getPendingIrBenchActivationSlot(); as irBenchSlot) {
       @if (irBenchSlot.asset; as irBenchAsset) {
-        <div class="ir-activation-backdrop rr-dialog-backdrop" role="presentation" (click)="cancelIrBenchActivation()">
+        <div class="ir-activation-backdrop rr-dialog-backdrop" appViewportOverlayPortal role="presentation" (click)="cancelIrBenchActivation()">
           <section class="ir-activation-dialog rr-dialog" role="dialog" aria-modal="true" aria-labelledby="ir-bench-title" appDialogFocusTrap (dialogEscape)="cancelIrBenchActivation()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
@@ -1294,7 +1295,7 @@
     }
     @if (getPendingBenchSwapSlot(); as benchSwapSlot) {
       @if (benchSwapSlot.asset; as benchSwapAsset) {
-        <div class="ir-activation-backdrop rr-dialog-backdrop" role="presentation" (click)="cancelBenchSwap()">
+        <div class="ir-activation-backdrop rr-dialog-backdrop" appViewportOverlayPortal role="presentation" (click)="cancelBenchSwap()">
           <section class="ir-activation-dialog rr-dialog" role="dialog" aria-modal="true" aria-labelledby="bench-swap-title" appDialogFocusTrap (dialogEscape)="cancelBenchSwap()" (click)="$event.stopPropagation()">
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
@@ -1366,6 +1367,7 @@
     @if (getPendingRosterDrop(); as pendingDrop) {
       <div
         class="ir-activation-backdrop roster-drop-backdrop rr-dialog-backdrop"
+        appViewportOverlayPortal
         role="presentation"
         (click)="cancelRosterDrop()"
       >
@@ -1461,7 +1463,7 @@
     }
 
     @if (isRosterOperationPending()) {
-      <div class="roster-action-shield" role="status" aria-live="assertive" aria-atomic="true">
+      <div class="roster-action-shield" appViewportOverlayPortal role="status" aria-live="assertive" aria-atomic="true">
         <div class="roster-action-shield-card">
           <span class="roster-action-spinner" aria-hidden="true"></span>
           <div>

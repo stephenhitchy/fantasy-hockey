@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -54,7 +55,7 @@ interface DraftRoundPreview {
 
 @Component({
   selector: 'app-draft-setup',
-  imports: [FormsModule, RouterLink, ManagerAvatar],
+  imports: [FormsModule, RouterLink, ManagerAvatar, ViewportOverlayPortalDirective],
   templateUrl: './draft-setup.html',
   styleUrl: './draft-setup.css',
 })

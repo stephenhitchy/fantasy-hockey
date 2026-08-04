@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -135,7 +136,7 @@ interface PendingPickConfirmation {
 
 @Component({
   selector: 'app-draft-room',
-  imports: [FormsModule, RouterLink, ManagerAvatar],
+  imports: [FormsModule, RouterLink, ManagerAvatar, ViewportOverlayPortalDirective],
   templateUrl: './draft-room.html',
   styleUrl: './draft-room.css',
 })

@@ -62,6 +62,7 @@ import {
 } from '../../core/transactions/roster-move-eligibility.service';
 
 import { ActionSheet } from '../../shared/action-sheet/action-sheet';
+import { ViewportOverlayPortalDirective } from '../../shared/accessibility/viewport-overlay-portal.directive';
 import {
   parseFreeAgentMobileViewState,
   resolveFreeAgentRoutePreferences,
@@ -109,7 +110,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink, ActionSheet],
+  imports: [FormsModule, RouterLink, ActionSheet, ViewportOverlayPortalDirective],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })

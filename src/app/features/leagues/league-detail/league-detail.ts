@@ -55,6 +55,7 @@ import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/p
 import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
+import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
   getProfileIconsForCategory,
@@ -78,7 +79,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })

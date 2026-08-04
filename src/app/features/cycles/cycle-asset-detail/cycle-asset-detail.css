@@ -167,6 +167,36 @@
   line-height: 1.35;
 }
 
+.detail-source-notice {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--rr-info) 38%, transparent);
+  border-left: 4px solid var(--rr-info);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--rr-info) 12%);
+  color: var(--text-primary);
+}
+
+.detail-source-notice strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.detail-source-notice span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.detail-source-notice.historical-replay-notice {
+  border-color: color-mix(in srgb, var(--rr-warning) 45%, transparent);
+  border-left-color: var(--rr-warning);
+  background: color-mix(in srgb, var(--surface-2) 86%, var(--rr-warning) 14%);
+}
+
 .status-card {
   margin: 0 0 16px;
   padding: 13px 15px;

@@ -5,7 +5,7 @@
 .rr-action-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: var(--rr-z-dialog);
+  z-index: var(--rr-z-viewport-overlay, 2000);
   display: grid;
   place-items: center;
   padding: var(--rr-space-4);
@@ -90,6 +90,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   padding: var(--rr-space-5);
 }
 

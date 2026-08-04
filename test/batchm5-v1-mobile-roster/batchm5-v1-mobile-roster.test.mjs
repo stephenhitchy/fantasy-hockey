@@ -304,18 +304,23 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
 });
 
 test('shared action sheet is an accessible desktop dialog and mobile bottom sheet', async () => {
-  const [source, template, styles] = await Promise.all([
+  const [source, template, styles, viewportPortal] = await Promise.all([
     read('src/app/shared/action-sheet/action-sheet.ts'),
     read('src/app/shared/action-sheet/action-sheet.html'),
     read('src/app/shared/action-sheet/action-sheet.css'),
+    read('src/app/shared/accessibility/viewport-overlay-portal.directive.ts'),
   ]);
 
   assert.match(source, /DialogFocusTrapDirective/);
+  assert.match(source, /ViewportOverlayPortalDirective/);
   assert.match(source, /if \(this\.busy\)/);
-  assert.match(source, /document\.body\.style\.overflow = 'hidden'/);
-  assert.match(source, /releaseBodyLock/);
+  assert.match(viewportPortal, /document\.body\.appendChild\(this\.host\)/);
+  assert.match(viewportPortal, /body\.style\.overflow = 'hidden'/);
+  assert.match(viewportPortal, /releaseViewportLock/);
+  assert.match(viewportPortal, /window\.scrollTo\(scrollX, scrollY\)/);
   assert.match(template, /role="dialog"/);
   assert.match(template, /aria-modal="true"/);
+  assert.match(template, /appViewportOverlayPortal/);
   assert.match(template, /appDialogFocusTrap/);
   assert.match(template, /\(dialogEscape\)="requestClose\(\)"/);
   assert.match(template, /ng-content select="\[action-sheet-actions\]"/);

@@ -4,7 +4,13 @@
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="free-agents-page rr-page-shell">
-    <a class="back-link" [routerLink]="['/leagues', leagueId, 'team']">← Back to My Team</a>
+    <a
+      class="league-return-link"
+      [routerLink]="['/leagues', leagueId, 'team']"
+      aria-label="Back to My Team"
+    >
+      Back to My Team
+    </a>
 
     <header class="free-agent-hero rr-card rr-card--padded">
       <div>
@@ -653,7 +659,7 @@
     }
 
     @if (isRosterOperationPending()) {
-      <div class="roster-action-shield" role="status" aria-live="assertive" aria-atomic="true">
+      <div class="roster-action-shield" appViewportOverlayPortal role="status" aria-live="assertive" aria-atomic="true">
         <div class="roster-action-shield-card">
           <span class="roster-action-spinner" aria-hidden="true"></span>
           <div>

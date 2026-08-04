@@ -266,7 +266,9 @@
   --rr-z-sticky: 20;
   --rr-z-menu: 40;
   --rr-z-dialog: 80;
-  --rr-z-toast: 100;
+  /* Portaled overlays must sit above the mobile nav (1300) and Coach Help (1490). */
+  --rr-z-viewport-overlay: 2000;
+  --rr-z-toast: 2100;
 }
 
 html[data-background-theme='rink-dark'] {
