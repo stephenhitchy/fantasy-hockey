@@ -9,7 +9,10 @@ import type { CycleOne } from '../../cycle-one';
   selector: 'app-cycle-mobile-scorebar',
   imports: [NgStyle, ManagerAvatar],
   templateUrl: './cycle-mobile-scorebar.html',
-  styles: [':host { display: contents; }'],
+  styles: [
+    ':host { display: contents; }',
+    '.mobile-score-finish { margin-top: 3px; color: #b9d6ef !important; }',
+  ],
 })
 export class CycleMobileScorebar {
   @Input({ required: true }) mobileMatchup!: FantasyMatchup;

@@ -35,9 +35,58 @@ export interface DraftRosterRequirements {
   G: number;
 }
 
+
+export type ProjectionCycleGameStatus = 'played' | 'missed' | 'upcoming';
+
+export interface ProjectionCycleGameMarker {
+  gameId: number;
+  gameDate: string;
+  opponentAbbreviation: string;
+  venue: 'home' | 'away';
+  status: ProjectionCycleGameStatus;
+}
+
+export interface ProjectionStatBreakdownItem {
+  key: string;
+  label: string;
+  statValue: number;
+  statUnit: string;
+  fantasyPoints: number;
+  note?: string | null;
+}
+
 export interface DraftProjection {
   projectedSeasonPoints?: number | null;
   projectedCyclePoints?: number | null;
+
+  /** Current-season fantasy production calculated from available NHL game rows. */
+  currentSeasonFantasyPoints?: number | null;
+
+  /** Remaining regular-season fantasy points at the current projection pace. */
+  projectedRestOfSeasonPoints?: number | null;
+
+  /** Current production plus the remaining-season estimate. */
+  projectedFinalSeasonPoints?: number | null;
+
+  /** Stable draft/preseason pace through the number of games already played. */
+  expectedFantasyPointsToDate?: number | null;
+
+  /** Positive means ahead of projection; negative means behind projection. */
+  performanceVsProjectionPoints?: number | null;
+  performanceVsProjectionPercent?: number | null;
+
+  /** NHL team games completed and remaining in the regular season. */
+  seasonTeamGamesPlayed?: number | null;
+  seasonGamesRemaining?: number | null;
+
+  /** Category-by-category explanation of current-season fantasy points. */
+  seasonStatBreakdown?: ProjectionStatBreakdownItem[] | null;
+  seasonStatBreakdownNote?: string | null;
+
+  /** The NHL team's currently active six-game block and its game markers. */
+  currentTeamCycleNumber?: number | null;
+  currentTeamCycleGames?: ProjectionCycleGameMarker[] | null;
+
 
   /**
    * Exact manager-facing projection frozen when a fantasy cycle begins.
@@ -101,11 +150,47 @@ export interface DraftProjection {
    */
   draftProjectedSeasonPoints?: number | null;
   draftProjectedCyclePoints?: number | null;
+
+  /** Projection V11 completed-season development/decline classification. */
+  draftTrajectoryLabel?:
+    | 'breakout'
+    | 'rising'
+    | 'stable'
+    | 'declining'
+    | 'insufficient-data'
+    | null;
+  draftTrajectoryConfidence?: number | null;
+  draftTrajectoryAdjustment?: number | null;
+  draftLatestSeasonWeight?: number | null;
+  draftPaceChangePercent?: number | null;
+
   draftRecentTrendAdjustment?: number | null;
   draftRoleAdjustment?: number | null;
   draftReliabilityRating?: number | null;
   draftVolatilityPenalty?: number | null;
   draftFloorAdjustedCyclePoints?: number | null;
+
+  /** Projection V11 stat-component ensemble diagnostics. */
+  projectionModelVersion?: number | null;
+  projectionModelConfidence?: number | null;
+
+  /** Stored as 0-1 rates; UI surfaces format them as percentages. */
+  projectionPrimaryAssistShare?: number | null;
+  projectionShootingPercentage?: number | null;
+  projectionCurrentSeasonWeight?: number | null;
+  projectionHistoricalWeight?: number | null;
+
+  /** Estimated goals per 82 added or removed by shooting regression. */
+  projectionShootingRegressionAdjustment?: number | null;
+
+  /** Likely next-matchup range around the availability-adjusted mean. */
+  projectionFloorPoints?: number | null;
+  projectionCeilingPoints?: number | null;
+  projectionUncertaintyPoints?: number | null;
+
+  /** Repeatable opportunity portion of the recent-form adjustment. */
+  sustainableFormAdjustment?: number | null;
+  recentGameStandardDeviation?: number | null;
 
   /** Shared ranking fields used by the Draft Room and auto-draft. */
   draftValueAboveReplacement?: number | null;

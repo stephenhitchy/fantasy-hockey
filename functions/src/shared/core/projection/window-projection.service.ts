@@ -2,6 +2,7 @@ import { DraftableAsset, DraftProjection } from '../draft/draft.models';
 import { createFrozenCycleProjection } from './cycle-projection.util';
 import {
   generateSharedProjectionSnapshot,
+  getExpectedProjectionSnapshotContext,
   isSharedProjectionSnapshotFreshForWindow,
   loadSharedProjectionSnapshot,
   loadSharedProjectionSnapshotForCycle,
@@ -65,11 +66,17 @@ export async function ensureWindowProjectionBundle(
   input: EnsureWindowProjectionBundleInput,
 ): Promise<WindowProjectionBundle> {
   const targetCycleNumber = Math.max(1, Math.floor(input.targetCycleNumber));
+  const expectedContext = await getExpectedProjectionSnapshotContext(
+    input.leagueId,
+    input.now,
+  );
   const freshnessInput = {
     teamCount: input.teamCount,
     requiredGamesPerCycle: input.requiredGamesPerCycle,
     targetCycleNumber,
     now: input.now,
+    expectedProjectionAsOfDate: expectedContext.projectionAsOfDate,
+    expectedProjectionContext: expectedContext.projectionContext,
   };
   const targetSnapshot = await loadSharedProjectionSnapshotForCycle(
     input.leagueId,

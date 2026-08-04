@@ -13,12 +13,12 @@
 
     <header class="projection-header">
       <div>
-        <span class="eyebrow">Projection Lab V6</span>
+        <span class="eyebrow">Projection Lab V11</span>
         <h1>Fantasy Value Balancer</h1>
         <p>
           {{ league()?.name }}
           ·
-          Compare a stable season-long draft board with a separate injury-adjusted next-six-game outlook.
+          Compare an opportunity-weighted, luck-regressed season draft board with a separate injury- and schedule-adjusted next-six-game outlook.
         </p>
       </div>
 
@@ -250,6 +250,41 @@
         </span>
       </article>
 
+      <article class="trajectory-explainer">
+        <strong>Development Trajectory</strong>
+        <span>
+          Projection V11 gives a supported young breakout more weight when the production jump is backed by a real sample and role, shot, or power-play growth. Positive uplift is capped, and age alone never creates a breakout.
+        </span>
+      </article>
+
+      <article>
+        <strong>Component Ensemble</strong>
+        <span>
+          Ice time, shots, hits, blocks, scoring, power-play output, and rare bonuses stabilize at different speeds. Repeatable opportunity moves faster than finishing luck.
+        </span>
+      </article>
+
+      <article>
+        <strong>Luck Regression</strong>
+        <span>
+          Shooting percentage, goalie save percentage, game-winners, overtime goals, short-handed points, and plus/minus are pulled toward sustainable history when the sample is noisy.
+        </span>
+      </article>
+
+      <article>
+        <strong>Likely Matchup Range</strong>
+        <span>
+          The mean remains the official projection. The likely range shows normal six-game volatility using recent game variation, sample size, position, and reliability.
+        </span>
+      </article>
+
+      <article>
+        <strong>Missed Games</strong>
+        <span>
+          A game the player did not appear in is never inserted as a zero. Healthy production is measured per appearance; current injury availability is applied separately to the next-six-game outlook.
+        </span>
+      </article>
+
       <article>
         <strong>Availability</strong>
         <span>
@@ -473,6 +508,10 @@
               <th>NHL</th>
               <th>Draft Rating</th>
               <th>Draft 6-Game</th>
+              <th>Development</th>
+              <th>V11 Model</th>
+              <th>Likely Range</th>
+              <th>Luck Regression</th>
               <th>Next 6 Games</th>
               <th>Healthy Matchup</th>
               <th>Availability</th>
@@ -538,6 +577,44 @@
                 </td>
 
                 <td>{{ getDisplayNumber(row.draftProjectedCycle) }}</td>
+
+                <td class="trajectory-cell">
+                  <span [class]="'trajectory-pill ' + getTrajectoryClass(row)">
+                    {{ getTrajectoryLabel(row) }}
+                  </span>
+                  <small class="trajectory-adjustment">
+                    {{ getTrajectoryAdjustmentLabel(row) }}
+                  </small>
+                  <small class="rating-basis">
+                    {{ getTrajectoryDescription(row) }}
+                  </small>
+                </td>
+
+                <td class="model-diagnostic-cell">
+                  <strong>V{{ row.projectionModelVersion }}</strong>
+                  <small class="rating-basis">
+                    {{ getProjectionModelDescription(row) }}
+                  </small>
+                </td>
+
+                <td class="model-diagnostic-cell">
+                  <strong>
+                    {{ getDisplayNumber(row.projectionFloor) }}–{{ getDisplayNumber(row.projectionCeiling) }}
+                  </strong>
+                  <small class="rating-basis">
+                    {{ getProjectionRangeDescription(row) }}
+                  </small>
+                </td>
+
+                <td class="model-diagnostic-cell">
+                  <strong>
+                    {{ getSignedDisplayNumber(row.sustainableFormAdjustment) }} repeatable form
+                  </strong>
+                  <small class="rating-basis">
+                    {{ getLuckRegressionDescription(row) }}
+                  </small>
+                </td>
+
                 <td>{{ getDisplayNumber(row.projectedCycle) }}</td>
 
                 <td>

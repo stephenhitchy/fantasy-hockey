@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TeamGoalieLab } from './team-goalie-lab/team-goalie-lab';
+import { HistoricalScoringCalibration } from './historical-calibration/historical-calibration';
 import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
@@ -118,7 +119,7 @@ function toiToMinutes(toi: string): number {
 
 @Component({
   selector: 'app-scoring-test',
-  imports: [FormsModule, JsonPipe, TeamGoalieLab],
+  imports: [FormsModule, JsonPipe, TeamGoalieLab, HistoricalScoringCalibration],
   templateUrl: './scoring-test.html',
   styleUrl: './scoring-test.css'
 })

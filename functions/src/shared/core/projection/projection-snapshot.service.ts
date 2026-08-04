@@ -8,9 +8,18 @@ import {
 } from '../firebase-admin-compat';
 import { db } from '../firebase';
 import { DraftableAsset, DraftPosition, SharedProjectionAvailabilityStatus } from '../draft/draft.models';
+import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
 import { getCurrentNhlDraftSkaters, NHL_DRAFT_CLUBS } from '../nhl/nhl-api.service';
+import {
+  PlayerAvailabilityDatabaseRecord,
+  PlayerAvailabilityStatus,
+} from '../player/player-availability.models';
+import {
+  assertSharedProjectionPoolHealthy,
+  rankSharedProjectionAssets,
+} from './projection-ranking.util';
 
-export const SHARED_PROJECTION_VERSION = 9;
+export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
 
 export type SharedProjectionSnapshotStatus = 'building' | 'ready' | 'error';
@@ -40,6 +49,9 @@ export interface SharedProjectionSnapshotMetadata {
   generationReason: SharedProjectionGenerationReason;
   draftReadyUntil: string;
   message: string;
+  projectionAsOfDate?: string;
+  projectionContext?: 'live' | 'historical-replay';
+  projectionSeason?: string;
 }
 
 export interface SharedProjectionSnapshot {
@@ -60,6 +72,8 @@ export interface WindowSnapshotFreshnessInput {
   requiredGamesPerCycle: number;
   targetCycleNumber: number;
   now?: Date;
+  expectedProjectionAsOfDate?: string;
+  expectedProjectionContext?: 'live' | 'historical-replay';
 }
 
 function getPointerRef(leagueId: string, pointerId: string) {
@@ -103,6 +117,20 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     generationReason: value.generationReason ?? 'window-boundary',
     draftReadyUntil: typeof value.draftReadyUntil === 'string' ? value.draftReadyUntil : '',
     message: typeof value.message === 'string' ? value.message : '',
+    projectionAsOfDate:
+      typeof value.projectionAsOfDate === 'string'
+        ? value.projectionAsOfDate
+        : undefined,
+    projectionContext:
+      value.projectionContext === 'historical-replay'
+        ? 'historical-replay'
+        : value.projectionContext === 'live'
+          ? 'live'
+          : undefined,
+    projectionSeason:
+      typeof value.projectionSeason === 'string'
+        ? value.projectionSeason
+        : undefined,
   };
 }
 
@@ -162,7 +190,11 @@ export function isSharedProjectionSnapshotFreshForWindow(
     metadata.status !== 'ready' ||
     metadata.teamCount !== input.teamCount ||
     metadata.requiredGamesPerCycle !== input.requiredGamesPerCycle ||
-    metadata.targetCycleNumber !== input.targetCycleNumber
+    metadata.targetCycleNumber !== input.targetCycleNumber ||
+    (input.expectedProjectionAsOfDate !== undefined &&
+      metadata.projectionAsOfDate !== input.expectedProjectionAsOfDate) ||
+    (input.expectedProjectionContext !== undefined &&
+      metadata.projectionContext !== input.expectedProjectionContext)
   ) {
     return false;
   }
@@ -187,12 +219,514 @@ export function loadSharedProjectionSnapshotForCycle(
   return loadSnapshotFromPointer(leagueId, `target-cycle-${Math.max(1, Math.floor(cycleNumber))}`);
 }
 
-export async function generateSharedProjectionSnapshot(
-  _input: GenerateSharedProjectionSnapshotInput,
-): Promise<SharedProjectionSnapshot> {
-  throw new Error(
-    'The server scoring worker could not refresh projections. It will preserve the best saved or roster-based projection while continuing cycle automation.',
+const SNAPSHOT_ASSET_WRITE_BATCH_SIZE = 400;
+const SNAPSHOT_ASSET_CHUNK_SIZE = 25;
+const generationByLeagueAndCycle = new Map<string, Promise<SharedProjectionSnapshot>>();
+
+interface HistoricalReplayProjectionContext {
+  enabled: true;
+  targetSeason: string;
+  sourceSeason: string;
+  simulatedDate: string;
+}
+
+interface ProjectionGenerationContext {
+  projectionDate: Date;
+  projectionAsOfDate: string;
+  projectionContext: 'live' | 'historical-replay';
+  projectionSeason: string;
+  currentSeasonOverride?: string;
+  previousSeasonOverride?: string;
+  secondPreviousSeasonOverride?: string;
+  ignoreAvailability: boolean;
+  availabilityByPlayerId: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
+}
+
+const VALID_AVAILABILITY_STATUSES = new Set<PlayerAvailabilityStatus>([
+  'active',
+  'day-to-day',
+  'out',
+  'injured-reserve',
+  'long-term-injured-reserve',
+  'suspended',
+  'personal-leave',
+  'unknown',
+]);
+
+function sanitizeForFirestore<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function toIsoDate(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  return '';
+}
+
+function previousSeason(season: string): string {
+  const startYear = Number(season.slice(0, 4));
+
+  if (!/^\d{8}$/.test(season) || !Number.isFinite(startYear)) {
+    return season;
+  }
+
+  return `${startYear - 1}${startYear}`;
+}
+
+function seasonForDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const startYear = date.getUTCMonth() + 1 >= 7 ? year : year - 1;
+  return `${startYear}${startYear + 1}`;
+}
+
+function isIrEligible(status: PlayerAvailabilityStatus): boolean {
+  return (
+    status === 'out' ||
+    status === 'injured-reserve' ||
+    status === 'long-term-injured-reserve'
   );
+}
+
+function normalizeAvailabilityRecord(
+  value: unknown,
+  leagueId: string,
+  defaultSource: 'espn' | 'commissioner',
+): PlayerAvailabilityDatabaseRecord | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const data = value as Record<string, unknown>;
+  const playerId = data['playerId'];
+  const playerName = data['playerName'];
+  const statusValue = data['status'];
+
+  if (
+    typeof playerId !== 'number' ||
+    !Number.isFinite(playerId) ||
+    typeof playerName !== 'string' ||
+    typeof statusValue !== 'string' ||
+    !VALID_AVAILABILITY_STATUSES.has(statusValue as PlayerAvailabilityStatus)
+  ) {
+    return null;
+  }
+
+  const status = statusValue as PlayerAvailabilityStatus;
+  const source = data['source'] === 'commissioner'
+    ? 'commissioner'
+    : defaultSource;
+
+  return {
+    playerId,
+    playerName,
+    status,
+    note: typeof data['note'] === 'string' ? data['note'] : '',
+    irEligible: isIrEligible(status),
+    updatedAt: toIsoDate(data['updatedAt']),
+    updatedBy: typeof data['updatedBy'] === 'string' ? data['updatedBy'] : '',
+    source,
+    leagueId: source === 'commissioner' ? leagueId : 'global',
+    externalSource: data['externalSource'] === 'ESPN' ? 'ESPN' : undefined,
+    externalStatus:
+      typeof data['externalStatus'] === 'string'
+        ? data['externalStatus']
+        : undefined,
+    externalReturnDate:
+      typeof data['externalReturnDate'] === 'string'
+        ? data['externalReturnDate']
+        : undefined,
+    externalInjuryDate:
+      typeof data['externalInjuryDate'] === 'string'
+        ? data['externalInjuryDate']
+        : undefined,
+    externalTeamName:
+      typeof data['externalTeamName'] === 'string'
+        ? data['externalTeamName']
+        : undefined,
+    syncedAt: toIsoDate(data['syncedAt']) || undefined,
+  };
+}
+
+async function loadAvailabilityRecords(
+  leagueId: string,
+): Promise<ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>> {
+  const records = new Map<number, PlayerAvailabilityDatabaseRecord>();
+  const [globalSnapshot, manualSnapshot] = await Promise.all([
+    getDoc(doc(db, 'appData', 'playerAvailability')).catch(() => null),
+    getDocs(collection(db, 'leagues', leagueId, 'playerAvailability')).catch(() => null),
+  ]);
+  const globalData = globalSnapshot?.data() as Record<string, unknown> | undefined;
+  const globalRecords = Array.isArray(globalData?.['records'])
+    ? globalData?.['records'] as unknown[]
+    : [];
+
+  for (const value of globalRecords) {
+    const record = normalizeAvailabilityRecord(value, leagueId, 'espn');
+
+    if (record) {
+      records.set(record.playerId, record);
+    }
+  }
+
+  for (const document of manualSnapshot?.docs ?? []) {
+    const record = normalizeAvailabilityRecord(
+      document.data(),
+      leagueId,
+      'commissioner',
+    );
+
+    if (record?.source === 'commissioner') {
+      records.set(record.playerId, record);
+    }
+  }
+
+  return records;
+}
+
+async function loadHistoricalReplayProjectionContext(
+  leagueId: string,
+): Promise<HistoricalReplayProjectionContext | null> {
+  const snapshot = await getDoc(
+    doc(db, 'leagues', leagueId, 'historicalReplay', 'control'),
+  ).catch(() => null);
+
+  if (!snapshot?.exists()) {
+    return null;
+  }
+
+  const data = snapshot.data() as Record<string, unknown>;
+  const targetSeason = data['targetSeason'];
+  const sourceSeason = data['sourceSeason'];
+  const simulatedDate = data['simulatedDate'];
+
+  if (
+    data['enabled'] !== true ||
+    typeof targetSeason !== 'string' ||
+    !/^\d{8}$/.test(targetSeason) ||
+    typeof sourceSeason !== 'string' ||
+    !/^\d{8}$/.test(sourceSeason) ||
+    typeof simulatedDate !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(simulatedDate)
+  ) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    targetSeason,
+    sourceSeason,
+    simulatedDate,
+  };
+}
+
+export interface ExpectedProjectionSnapshotContext {
+  projectionAsOfDate: string;
+  projectionContext: 'live' | 'historical-replay';
+}
+
+/**
+ * Returns the date/context that a window-boundary snapshot must represent.
+ * Historical replay advances many simulated days within a few real minutes,
+ * so elapsed wall-clock freshness alone is not enough: a Matchup 2 slot that
+ * opens on a later replay date must not reuse an earlier-date projection just
+ * because that snapshot was generated less than six hours ago.
+ */
+export async function getExpectedProjectionSnapshotContext(
+  leagueId: string,
+  now: Date = new Date(),
+): Promise<ExpectedProjectionSnapshotContext> {
+  const replay = await loadHistoricalReplayProjectionContext(leagueId);
+
+  if (replay) {
+    return {
+      projectionAsOfDate: replay.simulatedDate,
+      projectionContext: 'historical-replay',
+    };
+  }
+
+  return {
+    projectionAsOfDate: now.toISOString().slice(0, 10),
+    projectionContext: 'live',
+  };
+}
+
+async function getProjectionGenerationContext(
+  leagueId: string,
+): Promise<ProjectionGenerationContext> {
+  const replay = await loadHistoricalReplayProjectionContext(leagueId);
+
+  if (replay) {
+    const projectionDate = new Date(`${replay.simulatedDate}T12:00:00Z`);
+
+    /*
+     * Replay projections deliberately use the replay target as the empty/current
+     * season and the source season as the latest completed season. This prevents
+     * future source-season games from leaking into a simulated date while still
+     * letting Projection V11 recognize supported completed-season breakouts.
+     * Live 2026 injury records are ignored during a historical replay.
+     */
+    return {
+      projectionDate,
+      projectionAsOfDate: replay.simulatedDate,
+      projectionContext: 'historical-replay',
+      projectionSeason: replay.targetSeason,
+      currentSeasonOverride: replay.targetSeason,
+      previousSeasonOverride: replay.sourceSeason,
+      secondPreviousSeasonOverride: previousSeason(replay.sourceSeason),
+      ignoreAvailability: true,
+      availabilityByPlayerId: new Map(),
+    };
+  }
+
+  const projectionDate = new Date();
+
+  return {
+    projectionDate,
+    projectionAsOfDate: projectionDate.toISOString().slice(0, 10),
+    projectionContext: 'live',
+    projectionSeason: seasonForDate(projectionDate),
+    ignoreAvailability: false,
+    availabilityByPlayerId: await loadAvailabilityRecords(leagueId),
+  };
+}
+
+async function generateSnapshotInternal(
+  input: GenerateSharedProjectionSnapshotInput,
+): Promise<SharedProjectionSnapshot> {
+  const leagueId = input.leagueId.trim();
+
+  if (!leagueId) {
+    throw new Error('A league is required to refresh shared projections.');
+  }
+
+  const teamCount = Math.max(2, Math.floor(input.teamCount));
+  const requiredGamesPerCycle = Math.max(
+    1,
+    Math.floor(input.requiredGamesPerCycle),
+  );
+  const targetCycleNumber = Math.max(
+    1,
+    Math.floor(input.targetCycleNumber ?? 1),
+  );
+  const generationReason = input.generationReason ?? 'window-boundary';
+  const generatedAt = new Date().toISOString();
+  const snapshotId = `server-v${SHARED_PROJECTION_VERSION}-${Date.now()}-${targetCycleNumber}`;
+  const draftReadyUntil = new Date(
+    Date.now() + WINDOW_PROJECTION_FRESH_MINUTES * 60_000,
+  ).toISOString();
+  const snapshotRef = doc(
+    db,
+    'leagues',
+    leagueId,
+    'projectionSnapshots',
+    snapshotId,
+  );
+  const context = await getProjectionGenerationContext(leagueId);
+  const buildingMetadata = {
+    snapshotId,
+    activeSnapshotId: snapshotId,
+    status: 'building' as const,
+    projectionVersion: SHARED_PROJECTION_VERSION,
+    generatedAt,
+    generatedAtServer: serverTimestamp(),
+    generatedBy: 'server:window-projection',
+    assetCount: 0,
+    teamCount,
+    targetCycleNumber,
+    requiredGamesPerCycle,
+    generationReason,
+    draftReadyUntil,
+    message: 'Building server-authoritative shared projections.',
+    projectionAsOfDate: context.projectionAsOfDate,
+    projectionContext: context.projectionContext,
+    projectionSeason: context.projectionSeason,
+  };
+
+  const buildingBatch = writeBatch(db);
+  buildingBatch.set(snapshotRef, buildingMetadata);
+  await buildingBatch.commit();
+
+  try {
+    const localAssets = await loadDraftPlayerPool({
+      forceRefresh: true,
+      targetCycleNumber,
+      requiredGamesPerCycle,
+      availabilityByPlayerId: context.availabilityByPlayerId,
+      currentSeasonOverride: context.currentSeasonOverride,
+      previousSeasonOverride: context.previousSeasonOverride,
+      secondPreviousSeasonOverride: context.secondPreviousSeasonOverride,
+      projectionAsOfDate: context.projectionDate,
+      ignoreAvailability: context.ignoreAvailability,
+    });
+
+    assertSharedProjectionPoolHealthy(localAssets);
+
+    const rankedAssets = rankSharedProjectionAssets(
+      localAssets,
+      teamCount,
+    ).map((asset) => ({
+      ...asset,
+      sharedProjectionSnapshotId: snapshotId,
+      projectionGeneratedAt: generatedAt,
+    }));
+    const assetChunks: DraftableAsset[][] = [];
+
+    for (
+      let index = 0;
+      index < rankedAssets.length;
+      index += SNAPSHOT_ASSET_CHUNK_SIZE
+    ) {
+      assetChunks.push(
+        rankedAssets.slice(index, index + SNAPSHOT_ASSET_CHUNK_SIZE),
+      );
+    }
+
+    for (
+      let index = 0;
+      index < assetChunks.length;
+      index += SNAPSHOT_ASSET_WRITE_BATCH_SIZE
+    ) {
+      const batch = writeBatch(db);
+      const chunkBatch = assetChunks.slice(
+        index,
+        index + SNAPSHOT_ASSET_WRITE_BATCH_SIZE,
+      );
+
+      chunkBatch.forEach((chunkAssets, offset) => {
+        const chunkIndex = index + offset;
+        const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
+
+        batch.set(
+          doc(
+            db,
+            'leagues',
+            leagueId,
+            'projectionSnapshots',
+            snapshotId,
+            'assets',
+            chunkId,
+          ),
+          sanitizeForFirestore({
+            schemaVersion: 2,
+            chunkIndex,
+            assetCount: chunkAssets.length,
+            sharedProjectionSnapshotId: snapshotId,
+            assets: chunkAssets,
+          }),
+        );
+      });
+
+      await batch.commit();
+    }
+
+    const metadata: SharedProjectionSnapshotMetadata = {
+      snapshotId,
+      activeSnapshotId: snapshotId,
+      status: 'ready',
+      projectionVersion: SHARED_PROJECTION_VERSION,
+      generatedAt,
+      generatedBy: 'server:window-projection',
+      assetCount: rankedAssets.length,
+      assetDocumentCount: assetChunks.length,
+      assetStorageVersion: 2,
+      teamCount,
+      targetCycleNumber,
+      requiredGamesPerCycle,
+      generationReason,
+      draftReadyUntil,
+      message:
+        context.projectionContext === 'historical-replay'
+          ? `Replay-safe Matchup ${targetCycleNumber} projections are ready as of ${context.projectionAsOfDate}.`
+          : `Fresh Matchup ${targetCycleNumber} projections are ready.`,
+      projectionAsOfDate: context.projectionAsOfDate,
+      projectionContext: context.projectionContext,
+      projectionSeason: context.projectionSeason,
+    };
+    const pointerPayload = {
+      ...metadata,
+      generatedAtServer: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const finalBatch = writeBatch(db);
+
+    finalBatch.set(snapshotRef, pointerPayload);
+    finalBatch.set(
+      doc(
+        db,
+        'leagues',
+        leagueId,
+        'projectionSnapshots',
+        `target-cycle-${targetCycleNumber}`,
+      ),
+      pointerPayload,
+    );
+
+    if (generationReason !== 'window-boundary') {
+      finalBatch.set(
+        doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+        pointerPayload,
+      );
+    }
+
+    await finalBatch.commit();
+
+    return {
+      metadata,
+      assets: rankedAssets,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error
+      ? error.message
+      : 'Unable to generate server-authoritative projections.';
+    const errorBatch = writeBatch(db);
+
+    errorBatch.set(
+      snapshotRef,
+      {
+        ...buildingMetadata,
+        status: 'error',
+        message,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await errorBatch.commit().catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function generateSharedProjectionSnapshot(
+  input: GenerateSharedProjectionSnapshotInput,
+): Promise<SharedProjectionSnapshot> {
+  const leagueId = input.leagueId.trim();
+  const targetCycleNumber = Math.max(
+    1,
+    Math.floor(input.targetCycleNumber ?? 1),
+  );
+  const key = `${leagueId}::${targetCycleNumber}`;
+  const existing = generationByLeagueAndCycle.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
+  const generation = generateSnapshotInternal(input).finally(() => {
+    generationByLeagueAndCycle.delete(key);
+  });
+
+  generationByLeagueAndCycle.set(key, generation);
+  return generation;
 }
 
 

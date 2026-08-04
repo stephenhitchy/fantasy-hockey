@@ -564,6 +564,7 @@ export interface NhlDraftSkater {
   nhlTeamAbbreviation: string;
   teamLogoUrl: string;
   headshotUrl?: string;
+  birthDate?: string;
 }
 
 interface NhlCurrentRosterPlayer {
@@ -581,6 +582,7 @@ interface NhlCurrentRosterPlayer {
   positionCode?: string;
   currentTeamAbbrev?: string;
   headshot?: string;
+  birthDate?: string;
 }
 
 interface NhlCurrentRosterResponse {
@@ -748,7 +750,8 @@ function addRosterSkaters(
       position,
       nhlTeamAbbreviation: teamAbbreviation,
       teamLogoUrl: getDraftTeamLogo(teamAbbreviation),
-      headshotUrl: player.headshot
+      headshotUrl: player.headshot,
+      birthDate: player.birthDate
     });
   }
 }

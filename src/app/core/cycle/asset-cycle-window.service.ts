@@ -348,6 +348,23 @@ export function getFantasyTeamCycleWindowScore(
   return [...scoreBySlotId.values()].reduce((total, score) => total + score, 0);
 }
 
+export async function getCycleTeamWindows(
+  leagueId: string,
+  cycleNumber: number,
+): Promise<FantasyTeamCycleWindows[]> {
+  const snapshot = await getDocs(getTeamWindowsCollectionRef(leagueId, cycleNumber));
+
+  return snapshot.docs
+    .map((windowDocument) =>
+      normalizeFantasyTeamCycleWindows(
+        windowDocument.id,
+        cycleNumber,
+        windowDocument.data() as Partial<FantasyTeamCycleWindows>,
+      ),
+    )
+    .sort((first, second) => first.ownerId.localeCompare(second.ownerId));
+}
+
 export function listenToCycleTeamWindows(
   leagueId: string,
   cycleNumber: number,

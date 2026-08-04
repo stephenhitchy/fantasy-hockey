@@ -21,6 +21,7 @@
           <span>{{ presenter.getCycleLabel() }}</span>
           <strong>VS</strong>
           <small>{{ presenter.getMatchupReadinessLabel(mobileMatchup) }}</small>
+          <small class="mobile-score-finish">{{ presenter.getMobileMatchupFinishLabel() }}</small>
         </div>
 
         <article class="mobile-score-team mobile-score-team-b" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">

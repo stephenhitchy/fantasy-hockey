@@ -13,13 +13,18 @@ import {
 
 import { auth, db } from '../firebase';
 
-import { DraftableAsset, DraftPosition } from '../draft/draft.models';
+import { DraftableAsset } from '../draft/draft.models';
 
 import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
 
 import { getPlayerAvailabilityRecordsForLeague } from '../player/player-availability.service';
 
-export const SHARED_PROJECTION_VERSION = 9;
+import {
+  assertSharedProjectionPoolHealthy,
+  rankSharedProjectionAssets,
+} from './projection-ranking.util';
+
+export const SHARED_PROJECTION_VERSION = 11;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -28,22 +33,6 @@ const SNAPSHOT_POINTER_ID = 'current';
 const TARGET_CYCLE_POINTER_PREFIX = 'target-cycle-';
 const SNAPSHOT_ASSET_WRITE_BATCH_SIZE = 400;
 const SNAPSHOT_ASSET_CHUNK_SIZE = 25;
-const GOALIE_UNIT_TALENT_SCALE = 0.88;
-const GOALIE_UNIT_TALENT_WEIGHT = 0.63;
-const GOALIE_UNIT_SCARCITY_WEIGHT = 0.12;
-const GOALIE_UNIT_SLOT_CURVE_WEIGHT = 0.25;
-
-const POSITION_REQUIREMENTS: Record<DraftPosition, number> = {
-  LW: 3,
-  C: 3,
-  RW: 3,
-  D: 4,
-  G: 1,
-};
-
-const POSITIONS: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
-const FLEXIBLE_BENCH_SLOTS_PER_TEAM = 3;
-
 const generationByLeague = new Map<string, Promise<SharedProjectionSnapshot>>();
 
 const SNAPSHOT_READ_CACHE_MILLISECONDS = 15_000;
@@ -89,6 +78,9 @@ export interface SharedProjectionSnapshotMetadata {
   generationReason: SharedProjectionGenerationReason;
   draftReadyUntil: string;
   message: string;
+  projectionAsOfDate?: string;
+  projectionContext?: 'live' | 'historical-replay';
+  projectionSeason?: string;
 }
 
 export interface SharedProjectionSnapshot {
@@ -128,368 +120,29 @@ function getProjectionSnapshotAssetRef(leagueId: string, snapshotId: string, ass
   return doc(getProjectionSnapshotAssetsRef(leagueId, snapshotId), assetKey);
 }
 
-function getAssetName(asset: DraftableAsset): string {
-  return asset.assetType === 'skater' ? asset.player.fullName : asset.teamName;
+function getSnapshotSortNumber(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : Number.MAX_SAFE_INTEGER;
 }
 
-function assertSharedProjectionPoolHealthy(assets: DraftableAsset[]): void {
-  const skaters = assets.filter((asset) => asset.assetType === 'skater');
-
-  if (skaters.length < 100) {
-    return;
-  }
-
-  const dataBackedSkaters = skaters.filter(
-    (asset) =>
-      asset.projectionDataSource !== 'conservative-baseline' &&
-      typeof asset.draftProjectedSeasonPoints === 'number' &&
-      asset.draftProjectedSeasonPoints > 0,
-  );
-
-  const distinctSeasonOutlooks = new Set(
-    skaters
-      .map((asset) => asset.draftProjectedSeasonPoints)
-      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-      .map((value) => value.toFixed(1)),
-  );
-
-  const minimumDataBackedCount = Math.max(75, Math.floor(skaters.length * 0.2));
-
-  if (dataBackedSkaters.length < minimumDataBackedCount || distinctSeasonOutlooks.size < 20) {
-    throw new Error(
-      `Projection generation was stopped because the NHL statistics response produced a collapsed draft board (${dataBackedSkaters.length} of ${skaters.length} skaters had data-backed projections and only ${distinctSeasonOutlooks.size} distinct season outlooks were produced). The previous shared projection was preserved.`,
-    );
-  }
-}
-
-function getSortNumber(value: number | null | undefined): number {
-  return typeof value === 'number' ? value : -1;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function rounded(value: number): number {
-  return Number(value.toFixed(1));
-}
-
-function getDraftProjection(asset: DraftableAsset | undefined): number {
-  if (!asset) {
-    return 0;
-  }
+function compareSnapshotAssetOrder(
+  first: DraftableAsset,
+  second: DraftableAsset,
+): number {
+  const firstName = first.assetType === 'skater'
+    ? first.player.fullName
+    : first.teamName;
+  const secondName = second.assetType === 'skater'
+    ? second.player.fullName
+    : second.teamName;
 
   return (
-    asset.draftFloorAdjustedCyclePoints ??
-    asset.draftProjectedCyclePoints ??
-    (typeof asset.projectedSeasonPoints === 'number'
-      ? (asset.projectedSeasonPoints / 82) * 6
-      : asset.projectedCyclePoints) ??
-    0
-  );
-}
-
-function getCycleProjection(asset: DraftableAsset | undefined): number {
-  if (!asset) {
-    return 0;
-  }
-
-  return asset.floorAdjustedCyclePoints ?? asset.projectedCyclePoints ?? 0;
-}
-
-function compareAssetName(first: DraftableAsset, second: DraftableAsset): number {
-  return (
-    getAssetName(first).localeCompare(getAssetName(second)) ||
+    getSnapshotSortNumber(first.draftRank) - getSnapshotSortNumber(second.draftRank) ||
+    getSnapshotSortNumber(first.balancedRank) - getSnapshotSortNumber(second.balancedRank) ||
+    firstName.localeCompare(secondName) ||
     first.assetKey.localeCompare(second.assetKey)
   );
-}
-
-function compareDraftProjectionOrder(first: DraftableAsset, second: DraftableAsset): number {
-  return (
-    getDraftProjection(second) - getDraftProjection(first) ||
-    getSortNumber(second.draftReliabilityRating) - getSortNumber(first.draftReliabilityRating) ||
-    compareAssetName(first, second)
-  );
-}
-
-function compareCycleProjectionOrder(first: DraftableAsset, second: DraftableAsset): number {
-  return (
-    getCycleProjection(second) - getCycleProjection(first) ||
-    getSortNumber(second.reliabilityRating) - getSortNumber(first.reliabilityRating) ||
-    compareAssetName(first, second)
-  );
-}
-
-function getTalentScore(
-  asset: DraftableAsset,
-  projection: number,
-  topSkaterProjection: number,
-  topGoalieProjection: number,
-): number {
-  if (asset.position === 'G') {
-    return clamp(
-      (projection / Math.max(1, topGoalieProjection)) * 100 * GOALIE_UNIT_TALENT_SCALE,
-      0,
-      100,
-    );
-  }
-
-  return clamp((projection / Math.max(1, topSkaterProjection)) * 100, 0, 100);
-}
-
-function getGoalieSlotCurveScore(
-  positionRank: number | null | undefined,
-  starterCount: number,
-): number {
-  const safeRank =
-    typeof positionRank === 'number' && positionRank > 0 ? positionRank : starterCount * 2;
-
-  if (safeRank <= starterCount) {
-    const progress = starterCount <= 1 ? 0 : (safeRank - 1) / (starterCount - 1);
-
-    /*
-     * Spread the draftable goalie tier across the board instead of
-     * allowing many similarly projected units to form one large block.
-     * The best unit remains premium, while the replacement starter
-     * settles near the middle of the overall board.
-     */
-    return 88 - progress * 28;
-  }
-
-  const postStarterProgress = clamp((safeRank - starterCount) / Math.max(1, starterCount), 0, 1);
-
-  return 55 - postStarterProgress * 20;
-}
-
-function getFlexibleBenchReplacementCounts(
-  assets: DraftableAsset[],
-  teamCount: number,
-  projection: (asset: DraftableAsset) => number,
-): Record<DraftPosition, number> {
-  const replacementCounts = { ...POSITION_REQUIREMENTS } as Record<DraftPosition, number>;
-
-  for (const position of POSITIONS) {
-    replacementCounts[position] = Math.max(1, teamCount * POSITION_REQUIREMENTS[position]);
-  }
-
-  const remainingCandidates = POSITIONS.flatMap((position) => {
-    const starterCount = replacementCounts[position];
-
-    return assets
-      .filter((asset) => asset.position === position)
-      .sort((first, second) => projection(second) - projection(first))
-      .slice(starterCount);
-  }).sort((first, second) => projection(second) - projection(first));
-
-  for (const asset of remainingCandidates.slice(0, teamCount * FLEXIBLE_BENCH_SLOTS_PER_TEAM)) {
-    replacementCounts[asset.position] += 1;
-  }
-
-  return replacementCounts;
-}
-
-function rankSharedProjectionAssets(assets: DraftableAsset[], teamCount: number): DraftableAsset[] {
-  const working = new Map<string, DraftableAsset>();
-  const draftReplacementCounts = getFlexibleBenchReplacementCounts(
-    assets,
-    teamCount,
-    getDraftProjection,
-  );
-  const cycleReplacementCounts = getFlexibleBenchReplacementCounts(
-    assets,
-    teamCount,
-    getCycleProjection,
-  );
-
-  for (const position of POSITIONS) {
-    const positionAssets = assets
-      .filter((asset) => asset.position === position)
-      .sort(compareDraftProjectionOrder);
-
-    const draftReplacementIndex = Math.max(
-      0,
-      Math.min(positionAssets.length - 1, draftReplacementCounts[position] - 1),
-    );
-
-    const draftReplacement = getDraftProjection(positionAssets[draftReplacementIndex]);
-
-    const cyclePositionAssets = [...positionAssets].sort(compareCycleProjectionOrder);
-    const cycleReplacementIndex = Math.max(
-      0,
-      Math.min(cyclePositionAssets.length - 1, cycleReplacementCounts[position] - 1),
-    );
-
-    const cycleReplacement = getCycleProjection(cyclePositionAssets[cycleReplacementIndex]);
-
-    const draftPositionRankByKey = new Map(
-      positionAssets.map((asset, index) => [asset.assetKey, index + 1]),
-    );
-
-    const cyclePositionRankByKey = new Map(
-      cyclePositionAssets.map((asset, index) => [asset.assetKey, index + 1]),
-    );
-
-    for (const asset of positionAssets) {
-      const draftProjection = getDraftProjection(asset);
-      const cycleProjection = getCycleProjection(asset);
-
-      working.set(asset.assetKey, {
-        ...asset,
-        draftValueAboveReplacement: rounded(draftProjection - draftReplacement),
-        cycleValueAboveReplacement: rounded(cycleProjection - cycleReplacement),
-        draftPositionRank: draftPositionRankByKey.get(asset.assetKey) ?? null,
-        cyclePositionRank: cyclePositionRankByKey.get(asset.assetKey) ?? null,
-      });
-    }
-  }
-
-  const rankedAssets = assets.map((asset) => working.get(asset.assetKey) ?? asset);
-
-  const topSkaterDraft = Math.max(
-    1,
-    ...rankedAssets.filter((asset) => asset.position !== 'G').map(getDraftProjection),
-  );
-
-  const topGoalieDraft = Math.max(
-    1,
-    ...rankedAssets.filter((asset) => asset.position === 'G').map(getDraftProjection),
-  );
-
-  const topSkaterCycle = Math.max(
-    1,
-    ...rankedAssets.filter((asset) => asset.position !== 'G').map(getCycleProjection),
-  );
-
-  const topGoalieCycle = Math.max(
-    1,
-    ...rankedAssets.filter((asset) => asset.position === 'G').map(getCycleProjection),
-  );
-
-  const maxDraftRelativeValue = Math.max(
-    0.01,
-    ...rankedAssets.map((asset) => {
-      const projection = getDraftProjection(asset);
-      const value = asset.draftValueAboveReplacement ?? 0;
-      const replacement = Math.max(1, projection - value);
-
-      return clamp(value / replacement, 0, 1.5);
-    }),
-  );
-
-  const maxCycleRelativeValue = Math.max(
-    0.01,
-    ...rankedAssets.map((asset) => {
-      const projection = getCycleProjection(asset);
-      const value = asset.cycleValueAboveReplacement ?? 0;
-      const replacement = Math.max(1, projection - value);
-
-      return clamp(value / replacement, 0, 1.5);
-    }),
-  );
-
-  const goalieStarterCount = Math.max(1, teamCount * POSITION_REQUIREMENTS.G);
-
-  const scoredAssets = rankedAssets.map((asset) => {
-    const draftProjection = getDraftProjection(asset);
-    const cycleProjection = getCycleProjection(asset);
-
-    const draftValue = asset.draftValueAboveReplacement ?? 0;
-
-    const cycleValue = asset.cycleValueAboveReplacement ?? 0;
-
-    const draftReplacement = Math.max(1, draftProjection - draftValue);
-
-    const cycleReplacement = Math.max(1, cycleProjection - cycleValue);
-
-    const draftTalentScore = getTalentScore(asset, draftProjection, topSkaterDraft, topGoalieDraft);
-
-    const cycleTalentScore = getTalentScore(asset, cycleProjection, topSkaterCycle, topGoalieCycle);
-
-    const draftScarcityScore = clamp(
-      (clamp(draftValue / draftReplacement, 0, 1.5) / maxDraftRelativeValue) * 100,
-      0,
-      100,
-    );
-
-    const cycleScarcityScore = clamp(
-      (clamp(cycleValue / cycleReplacement, 0, 1.5) / maxCycleRelativeValue) * 100,
-      0,
-      100,
-    );
-
-    const draftGoalieSlotCurve =
-      asset.position === 'G'
-        ? getGoalieSlotCurveScore(asset.draftPositionRank, goalieStarterCount)
-        : 0;
-
-    const cycleGoalieSlotCurve =
-      asset.position === 'G'
-        ? getGoalieSlotCurveScore(asset.cyclePositionRank, goalieStarterCount)
-        : 0;
-
-    const draftScore =
-      asset.position === 'G'
-        ? draftTalentScore * GOALIE_UNIT_TALENT_WEIGHT +
-          draftScarcityScore * GOALIE_UNIT_SCARCITY_WEIGHT +
-          draftGoalieSlotCurve * GOALIE_UNIT_SLOT_CURVE_WEIGHT
-        : draftTalentScore * 0.75 + draftScarcityScore * 0.25;
-
-    const cycleScore =
-      asset.position === 'G'
-        ? cycleTalentScore * GOALIE_UNIT_TALENT_WEIGHT +
-          cycleScarcityScore * GOALIE_UNIT_SCARCITY_WEIGHT +
-          cycleGoalieSlotCurve * GOALIE_UNIT_SLOT_CURVE_WEIGHT
-        : cycleTalentScore * 0.75 + cycleScarcityScore * 0.25;
-
-    return {
-      ...asset,
-      draftScore: rounded(draftScore),
-      cycleScore: rounded(cycleScore),
-
-      // Backward-compatible fields used by older Draft Room code.
-      balancedDraftValue: rounded(draftScore),
-      floorAdjustedDraftValue: rounded(draftValue),
-      positionRank: asset.draftPositionRank ?? null,
-    };
-  });
-
-  const draftOrdered = [...scoredAssets].sort(
-    (first, second) =>
-      getSortNumber(second.draftScore) - getSortNumber(first.draftScore) ||
-      compareDraftProjectionOrder(first, second),
-  );
-
-  const draftRankByKey = new Map(draftOrdered.map((asset, index) => [asset.assetKey, index + 1]));
-
-  const cycleOrdered = [...scoredAssets].sort(
-    (first, second) =>
-      getSortNumber(second.cycleScore) - getSortNumber(first.cycleScore) ||
-      compareCycleProjectionOrder(first, second),
-  );
-
-  const cycleRankByKey = new Map(cycleOrdered.map((asset, index) => [asset.assetKey, index + 1]));
-
-  return scoredAssets
-    .map((asset) => {
-      const draftRank = draftRankByKey.get(asset.assetKey) ?? null;
-
-      const cycleRank = cycleRankByKey.get(asset.assetKey) ?? null;
-
-      return {
-        ...asset,
-        draftRank,
-        cycleRank,
-
-        // Backward-compatible aliases.
-        balancedRank: draftRank,
-        positionRank: asset.draftPositionRank ?? null,
-      };
-    })
-    .sort(
-      (first: DraftableAsset, second: DraftableAsset) =>
-        getSortNumber(first.draftRank) - getSortNumber(second.draftRank) ||
-        compareAssetName(first, second),
-    );
 }
 
 function sanitizeForFirestore<T>(value: T): T {
@@ -536,6 +189,20 @@ function normalizeMetadata(
     draftReadyUntil:
       typeof data.draftReadyUntil === 'string' ? data.draftReadyUntil : fallbackReadyUntil,
     message: typeof data.message === 'string' ? data.message : 'Shared projections are ready.',
+    projectionAsOfDate:
+      typeof data.projectionAsOfDate === 'string'
+        ? data.projectionAsOfDate
+        : undefined,
+    projectionContext:
+      data.projectionContext === 'historical-replay'
+        ? 'historical-replay'
+        : data.projectionContext === 'live'
+          ? 'live'
+          : undefined,
+    projectionSeason:
+      typeof data.projectionSeason === 'string'
+        ? data.projectionSeason
+        : undefined,
   };
 }
 
@@ -645,12 +312,7 @@ function loadProjectionSnapshotAtPointer(
 
           return typeof data.assetKey === 'string' ? [data as DraftableAsset] : [];
         })
-        .sort(
-          (first: DraftableAsset, second: DraftableAsset) =>
-            getSortNumber(first.draftRank) - getSortNumber(second.draftRank) ||
-            getSortNumber(first.balancedRank) - getSortNumber(second.balancedRank) ||
-            compareDraftProjectionOrder(first, second),
-        );
+        .sort(compareSnapshotAssetOrder);
 
       if (metadata.assetCount > 0 && assets.length !== metadata.assetCount) {
         throw new Error(
@@ -843,6 +505,8 @@ async function generateSnapshotInternal(
     generationReason,
     draftReadyUntil,
     message: 'Building shared projections.',
+    projectionAsOfDate: generatedAt.slice(0, 10),
+    projectionContext: 'live' as const,
   };
 
   await setDoc(snapshotRef, buildingMetadata);
@@ -909,7 +573,9 @@ async function generateSnapshotInternal(
       requiredGamesPerCycle,
       generationReason,
       draftReadyUntil,
-      message: `Shared draft rankings and Cycle ${targetCycleNumber} projections are ready.`,
+      message: `Shared draft rankings and Matchup ${targetCycleNumber} projections are ready.`,
+      projectionAsOfDate: generatedAt.slice(0, 10),
+      projectionContext: 'live',
     };
 
     const finalBatch = writeBatch(db);

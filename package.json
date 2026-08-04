@@ -77,7 +77,11 @@
     "test:batchm2-2:run": "node --test --test-concurrency=1 test/batchm2-2-polish/*.test.mjs",
     "verify:batchm2-2": "npm run verify:batchm2-1 && npm run test:batchm2-2:run",
     "test:future-lineup-projection:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/future-lineup-projection/*.test.mjs",
-    "verify:batchm2-3": "npm run verify:batchm2-2 && npm run test:future-lineup-projection:run"
+    "verify:batchm2-3": "npm run verify:batchm2-2 && npm run test:future-lineup-projection:run",
+    "test:batchf1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchf1-projection-calibration/*.test.mjs",
+    "verify:batchf1": "npm run verify:batchm2-3 && npm run test:batchf1:run",
+    "test:batchf1-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchf1-1-projection-v11/*.test.mjs",
+    "verify:batchf1-1": "npm run verify:batchf1 && npm run test:batchf1-1:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

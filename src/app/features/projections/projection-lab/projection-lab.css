@@ -10,7 +10,7 @@
 .page-loading {
   margin: 0;
   padding: 34px 20px;
-  color: #dce7f3;
+  color: var(--rr-color-text);
 }
 
 .projection-lab-page {
@@ -360,7 +360,7 @@
 
 table {
   width: 100%;
-  min-width: 1240px;
+  min-width: 1900px;
   border-collapse: collapse;
 }
 
@@ -381,7 +381,7 @@ th {
 }
 
 td {
-  color: #dce7f3;
+  color: var(--rr-color-text);
   font-size: 13px;
   font-weight: 750;
 }
@@ -473,12 +473,74 @@ tbody tr:hover {
   color: #ffd58a;
 }
 
+
+.trajectory-cell {
+  min-width: 175px;
+}
+
+.model-diagnostic-cell {
+  min-width: 190px;
+}
+
+.model-diagnostic-cell strong {
+  display: block;
+  color: var(--rr-color-text);
+  font-weight: 950;
+}
+
+.trajectory-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.trajectory-adjustment {
+  display: block;
+  margin-top: 5px;
+  color: var(--rr-color-text);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.trajectory-breakout {
+  border: 1px solid color-mix(in srgb, var(--rr-color-warning) 34%, transparent);
+  background: color-mix(in srgb, var(--rr-color-warning) 16%, transparent);
+  color: var(--rr-color-warning);
+}
+
+.trajectory-rising {
+  border: 1px solid color-mix(in srgb, var(--rr-color-success) 30%, transparent);
+  background: color-mix(in srgb, var(--rr-color-success) 14%, transparent);
+  color: var(--rr-color-success);
+}
+
+.trajectory-declining {
+  border: 1px solid color-mix(in srgb, var(--rr-color-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--rr-color-danger) 14%, transparent);
+  color: var(--rr-color-danger);
+}
+
+.trajectory-stable {
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 20%, transparent);
+  background: color-mix(in srgb, var(--rr-color-info) 10%, transparent);
+  color: var(--rr-color-text-secondary);
+}
+
+.trajectory-explainer {
+  border: 1px solid color-mix(in srgb, var(--rr-color-warning) 16%, transparent);
+}
+
 .tier-pill {
   display: inline-block;
   padding: 5px 8px;
   border-radius: 999px;
   background: rgba(184, 212, 239, 0.12);
-  color: #dce7f3;
+  color: var(--rr-color-text);
   font-size: 10px;
   font-weight: 950;
   white-space: nowrap;

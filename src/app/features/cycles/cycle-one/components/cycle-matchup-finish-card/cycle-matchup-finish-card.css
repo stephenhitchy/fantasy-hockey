@@ -1,0 +1,138 @@
+:host {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.matchup-finish-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(190px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 15px 16px;
+  --rr-card-border-width: 1px;
+  --rr-card-border-color: color-mix(
+    in srgb,
+    var(--rr-color-info) 42%,
+    var(--rr-color-border)
+  );
+  --rr-card-background: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--rr-scoreboard-raised) 92%, var(--rr-color-info)),
+    color-mix(in srgb, var(--rr-scoreboard) 94%, var(--rr-color-info))
+  );
+  --rr-card-shadow: var(--rr-shadow-card);
+}
+
+.matchup-finish-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 2px solid var(--rr-color-warning);
+  border-radius: 10px;
+  background: var(--rr-scoreboard-raised);
+  color: var(--rr-ice-white);
+  font-size: 21px;
+  font-weight: 950;
+  box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--rr-color-warning) 16%, transparent);
+}
+
+.matchup-finish-copy,
+.matchup-finish-progress {
+  min-width: 0;
+}
+
+.matchup-finish-eyebrow,
+.matchup-finish-copy h2,
+.matchup-finish-copy p,
+.matchup-finish-progress strong,
+.matchup-finish-progress span {
+  display: block;
+}
+
+.matchup-finish-eyebrow {
+  margin-bottom: 4px;
+  color: var(--rr-color-info);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.matchup-finish-copy h2 {
+  margin: 0;
+  color: var(--rr-ice-white);
+  font-size: clamp(18px, 2.2vw, 25px);
+  line-height: 1.1;
+}
+
+.matchup-finish-copy p {
+  max-width: 760px;
+  margin: 6px 0 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.matchup-finish-progress {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--rr-ice-blue) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rr-scoreboard) 58%, transparent);
+  text-align: right;
+}
+
+.matchup-finish-progress strong {
+  color: var(--rr-ice-white);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.matchup-finish-progress span {
+  margin-top: 4px;
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+@media (max-width: 780px) {
+  :host {
+    margin-bottom: 12px;
+  }
+
+  .matchup-finish-card {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .matchup-finish-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 17px;
+  }
+
+  .matchup-finish-copy h2 {
+    font-size: 18px;
+  }
+
+  .matchup-finish-copy p {
+    font-size: 12px;
+  }
+
+  .matchup-finish-progress {
+    grid-column: 1 / -1;
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  .matchup-finish-progress strong {
+    font-size: 12px;
+  }
+
+  .matchup-finish-progress span {
+    font-size: 12px;
+  }
+}

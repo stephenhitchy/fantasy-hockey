@@ -1,0 +1,325 @@
+<section class="calibration-shell" aria-labelledby="historical-calibration-title">
+  <header class="calibration-hero">
+    <div>
+      <p class="calibration-eyebrow">Beta Finalization · F1</p>
+      <h2 id="historical-calibration-title">Historical Scoring Calibration</h2>
+      <p>
+        Run one full NHL season through the current RinkRat scoring engine before deciding whether any point values should change.
+      </p>
+    </div>
+
+    <div class="no-write-badge">
+      <strong>Read-only analysis</strong>
+      <span>Never changes league scoring rules</span>
+    </div>
+  </header>
+
+  <div class="calibration-controls">
+    <label>
+      NHL Season
+      <input
+        type="text"
+        inputmode="numeric"
+        maxlength="8"
+        [(ngModel)]="season"
+        [disabled]="running()"
+        aria-describedby="season-format-help"
+      />
+      <small id="season-format-help">Eight digits, such as 20252026</small>
+    </label>
+
+    <label>
+      League Team Count
+      <input
+        type="number"
+        min="2"
+        max="32"
+        [(ngModel)]="leagueTeamCount"
+        [disabled]="running()"
+      />
+      <small>Sets starter and replacement-level cutoffs</small>
+    </label>
+
+    <label>
+      League ID <span>(optional)</span>
+      <input
+        type="text"
+        [(ngModel)]="leagueId"
+        [disabled]="running()"
+        placeholder="Compare draft ranks"
+      />
+      <small>Loads its saved draft board for rank correlation</small>
+    </label>
+  </div>
+
+  <div class="calibration-actions">
+    <button
+      type="button"
+      class="primary-action"
+      (click)="runFastReport()"
+      [disabled]="running()"
+    >
+      Run Full-Season Report
+    </button>
+
+    <button
+      type="button"
+      class="secondary-action"
+      (click)="runExactReport()"
+      [disabled]="running()"
+    >
+      Run With Exact Assist Order
+    </button>
+
+    @if (running()) {
+      <button type="button" class="cancel-action" (click)="cancelRun()">
+        Cancel
+      </button>
+    }
+  </div>
+
+  <aside class="exact-note">
+    <strong>Fast report:</strong>
+    uses every scheduled game and a deterministic 40/60 integer estimate for assist order.
+    <strong>Exact mode:</strong>
+    progressively reads NHL play-by-play, caches completed games in this browser, and may take several minutes on its first run.
+  </aside>
+
+  @if (projectionStatus()) {
+    <p class="projection-status">{{ projectionStatus() }}</p>
+  }
+
+  @if (progress(); as progress) {
+    <section class="progress-card" [attr.aria-busy]="running()">
+      <div class="progress-copy">
+        <strong>{{ progress.message }}</strong>
+        <span>{{ progress.completed }} / {{ progress.total }}</span>
+      </div>
+      <div
+        class="progress-track"
+        role="progressbar"
+        [attr.aria-valuemin]="0"
+        [attr.aria-valuemax]="100"
+        [attr.aria-valuenow]="progressPercent().toFixed(0)"
+      >
+        <span [style.width.%]="progressPercent()"></span>
+      </div>
+      @if (running() && exactAssistRun()) {
+        <small>Exact assist progress is saved periodically, so a later run resumes from the cached games.</small>
+      }
+    </section>
+  }
+
+  @if (errorMessage()) {
+    <p class="calibration-error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (report(); as result) {
+    <section class="report-shell">
+      <header class="report-heading">
+        <div>
+          <p class="calibration-eyebrow">{{ result.season }} · Scoring V{{ result.scoringRulesVersion }}</p>
+          <h3>{{ getRecommendationLabel(result) }}</h3>
+          <p>{{ result.assistMethodNote }}</p>
+        </div>
+
+        <button type="button" class="secondary-action" (click)="exportReport()">
+          Export JSON Report
+        </button>
+      </header>
+
+      <div class="report-summary-grid">
+        <article>
+          <span>Complete 6-Game Windows</span>
+          <strong>{{ result.totalWindowCount }}</strong>
+          <small>{{ result.skaterAssetCount }} skaters · {{ result.goalieUnitCount }} goalie units</small>
+        </article>
+
+        <article>
+          <span>Modeled Goalie Share</span>
+          <strong>{{ result.modeledGoalieSharePercent.toFixed(1) }}%</strong>
+          <small>One goalie unit in a 14-player starting lineup</small>
+        </article>
+
+        <article>
+          <span>Goalie Cap Hit Rate</span>
+          <strong>{{ result.goalieCapHitPercent.toFixed(2) }}%</strong>
+          <small>{{ result.goalieCapHitCount }} of {{ result.goalieGameCount }} team-goalie games</small>
+        </article>
+
+        <article>
+          <span>100+ Point Forward Windows</span>
+          <strong>{{ result.exceptionalForwardWindowPercent.toFixed(2) }}%</strong>
+          <small>{{ result.exceptionalForwardWindowCount }} of {{ result.forwardWindowCount }}</small>
+        </article>
+
+        <article>
+          <span>Assist Method</span>
+          <strong>{{ getAssistModeLabel(result) }}</strong>
+          <small>{{ result.exactAssistGames }} of {{ result.totalScheduleGames }} games exact</small>
+        </article>
+
+        <article>
+          <span>Draft Rank Correlation</span>
+          <strong>{{ getCorrelationDisplay(result) }}</strong>
+          <small>{{ result.draftComparison.label }} · {{ result.draftComparison.matchedAssetCount }} matched</small>
+        </article>
+      </div>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="calibration-eyebrow">Position distributions</p>
+            <h4>How each roster position actually scored</h4>
+          </div>
+          <span>All values are six scheduled NHL games</span>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Position</th>
+                <th>Assets</th>
+                <th>Windows</th>
+                <th>Median</th>
+                <th>P25</th>
+                <th>P75</th>
+                <th>P90</th>
+                <th>P95</th>
+                <th>Best</th>
+                <th>Volatility</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (position of result.positionSummaries; track position.position) {
+                <tr>
+                  <th scope="row">{{ position.label }}</th>
+                  <td>{{ position.assetCount }}</td>
+                  <td>{{ position.windowCount }}</td>
+                  <td><strong>{{ position.percentiles.median.toFixed(1) }}</strong></td>
+                  <td>{{ position.percentiles.p25.toFixed(1) }}</td>
+                  <td>{{ position.percentiles.p75.toFixed(1) }}</td>
+                  <td>{{ position.percentiles.p90.toFixed(1) }}</td>
+                  <td>{{ position.percentiles.p95.toFixed(1) }}</td>
+                  <td>{{ position.bestWindow.toFixed(1) }}</td>
+                  <td>{{ position.medianAssetVolatility.toFixed(1) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="calibration-eyebrow">Roster value</p>
+            <h4>Starter and replacement-level separation</h4>
+          </div>
+          <span>Based on {{ result.leagueTeamCount }} teams</span>
+        </div>
+
+        <div class="replacement-grid">
+          @for (position of result.positionSummaries; track position.position) {
+            <article>
+              <div>
+                <strong>{{ position.position }}</strong>
+                <span>{{ position.starterSlots }} starter slots</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Starter average</dt>
+                  <dd>{{ position.starterAverage.toFixed(1) }}</dd>
+                </div>
+                <div>
+                  <dt>Replacement average</dt>
+                  <dd>{{ position.replacementAverage.toFixed(1) }}</dd>
+                </div>
+                <div>
+                  <dt>Value above replacement</dt>
+                  <dd>{{ getSignedNumber(position.valueAboveReplacement) }}</dd>
+                </div>
+              </dl>
+            </article>
+          }
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="calibration-eyebrow">What-if comparison</p>
+            <h4>Candidate rules calculated without changing production</h4>
+          </div>
+          <span>Use evidence before adjusting point values</span>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Rule Set</th>
+                <th>Forward Median</th>
+                <th>Forward P90</th>
+                <th>Ceiling Spread</th>
+                <th>Defense Median</th>
+                <th>Goalie Median</th>
+                <th>Goalie Share</th>
+                <th>Starter Advantage</th>
+                <th>Goalie Cap Hits</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (candidate of result.candidateSummaries; track candidate.id) {
+                <tr [class.current-rule-row]="candidate.id === 'current-v3'">
+                  <th scope="row">
+                    <strong>{{ candidate.label }}</strong>
+                    <small>{{ candidate.description }}</small>
+                  </th>
+                  <td>{{ candidate.forwardMedian.toFixed(1) }}</td>
+                  <td>{{ candidate.forwardP90.toFixed(1) }}</td>
+                  <td>{{ candidate.forwardCeilingSpread.toFixed(1) }}</td>
+                  <td>{{ candidate.defenseMedian.toFixed(1) }}</td>
+                  <td>{{ candidate.goalieMedian.toFixed(1) }}</td>
+                  <td>{{ candidate.modeledGoalieSharePercent.toFixed(1) }}%</td>
+                  <td>{{ candidate.averageStarterAdvantage.toFixed(1) }}</td>
+                  <td>{{ candidate.goalieCapHitPercent.toFixed(2) }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="calibration-eyebrow">Fairness review</p>
+            <h4>What the season says about the current philosophy</h4>
+          </div>
+          <span>Defense vs comparable forwards: {{ getSignedNumber(result.defenseVsComparableForwardGap) }}</span>
+        </div>
+
+        <div class="findings-grid">
+          @for (finding of result.findings; track finding.title) {
+            <article [class]="getFindingClass(finding)">
+              <span>{{ finding.level }}</span>
+              <strong>{{ finding.title }}</strong>
+              <p>{{ finding.detail }}</p>
+            </article>
+          }
+        </div>
+      </section>
+
+      <details class="methodology-panel">
+        <summary>Methodology and limitations</summary>
+        <ul>
+          @for (note of result.methodologyNotes; track note) {
+            <li>{{ note }}</li>
+          }
+        </ul>
+      </details>
+    </section>
+  }
+</section>

@@ -1,0 +1,14 @@
+<section class="matchup-finish-card rr-card" aria-labelledby="matchup-finish-title">
+  <div class="matchup-finish-icon" aria-hidden="true">6</div>
+
+  <div class="matchup-finish-copy">
+    <span class="matchup-finish-eyebrow">{{ presenter.getMatchupFinishEyebrow() }}</span>
+    <h2 id="matchup-finish-title">{{ presenter.getMatchupFinishDateLabel() }}</h2>
+    <p>{{ presenter.getMatchupFinishDescription() }}</p>
+  </div>
+
+  <div class="matchup-finish-progress" aria-live="polite">
+    <strong>{{ presenter.getMatchupFinishProgressLabel() }}</strong>
+    <span>Ends when the last starter reaches game 6</span>
+  </div>
+</section>

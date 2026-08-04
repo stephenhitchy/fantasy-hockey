@@ -150,11 +150,47 @@ export interface DraftProjection {
    */
   draftProjectedSeasonPoints?: number | null;
   draftProjectedCyclePoints?: number | null;
+
+  /** Projection V11 completed-season development/decline classification. */
+  draftTrajectoryLabel?:
+    | 'breakout'
+    | 'rising'
+    | 'stable'
+    | 'declining'
+    | 'insufficient-data'
+    | null;
+  draftTrajectoryConfidence?: number | null;
+  draftTrajectoryAdjustment?: number | null;
+  draftLatestSeasonWeight?: number | null;
+  draftPaceChangePercent?: number | null;
+
   draftRecentTrendAdjustment?: number | null;
   draftRoleAdjustment?: number | null;
   draftReliabilityRating?: number | null;
   draftVolatilityPenalty?: number | null;
   draftFloorAdjustedCyclePoints?: number | null;
+
+  /** Projection V11 stat-component ensemble diagnostics. */
+  projectionModelVersion?: number | null;
+  projectionModelConfidence?: number | null;
+
+  /** Stored as 0-1 rates; UI surfaces format them as percentages. */
+  projectionPrimaryAssistShare?: number | null;
+  projectionShootingPercentage?: number | null;
+  projectionCurrentSeasonWeight?: number | null;
+  projectionHistoricalWeight?: number | null;
+
+  /** Estimated goals per 82 added or removed by shooting regression. */
+  projectionShootingRegressionAdjustment?: number | null;
+
+  /** Likely next-matchup range around the availability-adjusted mean. */
+  projectionFloorPoints?: number | null;
+  projectionCeilingPoints?: number | null;
+  projectionUncertaintyPoints?: number | null;
+
+  /** Repeatable opportunity portion of the recent-form adjustment. */
+  sustainableFormAdjustment?: number | null;
+  recentGameStandardDeviation?: number | null;
 
   /** Shared ranking fields used by the Draft Room and auto-draft. */
   draftValueAboveReplacement?: number | null;

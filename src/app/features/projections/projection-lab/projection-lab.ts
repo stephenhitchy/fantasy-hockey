@@ -51,6 +51,23 @@ interface ProjectionRow {
   projectedSeason: number;
   projectedPpg: number;
   draftProjectedCycle: number;
+  draftTrajectoryLabel: DraftableAsset['draftTrajectoryLabel'];
+  draftTrajectoryConfidence: number | null;
+  draftTrajectoryAdjustment: number;
+  draftLatestSeasonWeight: number | null;
+  draftPaceChangePercent: number | null;
+  projectionModelVersion: number;
+  projectionModelConfidence: number;
+  projectionPrimaryAssistShare: number | null;
+  projectionShootingPercentage: number | null;
+  projectionShootingRegressionAdjustment: number | null;
+  projectionCurrentSeasonWeight: number;
+  projectionHistoricalWeight: number;
+  projectionFloor: number;
+  projectionCeiling: number;
+  projectionUncertainty: number;
+  sustainableFormAdjustment: number;
+  recentGameStandardDeviation: number | null;
   draftFloorAdjustedCycle: number;
   draftScore: number;
   draftValueAboveReplacement: number;
@@ -549,6 +566,98 @@ export class ProjectionLab {
   }
 
 
+  getTrajectoryLabel(row: ProjectionRow): string {
+    switch (row.draftTrajectoryLabel) {
+      case 'breakout':
+        return 'Supported breakout';
+      case 'rising':
+        return 'Rising';
+      case 'declining':
+        return 'Declining';
+      case 'stable':
+        return 'Stable';
+      case 'insufficient-data':
+      default:
+        return row.position === 'G' ? 'Goalie baseline' : 'Trend not established';
+    }
+  }
+
+  getTrajectoryClass(row: ProjectionRow): string {
+    switch (row.draftTrajectoryLabel) {
+      case 'breakout':
+        return 'trajectory-breakout';
+      case 'rising':
+        return 'trajectory-rising';
+      case 'declining':
+        return 'trajectory-declining';
+      default:
+        return 'trajectory-stable';
+    }
+  }
+
+  getTrajectoryDescription(row: ProjectionRow): string {
+    const details: string[] = [];
+
+    if (typeof row.draftLatestSeasonWeight === 'number') {
+      const latestWeightPercent = row.draftLatestSeasonWeight <= 1
+        ? row.draftLatestSeasonWeight * 100
+        : row.draftLatestSeasonWeight;
+      details.push(`${Math.round(latestWeightPercent)}% latest season`);
+    }
+
+    if (typeof row.draftPaceChangePercent === 'number') {
+      const pace = Math.round(row.draftPaceChangePercent);
+      details.push(`${pace > 0 ? '+' : ''}${pace}% pace change`);
+    }
+
+    if (row.draftTrajectoryConfidence != null && row.draftTrajectoryConfidence > 0) {
+      details.push(`${Math.round(row.draftTrajectoryConfidence)}% confidence`);
+    }
+
+    return details.length > 0 ? details.join(' · ') : 'Uses the conservative multi-season baseline';
+  }
+
+  getTrajectoryAdjustmentLabel(row: ProjectionRow): string {
+    if (Math.abs(row.draftTrajectoryAdjustment) < 0.05) {
+      return 'No trajectory adjustment';
+    }
+
+    const sixGameAdjustment =
+      row.draftTrajectoryAdjustment / 82 * this.projectedGamesPerCycle();
+
+    return `${this.getSignedDisplayNumber(sixGameAdjustment)} per 6 games`;
+  }
+
+
+  getProjectionModelDescription(row: ProjectionRow): string {
+    const currentWeight = Math.round(row.projectionCurrentSeasonWeight * 100);
+    const historicalWeight = Math.round(row.projectionHistoricalWeight * 100);
+
+    return `V${row.projectionModelVersion} · ${Math.round(row.projectionModelConfidence)}% confidence · ${currentWeight}% current / ${historicalWeight}% history`;
+  }
+
+  getProjectionRangeDescription(row: ProjectionRow): string {
+    return `${this.getDisplayNumber(row.projectionFloor)}–${this.getDisplayNumber(row.projectionCeiling)} likely · ±${this.getDisplayNumber(row.projectionUncertainty)} uncertainty`;
+  }
+
+  getLuckRegressionDescription(row: ProjectionRow): string {
+    if (row.position === 'G') {
+      return 'Save percentage, workload, wins, and shutouts are projected separately and regressed by sample size.';
+    }
+
+    const shooting = row.projectionShootingPercentage != null
+      ? `${(row.projectionShootingPercentage * 100).toFixed(1)}% shooting`
+      : 'shooting unavailable';
+    const regression = row.projectionShootingRegressionAdjustment != null
+      ? `${row.projectionShootingRegressionAdjustment >= 0 ? '+' : ''}${row.projectionShootingRegressionAdjustment.toFixed(1)} goals/82`
+      : 'no shooting adjustment';
+    const primaryShare = row.projectionPrimaryAssistShare != null
+      ? `${Math.round(row.projectionPrimaryAssistShare * 100)}% primary assists`
+      : 'assist split unavailable';
+
+    return `${shooting} · ${regression} after regression · ${primaryShare}`;
+  }
+
   getScheduleDescription(row: ProjectionRow): string {
     const opponents = row.projectionOpponentAbbreviations.length > 0
       ? row.projectionOpponentAbbreviations.join(', ')
@@ -802,6 +911,24 @@ export class ProjectionLab {
         projectedSeason,
         projectedPpg,
         draftProjectedCycle,
+        draftTrajectoryLabel: asset.draftTrajectoryLabel ?? 'insufficient-data',
+        draftTrajectoryConfidence: asset.draftTrajectoryConfidence ?? null,
+        draftTrajectoryAdjustment: asset.draftTrajectoryAdjustment ?? 0,
+        draftLatestSeasonWeight: asset.draftLatestSeasonWeight ?? null,
+        draftPaceChangePercent: asset.draftPaceChangePercent ?? null,
+        projectionModelVersion: asset.projectionModelVersion ?? 11,
+        projectionModelConfidence: asset.projectionModelConfidence ?? reliabilityRating,
+        projectionPrimaryAssistShare: asset.projectionPrimaryAssistShare ?? null,
+        projectionShootingPercentage: asset.projectionShootingPercentage ?? null,
+        projectionShootingRegressionAdjustment:
+          asset.projectionShootingRegressionAdjustment ?? null,
+        projectionCurrentSeasonWeight: asset.projectionCurrentSeasonWeight ?? 0,
+        projectionHistoricalWeight: asset.projectionHistoricalWeight ?? 1,
+        projectionFloor: asset.projectionFloorPoints ?? floorAdjustedCycle,
+        projectionCeiling: asset.projectionCeilingPoints ?? projectedCycle,
+        projectionUncertainty: asset.projectionUncertaintyPoints ?? volatilityPenalty,
+        sustainableFormAdjustment: asset.sustainableFormAdjustment ?? 0,
+        recentGameStandardDeviation: asset.recentGameStandardDeviation ?? null,
         draftFloorAdjustedCycle,
         draftScore,
         draftValueAboveReplacement,
@@ -949,6 +1076,32 @@ export class ProjectionLab {
         projectedSeason: this.round(row.projectedSeason),
         projectedPpg: this.round(row.projectedPpg),
         draftProjectedCycle: this.round(row.draftProjectedCycle),
+        draftTrajectoryAdjustment: this.round(row.draftTrajectoryAdjustment),
+        draftTrajectoryConfidence:
+          row.draftTrajectoryConfidence != null
+            ? this.round(row.draftTrajectoryConfidence)
+            : null,
+        draftLatestSeasonWeight:
+          row.draftLatestSeasonWeight != null
+            ? Number(row.draftLatestSeasonWeight.toFixed(4))
+            : null,
+        draftPaceChangePercent:
+          row.draftPaceChangePercent != null
+            ? this.round(row.draftPaceChangePercent)
+            : null,
+        projectionModelConfidence: this.round(row.projectionModelConfidence),
+        projectionCurrentSeasonWeight:
+          Number(row.projectionCurrentSeasonWeight.toFixed(4)),
+        projectionHistoricalWeight:
+          Number(row.projectionHistoricalWeight.toFixed(4)),
+        projectionFloor: this.round(row.projectionFloor),
+        projectionCeiling: this.round(row.projectionCeiling),
+        projectionUncertainty: this.round(row.projectionUncertainty),
+        sustainableFormAdjustment: this.round(row.sustainableFormAdjustment),
+        recentGameStandardDeviation:
+          row.recentGameStandardDeviation != null
+            ? this.round(row.recentGameStandardDeviation)
+            : null,
         draftFloorAdjustedCycle: this.round(row.draftFloorAdjustedCycle),
         draftScore: this.round(row.draftScore),
         draftValueAboveReplacement: this.round(row.draftValueAboveReplacement),

@@ -28,7 +28,10 @@ import {
   listenToLeagueCycles,
 } from '../../../core/cycle/cycle.service';
 
-import { listenToCycleTeamWindows } from '../../../core/cycle/asset-cycle-window.service';
+import {
+  getCycleTeamWindows,
+  listenToCycleTeamWindows,
+} from '../../../core/cycle/asset-cycle-window.service';
 
 import { loadDraftPlayerPool } from '../../../core/draft/draft-player-pool.service';
 
@@ -47,7 +50,11 @@ import {
   getStandardRegularSeasonCycleCount,
 } from '../../../core/playoffs/playoff-format';
 
-import { getNhlTeamSeasonSchedule, NHL_DRAFT_CLUBS } from '../../../core/nhl/nhl-api.service';
+import {
+  getNhlTeamSeasonSchedule,
+  NHL_DRAFT_CLUBS,
+  NhlTeamSeasonGame,
+} from '../../../core/nhl/nhl-api.service';
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 import { BENCH_SLOT_COUNT } from '../../../core/team/roster-config';
@@ -99,6 +106,7 @@ import { PlatformAdminService } from '../../../core/admin/platform-admin.service
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
 import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
 import { CycleMobileScorebar } from './components/cycle-mobile-scorebar/cycle-mobile-scorebar';
+import { CycleMatchupFinishCard } from './components/cycle-matchup-finish-card/cycle-matchup-finish-card';
 import { CyclePageHeader } from './components/cycle-page-header/cycle-page-header';
 import { CycleStatusBanners } from './components/cycle-status-banners/cycle-status-banners';
 
@@ -125,6 +133,11 @@ import {
   isCycleWindowIdentityLocked,
   isPendingMovePlannedForCycle,
 } from './cycle-lineup-preview.util';
+import {
+  calculateMatchupFinishDate,
+  MatchupFinishDateResult,
+  MatchupFinishSlotInput,
+} from './cycle-matchup-finish-date.util';
 
 @Component({
   selector: 'app-cycle-one',
@@ -132,6 +145,7 @@ import {
   imports: [
     RouterLink,
     CycleMobileScorebar,
+    CycleMatchupFinishCard,
     CyclePageHeader,
     CycleStatusBanners,
     CycleMatchupToolbar,
@@ -161,9 +175,11 @@ export class CycleOne implements OnDestroy {
   picks = signal<DraftPick[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
   teamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
+  previousTeamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
   teamRostersByOwner = signal<Record<string, FantasyRoster | null>>({});
 
   teamGameCounts = signal<Record<string, number>>({});
+  teamSchedulesByAbbreviation = signal<Record<string, NhlTeamSeasonGame[]>>({});
 
   cycleScoring = signal<CycleScoringResult | null>(null);
   sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
@@ -1603,6 +1619,8 @@ export class CycleOne implements OnDestroy {
     Object.values(this.teamGameCounts()).some((gameCount) => gameCount > 0),
   );
 
+  readonly matchupFinishDate = computed(() => this.calculateDisplayedMatchupFinishDate());
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -1667,8 +1685,10 @@ export class CycleOne implements OnDestroy {
     this.picks.set([]);
     this.playerPool.set([]);
     this.teamWindowsByOwner.set({});
+    this.previousTeamWindowsByOwner.set({});
     this.teamRostersByOwner.set({});
     this.teamGameCounts.set({});
+    this.teamSchedulesByAbbreviation.set({});
     this.cycleScoring.set(null);
     this.sharedScoringSnapshot.set(null);
     this.liveScoringControl.set(null);
@@ -1768,6 +1788,7 @@ export class CycleOne implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
       void this.loadOwnerFavoriteTeams(teams.map((team) => team.ownerId));
+      void this.loadPreviousCycleTeamWindows();
 
       this.stopSharedScoringListener = listenToSharedCycleScoring(
         leagueId,
@@ -2005,6 +2026,79 @@ export class CycleOne implements OnDestroy {
       '--owner-theme-glow': hexToRgba(theme.accentColor, 0.22),
       '--owner-theme-accent-text': '#f7f9fc',
     };
+  }
+
+  getMatchupFinishEyebrow(): string {
+    const result = this.matchupFinishDate();
+    const matchup = this.getCurrentDisplayedMatchup();
+
+    if (matchup?.status === 'complete') {
+      return 'Matchup completed';
+    }
+
+    if (result.confidence === 'scheduled') {
+      return 'Scheduled matchup finish';
+    }
+
+    if (result.confidence === 'projected') {
+      return 'Projected matchup finish';
+    }
+
+    return 'Matchup timeline';
+  }
+
+  getMatchupFinishDateLabel(): string {
+    const result = this.matchupFinishDate();
+
+    if (!result.finishDate || result.confidence === 'partial' || result.confidence === 'unavailable') {
+      return this.scheduleProjectionLoading()
+        ? 'Calculating from NHL schedules...'
+        : 'Finish date is still being calculated';
+    }
+
+    return this.formatMatchupFinishDate(result.finishDate, true);
+  }
+
+  getMatchupFinishProgressLabel(): string {
+    const result = this.matchupFinishDate();
+
+    if (result.totalSlotCount === 0) {
+      return 'Waiting for the matchup lineup.';
+    }
+
+    if (result.unresolvedSlotCount > 0) {
+      return `${result.resolvedSlotCount} of ${result.totalSlotCount} starting roster-slot schedules resolved`;
+    }
+
+    if (result.projectedSlotCount > 0) {
+      return `${result.scheduledSlotCount} locked · ${result.projectedSlotCount} projected roster-slot schedules`;
+    }
+
+    return `All ${result.totalSlotCount} starting roster-slot schedules are locked`;
+  }
+
+  getMatchupFinishDescription(): string {
+    const result = this.matchupFinishDate();
+
+    if (result.confidence === 'partial' || result.confidence === 'unavailable') {
+      return 'RinkRat is waiting for the remaining roster-slot boundaries and NHL schedules before showing one definitive date.';
+    }
+
+    return result.confidence === 'projected'
+      ? 'This date includes future roster slots that have not opened yet. It updates if an NHL game is postponed or a planned starter changes.'
+      : 'This exact matchup finishes after the final starting roster slot completes its sixth scheduled NHL team game.';
+  }
+
+  getMobileMatchupFinishLabel(): string {
+    const result = this.matchupFinishDate();
+
+    if (!result.finishDate || result.confidence === 'partial' || result.confidence === 'unavailable') {
+      return 'End date pending';
+    }
+
+    const prefix = this.getCurrentDisplayedMatchup()?.status === 'complete' ? 'Ended' : 'Ends';
+
+    return `${prefix} ${this.formatMatchupFinishDate(result.finishDate, false)}`;
   }
 
   getCurrentDisplayedMatchup(): FantasyMatchup | null {
@@ -3158,6 +3252,104 @@ export class CycleOne implements OnDestroy {
     return 'NHL schedules are loaded for game progress. Projections stay frozen at the value saved when the matchup started.';
   }
 
+  private calculateDisplayedMatchupFinishDate(): MatchupFinishDateResult {
+    const matchup = this.getCurrentDisplayedMatchup();
+    const requiredGamesPerWindow =
+      this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+
+    if (!matchup) {
+      return {
+        finishDate: null,
+        confidence: 'unavailable',
+        totalSlotCount: 0,
+        resolvedSlotCount: 0,
+        scheduledSlotCount: 0,
+        projectedSlotCount: 0,
+        unresolvedSlotCount: 0,
+      };
+    }
+
+    const ownerIds = [matchup.teamAOwnerId, matchup.teamBOwnerId].filter(
+      (ownerId): ownerId is string => Boolean(ownerId),
+    );
+    const slots: MatchupFinishSlotInput[] = ownerIds.flatMap((ownerId) =>
+      this.getTeamPicks(ownerId).map((pick) => {
+        const rosterSlotId = pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
+        const currentWindow = this.getWindowForPick(pick);
+        const previousWindow = this.previousTeamWindowsByOwner()[ownerId]?.windows.find(
+          (window) => window.rosterSlotId === rosterSlotId,
+        );
+
+        return {
+          ownerId,
+          rosterSlotId,
+          teamAbbreviation: this.getAssetNhlTeamAbbreviation(pick.asset),
+          currentScheduledGameDates: currentWindow?.scheduledGameDates ?? [],
+          previousLastScheduledGameDate:
+            previousWindow?.lastScheduledGameDate ??
+            previousWindow?.scheduledGameDates.at(-1) ??
+            null,
+        };
+      }),
+    );
+    const cycleOneStart = this.cycleNumber === 1
+      ? this.getProjectionWindowStartDate()
+      : null;
+
+    return calculateMatchupFinishDate({
+      slots,
+      schedulesByTeam: this.teamSchedulesByAbbreviation(),
+      requiredGamesPerWindow,
+      fallbackStartDate: cycleOneStart ? this.getDateKey(cycleOneStart) : null,
+    });
+  }
+
+  private formatMatchupFinishDate(dateKey: string, includeWeekday: boolean): string {
+    const parsed = new Date(`${dateKey}T12:00:00Z`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return dateKey;
+    }
+
+    return parsed.toLocaleDateString(undefined, includeWeekday
+      ? {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }
+      : {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        });
+  }
+
+  private async loadPreviousCycleTeamWindows(): Promise<void> {
+    if (this.cycleNumber <= 1) {
+      this.previousTeamWindowsByOwner.set({});
+      return;
+    }
+
+    const leagueId = this.leagueId;
+    const cycleNumber = this.cycleNumber;
+
+    try {
+      const teamWindows = await getCycleTeamWindows(leagueId, cycleNumber - 1);
+
+      if (this.leagueId !== leagueId || this.cycleNumber !== cycleNumber) {
+        return;
+      }
+
+      this.previousTeamWindowsByOwner.set(
+        Object.fromEntries(teamWindows.map((entry) => [entry.ownerId, entry])),
+      );
+    } catch (error: unknown) {
+      console.warn('Unable to load the prior matchup window dates.', error);
+    }
+  }
+
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
       this.playerPool.set(await loadDraftPlayerPool(true));
@@ -3187,6 +3379,7 @@ export class CycleOne implements OnDestroy {
     const season = this.getNhlSeasonForDate(startDate);
 
     const gameCounts: Record<string, number> = {};
+    const schedulesByTeam: Record<string, NhlTeamSeasonGame[]> = {};
 
     try {
       for (let index = 0; index < NHL_DRAFT_CLUBS.length; index += NHL_SCHEDULE_BATCH_SIZE) {
@@ -3203,6 +3396,7 @@ export class CycleOne implements OnDestroy {
             return {
               teamAbbreviation: club.abbreviation,
               gameCount,
+              schedule,
             };
           }),
         );
@@ -3210,6 +3404,7 @@ export class CycleOne implements OnDestroy {
         for (const result of results) {
           if (result.status === 'fulfilled') {
             gameCounts[result.value.teamAbbreviation] = result.value.gameCount;
+            schedulesByTeam[result.value.teamAbbreviation] = result.value.schedule;
           } else {
             console.warn('Unable to load one NHL team schedule.', result.reason);
           }
@@ -3219,6 +3414,7 @@ export class CycleOne implements OnDestroy {
       }
 
       this.teamGameCounts.set(gameCounts);
+      this.teamSchedulesByAbbreviation.set(schedulesByTeam);
     } catch (error: unknown) {
       this.scheduleProjectionError.set(
         error instanceof Error ? error.message : 'Unable to load NHL schedule projections.',

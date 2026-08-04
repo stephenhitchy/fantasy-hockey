@@ -9,6 +9,7 @@ export interface NHLPlayer {
   // These will come from the NHL API later.
   teamLogoUrl?: string;
   headshotUrl?: string;
+  birthDate?: string;
 }
 
 export interface PlayerCycleScore {

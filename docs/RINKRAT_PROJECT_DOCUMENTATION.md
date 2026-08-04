@@ -1,6 +1,527 @@
 # RinkRat Fantasy — Project Documentation
 
-_Consolidated 2026-07-30._
+_Consolidated 2026-08-03._
+
+## Batch F1.1 — Projection V11 Accuracy and Matchup Build Hotfix
+
+### Purpose
+
+Batch F1.1 fixes the Angular production-build failure reported after Batch F1 and upgrades the shared projection model from V10 to V11. The projection work is intentionally general rather than player-specific: there is no hard-coded Cutter Gauthier adjustment or manual player override. Every skater and team-goalie unit is evaluated through the same versioned browser and Cloud Functions implementation.
+
+Production Scoring V3 remains unchanged. Projection V11 changes how future performance is estimated; it does not rewrite earned scores, completed matchup results, roster windows, transactions, standings, or playoff outcomes.
+
+### Angular TS2365 build hotfix
+
+The Batch F1 matchup-finish utility compared an ISO date string against a nullable accumulator inside a compact boolean/ternary expression:
+
+```ts
+finishDate = !finishDate || resolved.finishDate > finishDate
+  ? resolved.finishDate
+  : finishDate;
+```
+
+Angular's TypeScript 6 compiler narrowed the accumulator's comparison branch to `never`, producing:
+
+```text
+TS2365: Operator '>' cannot be applied to types 'string' and 'never'.
+```
+
+The utility now uses an explicit null-safe helper and `localeCompare()`:
+
+```ts
+function getLaterIsoDate(
+  currentDate: string | null,
+  candidateDate: string,
+): string {
+  if (currentDate === null) {
+    return candidateDate;
+  }
+
+  return candidateDate.localeCompare(currentDate) > 0
+    ? candidateDate
+    : currentDate;
+}
+```
+
+ISO `YYYY-MM-DD` dates retain chronological lexical ordering, and the explicit branch avoids the TypeScript narrowing failure. The asynchronous matchup-finish calculation itself is unchanged: the displayed finish remains the latest sixth-game date across all independent active roster slots for both teams.
+
+### Projection V11 — stat-component ensemble
+
+Projection V10 improved completed-season trajectory handling, but it still relied heavily on blended total fantasy-point pace. A total-points blend can overreact to a short run of goals or goalie results, while reacting too slowly to a real role change. Projection V11 forecasts the underlying stat components separately so categories with different repeatability can stabilize at different speeds.
+
+For skaters, the shared model separately estimates:
+
+- average ice time;
+- shots on goal;
+- hits;
+- blocked shots;
+- goals;
+- assists;
+- power-play points;
+- short-handed points;
+- game-winning and overtime goals; and
+- plus/minus, which remains strongly regressed because it is noisy and only affects the defense time-on-ice multiplier in RinkRat scoring.
+
+Ice time, shots, hits, and blocks can respond relatively quickly because they describe role and opportunity. Goals, power-play output, plus/minus, and rare bonuses require more evidence before the current season dominates the projection.
+
+For team-goalie units, V11 separately estimates:
+
+- shots faced per game;
+- save percentage;
+- win rate; and
+- shutout rate.
+
+This prevents a small number of wins, shutouts, or unusually strong save-percentage games from overwhelming the more stable workload and longer-term talent signal.
+
+### Empirical sample stabilization and regression
+
+Every component blends current production, the most recent completed season, the preceding completed season, and a positional prior. The current-season weight grows with the relevant sample rather than using one universal threshold for every statistic.
+
+Examples:
+
+- time on ice begins carrying meaningful current-season weight quickly;
+- shots, hits, and blocks stabilize after a moderate sample;
+- goals and assists require more games;
+- plus/minus, short-handed points, game-winning goals, and overtime goals remain heavily regressed; and
+- goalie save percentage is weighted by shots faced rather than only appearances.
+
+The model records its effective current-season and historical weights plus a model-confidence score for inspection in Projection Lab.
+
+### Shooting-percentage regression
+
+Skater goals are no longer projected only from the observed goals-per-game rate. V11 estimates a sustainable shooting percentage from:
+
+1. the player's current shot and goal sample;
+2. the two completed-season samples; and
+3. a position-level prior.
+
+Most of the goal forecast is then derived from projected shot volume multiplied by the regressed shooting percentage. A smaller direct goal-rate component remains so proven elite finishers are not reduced to the positional average.
+
+This structure can distinguish two players with the same recent goal total:
+
+- a player whose shots and role also increased receives a more durable improvement; and
+- a player scoring on an unusually high percentage of limited shots is pulled back more aggressively.
+
+Projection Lab shows the regressed shooting percentage and the estimated goals-per-82 added or removed by the shooting-regression step.
+
+### More realistic assist valuation
+
+The prior aggregate-data fallback valued only 40% of assists as primary and 60% as secondary. That was overly conservative under RinkRat's larger primary-assist value. V11 uses a bounded position estimate of approximately:
+
+- 56% primary assists for forwards; and
+- 53% primary assists for defense.
+
+Exact play-by-play assist order remains preferable when available. The revised estimate is used consistently in the browser and server projection mirrors when only aggregate assist totals are available.
+
+### Opportunity-weighted recent form
+
+Short six-game projections should react to a genuine promotion without chasing every hot scoring streak. V11 therefore calculates two recent-form signals:
+
+- **raw form**, containing all recently earned fantasy production; and
+- **sustainable form**, preserving shots, hits, blocks, ice time, and most repeatable role value while heavily discounting volatile goals, assists, rare bonuses, and the volatile portion of power-play scoring.
+
+The next-matchup adjustment uses 72% sustainable opportunity/form change and 28% raw scoring change. It continues to require a minimum sample and remains capped. Draft-ranking trend adjustments are more conservative than matchup adjustments.
+
+### Completed-season trajectory retained as a guardrail
+
+The V10 breakout/rising/stable/declining assessment remains in place. V11 uses its age, sample, role, shot, and power-play evidence to establish completed-season weights, then combines the new component forecast with the trajectory-aware total-points forecast.
+
+The component model is the primary signal, but its result is bounded relative to the trajectory model:
+
+- skater draft forecasts are limited to approximately ±15% of the trajectory-aware result;
+- team-goalie draft forecasts are limited to approximately ±14%; and
+- positive development uplift remains capped.
+
+This protects against bad or unavailable endpoint data while allowing supported young breakouts to move materially above the old fixed 70% / 20% / 10% blend.
+
+A Cutter Gauthier-type profile should now move from a conservative high-50s healthy six-game estimate toward a value closer to the high 60s when the full stat line supports the breakout. The exact value still depends on the saved season data, role, shots, power-play usage, opponent schedule, projection date, and live availability. An exceptional 100-plus-point six-game result remains an upside outcome rather than the mean projection.
+
+### Injuries remain separate from healthy talent
+
+Projection V11 preserves the injury behavior reviewed before this batch:
+
+- missed NHL team games are not inserted as zero-production appearances when estimating healthy talent;
+- partial injury games can receive reduced sample weight;
+- historical availability modestly affects reliability rather than erasing per-appearance production; and
+- live injury status, return timing, and expected appearances are applied after the healthy projection.
+
+The saved asset continues to distinguish:
+
+- `healthyProjectedCyclePoints`; and
+- the availability-adjusted `projectedCyclePoints`.
+
+After availability reduces the expected games, V11 recalculates the likely floor, ceiling, and uncertainty around the adjusted mean.
+
+Historical replay continues to use the simulated replay date and ignores present-day injury records, so a current injury cannot reduce an earlier historical projection.
+
+### Likely six-game range
+
+A single mean can make two equally projected players look equally safe even when one is much more volatile. V11 adds a likely six-game range based on:
+
+- the official mean projection;
+- recent game-level standard deviation;
+- recent sample size;
+- player reliability;
+- expected available games; and
+- position-specific baseline uncertainty.
+
+The mean remains the official value used by matchup projections. The range is explanatory and does not independently change scores or lineup totals.
+
+New optional projection fields include:
+
+- `projectionModelVersion`
+- `projectionModelConfidence`
+- `projectionPrimaryAssistShare`
+- `projectionShootingPercentage`
+- `projectionShootingRegressionAdjustment`
+- `projectionCurrentSeasonWeight`
+- `projectionHistoricalWeight`
+- `projectionFloorPoints`
+- `projectionCeilingPoints`
+- `projectionUncertaintyPoints`
+- `sustainableFormAdjustment`
+- `recentGameStandardDeviation`
+
+### Browser and Cloud Functions parity
+
+The browser and server use byte-identical copies of:
+
+- `draft-player-pool.service.ts`;
+- `draft.models.ts`; and
+- `projection-v11.util.ts`.
+
+The shared snapshot version is now `11`, so saved V10 projection pools are treated as stale and regenerated. Newly opened independent roster-slot windows therefore freeze a V11 projection, including schedule, current availability, sustainable form, and the simulated as-of date during historical replay.
+
+A projection refresh failure continues to fall back to the best valid saved data rather than blocking scoring or asynchronous window rollover.
+
+### Projection Lab V11
+
+Projection Lab now exposes the model's most important diagnostics:
+
+- trajectory classification and latest-season weight;
+- V11 model confidence;
+- current-season versus historical component weight;
+- likely six-game floor and ceiling;
+- uncertainty estimate;
+- sustainable form adjustment;
+- shooting-percentage regression;
+- primary-assist estimate; and
+- healthy versus availability-adjusted next-six projection.
+
+The diagnostics make it possible to determine whether a low value comes from conservative talent regression, an unsustainable finishing rate, an unfavorable schedule, current availability, or ordinary matchup uncertainty.
+
+### Architecture preserved
+
+Batch F1.1 does not change:
+
+- Production Scoring V3 values or formulas;
+- any completed score or game ledger;
+- the 14 active / 3 bench / 3 Injured Reserve roster structure;
+- independent six-game windows per active roster slot;
+- seventh-game rollover;
+- scheduled transaction activation;
+- waivers;
+- draft-clock authority;
+- standings;
+- playoff advancement or game backfill;
+- Firestore rules or indexes; or
+- manager permissions.
+
+No Firestore data migration is required. All V11 fields are optional and backward-compatible.
+
+### Automated verification
+
+After manually replacing the project files:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+
+npm run verify:batchf1-1
+npm run build:all
+```
+
+The focused F1.1 suite verifies:
+
+- the exact TypeScript narrowing build defect is removed;
+- missed games do not become zero-production appearances;
+- hot shooting is regressed toward shot volume and history;
+- repeatable opportunity responds faster than finishing luck;
+- aggregate assist estimation no longer assumes only 40% primary assists;
+- goalie save percentage, wins, and shutouts receive sample-size regression;
+- likely ranges expand for volatile, low-confidence players;
+- browser and server model files remain identical;
+- availability remains separate from healthy talent;
+- Projection Lab exposes the new diagnostics; and
+- production Scoring V3 files remain unchanged.
+
+### Commit
+
+```bash
+git status
+git add .
+git commit -m "Fix matchup build and add Projection V11"
+git push
+```
+
+### Deployment
+
+Deploy Functions first so newly opened roster-slot windows and refreshed shared pools use Projection V11:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Batch F1.1 Projection V11"
+```
+
+Then deploy the build hotfix and Projection Lab diagnostics:
+
+```bash
+firebase deploy --only hosting:app -m "Batch F1.1 projection diagnostics and build hotfix"
+```
+
+No Firestore rules or index deployment is required.
+
+### Post-deployment verification
+
+1. Run `npm run build:all` and confirm the former TS2365 matchup-finish error is gone.
+2. Refresh the shared projection pool and confirm its metadata reports version 11.
+3. Inspect Cutter Gauthier and several comparable young breakouts in Projection Lab V11.
+4. Confirm the Development section explains the season weighting rather than using a player-specific override.
+5. Compare projected shooting percentage with observed shooting percentage for a hot finisher.
+6. Confirm a role/shot increase moves faster than a short goal streak with unchanged opportunity.
+7. Confirm a healthy player who missed prior team games still shows six expected games and no historical zero-game penalty.
+8. Mark a test player day-to-day or out and confirm the healthy projection remains visible while only the availability-adjusted value and range change.
+9. Inspect a volatile forward and a stable defenseman with similar means; confirm their likely ranges differ appropriately.
+10. Advance historical replay until a roster slot opens another matchup and confirm the frozen projection is version 11 and uses the replay's simulated date.
+11. Confirm the exact matchup-finish card and compact mobile end date still display correctly.
+12. Watch for console errors, stale V10 snapshots, clipped Projection Lab columns, or horizontal page overflow outside the intended table scroller.
+
+### Rollback guidance
+
+A Hosting rollback removes the Projection Lab diagnostics and build hotfix, but restoring the Batch F1 file would also restore the TypeScript build defect. For a safe frontend rollback, redeploy a build known to contain the F1.1 date-comparison helper.
+
+Reverting Functions to Batch F1 restores Projection V10 snapshots. Existing version-11 fields are optional, so no data rollback is required. Keeping the F1.1 Functions build is recommended because browser/server parity and regenerated V11 window projections are the intended production state.
+
+---
+
+## Batch F1 — Projection V10, Historical Scoring Calibration, and Matchup Finish Date
+
+### Purpose
+
+This batch completes the next beta-finalization roadmap item after the mobile and beginner-onboarding work. It addresses three related release questions without changing the production competition rules:
+
+1. distinguish a player's healthy production from games missed because of injury;
+2. recognize a supported young-player breakout more quickly without chasing one hot week; and
+3. measure the current scoring system across a complete historical season before deciding whether any point value should change.
+
+It also adds a prominent Game Center timeline showing when the exact displayed matchup is expected to finish under RinkRat's independent six-game roster-slot model.
+
+### Projection V10 — healthy talent, trajectory, and availability
+
+Projection V10 preserves the strongest parts of Projection V9:
+
+- Player pace is calculated from NHL appearances. A scheduled NHL team game in which the player did not appear is **not** inserted as a zero when estimating healthy talent.
+- Current injury availability remains a separate next-six-game adjustment. The saved projection continues to distinguish `healthyProjectedCyclePoints` from the availability-adjusted `projectedCyclePoints`.
+- Current-season form, role, opponent schedule, reliability, sample-size caps, and conservative manager-facing calibration remain bounded.
+- A short partial game can still be regressed toward the player's normal role rather than being treated as a full poor appearance.
+- Team-goalie units retain the established stable multi-season baseline; an individual skater age curve is not applied to the goalie unit.
+
+The V9 completed-season draft baseline was fixed at 70% latest completed season, 20% previous completed season, and 10% conservative positional baseline. That is still the default for stable players. Projection V10 adds a bounded trajectory assessment:
+
+- **Supported breakout:** requires at least 50 appearances, a substantial completed-season pace increase, and either supporting growth in ice time, shots, or power-play production, or an unusually large pace increase. A young supported breakout can use up to an 86% / 11% / 3% completed-season blend.
+- **Rising:** requires a meaningful pace increase with a sufficient sample and supporting evidence. A young rising player can use up to an 80% / 15% / 5% blend.
+- **Stable:** keeps the existing 70% / 20% / 10% blend.
+- **Declining:** gives the more recent completed season additional weight when the decline is established over a meaningful sample.
+- **Insufficient data:** keeps the conservative stable baseline. Age alone never creates a breakout classification.
+
+Any positive trajectory uplift is capped. The maximum supported young-breakout increase over the V9 stable result is 10%; other rising/breakout profiles receive smaller caps. This lets a Cutter Gauthier-type profile move materially above a high-50s conservative draft rating when a large full-season jump is supported, while preventing one unsustainable shooting season from becoming the entire projection.
+
+The following explanation fields are now saved with projection assets and shown in Projection Lab V10:
+
+- `draftTrajectoryLabel`
+- `draftTrajectoryConfidence`
+- `draftTrajectoryAdjustment`
+- `draftLatestSeasonWeight`
+- `draftPaceChangePercent`
+
+`draftTrajectoryAdjustment` describes the season-level rating change from trajectory. It is not an injury deduction. Projection Lab converts it to a six-game equivalent for explanation while continuing to show healthy and availability-adjusted matchup projections separately.
+
+### Fresh server projections at independent window boundaries
+
+The Cloud Functions projection mirror now performs the full Projection V10 calculation. The previous placeholder implementation deliberately threw and caused the scoring worker to preserve an older saved or draft projection. That fallback protected scoring automation, but it meant a later roster-slot window was not guaranteed to receive a fresh schedule- and injury-aware projection.
+
+At a legal roster-slot boundary, the server now:
+
+1. resolves the exact target matchup number;
+2. loads the current league/global availability records for a live league;
+3. generates the full skater and team-goalie projection pool;
+4. ranks the pool with the same draft-value logic as the browser;
+5. writes a versioned Projection V10 snapshot for that target matchup; and
+6. freezes the applicable player's value into the immutable roster-slot window.
+
+A failed NHL refresh still does **not** block asynchronous roster advancement. The server uses the best target or current snapshot as a fallback and records a warning, preserving the rule that one roster slot can enter Matchup N+1 while other slots continue Matchup N.
+
+Snapshot freshness now includes the projection context and as-of date, not only elapsed wall-clock time. This matters during historical replay, where many simulated NHL dates can be advanced within a few real minutes. A roster slot opening on a later replay date cannot reuse an earlier-date target-matchup snapshot merely because that snapshot is less than six real hours old. Multiple slots opening on the same simulated date can still share one consistent target-matchup pool.
+
+### Historical replay safety
+
+Historical replay projections are calculated as of the replay control document's `simulatedDate`.
+
+- The replay target season is treated as the current season.
+- The replay source season is treated as the latest completed season.
+- The preceding completed season remains available for the multi-season baseline.
+- Current-season game rows and role/form inputs are filtered to the simulated date.
+- Present-day league/global injury records are ignored. A real 2026 injury cannot reduce a player in an earlier simulated matchup.
+- Missed appearances continue to affect confidence only modestly and never become artificial zero-point healthy-production games.
+
+This keeps replay projections temporally consistent while allowing the exact earned scoring ledger to continue using the historical source-season results mapped onto the target schedule.
+
+### F1 historical scoring calibration report
+
+Platform administrators can run the new report from `/scoring-test`. It is a read-only browser analysis and does not write Firestore scoring rules, league settings, or score documents.
+
+The report loads one complete NHL regular season and runs each recorded game through the current production scoring engine:
+
+- `calculateSkaterGamePoints()` for skaters;
+- `calculateGoalieGamePoints()` for team-goalie units; and
+- `calculateGoalieGameBreakdown()` to measure goalie cap behavior.
+
+Every player window is formed from six scheduled NHL team games. A scheduled team game in which the skater did not appear contributes zero to that fantasy window, which matches how an already-rostered player occupies an immutable RinkRat slot. Only complete six-game blocks are included; a final partial block is excluded.
+
+The full-season report includes:
+
+- position counts and six-game distributions;
+- P10, P25, median, P75, P90, and P95 outcomes;
+- best window, standard deviation, coefficient of variation, and median player volatility;
+- starter averages, replacement thresholds, replacement-pool averages, and value above replacement for the selected league size;
+- modeled team-goalie share in the 14-slot active lineup;
+- team-goalie per-game cap hit count and rate;
+- frequency of 100-point-or-higher forward windows;
+- defense-versus-comparable-forward separation;
+- optional Spearman correlation between a league's saved draft rankings and historical average outcomes; and
+- plain-language findings and a keep/review/insufficient-data recommendation.
+
+Two assist modes are available:
+
+- **Fast report:** uses the complete schedule and a deterministic integer estimate for primary versus secondary assist order.
+- **Exact assist mode:** reads NHL play-by-play, stores completed game assist order in browser local storage, and resumes from that cache on a later run. If only part of the season is cached, the report clearly labels the result as hybrid.
+
+The report also calculates three candidate rule sets in memory:
+
+- **Current V3** — exact production rules;
+- **Star Separation** — a narrow what-if increase to forward goals/primary assists with a reduction to repeatable floor categories; and
+- **Lower Goalie Ceiling** — a narrow what-if reduction to goalie cap/save/win values.
+
+These candidates are evidence displays only. **Scoring V3 and the production scoring engine remain byte-for-byte unchanged in this batch.** Review the full report with the user before promoting any candidate rule adjustment.
+
+### Exact displayed-matchup finish date
+
+Game Center now includes a dedicated matchup-finish card directly below the page header, plus a compact end-date line in the mobile score bar.
+
+The calculation follows the asynchronous architecture rather than inventing one league-wide cycle deadline:
+
+- every starting roster slot for both displayed teams is considered independently;
+- an already-created immutable slot window uses its saved `scheduledGameDates`;
+- an untouched future slot uses the effective current or scheduled incoming player shown by the M2.3 lineup resolver;
+- that future slot begins only after the same roster slot's prior six-game boundary;
+- the incoming/current player's NHL team schedule supplies the remaining dates; and
+- the matchup finish is the **latest sixth-game date across all starting roster slots on both teams**.
+
+The card labels the result as scheduled or projected. It does not present a partial result as definitive. When one slot's prior boundary, player assignment, or NHL schedule is not yet resolvable, it says the finish date is still being calculated and shows how many roster-slot schedules are resolved.
+
+A projected date can move when an NHL game is postponed or a planned starter changes before that slot begins. Once all participating slot schedules are immutable, the card describes the date as the scheduled matchup finish. Completed historical matchups retain the date derived from their frozen six-game schedules.
+
+### Architecture preserved
+
+This batch does not change:
+
+- Scoring V3 point values, diminishing returns, bonuses, or goalie cap;
+- the 14 active / 3 bench / 3 Injured Reserve roster structure;
+- independent six-game windows per active roster slot;
+- seventh-game rollover into that slot's next matchup;
+- scheduled add/drop, waiver, bench, or Injured Reserve activation rules;
+- frozen projections after a roster-slot window begins;
+- standings, playoff advancement, or playoff game banking/backfill;
+- Firestore rules or indexes; or
+- manager permissions.
+
+No Firestore data migration is required. New projection fields are optional and backward-compatible.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchf1
+npm run build:all
+```
+
+The focused F1 suite verifies:
+
+- supported young breakouts receive additional recent-season weight;
+- positive trajectory uplift is capped;
+- short samples and age alone cannot create a breakout;
+- stable players and goalie units retain the conservative baseline;
+- missed appearances and current availability remain separate concepts;
+- live server Projection V10 generation replaces the former placeholder failure;
+- historical replay uses its simulated date and ignores present-day injuries;
+- replay snapshot freshness compares the simulated as-of date, not only wall-clock age;
+- the F1 report invokes the production scoring engine and remains read-only;
+- production Scoring V3 files are unchanged from Batch M2.3;
+- the matchup finish is the latest independent sixth-game date;
+- unresolved slot paths cannot produce a misleading definitive date; and
+- desktop and mobile Game Center surfaces expose the timeline.
+
+### Manual verification checklist
+
+1. Refresh shared projections for a test league and open Projection Lab V10.
+2. Inspect a supported young breakout. Confirm Development explains the latest-season weight, pace change, confidence, and bounded adjustment.
+3. Confirm `Healthy Matchup` remains above or equal to `Next 6 Games` only when current availability removes expected appearances.
+4. Confirm a player who missed prior team games is evaluated from appearances rather than receiving zeroes in healthy pace.
+5. Mark a test skater day-to-day or out, refresh, and confirm only the availability-adjusted next-six value changes as expected.
+6. During historical replay, advance to a new simulated date and let one roster slot open a new matchup. Confirm the saved snapshot metadata uses that simulated date and `historical-replay` context.
+7. Advance another simulated date quickly and open another slot in the same target matchup. Confirm a later-date snapshot is generated rather than reusing the prior date solely because it is less than six real hours old.
+8. Confirm no present-day injury record reduces a historical replay projection.
+9. As platform administrator, open `/scoring-test`, run the fast full-season report, and export the JSON.
+10. Review position distributions, replacement values, goalie share/cap rate, forward ceilings, volatility, and draft-rank correlation before discussing a scoring change.
+11. Optionally run exact assist mode and confirm cached progress resumes after cancellation/reload.
+12. Confirm the report never changes a league's scoring rules or published scores.
+13. Open an active matchup and confirm the finish card is visible directly below the header.
+14. Confirm the displayed date equals the latest sixth scheduled game among both teams' 28 active roster slots.
+15. Schedule an add/drop for a future matchup and confirm the incoming player's NHL schedule is used for the untouched future slot.
+16. Confirm the current matchup still uses the outgoing player's immutable schedule until that slot reaches its legal boundary.
+17. Open a matchup with one unresolved future slot and confirm the page says the date is pending rather than showing a partial date as exact.
+18. Check the compact `Ends Mon D` line in the mobile score bar at 320px, 360px, 390px, and 430px.
+19. Repeat in Rink Dark, Light Ice, and OLED Black and check focus, zoom, horizontal overflow, and console errors.
+
+### Deployment
+
+Deploy Functions first so every newly opened roster-slot window can use Projection V10 server generation:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Batch F1 Projection V10 server window refresh"
+```
+
+Then deploy the Projection Lab, historical calibration report, and Game Center timeline:
+
+```bash
+firebase deploy --only hosting:app -m "Batch F1 scoring calibration and matchup timeline"
+```
+
+No Firestore rules or index deployment is required.
+
+### Rollback guidance
+
+A Hosting-only rollback is safe and does not alter competition data. Keeping the Batch F1 Functions build is recommended because it supplies fresh window-boundary Projection V10 snapshots and replay-date safety. Reverting Functions to Batch M2.3 restores the previous saved-projection fallback behavior; scoring and rollover continue, but later windows are no longer guaranteed to receive a newly generated schedule/injury projection at their boundary. No scoring, roster, transaction, or matchup migration is needed for either direction.
+
+---
 
 
 ## Batch M2.3 — Future Matchup Lineup Integrity and Scoring Review
