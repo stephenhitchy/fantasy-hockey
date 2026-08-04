@@ -1,0 +1,1056 @@
+/*
+ * Batch M5–V1
+ * Mobile roster task flows and calmer repeated utility surfaces.
+ * Competitive rules remain in the existing domain services; this file only
+ * changes presentation and shared interaction states.
+ */
+
+/* --------------------------------------------------------------------------
+   Shared pending-operation shield
+   -------------------------------------------------------------------------- */
+.roster-action-shield {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--rr-z-toast) + 10);
+  display: grid;
+  place-items: center;
+  padding: var(--rr-space-4);
+  background: color-mix(in srgb, var(--rr-color-page) 78%, transparent);
+  backdrop-filter: blur(6px);
+  cursor: wait;
+}
+
+.roster-action-shield-card {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-4);
+  width: min(30rem, 100%);
+  padding: var(--rr-space-5);
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text);
+  box-shadow: var(--rr-shadow-deep);
+}
+
+.roster-action-shield-card div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+.roster-action-shield-card strong,
+.roster-action-shield-card small {
+  display: block;
+}
+
+.roster-action-shield-card strong {
+  font-family: var(--rr-font-interface);
+  font-size: var(--rr-text-lg);
+}
+
+.roster-action-shield-card small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+}
+
+.roster-action-spinner {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  border: 3px solid color-mix(in srgb, var(--rr-color-border-strong) 72%, transparent);
+  border-top-color: var(--rr-color-accent);
+  border-radius: 50%;
+  animation: rr-roster-action-spin 0.8s linear infinite;
+}
+
+@keyframes rr-roster-action-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roster-action-spinner {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   My Team: explicit Manage flow and calm roster rows
+   -------------------------------------------------------------------------- */
+app-team-settings :where(
+  .fantasy-position-group,
+  .fantasy-player-card,
+  .ir-slot-card,
+  .roster-section
+) {
+  border-width: 1px;
+}
+
+app-team-settings :where(.fantasy-player-card, .ir-slot-card) {
+  box-shadow: none;
+}
+
+app-team-settings .roster-card-primary-actions,
+app-team-settings .ir-slot-primary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--rr-space-2);
+}
+
+app-team-settings .roster-card-view-action,
+app-team-settings .roster-empty-find-action {
+  min-height: 36px;
+  padding-inline: var(--rr-space-3);
+  font-size: var(--rr-text-xs);
+  white-space: nowrap;
+}
+
+app-team-settings .roster-manage-button {
+  display: none;
+}
+
+app-team-settings .empty-slot-copy {
+  gap: var(--rr-space-2);
+}
+
+app-team-settings .roster-empty-find-action {
+  width: fit-content;
+  margin-top: var(--rr-space-2);
+}
+
+app-team-settings .roster-manager-summary {
+  display: grid;
+  gap: var(--rr-space-4);
+  margin-bottom: var(--rr-space-4);
+}
+
+app-team-settings .roster-manager-identity,
+app-team-settings .roster-manager-empty-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-3);
+  min-width: 0;
+  padding: var(--rr-space-4);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-raised);
+}
+
+app-team-settings .roster-manager-identity img,
+app-team-settings .roster-manager-logo-fallback,
+app-team-settings .roster-manager-empty-summary > span {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  place-items: center;
+  object-fit: contain;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+  font-weight: 800;
+}
+
+app-team-settings .roster-manager-identity > div,
+app-team-settings .roster-manager-empty-summary > div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+app-team-settings .roster-manager-identity strong,
+app-team-settings .roster-manager-empty-summary strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-lg);
+}
+
+app-team-settings .roster-manager-identity span,
+app-team-settings .roster-manager-empty-summary small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+}
+
+app-team-settings .roster-manager-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+}
+
+app-team-settings .roster-manager-score-grid > div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-raised);
+}
+
+app-team-settings .roster-manager-score-grid span {
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+app-team-settings .roster-manager-score-grid strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-xl);
+}
+
+app-team-settings .roster-manager-pending-note {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+app-team-settings .roster-manager-pending-note span {
+  color: inherit;
+  font-size: var(--rr-text-sm);
+}
+
+app-team-settings .roster-manager-action-list {
+  display: grid;
+  gap: var(--rr-space-2);
+}
+
+app-team-settings .roster-manager-action {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--rr-space-2) var(--rr-space-3);
+  width: 100%;
+  min-height: var(--rr-touch-target);
+  padding: var(--rr-space-3) var(--rr-space-4);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+app-team-settings .roster-manager-action > span:first-child {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+app-team-settings .roster-manager-action strong,
+app-team-settings .roster-manager-action small,
+app-team-settings .roster-manager-action em {
+  display: block;
+}
+
+app-team-settings .roster-manager-action strong {
+  font-size: var(--rr-text-md);
+}
+
+app-team-settings .roster-manager-action small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+  line-height: var(--rr-line-normal);
+}
+
+app-team-settings .roster-manager-action em {
+  grid-column: 1 / -1;
+  color: var(--rr-color-warning);
+  font-size: var(--rr-text-xs);
+  font-style: normal;
+  font-weight: 700;
+}
+
+app-team-settings .roster-manager-action-arrow {
+  align-self: center;
+  color: var(--rr-color-text-muted);
+  font-size: 1.6rem;
+}
+
+app-team-settings .roster-manager-action--primary {
+  border-color: color-mix(in srgb, var(--rr-color-accent) 56%, var(--rr-color-border));
+}
+
+app-team-settings .roster-manager-action--warning {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 54%, var(--rr-color-border));
+}
+
+app-team-settings .roster-manager-action--danger {
+  border-color: color-mix(in srgb, var(--rr-color-danger) 58%, var(--rr-color-border));
+}
+
+app-team-settings .roster-manager-action:hover:not(:disabled),
+app-team-settings .roster-manager-action:focus-visible {
+  border-color: var(--rr-color-accent);
+  background: var(--rr-color-surface-strong);
+}
+
+app-team-settings .roster-manager-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+app-team-settings .roster-manager-no-actions {
+  margin: 0;
+  padding: var(--rr-space-4);
+  color: var(--rr-color-text-secondary);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Available Players: focused two-step task flow
+   -------------------------------------------------------------------------- */
+app-free-agents :where(
+  .free-agent-list-card,
+  .pending-moves-card,
+  .decision-asset-card,
+  .slot-choice-card,
+  .move-comparison-panel
+) {
+  border-width: 1px;
+  box-shadow: none;
+}
+
+app-free-agents .preferred-roster-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+  margin-bottom: var(--rr-space-4);
+}
+
+app-free-agents .preferred-roster-target > div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+app-free-agents .preferred-roster-target small {
+  color: inherit;
+  font-size: var(--rr-text-sm);
+}
+
+app-free-agents .free-agent-pool-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  margin-bottom: var(--rr-space-3);
+  padding: var(--rr-space-1);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .free-agent-pool-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--rr-space-2);
+  min-height: var(--rr-touch-target);
+  border: 1px solid transparent;
+  border-radius: var(--rr-radius-sm);
+  background: transparent;
+  color: var(--rr-color-text-secondary);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+app-free-agents .free-agent-pool-tabs button strong {
+  display: grid;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  place-items: center;
+  border-radius: var(--rr-radius-pill);
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-xs);
+}
+
+app-free-agents .free-agent-pool-tabs button.active-pool-tab {
+  border-color: color-mix(in srgb, var(--rr-color-accent) 52%, var(--rr-color-border));
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text);
+}
+
+app-free-agents .waiver-tab-panel {
+  display: grid;
+  gap: var(--rr-space-3);
+}
+
+app-free-agents .waiver-tab-intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+  padding: var(--rr-space-3) 0;
+}
+
+app-free-agents .waiver-tab-intro h3,
+app-free-agents .waiver-tab-intro p {
+  margin: 0;
+}
+
+app-free-agents .waiver-tab-intro p {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+  font-weight: 800;
+}
+
+app-free-agents .compact-player-pool .decision-asset-card {
+  grid-template-columns: minmax(15rem, 1.25fr) minmax(15rem, 0.85fr) minmax(10rem, 0.48fr);
+  align-items: center;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-3);
+  border-color: var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .compact-player-pool .decision-asset-card:hover {
+  border-color: color-mix(in srgb, var(--rr-color-accent) 48%, var(--rr-color-border));
+  background: var(--rr-color-surface-strong);
+}
+
+app-free-agents .compact-player-pool .decision-metric-grid--primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+app-free-agents .compact-player-pool .decision-metric-grid--primary > div {
+  min-height: 3.5rem;
+  padding: var(--rr-space-2);
+  border-color: var(--rr-color-border);
+  background: var(--rr-color-surface);
+}
+
+app-free-agents .compact-player-pool .decision-action-column {
+  grid-template-columns: 1fr;
+  justify-items: stretch;
+  gap: var(--rr-space-2);
+}
+
+app-free-agents .compact-player-pool .decision-action-column > :where(span, small) {
+  justify-self: start;
+}
+
+app-free-agents .compact-player-pool .choose-slot-button,
+app-free-agents .compact-player-pool .claim-button {
+  width: 100%;
+  min-height: var(--rr-touch-target);
+}
+
+app-free-agents .compact-player-pool .waiver-action-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--rr-space-2);
+  width: 100%;
+}
+
+/* Projected content inside the shared action sheet must be styled globally. */
+app-free-agents .compact-selected-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--rr-space-3);
+  margin-bottom: var(--rr-space-3);
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .compact-selected-player > img {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+app-free-agents .compact-selected-player > div:nth-child(2) {
+  min-width: 0;
+}
+
+app-free-agents .compact-selected-player strong,
+app-free-agents .compact-selected-player p {
+  display: block;
+  margin: 0;
+}
+
+app-free-agents .compact-selected-player p {
+  margin-top: var(--rr-space-1);
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+}
+
+app-free-agents .selected-primary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  margin-bottom: var(--rr-space-3);
+}
+
+app-free-agents .selected-primary-metrics > div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .selected-primary-metrics span {
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+app-free-agents .selected-primary-metrics strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-xl);
+}
+
+app-free-agents .projection-explanation-details {
+  margin-bottom: var(--rr-space-3);
+  border-color: var(--rr-color-border);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .projection-explanation-details > summary {
+  min-height: var(--rr-touch-target);
+  padding: var(--rr-space-3);
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+  font-weight: 800;
+}
+
+app-free-agents .projection-explanation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  padding: 0 var(--rr-space-3) var(--rr-space-3);
+}
+
+app-free-agents .projection-explanation-grid section {
+  display: grid;
+  gap: var(--rr-space-1);
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface);
+}
+
+app-free-agents .projection-explanation-grid section > span,
+app-free-agents .projection-explanation-grid section > small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-xs);
+}
+
+app-free-agents .projection-explanation-grid section > strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+}
+
+app-free-agents .projection-explanation-details .cycle-decision-block {
+  margin: 0 var(--rr-space-3) var(--rr-space-3);
+  border-color: var(--rr-color-border);
+  background: var(--rr-color-surface);
+}
+
+app-free-agents .compact-stat-breakdown-heading {
+  display: grid;
+  gap: var(--rr-space-1);
+  padding: 0 var(--rr-space-3) var(--rr-space-2);
+}
+
+app-free-agents .compact-stat-breakdown-heading strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+}
+
+app-free-agents .compact-stat-breakdown-heading small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-xs);
+}
+
+app-free-agents .compact-stat-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  padding: 0 var(--rr-space-3) var(--rr-space-3);
+}
+
+app-free-agents .compact-stat-breakdown > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-2);
+  min-width: 0;
+  padding: var(--rr-space-2);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface);
+}
+
+app-free-agents .compact-stat-breakdown small {
+  overflow: hidden;
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-free-agents .compact-stat-breakdown strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+}
+
+app-free-agents .preferred-sheet-target {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--rr-space-1) var(--rr-space-3);
+  margin: var(--rr-space-3) 0;
+  padding: var(--rr-space-3);
+  border: 1px solid color-mix(in srgb, var(--rr-color-accent) 42%, var(--rr-color-border));
+  border-radius: var(--rr-radius-sm);
+  background: color-mix(in srgb, var(--rr-color-accent) 8%, var(--rr-color-surface-raised));
+}
+
+app-free-agents .preferred-sheet-target > span {
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+app-free-agents .preferred-sheet-target > strong {
+  grid-column: 1;
+}
+
+app-free-agents .preferred-sheet-target > button {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+app-free-agents .slot-choice-list {
+  display: grid;
+  gap: var(--rr-space-2);
+}
+
+app-free-agents .slot-choice-card {
+  grid-template-columns: minmax(13rem, 1fr) minmax(8rem, 0.48fr) minmax(14rem, 0.8fr) auto;
+  gap: var(--rr-space-3);
+  border-color: var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .slot-choice-card.selected-slot-choice {
+  border-color: var(--rr-color-accent);
+  background: color-mix(in srgb, var(--rr-color-accent) 9%, var(--rr-color-surface-raised));
+  box-shadow: inset 3px 0 0 var(--rr-color-accent);
+}
+
+app-free-agents .slot-choice-decision-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+app-free-agents .slot-choice-decision-metrics > span,
+app-free-agents .comparison-metrics > span {
+  border-color: var(--rr-color-border);
+  background: var(--rr-color-surface);
+}
+
+app-free-agents .move-comparison-panel {
+  margin-top: var(--rr-space-4);
+  border-color: var(--rr-color-border);
+  background: var(--rr-color-surface-raised);
+}
+
+app-free-agents .comparison-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+app-free-agents .move-timing-panel {
+  display: grid;
+  gap: var(--rr-space-1);
+  margin-top: var(--rr-space-3);
+}
+
+app-free-agents .move-timing-panel p {
+  margin: 0;
+  color: inherit;
+  font-size: var(--rr-text-sm);
+  line-height: var(--rr-line-normal);
+}
+
+app-free-agents .free-agent-sheet-actions {
+  display: grid;
+  gap: var(--rr-space-3);
+}
+
+app-free-agents .free-agent-sheet-summary {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+app-free-agents .free-agent-sheet-summary strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-sm);
+  line-height: var(--rr-line-normal);
+}
+
+app-free-agents .free-agent-sheet-buttons {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr);
+  gap: var(--rr-space-2);
+}
+
+app-free-agents .free-agent-sheet-buttons button {
+  min-height: var(--rr-touch-target);
+}
+
+/* --------------------------------------------------------------------------
+   Phone layout
+   -------------------------------------------------------------------------- */
+@media (max-width: 680px) {
+  app-team-settings .roster-section {
+    padding: var(--rr-space-3);
+  }
+
+  app-team-settings :where(
+    .forward-row,
+    .defense-goalie-row,
+    .defense-slots,
+    .bench-slot-grid,
+    .ir-slot-grid
+  ) {
+    grid-template-columns: 1fr;
+    gap: var(--rr-space-2);
+  }
+
+  app-team-settings .active-roster-board {
+    gap: var(--rr-space-3);
+  }
+
+  app-team-settings .fantasy-position-group {
+    padding: var(--rr-space-2);
+    border-color: var(--rr-color-border);
+    border-radius: var(--rr-radius-md);
+    background: color-mix(in srgb, var(--rr-color-surface-raised) 68%, transparent);
+  }
+
+  app-team-settings .fantasy-position-header {
+    margin-bottom: var(--rr-space-2);
+    padding-inline: var(--rr-space-1);
+    color: var(--rr-color-text-secondary);
+    font-size: var(--rr-mobile-text-label);
+    text-align: left;
+  }
+
+  app-team-settings .fantasy-player-card,
+  app-team-settings .bench-player-card {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    gap: var(--rr-space-2);
+    min-height: 0;
+    padding: var(--rr-space-3);
+    border-color: var(--rr-color-border);
+    border-radius: var(--rr-radius-sm);
+    background: var(--rr-color-surface-raised);
+  }
+
+  app-team-settings .fantasy-player-logo,
+  app-team-settings .logo-fallback {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  app-team-settings .fantasy-player-main strong {
+    font-size: var(--rr-mobile-text-player);
+  }
+
+  app-team-settings .fantasy-player-main span,
+  app-team-settings .fantasy-player-main em {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  app-team-settings .fantasy-player-score-stack {
+    grid-template-columns: repeat(2, minmax(2.7rem, 1fr));
+    min-width: 5.8rem;
+  }
+
+  app-team-settings .fantasy-player-score-stack div {
+    padding: var(--rr-space-2) var(--rr-space-1);
+    border: 1px solid var(--rr-color-border);
+    background: var(--rr-color-surface);
+  }
+
+  app-team-settings .roster-card-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  app-team-settings .roster-card-primary-actions,
+  app-team-settings .ir-slot-primary-actions {
+    width: 100%;
+  }
+
+  app-team-settings .roster-card-action-buttons,
+  app-team-settings .ir-slot-actions,
+  app-team-settings .roster-card-view-action {
+    display: none;
+  }
+
+  app-team-settings .roster-manage-button {
+    display: inline-flex;
+    width: 100%;
+    min-height: var(--rr-touch-target);
+  }
+
+  app-team-settings .empty-slot-copy {
+    display: grid;
+    gap: var(--rr-space-1);
+    padding: var(--rr-space-2);
+  }
+
+  app-team-settings .roster-empty-find-action {
+    width: 100%;
+    min-height: var(--rr-touch-target);
+    margin-top: var(--rr-space-2);
+  }
+
+  app-team-settings .pending-slot-move-pill,
+  app-team-settings .player-injury-banner {
+    grid-column: 1 / -1;
+  }
+
+  app-team-settings .ir-slot-card {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: var(--rr-space-2);
+    padding: var(--rr-space-3);
+    border-color: var(--rr-color-border);
+    border-radius: var(--rr-radius-sm);
+    background: var(--rr-color-surface-raised);
+  }
+
+  app-team-settings .ir-slot-primary-actions {
+    grid-column: 1 / -1;
+  }
+
+  app-team-settings .roster-manager-score-grid,
+  app-free-agents .selected-primary-metrics,
+  app-free-agents .projection-explanation-grid,
+  app-free-agents .compact-stat-breakdown {
+    grid-template-columns: 1fr;
+  }
+
+  app-team-settings .roster-manager-action {
+    padding: var(--rr-space-3);
+  }
+
+  app-free-agents .free-agents-page {
+    padding-inline: var(--rr-space-2);
+  }
+
+  app-free-agents .free-agent-list-card,
+  app-free-agents .pending-moves-card {
+    padding: var(--rr-space-3);
+  }
+
+  app-free-agents .preferred-roster-target {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  app-free-agents .preferred-roster-target > button {
+    width: 100%;
+    min-height: var(--rr-touch-target);
+  }
+
+  app-free-agents .free-agent-pool-tabs {
+    position: sticky;
+    top: 0;
+    z-index: var(--rr-z-sticky);
+    background: color-mix(in srgb, var(--rr-color-surface) 94%, transparent);
+    backdrop-filter: blur(8px);
+  }
+
+  app-free-agents .decision-filter-row {
+    position: sticky;
+    top: calc(var(--rr-touch-target) + var(--rr-space-3));
+    z-index: calc(var(--rr-z-sticky) - 1);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--rr-space-2);
+    margin-inline: calc(var(--rr-space-3) * -1);
+    padding: var(--rr-space-3);
+    border-block: 1px solid var(--rr-color-border);
+    background: color-mix(in srgb, var(--rr-color-surface) 96%, transparent);
+    backdrop-filter: blur(8px);
+  }
+
+  app-free-agents .decision-filter-row label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  app-free-agents .compact-player-pool .decision-asset-card {
+    grid-template-columns: 1fr;
+    gap: var(--rr-space-2);
+    padding: var(--rr-space-3);
+  }
+
+  app-free-agents .compact-player-pool .asset-identity-block,
+  app-free-agents .compact-player-pool .decision-metric-grid,
+  app-free-agents .compact-player-pool .decision-action-column {
+    grid-column: 1;
+  }
+
+  app-free-agents .compact-player-pool .decision-metric-grid--primary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  app-free-agents .compact-player-pool .decision-metric-grid--primary > div {
+    min-height: 3.75rem;
+  }
+
+  app-free-agents .compact-player-pool .decision-action-column {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  app-free-agents .compact-player-pool .decision-action-column .waiver-action-stack,
+  app-free-agents .compact-player-pool .choose-slot-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  app-free-agents .compact-player-pool .waiver-action-stack {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  app-free-agents .compact-selected-player {
+    grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+    padding: var(--rr-space-3);
+  }
+
+  app-free-agents .compact-selected-player > img {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  app-free-agents .selected-player-rank strong {
+    font-size: var(--rr-text-lg);
+  }
+
+  app-free-agents .selected-player-rank span {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  app-free-agents .preferred-sheet-target {
+    grid-template-columns: 1fr;
+  }
+
+  app-free-agents .preferred-sheet-target > strong,
+  app-free-agents .preferred-sheet-target > button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  app-free-agents .preferred-sheet-target > button {
+    width: 100%;
+  }
+
+  app-free-agents .slot-choice-card {
+    grid-template-columns: 1fr;
+    gap: var(--rr-space-2);
+    padding: var(--rr-space-3);
+    text-align: left;
+  }
+
+  app-free-agents .slot-choice-decision-metrics,
+  app-free-agents .slot-window-progress,
+  app-free-agents .slot-select-indicator {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  app-free-agents .slot-select-indicator {
+    min-height: var(--rr-touch-target);
+  }
+
+  app-free-agents .move-comparison-heading {
+    grid-template-columns: 1fr;
+  }
+
+  app-free-agents .move-delta-summary {
+    text-align: left;
+  }
+
+  app-free-agents .move-comparison-grid,
+  app-free-agents .comparison-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  app-free-agents .free-agent-sheet-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  app-free-agents .free-agent-sheet-buttons button {
+    width: 100%;
+  }
+
+  app-free-agents .waiver-tab-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--rr-space-1);
+  }
+
+  .roster-action-shield-card {
+    align-items: flex-start;
+    padding: var(--rr-space-4);
+  }
+}
+
+@media (max-width: 390px) {
+  app-team-settings .fantasy-player-card,
+  app-team-settings .bench-player-card {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+  }
+
+  app-team-settings .fantasy-player-score-stack {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  app-free-agents .decision-filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  app-free-agents .decision-filter-row label,
+  app-free-agents .decision-filter-row label:first-child {
+    grid-column: 1;
+  }
+
+  app-free-agents .compact-player-pool .decision-metric-grid--primary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  app-free-agents .compact-player-pool .decision-metric-grid--primary span {
+    font-size: var(--rr-mobile-text-micro);
+  }
+
+  app-free-agents .compact-selected-player {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+
+  app-free-agents .selected-player-rank {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    text-align: left;
+  }
+}

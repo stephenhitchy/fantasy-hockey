@@ -26,7 +26,7 @@
             [class.enabled]="myQueue().autoDraftEnabled"
             [class.forced-auto-draft]="myQueue().autoDraftActivatedByTimeout"
             (click)="toggleMyAutoDraft()"
-            [disabled]="queueSaving()"
+            [disabled]="queueSaving() || !canUseLiveDraftActions()"
           >
             {{ getMyAutoDraftButtonLabel() }}
           </button>
@@ -124,6 +124,52 @@
       </section>
 
       <section
+        [class]="'draft-connection-banner rr-notice ' + getRealtimeConnectionClass()"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="draft-connection-indicator" aria-hidden="true"></span>
+        <div class="draft-connection-copy">
+          <strong>{{ getRealtimeConnectionLabel() }}</strong>
+          <span>{{ getRealtimeConnectionDetail() }}</span>
+          <small>{{ getLastServerConfirmationLabel() }}</small>
+        </div>
+
+        @if (realtimeConnectionState() !== 'connected') {
+          <button
+            type="button"
+            class="draft-connection-retry rr-button rr-button--secondary"
+            (click)="retryRealtimeConnection()"
+            [disabled]="realtimeConnectionState() === 'offline'"
+          >
+            Retry Connection
+          </button>
+        }
+      </section>
+
+      @if (latestAutoPickNotice(); as autoPickNotice) {
+        <section
+          class="draft-auto-pick-notice rr-notice"
+          [class.draft-auto-pick-warning]="autoPickNotice.tone === 'warning'"
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <strong>{{ autoPickNotice.title }}</strong>
+            <span>{{ autoPickNotice.detail }}</span>
+          </div>
+          <button
+            type="button"
+            class="draft-auto-pick-dismiss rr-button rr-button--quiet"
+            (click)="dismissLatestAutoPickNotice()"
+            aria-label="Dismiss auto-draft explanation"
+          >
+            ×
+          </button>
+        </section>
+      }
+
+      <section
         class="draft-clock-bar rr-card rr-card--padded"
         [class.clock-urgent]="draftClockIsUrgent()"
         [class.clock-paused]="draft()?.clockStatus === 'paused'"
@@ -152,7 +198,8 @@
                   clockActionInProgress() ||
                   playerPoolLoading() ||
                   playerPool().length === 0 ||
-                  !!playerPoolError()
+                  !!playerPoolError() ||
+                  !canUseLiveDraftActions()
                 "
               >
                 {{
@@ -171,7 +218,7 @@
               type="button"
               class="clock-control-button rr-button rr-button--secondary"
               (click)="toggleDraftClockPause()"
-              [disabled]="clockActionInProgress() || draft()?.status !== 'live'"
+              [disabled]="clockActionInProgress() || draft()?.status !== 'live' || !canUseLiveDraftActions()"
             >
               {{
                 clockActionInProgress()
@@ -188,6 +235,90 @@
           }
         </div>
       </section>
+
+      <section
+        class="draft-mobile-command-bar"
+        [class.clock-urgent]="draftClockIsUrgent()"
+        aria-label="Live draft status"
+      >
+        <div>
+          <span>{{ getCurrentPickNumberLabel() }}</span>
+          <strong>{{ getCurrentPickTeamName() }}</strong>
+        </div>
+        <div class="draft-mobile-command-clock">
+          <strong>{{ draftClockDisplay() }}</strong>
+          <span>{{ getDraftClockStatusLabel() }}</span>
+        </div>
+        <div [class]="'draft-mobile-command-connection ' + getRealtimeConnectionClass()">
+          <i aria-hidden="true"></i>
+          <span>{{ getRealtimeConnectionLabel() }}</span>
+        </div>
+
+        @if (draft()?.clockStatus === 'stopped' && isMyTurn()) {
+          <button
+            type="button"
+            class="draft-mobile-command-action rr-button rr-button--primary"
+            (click)="startMyDraftClock()"
+            [disabled]="
+              clockActionInProgress() ||
+              playerPoolLoading() ||
+              playerPool().length === 0 ||
+              !!playerPoolError() ||
+              !canUseLiveDraftActions()
+            "
+          >
+            {{ clockActionInProgress() ? 'Starting…' : 'Start Clock' }}
+          </button>
+        } @else if (isCommissioner() && draft()?.clockStatus !== 'stopped') {
+          <button
+            type="button"
+            class="draft-mobile-command-action rr-button rr-button--secondary"
+            (click)="toggleDraftClockPause()"
+            [disabled]="clockActionInProgress() || !canUseLiveDraftActions()"
+          >
+            {{
+              clockActionInProgress()
+                ? 'Updating…'
+                : draft()?.clockStatus === 'paused'
+                  ? 'Resume'
+                  : 'Pause'
+            }}
+          </button>
+        }
+      </section>
+
+      <nav class="draft-mobile-tabs" aria-label="Draft room views" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="mobilePanel() === 'players'"
+          [class.active]="mobilePanel() === 'players'"
+          (click)="setMobilePanel('players')"
+        >
+          <span>Players</span>
+          <small>{{ availableAssetCount() }}</small>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="mobilePanel() === 'queue'"
+          [class.active]="mobilePanel() === 'queue'"
+          (click)="setMobilePanel('queue')"
+        >
+          <span>Queue</span>
+          <small>{{ queueEntries().length }}</small>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="mobilePanel() === 'roster'"
+          [class.active]="mobilePanel() === 'roster'"
+          (click)="setMobilePanel('roster')"
+        >
+          <span>Roster</span>
+          <small>{{ getMyDraftedCount() }}/{{ getMyRosterSlotTotal() }}</small>
+        </button>
+      </nav>
 
       <section class="draft-roster-needs rr-card rr-card--padded" aria-label="Your draft roster needs">
         <div class="draft-roster-needs-heading">
@@ -285,7 +416,11 @@
       </section>
 
       <section class="draft-layout">
-        <main class="player-pool-panel rr-card rr-card--padded">
+        <main
+          class="player-pool-panel rr-card rr-card--padded draft-mobile-panel"
+          [class.mobile-panel-active]="mobilePanel() === 'players'"
+          role="tabpanel"
+        >
           <div class="panel-heading rr-section-heading">
             <div>
               <span class="eyebrow">Available Players</span>
@@ -363,6 +498,7 @@
                 <article
                   class="draft-asset-card rr-list-row"
                   [class.has-team-change-logo]="hasOffseasonTeamChange(asset)"
+                  [class.mobile-selected-asset]="selectedAssetKey() === asset.assetKey"
                 >
                   @if (hasOffseasonTeamChange(asset)) {
                     <div
@@ -492,9 +628,19 @@
                       class="queue-button rr-button rr-button--secondary"
                       [class.queued]="isAssetQueued(asset)"
                       (click)="toggleAssetInQueue(asset)"
-                      [disabled]="queueSaving() || draft()?.status === 'complete'"
+                      [disabled]="queueSaving() || draft()?.status === 'complete' || !canUseLiveDraftActions()"
                     >
                       {{ isAssetQueued(asset) ? 'Queued' : '+ Queue' }}
+                    </button>
+
+                    <button
+                      type="button"
+                      class="mobile-select-player-button rr-button rr-button--primary"
+                      [class.selected]="selectedAssetKey() === asset.assetKey"
+                      (click)="selectAssetForMobile(asset)"
+                      [disabled]="draft()?.status === 'complete'"
+                    >
+                      {{ selectedAssetKey() === asset.assetKey ? 'Selected' : 'Select' }}
                     </button>
 
                     <button
@@ -552,7 +698,11 @@
 
           </section>
 
-          <section class="sidebar-card queue-card rr-card rr-card--padded">
+          <section
+            class="sidebar-card queue-card rr-card rr-card--padded draft-mobile-panel"
+            [class.mobile-panel-active]="mobilePanel() === 'queue'"
+            role="tabpanel"
+          >
             <div class="queue-card-heading">
               <div>
                 <span class="eyebrow">Your Draft List</span>
@@ -569,38 +719,50 @@
               turn it off with the button at the top of the page.
             </p>
 
-            @if (queueAssets().length === 0) {
+            @if (queueEntries().length === 0) {
               <p class="empty-sidebar-copy">
                 Add players from the pool to build your queue.
               </p>
             } @else {
               <div class="queue-list">
-                @for (asset of queueAssets(); track asset.assetKey; let index = $index) {
-                  <article class="queue-row rr-list-row">
-                    <span class="queue-rank">{{ index + 1 }}</span>
+                @for (entry of queueEntries(); track entry.assetKey) {
+                  <article
+                    class="queue-row rr-list-row"
+                    [class.queue-row-unavailable]="!entry.available"
+                  >
+                    <span class="queue-rank">{{ entry.index + 1 }}</span>
 
                     <div class="queue-copy">
-                      <strong>{{ getAssetName(asset) }}</strong>
-                      <small>
-                        {{ asset.position }} · {{ getAssetTeamLabel(asset) }}
-                      </small>
+                      @if (entry.asset; as asset) {
+                        <strong>{{ getAssetName(asset) }}</strong>
+                        <small>{{ asset.position }} · {{ getAssetTeamLabel(asset) }}</small>
+                      } @else {
+                        <strong>Unavailable player</strong>
+                        <small>Player record could not be loaded</small>
+                      }
+                      <span
+                        class="queue-entry-status"
+                        [class.queue-entry-ready]="entry.available"
+                      >
+                        {{ getQueueEntryStatusLabel(entry) }}
+                      </span>
                     </div>
 
                     <div class="queue-row-actions">
                       <button
                         type="button"
-                        aria-label="Move queued asset up"
-                        (click)="moveQueueAsset(asset.assetKey, -1)"
-                        [disabled]="index === 0 || queueSaving()"
+                        aria-label="Move queued player up"
+                        (click)="moveQueueAsset(entry.assetKey, -1)"
+                        [disabled]="entry.index === 0 || queueSaving() || !canUseLiveDraftActions()"
                       >
                         ↑
                       </button>
 
                       <button
                         type="button"
-                        aria-label="Move queued asset down"
-                        (click)="moveQueueAsset(asset.assetKey, 1)"
-                        [disabled]="index === queueAssets().length - 1 || queueSaving()"
+                        aria-label="Move queued player down"
+                        (click)="moveQueueAsset(entry.assetKey, 1)"
+                        [disabled]="entry.index === queueEntries().length - 1 || queueSaving() || !canUseLiveDraftActions()"
                       >
                         ↓
                       </button>
@@ -608,9 +770,9 @@
                       <button
                         type="button"
                         class="remove-queue-button rr-button rr-button--quiet"
-                        aria-label="Remove queued asset"
-                        (click)="removeAssetFromQueue(asset.assetKey)"
-                        [disabled]="queueSaving()"
+                        aria-label="Remove queued player"
+                        (click)="removeAssetFromQueue(entry.assetKey)"
+                        [disabled]="queueSaving() || !canUseLiveDraftActions()"
                       >
                         ×
                       </button>
@@ -621,7 +783,11 @@
             }
           </section>
 
-          <section class="sidebar-card roster-card rr-card rr-card--padded">
+          <section
+            class="sidebar-card roster-card rr-card rr-card--padded draft-mobile-panel"
+            [class.mobile-panel-active]="mobilePanel() === 'roster'"
+            role="tabpanel"
+          >
   <span class="eyebrow">Your Roster</span>
   <h2>Drafted Players</h2>
 
@@ -789,6 +955,45 @@
 
         </aside>
       </section>
+
+      @if (selectedAsset(); as selectedAsset) {
+        <section class="draft-mobile-selection-bar" aria-live="polite">
+          <button
+            type="button"
+            class="draft-mobile-selection-close"
+            (click)="clearSelectedAsset()"
+            aria-label="Clear selected player"
+          >
+            ×
+          </button>
+          <div>
+            <strong>{{ getAssetName(selectedAsset) }}</strong>
+            <span>{{ selectedAsset.position }} · {{ getSelectedAssetDestinationLabel() }}</span>
+          </div>
+          <button
+            type="button"
+            class="draft-mobile-selection-submit rr-button rr-button--primary"
+            (click)="draftSelectedAsset()"
+            [disabled]="!canDraftAsset(selectedAsset) || makingPickAssetKey() !== null"
+          >
+            {{ getDraftButtonLabel(selectedAsset) }}
+          </button>
+        </section>
+      }
+
+      @if (pickSubmissionPhase() !== 'idle') {
+        <div class="draft-pick-submission-shield" role="status" aria-live="assertive">
+          <div class="draft-pick-submission-card rr-card rr-card--padded">
+            <span class="draft-submit-spinner" aria-hidden="true"></span>
+            <strong>
+              {{ pickSubmissionPhase() === 'submitting' ? 'Submitting your pick…' : 'Confirming the live draft board…' }}
+            </strong>
+            <p>
+              Keep this page open until RinkRat receives the server-confirmed pick and advances the board.
+            </p>
+          </div>
+        </div>
+      }
     }
   </section>
 }

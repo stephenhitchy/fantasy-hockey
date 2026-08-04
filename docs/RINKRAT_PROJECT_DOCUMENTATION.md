@@ -1,3 +1,383 @@
+## Batch M5–V1 — Mobile Roster Actions and Calm Utility Surfaces
+
+### Scope
+
+This combined beta-finalization batch completes the planned M5 phone task-flow pass for **My Team** and **Available Players**, while beginning the V1 visual-consistency pass on the utility surfaces managers use most often. The changes are client-side only. They do not change roster authority, transaction timing, waiver processing, Production Scoring V3, Projection V11, independent six-game windows, Firestore rules, indexes, or Cloud Functions.
+
+### My Team: one clear Manage action on phones
+
+Occupied active, bench, and Injured Reserve slots now use a full-width **Manage** action at phone widths. Tapping it opens an accessible bottom sheet that shows the selected player or goalie unit, exact roster spot, current matchup points, frozen projection, six-game progress, and any scheduled move already attached to the slot.
+
+The sheet builds its actions from the slot's real state rather than presenting one universal menu. Depending on the area and legal roster state, it can offer:
+
+- View Scoring Detail;
+- Find a Replacement;
+- Review Scheduled Move;
+- Move into Starting Lineup;
+- Move to Injured Reserve;
+- Activate to Starting Lineup;
+- Move to Bench; or
+- Drop to Waivers.
+
+Every action explains the consequence before the manager continues. When an action is relevant but temporarily blocked, the sheet explains why—for example, no open Injured Reserve slot, an ineligible injury status, or an existing scheduled move that must be canceled first.
+
+The Injured Reserve action remains hidden for healthy or otherwise ineligible skaters, matching the established roster policy. A bench player already reserved for a scheduled active-lineup swap exposes only **View Scoring Detail** and **Review Scheduled Move**; it cannot be silently replaced, dropped, or reused by a second mobile flow. Available Players also excludes that reserved bench slot from add/drop candidates.
+
+Open active and bench slots now include a direct **Find Player** action. It opens Available Players with the exact position, roster area, and roster-slot ID carried in the URL so the intended slot can be preselected during comparison.
+
+Desktop keeps its existing direct roster controls, while gaining an explicit View Stats button instead of relying on a clickable card containing nested buttons.
+
+### Available Players: focused two-step compare and confirm flow
+
+The main player pool now keeps only the decision information managers need while scanning:
+
+- current-season fantasy points;
+- next-six-game projection;
+- rest-of-season estimate;
+- performance direction; and
+- next-six rank when available.
+
+Available players and waiver players are separated into **Available Now** and **Waivers** controls. Search, position, sort mode, selected view, selected player, intended roster slot, and scroll position are preserved in session storage for up to two hours. Malformed, expired, future-dated, or unavailable browser storage is ignored safely. A direct handoff from My Team intentionally starts a fresh roster task rather than reopening an unrelated older comparison. The **Review Scheduled Move** handoff waits for the live roster listener before scrolling and focusing the scheduled-move section, so a slower connection does not lose the destination.
+
+Selecting a player opens the shared action sheet for Step 2. The manager can then:
+
+1. review the incoming player's three primary metrics;
+2. expand **Why this projection?** for reliability, schedule, recent form, source, six-game markers, and stat contribution;
+3. verify incoming-player eligibility;
+4. choose an exact compatible active or bench slot;
+5. compare incoming and outgoing season, next-six, and rest-of-season values;
+6. read the exact immediate, scheduled, or waiver-contingent activation timing; and
+7. confirm from a footer that remains reachable while the comparison content scrolls.
+
+A preferred slot opened from My Team is selected automatically only when that exact slot is still a legal candidate. The manager can clear it and choose another without losing the selected player.
+
+### Pending-operation navigation protection
+
+My Team and Available Players now share a route guard for roster writes. While a roster move, waiver action, Injured Reserve change, bench swap, player drop, or related team save is awaiting the server:
+
+- in-app navigation is denied;
+- browser Back, refresh, tab close, and window close invoke the pending-operation warning; and
+- a full-page confirmation shield explains that the page should remain open.
+
+The shared action sheet also refuses to close while the operation is in progress, preventing a manager from accidentally submitting a duplicate or believing a move failed before the server responds.
+
+### Shared accessible action sheet
+
+A reusable `app-action-sheet` component now provides:
+
+- a centered dialog on larger screens;
+- a full-width bottom sheet on phones;
+- semantic dialog and modal attributes;
+- keyboard focus containment;
+- Escape and backdrop dismissal when safe;
+- focus restoration;
+- background-page scroll locking while the sheet is open;
+- a fixed action footer;
+- safe-area spacing; and
+- reduced-motion support, including a non-animated pending indicator when reduced motion is requested.
+
+The component is used by both My Team and Available Players so future mobile roster actions can follow the same interaction pattern.
+
+### V1 visual restraint: first pass
+
+The first V1 pass focuses on the repeated utility surfaces in My Team and Available Players:
+
+- repeated cards and roster panels use one-pixel borders and fewer stacked shadows;
+- phone roster sections become simple one-column rows;
+- team colors remain accents rather than competing with names, scores, and actions;
+- projected comparison panels use existing semantic design tokens rather than new page-specific colors;
+- the readable Barlow Condensed interface font remains high priority; and
+- decorative Pixelify Sans and Silkscreen font stylesheets load asynchronously with a no-script fallback.
+
+This is intentionally not a full-site restyle. It establishes the calmer pattern on the two roster-management pages before the later V1 contrast and consistency sweep expands it across the remaining utility surfaces.
+
+### Competitive architecture preserved
+
+This batch does not modify:
+
+- Production Scoring V3;
+- Projection V11;
+- healthy-versus-availability projection handling;
+- roster or waiver Cloud Functions;
+- immediate or scheduled add/drop behavior;
+- active/bench/IR transaction authority;
+- the immutable six-scheduled-team-game window owned by every starting roster slot;
+- seventh-game rollover;
+- standings, playoffs, or historical replay;
+- Firestore rules or indexes; or
+- persisted Firestore schemas.
+
+The browser still delegates every competitive write to the existing server-authoritative services. M5 changes how managers choose and understand an action, not how the action is judged or executed.
+
+### Automated verification
+
+After replacing the project files:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm5-v1
+npm run build:all
+```
+
+The focused M5–V1 suite verifies:
+
+- legal action construction for active, bench, Injured Reserve, and open roster slots;
+- scheduled-move protection for both active slots and reserved bench sources;
+- safe My Team-to-Available Players roster-target parameters;
+- mobile task-state validation and expiration;
+- exact preferred-slot matching;
+- route-parameter validation;
+- one-action mobile roster rows without nested clickable cards;
+- Available Now and Waivers tabs;
+- the compare-and-confirm sheet, projection explanation, add/drop comparison, and timing explanation;
+- shared dialog accessibility and phone bottom-sheet behavior;
+- route and browser-exit protection during roster writes;
+- interface-versus-decorative font loading priority;
+- calm one-pixel utility surfaces using semantic tokens; and
+- preservation of scoring, Projection V11, Firestore rules, indexes, and the entire Functions tree.
+
+### Manual mobile checklist
+
+#### My Team
+
+1. Test occupied LW, C, RW, D, goalie, bench, and Injured Reserve slots at 320px, 360px, 390px, and 430px.
+2. Confirm each occupied phone row has one full-width Manage action and no tiny competing roster buttons.
+3. Open each Manage sheet and confirm the correct player, roster spot, score, projection, and six-game count.
+4. Confirm an active slot with a scheduled move shows Review Scheduled Move and prevents an unsafe direct drop.
+5. Test a healthy skater, IR-eligible skater, ineligible skater, goalie unit, bench player, and IR player; verify only relevant actions appear and blocked actions explain why.
+6. Open an empty starting slot and an empty bench slot; confirm Find Player opens Available Players with the intended slot visible.
+7. Begin a bench swap, IR move, activation, or drop and immediately attempt in-app navigation, browser Back, refresh, and tab close. Confirm the page remains protected until the server responds.
+8. Confirm desktop View Stats and existing direct controls still work.
+
+#### Available Players
+
+1. Switch between Available Now and Waivers and confirm the count, filter, and search results match the selected tab.
+2. Search, filter, sort, and scroll deep into the player list; select a player, then choose Change Player. Confirm the list returns to the prior state and scroll position.
+3. Select a normal free agent and a waiver player. Confirm each opens the same two-step sheet with the correct Add or Claim wording.
+4. Expand Why this projection? and verify the reliability, schedule, form, source, six-game markers, and stat breakdown remain readable.
+5. Confirm a My Team handoff preselects only the intended compatible roster slot.
+6. Compare an incoming player against an occupied active slot, open active slot, occupied bench slot, and open bench slot.
+7. Verify the timing panel distinguishes immediate, scheduled, bench ownership, and waiver-contingent activation.
+8. Start a roster move or waiver claim, then attempt duplicate confirmation, sheet dismissal, in-app navigation, browser Back, refresh, and tab close.
+9. Complete a successful move and confirm the sheet closes, the list state returns, and the preferred target clears.
+10. Repeat in Rink Dark, Light Ice, OLED Black, reduced motion, landscape orientation, and 200% text zoom.
+
+### Deployment
+
+This is a Hosting-only release:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M5-V1 mobile roster flows and visual restraint"
+```
+
+No Functions, Firestore rules, indexes, or data migration should be deployed for this batch.
+
+### Rollback
+
+A Hosting rollback to the approved M3–M4 build is safe. M5–V1 does not introduce a Firestore schema field or change any server-side transaction behavior.
+
+---
+
+## Batch M3–M4 — Mobile Live Draft Resilience and Game Center Experience
+
+### Scope
+
+This combined beta-finalization batch completes the planned M3 Draft Room phone pass and M4 Game Center phone pass together. The work is intentionally limited to client-side presentation, listener health, action confirmation, and matchup explanation. It does not modify scoring, Projection V11, draft authority, roster authority, six-game-window ownership, Cloud Functions, Firestore rules, or indexes.
+
+### M3: Draft Room mobile focus and connection safety
+
+#### Focused phone navigation
+
+At phone widths, the Draft Room now presents three explicit views:
+
+- **Players** — the searchable player pool and the selected-player action.
+- **Queue** — the manager's private ordered queue, including entries that have become unavailable.
+- **Roster** — the manager's current starter and bench construction.
+
+A sticky live command bar keeps the current pick, team on the clock, server clock, connection state, and commissioner clock control visible. The existing recent/upcoming pick rail remains available but is reduced so it does not dominate the phone screen.
+
+Selecting a player on mobile no longer requires drafting from a small button inside a dense card. Selection opens a fixed action bar showing the player, legal roster destination, and one primary Draft action. Desktop behavior remains available through the original card action.
+
+#### Server-confirmed connection state
+
+Draft, pick, and queue listeners now expose Firestore snapshot metadata and listener errors. Competitive actions remain disabled until all three critical streams have delivered a fresh server-confirmed snapshot after the current connection checkpoint.
+
+The interface distinguishes:
+
+- **Connecting** — waiting for the first confirmed snapshot.
+- **Connected** — draft state, picks, and queue are server-confirmed.
+- **Reconnecting** — listeners are being restored after an error, internet return, or manual retry.
+- **Draft view may be stale** — the page resumed after being backgrounded but has not received a fresh server snapshot within the safety window.
+- **Offline** — internet access is unavailable and competitive actions are paused.
+
+The Draft Room revalidates after the browser returns online and after a phone or browser tab has been hidden for at least ten seconds. A Retry Connection control restarts all critical listeners without requiring a full page refresh.
+
+#### Pick submission confirmation
+
+A manual pick now has separate **Submitting** and **Confirming** phases:
+
+1. The callable Function must accept the requested pick.
+2. The live pick listener must then return the same overall pick, owner, and asset.
+3. Only after that matching server snapshot arrives does the interface unlock and announce the confirmed selection.
+
+While either phase is active:
+
+- Duplicate Draft actions are blocked.
+- In-app route navigation is denied by a `canDeactivate` guard.
+- Refreshing or closing the page invokes the browser's pending-operation warning.
+- A full-screen status shield explains that the page should remain open.
+
+A slow listener response triggers a reconnect attempt rather than silently allowing another selection. If the callable succeeds but the live board cannot be confirmed after the extended recovery window, drafting remains blocked until the manager refreshes the live connection.
+
+#### Queue and Auto-Draft transparency
+
+The queue no longer silently removes every unusable entry from view. It identifies why an entry cannot currently be selected, including:
+
+- Already drafted.
+- Starting position and bench are full.
+- Bench selection is reserved until the starting lineup is complete.
+- No legal roster destination.
+- Player data could not be loaded.
+
+After an automatic selection, a visible notice distinguishes a queue-based pick from the highest-ranked legal fallback and explains whether the clock expired or Auto-Draft was already enabled. The latest explanation remains visible while later managers pick, and a dismissal is remembered for that manager and league so it does not reappear after a refresh. A newly reset draft clears stale dismissal state when its new pick sequence begins.
+
+### M4: Game Center mobile live-lineup redesign
+
+#### Three owner-relative views
+
+The mobile matchup lineup now has three focused modes:
+
+- **My Team**
+- **Head-to-Head**
+- **Opponent**
+
+For a manager viewing someone else's matchup, the first and third labels use the actual team names. The underlying desktop team selector remains unchanged; the mobile controls update the same existing `matchupView` state.
+
+#### Calm lineup hierarchy
+
+The phone layout keeps the existing sticky score and matchup-finish information, then presents a compact team/progress context followed by collapsible position sections:
+
+- Forwards — LW, C, and RW
+- Defense — D
+- Goalie Unit — G
+- Bench — collapsed by default and clearly labeled non-scoring
+
+Head-to-Head mode uses compact paired player rows. Single-team modes use full-width rows with more room for names, status, projection, progress, and the six game markers. No additional large duplicate matchup-overview card was introduced.
+
+#### Six-game detail sheet
+
+Tapping a starter opens an accessible mobile bottom sheet with:
+
+- Team, player, NHL team, and position.
+- Current score and frozen matchup projection.
+- Projection V11 likely range when available.
+- Six-game progress and current roster-slot status.
+- A separate explanation for every one of the six scheduled NHL team games.
+
+Each game explanation identifies whether:
+
+- The player appeared and the fantasy points counted.
+- The NHL team played but the player did not appear, producing zero while still using one scheduled team game.
+- The game is live and points may change.
+- The game is upcoming.
+- The asynchronous roster-slot schedule is still pending.
+
+The sheet traps keyboard focus, supports Escape to close, restores focus to the triggering player, respects reduced motion, and provides a direct route to the existing full scoring breakdown.
+
+Tapping a bench player opens a simpler sheet that explains that bench players do not score until entering a starting slot at a legal roster boundary.
+
+### Competitive architecture preserved
+
+This batch leaves the following behavior unchanged:
+
+- Each starting roster slot owns an independent immutable six-scheduled-team-game window.
+- A player's seventh scheduled NHL team game belongs to that slot's next matchup, even when other slots remain in the prior matchup.
+- A queued transaction does not rewrite a window that has already started.
+- Future lineup previews continue to use the correct current or scheduled incoming player.
+- Draft order, draft clock, pick validation, Auto-Draft selection, scoring, Projection V11, waivers, roster moves, standings, playoffs, and historical replay remain server-authoritative.
+- No Cloud Function, Firestore rule, Firestore index, or data migration is included.
+
+### Automated verification
+
+After replacing the project files:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm3-m4
+npm run build:all
+```
+
+The focused M3–M4 suite verifies:
+
+- Connected, connecting, reconnecting, stale, and offline draft states.
+- Persistent, dismissible Auto-Draft explanations for queue and ranked fallback selections.
+- Owner-relative My Team, Head-to-Head, and Opponent mapping.
+- Forward, defense, and goalie grouping.
+- Played, missed, live, upcoming, and pending six-game explanations.
+- Firestore listener metadata and error callbacks.
+- Mobile Draft Room tabs, sticky actions, queue reasons, duplicate-pick shield, route guard, and browser-exit warning.
+- Mobile Game Center perspective controls, accordions, collapsed bench, six markers, accessible detail sheet, and reduced-motion behavior.
+- Preservation of Production Scoring V3, Projection V11, Firestore rules, indexes, and the complete Cloud Functions tree.
+- Raw component-style sizes below the configured 45 kB ceiling.
+
+### Manual mobile checklist
+
+#### Draft Room
+
+1. Test at 320px, 360px, 390px, and 430px in Mobile Safari and Mobile Chrome.
+2. Confirm the sticky command bar always shows the correct team, pick number, timer, and connection state.
+3. Switch repeatedly among Players, Queue, and Roster; confirm no horizontal page scrolling and that each view preserves its data.
+4. Search and filter, scroll deep into the pool, select a player, and confirm the fixed Draft action remains reachable above the bottom navigation.
+5. Submit a pick and immediately try another Draft button, in-app navigation, browser Back, refresh, and tab close. Confirm the first pick remains protected until the matching live snapshot arrives.
+6. Background the browser for at least ten seconds, return, and confirm the page temporarily blocks actions until the fresh server snapshot arrives.
+7. Disable Wi-Fi during the draft. Confirm Offline appears, actions are blocked, and the page recovers after internet access returns.
+8. Force or observe a listener error and test Retry Connection.
+9. Put drafted players, position-full players, and otherwise illegal choices in the queue; confirm each remains visible with an accurate reason.
+10. Allow the clock to expire with a legal queue choice and without one; confirm each resulting Auto-Draft explanation is accurate.
+11. Confirm commissioner Pause/Resume and manager Start Clock remain available in the mobile command bar only when legal.
+12. Repeat the flow in Rink Dark, Light Ice, and OLED Black with reduced motion and 200% text zoom.
+
+#### Game Center
+
+1. Confirm the existing sticky score bar still shows current score, projection/progress, matchup number, and exact or pending finish date.
+2. Switch among My Team, Head-to-Head, and Opponent as both Team A and Team B managers.
+3. Confirm Forwards, Defense, and Goalie Unit open by default while Bench starts collapsed.
+4. Check long player and team names at 320px without horizontal page scrolling.
+5. Open a starter detail sheet and test Close, backdrop click, Escape, keyboard focus containment, and focus restoration.
+6. Verify all six marker explanations against one player with appearances, one missed scheduled team game, one live game, and upcoming games.
+7. Confirm a missed appearance explicitly says that the NHL team game still uses one of the six scheduled roster-slot games.
+8. Open a future matchup with a queued add/drop. Confirm the incoming player appears, the schedule is described as planned or scheduled, and no outgoing points or markers are inherited.
+9. Open overlapping matchups where some roster slots are in Matchup N and others are in Matchup N+1; confirm every row retains its own correct immutable state.
+10. Open a bench player and confirm the sheet identifies the slot as non-scoring rather than presenting starter game markers.
+11. Use **Open full scoring breakdown** and confirm the existing detailed page opens for both starters and bench players.
+12. Repeat in all three display themes, reduced motion, landscape orientation, and 200% text zoom.
+
+### Deployment
+
+This is a Hosting-only release:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M3-M4 mobile live draft and Game Center"
+```
+
+No Functions, Firestore rules, indexes, or data migration should be deployed for this batch.
+
+### Rollback
+
+A Hosting rollback to the approved F1.1 build is safe. The M3–M4 package does not write new schema fields or change server behavior. Existing drafts, picks, queues, roster windows, scores, and projections remain compatible.
+
+---
+
 # RinkRat Fantasy — Project Documentation
 
 _Consolidated 2026-08-03._

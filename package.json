@@ -81,7 +81,11 @@
     "test:batchf1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchf1-projection-calibration/*.test.mjs",
     "verify:batchf1": "npm run verify:batchm2-3 && npm run test:batchf1:run",
     "test:batchf1-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchf1-1-projection-v11/*.test.mjs",
-    "verify:batchf1-1": "npm run verify:batchf1 && npm run test:batchf1-1:run"
+    "verify:batchf1-1": "npm run verify:batchf1 && npm run test:batchf1-1:run",
+    "test:batchm3-m4:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm3-m4-mobile-live/*.test.mjs",
+    "verify:batchm3-m4": "npm run verify:batchf1-1 && npm run test:batchm3-m4:run",
+    "test:batchm5-v1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-v1-mobile-roster/*.test.mjs",
+    "verify:batchm5-v1": "npm run verify:batchm3-m4 && npm run test:batchm5-v1:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

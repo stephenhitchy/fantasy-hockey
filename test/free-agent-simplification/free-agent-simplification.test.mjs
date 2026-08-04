@@ -52,22 +52,24 @@ test('waiver cards use the same compact decision hierarchy', async () => {
   assert.match(defaultView, /processLeagueWaiver\(waiver\)/);
 });
 
-test('six-game markers and estimated final totals remain available through progressive disclosure', async () => {
+test('six-game markers and estimated final totals remain available after selecting a player', async () => {
   const html = await source(htmlPath);
+  const listEnd = html.indexOf('<app-action-sheet');
+  const listMarkup = html.slice(0, listEnd);
+  const comparisonMarkup = html.slice(listEnd);
 
-  assert.equal((html.match(/View six-game status &amp; full stats/g) ?? []).length, 2);
-  assert.equal((html.match(/cycle-decision-block--details/g) ?? []).length, 2);
-  assert.equal((html.match(/Estimated final total/g) ?? []).length, 2);
-  assert.match(html, /getCurrentCycleMarker\(asset, dotIndex\)/);
-  assert.match(html, /getCurrentCycleMarker\(waiver\.asset, dotIndex\)/);
+  assert.doesNotMatch(listMarkup, /cycle-decision-block--details/);
+  assert.equal((comparisonMarkup.match(/cycle-decision-block--details/g) ?? []).length, 1);
+  assert.equal((comparisonMarkup.match(/Estimated final total/g) ?? []).length, 1);
+  assert.match(comparisonMarkup, /getCurrentCycleMarker\(addAsset, dotIndex\)/);
+  assert.match(comparisonMarkup, /Why this projection\?/);
 });
 
-test('the full current-season scoring breakdown is preserved', async () => {
+test('the full current-season scoring breakdown is preserved in the comparison sheet', async () => {
   const html = await source(htmlPath);
 
   assert.match(html, /Stat totals → fantasy points/);
-  assert.match(html, /getStatBreakdown\(asset\)/);
-  assert.match(html, /getStatBreakdown\(waiver\.asset\)/);
+  assert.match(html, /getStatBreakdown\(addAsset\)/);
   assert.match(html, /Combined scoring-category contribution/);
 });
 

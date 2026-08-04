@@ -72,6 +72,23 @@ export const DRAFT_PICK_SECONDS_OPTIONS = [30, 45, 60, 90, 120] as const;
 
 const MAX_DRAFT_QUEUE_SIZE = 100;
 
+export interface DraftRealtimeSnapshotState {
+  fromCache: boolean;
+  hasPendingWrites: boolean;
+  receivedAt: number;
+}
+
+function reportDraftSnapshotState(
+  metadata: { fromCache: boolean; hasPendingWrites: boolean },
+  onState?: (state: DraftRealtimeSnapshotState) => void,
+): void {
+  onState?.({
+    fromCache: metadata.fromCache,
+    hasPendingWrites: metadata.hasPendingWrites,
+    receivedAt: Date.now(),
+  });
+}
+
 function reportDraftListenerError(
   error: unknown,
   fallbackMessage: string,
@@ -637,10 +654,14 @@ export function listenToFantasyDraft(
   leagueId: string,
   callback: (draft: FantasyDraft | null) => void,
   onError?: (error: Error) => void,
+  onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
   return onSnapshot(
     getDraftRef(leagueId),
+    { includeMetadataChanges: true },
     (snapshot) => {
+      reportDraftSnapshotState(snapshot.metadata, onState);
+
       if (!snapshot.exists()) {
         callback(null);
         return;
@@ -658,12 +679,15 @@ export function listenToDraftPicks(
   leagueId: string,
   callback: (picks: DraftPick[]) => void,
   onError?: (error: Error) => void,
+  onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
   const picksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
 
   return onSnapshot(
     picksQuery,
+    { includeMetadataChanges: true },
     (snapshot) => {
+      reportDraftSnapshotState(snapshot.metadata, onState);
       callback(snapshot.docs.map((pickDoc) => pickDoc.data() as DraftPick));
     },
     (error) => {
@@ -676,28 +700,48 @@ export function listenToDraftQueue(
   leagueId: string,
   ownerId: string,
   callback: (queue: DraftQueue) => void,
+  onError?: (error: Error) => void,
+  onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return onSnapshot(getDraftQueueRef(leagueId, ownerId), (snapshot) => {
-    callback(
-      normalizeDraftQueue(
-        ownerId,
-        snapshot.exists() ? (snapshot.data() as Partial<DraftQueue>) : undefined,
-      ),
-    );
-  });
+  return onSnapshot(
+    getDraftQueueRef(leagueId, ownerId),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      reportDraftSnapshotState(snapshot.metadata, onState);
+      callback(
+        normalizeDraftQueue(
+          ownerId,
+          snapshot.exists() ? (snapshot.data() as Partial<DraftQueue>) : undefined,
+        ),
+      );
+    },
+    (error) => {
+      reportDraftListenerError(error, 'Unable to load your draft queue.', onError);
+    },
+  );
 }
 
 export function listenToDraftQueues(
   leagueId: string,
   callback: (queues: DraftQueue[]) => void,
+  onError?: (error: Error) => void,
+  onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return onSnapshot(getDraftQueuesRef(leagueId), (snapshot) => {
-    callback(
-      snapshot.docs.map((queueDocument) =>
-        normalizeDraftQueue(queueDocument.id, queueDocument.data() as Partial<DraftQueue>),
-      ),
-    );
-  });
+  return onSnapshot(
+    getDraftQueuesRef(leagueId),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      reportDraftSnapshotState(snapshot.metadata, onState);
+      callback(
+        snapshot.docs.map((queueDocument) =>
+          normalizeDraftQueue(queueDocument.id, queueDocument.data() as Partial<DraftQueue>),
+        ),
+      );
+    },
+    (error) => {
+      reportDraftListenerError(error, 'Unable to load draft queues.', onError);
+    },
+  );
 }
 
 export async function saveDraftQueue(

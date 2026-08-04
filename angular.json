@@ -31,6 +31,7 @@
               "src/rinkrat-visual-system.css",
               "src/rinkrat-page-identities-phase2.css",
               "src/rinkrat-arena-phase3.css",
+              "src/rinkrat-mobile-roster-v1.css",
               "src/rinkrat-shared-primitives.css"
             ]
           },

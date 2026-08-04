@@ -3,6 +3,8 @@ import { Routes } from '@angular/router';
 import { authChildGuard, authGuard } from './core/guards/auth.guard';
 import { platformAdminGuard } from './core/guards/platform-admin.guard';
 import { pendingDraftSaveGuard } from './core/guards/pending-draft-save.guard';
+import { pendingDraftActionGuard } from './core/guards/pending-draft-action.guard';
+import { pendingRosterActionGuard } from './core/guards/pending-roster-action.guard';
 import {
   commissionerGuard,
   leagueMemberGuard,
@@ -129,6 +131,7 @@ export const routes: Routes = [
         path: 'leagues/:leagueId/team',
         title: 'My Team',
         canActivate: [leagueMemberGuard],
+        canDeactivate: [pendingRosterActionGuard],
         loadComponent: () =>
           import('./features/team/team-settings/team-settings').then(
             (module) => module.TeamSettings,
@@ -138,6 +141,7 @@ export const routes: Routes = [
         path: 'leagues/:leagueId/free-agents',
         title: 'Free Agents',
         canActivate: [leagueMemberGuard],
+        canDeactivate: [pendingRosterActionGuard],
         loadComponent: () =>
           import('./features/free-agents/free-agents').then((module) => module.FreeAgents),
       },
@@ -155,6 +159,7 @@ export const routes: Routes = [
         path: 'leagues/:leagueId/draft',
         title: 'Draft Room',
         canActivate: [leagueMemberGuard],
+        canDeactivate: [pendingDraftActionGuard],
         loadComponent: () =>
           import('./features/draft/draft-room/draft-room').then((module) => module.DraftRoom),
       },

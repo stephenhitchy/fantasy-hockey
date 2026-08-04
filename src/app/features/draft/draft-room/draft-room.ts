@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, OnDestroy, signal, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, HostListener, OnDestroy, signal, ViewChild } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -36,6 +36,7 @@ import {
   saveDraftQueue,
   setDraftAutoDraftEnabled,
   startDraftClock,
+  DraftRealtimeSnapshotState,
 } from '../../../core/draft/draft.service';
 
 import {
@@ -76,6 +77,17 @@ import { getLeagueById, League } from '../../../core/league/league.service';
 
 import { FantasyTeam, getFantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
+import {
+  DraftAutoPickExplanation,
+  DraftMobilePanel,
+  DraftRealtimeConnectionState,
+  getDraftAutoPickExplanation,
+  getLatestUndismissedAutoPick,
+  getDraftConnectionStatusDetail,
+  getDraftConnectionStatusLabel,
+  resolveDraftRealtimeConnectionState,
+} from './draft-mobile-resilience.util';
+
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
     return Promise.resolve(auth.currentUser);
@@ -104,6 +116,21 @@ type PlayerPoolSort =
 interface DraftTimelineEntry {
   preview: DraftPickPreview;
   pick: DraftPick | null;
+}
+
+interface DraftQueueEntryView {
+  assetKey: string;
+  asset: DraftableAsset | null;
+  index: number;
+  unavailableReason: string | null;
+  available: boolean;
+}
+
+interface PendingPickConfirmation {
+  overallPick: number;
+  assetKey: string;
+  assetName: string;
+  startedAt: number;
 }
 
 @Component({
@@ -149,6 +176,21 @@ export class DraftRoom implements OnDestroy {
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
   now = signal(Date.now());
+
+  mobilePanel = signal<DraftMobilePanel>('players');
+  selectedAssetKey = signal<string | null>(null);
+  pickSubmissionPhase = signal<'idle' | 'submitting' | 'confirming'>('idle');
+  browserOnline = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
+  draftServerSyncAt = signal<number | null>(null);
+  picksServerSyncAt = signal<number | null>(null);
+  queueServerSyncAt = signal<number | null>(null);
+  realtimeConfirmationStartedAt = signal<number | null>(Date.now());
+  realtimeReconnectReason = signal<
+    'initial' | 'online' | 'resume' | 'listener-error' | 'manual' | null
+  >('initial');
+  realtimeListenerError = signal<string | null>(null);
+  dismissedAutoPickOverall = signal(0);
+  autoPickNoticePick = signal<DraftPick | null>(null);
 
   readonly rosterPositions: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
   setSortMode(value: string): void {
@@ -563,6 +605,35 @@ export class DraftRoom implements OnDestroy {
   private stopInjurySyncListener: (() => void) | null = null;
   private stopQueueListener: (() => void) | null = null;
   private activationInProgress = false;
+  private hiddenAt: number | null = null;
+  private pendingPickConfirmation: PendingPickConfirmation | null = null;
+  private pendingPickConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
+  private realtimeRestartTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly handleBrowserOnline = () => {
+    this.browserOnline.set(true);
+    this.requestRealtimeConfirmation('online');
+  };
+  private readonly handleBrowserOffline = () => {
+    this.browserOnline.set(false);
+    this.realtimeListenerError.set(null);
+  };
+  private readonly handleVisibilityChange = () => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    if (document.visibilityState === 'hidden') {
+      this.hiddenAt = Date.now();
+      return;
+    }
+
+    const hiddenDuration = this.hiddenAt === null ? 0 : Date.now() - this.hiddenAt;
+    this.hiddenAt = null;
+
+    if (hiddenDuration >= 10_000) {
+      this.requestRealtimeConfirmation('resume');
+    }
+  };
   private scheduledDraftCheckInProgress = false;
   private destroyed = false;
   private activationFailureCount = 0;
@@ -586,17 +657,78 @@ export class DraftRoom implements OnDestroy {
 
   readonly myQueue = computed<DraftQueue>(() => this.getQueueForOwner(this.userId));
 
-  readonly queueAssets = computed(() => {
+  readonly queueEntries = computed<DraftQueueEntryView[]>(() => {
     const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
-
     const assetsByKey = new Map(this.playerPool().map((asset) => [asset.assetKey, asset]));
 
-    return this.myQueue()
-      .assetKeys.map((assetKey) => assetsByKey.get(assetKey))
-      .filter(
-        (asset): asset is DraftableAsset =>
-          asset !== undefined && !draftedAssetKeys.has(asset.assetKey),
-      );
+    return this.myQueue().assetKeys.map((assetKey, index) => {
+      const asset = assetsByKey.get(assetKey) ?? null;
+      const unavailableReason = asset
+        ? this.getQueueEntryUnavailableReason(asset, draftedAssetKeys.has(assetKey))
+        : 'Player data is unavailable. Remove this entry and add it again.';
+
+      return {
+        assetKey,
+        asset,
+        index,
+        unavailableReason,
+        available: unavailableReason === null,
+      };
+    });
+  });
+
+  readonly queueAssets = computed(() =>
+    this.queueEntries()
+      .filter((entry) => entry.available && entry.asset !== null)
+      .map((entry) => entry.asset as DraftableAsset),
+  );
+
+  readonly selectedAsset = computed(() => {
+    const assetKey = this.selectedAssetKey();
+
+    if (!assetKey) {
+      return null;
+    }
+
+    const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
+
+    if (draftedAssetKeys.has(assetKey)) {
+      return null;
+    }
+
+    return this.playerPool().find((asset) => asset.assetKey === assetKey) ?? null;
+  });
+
+  readonly realtimeConnectionState = computed<DraftRealtimeConnectionState>(() =>
+    resolveDraftRealtimeConnectionState({
+      online: this.browserOnline(),
+      confirmationStartedAt: this.realtimeConfirmationStartedAt(),
+      criticalServerSyncTimes: [
+        this.draftServerSyncAt(),
+        this.picksServerSyncAt(),
+        this.queueServerSyncAt(),
+      ],
+      listenerError: this.realtimeListenerError(),
+      reconnectReason: this.realtimeReconnectReason(),
+      now: this.now(),
+    }),
+  );
+
+  readonly canUseLiveDraftActions = computed(
+    () => this.realtimeConnectionState() === 'connected' && this.pickSubmissionPhase() === 'idle',
+  );
+
+  readonly latestAutoPickNotice = computed<DraftAutoPickExplanation | null>(() => {
+    const latestPick = this.autoPickNoticePick();
+
+    if (!latestPick) {
+      return null;
+    }
+
+    return getDraftAutoPickExplanation(
+      latestPick,
+      this.getAssetName(latestPick.asset),
+    );
   });
 
   readonly draftClockRemainingSeconds = computed(() =>
@@ -788,6 +920,15 @@ export class DraftRoom implements OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
   ) {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.handleBrowserOnline);
+      window.addEventListener('offline', this.handleBrowserOffline);
+    }
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
     this.loadDraftRoom();
   }
 
@@ -795,10 +936,55 @@ export class DraftRoom implements OnDestroy {
     this.destroyed = true;
     clearInterval(this.clockTimer);
     clearInterval(this.scheduledDraftCheckTimer);
+
+    if (this.pendingPickConfirmationTimer) {
+      clearTimeout(this.pendingPickConfirmationTimer);
+    }
+
+    if (this.realtimeRestartTimer) {
+      clearTimeout(this.realtimeRestartTimer);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.handleBrowserOnline);
+      window.removeEventListener('offline', this.handleBrowserOffline);
+    }
+
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
     this.stopDraftListener?.();
     this.stopPickListener?.();
     this.stopInjurySyncListener?.();
     this.stopQueueListener?.();
+  }
+
+  canLeaveDraftRoom(): boolean {
+    return this.pickSubmissionPhase() === 'idle';
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  preventWindowExitDuringPick(event: BeforeUnloadEvent): void {
+    if (this.canLeaveDraftRoom()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
+  getMyDraftedCount(): number {
+    return this.picks().filter((pick) => pick.ownerId === this.userId).length;
+  }
+
+  getMyRosterSlotTotal(): number {
+    const starterTotal = this.rosterPositions.reduce(
+      (total, position) => total + this.getPositionRequirement(position),
+      0,
+    );
+
+    return starterTotal + this.getBenchRequirement();
   }
 
   async loadDraftRoom(): Promise<void> {
@@ -838,22 +1024,6 @@ export class DraftRoom implements OnDestroy {
       this.isCommissioner.set(league.commissionerId === user.uid);
       startPlayerAvailabilityListenerForLeague(leagueId);
 
-      this.stopQueueListener?.();
-
-      if (league.commissionerId === user.uid) {
-        this.stopQueueListener = listenToDraftQueues(leagueId, (queues) => {
-          if (!this.destroyed) {
-            this.draftQueues.set(queues);
-          }
-        });
-      } else {
-        this.stopQueueListener = listenToDraftQueue(leagueId, user.uid, (queue) => {
-          if (!this.destroyed) {
-            this.draftQueues.set([queue]);
-          }
-        });
-      }
-
       this.stopInjurySyncListener?.();
       this.stopInjurySyncListener = listenToPlayerAvailabilitySyncState(leagueId, (state) => {
         if (!this.destroyed) {
@@ -861,35 +1031,7 @@ export class DraftRoom implements OnDestroy {
         }
       });
 
-      this.stopDraftListener = listenToFantasyDraft(leagueId, (draft) => {
-        if (this.destroyed) {
-          return;
-        }
-
-        const previousStatus = this.lastObservedDraftStatus;
-
-        this.lastObservedDraftStatus = draft?.status ?? null;
-
-        this.draft.set(draft);
-        this.scheduleDraftTimelineScroll();
-
-        if (draft?.status === 'live' && previousStatus !== null && previousStatus !== 'live') {
-          // The commissioner creates the final frozen snapshot immediately
-          // before activating the draft. Reload once on the scheduled-to-live
-          // transition so managers who entered early do not keep an older
-          // pre-draft snapshot.
-          void this.loadPlayerPool();
-        }
-
-        void this.runScheduledDraftChecks();
-      });
-
-      this.stopPickListener = listenToDraftPicks(leagueId, (picks) => {
-        if (!this.destroyed) {
-          this.picks.set(picks);
-          this.scheduleDraftTimelineScroll();
-        }
-      });
+      this.startRealtimeDraftListeners();
 
       await this.loadPlayerPool();
 
@@ -908,6 +1050,440 @@ export class DraftRoom implements OnDestroy {
         this.scheduleDraftTimelineScroll();
       }
     }
+  }
+
+  private startRealtimeDraftListeners(): void {
+    if (!this.leagueId || !this.userId || this.destroyed) {
+      return;
+    }
+
+    this.stopDraftListener?.();
+    this.stopPickListener?.();
+    this.stopQueueListener?.();
+
+    const leagueId = this.leagueId;
+    const userId = this.userId;
+
+    if (this.isCommissioner()) {
+      this.stopQueueListener = listenToDraftQueues(
+        leagueId,
+        (queues) => {
+          if (!this.destroyed) {
+            this.draftQueues.set(queues);
+          }
+        },
+        (error) => this.handleRealtimeListenerError('queue', error),
+        (state) => this.handleRealtimeSnapshotState('queue', state),
+      );
+    } else {
+      this.stopQueueListener = listenToDraftQueue(
+        leagueId,
+        userId,
+        (queue) => {
+          if (!this.destroyed) {
+            this.draftQueues.set([queue]);
+          }
+        },
+        (error) => this.handleRealtimeListenerError('queue', error),
+        (state) => this.handleRealtimeSnapshotState('queue', state),
+      );
+    }
+
+    this.stopDraftListener = listenToFantasyDraft(
+      leagueId,
+      (draft) => {
+        if (this.destroyed) {
+          return;
+        }
+
+        const previousStatus = this.lastObservedDraftStatus;
+        this.lastObservedDraftStatus = draft?.status ?? null;
+        this.draft.set(draft);
+        this.confirmPendingPickIfObserved();
+        this.clearSelectedAssetIfUnavailable();
+        this.scheduleDraftTimelineScroll();
+
+        if (draft?.status === 'live' && previousStatus !== null && previousStatus !== 'live') {
+          // The commissioner creates the final frozen snapshot immediately
+          // before activating the draft. Reload once on the scheduled-to-live
+          // transition so managers who entered early do not keep an older
+          // pre-draft snapshot.
+          void this.loadPlayerPool();
+        }
+
+        void this.runScheduledDraftChecks();
+      },
+      (error) => this.handleRealtimeListenerError('draft', error),
+      (state) => this.handleRealtimeSnapshotState('draft', state),
+    );
+
+    this.stopPickListener = listenToDraftPicks(
+      leagueId,
+      (picks) => {
+        if (!this.destroyed) {
+          this.picks.set(picks);
+          this.updateAutoPickNotice(picks);
+          this.confirmPendingPickIfObserved();
+          this.clearSelectedAssetIfUnavailable();
+          this.scheduleDraftTimelineScroll();
+        }
+      },
+      (error) => this.handleRealtimeListenerError('picks', error),
+      (state) => this.handleRealtimeSnapshotState('picks', state),
+    );
+  }
+
+  private handleRealtimeSnapshotState(
+    source: 'draft' | 'picks' | 'queue',
+    state: DraftRealtimeSnapshotState,
+  ): void {
+    if (this.destroyed || state.fromCache || state.hasPendingWrites) {
+      return;
+    }
+
+    if (source === 'draft') {
+      this.draftServerSyncAt.set(state.receivedAt);
+    } else if (source === 'picks') {
+      this.picksServerSyncAt.set(state.receivedAt);
+    } else {
+      this.queueServerSyncAt.set(state.receivedAt);
+    }
+
+    const confirmationStartedAt = this.realtimeConfirmationStartedAt();
+    const allConfirmed = [
+      this.draftServerSyncAt(),
+      this.picksServerSyncAt(),
+      this.queueServerSyncAt(),
+    ].every(
+      (syncedAt) =>
+        syncedAt !== null &&
+        (confirmationStartedAt === null || syncedAt >= confirmationStartedAt),
+    );
+
+    if (allConfirmed) {
+      this.realtimeListenerError.set(null);
+      this.realtimeReconnectReason.set(null);
+    }
+  }
+
+  private handleRealtimeListenerError(
+    source: 'draft' | 'picks' | 'queue',
+    error: Error,
+  ): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.realtimeListenerError.set(
+      `${source === 'draft' ? 'Draft' : source === 'picks' ? 'Pick' : 'Queue'} connection: ${error.message}`,
+    );
+    this.realtimeConfirmationStartedAt.set(Date.now());
+    this.realtimeReconnectReason.set('listener-error');
+
+    if (this.browserOnline()) {
+      this.scheduleRealtimeListenerRestart(1800);
+    }
+  }
+
+  private scheduleRealtimeListenerRestart(delayMilliseconds: number): void {
+    if (this.realtimeRestartTimer) {
+      clearTimeout(this.realtimeRestartTimer);
+    }
+
+    this.realtimeRestartTimer = setTimeout(() => {
+      this.realtimeRestartTimer = null;
+
+      if (!this.destroyed && this.browserOnline()) {
+        this.startRealtimeDraftListeners();
+      }
+    }, delayMilliseconds);
+  }
+
+  private requestRealtimeConfirmation(
+    reason: 'online' | 'resume' | 'manual',
+  ): void {
+    if (this.destroyed || !this.leagueId || !this.userId) {
+      return;
+    }
+
+    this.realtimeConfirmationStartedAt.set(Date.now());
+    this.realtimeReconnectReason.set(reason);
+    this.realtimeListenerError.set(null);
+
+    if (this.browserOnline()) {
+      this.scheduleRealtimeListenerRestart(60);
+    }
+  }
+
+  retryRealtimeConnection(): void {
+    if (typeof navigator !== 'undefined') {
+      this.browserOnline.set(navigator.onLine);
+    }
+
+    if (!this.browserOnline()) {
+      return;
+    }
+
+    this.requestRealtimeConfirmation('manual');
+  }
+
+  getRealtimeConnectionLabel(): string {
+    return getDraftConnectionStatusLabel(this.realtimeConnectionState());
+  }
+
+  getRealtimeConnectionDetail(): string {
+    return this.realtimeListenerError() ||
+      getDraftConnectionStatusDetail(this.realtimeConnectionState());
+  }
+
+  getRealtimeConnectionClass(): string {
+    return `draft-connection-${this.realtimeConnectionState()}`;
+  }
+
+  getLastServerConfirmationLabel(): string {
+    const syncTimes = [
+      this.draftServerSyncAt(),
+      this.picksServerSyncAt(),
+      this.queueServerSyncAt(),
+    ].filter((value): value is number => value !== null);
+
+    if (syncTimes.length < 3) {
+      return 'Waiting for server confirmation';
+    }
+
+    const secondsAgo = Math.max(0, Math.floor((this.now() - Math.min(...syncTimes)) / 1000));
+
+    if (secondsAgo < 2) {
+      return 'Server confirmed now';
+    }
+
+    if (secondsAgo < 60) {
+      return `Server confirmed ${secondsAgo}s ago`;
+    }
+
+    return `Server confirmed ${Math.floor(secondsAgo / 60)}m ago`;
+  }
+
+  setMobilePanel(panel: DraftMobilePanel): void {
+    this.mobilePanel.set(panel);
+  }
+
+  selectAssetForMobile(asset: DraftableAsset): void {
+    if ((this.draft()?.draftedAssetKeys ?? []).includes(asset.assetKey)) {
+      return;
+    }
+
+    this.selectedAssetKey.set(
+      this.selectedAssetKey() === asset.assetKey ? null : asset.assetKey,
+    );
+  }
+
+  clearSelectedAsset(): void {
+    this.selectedAssetKey.set(null);
+  }
+
+  private clearSelectedAssetIfUnavailable(): void {
+    const selectedAssetKey = this.selectedAssetKey();
+
+    if (!selectedAssetKey) {
+      return;
+    }
+
+    if ((this.draft()?.draftedAssetKeys ?? []).includes(selectedAssetKey)) {
+      this.selectedAssetKey.set(null);
+    }
+  }
+
+  getSelectedAssetDestinationLabel(): string {
+    const asset = this.selectedAsset();
+
+    if (!asset) {
+      return '';
+    }
+
+    const destination = this.getDraftDestinationForAsset(this.userId, asset);
+
+    if (destination === 'bench') {
+      return 'Will fill an open bench spot';
+    }
+
+    if (destination === 'active') {
+      return `Will fill an open ${asset.position} starter spot`;
+    }
+
+    return this.getDraftButtonLabel(asset);
+  }
+
+  async draftSelectedAsset(): Promise<void> {
+    const asset = this.selectedAsset();
+
+    if (asset) {
+      await this.selectAsset(asset);
+    }
+  }
+
+  dismissLatestAutoPickNotice(): void {
+    const latestPick = this.autoPickNoticePick();
+
+    if (!latestPick) {
+      return;
+    }
+
+    this.dismissedAutoPickOverall.set(latestPick.overallPick);
+    this.autoPickNoticePick.set(null);
+    this.writeDismissedAutoPickOverall(latestPick.overallPick);
+  }
+
+  private updateAutoPickNotice(picks: DraftPick[]): void {
+    let dismissedOverall = this.readDismissedAutoPickOverall();
+    const highestOverallPick = picks.reduce(
+      (highest, pick) => Math.max(highest, pick.overallPick),
+      0,
+    );
+
+    // A commissioner may reset a test draft in the same league. When the new
+    // pick collection starts below the old dismissed pick number, discard the
+    // previous draft's local notice state so a new automatic selection is not hidden.
+    if (picks.length > 0 && highestOverallPick < dismissedOverall) {
+      dismissedOverall = 0;
+      this.writeDismissedAutoPickOverall(0);
+    }
+
+    this.dismissedAutoPickOverall.set(dismissedOverall);
+    this.autoPickNoticePick.set(
+      getLatestUndismissedAutoPick(picks, this.userId, dismissedOverall),
+    );
+  }
+
+  private getAutoPickDismissalStorageKey(): string {
+    return `rinkrat:draft-auto-pick-dismissed:${this.leagueId}:${this.userId}`;
+  }
+
+  private readDismissedAutoPickOverall(): number {
+    if (typeof localStorage === 'undefined' || !this.leagueId || !this.userId) {
+      return this.dismissedAutoPickOverall();
+    }
+
+    try {
+      const parsed = Number(localStorage.getItem(this.getAutoPickDismissalStorageKey()));
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+    } catch {
+      return this.dismissedAutoPickOverall();
+    }
+  }
+
+  private writeDismissedAutoPickOverall(overallPick: number): void {
+    if (typeof localStorage === 'undefined' || !this.leagueId || !this.userId) {
+      return;
+    }
+
+    const storageKey = this.getAutoPickDismissalStorageKey();
+
+    try {
+      if (overallPick > 0) {
+        localStorage.setItem(storageKey, String(overallPick));
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Storage may be unavailable in hardened/private browser contexts. The
+      // in-memory dismissal still keeps the current Draft Room session calm.
+    }
+  }
+
+  getQueueEntryStatusLabel(entry: DraftQueueEntryView): string {
+    return entry.unavailableReason ?? 'Ready for Auto-Draft';
+  }
+
+  private getQueueEntryUnavailableReason(
+    asset: DraftableAsset,
+    alreadyDrafted: boolean,
+  ): string | null {
+    if (alreadyDrafted) {
+      return 'Already drafted';
+    }
+
+    if (this.getDraftDestinationForAsset(this.userId, asset)) {
+      return null;
+    }
+
+    if (this.isBenchSelectionReservedForStarters(this.userId, asset)) {
+      return 'Bench spot reserved until your starting lineup is complete';
+    }
+
+    const starterCount = this.getStarterCount(this.userId, asset.position);
+    const requiredCount = this.getPositionRequirement(asset.position);
+
+    if (starterCount >= requiredCount && this.getOpenBenchSlotCount(this.userId) <= 0) {
+      return `${asset.position} starters and bench are full`;
+    }
+
+    return 'No legal roster spot is available';
+  }
+
+  private confirmPendingPickIfObserved(): void {
+    const pending = this.pendingPickConfirmation;
+
+    if (!pending) {
+      return;
+    }
+
+    const matchingPick = this.picks().find(
+      (pick) =>
+        pick.overallPick === pending.overallPick &&
+        pick.ownerId === this.userId &&
+        pick.asset.assetKey === pending.assetKey,
+    );
+    if (!matchingPick) {
+      return;
+    }
+
+    this.pendingPickConfirmation = null;
+
+    if (this.pendingPickConfirmationTimer) {
+      clearTimeout(this.pendingPickConfirmationTimer);
+      this.pendingPickConfirmationTimer = null;
+    }
+
+    this.pickSubmissionPhase.set('idle');
+    this.makingPickAssetKey.set(null);
+    this.selectedAssetKey.set(null);
+    this.successMessage.set(
+      `${pending.assetName} was confirmed at pick #${pending.overallPick}.`,
+    );
+  }
+
+  private armPendingPickConfirmationTimeout(): void {
+    if (this.pendingPickConfirmationTimer) {
+      clearTimeout(this.pendingPickConfirmationTimer);
+    }
+
+    this.pendingPickConfirmationTimer = setTimeout(() => {
+      if (!this.pendingPickConfirmation || this.destroyed) {
+        return;
+      }
+
+      this.successMessage.set(
+        'The server accepted the pick. RinkRat is reconnecting to confirm the updated board.',
+      );
+      this.requestRealtimeConfirmation('manual');
+
+      this.pendingPickConfirmationTimer = setTimeout(() => {
+        if (!this.pendingPickConfirmation || this.destroyed) {
+          return;
+        }
+
+        this.pendingPickConfirmation = null;
+        this.pickSubmissionPhase.set('idle');
+        this.makingPickAssetKey.set(null);
+        this.selectedAssetKey.set(null);
+        this.realtimeListenerError.set(
+          'The pick response was received, but the live board could not be confirmed. Refresh the connection before drafting again.',
+        );
+        this.realtimeConfirmationStartedAt.set(Date.now());
+        this.realtimeReconnectReason.set('listener-error');
+      }, 18_000);
+    }, 12_000);
   }
 
   async loadPlayerPool(): Promise<void> {
@@ -1539,8 +2115,19 @@ export class DraftRoom implements OnDestroy {
     await this.saveMyQueue(assetKeys);
   }
 
+  private ensureRealtimeActionReady(): boolean {
+    if (this.realtimeConnectionState() === 'connected') {
+      return true;
+    }
+
+    this.errorMessage.set(
+      'Draft actions are paused until RinkRat confirms the live server state. Use Retry Connection if this message remains.',
+    );
+    return false;
+  }
+
   async toggleMyAutoDraft(): Promise<void> {
-    if (this.queueSaving()) {
+    if (this.queueSaving() || !this.ensureRealtimeActionReady()) {
       return;
     }
 
@@ -1569,7 +2156,8 @@ export class DraftRoom implements OnDestroy {
       this.clockActionInProgress() ||
       this.playerPoolLoading() ||
       this.playerPool().length === 0 ||
-      Boolean(this.playerPoolError())
+      Boolean(this.playerPoolError()) ||
+      !this.ensureRealtimeActionReady()
     ) {
       return;
     }
@@ -1598,7 +2186,8 @@ export class DraftRoom implements OnDestroy {
       !draft ||
       draft.status !== 'live' ||
       !this.isCommissioner() ||
-      this.clockActionInProgress()
+      this.clockActionInProgress() ||
+      !this.ensureRealtimeActionReady()
     ) {
       return;
     }
@@ -1660,6 +2249,10 @@ export class DraftRoom implements OnDestroy {
   }
 
   private async saveMyQueue(assetKeys: string[]): Promise<void> {
+    if (!this.ensureRealtimeActionReady()) {
+      return;
+    }
+
     this.queueSaving.set(true);
     this.errorMessage.set('');
 
@@ -1999,7 +2592,8 @@ export class DraftRoom implements OnDestroy {
       draft.status !== 'live' ||
       draft.clockStatus !== 'running' ||
       isDraftClockExpired(draft, new Date(this.now())) ||
-      !this.isMyTurn()
+      !this.isMyTurn() ||
+      !this.canUseLiveDraftActions()
     ) {
       return false;
     }
@@ -2009,7 +2603,11 @@ export class DraftRoom implements OnDestroy {
 
   getDraftButtonLabel(asset: DraftableAsset): string {
     if (this.makingPickAssetKey() === asset.assetKey) {
-      return 'Drafting...';
+      return this.pickSubmissionPhase() === 'confirming' ? 'Confirming...' : 'Drafting...';
+    }
+
+    if (this.realtimeConnectionState() !== 'connected') {
+      return this.realtimeConnectionState() === 'offline' ? 'Offline' : 'Reconnecting';
     }
 
     if (this.draft()?.clockStatus === 'stopped') {
@@ -2049,24 +2647,49 @@ export class DraftRoom implements OnDestroy {
     this.errorMessage.set('');
     this.successMessage.set('');
 
-    if (!this.canDraftAsset(asset)) {
+    if (!this.ensureRealtimeActionReady() || !this.canDraftAsset(asset)) {
+      return;
+    }
+
+    const currentPick = this.currentPick();
+
+    if (!currentPick) {
       return;
     }
 
     this.makingPickAssetKey.set(asset.assetKey);
+    this.pickSubmissionPhase.set('submitting');
+    this.pendingPickConfirmation = {
+      overallPick: currentPick.overallPick,
+      assetKey: asset.assetKey,
+      assetName: this.getAssetName(asset),
+      startedAt: Date.now(),
+    };
 
     try {
       const pick = await makeDraftPick(this.leagueId, this.userId, asset);
 
-      this.successMessage.set(
-        `${this.getAssetName(pick.asset)} was drafted at pick #${pick.overallPick}${pick.rosterArea === 'bench' ? ' to your bench' : ''}.`,
-      );
+      if (this.pendingPickConfirmation) {
+        this.pickSubmissionPhase.set('confirming');
+        this.successMessage.set(
+          `${this.getAssetName(pick.asset)} was accepted at pick #${pick.overallPick}. Confirming the live draft board...`,
+        );
+        this.armPendingPickConfirmationTimeout();
+        this.confirmPendingPickIfObserved();
+      }
     } catch (error: unknown) {
+      this.pendingPickConfirmation = null;
+
+      if (this.pendingPickConfirmationTimer) {
+        clearTimeout(this.pendingPickConfirmationTimer);
+        this.pendingPickConfirmationTimer = null;
+      }
+
+      this.pickSubmissionPhase.set('idle');
+      this.makingPickAssetKey.set(null);
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to make this draft pick.',
       );
-    } finally {
-      this.makingPickAssetKey.set(null);
     }
   }
 

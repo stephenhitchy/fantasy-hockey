@@ -1,0 +1,48 @@
+@if (open) {
+  <div
+    class="rr-action-sheet-backdrop"
+    role="presentation"
+    (click)="requestClose()"
+  >
+    <section
+      class="rr-action-sheet"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="dialogId"
+      appDialogFocusTrap
+      (dialogEscape)="requestClose()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="rr-action-sheet__header">
+        <div>
+          @if (eyebrow) {
+            <span class="rr-action-sheet__eyebrow">{{ eyebrow }}</span>
+          }
+          <h2 [id]="dialogId">{{ title }}</h2>
+          @if (description) {
+            <p>{{ description }}</p>
+          }
+        </div>
+
+        <button
+          type="button"
+          class="rr-action-sheet__close"
+          aria-label="Close dialog"
+          [attr.title]="closeLabel"
+          (click)="requestClose()"
+          [disabled]="busy"
+        >
+          ×
+        </button>
+      </header>
+
+      <div class="rr-action-sheet__content">
+        <ng-content></ng-content>
+      </div>
+
+      <footer class="rr-action-sheet__footer">
+        <ng-content select="[action-sheet-actions]"></ng-content>
+      </footer>
+    </section>
+  </div>
+}

@@ -40,6 +40,14 @@ export interface MobileMatchupPositionGroup {
   rows: MobileMatchupPlayerPair[];
 }
 
+export interface MobileMatchupSection {
+  key: 'forwards' | 'defense' | 'goalie';
+  label: string;
+  shortLabel: string;
+  positions: DraftPosition[];
+  rows: MobileMatchupPlayerPair[];
+}
+
 export interface MobileMatchupBenchRow {
   slotIndex: number;
   teamASlot: BenchRosterSlot;

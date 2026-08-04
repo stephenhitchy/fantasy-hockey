@@ -333,14 +333,8 @@
                     <article
                       class="fantasy-player-card rr-card"
                       [class.empty-slot-card]="!slot.asset"
-                      [class.clickable-player-card]="slot.asset"
                       [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
                       [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
-                      [attr.role]="slot.asset ? 'link' : null"
-                      [attr.tabindex]="slot.asset ? 0 : null"
-                      [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
-                      (click)="slot.asset && openRosterAssetDetail(slot.asset)"
-                      (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
                     >
                       @if (slot.asset; as asset) {
                         @if (hasRosterAssetAlert(asset)) {
@@ -418,6 +412,23 @@
                         </div>
 
                         <div class="roster-card-actions">
+                          <div class="roster-card-primary-actions">
+                            <button
+                              type="button"
+                              class="roster-card-view-action rr-button rr-button--quiet"
+                              (click)="openRosterAssetDetail(asset)"
+                            >
+                              View Stats
+                            </button>
+                            <button
+                              type="button"
+                              class="roster-manage-button rr-button rr-button--primary"
+                              (click)="openRosterManager('active', slot.slotId)"
+                              [disabled]="isRosterOperationPending()"
+                            >
+                              Manage
+                            </button>
+                          </div>
                           <div class="roster-card-action-buttons">
                             @if (shouldShowMoveToIrAction(asset)) {
                               <button
@@ -443,7 +454,15 @@
                       } @else {
                         <div class="empty-slot-copy">
                           <strong>Open {{ group.position }} Slot</strong>
-                          <span>Waiting for roster move</span>
+                          <span>Choose an available {{ group.position }} player.</span>
+                          <button
+                            type="button"
+                            class="roster-empty-find-action rr-button rr-button--primary"
+                            (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                            [disabled]="isRosterOperationPending()"
+                          >
+                            Find Player
+                          </button>
                         </div>
                       }
                     </article>
@@ -464,14 +483,8 @@
                   <article
                     class="fantasy-player-card rr-card"
                     [class.empty-slot-card]="!slot.asset"
-                    [class.clickable-player-card]="slot.asset"
                     [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
                       [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
-                    [attr.role]="slot.asset ? 'link' : null"
-                    [attr.tabindex]="slot.asset ? 0 : null"
-                    [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
-                    (click)="slot.asset && openRosterAssetDetail(slot.asset)"
-                    (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
                   >
                     @if (slot.asset; as asset) {
                       @if (isRosterAssetInjured(asset)) {
@@ -541,6 +554,23 @@
                       </div>
 
                       <div class="roster-card-actions">
+                        <div class="roster-card-primary-actions">
+                          <button
+                            type="button"
+                            class="roster-card-view-action rr-button rr-button--quiet"
+                            (click)="openRosterAssetDetail(asset)"
+                          >
+                            View Stats
+                          </button>
+                          <button
+                            type="button"
+                            class="roster-manage-button rr-button rr-button--primary"
+                            (click)="openRosterManager('active', slot.slotId)"
+                            [disabled]="isRosterOperationPending()"
+                          >
+                            Manage
+                          </button>
+                        </div>
                         <div class="roster-card-action-buttons">
                           @if (shouldShowMoveToIrAction(asset)) {
                             <button
@@ -567,7 +597,15 @@
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open D Slot</strong>
-                        <span>Waiting for roster move</span>
+                        <span>Choose an available defenseman.</span>
+                        <button
+                          type="button"
+                          class="roster-empty-find-action rr-button rr-button--primary"
+                          (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                          [disabled]="isRosterOperationPending()"
+                        >
+                          Find Player
+                        </button>
                       </div>
                     }
                   </article>
@@ -585,14 +623,8 @@
                   <article
                     class="fantasy-player-card goalie-card rr-card"
                     [class.empty-slot-card]="!slot.asset"
-                    [class.clickable-player-card]="slot.asset"
                     [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
                       [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
-                    [attr.role]="slot.asset ? 'link' : null"
-                    [attr.tabindex]="slot.asset ? 0 : null"
-                    [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
-                    (click)="slot.asset && openRosterAssetDetail(slot.asset)"
-                    (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
                   >
                     @if (slot.asset; as asset) {
                       @if (isRosterAssetInjured(asset)) {
@@ -662,6 +694,23 @@
                       </div>
 
                       <div class="roster-card-actions">
+                        <div class="roster-card-primary-actions">
+                          <button
+                            type="button"
+                            class="roster-card-view-action rr-button rr-button--quiet"
+                            (click)="openRosterAssetDetail(asset)"
+                          >
+                            View Stats
+                          </button>
+                          <button
+                            type="button"
+                            class="roster-manage-button rr-button rr-button--primary"
+                            (click)="openRosterManager('active', slot.slotId)"
+                            [disabled]="isRosterOperationPending()"
+                          >
+                            Manage
+                          </button>
+                        </div>
                         <div class="roster-card-action-buttons">
                           @if (shouldShowMoveToIrAction(asset)) {
                             <button
@@ -688,7 +737,15 @@
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open G Slot</strong>
-                        <span>Waiting for roster move</span>
+                        <span>Choose an available team goalie unit.</span>
+                        <button
+                          type="button"
+                          class="roster-empty-find-action rr-button rr-button--primary"
+                          (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                          [disabled]="isRosterOperationPending()"
+                        >
+                          Find Goalie Unit
+                        </button>
                       </div>
                     }
                   </article>
@@ -719,14 +776,8 @@
           <article
             class="fantasy-player-card bench-player-card rr-card"
             [class.empty-slot-card]="!slot.asset"
-            [class.clickable-player-card]="slot.asset"
             [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
             [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
-            [attr.role]="slot.asset ? 'link' : null"
-            [attr.tabindex]="slot.asset ? 0 : null"
-            [attr.aria-label]="slot.asset ? 'View scoring detail for ' + getRosterAssetName(slot.asset) : null"
-            (click)="slot.asset && openRosterAssetDetail(slot.asset)"
-            (keydown.enter)="slot.asset && openRosterAssetDetail(slot.asset)"
           >
             @if (slot.asset; as asset) {
               @if (hasRosterAssetAlert(asset)) {
@@ -777,6 +828,23 @@
               </div>
 
               <div class="roster-card-actions">
+                <div class="roster-card-primary-actions">
+                  <button
+                    type="button"
+                    class="roster-card-view-action rr-button rr-button--quiet"
+                    (click)="openRosterAssetDetail(asset)"
+                  >
+                    View Stats
+                  </button>
+                  <button
+                    type="button"
+                    class="roster-manage-button rr-button rr-button--primary"
+                    (click)="openRosterManager('bench', slot.slotId)"
+                    [disabled]="isRosterOperationPending()"
+                  >
+                    Manage
+                  </button>
+                </div>
                 <div class="roster-card-action-buttons bench-action-buttons">
                   <button
                     type="button"
@@ -812,6 +880,14 @@
               <div class="empty-slot-copy">
                 <strong>Open Bench {{ slot.slotNumber }}</strong>
                 <span>Any skater or team goalie unit</span>
+                <button
+                  type="button"
+                  class="roster-empty-find-action rr-button rr-button--primary"
+                  (click)="openFreeAgentsForRosterSlot('bench', slot.slotId)"
+                  [disabled]="isRosterOperationPending()"
+                >
+                  Find Player
+                </button>
               </div>
             }
           </article>
@@ -890,6 +966,24 @@
                   }
                 </div>
 
+                <div class="ir-slot-primary-actions">
+                  <button
+                    type="button"
+                    class="roster-card-view-action rr-button rr-button--quiet"
+                    (click)="openRosterAssetDetail(asset)"
+                  >
+                    View Stats
+                  </button>
+                  <button
+                    type="button"
+                    class="roster-manage-button rr-button rr-button--primary"
+                    (click)="openRosterManager('ir', slot.slotId)"
+                    [disabled]="isRosterOperationPending()"
+                  >
+                    Manage
+                  </button>
+                </div>
+
                 <div class="ir-slot-actions">
                   <button
                     type="button"
@@ -929,6 +1023,92 @@
         </div>
       }
     </section>
+
+    <app-action-sheet
+      [open]="rosterManagerOpen()"
+      [title]="getRosterManagerTitle()"
+      eyebrow="Manage Roster Spot"
+      [description]="getRosterManagerDescription()"
+      [busy]="isRosterOperationPending()"
+      closeLabel="Close roster actions"
+      dialogId="roster-manager-title"
+      (close)="closeRosterManager()"
+    >
+      <section class="roster-manager-summary">
+        @if (rosterManagerAsset(); as managerAsset) {
+          <div class="roster-manager-identity">
+            @if (getRosterAssetLogoUrl(managerAsset); as managerLogoUrl) {
+              <img
+                [src]="managerLogoUrl"
+                [alt]="getRosterAssetTeamLabel(managerAsset) + ' logo'"
+              />
+            } @else {
+              <span class="roster-manager-logo-fallback">
+                {{ getRosterAssetTeamLabel(managerAsset) }}
+              </span>
+            }
+
+            <div>
+              <strong>{{ getRosterAssetName(managerAsset) }}</strong>
+              <span>{{ getRosterManagerMeta() }}</span>
+            </div>
+          </div>
+
+          <div class="roster-manager-score-grid" aria-label="Player matchup summary">
+            <div>
+              <span>Current</span>
+              <strong>{{ getDisplayNumber(getRosterAssetCurrentCycleScore(managerAsset)) }}</strong>
+            </div>
+            <div>
+              <span>Projection</span>
+              <strong>{{ getDisplayNumber(getProjectedCycle(managerAsset)) }}</strong>
+            </div>
+            <div>
+              <span>Six-game count</span>
+              <strong>{{ getRosterAssetGamesPlayed(managerAsset) }} / 6</strong>
+            </div>
+          </div>
+        } @else {
+          <div class="roster-manager-empty-summary">
+            <span aria-hidden="true">＋</span>
+            <div>
+              <strong>{{ getRosterManagerSlotLabel() }}</strong>
+              <small>This roster spot is ready for a legal addition.</small>
+            </div>
+          </div>
+        }
+
+        @if (getRosterManagerPendingMoveText(); as pendingMoveText) {
+          <div class="roster-manager-pending-note rr-notice rr-notice--warning">
+            <strong>Scheduled move already attached</strong>
+            <span>{{ pendingMoveText }}</span>
+          </div>
+        }
+      </section>
+
+      <div class="roster-manager-action-list">
+        @for (action of rosterManagerActions(); track action.id) {
+          <button
+            type="button"
+            [class]="getRosterManagerActionClass(action)"
+            [disabled]="!action.enabled"
+            [attr.title]="action.disabledReason || null"
+            (click)="handleRosterManagerAction(action.id)"
+          >
+            <span>
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.detail }}</small>
+            </span>
+            <span class="roster-manager-action-arrow" aria-hidden="true">›</span>
+            @if (action.disabledReason) {
+              <em>{{ action.disabledReason }}</em>
+            }
+          </button>
+        } @empty {
+          <p class="roster-manager-no-actions">No roster action is available for this spot.</p>
+        }
+      </div>
+    </app-action-sheet>
 
     @if (getPendingIrActivationSlot(); as activationIrSlot) {
       @if (activationIrSlot.asset; as activationAsset) {
@@ -1277,6 +1457,18 @@
             </button>
           </footer>
         </section>
+      </div>
+    }
+
+    @if (isRosterOperationPending()) {
+      <div class="roster-action-shield" role="status" aria-live="assertive" aria-atomic="true">
+        <div class="roster-action-shield-card">
+          <span class="roster-action-spinner" aria-hidden="true"></span>
+          <div>
+            <strong>{{ rosterMoveLoading() ? 'Saving roster change…' : 'Saving team settings…' }}</strong>
+            <small>Stay on this page until RinkRat confirms the update.</small>
+          </div>
+        </div>
       </div>
     }
 

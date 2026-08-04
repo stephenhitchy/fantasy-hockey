@@ -1,351 +1,611 @@
-                <section
-                  class="mobile-head-to-head-roster"
-                  aria-label="Condensed head-to-head player comparison"
-                >
-                  <div class="mobile-h2h-team-strip">
-                    <article
-                      class="mobile-h2h-team mobile-h2h-team-a"
-                      [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
-                    >
-                      <img
-                        [src]="presenter.getOwnerTheme(matchup.teamAOwnerId).logoUrl"
-                        [alt]="presenter.getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
-                      />
+<section
+  class="mobile-head-to-head-roster mobile-matchup-live-view"
+  aria-label="Mobile matchup lineup"
+>
+  <nav
+    class="mobile-matchup-mode-selector"
+    role="tablist"
+    aria-label="Choose matchup lineup view"
+  >
+    <button
+      type="button"
+      role="tab"
+      [class.is-active]="isPerspectiveActive('my-team')"
+      [attr.aria-selected]="isPerspectiveActive('my-team')"
+      (click)="setPerspective('my-team')"
+    >
+      {{ getPrimaryViewLabel() }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      [class.is-active]="isPerspectiveActive('head-to-head')"
+      [attr.aria-selected]="isPerspectiveActive('head-to-head')"
+      (click)="setPerspective('head-to-head')"
+    >
+      Head-to-Head
+    </button>
+    <button
+      type="button"
+      role="tab"
+      [class.is-active]="isPerspectiveActive('opponent')"
+      [attr.aria-selected]="isPerspectiveActive('opponent')"
+      (click)="setPerspective('opponent')"
+    >
+      {{ getSecondaryViewLabel() }}
+    </button>
+  </nav>
 
-                      <div class="manager-name-stack">
-                        <app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(matchup.teamAOwnerId)" [label]="presenter.getTeamManagerLabel(matchup.teamAOwnerId)" size="sm" />
-                        <div>
-                          <strong>{{ presenter.getTeamName(matchup.teamAOwnerId) }}</strong>
-                          <span>{{ presenter.getTeamRecord(matchup.teamAOwnerId) }}</span>
-                        </div>
-                      </div>
+  <div
+    class="mobile-matchup-context"
+    [class.mobile-matchup-context-single]="!isHeadToHeadView()"
+  >
+    @if (isHeadToHeadView()) {
+      <article
+        class="mobile-matchup-team-summary team-a"
+        [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
+      >
+        <div class="mobile-matchup-team-identity">
+          <img
+            [src]="presenter.getOwnerTheme(matchup.teamAOwnerId).logoUrl"
+            [alt]="presenter.getOwnerTheme(matchup.teamAOwnerId).name + ' logo'"
+          />
+          <div>
+            <strong>{{ presenter.getTeamName(matchup.teamAOwnerId) }}</strong>
+            <span>{{ presenter.getTeamRecord(matchup.teamAOwnerId) }}</span>
+          </div>
+        </div>
+        <div class="mobile-matchup-team-scoreline">
+          <span>
+            Current
+            <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
+          </span>
+          <span>
+            Projected
+            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</strong>
+          </span>
+        </div>
+        <div class="mobile-matchup-team-progress-copy">
+          <span>{{ getTeamProgressText(matchup.teamAOwnerId) }}</span>
+          <strong>{{ presenter.getTeamRosterProgressPercent(matchup.teamAOwnerId) }}%</strong>
+        </div>
+        <div
+          class="mobile-matchup-team-progress rr-progress"
+          role="progressbar"
+          [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamAOwnerId)"
+          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
+        >
+          <span
+            class="rr-progress__value"
+            [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamAOwnerId)"
+          ></span>
+        </div>
+      </article>
 
-                      <div class="mobile-team-theme-meta">
-                        <span>{{ presenter.getOwnerTheme(matchup.teamAOwnerId).variantShortLabel }}</span>
-                        <div class="team-color-strip" aria-hidden="true">
-                          <i class="team-color-primary"></i>
-                          <i class="team-color-secondary"></i>
-                          <i class="team-color-tertiary"></i>
-                        </div>
-                      </div>
+      <article
+        class="mobile-matchup-team-summary team-b"
+        [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
+      >
+        <div class="mobile-matchup-team-identity">
+          <img
+            [src]="presenter.getOwnerTheme(matchup.teamBOwnerId).logoUrl"
+            [alt]="presenter.getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
+          />
+          <div>
+            <strong>{{ presenter.getTeamName(matchup.teamBOwnerId) }}</strong>
+            <span>{{ presenter.getTeamRecord(matchup.teamBOwnerId) }}</span>
+          </div>
+        </div>
+        <div class="mobile-matchup-team-scoreline">
+          <span>
+            Current
+            <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
+          </span>
+          <span>
+            Projected
+            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</strong>
+          </span>
+        </div>
+        <div class="mobile-matchup-team-progress-copy">
+          <span>{{ getTeamProgressText(matchup.teamBOwnerId) }}</span>
+          <strong>{{ presenter.getTeamRosterProgressPercent(matchup.teamBOwnerId) }}%</strong>
+        </div>
+        <div
+          class="mobile-matchup-team-progress rr-progress"
+          role="progressbar"
+          [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamBOwnerId)"
+          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
+        >
+          <span
+            class="rr-progress__value"
+            [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamBOwnerId)"
+          ></span>
+        </div>
+      </article>
+    } @else if (getSingleOwnerId(); as ownerId) {
+      <article
+        class="mobile-matchup-team-summary mobile-matchup-team-summary-single"
+        [class.team-b]="ownerId === matchup.teamBOwnerId"
+        [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
+      >
+        <div class="mobile-matchup-team-identity">
+          <img
+            [src]="presenter.getOwnerTheme(ownerId).logoUrl"
+            [alt]="presenter.getOwnerTheme(ownerId).name + ' logo'"
+          />
+          <div>
+            <strong>{{ presenter.getTeamName(ownerId) }}</strong>
+            <span>{{ presenter.getTeamRecord(ownerId) }} · {{ getTeamProgressText(ownerId) }}</span>
+          </div>
+        </div>
+        <div class="mobile-matchup-team-scoreline">
+          <span>
+            Current
+            <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, ownerId)) }}</strong>
+          </span>
+          <span>
+            Projected
+            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(ownerId)) }}</strong>
+          </span>
+          <span>
+            Progress
+            <strong>{{ presenter.getTeamRosterProgressPercent(ownerId) }}%</strong>
+          </span>
+        </div>
+        <div
+          class="mobile-matchup-team-progress rr-progress"
+          role="progressbar"
+          [attr.aria-label]="presenter.getTeamRosterProgressLabel(ownerId)"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(ownerId)"
+          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(ownerId)"
+        >
+          <span
+            class="rr-progress__value"
+            [style.width.%]="presenter.getTeamRosterProgressPercent(ownerId)"
+          ></span>
+        </div>
+      </article>
+    }
+  </div>
 
-                      <dl>
-                        <div>
-                          <dt>Cur</dt>
-                          <dd>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</dd>
-                        </div>
-                        <div>
-                          <dt>Proj</dt>
-                          <dd>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</dd>
-                        </div>
-                      </dl>
+  <div class="mobile-live-lineup">
+    @for (section of getPositionSections(); track section.key) {
+      <details class="mobile-live-position-section" open>
+        <summary>
+          <span>{{ section.label }}</span>
+          <small>{{ section.shortLabel }}</small>
+          <strong>{{ section.rows.length }}</strong>
+        </summary>
 
-                      <div class="team-roster-progress mobile-team-roster-progress">
-                        <div class="team-roster-progress-copy">
-                          <span>Six-Game Progress</span>
-                          <strong>
-                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId) }} played ·
-                            {{ presenter.getTeamRosterGamesLeft(matchup.teamAOwnerId) }} left
-                          </strong>
-                        </div>
-
-                        <div
-                          class="team-roster-progress-track rr-progress"
-                          role="progressbar"
-                          [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamAOwnerId)"
-                          [attr.aria-valuemin]="0"
-                          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamAOwnerId)"
-                          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamAOwnerId)"
-                        >
-                          <span
-                            class="team-roster-progress-fill rr-progress__value"
-                            [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamAOwnerId)"
-                          ></span>
-                        </div>
-                      </div>
-                    </article>
-
-                    <div class="mobile-h2h-versus" aria-hidden="true">
-                      <span>{{ presenter.getCycleLabel() }}</span>
-                      <strong>VS</strong>
-                    </div>
-
-                    <article
-                      class="mobile-h2h-team mobile-h2h-team-b"
-                      [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
-                    >
-                      <img
-                        [src]="presenter.getOwnerTheme(matchup.teamBOwnerId).logoUrl"
-                        [alt]="presenter.getOwnerTheme(matchup.teamBOwnerId).name + ' logo'"
-                      />
-
-                      <div class="manager-name-stack">
-                        <app-manager-avatar [profileIconId]="presenter.getTeamProfileIconId(matchup.teamBOwnerId)" [label]="presenter.getTeamManagerLabel(matchup.teamBOwnerId)" size="sm" />
-                        <div>
-                          <strong>{{ presenter.getTeamName(matchup.teamBOwnerId) }}</strong>
-                          <span>{{ presenter.getTeamRecord(matchup.teamBOwnerId) }}</span>
-                        </div>
-                      </div>
-
-                      <div class="mobile-team-theme-meta">
-                        <span>{{ presenter.getOwnerTheme(matchup.teamBOwnerId).variantShortLabel }}</span>
-                        <div class="team-color-strip" aria-hidden="true">
-                          <i class="team-color-primary"></i>
-                          <i class="team-color-secondary"></i>
-                          <i class="team-color-tertiary"></i>
-                        </div>
-                      </div>
-
-                      <dl>
-                        <div>
-                          <dt>Cur</dt>
-                          <dd>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</dd>
-                        </div>
-                        <div>
-                          <dt>Proj</dt>
-                          <dd>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</dd>
-                        </div>
-                      </dl>
-
-                      <div class="team-roster-progress mobile-team-roster-progress">
-                        <div class="team-roster-progress-copy">
-                          <span>Six-Game Progress</span>
-                          <strong>
-                            {{ presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId) }} played ·
-                            {{ presenter.getTeamRosterGamesLeft(matchup.teamBOwnerId) }} left
-                          </strong>
-                        </div>
-
-                        <div
-                          class="team-roster-progress-track rr-progress"
-                          role="progressbar"
-                          [attr.aria-label]="presenter.getTeamRosterProgressLabel(matchup.teamBOwnerId)"
-                          [attr.aria-valuemin]="0"
-                          [attr.aria-valuemax]="presenter.getTeamRosterGameTotal(matchup.teamBOwnerId)"
-                          [attr.aria-valuenow]="presenter.getTeamRosterGamesPlayed(matchup.teamBOwnerId)"
-                        >
-                          <span
-                            class="team-roster-progress-fill rr-progress__value"
-                            [style.width.%]="presenter.getTeamRosterProgressPercent(matchup.teamBOwnerId)"
-                          ></span>
-                        </div>
-                      </div>
-                    </article>
-                  </div>
-
-                  <div class="mobile-h2h-position-list">
-                    @for (
-                      group of presenter.getMobileMatchupPositionGroups(matchup);
-                      track group.position
-                    ) {
-                      <section class="mobile-h2h-position-group">
-                        <header>
-                          <span>{{ group.label }}</span>
-                          <small>{{ group.position }}</small>
-                        </header>
-
-                        @for (
-                          row of group.rows;
-                          track presenter.getMobileMatchupPlayerTrackKey(row)
-                        ) {
-                          <div class="mobile-h2h-player-row">
-                            @if (row.teamAPick; as pick) {
-                              <article
-                                class="mobile-h2h-player mobile-h2h-player-a"
-                                [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
-                                role="link"
-                                tabindex="0"
-                                (click)="presenter.openAssetDetail(pick.asset)"
-                                (keydown.enter)="presenter.openAssetDetail(pick.asset)"
-                              >
-                                <div class="mobile-h2h-player-identity">
-                                  @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
-                                    <img
-                                      [src]="logoUrl"
-                                      [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
-                                    />
-                                  }
-
-                                  <div>
-                                    <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
-                                    <span>{{ presenter.getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</span>
-                                    <small>
-                                      {{ presenter.getAssetGamesPlayed(pick.asset) }} played ·
-                                      {{ presenter.getAssetGamesLeft(pick.asset) }} left
-                                    </small>
-                                  </div>
-                                </div>
-
-                                <div class="mobile-h2h-player-scores">
-                                  <span
-                                    class="current-score-cell"
-                                    [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
-                                    [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
-                                    [attr.data-score-asset-key]="pick.asset.assetKey"
-                                  >
-                                    Cur <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
-                                    @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
-                                      <small
-                                        class="score-delta-pop"
-                                        [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
-                                        [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
-                                        [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
-                                      >
-                                        {{ presenter.getScoreDeltaLabel(scoreUpdate) }}
-                                      </small>
-                                    }
-                                  </span>
-                                  <span>Proj <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong></span>
-                                </div>
-                              </article>
-                            } @else {
-                              <article class="mobile-h2h-player mobile-h2h-player-empty">
-                                <span>Open slot</span>
-                              </article>
-                            }
-
-                            <div class="mobile-h2h-slot-label" aria-hidden="true">
-                              <strong>{{ group.position }}</strong>
-                              <span>{{ row.slotIndex + 1 }}</span>
-                            </div>
-
-                            @if (row.teamBPick; as pick) {
-                              <article
-                                class="mobile-h2h-player mobile-h2h-player-b"
-                                [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
-                                role="link"
-                                tabindex="0"
-                                (click)="presenter.openAssetDetail(pick.asset)"
-                                (keydown.enter)="presenter.openAssetDetail(pick.asset)"
-                              >
-                                <div class="mobile-h2h-player-identity">
-                                  @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
-                                    <img
-                                      [src]="logoUrl"
-                                      [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
-                                    />
-                                  }
-
-                                  <div>
-                                    <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
-                                    <span>{{ presenter.getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</span>
-                                    <small>
-                                      {{ presenter.getAssetGamesPlayed(pick.asset) }} played ·
-                                      {{ presenter.getAssetGamesLeft(pick.asset) }} left
-                                    </small>
-                                  </div>
-                                </div>
-
-                                <div class="mobile-h2h-player-scores">
-                                  <span
-                                    class="current-score-cell"
-                                    [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
-                                    [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
-                                    [attr.data-score-asset-key]="pick.asset.assetKey"
-                                  >
-                                    Cur <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
-                                    @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
-                                      <small
-                                        class="score-delta-pop"
-                                        [class.score-delta-gain]="scoreUpdate.direction === 'gain'"
-                                        [class.score-delta-opponent]="scoreUpdate.presentation === 'opponent'"
-                                        [class.score-delta-loss]="scoreUpdate.direction === 'loss'"
-                                      >
-                                        {{ presenter.getScoreDeltaLabel(scoreUpdate) }}
-                                      </small>
-                                    }
-                                  </span>
-                                  <span>Proj <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong></span>
-                                </div>
-                              </article>
-                            } @else {
-                              <article class="mobile-h2h-player mobile-h2h-player-empty">
-                                <span>Open slot</span>
-                              </article>
-                            }
-                          </div>
-                        }
-                      </section>
-                    }
-
-                    <section class="mobile-h2h-position-group mobile-h2h-bench-group">
-                      <header>
-                        <span>Bench</span>
-                        <small>Non-scoring</small>
-                      </header>
-
-                      @for (row of presenter.getMobileMatchupBenchRows(matchup); track row.slotIndex) {
-                        <div class="mobile-h2h-player-row mobile-h2h-bench-row">
-                          @if (row.teamASlot.asset; as asset) {
-                            <article
-                              class="mobile-h2h-player mobile-h2h-player-a mobile-h2h-bench-player"
-                              [class.injured-player-card]="presenter.isBenchAssetInjured(asset)"
-                              [class.suspended-player-card]="presenter.isBenchAssetSuspended(asset)"
-                              [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
-                              role="link"
-                              tabindex="0"
-                              (click)="presenter.openBenchAssetDetail(asset)"
-                              (keydown.enter)="presenter.openBenchAssetDetail(asset)"
-                            >
-                              <div class="mobile-h2h-player-identity">
-                                @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
-                                  <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
-                                }
-                                <div>
-                                  <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
-                                  <span>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</span>
-                                  <small>Bench {{ row.teamASlot.slotNumber }} · does not score</small>
-                                </div>
-                              </div>
-                              <div class="mobile-h2h-player-scores">
-                                <span>Bench <strong>—</strong></span>
-                                <span>Proj <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
-                              </div>
-                            </article>
-                          } @else {
-                            <article class="mobile-h2h-player mobile-h2h-player-empty">
-                              <span>Open bench</span>
-                            </article>
-                          }
-
-                          <div class="mobile-h2h-slot-label" aria-hidden="true">
-                            <strong>B</strong>
-                            <span>{{ row.slotIndex + 1 }}</span>
-                          </div>
-
-                          @if (row.teamBSlot.asset; as asset) {
-                            <article
-                              class="mobile-h2h-player mobile-h2h-player-b mobile-h2h-bench-player"
-                              [class.injured-player-card]="presenter.isBenchAssetInjured(asset)"
-                              [class.suspended-player-card]="presenter.isBenchAssetSuspended(asset)"
-                              [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
-                              role="link"
-                              tabindex="0"
-                              (click)="presenter.openBenchAssetDetail(asset)"
-                              (keydown.enter)="presenter.openBenchAssetDetail(asset)"
-                            >
-                              <div class="mobile-h2h-player-identity">
-                                @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
-                                  <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
-                                }
-                                <div>
-                                  <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
-                                  <span>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</span>
-                                  <small>Bench {{ row.teamBSlot.slotNumber }} · does not score</small>
-                                </div>
-                              </div>
-                              <div class="mobile-h2h-player-scores">
-                                <span>Bench <strong>—</strong></span>
-                                <span>Proj <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
-                              </div>
-                            </article>
-                          } @else {
-                            <article class="mobile-h2h-player mobile-h2h-player-empty">
-                              <span>Open bench</span>
-                            </article>
-                          }
-                        </div>
+        <div class="mobile-live-position-rows">
+          @for (
+            row of section.rows;
+            track presenter.getMobileMatchupPlayerTrackKey(row)
+          ) {
+            @if (isHeadToHeadView()) {
+              <div class="mobile-live-player-row mobile-live-player-row-head-to-head">
+                @if (row.teamAPick; as pick) {
+                  <button
+                    type="button"
+                    class="mobile-live-player mobile-live-player-team-a"
+                    [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
+                    [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
+                    [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                    (click)="openActiveDetail(pick)"
+                  >
+                    <span class="mobile-live-player-topline">
+                      @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                        <img
+                          [src]="logoUrl"
+                          [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                        />
                       }
-                    </section>
-                  </div>
-                </section>
+                      <span class="mobile-live-player-name">
+                        <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+                        <small>{{ presenter.getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</small>
+                      </span>
+                    </span>
+
+                    <span class="mobile-live-player-numbers">
+                      <span
+                        class="current-score-cell"
+                        [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                        [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                      >
+                        Current
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                      </span>
+                      <span>
+                        Projected
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong>
+                      </span>
+                    </span>
+
+                    <span class="mobile-window-markers" aria-label="Six-game window">
+                      @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
+                        <i
+                          [class]="getMarkerClass(marker)"
+                          [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                          [attr.title]="marker.title"
+                        >{{ marker.index }}</i>
+                      }
+                    </span>
+
+                    <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                  </button>
+                } @else {
+                  <div class="mobile-live-player mobile-live-player-empty">Open slot</div>
+                }
+
+                <div class="mobile-live-slot-badge" aria-hidden="true">
+                  <strong>{{ row.position }}</strong>
+                  <span>{{ row.slotIndex + 1 }}</span>
+                </div>
+
+                @if (row.teamBPick; as pick) {
+                  <button
+                    type="button"
+                    class="mobile-live-player mobile-live-player-team-b"
+                    [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
+                    [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
+                    [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                    (click)="openActiveDetail(pick)"
+                  >
+                    <span class="mobile-live-player-topline">
+                      @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                        <img
+                          [src]="logoUrl"
+                          [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                        />
+                      }
+                      <span class="mobile-live-player-name">
+                        <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+                        <small>{{ presenter.getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }}</small>
+                      </span>
+                    </span>
+
+                    <span class="mobile-live-player-numbers">
+                      <span
+                        class="current-score-cell"
+                        [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                        [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                        [attr.data-score-asset-key]="pick.asset.assetKey"
+                      >
+                        Current
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                      </span>
+                      <span>
+                        Projected
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong>
+                      </span>
+                    </span>
+
+                    <span class="mobile-window-markers" aria-label="Six-game window">
+                      @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
+                        <i
+                          [class]="getMarkerClass(marker)"
+                          [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                          [attr.title]="marker.title"
+                        >{{ marker.index }}</i>
+                      }
+                    </span>
+
+                    <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                  </button>
+                } @else {
+                  <div class="mobile-live-player mobile-live-player-empty">Open slot</div>
+                }
+              </div>
+            } @else if (getSingleOwnerId(); as ownerId) {
+              @if (getPickForOwner(row, ownerId); as pick) {
+                <button
+                  type="button"
+                  class="mobile-live-player mobile-live-player-single"
+                  [class.mobile-live-player-team-b]="ownerId === matchup.teamBOwnerId"
+                  [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
+                  [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
+                  [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                  (click)="openActiveDetail(pick)"
+                >
+                  <span class="mobile-live-player-topline">
+                    @if (presenter.getAssetLogoUrl(pick.asset); as logoUrl) {
+                      <img
+                        [src]="logoUrl"
+                        [alt]="presenter.getAssetTeamLabel(pick.asset) + ' logo'"
+                      />
+                    }
+                    <span class="mobile-live-player-name">
+                      <strong>{{ presenter.getAssetName(pick.asset) }}</strong>
+                      <small>{{ presenter.getAssetTeamLabel(pick.asset) }} · {{ pick.asset.position }} · Slot {{ row.slotIndex + 1 }}</small>
+                    </span>
+                  </span>
+
+                  <span class="mobile-live-player-numbers">
+                    <span
+                      class="current-score-cell"
+                      [class.score-change-active]="presenter.getScoreDeltaAnimation(pick.asset)"
+                      [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
+                      [attr.data-score-asset-key]="pick.asset.assetKey"
+                    >
+                      Current
+                      <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                    </span>
+                    <span>
+                      Projected
+                      <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong>
+                    </span>
+                    <span>
+                      Progress
+                      <strong>{{ presenter.getAssetGamesPlayed(pick.asset) }}/6</strong>
+                    </span>
+                  </span>
+
+                  <span class="mobile-window-markers" aria-label="Six-game window">
+                    @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
+                      <i
+                        [class]="getMarkerClass(marker)"
+                        [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                        [attr.title]="marker.title"
+                      >{{ marker.index }}</i>
+                    }
+                  </span>
+
+                  <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                </button>
+              } @else {
+                <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">
+                  Open {{ row.position }} slot {{ row.slotIndex + 1 }}
+                </div>
+              }
+            }
+          }
+        </div>
+      </details>
+    }
+
+    <details class="mobile-live-position-section mobile-live-bench-section">
+      <summary>
+        <span>Bench</span>
+        <small>Collapsed · does not score</small>
+        <strong>{{ presenter.getMobileMatchupBenchRows(matchup).length }}</strong>
+      </summary>
+
+      <div class="mobile-live-position-rows">
+        @for (row of presenter.getMobileMatchupBenchRows(matchup); track row.slotIndex) {
+          @if (isHeadToHeadView()) {
+            <div class="mobile-live-player-row mobile-live-player-row-head-to-head mobile-live-bench-row">
+              @if (row.teamASlot.asset; as asset) {
+                <button
+                  type="button"
+                  class="mobile-live-player mobile-live-player-team-a mobile-live-bench-player"
+                  [class.mobile-live-player-status]="presenter.isBenchAssetInjured(asset) || presenter.isBenchAssetSuspended(asset)"
+                  [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
+                  (click)="openBenchDetail(asset, matchup.teamAOwnerId, row.teamASlot.slotNumber)"
+                >
+                  <span class="mobile-live-player-topline">
+                    @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
+                      <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
+                    }
+                    <span class="mobile-live-player-name">
+                      <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
+                      <small>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</small>
+                    </span>
+                  </span>
+                  <span class="mobile-live-player-numbers">
+                    <span>Bench <strong>—</strong></span>
+                    <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-live-player-statusline">Bench {{ row.teamASlot.slotNumber }} · does not score</span>
+                </button>
+              } @else {
+                <div class="mobile-live-player mobile-live-player-empty">Open bench</div>
+              }
+
+              <div class="mobile-live-slot-badge mobile-live-bench-badge" aria-hidden="true">
+                <strong>B</strong>
+                <span>{{ row.slotIndex + 1 }}</span>
+              </div>
+
+              @if (row.teamBSlot.asset; as asset) {
+                <button
+                  type="button"
+                  class="mobile-live-player mobile-live-player-team-b mobile-live-bench-player"
+                  [class.mobile-live-player-status]="presenter.isBenchAssetInjured(asset) || presenter.isBenchAssetSuspended(asset)"
+                  [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
+                  (click)="openBenchDetail(asset, matchup.teamBOwnerId, row.teamBSlot.slotNumber)"
+                >
+                  <span class="mobile-live-player-topline">
+                    @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
+                      <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
+                    }
+                    <span class="mobile-live-player-name">
+                      <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
+                      <small>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }}</small>
+                    </span>
+                  </span>
+                  <span class="mobile-live-player-numbers">
+                    <span>Bench <strong>—</strong></span>
+                    <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-live-player-statusline">Bench {{ row.teamBSlot.slotNumber }} · does not score</span>
+                </button>
+              } @else {
+                <div class="mobile-live-player mobile-live-player-empty">Open bench</div>
+              }
+            </div>
+          } @else if (getSingleOwnerId(); as ownerId) {
+            @if (ownerId === matchup.teamAOwnerId) {
+              @if (row.teamASlot.asset; as asset) {
+                <button
+                  type="button"
+                  class="mobile-live-player mobile-live-player-single mobile-live-bench-player"
+                  [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
+                  (click)="openBenchDetail(asset, ownerId, row.teamASlot.slotNumber)"
+                >
+                  <span class="mobile-live-player-topline">
+                    @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
+                      <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
+                    }
+                    <span class="mobile-live-player-name">
+                      <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
+                      <small>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ row.teamASlot.slotNumber }}</small>
+                    </span>
+                  </span>
+                  <span class="mobile-live-player-numbers">
+                    <span>Scoring <strong>Off</strong></span>
+                    <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-live-player-statusline">{{ presenter.getBenchAssetStatusTooltip(asset) || 'Bench player · does not score' }}</span>
+                </button>
+              } @else {
+                <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">Open bench {{ row.teamASlot.slotNumber }}</div>
+              }
+            } @else {
+              @if (row.teamBSlot.asset; as asset) {
+                <button
+                  type="button"
+                  class="mobile-live-player mobile-live-player-single mobile-live-player-team-b mobile-live-bench-player"
+                  [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
+                  (click)="openBenchDetail(asset, ownerId, row.teamBSlot.slotNumber)"
+                >
+                  <span class="mobile-live-player-topline">
+                    @if (presenter.getBenchAssetLogoUrl(asset); as logoUrl) {
+                      <img [src]="logoUrl" [alt]="presenter.getBenchAssetTeamLabel(asset) + ' logo'" />
+                    }
+                    <span class="mobile-live-player-name">
+                      <strong>{{ presenter.getBenchAssetName(asset) }}</strong>
+                      <small>{{ presenter.getBenchAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ row.teamBSlot.slotNumber }}</small>
+                    </span>
+                  </span>
+                  <span class="mobile-live-player-numbers">
+                    <span>Scoring <strong>Off</strong></span>
+                    <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-live-player-statusline">{{ presenter.getBenchAssetStatusTooltip(asset) || 'Bench player · does not score' }}</span>
+                </button>
+              } @else {
+                <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">Open bench {{ row.teamBSlot.slotNumber }}</div>
+              }
+            }
+          }
+        }
+      </div>
+    </details>
+  </div>
+</section>
+
+@if (selectedDetail(); as detail) {
+  <div class="mobile-asset-sheet-backdrop" (click)="closeDetail()">
+    <section
+      class="mobile-asset-sheet rr-dialog"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="getDetailName(detail) + ' matchup details'"
+      appDialogFocusTrap
+      dialogInitialFocus=".mobile-asset-sheet-close"
+      (dialogEscape)="closeDetail()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="mobile-asset-sheet-header">
+        <div class="mobile-asset-sheet-identity">
+          @if (getDetailLogoUrl(detail); as logoUrl) {
+            <img [src]="logoUrl" [alt]="getDetailTeamLabel(detail) + ' logo'" />
+          }
+          <div>
+            <span>{{ presenter.getTeamName(detail.ownerId) }}</span>
+            <h3>{{ getDetailName(detail) }}</h3>
+            <p>{{ getDetailTeamLabel(detail) }} · {{ getDetailPosition(detail) }}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="mobile-asset-sheet-close"
+          aria-label="Close player details"
+          (click)="closeDetail()"
+        >
+          ×
+        </button>
+      </header>
+
+      <p class="mobile-asset-sheet-status">{{ getDetailStatus(detail) }}</p>
+
+      <div class="mobile-asset-sheet-metrics">
+        <article>
+          <span>Current</span>
+          <strong>{{ getDetailCurrentScore(detail) }}</strong>
+        </article>
+        <article>
+          <span>Projected</span>
+          <strong>{{ getDetailProjection(detail) }}</strong>
+        </article>
+        <article>
+          <span>Six-Game Progress</span>
+          <strong>{{ detail.pick ? presenter.getAssetGamesPlayed(detail.pick.asset) + '/6' : 'Bench' }}</strong>
+          @if (detail.pick; as progressPick) {
+            <small>{{ presenter.getAssetGamesLeft(progressPick.asset) }} left</small>
+          }
+        </article>
+      </div>
+
+      @if (detail.kind === 'active') {
+        <div class="mobile-asset-sheet-projection-note">
+          <strong>{{ getDetailProjectionRange(detail) }}</strong>
+          <span>{{ getDetailGamesLabel(detail) }}</span>
+        </div>
+
+        @if (detail.pick; as pick) {
+          <section class="mobile-asset-sheet-games" aria-labelledby="mobile-game-window-title">
+            <header>
+              <h4 id="mobile-game-window-title">Why each game counts</h4>
+              <p>Every roster slot uses six scheduled NHL team games. A missed appearance still uses that scheduled team game.</p>
+            </header>
+
+            <div class="mobile-asset-sheet-game-list">
+              @for (marker of getDetailMarkers(detail); track marker.index) {
+                @if (getMarkerExplanation(pick, marker); as explanation) {
+                  <article
+                    class="mobile-asset-sheet-game"
+                    [class.marker-played]="marker.status === 'played'"
+                    [class.marker-missed]="marker.status === 'missed'"
+                    [class.marker-upcoming]="marker.status === 'upcoming'"
+                    [class.marker-unavailable]="marker.status === 'unavailable'"
+                  >
+                    <span
+                      [class]="getMarkerClass(marker)"
+                      [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                      aria-hidden="true"
+                    >{{ marker.index }}</span>
+                    <div>
+                      <strong>{{ explanation.heading }}</strong>
+                      <p>{{ explanation.detail }}</p>
+                    </div>
+                    <b>{{ explanation.pointsLabel }}</b>
+                  </article>
+                }
+              }
+            </div>
+          </section>
+        }
+      } @else {
+        <div class="mobile-asset-sheet-bench-note">
+          <strong>This player is on the bench.</strong>
+          <span>Bench players remain available for roster moves but do not add fantasy points until they enter a starting slot at a legal boundary.</span>
+        </div>
+      }
+
+      <button
+        type="button"
+        class="mobile-asset-sheet-full-detail"
+        (click)="openFullDetail(detail)"
+      >
+        Open full scoring breakdown
+      </button>
+    </section>
+  </div>
+}

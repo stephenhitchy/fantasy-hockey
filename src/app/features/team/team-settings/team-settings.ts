@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -77,6 +77,14 @@ import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/t
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
 import { getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
+import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
+import {
+  buildFreeAgentRosterTargetQuery,
+  buildRosterManagementActions,
+  type RosterManagementAction,
+  type RosterManagementActionId,
+  type RosterManagementArea,
+} from './roster-mobile-management.util';
 
 import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
@@ -109,7 +117,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ActionSheet],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })
@@ -150,6 +158,8 @@ export class TeamSettings implements OnDestroy {
   benchSwapTargetSlotId = signal('');
   rosterDropSource = signal<RosterDropSource | null>(null);
   rosterDropSlotId = signal('');
+  rosterManagerArea = signal<RosterManagementArea | null>(null);
+  rosterManagerSlotId = signal('');
 
   readonly rosterPositions: RosterPositionGroup[] = [
     { position: 'LW', label: 'Left Wing' },
@@ -252,6 +262,96 @@ export class TeamSettings implements OnDestroy {
       .slice(0, 10),
   );
 
+  readonly rosterManagerOpen = computed(() =>
+    Boolean(this.rosterManagerArea() && this.rosterManagerSlotId()),
+  );
+
+  readonly rosterManagerAsset = computed(() => {
+    const area = this.rosterManagerArea();
+    const slotId = this.rosterManagerSlotId();
+    const roster = this.roster();
+
+    if (!area || !slotId || !roster) {
+      return null;
+    }
+
+    if (area === 'active') {
+      return roster.activeSlots.find((slot) => slot.slotId === slotId)?.asset ?? null;
+    }
+
+    if (area === 'bench') {
+      return roster.benchSlots.find((slot) => slot.slotId === slotId)?.asset ?? null;
+    }
+
+    return roster.irSlots.find((slot) => slot.slotId === slotId)?.asset ?? null;
+  });
+
+  readonly rosterManagerActions = computed((): RosterManagementAction[] => {
+    const area = this.rosterManagerArea();
+    const slotId = this.rosterManagerSlotId();
+    const asset = this.rosterManagerAsset();
+
+    if (!area || !slotId) {
+      return [];
+    }
+
+    const activeSlot = area === 'active'
+      ? this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null
+      : null;
+    const benchSlot = area === 'bench'
+      ? this.roster()?.benchSlots.find((slot) => slot.slotId === slotId) ?? null
+      : null;
+    const irSlot = area === 'ir'
+      ? this.roster()?.irSlots.find((slot) => slot.slotId === slotId) ?? null
+      : null;
+    const benchReservedForActiveSwap = Boolean(
+      benchSlot && this.isBenchSlotReservedForActiveSwap(benchSlot),
+    );
+    const benchStartTargets = benchSlot?.asset
+      ? this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove)
+      : [];
+    const irBenchTargets = irSlot?.asset
+      ? this.getIrBenchActivationTargets().filter(
+          (slot) => !this.isBenchSlotReservedForActiveSwap(slot),
+        )
+      : [];
+    const availability = asset?.assetType === 'skater'
+      ? this.getPlayerAvailability(asset)
+      : null;
+    const moveToIrDisabledReason = activeSlot
+      ? this.getMoveToIrDisabledText(activeSlot)
+      : benchSlot && this.getOpenIrSlotCount() <= 0
+        ? 'No Injured Reserve (IR) slots are open.'
+        : availability
+          ? getPlayerIrIneligibleReason(availability)
+          : 'Only skaters with a verified Out, IR, or LTIR status can use Injured Reserve.';
+
+    return buildRosterManagementActions({
+      area,
+      hasAsset: Boolean(asset),
+      assetIsSkater: asset?.assetType === 'skater',
+      hasPendingMove: Boolean(activeSlot?.pendingMove) || benchReservedForActiveSwap,
+      busy: this.rosterMoveLoading(),
+      showMoveToIr: Boolean(asset && this.shouldShowMoveToIrAction(asset)),
+      canMoveToIr: activeSlot
+        ? this.canMoveSlotToIr(activeSlot)
+        : benchSlot
+          ? this.canMoveBenchSlotToIr(benchSlot)
+          : false,
+      moveToIrDisabledReason,
+      canStartFromBench: benchStartTargets.length > 0,
+      startDisabledReason: benchSlot?.asset && benchStartTargets.length === 0
+        ? `Every ${benchSlot.asset.position} starting slot already has a scheduled move.`
+        : null,
+      canActivateFromIr: irSlot ? this.canActivateIrSlot(irSlot) : false,
+      activateDisabledReason: irSlot ? this.getIrActivationHelp(irSlot) : null,
+      canMoveIrToBench: irBenchTargets.length > 0,
+      moveIrToBenchDisabledReason: irSlot?.asset && irBenchTargets.length === 0
+        ? 'Every bench spot is reserved for another scheduled lineup move.'
+        : null,
+    });
+  });
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -269,6 +369,24 @@ export class TeamSettings implements OnDestroy {
     this.stopMatchupsListener?.();
     this.stopCurrentNavigationMatchupListener?.();
     this.stopSharedScoringListener?.();
+  }
+
+  canLeaveRosterPage(): boolean {
+    return !this.isRosterOperationPending();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protectPendingRosterOperation(event: BeforeUnloadEvent): void {
+    if (!this.isRosterOperationPending()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
+  isRosterOperationPending(): boolean {
+    return this.rosterMoveLoading() || this.saving();
   }
 
   async loadTeam(): Promise<void> {
@@ -531,6 +649,193 @@ export class TeamSettings implements OnDestroy {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  openRosterManager(area: RosterManagementArea, slotId: string): void {
+    if (!slotId || this.isRosterOperationPending()) {
+      return;
+    }
+
+    this.rosterManagerArea.set(area);
+    this.rosterManagerSlotId.set(slotId);
+  }
+
+  closeRosterManager(): void {
+    if (this.isRosterOperationPending()) {
+      return;
+    }
+
+    this.rosterManagerArea.set(null);
+    this.rosterManagerSlotId.set('');
+  }
+
+  getRosterManagerTitle(): string {
+    const asset = this.rosterManagerAsset();
+
+    return asset ? this.getRosterAssetName(asset) : this.getRosterManagerSlotLabel();
+  }
+
+  getRosterManagerDescription(): string {
+    const asset = this.rosterManagerAsset();
+    const area = this.rosterManagerArea();
+
+    if (!asset) {
+      return area === 'bench'
+        ? 'This bench spot is open. Choose a player without changing an active six-game count.'
+        : 'This starting slot is open. Available Players will keep the exact position and slot selected.';
+    }
+
+    if (area === 'bench') {
+      return 'Bench players are owned but do not score until they enter a starting roster slot.';
+    }
+
+    if (area === 'ir') {
+      return 'Choose only a legal Injured Reserve action. RinkRat will explain the roster consequence before confirmation.';
+    }
+
+    return 'Manage this roster spot without changing any games that have already counted.';
+  }
+
+  getRosterManagerSlotLabel(): string {
+    const area = this.rosterManagerArea();
+    const slotId = this.rosterManagerSlotId();
+    const roster = this.roster();
+
+    if (!area || !slotId || !roster) {
+      return 'Roster Spot';
+    }
+
+    if (area === 'active') {
+      const slot = roster.activeSlots.find((candidate) => candidate.slotId === slotId);
+      return slot ? `${slot.position} Slot ${slot.slotNumber}` : slotId;
+    }
+
+    if (area === 'bench') {
+      const slot = roster.benchSlots.find((candidate) => candidate.slotId === slotId);
+      return slot ? `Bench ${slot.slotNumber}` : slotId;
+    }
+
+    const slot = roster.irSlots.find((candidate) => candidate.slotId === slotId);
+    return slot ? `Injured Reserve ${slot.slotNumber}` : slotId;
+  }
+
+  getRosterManagerMeta(): string {
+    const asset = this.rosterManagerAsset();
+
+    if (!asset) {
+      return this.getRosterManagerSlotLabel();
+    }
+
+    return `${this.getRosterAssetTeamLabel(asset)} · ${asset.position} · ${this.getRosterManagerSlotLabel()}`;
+  }
+
+  getRosterManagerPendingMoveText(): string {
+    if (this.rosterManagerArea() !== 'active') {
+      return '';
+    }
+
+    const slot = this.roster()?.activeSlots.find(
+      (candidate) => candidate.slotId === this.rosterManagerSlotId(),
+    );
+
+    return slot?.pendingMove ? this.getPendingRosterMoveText(slot) : '';
+  }
+
+  getRosterManagerActionClass(action: RosterManagementAction): string {
+    return `roster-manager-action roster-manager-action--${action.tone}`;
+  }
+
+  handleRosterManagerAction(actionId: RosterManagementActionId): void {
+    const action = this.rosterManagerActions().find((candidate) => candidate.id === actionId);
+    const area = this.rosterManagerArea();
+    const slotId = this.rosterManagerSlotId();
+    const asset = this.rosterManagerAsset();
+
+    if (!action?.enabled || !area || !slotId) {
+      return;
+    }
+
+    switch (actionId) {
+      case 'view':
+        this.closeRosterManager();
+        if (asset) {
+          this.openRosterAssetDetail(asset);
+        }
+        return;
+
+      case 'find-player':
+        this.closeRosterManager();
+        void this.openFreeAgentsForRosterSlot(area, slotId);
+        return;
+
+      case 'review-scheduled':
+        this.closeRosterManager();
+        void this.router.navigate(['/leagues', this.leagueId, 'free-agents'], {
+          queryParams: { focus: 'pending-moves' },
+          fragment: 'pending-roster-moves',
+        });
+        return;
+
+      case 'start':
+        this.closeRosterManager();
+        this.beginBenchSwap(slotId);
+        return;
+
+      case 'move-to-ir':
+        this.closeRosterManager();
+        if (area === 'active') {
+          void this.moveActiveSlotToIr(slotId);
+        } else if (area === 'bench') {
+          void this.moveBenchSlotToIr(slotId);
+        }
+        return;
+
+      case 'activate':
+        this.closeRosterManager();
+        this.beginIrActivation(slotId);
+        return;
+
+      case 'move-to-bench':
+        this.closeRosterManager();
+        this.beginIrBenchActivation(slotId);
+        return;
+
+      case 'drop':
+        this.closeRosterManager();
+        this.beginRosterDrop(area, slotId);
+        return;
+    }
+  }
+
+  async openFreeAgentsForRosterSlot(
+    area: RosterManagementArea,
+    slotId: string,
+  ): Promise<void> {
+    const roster = this.roster();
+
+    if (!roster) {
+      return;
+    }
+
+    const activeSlot = area === 'active'
+      ? roster.activeSlots.find((slot) => slot.slotId === slotId) ?? null
+      : null;
+    const benchSlot = area === 'bench'
+      ? roster.benchSlots.find((slot) => slot.slotId === slotId) ?? null
+      : null;
+    const position = activeSlot?.position ?? benchSlot?.asset?.position ?? null;
+    const query = buildFreeAgentRosterTargetQuery(area, position, slotId);
+
+    if (!query) {
+      return;
+    }
+
+    await this.router.navigate(['/leagues', this.leagueId, 'free-agents'], {
+      queryParams: {
+        ...query,
+        tab: 'available',
+      },
+    });
   }
 
   getBenchSlots(): BenchRosterSlot[] {

@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -61,6 +61,15 @@ import {
   RosterMoveAssetCycleEligibility,
 } from '../../core/transactions/roster-move-eligibility.service';
 
+import { ActionSheet } from '../../shared/action-sheet/action-sheet';
+import {
+  parseFreeAgentMobileViewState,
+  resolveFreeAgentRoutePreferences,
+  resolvePreferredRosterCandidate,
+  type FreeAgentMobileViewState,
+  type FreeAgentPoolTab,
+} from './free-agent-mobile-flow.util';
+
 type FreeAgentPositionFilter = 'ALL' | DraftPosition;
 type FreeAgentSortMode =
   | 'NEXT_CYCLE'
@@ -100,7 +109,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ActionSheet],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })
@@ -128,6 +137,10 @@ export class FreeAgents implements OnDestroy {
   searchTerm = signal('');
   positionFilter = signal<FreeAgentPositionFilter>('ALL');
   sortMode = signal<FreeAgentSortMode>('NEXT_CYCLE');
+  poolTab = signal<FreeAgentPoolTab>('available');
+  preferredSlotId = signal('');
+  preferredRosterArea = signal<'active' | 'bench' | ''>('');
+  playerPoolScrollY = signal(0);
 
   selectedAddAssetKey = signal('');
   selectedWaiverId = signal('');
@@ -155,6 +168,10 @@ export class FreeAgents implements OnDestroy {
   private rosterListeners: Record<string, () => void> = {};
   private teamWindowListeners: Record<number, () => void> = {};
   private eligibilityRequestKey = '';
+  private restoredEligibilityKey = '';
+  private hasReceivedWaivers = false;
+  private viewStateRestored = false;
+  private focusPendingMovesRequested = false;
 
   readonly selectedAddAsset = computed(
     () =>
@@ -386,7 +403,10 @@ export class FreeAgents implements OnDestroy {
       .map((slot) => buildBenchCandidate(slot, null, 'open-slot'));
 
     const benchDropCandidates = roster.benchSlots
-      .filter((slot): slot is BenchRosterSlot & { asset: RosterAsset } => slot.asset !== null)
+      .filter(
+        (slot): slot is BenchRosterSlot & { asset: RosterAsset } =>
+          slot.asset !== null && !this.isBenchCandidateReservedForActiveSwap(slot),
+      )
       .map((slot) => buildBenchCandidate(slot, slot.asset, 'drop'));
 
     return [
@@ -415,12 +435,31 @@ export class FreeAgents implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.persistFreeAgentViewState();
     this.stopDraftListener?.();
     this.stopTeamsListener?.();
     this.stopLeagueCyclesListener?.();
     this.stopWaiversListener?.();
     this.clearRosterListeners();
     this.clearTeamWindowListeners();
+  }
+
+  canLeaveRosterPage(): boolean {
+    return !this.isRosterOperationPending();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protectPendingRosterOperation(event: BeforeUnloadEvent): void {
+    if (!this.isRosterOperationPending()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
+  isRosterOperationPending(): boolean {
+    return this.moving();
   }
 
   async loadPage(): Promise<void> {
@@ -434,6 +473,9 @@ export class FreeAgents implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
+    this.restoreFreeAgentViewState();
+    const routePreferences = this.applyRoutePreferences();
+    this.focusPendingMovesRequested = routePreferences.focusPendingMoves;
 
     try {
       const league = await getLeagueById(leagueId);
@@ -453,10 +495,13 @@ export class FreeAgents implements OnDestroy {
         this.leagueCycles.set(cycles);
         this.latestCycle.set(cycles.at(-1) ?? null);
         this.refreshTeamWindowListeners(cycles);
+        this.selectPreferredDropCandidateIfAvailable();
       });
 
       this.stopWaiversListener = listenToLeagueWaivers(leagueId, (waivers) => {
+        this.hasReceivedWaivers = true;
         this.waivers.set(waivers);
+        this.resumeRestoredSelectionIfAvailable();
       });
 
       this.stopTeamsListener = listenToLeagueTeams(leagueId, (teams) => {
@@ -469,6 +514,7 @@ export class FreeAgents implements OnDestroy {
       this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load free agents.');
     } finally {
       this.loading.set(false);
+      this.focusPendingMovesAfterRender();
     }
   }
 
@@ -487,6 +533,7 @@ export class FreeAgents implements OnDestroy {
       }
 
       this.playerPool.set(snapshot.assets);
+      this.resumeRestoredSelectionIfAvailable();
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to load the shared free agent pool.',
@@ -498,6 +545,7 @@ export class FreeAgents implements OnDestroy {
 
   setSearchTerm(value: string): void {
     this.searchTerm.set(value);
+    this.persistFreeAgentViewState();
   }
 
   setPositionFilter(value: string): void {
@@ -505,6 +553,7 @@ export class FreeAgents implements OnDestroy {
 
     if (validFilters.includes(value as FreeAgentPositionFilter)) {
       this.positionFilter.set(value as FreeAgentPositionFilter);
+      this.persistFreeAgentViewState();
     }
   }
 
@@ -514,10 +563,25 @@ export class FreeAgents implements OnDestroy {
 
     if (validModes.includes(value as FreeAgentSortMode)) {
       this.sortMode.set(value as FreeAgentSortMode);
+      this.persistFreeAgentViewState();
     }
   }
 
+  setPoolTab(tab: FreeAgentPoolTab): void {
+    if (tab === this.poolTab()) {
+      return;
+    }
+
+    this.poolTab.set(tab);
+    this.persistFreeAgentViewState();
+  }
+
+  getPoolTabCount(tab: FreeAgentPoolTab): number {
+    return tab === 'available' ? this.availableAssets().length : this.availableWaivers().length;
+  }
+
   selectAddAsset(asset: DraftableAsset): void {
+    this.capturePlayerPoolScroll();
     this.successMessage.set('');
     this.errorMessage.set('');
     this.selectedAddAssetKey.set(asset.assetKey);
@@ -529,10 +593,12 @@ export class FreeAgents implements OnDestroy {
       this.positionFilter.set(asset.position);
     }
 
+    this.persistFreeAgentViewState();
     void this.loadSelectedAssetEligibility(asset);
   }
 
   selectWaiver(waiver: FantasyWaiver): void {
+    this.capturePlayerPoolScroll();
     this.successMessage.set('');
     this.errorMessage.set('');
     this.selectedAddAssetKey.set(waiver.asset.assetKey);
@@ -544,13 +610,24 @@ export class FreeAgents implements OnDestroy {
       this.positionFilter.set(waiver.asset.position);
     }
 
+    this.persistFreeAgentViewState();
     void this.loadSelectedAssetEligibility(waiver.asset);
   }
 
   returnToPlayerPool(): void {
+    if (this.moving()) {
+      return;
+    }
+
     this.flowStep.set('player-pool');
+    this.selectedAddAssetKey.set('');
+    this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.selectedAssetEligibility.set(null);
     this.eligibilityError.set('');
+    this.restoredEligibilityKey = '';
+    this.persistFreeAgentViewState();
+    this.restorePlayerPoolScroll();
   }
 
   async retryEligibilityCheck(): Promise<void> {
@@ -565,6 +642,7 @@ export class FreeAgents implements OnDestroy {
 
   selectDropCandidate(candidate: DropCandidate): void {
     this.selectedDropSlotId.set(candidate.slotId);
+    this.persistFreeAgentViewState();
   }
 
   canConfirmMove(): boolean {
@@ -686,6 +764,11 @@ export class FreeAgents implements OnDestroy {
       this.selectedDropSlotId.set('');
       this.selectedAssetEligibility.set(null);
       this.flowStep.set('player-pool');
+      this.preferredSlotId.set('');
+      this.preferredRosterArea.set('');
+      this.restoredEligibilityKey = '';
+      this.persistFreeAgentViewState();
+      this.restorePlayerPoolScroll();
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to complete this roster move.',
@@ -1505,6 +1588,73 @@ export class FreeAgents implements OnDestroy {
     return this.selectedWaiver() ? 'Submit Waiver Claim' : 'Confirm Add / Drop';
   }
 
+  getPreferredRosterTargetLabel(): string {
+    const slotId = this.preferredSlotId();
+    const rosterArea = this.preferredRosterArea();
+    const roster = this.myRoster();
+
+    if (!slotId || !rosterArea || !roster) {
+      return '';
+    }
+
+    if (rosterArea === 'active') {
+      const slot = roster.activeSlots.find((candidate) => candidate.slotId === slotId);
+      return slot ? `${slot.position} Slot ${slot.slotNumber}` : slotId;
+    }
+
+    const slot = roster.benchSlots.find((candidate) => candidate.slotId === slotId);
+    return slot ? `Bench ${slot.slotNumber}` : slotId;
+  }
+
+  clearPreferredRosterTarget(): void {
+    const preferredSlotId = this.preferredSlotId();
+
+    this.preferredSlotId.set('');
+    this.preferredRosterArea.set('');
+
+    if (preferredSlotId && this.selectedDropSlotId() === preferredSlotId) {
+      this.selectedDropSlotId.set('');
+    }
+
+    this.persistFreeAgentViewState();
+  }
+
+  getConfirmationTimingTitle(): string {
+    const candidate = this.selectedDropCandidate();
+
+    if (!candidate) {
+      return 'Choose a roster spot to see the exact timing.';
+    }
+
+    if (this.selectedWaiver()) {
+      return `If awarded: earliest Matchup ${candidate.effectiveCycleNumber}`;
+    }
+
+    if (candidate.rosterArea === 'bench') {
+      return candidate.canApplyImmediately
+        ? 'Bench ownership updates immediately'
+        : `Owned now · active eligibility Matchup ${candidate.effectiveCycleNumber}`;
+    }
+
+    return candidate.canApplyImmediately
+      ? `Applies now in Matchup ${candidate.effectiveCycleNumber}`
+      : `Scheduled for Matchup ${candidate.effectiveCycleNumber}`;
+  }
+
+  getConfirmationTimingDetail(): string {
+    const candidate = this.selectedDropCandidate();
+
+    if (!candidate) {
+      return 'RinkRat checks the incoming player and this exact roster slot before allowing the move.';
+    }
+
+    if (this.selectedWaiver()) {
+      return `Submitting a claim does not add the player immediately. If this claim wins, ${this.getCandidateActivationDetail(candidate).replace(/^The /, 'the ')}`;
+    }
+
+    return this.getCandidateActivationDetail(candidate);
+  }
+
   isCommissioner(): boolean {
     return this.league()?.commissionerId === this.userId;
   }
@@ -1561,6 +1711,216 @@ export class FreeAgents implements OnDestroy {
       : 'Reserved · activates after the roster spot finishes its current six games';
   }
 
+  private getFreeAgentViewStateKey(): string {
+    return `rinkrat:free-agents:v1:${this.leagueId}:${this.userId}`;
+  }
+
+  private restoreFreeAgentViewState(): void {
+    if (this.viewStateRestored || !this.leagueId || !this.userId) {
+      return;
+    }
+
+    this.viewStateRestored = true;
+
+    if (typeof sessionStorage === 'undefined') {
+      return;
+    }
+
+    let storedValue: string | null;
+
+    try {
+      storedValue = sessionStorage.getItem(this.getFreeAgentViewStateKey());
+    } catch {
+      return;
+    }
+
+    const state = parseFreeAgentMobileViewState(storedValue);
+
+    if (!state) {
+      return;
+    }
+
+    this.searchTerm.set(state.searchTerm);
+    this.positionFilter.set(state.positionFilter);
+    this.sortMode.set(state.sortMode);
+    this.poolTab.set(state.poolTab);
+    this.selectedAddAssetKey.set(state.selectedAddAssetKey);
+    this.selectedWaiverId.set(state.selectedWaiverId);
+    this.selectedDropSlotId.set(state.selectedDropSlotId);
+    this.preferredSlotId.set(state.preferredSlotId);
+    this.preferredRosterArea.set(state.preferredRosterArea);
+    this.playerPoolScrollY.set(Math.max(0, state.playerPoolScrollY));
+    this.flowStep.set(
+      state.flowStep === 'roster-slot' && state.selectedAddAssetKey
+        ? 'roster-slot'
+        : 'player-pool',
+    );
+  }
+
+  private persistFreeAgentViewState(): void {
+    if (!this.leagueId || !this.userId || typeof sessionStorage === 'undefined') {
+      return;
+    }
+
+    const state: FreeAgentMobileViewState = {
+      version: 1,
+      savedAt: Date.now(),
+      searchTerm: this.searchTerm(),
+      positionFilter: this.positionFilter(),
+      sortMode: this.sortMode(),
+      poolTab: this.poolTab(),
+      flowStep: this.flowStep(),
+      selectedAddAssetKey: this.selectedAddAssetKey(),
+      selectedWaiverId: this.selectedWaiverId(),
+      selectedDropSlotId: this.selectedDropSlotId(),
+      preferredSlotId: this.preferredSlotId(),
+      preferredRosterArea: this.preferredRosterArea(),
+      playerPoolScrollY: this.playerPoolScrollY(),
+    };
+
+    try {
+      sessionStorage.setItem(this.getFreeAgentViewStateKey(), JSON.stringify(state));
+    } catch {
+      // Storage may be disabled. The page remains fully usable without persistence.
+    }
+  }
+
+  private applyRoutePreferences() {
+    const query = this.route.snapshot.queryParamMap;
+    const preferences = resolveFreeAgentRoutePreferences({
+      position: query.get('position'),
+      targetSlot: query.get('targetSlot'),
+      rosterArea: query.get('rosterArea'),
+      tab: query.get('tab'),
+      focus: query.get('focus'),
+    });
+
+    if (preferences.position) {
+      this.positionFilter.set(preferences.position);
+    }
+
+    if (preferences.poolTab) {
+      this.poolTab.set(preferences.poolTab);
+    }
+
+    if (preferences.targetSlot) {
+      // A direct handoff from My Team represents a new roster task. Do not reopen
+      // an older comparison sheet that happened to be saved in this tab.
+      this.selectedAddAssetKey.set('');
+      this.selectedWaiverId.set('');
+      this.selectedDropSlotId.set('');
+      this.selectedAssetEligibility.set(null);
+      this.eligibilityError.set('');
+      this.restoredEligibilityKey = '';
+      this.flowStep.set('player-pool');
+      this.playerPoolScrollY.set(0);
+      this.preferredSlotId.set(preferences.targetSlot);
+      this.preferredRosterArea.set(preferences.rosterArea);
+    }
+
+    this.persistFreeAgentViewState();
+    return preferences;
+  }
+
+  private resumeRestoredSelectionIfAvailable(): void {
+    if (this.flowStep() !== 'roster-slot' || !this.selectedAddAssetKey()) {
+      return;
+    }
+
+    const asset = this.selectedAddAsset();
+
+    if (!asset) {
+      if (!this.playerPoolLoading() && this.hasReceivedWaivers) {
+        const missingName = this.selectedAddAssetKey();
+        this.returnToPlayerPool();
+        this.errorMessage.set(
+          `The previously selected player (${missingName}) is no longer available. Choose another player.`,
+        );
+      }
+      return;
+    }
+
+    const eligibilityKey = `${asset.assetKey}:${this.selectedWaiverId()}`;
+    if (this.restoredEligibilityKey === eligibilityKey) {
+      this.selectPreferredDropCandidateIfAvailable();
+      return;
+    }
+
+    this.restoredEligibilityKey = eligibilityKey;
+    void this.loadSelectedAssetEligibility(asset);
+  }
+
+  private selectPreferredDropCandidateIfAvailable(): void {
+    if (this.selectedDropSlotId()) {
+      return;
+    }
+
+    const preferred = resolvePreferredRosterCandidate(
+      this.dropCandidates(),
+      this.preferredSlotId(),
+      this.preferredRosterArea(),
+    );
+
+    if (!preferred) {
+      return;
+    }
+
+    this.selectedDropSlotId.set(preferred.slotId);
+    this.persistFreeAgentViewState();
+  }
+
+  private capturePlayerPoolScroll(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.playerPoolScrollY.set(Math.max(0, window.scrollY));
+  }
+
+  private restorePlayerPoolScroll(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const targetY = this.playerPoolScrollY();
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: targetY, behavior: 'auto' });
+      });
+    }, 0);
+  }
+
+  private focusPendingMovesAfterRender(): void {
+    if (
+      !this.focusPendingMovesRequested ||
+      typeof document === 'undefined' ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
+        if (!this.focusPendingMovesRequested) {
+          return;
+        }
+
+        const target = document.getElementById('pending-roster-moves');
+
+        if (!target) {
+          return;
+        }
+
+        this.focusPendingMovesRequested = false;
+        target.scrollIntoView({
+          block: 'start',
+          behavior: 'smooth',
+        });
+        target.focus({ preventScroll: true });
+      });
+    }, 80);
+  }
+
   private async loadSelectedAssetEligibility(
     asset: DraftableAsset,
     forceRefresh = false,
@@ -1585,6 +1945,8 @@ export class FreeAgents implements OnDestroy {
       }
 
       this.selectedAssetEligibility.set(eligibility);
+      this.selectPreferredDropCandidateIfAvailable();
+      this.persistFreeAgentViewState();
     } catch (error: unknown) {
       if (this.eligibilityRequestKey !== requestKey) {
         return;
@@ -1654,6 +2016,7 @@ export class FreeAgents implements OnDestroy {
             ...this.teamWindowLoadedByCycle(),
             [cycleNumber]: true,
           });
+          this.selectPreferredDropCandidateIfAvailable();
         },
         (error) => {
           console.warn(`Unable to load Matchup ${cycleNumber} roster-spot progress.`, error);
@@ -1817,6 +2180,11 @@ export class FreeAgents implements OnDestroy {
             ...this.rosters(),
             [team.ownerId]: roster,
           });
+
+          if (team.ownerId === this.userId) {
+            this.selectPreferredDropCandidateIfAvailable();
+            this.focusPendingMovesAfterRender();
+          }
         },
       );
     });
@@ -1852,5 +2220,22 @@ export class FreeAgents implements OnDestroy {
     }
 
     return asset.teamAbbreviation ? `goalie-unit-${asset.teamAbbreviation}` : '';
+  }
+
+  private isBenchCandidateReservedForActiveSwap(slot: BenchRosterSlot): boolean {
+    if (!slot.asset) {
+      return false;
+    }
+
+    const assetKey = this.getRosterAssetKey(slot.asset);
+
+    return Boolean(
+      assetKey &&
+      this.myRoster()?.activeSlots.some(
+        (activeSlot) =>
+          activeSlot.pendingMove?.sourceBenchSlotId === slot.slotId &&
+          this.getRosterAssetKey(activeSlot.pendingMove.incomingAsset) === assetKey,
+      ),
+    );
   }
 }
