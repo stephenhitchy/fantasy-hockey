@@ -63,7 +63,7 @@ test('Free Agents composes shared pool, filter, waiver, comparison, and confirma
     '<app-action-sheet',
     'incoming-scout-card',
     'transaction-player-incoming',
-    'replacement-card-rail',
+    'replacement-card-list',
     'selected-final-comparison',
     'top-confirm-move-button rr-button rr-button--primary',
   ]) {

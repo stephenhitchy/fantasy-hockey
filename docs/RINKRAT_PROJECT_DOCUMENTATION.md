@@ -8744,3 +8744,81 @@ Deploy Functions before pressing **Advance One Day** again. Hosting may be deplo
 ### Rollback guidance
 
 Do not roll back the Functions fix after it has repaired a queued move unless the replacement build also supports auto-ID transaction records and the same per-slot rollover behavior. The repair writes ordinary roster, waiver, cycle-pick, and transaction documents that remain compatible with Batch M2. A Hosting-only rollback is safe because the server remains authoritative, but keeping the browser score-cache identity guard is recommended for consistent client-side displays.
+
+---
+
+## Batch M5.4 — Transaction Workbench Vertical Layout and Scrollable Dialog
+
+### Problem corrected
+
+The M5.3 transaction workbench used a horizontally scrolling roster-candidate rail. On desktop, older `slot-choice-card` grid rules could still affect those specialized cards, causing the logo, player identity, metric boxes, and timing copy to overlap. On phones, the action-sheet header, top confirmation row, inner content pane, and footer were separate grid rows. The header and action rows therefore stayed visible while only the smaller center pane scrolled, leaving too little room to read the transaction information.
+
+### Vertical replacement flow
+
+The incoming player or goalie unit remains first. Compatible active and bench destinations are now presented as full-width cards stacked vertically beneath the incoming report. Each card keeps its exact roster slot, matchup number, six-game progress, season points, form, next-six projection, game schedule, category contribution when appropriate, and first-legal-start explanation.
+
+The old carousel controls, horizontal scroll snapping, `ViewChild` rail reference, and legacy `slot-choice-card`/`rr-choice-card` classes were removed from the workbench. The replacement card explicitly owns a single-column layout so older roster-choice grid rules cannot place its content into conflicting tracks.
+
+### More usable mobile viewport
+
+`app-action-sheet` now supports an optional `scrollChrome` mode. In that mode, the dialog title, helper copy, top action row, main content, and footer scroll together as one document instead of reserving fixed rows above and below a small inner viewport.
+
+The transaction workbench enables this mode. Its longer timing explanation was moved into a collapsed **How RinkRat verifies the move** disclosure within the scrollable content. The confirmation control remains at the top of the transaction, but it is no longer pinned to the screen. The selected roster card also exposes an inline confirmation button so a manager does not have to scroll back to the top after choosing a replacement.
+
+At phone widths:
+
+- Replacement cards remain full width and vertical.
+- Six-game schedules use a readable two-column grid instead of a sideways carousel.
+- Final current-versus-incoming summaries stack into one column.
+- The selected-card confirmation action becomes full width.
+- The sheet can use up to 96% of the dynamic viewport while all informational chrome remains part of the same scroll surface.
+
+### Competitive architecture preserved
+
+M5.4 changes presentation only. It does not modify Production Scoring V3, Projection V11, roster legality, add/drop authority, waiver processing, independent six-game roster-slot windows, scheduled-move activation, historical replay, standings, playoffs, Cloud Functions, Firestore rules, or indexes.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm5-4
+npm run build:all
+```
+
+The focused M5.4 suite verifies:
+
+- Scrollable action-sheet chrome and correct overlay scroll-root selection.
+- Helper information remains available without being pinned.
+- Incoming-player-first ordering.
+- Full-width vertical replacement cards with no carousel code.
+- Mobile two-column six-game cards and one-column final comparison.
+- Inline confirmation on the selected roster card.
+- Production scoring and Projection V11 preservation.
+
+### Deployment
+
+M5.4 is a Hosting-only presentation update:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M5.4 transaction workbench layout cleanup"
+```
+
+Do not deploy Functions, Firestore rules, or indexes for this batch.
+
+### Manual verification
+
+1. Open an add/drop comparison for a skater and a team-goalie unit on desktop.
+2. Confirm every compatible roster option is a full-width card below the incoming player.
+3. Confirm logos, names, metrics, schedules, and timing messages never overlap.
+4. Select an active slot, same-position bench player, cross-position bench player, and open slot.
+5. Confirm the selected card offers an inline Confirm action and the top Confirm action still works.
+6. On an iPhone, verify that the title, helper disclosure, confirmation row, content, and footer all move together when scrolling.
+7. Confirm most of the visible phone window is available for transaction content rather than fixed instructions.
+8. Open the timing disclosure and confirm both six-game verification explanations remain available.
+9. Test at 320px, 360px, 390px, 430px, tablet width, and desktop width in Rink Dark, Light Ice, and OLED Black.
+10. Complete immediate, scheduled, bench, open-slot, goalie-unit, and waiver transactions and confirm no competitive behavior changed.

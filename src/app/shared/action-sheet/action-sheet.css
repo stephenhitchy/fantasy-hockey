@@ -30,6 +30,36 @@
   width: min(68rem, 100%);
 }
 
+
+/*
+ * Some information-dense workflows need the title, helper copy, action row,
+ * content, and footer to move as one document. This variant gives the dialog
+ * almost the entire visual viewport without pinning several rows above and
+ * below a small inner scrolling pane.
+ */
+.rr-action-sheet--scroll-chrome {
+  display: block;
+  max-height: min(94dvh, 64rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.rr-action-sheet--scroll-chrome .rr-action-sheet__content {
+  min-height: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+
+.rr-action-sheet--scroll-chrome .rr-action-sheet__header,
+.rr-action-sheet--scroll-chrome .rr-action-sheet__top-actions,
+.rr-action-sheet--scroll-chrome .rr-action-sheet__footer {
+  position: static;
+}
+
 .rr-action-sheet__header {
   display: flex;
   align-items: flex-start;
@@ -125,6 +155,7 @@
     padding: 0;
   }
 
+
   .rr-action-sheet {
     width: 100%;
     max-height: min(94dvh, 58rem);
@@ -132,6 +163,10 @@
     border-bottom: 0;
     border-left: 0;
     border-radius: var(--rr-radius-md) var(--rr-radius-md) 0 0;
+  }
+
+  .rr-action-sheet.rr-action-sheet--scroll-chrome {
+    max-height: 96dvh;
   }
 
   .rr-action-sheet__header,

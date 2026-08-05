@@ -373,9 +373,9 @@
         [open]="flowStep() === 'roster-slot'"
         [title]="(selectedWaiver() ? 'Claim ' : 'Add ') + getAssetName(addAsset)"
         eyebrow="Step 2 · Transaction Workbench"
-        description="Review the incoming player first, then swipe through every legal roster replacement and verify the exact first scoring matchup."
         [busy]="moving()"
         [wide]="true"
+        [scrollChrome]="true"
         closeLabel="Return to available players"
         dialogId="free-agent-roster-sheet-title"
         (close)="returnToPlayerPool()"
@@ -403,7 +403,15 @@
         </div>
 
         <section class="transaction-workbench">
-          <article class="incoming-scout-card transaction-player-incoming selected-player-summary compact-selected-player" aria-label="Incoming player report">
+          <details class="transaction-workbench-help">
+            <summary>How RinkRat verifies the move</summary>
+            <div>
+              <p>Review the incoming player first, then compare every legal roster replacement below.</p>
+              <p>RinkRat unlocks confirmation only after it verifies the exact six-game timeline for both the incoming player and the selected roster spot.</p>
+            </div>
+          </details>
+
+          <article class="incoming-scout-card transaction-player-incoming" aria-label="Incoming player report">
             <header class="workbench-player-header">
               <div class="workbench-player-identity">
                 @if (getAssetLogoUrl(addAsset); as selectedLogoUrl) {
@@ -555,12 +563,8 @@
               <div>
                 <span class="eyebrow">Compatible Roster Spots</span>
                 <h2 id="replacement-workbench-title">Choose Who This Player Replaces</h2>
-                <strong class="replacement-workbench-instruction">Swipe through every legal roster option</strong>
+                <strong class="replacement-workbench-instruction">Review each legal roster option below</strong>
                 <p>Active starters appear first. Same-position bench players include the full point formula; flexible cross-position bench options keep the comparison focused on totals and timing.</p>
-              </div>
-              <div class="replacement-rail-controls" aria-label="Scroll replacement choices">
-                <button type="button" class="rr-button rr-button--quiet" (click)="scrollReplacementRail(-1)" aria-label="Previous roster option">←</button>
-                <button type="button" class="rr-button rr-button--quiet" (click)="scrollReplacementRail(1)" aria-label="Next roster option">→</button>
               </div>
             </div>
 
@@ -571,10 +575,10 @@
             } @else if (dropCandidates().length === 0) {
               <div class="empty-card rr-state">No compatible active or bench roster spot is currently available.</div>
             } @else {
-              <div #replacementRail class="replacement-card-rail" role="list" aria-label="Roster replacement choices">
+              <div class="replacement-card-list" role="list" aria-label="Roster replacement choices">
                 @for (candidate of dropCandidates(); track candidate.slotId) {
                   <article
-                    class="replacement-player-card slot-choice-card rr-choice-card transaction-player-outgoing"
+                    class="replacement-player-card transaction-player-outgoing"
                     [class.selected-replacement-card]="isSelectedDropCandidate(candidate)"
                     [class.open-replacement-card]="candidate.moveType === 'open-slot'"
                     [class.flex-bench-replacement-card]="candidate.rosterArea === 'bench' && candidate.asset?.position !== addAsset.position"
@@ -690,6 +694,26 @@
                         <strong>{{ candidateTiming.headline }}</strong>
                         <p>{{ candidateTiming.detail }}</p>
                       </section>
+                    }
+
+                    @if (isSelectedDropCandidate(candidate)) {
+                      <div class="selected-candidate-action" aria-live="polite">
+                        <div>
+                          <span class="eyebrow">Selected Roster Spot</span>
+                          <strong>{{ getTopConfirmationDetail() }}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          class="rr-button rr-button--primary confirm-move-button"
+                          (click)="confirmAddDrop()"
+                          [disabled]="!canConfirmMove() || moving()"
+                        >
+                          @if (moving()) {
+                            <span class="inline-confirm-spinner" aria-hidden="true"></span>
+                          }
+                          {{ getConfirmButtonLabel() }}
+                        </button>
+                      </div>
                     }
                   </article>
                 }

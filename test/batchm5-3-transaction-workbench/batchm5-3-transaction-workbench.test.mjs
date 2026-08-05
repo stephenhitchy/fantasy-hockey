@@ -79,14 +79,14 @@ test('goalie and player drops close the modal and accept the authoritative roste
   assert.doesNotMatch(template, /roster-action-shield" appViewportOverlayPortal/);
 });
 
-test('the add drop workbench introduces the incoming player first and provides a horizontal replacement rail', async () => {
+test('the add drop workbench introduces the incoming player first and provides readable replacement cards', async () => {
   const [source, template, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
     read('src/rinkrat-transaction-workbench.css'),
   ]);
 
-  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-rail'));
+  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
   assert.match(template, /Season Point Formula/);
   assert.match(template, /Every stat behind/);
   assert.match(template, /getIncomingMatchupNumberLabel\(\)/);
@@ -97,9 +97,9 @@ test('the add drop workbench introduces the incoming player first and provides a
   assert.match(template, /getCandidateTransactionTiming\(candidate\)/);
   assert.match(template, /shouldShowCandidatePointBreakdown\(candidate\)/);
   assert.match(source, /candidate\.rosterArea === 'active' \|\| candidate\.asset\.position === incoming\.position/);
-  assert.match(source, /scrollReplacementRail\(direction: -1 \| 1\)/);
-  assert.match(styles, /\.replacement-card-rail[\s\S]*grid-auto-flow:\s*column/);
-  assert.match(styles, /scroll-snap-type:\s*x mandatory/);
+  assert.doesNotMatch(source, /scrollReplacementRail/);
+  assert.match(styles, /\.replacement-card-list[\s\S]*display:\s*grid/);
+  assert.match(styles, /\.replacement-player-card[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
 });
 
 test('add drop submission releases the action sheet before waiting and uses a compact non-blurred status dock', async () => {

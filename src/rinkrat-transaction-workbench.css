@@ -1,4 +1,4 @@
-/* Batch M5.3: transaction workbench, non-blocking roster status, and swipe rail. */
+/* Batch M5.4: vertically stacked transaction workbench and scrollable dialog chrome. */
 
 .roster-operation-status-dock {
   position: fixed;
@@ -41,6 +41,37 @@
 .transaction-workbench {
   display: grid;
   gap: 20px;
+}
+
+.transaction-workbench-help {
+  border: 1px solid var(--rr-color-border);
+  border-left: 4px solid var(--rr-color-info);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rr-color-info) 7%, var(--rr-color-surface-raised));
+}
+
+.transaction-workbench-help summary {
+  min-height: 44px;
+  padding: 11px 14px;
+  color: var(--rr-color-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.transaction-workbench-help > div {
+  display: grid;
+  gap: 7px;
+  padding: 0 14px 13px;
+}
+
+.transaction-workbench-help p {
+  margin: 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .incoming-scout-card,
@@ -323,7 +354,7 @@
 }
 
 .replacement-workbench-heading {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .replacement-workbench-heading h2 {
@@ -335,44 +366,43 @@
   font-size: 12px;
 }
 
-.replacement-rail-controls {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 6px;
+.replacement-workbench-instruction {
+  display: block;
+  margin-top: 7px;
+  color: var(--rr-color-warning);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
-.replacement-rail-controls button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 8px;
-  font-size: 20px;
-}
-
-.replacement-card-rail {
+.replacement-card-list {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(390px, 44vw);
-  gap: 14px;
-  overflow-x: auto;
-  padding: 4px 4px 14px;
-  scroll-behavior: smooth;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
+  gap: 16px;
 }
 
+/*
+ * The older slot-choice component used a multi-column grid. These cards are a
+ * full-width reading flow now, so explicitly reset every legacy grid track to
+ * prevent logos, names, and metric boxes from overlapping on desktop.
+ */
 .replacement-player-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 14px;
+  width: 100%;
   min-width: 0;
-  min-height: 100%;
-  flex-direction: column;
-  padding: 14px;
+  padding: 16px;
   box-sizing: border-box;
   border: 1px solid var(--rr-color-border);
   border-top: 4px solid var(--rr-color-info);
   border-radius: 14px;
   background: var(--rr-color-surface);
-  scroll-snap-align: start;
+}
+
+.replacement-player-card > * {
+  min-width: 0;
+  grid-column: 1;
+  grid-row: auto;
 }
 
 .replacement-player-card.selected-replacement-card {
@@ -426,7 +456,7 @@
 }
 
 .replacement-metric-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .open-roster-metric-message,
@@ -468,7 +498,7 @@
 }
 
 .compact-breakdown-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
 }
 
 .candidate-start-card {
@@ -519,6 +549,33 @@
   line-height: 1.45;
 }
 
+.selected-candidate-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-warning) 58%, var(--rr-color-border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--rr-color-warning) 9%, var(--rr-color-surface-raised));
+}
+
+.selected-candidate-action > div {
+  display: grid;
+  gap: 4px;
+}
+
+.selected-candidate-action > div > strong {
+  color: var(--rr-color-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.selected-candidate-action button {
+  min-height: 46px;
+  justify-content: center;
+}
+
 .selected-final-comparison {
   padding: 14px;
 }
@@ -552,6 +609,12 @@
 .selected-final-player > strong {
   color: var(--text-primary, white);
   font-size: 17px;
+}
+
+@media (max-width: 900px) {
+  .replacement-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -604,22 +667,13 @@
     text-align: left;
   }
 
-  .replacement-workbench-heading {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+  .replacement-card-list {
+    gap: 13px;
   }
 
-  .replacement-workbench-heading > div:first-child {
-    grid-column: 1 / -1;
-  }
-
-  .replacement-rail-controls {
-    grid-column: 2;
-  }
-
-  .replacement-card-rail {
-    grid-auto-columns: min(88vw, 420px);
-    margin-inline: -5px;
+  .replacement-player-card {
+    gap: 12px;
+    padding: 13px;
   }
 
   .replacement-select-button {
@@ -627,24 +681,38 @@
     font-size: 12px;
   }
 
+  .workbench-game-strip,
+  .compact-game-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .workbench-game-strip > li,
+  .compact-game-strip > li {
+    min-height: 92px;
+  }
+
   .season-breakdown-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .selected-candidate-action {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-candidate-action button {
+    width: 100%;
+  }
+
   .transaction-player-pair {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 390px) {
-  .workbench-metric-grid,
   .season-breakdown-grid,
   .compact-breakdown-grid {
     grid-template-columns: 1fr;
-  }
-
-  .replacement-card-rail {
-    grid-auto-columns: calc(100vw - 54px);
   }
 
   .replacement-card-header {
@@ -666,8 +734,3 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .replacement-card-rail {
-    scroll-behavior: auto;
-  }
-}

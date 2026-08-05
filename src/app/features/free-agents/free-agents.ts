@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, HostListener, OnDestroy, signal, ViewChild } from '@angular/core';
+import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -135,8 +135,6 @@ function waitForAuthUser(): Promise<User | null> {
   styleUrl: './free-agents.css',
 })
 export class FreeAgents implements OnDestroy {
-  @ViewChild('replacementRail') replacementRail?: ElementRef<HTMLElement>;
-
   leagueId = '';
   userId = '';
 
@@ -1838,18 +1836,6 @@ export class FreeAgents implements OnDestroy {
       : `Replace ${candidate.asset ? this.getRosterAssetName(candidate.asset) : 'this slot'}`;
   }
 
-  scrollReplacementRail(direction: -1 | 1): void {
-    const rail = this.replacementRail?.nativeElement;
-
-    if (!rail) {
-      return;
-    }
-
-    rail.scrollBy({
-      left: direction * Math.max(300, rail.clientWidth * 0.82),
-      behavior: 'smooth',
-    });
-  }
 
   private resolveCandidateTransactionTiming(
     candidate: DropCandidate,

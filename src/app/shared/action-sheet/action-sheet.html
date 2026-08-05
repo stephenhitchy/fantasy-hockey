@@ -8,6 +8,8 @@
     <section
       class="rr-action-sheet"
       [class.rr-action-sheet--wide]="wide"
+      [class.rr-action-sheet--scroll-chrome]="scrollChrome"
+      [attr.data-overlay-scroll-root]="scrollChrome ? '' : null"
       role="dialog"
       aria-modal="true"
       [attr.aria-labelledby]="dialogId"
@@ -42,7 +44,10 @@
         <ng-content select="[action-sheet-top-actions]"></ng-content>
       </div>
 
-      <div class="rr-action-sheet__content" data-overlay-scroll-root>
+      <div
+        class="rr-action-sheet__content"
+        [attr.data-overlay-scroll-root]="scrollChrome ? null : ''"
+      >
         <ng-content></ng-content>
       </div>
 

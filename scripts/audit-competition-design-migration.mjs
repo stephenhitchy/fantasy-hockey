@@ -9,7 +9,7 @@ const templates = new Map([
     'rr-page-shell', 'rr-stat-grid', 'rr-list-row', 'rr-data-panel', 'rr-dialog',
   ]],
   ['src/app/features/free-agents/free-agents.html', [
-    'rr-page-shell', 'rr-toolbar', 'rr-list-row', 'rr-choice-card', 'rr-notice',
+    'rr-page-shell', 'rr-toolbar', 'rr-list-row', 'replacement-player-card', 'rr-notice',
   ]],
   ['src/app/features/draft/draft-setup/draft-setup.html', [
     'rr-page-shell', 'rr-stat-grid', 'rr-field', 'rr-select', 'rr-list-row',

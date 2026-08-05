@@ -23,6 +23,7 @@ export class ActionSheet {
   @Input() dialogId = 'rr-action-sheet-title';
   @Input() busy = false;
   @Input() wide = false;
+  @Input() scrollChrome = false;
 
   @Output() close = new EventEmitter<void>();
 
