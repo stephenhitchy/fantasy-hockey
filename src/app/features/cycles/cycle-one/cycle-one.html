@@ -75,10 +75,10 @@
                 type="button"
                 class="advance-replay-button rr-button rr-button--secondary"
                 (click)="advanceReplayOneDay()"
-                [disabled]="historicalReplayAdvancing()"
+                [disabled]="historicalReplayAdvancing() || historicalReplayControl()?.status === 'advancing'"
               >
                 {{
-                  historicalReplayAdvancing()
+                  historicalReplayAdvancing() || historicalReplayControl()?.status === 'advancing'
                     ? 'Processing Day...'
                     : historicalReplayControl()?.enabled
                       ? 'Advance One NHL Day'

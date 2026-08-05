@@ -372,8 +372,8 @@
       <app-action-sheet
         [open]="flowStep() === 'roster-slot'"
         [title]="(selectedWaiver() ? 'Claim ' : 'Add ') + getAssetName(addAsset)"
-        eyebrow="Step 2 · Compare and Confirm"
-        description="Choose the exact roster spot, compare both players, and verify the first legal matchup before submitting."
+        eyebrow="Step 2 · Transaction Workbench"
+        description="Review the incoming player first, then swipe through every legal roster replacement and verify the exact first scoring matchup."
         [busy]="moving()"
         [wide]="true"
         closeLabel="Return to available players"
@@ -387,7 +387,7 @@
         >
           <button
             type="button"
-            class="top-confirm-move-button rr-button rr-button--primary"
+            class="top-confirm-move-button rr-button rr-button--primary confirm-move-button"
             (click)="confirmAddDrop()"
             [disabled]="!canConfirmMove() || moving()"
           >
@@ -402,284 +402,339 @@
           </div>
         </div>
 
-        <section class="selected-player-summary compact-selected-player">
-          @if (getAssetLogoUrl(addAsset); as selectedLogoUrl) {
-            <img [src]="selectedLogoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
-          }
-          <div>
-            <span class="eyebrow">{{ selectedWaiver() ? 'Waiver Target' : 'New Player' }}</span>
-            <strong>{{ getAssetName(addAsset) }}</strong>
-            <p>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</p>
-          </div>
-          <div class="selected-player-rank">
-            <strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong>
-            <span>Next 6 Rank</span>
-          </div>
-        </section>
+        <section class="transaction-workbench">
+          <article class="incoming-scout-card transaction-player-incoming selected-player-summary compact-selected-player" aria-label="Incoming player report">
+            <header class="workbench-player-header">
+              <div class="workbench-player-identity">
+                @if (getAssetLogoUrl(addAsset); as selectedLogoUrl) {
+                  <img [src]="selectedLogoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
+                }
+                <div>
+                  <span class="eyebrow">{{ selectedWaiver() ? 'Waiver Target' : 'Incoming Player' }}</span>
+                  <h2>{{ getAssetName(addAsset) }}</h2>
+                  <p>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</p>
+                </div>
+              </div>
+              <span [class]="'performance-pill ' + getPerformanceClass(addAsset)">
+                {{ getPerformanceLabel(addAsset) }}
+              </span>
+            </header>
 
-        <section [class]="'eligibility-card ' + getSelectedAssetCycleClass()">
-          <div class="eligibility-icon">
-            @if (eligibilityLoading()) {
-              …
-            } @else if (eligibilityError()) {
-              !
-            } @else if (selectedAssetEligibility()?.currentCycleHasStarted) {
-              ⏳
-            } @else {
-              ✓
+            <div class="workbench-metric-grid incoming-metric-grid">
+              <article>
+                <span>Current matchup</span>
+                <strong>{{ getIncomingMatchupNumberLabel() }}</strong>
+                <small>{{ getIncomingGameProgressLabel() }}</small>
+              </article>
+              <article>
+                <span>Season points</span>
+                <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong>
+                <small>{{ getSeasonGamesLabel(addAsset) }}</small>
+              </article>
+              <article>
+                <span>Recent form</span>
+                <strong>{{ getRecentFormLabel(addAsset) }}</strong>
+                <small>{{ getRecentPaceLabel(addAsset, 10) }} pts/game over last 10</small>
+              </article>
+              <article>
+                <span>Next 6 games</span>
+                <strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong>
+                <small>{{ getExpectedAvailabilityLabel(addAsset) }}</small>
+              </article>
+            </div>
+
+            <section [class]="'eligibility-card incoming-eligibility-card ' + getSelectedAssetCycleClass()">
+              <div class="eligibility-icon">
+                @if (eligibilityLoading()) {
+                  …
+                } @else if (eligibilityError()) {
+                  !
+                } @else if (selectedAssetEligibility()?.currentCycleHasStarted) {
+                  ⏳
+                } @else {
+                  ✓
+                }
+              </div>
+              <div>
+                <span class="eyebrow">Incoming Six-Game Timeline</span>
+                <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
+                <p>{{ getSelectedAssetCycleDetail() }}</p>
+              </div>
+              @if (eligibilityError()) {
+                <button
+                  type="button"
+                  class="retry-button rr-button rr-button--secondary"
+                  (click)="retryEligibilityCheck()"
+                  [disabled]="moving()"
+                >
+                  Retry Check
+                </button>
+              }
+            </section>
+
+            @if (getEligibilityEvaluationLabel(); as evaluationLabel) {
+              <p class="transaction-replay-evaluation-note">{{ evaluationLabel }}</p>
             }
-          </div>
-          <div>
-            <span class="eyebrow">New Player Matchup Status</span>
-            <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
-            <p>{{ getSelectedAssetCycleDetail() }}</p>
-          </div>
-          @if (eligibilityError()) {
-            <button
-              type="button"
-              class="retry-button rr-button rr-button--secondary"
-              (click)="retryEligibilityCheck()"
-              [disabled]="moving()"
-            >
-              Retry Check
-            </button>
-          }
-        </section>
 
-        @if (preferredSlotId()) {
-          <div class="preferred-sheet-target">
-            <span>Preferred roster spot</span>
-            <strong>{{ getPreferredRosterTargetLabel() || preferredSlotId() }}</strong>
-            <button
-              type="button"
-              class="rr-button rr-button--quiet"
-              (click)="clearPreferredRosterTarget()"
-              [disabled]="moving()"
-            >
-              Choose Another
-            </button>
-          </div>
-        }
+            <section class="workbench-game-strip-section cycle-decision-block cycle-decision-block--details">
+              <div class="workbench-section-heading">
+                <div>
+                  <span class="eyebrow">Exact Current Block</span>
+                  <h3>{{ getIncomingComparisonMatchupLabel() }}</h3>
+                </div>
+                <span>{{ getCycleProgressLabel(addAsset) }}</span>
+              </div>
+              <div class="cycle-marker-row workbench-cycle-marker-row" aria-label="Incoming player six-game markers">
+                @for (dotIndex of cycleDotSlots; track dotIndex) {
+                  @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
+                    <span
+                      [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
+                      [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                    >{{ dotIndex + 1 }}</span>
+                  } @else {
+                    <span class="cycle-game-marker cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                  }
+                }
+              </div>
 
-        <div class="slot-list-heading">
-          <div>
-            <span class="eyebrow">Compatible Roster Spots</span>
-            <h3>Select the player or open spot on the left side of the comparison</h3>
-          </div>
-          <span class="fairness-note">RinkRat checks each player’s independent six-game timeline.</span>
-        </div>
+              <ol class="workbench-game-strip" aria-label="Incoming player's exact current six-game block">
+                @for (game of incomingCurrentComparisonGames(); track game.gameNumber) {
+                  <li [class]="getComparisonGameClass(game)">
+                    <span>Game {{ game.gameNumber }}</span>
+                    <strong>{{ getComparisonGameDate(game) }}</strong>
+                    <small>{{ game.opponentLabel }}</small>
+                    <em>{{ getComparisonGameStatusLabel(game, 'incoming') }}</em>
+                  </li>
+                }
+              </ol>
+            </section>
 
-        @if (!areRosterWindowsReady()) {
-          <div class="empty-card roster-window-loading rr-state">
-            Loading your six-game roster progress before calculating the legal activation matchup…
-          </div>
-        } @else if (dropCandidates().length === 0) {
-          <div class="empty-card rr-state">
-            No compatible active or bench roster spot is currently available.
-          </div>
-        } @else {
-          <div class="drop-list slot-choice-list">
-            @for (candidate of dropCandidates(); track candidate.slotId) {
+            <section class="workbench-stat-section incoming-stat-section">
+              <div class="workbench-section-heading">
+                <div>
+                  <span class="eyebrow">Season Point Formula · Combined scoring-category contribution</span>
+                  <h3>Stat totals → fantasy points</h3>
+                  <p>Every stat behind {{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }} current-season points.</p>
+                </div>
+                <small>Raw NHL totals → RinkRat fantasy points</small>
+              </div>
+
+              @if (getStatBreakdown(addAsset).length > 0) {
+                <div class="season-breakdown-grid">
+                  @for (item of getStatBreakdown(addAsset); track item.key) {
+                    <article>
+                      <span>{{ item.label }}</span>
+                      <strong>{{ getBreakdownStatLabel(item) }}</strong>
+                      <small>{{ getStatComparisonPointsLabel(item) }}</small>
+                    </article>
+                  }
+                </div>
+              } @else {
+                <p class="transaction-game-empty">{{ getStatBreakdownNote(addAsset) }}</p>
+              }
+            </section>
+          </article>
+
+          @if (preferredSlotId()) {
+            <div class="preferred-sheet-target">
+              <span>Preferred roster spot</span>
+              <strong>{{ getPreferredRosterTargetLabel() || preferredSlotId() }}</strong>
               <button
                 type="button"
-                class="slot-choice-card rr-choice-card"
-                [class.selected-slot-choice]="isSelectedDropCandidate(candidate)"
-                [class.open-slot-choice]="candidate.moveType === 'open-slot'"
-                [class.bench-slot-choice]="candidate.rosterArea === 'bench'"
-                (click)="selectDropCandidate(candidate)"
+                class="rr-button rr-button--quiet"
+                (click)="clearPreferredRosterTarget()"
                 [disabled]="moving()"
               >
-                <div class="slot-choice-asset">
-                  @if (candidate.asset) {
-                    @if (getRosterAssetLogoUrl(candidate.asset); as candidateLogoUrl) {
-                      <img [src]="candidateLogoUrl" [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'" />
-                    } @else {
-                      <span class="open-slot-icon">{{ getRosterAssetTeamLabel(candidate.asset) }}</span>
-                    }
-                  } @else {
-                    <span class="open-slot-icon">+</span>
-                  }
-                  <div>
-                    <span class="slot-label">
-                      {{ candidate.rosterArea === 'bench' ? 'Bench' : candidate.position + ' Slot' }}
-                      {{ candidate.slotNumber }}
-                    </span>
-                    <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
-                    <small>{{ getCandidateWindowAssetLabel(candidate) }}</small>
-                  </div>
-                </div>
-
-                @if (getDropCandidateProjectionAsset(candidate); as candidateProjection) {
-                  <div class="slot-choice-decision-metrics">
-                    <span>Season <strong>{{ getDisplayNumber(getCurrentSeasonPoints(candidateProjection)) }}</strong></span>
-                    <span>Next 6 <strong>{{ getDisplayNumber(getProjectedCyclePoints(candidateProjection)) }}</strong></span>
-                  </div>
-                }
-
-                <div class="slot-window-progress">
-                  <span>{{ getCandidateWindowLabel(candidate) }}</span>
-                  <strong>{{ getCandidateActivationLabel(candidate) }}</strong>
-                  <small>{{ getCandidateActivationDetail(candidate) }}</small>
-                </div>
-
-                <span class="slot-select-indicator">
-                  {{ isSelectedDropCandidate(candidate) ? 'Selected ✓' : 'Compare' }}
-                </span>
+                Choose Another
               </button>
-            }
-          </div>
-        }
+            </div>
+          }
 
-        @if (selectedDropCandidate(); as selectedCandidate) {
-          <section [class]="'transaction-timing-decision ' + getTransactionTimingClass()">
-            @if (transactionTiming(); as timing) {
-              <span class="eyebrow">When this takes effect</span>
-              <div class="transaction-timing-heading">
-                <span class="transaction-delay-badge">{{ getTransactionDelayLabel() }}</span>
-                <strong>{{ timing.startLabel }}</strong>
+          <section class="replacement-workbench" aria-labelledby="replacement-workbench-title">
+            <div class="replacement-workbench-heading">
+              <div>
+                <span class="eyebrow">Compatible Roster Spots</span>
+                <h2 id="replacement-workbench-title">Choose Who This Player Replaces</h2>
+                <strong class="replacement-workbench-instruction">Swipe through every legal roster option</strong>
+                <p>Active starters appear first. Same-position bench players include the full point formula; flexible cross-position bench options keep the comparison focused on totals and timing.</p>
               </div>
-              <h3>{{ timing.headline }}</h3>
-              <p>{{ timing.detail }}</p>
-              <small>{{ timing.relationshipLabel }}</small>
+              <div class="replacement-rail-controls" aria-label="Scroll replacement choices">
+                <button type="button" class="rr-button rr-button--quiet" (click)="scrollReplacementRail(-1)" aria-label="Previous roster option">←</button>
+                <button type="button" class="rr-button rr-button--quiet" (click)="scrollReplacementRail(1)" aria-label="Next roster option">→</button>
+              </div>
+            </div>
+
+            @if (!areRosterWindowsReady()) {
+              <div class="empty-card roster-window-loading rr-state">
+                Loading your exact six-game roster windows before calculating legal start matchups…
+              </div>
+            } @else if (dropCandidates().length === 0) {
+              <div class="empty-card rr-state">No compatible active or bench roster spot is currently available.</div>
+            } @else {
+              <div #replacementRail class="replacement-card-rail" role="list" aria-label="Roster replacement choices">
+                @for (candidate of dropCandidates(); track candidate.slotId) {
+                  <article
+                    class="replacement-player-card slot-choice-card rr-choice-card transaction-player-outgoing"
+                    [class.selected-replacement-card]="isSelectedDropCandidate(candidate)"
+                    [class.open-replacement-card]="candidate.moveType === 'open-slot'"
+                    [class.flex-bench-replacement-card]="candidate.rosterArea === 'bench' && candidate.asset?.position !== addAsset.position"
+                    role="listitem"
+                  >
+                    <header class="replacement-card-header">
+                      <span class="replacement-roster-badge">{{ getCandidateRosterLabel(candidate) }}</span>
+                      <button
+                        type="button"
+                        class="replacement-select-button rr-button"
+                        [class.rr-button--primary]="isSelectedDropCandidate(candidate)"
+                        [class.rr-button--secondary]="!isSelectedDropCandidate(candidate)"
+                        (click)="selectDropCandidate(candidate)"
+                        [disabled]="moving()"
+                      >
+                        {{ getCandidateSelectionLabel(candidate) }}
+                      </button>
+                    </header>
+
+                    <div class="workbench-player-identity replacement-player-identity">
+                      @if (candidate.asset) {
+                        @if (getRosterAssetLogoUrl(candidate.asset); as candidateLogoUrl) {
+                          <img [src]="candidateLogoUrl" [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'" />
+                        } @else {
+                          <span class="open-slot-icon">{{ getRosterAssetTeamLabel(candidate.asset) }}</span>
+                        }
+                        <div>
+                          <span class="eyebrow">Current Roster Player</span>
+                          <h3>{{ getRosterAssetName(candidate.asset) }}</h3>
+                          <p>{{ getRosterAssetTeamLabel(candidate.asset) }} · {{ candidate.asset.position }}</p>
+                        </div>
+                      } @else {
+                        <span class="open-slot-icon">+</span>
+                        <div>
+                          <span class="eyebrow">Open Roster Spot</span>
+                          <h3>No player removed</h3>
+                          <p>{{ getCandidateRosterLabel(candidate) }}</p>
+                        </div>
+                      }
+                    </div>
+
+                    @if (getDropCandidateProjectionAsset(candidate); as candidateProjection) {
+                      <div class="workbench-metric-grid replacement-metric-grid">
+                        <article>
+                          <span>Current block</span>
+                          <strong>{{ getCandidateMatchupNumberLabel(candidate) }}</strong>
+                          <small>{{ getCandidateGameProgressLabel(candidate) }}</small>
+                        </article>
+                        <article>
+                          <span>Season points</span>
+                          <strong>{{ getDisplayNumber(getCurrentSeasonPoints(candidateProjection)) }}</strong>
+                          <small>{{ getSeasonGamesLabel(candidateProjection) }}</small>
+                        </article>
+                        <article>
+                          <span>Form</span>
+                          <strong>{{ getCandidateFormLabel(candidate) }}</strong>
+                          <small>{{ getRecentPaceLabel(candidateProjection, 10) }} pts/game over last 10</small>
+                        </article>
+                        <article>
+                          <span>Next 6</span>
+                          <strong>{{ getDisplayNumber(getProjectedCyclePoints(candidateProjection)) }}</strong>
+                          <small>{{ getExpectedAvailabilityLabel(candidateProjection) }}</small>
+                        </article>
+                      </div>
+                    } @else {
+                      <div class="open-roster-metric-message">This empty spot has no outgoing score or projection.</div>
+                    }
+
+                    <section class="replacement-game-section">
+                      <div class="replacement-subheading">
+                        <strong>{{ getOutgoingComparisonMatchupLabel(candidate) }}</strong>
+                        <small>{{ getCandidateWindowAssetLabel(candidate) }}</small>
+                      </div>
+                      <ol class="workbench-game-strip compact-game-strip" [attr.aria-label]="getRosterSpotCandidateName(candidate) + ' exact six-game status'">
+                        @for (game of getCandidateComparisonGames(candidate); track game.gameNumber) {
+                          <li [class]="getComparisonGameClass(game)">
+                            <span>#{{ game.gameNumber }}</span>
+                            <strong>{{ getComparisonGameDate(game) }}</strong>
+                            <small>{{ game.opponentLabel }}</small>
+                            <em>{{ getComparisonGameStatusLabel(game, 'outgoing') }}</em>
+                          </li>
+                        }
+                      </ol>
+                    </section>
+
+                    @if (shouldShowCandidatePointBreakdown(candidate)) {
+                      <section class="workbench-stat-section replacement-stat-section">
+                        <div class="replacement-subheading">
+                          <strong>Season point formula</strong>
+                          <small>Same-position comparison</small>
+                        </div>
+                        @if (getCandidateStatBreakdown(candidate).length > 0) {
+                          <div class="season-breakdown-grid compact-breakdown-grid">
+                            @for (item of getCandidateStatBreakdown(candidate); track item.key) {
+                              <article>
+                                <span>{{ item.label }}</span>
+                                <strong>{{ getBreakdownStatLabel(item) }}</strong>
+                                <small>{{ getStatComparisonPointsLabel(item) }}</small>
+                              </article>
+                            }
+                          </div>
+                        } @else {
+                          <p class="transaction-game-empty">{{ getCandidateStatBreakdownNote(candidate) }}</p>
+                        }
+                      </section>
+                    } @else {
+                      <p class="cross-position-breakdown-note">{{ getCandidateStatBreakdownNote(candidate) }}</p>
+                    }
+
+                    @if (getCandidateTransactionTiming(candidate); as candidateTiming) {
+                      <section [class]="'candidate-start-card transaction-timing-' + candidateTiming.tone">
+                        <span>{{ candidateTiming.startLabel }}</span>
+                        <strong>{{ candidateTiming.headline }}</strong>
+                        <p>{{ candidateTiming.detail }}</p>
+                      </section>
+                    }
+                  </article>
+                }
+              </div>
             }
           </section>
 
-          <section class="transaction-comparison-panel move-comparison-panel rr-data-panel" aria-label="Current and new player comparison">
-            <div class="transaction-comparison-heading">
-              <div>
-                <span class="eyebrow">Add / Drop Comparison</span>
-                <h3>Current player on the left · new player on the right</h3>
+          @if (selectedDropCandidate(); as selectedCandidate) {
+            <section [class]="'transaction-timing-decision ' + getTransactionTimingClass()">
+              @if (transactionTiming(); as timing) {
+                <span class="eyebrow">Final Timing Decision · When this takes effect</span>
+                <div class="transaction-timing-heading">
+                  <span class="transaction-delay-badge">{{ getTransactionDelayLabel() }}</span>
+                  <strong>{{ timing.startLabel }}</strong>
+                </div>
+                <h3>{{ timing.headline }}</h3>
+                <p>{{ timing.detail }}</p>
+                <small>{{ timing.relationshipLabel }}</small>
+              }
+            </section>
+
+            <section class="selected-final-comparison move-comparison-panel rr-data-panel" aria-label="Selected outgoing and incoming players">
+              <div class="selected-final-heading">
+                <div>
+                  <span class="eyebrow">Add / Drop Comparison</span>
+                  <h3>Current player on the left · new player on the right</h3>
+                </div>
+                <div class="move-delta-summary">
+                  <strong>{{ getMoveProjectionDeltaLabel('NEXT_CYCLE') }}</strong>
+                  <span>{{ getMoveProjectionDeltaLabel('REST_OF_SEASON') }}</span>
+                </div>
               </div>
-              <div class="move-delta-summary">
-                <strong>{{ getMoveProjectionDeltaLabel('NEXT_CYCLE') }}</strong>
-                <span>{{ getMoveProjectionDeltaLabel('REST_OF_SEASON') }}</span>
+              <div class="transaction-player-pair">
+                <article class="transaction-player-outgoing selected-final-player">
+                  <span>Current</span>
+                  <strong>{{ selectedCandidate.asset ? getRosterAssetName(selectedCandidate.asset) : 'Open roster spot' }}</strong>
+                  <small>{{ getCandidateRosterLabel(selectedCandidate) }} · {{ getCandidateGameProgressLabel(selectedCandidate) }}</small>
+                </article>
+                <article class="transaction-player-incoming selected-final-player">
+                  <span>New</span>
+                  <strong>{{ getAssetName(addAsset) }}</strong>
+                  <small>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }} · {{ getIncomingGameProgressLabel() }}</small>
+                </article>
               </div>
-            </div>
-
-            <div class="transaction-player-pair">
-              <article class="transaction-player-column transaction-player-outgoing">
-                <span class="comparison-role">Current Player</span>
-
-                @if (selectedCandidate.asset) {
-                  <div class="transaction-player-identity">
-                    @if (getRosterAssetLogoUrl(selectedCandidate.asset); as outgoingLogoUrl) {
-                      <img [src]="outgoingLogoUrl" [alt]="getRosterAssetTeamLabel(selectedCandidate.asset) + ' logo'" />
-                    }
-                    <div>
-                      <strong>{{ getRosterAssetName(selectedCandidate.asset) }}</strong>
-                      <small>{{ getRosterAssetTeamLabel(selectedCandidate.asset) }} · {{ selectedCandidate.position }}</small>
-                    </div>
-                  </div>
-                } @else {
-                  <div class="transaction-player-identity transaction-open-slot-identity">
-                    <span class="open-slot-icon">+</span>
-                    <div>
-                      <strong>Open roster spot</strong>
-                      <small>No player is being removed.</small>
-                    </div>
-                  </div>
-                }
-
-                @if (getDropCandidateProjectionAsset(selectedCandidate); as outgoingAsset) {
-                  <div class="transaction-primary-metrics">
-                    <span>Season <strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoingAsset)) }}</strong></span>
-                    <span>Next 6 <strong>{{ getDisplayNumber(getProjectedCyclePoints(outgoingAsset)) }}</strong></span>
-                    <span>Rest <strong>{{ getDisplayNumber(getRestOfSeasonProjection(outgoingAsset)) }}</strong></span>
-                  </div>
-                } @else {
-                  <div class="transaction-primary-metrics transaction-primary-metrics-empty">
-                    <span>Season <strong>—</strong></span>
-                    <span>Next 6 <strong>—</strong></span>
-                    <span>Rest <strong>—</strong></span>
-                  </div>
-                }
-
-                <div class="transaction-matchup-status">
-                  <span>Roster-slot timeline</span>
-                  <strong>{{ getOutgoingComparisonMatchupLabel(selectedCandidate) }}</strong>
-                </div>
-
-                @if (selectedCandidate.rosterArea === 'active' && selectedCandidate.asset) {
-                  <ol class="transaction-game-list" aria-label="Current player's exact six-game window">
-                    @for (game of outgoingComparisonGames(); track game.gameNumber) {
-                      <li [class]="getComparisonGameClass(game)">
-                        <span class="transaction-game-number">{{ game.gameNumber }}</span>
-                        <div>
-                          <strong>{{ getComparisonGameDate(game) }}</strong>
-                          <small>{{ game.opponentLabel }}</small>
-                        </div>
-                        <span>{{ getComparisonGameStatusLabel(game, 'outgoing') }}</span>
-                      </li>
-                    }
-                  </ol>
-                } @else {
-                  <div class="transaction-game-empty">
-                    {{ selectedCandidate.rosterArea === 'bench'
-                      ? 'Bench players are owned but do not have an active scoring window.'
-                      : 'This slot has not started a six-game window.' }}
-                  </div>
-                }
-              </article>
-
-              <article class="transaction-player-column transaction-player-incoming">
-                <span class="comparison-role">New Player</span>
-                <div class="transaction-player-identity">
-                  @if (getAssetLogoUrl(addAsset); as incomingLogoUrl) {
-                    <img [src]="incomingLogoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
-                  }
-                  <div>
-                    <strong>{{ getAssetName(addAsset) }}</strong>
-                    <small>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</small>
-                  </div>
-                </div>
-
-                <div class="transaction-primary-metrics">
-                  <span>Season <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></span>
-                  <span>Next 6 <strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></span>
-                  <span>Rest <strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></span>
-                </div>
-
-                <div class="transaction-matchup-status">
-                  <span>Current NHL six-game block</span>
-                  <strong>{{ getIncomingComparisonMatchupLabel() }}</strong>
-                </div>
-
-                @if (getEligibilityEvaluationLabel(); as evaluationLabel) {
-                  <p class="transaction-replay-evaluation-note">
-                    {{ evaluationLabel }}
-                  </p>
-                }
-
-                <div class="cycle-decision-block cycle-decision-block--details" aria-label="Incoming player six-game status">
-                  <div class="cycle-marker-row">
-                    @for (dotIndex of cycleDotSlots; track dotIndex) {
-                      @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
-                        <span
-                          [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
-                          [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                        >{{ dotIndex + 1 }}</span>
-                      } @else {
-                        <span class="cycle-game-marker cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
-                      }
-                    }
-                  </div>
-                  <small>{{ getCycleProgressLabel(addAsset) }}</small>
-                </div>
-
-                <ol class="transaction-game-list" aria-label="New player's current exact six-game block">
-                  @for (game of incomingCurrentComparisonGames(); track game.gameNumber) {
-                    <li [class]="getComparisonGameClass(game)">
-                      <span class="transaction-game-number">{{ game.gameNumber }}</span>
-                      <div>
-                        <strong>{{ getComparisonGameDate(game) }}</strong>
-                        <small>{{ game.opponentLabel }}</small>
-                      </div>
-                      <span>{{ getComparisonGameStatusLabel(game, 'incoming') }}</span>
-                    </li>
-                  }
-                </ol>
-              </article>
-            </div>
+            </section>
 
             <section class="incoming-start-window">
               <div class="incoming-start-window-heading">
@@ -701,56 +756,10 @@
                 }
               </ol>
             </section>
-
-            <section class="transaction-stat-comparison">
-              <div class="transaction-stat-heading">
-                <div>
-                  <span class="eyebrow">Full Current-Season Breakdown</span>
-                  <h3>Stat totals → fantasy points</h3>
-                </div>
-                <small>Combined scoring-category contribution for both players</small>
-              </div>
-
-              @if (getStatBreakdown(addAsset).length > 0 || statComparisonRows().length > 0) {
-                <div class="transaction-stat-table" role="table" aria-label="Outgoing and incoming player stat comparison">
-                  <div class="transaction-stat-table-header" role="row">
-                    <strong role="columnheader">Current</strong>
-                    <span role="columnheader">Stat</span>
-                    <strong role="columnheader">New</strong>
-                  </div>
-                  @for (row of statComparisonRows(); track row.key) {
-                    <div class="transaction-stat-row" role="row">
-                      <div class="transaction-stat-value transaction-stat-value-outgoing" role="cell">
-                        <strong>{{ getStatComparisonValueLabel(row.outgoing) }}</strong>
-                        <small>{{ getStatComparisonPointsLabel(row.outgoing) }}</small>
-                      </div>
-                      <span class="transaction-stat-label" role="cell">{{ row.label }}</span>
-                      <div class="transaction-stat-value transaction-stat-value-incoming" role="cell">
-                        <strong>{{ getStatComparisonValueLabel(row.incoming) }}</strong>
-                        <small>{{ getStatComparisonPointsLabel(row.incoming) }}</small>
-                      </div>
-                    </div>
-                  }
-                </div>
-              } @else {
-                <div class="transaction-game-empty">
-                  Current-season category data is not available yet. Refresh shared projections in Projection Lab to populate this comparison.
-                </div>
-              }
-
-              <div class="transaction-stat-notes">
-                @if (getSelectedOutgoingProjectionAsset(); as outgoingProjectionForNote) {
-                  <small>Current player: {{ getStatBreakdownNote(outgoingProjectionForNote) }}</small>
-                } @else {
-                  <small>Current player: Open roster spot — no outgoing stat line.</small>
-                }
-                <small>New player: {{ getStatBreakdownNote(addAsset) }}</small>
-              </div>
-            </section>
-          </section>
+          }
 
           <details class="decision-details selected-decision-details projection-explanation-details">
-            <summary>Why this projection?</summary>
+            <summary>Why this incoming projection?</summary>
             <div class="projection-explanation-grid">
               <section>
                 <span>Reliability</span>
@@ -765,7 +774,7 @@
               <section>
                 <span>Recent form</span>
                 <strong>{{ getRecentFormLabel(addAsset) }}</strong>
-                <small>{{ getRecentPaceLabel(addAsset, 10) }}</small>
+                <small>{{ getRecentPaceLabel(addAsset, 10) }} points per game over the last 10 appearances</small>
               </section>
               <section>
                 <span>Projection source</span>
@@ -774,7 +783,7 @@
               </section>
             </div>
           </details>
-        }
+        </section>
 
         <div action-sheet-actions class="free-agent-sheet-actions">
           <div class="free-agent-sheet-summary">
@@ -796,15 +805,13 @@
     }
 
     @if (shouldShowRosterActionShield()) {
-      <div class="roster-action-shield" appViewportOverlayPortal role="status" aria-live="assertive" aria-atomic="true">
-        <div class="roster-action-shield-card">
-          <span class="roster-action-spinner" aria-hidden="true"></span>
-          <div>
-            <strong>{{ selectedWaiver() ? 'Submitting waiver action…' : 'Saving roster move…' }}</strong>
-            <small>Stay on this page until RinkRat confirms the update.</small>
-          </div>
+      <aside class="roster-operation-status-dock" role="status" aria-live="assertive" aria-atomic="true">
+        <span class="roster-action-spinner" aria-hidden="true"></span>
+        <div>
+          <strong>{{ rosterOperationHeadline() || (selectedWaiver() ? 'Submitting waiver action…' : 'Confirming roster move…') }}</strong>
+          <small>{{ rosterOperationDetail() || 'The comparison has closed while RinkRat waits for the secure response or the live roster update. Stay on this page until RinkRat confirms the update.' }}</small>
         </div>
-      </div>
+      </aside>
     }
   </section>
 }

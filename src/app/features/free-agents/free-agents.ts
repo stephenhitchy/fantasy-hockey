@@ -1,4 +1,4 @@
-import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
+import { Component, computed, ElementRef, HostListener, OnDestroy, signal, ViewChild } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -68,7 +68,6 @@ import {
 } from '../../core/replay/historical-replay.service';
 
 import { ActionSheet } from '../../shared/action-sheet/action-sheet';
-import { ViewportOverlayPortalDirective } from '../../shared/accessibility/viewport-overlay-portal.directive';
 import {
   parseFreeAgentMobileViewState,
   resolveFreeAgentRoutePreferences,
@@ -80,6 +79,7 @@ import {
   buildFreeAgentStatComparisonRows,
   buildIncomingEligibilityComparisonGames,
   buildOutgoingWindowComparisonGames,
+  buildProjectionMarkerComparisonGames,
   resolveFreeAgentTransactionTiming,
   type FreeAgentComparisonGame,
   type FreeAgentTransactionTimingDecision,
@@ -130,11 +130,13 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink, ActionSheet, ViewportOverlayPortalDirective],
+  imports: [FormsModule, RouterLink, ActionSheet],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })
 export class FreeAgents implements OnDestroy {
+  @ViewChild('replacementRail') replacementRail?: ElementRef<HTMLElement>;
+
   leagueId = '';
   userId = '';
 
@@ -154,6 +156,8 @@ export class FreeAgents implements OnDestroy {
   moving = signal(false);
   errorMessage = signal('');
   successMessage = signal('');
+  rosterOperationHeadline = signal('');
+  rosterOperationDetail = signal('');
 
   searchTerm = signal('');
   positionFilter = signal<FreeAgentPositionFilter>('ALL');
@@ -399,7 +403,7 @@ export class FreeAgents implements OnDestroy {
       return {
         slotId: slot.slotId,
         slotNumber: slot.slotNumber,
-        position: addAsset.position,
+        position: asset?.position ?? addAsset.position,
         asset,
         moveType,
         rosterArea: 'bench',
@@ -435,11 +439,22 @@ export class FreeAgents implements OnDestroy {
       )
       .map((slot) => buildBenchCandidate(slot, slot.asset, 'drop'));
 
+    const samePositionBenchDrops = benchDropCandidates.filter(
+      (candidate) => candidate.asset?.position === addAsset.position,
+    );
+    const otherPositionBenchDrops = benchDropCandidates.filter(
+      (candidate) => candidate.asset?.position !== addAsset.position,
+    );
+
+    // Active replacements are the primary decision. Same-position bench players
+    // follow because they can be compared category-for-category. Flexible bench
+    // alternatives remain available after the directly comparable options.
     return [
-      ...openActiveCandidates,
-      ...openBenchCandidates,
       ...activeDropCandidates,
-      ...benchDropCandidates,
+      ...openActiveCandidates,
+      ...samePositionBenchDrops,
+      ...openBenchCandidates,
+      ...otherPositionBenchDrops,
     ];
   });
 
@@ -454,39 +469,9 @@ export class FreeAgents implements OnDestroy {
   });
 
   readonly transactionTiming = computed((): FreeAgentTransactionTimingDecision | null => {
-    const addAsset = this.selectedAddAsset();
     const candidate = this.selectedDropCandidate();
-    const eligibility = this.selectedAssetEligibility();
 
-    if (!addAsset || !candidate) {
-      return null;
-    }
-
-    const outgoingWindow = candidate.currentWindow;
-
-    return resolveFreeAgentTransactionTiming({
-      incomingName: this.getAssetName(addAsset),
-      outgoingName: candidate.asset ? this.getRosterAssetName(candidate.asset) : null,
-      rosterArea: candidate.rosterArea,
-      isWaiver: Boolean(this.selectedWaiver()),
-      seasonHasStarted: this.hasStartedCycleWindows(),
-      canApplyImmediately: candidate.canApplyImmediately,
-      effectiveCycleNumber: candidate.effectiveCycleNumber,
-      slotNextCycleNumber: candidate.slotNextCycleNumber,
-      outgoingCycleNumber: outgoingWindow?.cycleNumber ??
-        (candidate.rosterArea === 'active' ? candidate.slotNextCycleNumber : null),
-      outgoingWindowStatus: outgoingWindow?.status ?? null,
-      outgoingFinalGames: outgoingWindow?.gamesPlayed ?? 0,
-      outgoingLiveGames: outgoingWindow?.liveGameIds.length ?? 0,
-      outgoingScheduledGames: outgoingWindow?.scheduledGames ?? this.getRequiredGamesPerCycle(),
-      incomingCurrentCycleNumber: eligibility?.currentCycleNumber ?? null,
-      incomingFinalGames: eligibility?.completedGamesInCurrentCycle ?? 0,
-      incomingLiveGames: eligibility?.liveGamesInCurrentCycle ?? 0,
-      incomingScheduledGames: eligibility?.scheduledGamesInCurrentCycle ??
-        this.getRequiredGamesPerCycle(),
-      incomingHasStarted: eligibility?.currentCycleHasStarted ?? false,
-      incomingEarliestCycleNumber: eligibility?.earliestEligibleCycleNumber ?? null,
-    });
+    return candidate ? this.resolveCandidateTransactionTiming(candidate) : null;
   });
 
   readonly outgoingComparisonGames = computed(() =>
@@ -799,6 +784,15 @@ export class FreeAgents implements OnDestroy {
     this.persistFreeAgentViewState();
   }
 
+  selectDropCandidateWithKeyboard(event: KeyboardEvent, candidate: DropCandidate): void {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    this.selectDropCandidate(candidate);
+  }
+
   clearSelectedDropCandidate(): void {
     if (this.moving()) {
       return;
@@ -824,6 +818,8 @@ export class FreeAgents implements OnDestroy {
 
     this.successMessage.set('');
     this.errorMessage.set('');
+    this.rosterOperationHeadline.set('');
+    this.rosterOperationDetail.set('');
 
     if (!addAsset || !this.selectedDropCandidate()) {
       this.errorMessage.set('Choose a player and an eligible active or bench roster spot.');
@@ -837,9 +833,26 @@ export class FreeAgents implements OnDestroy {
       return;
     }
 
+    const submittedCandidate = this.selectedDropCandidate()!;
+    const submittedTiming = this.resolveCandidateTransactionTiming(submittedCandidate);
+    this.rosterOperationHeadline.set(
+      this.selectedWaiver() ? 'Submitting waiver claim…' : 'Confirming add / drop…',
+    );
+    this.rosterOperationDetail.set(
+      submittedTiming
+        ? `${submittedTiming.startLabel} · ${submittedTiming.headline}`
+        : 'RinkRat is waiting for the secure response or the live roster update.',
+    );
     this.moving.set(true);
     const operationWatchGeneration = ++this.operationWatchGeneration;
     let completed = false;
+    let reopenComparison = false;
+
+    // Release the modal and its backdrop before the network request begins. If
+    // mobile Safari loses the callable response after Firestore commits, the
+    // manager sees a compact status dock instead of a permanent fuzzy screen.
+    this.flowStep.set('player-pool');
+    this.persistFreeAgentViewState();
 
     try {
       await this.loadSelectedAssetEligibility(addAsset, true);
@@ -851,7 +864,10 @@ export class FreeAgents implements OnDestroy {
         throw new Error('The selected roster slot is no longer available.');
       }
 
-      if (addAsset.position !== dropCandidate.position) {
+      if (
+        dropCandidate.rosterArea === 'active' &&
+        addAsset.position !== dropCandidate.position
+      ) {
         throw new Error('Active roster moves must use the same position. Bench slots accept any position.');
       }
 
@@ -975,6 +991,7 @@ export class FreeAgents implements OnDestroy {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to complete this roster move.',
       );
+      reopenComparison = true;
     } finally {
       if (this.operationWatchGeneration === operationWatchGeneration) {
         this.operationWatchGeneration += 1;
@@ -983,11 +1000,15 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (completed) {
-      // Let Angular remove the busy state while the action sheet is still in the
-      // viewport. Closing it on the following frame avoids a Safari portal-lock
-      // race that could otherwise leave the dimmed screen behind after success.
       await this.waitForUiUnlockFrame();
       this.finishSuccessfulRosterMove();
+      return;
+    }
+
+    if (reopenComparison && this.selectedAddAsset()) {
+      await this.waitForUiUnlockFrame();
+      this.flowStep.set('roster-slot');
+      this.persistFreeAgentViewState();
     }
   }
 
@@ -1680,6 +1701,193 @@ export class FreeAgents implements OnDestroy {
     return `The move begins when this roster slot advances into Matchup ${candidate.effectiveCycleNumber}.`;
   }
 
+  getIncomingMatchupNumberLabel(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    return eligibility
+      ? `Matchup ${eligibility.currentCycleNumber}`
+      : 'Matchup pending';
+  }
+
+  getIncomingGameProgressLabel(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility) {
+      return this.eligibilityLoading() ? 'Checking 0 / 6' : 'Progress unavailable';
+    }
+
+    const usedGames = Math.min(
+      eligibility.scheduledGamesInCurrentCycle,
+      eligibility.completedGamesInCurrentCycle + eligibility.liveGamesInCurrentCycle,
+    );
+
+    return `${usedGames} / ${eligibility.scheduledGamesInCurrentCycle} games used`;
+  }
+
+  getCandidateRosterLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'bench') {
+      return `Bench ${candidate.slotNumber}`;
+    }
+
+    return `${candidate.position} Starter ${candidate.slotNumber}`;
+  }
+
+  getCandidateMatchupNumberLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'active') {
+      const cycleNumber = candidate.currentWindow?.cycleNumber ?? candidate.slotNextCycleNumber;
+      return `Matchup ${cycleNumber}`;
+    }
+
+    const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
+    const cycleNumber = projectionAsset?.currentTeamCycleNumber;
+
+    return typeof cycleNumber === 'number'
+      ? `NHL Block ${cycleNumber}`
+      : 'Bench · no scoring matchup';
+  }
+
+  getCandidateGameProgressLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'active') {
+      const window = candidate.currentWindow;
+
+      if (!window) {
+        return '0 / 6 games used';
+      }
+
+      const scheduledGames = window.scheduledGames || this.getRequiredGamesPerCycle();
+      const usedGames = Math.min(
+        scheduledGames,
+        window.gamesPlayed + window.liveGameIds.length,
+      );
+
+      return `${usedGames} / ${scheduledGames} games used`;
+    }
+
+    const markers = this.getDropCandidateProjectionAsset(candidate)?.currentTeamCycleGames ?? [];
+    const usedGames = markers.filter((marker) => marker.status !== 'upcoming').length;
+
+    return markers.length > 0
+      ? `${usedGames} / ${markers.length} NHL games used · bench does not score`
+      : 'Bench does not have an active scoring window';
+  }
+
+  getCandidateFormLabel(candidate: DropCandidate): string {
+    const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
+
+    return projectionAsset ? this.getRecentFormLabel(projectionAsset) : 'No player selected';
+  }
+
+  shouldShowCandidatePointBreakdown(candidate: DropCandidate): boolean {
+    const incoming = this.selectedAddAsset();
+
+    if (!candidate.asset || !incoming) {
+      return false;
+    }
+
+    return candidate.rosterArea === 'active' || candidate.asset.position === incoming.position;
+  }
+
+  getCandidateStatBreakdown(candidate: DropCandidate): ProjectionStatBreakdownItem[] {
+    const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
+
+    return projectionAsset && this.shouldShowCandidatePointBreakdown(candidate)
+      ? this.getStatBreakdown(projectionAsset)
+      : [];
+  }
+
+  getCandidateStatBreakdownNote(candidate: DropCandidate): string {
+    if (!candidate.asset) {
+      return 'Open roster spot — no outgoing point breakdown.';
+    }
+
+    if (!this.shouldShowCandidatePointBreakdown(candidate)) {
+      return `This is a flexible bench option at ${candidate.asset.position}. Its main season and projection totals are shown, but category-by-category points are hidden because it is not a same-position comparison.`;
+    }
+
+    const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
+    return projectionAsset
+      ? this.getStatBreakdownNote(projectionAsset)
+      : 'Current-season stat breakdown is not available.';
+  }
+
+  getCandidateComparisonGames(candidate: DropCandidate): FreeAgentComparisonGame[] {
+    if (candidate.rosterArea === 'active') {
+      return buildOutgoingWindowComparisonGames(
+        candidate.currentWindow,
+        this.getRequiredGamesPerCycle(),
+      );
+    }
+
+    return buildProjectionMarkerComparisonGames(
+      this.getDropCandidateProjectionAsset(candidate)?.currentTeamCycleGames,
+      this.getRequiredGamesPerCycle(),
+    );
+  }
+
+  getCandidateTransactionTiming(candidate: DropCandidate): FreeAgentTransactionTimingDecision | null {
+    return this.resolveCandidateTransactionTiming(candidate);
+  }
+
+  getCandidateSelectionLabel(candidate: DropCandidate): string {
+    if (this.isSelectedDropCandidate(candidate)) {
+      return 'Selected for comparison';
+    }
+
+    return candidate.moveType === 'open-slot'
+      ? 'Use this open spot'
+      : `Replace ${candidate.asset ? this.getRosterAssetName(candidate.asset) : 'this slot'}`;
+  }
+
+  scrollReplacementRail(direction: -1 | 1): void {
+    const rail = this.replacementRail?.nativeElement;
+
+    if (!rail) {
+      return;
+    }
+
+    rail.scrollBy({
+      left: direction * Math.max(300, rail.clientWidth * 0.82),
+      behavior: 'smooth',
+    });
+  }
+
+  private resolveCandidateTransactionTiming(
+    candidate: DropCandidate,
+  ): FreeAgentTransactionTimingDecision | null {
+    const addAsset = this.selectedAddAsset();
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!addAsset) {
+      return null;
+    }
+
+    const outgoingWindow = candidate.currentWindow;
+
+    return resolveFreeAgentTransactionTiming({
+      incomingName: this.getAssetName(addAsset),
+      outgoingName: candidate.asset ? this.getRosterAssetName(candidate.asset) : null,
+      rosterArea: candidate.rosterArea,
+      isWaiver: Boolean(this.selectedWaiver()),
+      seasonHasStarted: this.hasStartedCycleWindows(),
+      canApplyImmediately: candidate.canApplyImmediately,
+      effectiveCycleNumber: candidate.effectiveCycleNumber,
+      slotNextCycleNumber: candidate.slotNextCycleNumber,
+      outgoingCycleNumber: outgoingWindow?.cycleNumber ??
+        (candidate.rosterArea === 'active' ? candidate.slotNextCycleNumber : null),
+      outgoingWindowStatus: outgoingWindow?.status ?? null,
+      outgoingFinalGames: outgoingWindow?.gamesPlayed ?? 0,
+      outgoingLiveGames: outgoingWindow?.liveGameIds.length ?? 0,
+      outgoingScheduledGames: outgoingWindow?.scheduledGames ?? this.getRequiredGamesPerCycle(),
+      incomingCurrentCycleNumber: eligibility?.currentCycleNumber ?? null,
+      incomingFinalGames: eligibility?.completedGamesInCurrentCycle ?? 0,
+      incomingLiveGames: eligibility?.liveGamesInCurrentCycle ?? 0,
+      incomingScheduledGames: eligibility?.scheduledGamesInCurrentCycle ??
+        this.getRequiredGamesPerCycle(),
+      incomingHasStarted: eligibility?.currentCycleHasStarted ?? false,
+      incomingEarliestCycleNumber: eligibility?.earliestEligibleCycleNumber ?? null,
+    });
+  }
+
   getPendingMoveIncomingName(index: number): string {
     const entry = this.pendingRosterMoves()[index];
 
@@ -1911,6 +2119,8 @@ export class FreeAgents implements OnDestroy {
 
     return `Matchup ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} team games final${liveSuffix}${replaySuffix}`;
   }
+
+
 
   getEligibilityEvaluationLabel(): string {
     const eligibility = this.selectedAssetEligibility();

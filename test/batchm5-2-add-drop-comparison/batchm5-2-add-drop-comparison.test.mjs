@@ -334,17 +334,17 @@ test('live waiver listener confirmation releases the UI even when the callable r
   }), true);
 });
 
-test('the comparison sheet puts confirmation at the top and keeps current left/new right with exact timelines', async () => {
+test('the transaction workbench keeps confirmation at the top, introduces the incoming player first, and preserves exact timelines', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
   assert.match(template, /action-sheet-top-actions[\s\S]*top-confirm-move-button/);
   assert.match(template, /\[wide\]="true"/);
+  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-rail'));
   assert.match(template, /Current player on the left · new player on the right/);
-  assert.ok(template.indexOf('transaction-player-outgoing') < template.indexOf('transaction-player-incoming'));
-  assert.match(template, /outgoingComparisonGames\(\)/);
+  assert.match(template, /getCandidateComparisonGames\(candidate\)/);
   assert.match(template, /incomingCurrentComparisonGames\(\)/);
   assert.match(template, /incomingStartComparisonGames\(\)/);
-  assert.match(template, /Full Current-Season Breakdown/);
+  assert.match(template, /Season Point Formula/);
   assert.match(template, /getTransactionDelayLabel\(\)/);
 });
 

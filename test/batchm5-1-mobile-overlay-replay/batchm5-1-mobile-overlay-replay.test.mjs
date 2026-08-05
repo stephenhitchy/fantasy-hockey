@@ -166,8 +166,8 @@ test('player detail listens to the same scoring snapshot and replay control as G
   assert.match(source, /scoreSummary\.gameScores/);
   assert.match(source, /getRegularSeasonGameLog\(asset\.player\.id, season\)/);
   assert.match(source, /Saved Game Center score/);
-  assert.match(template, /Historical Replay Detail/);
-  assert.match(template, /Roster-Slot Game/);
+  assert.match(template, /Historical Replay Source/);
+  assert.match(template, /Game \{\{ row\.cycleGameNumber \}\}/);
   assert.doesNotMatch(template, /NHL Team Game\s*\{\{ row\.teamGameNumber/);
 });
 
@@ -198,8 +198,9 @@ test('all recently added modal-style interfaces use the shared viewport portal',
   assert.match(files.league, /draft-live-overlay[\s\S]*appViewportOverlayPortal/);
   assert.match(files.draft, /draft-pick-submission-shield[\s\S]*appViewportOverlayPortal/);
   assert.match(files.draftSetup, /draft-save-lock[\s\S]*appViewportOverlayPortal/);
-  assert.match(files.freeAgents, /roster-action-shield[\s\S]*appViewportOverlayPortal/);
-  assert.ok((files.team.match(/appViewportOverlayPortal/g) ?? []).length >= 5);
+  assert.match(files.freeAgents, /roster-operation-status-dock/);
+  assert.doesNotMatch(files.freeAgents, /roster-operation-status-dock[\s\S]*appViewportOverlayPortal/);
+  assert.ok((files.team.match(/appViewportOverlayPortal/g) ?? []).length >= 4);
 });
 
 test('mobile sheets open inside the current visual viewport instead of below the page', async () => {
@@ -279,7 +280,7 @@ test('other high-traffic return controls share the same visible graphic style', 
   }
 });
 
-test('the hotfix leaves production scoring and Cloud Functions unchanged', async () => {
+test('the overlay hotfix still preserves production scoring while replay orchestration includes the later lease-retry safeguard', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
     'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
@@ -288,8 +289,7 @@ test('the hotfix leaves production scoring and Cloud Functions unchanged', async
     await sha256('src/app/core/scoring/scoring-engine.ts'),
     'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15',
   );
-  assert.equal(
-    await sha256('functions/src/league-automation.ts'),
-    'c6a6f17d94fa6ac35ca9481b6a4738028ad92fb6867155456d279fe4ea0ff91d',
-  );
+  const automation = await read('functions/src/league-automation.ts');
+  assert.match(automation, /runHistoricalReplayAutomationWithRetry/);
+  assert.match(automation, /The simulated date was not skipped/);
 });

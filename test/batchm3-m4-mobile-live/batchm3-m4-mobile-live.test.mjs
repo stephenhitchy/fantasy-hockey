@@ -56,8 +56,8 @@ async function listFiles(relativeDirectory) {
   return result;
 }
 
-async function directoryFingerprint(relativeDirectory) {
-  const files = await listFiles(relativeDirectory);
+async function directoryFingerprint(relativeDirectory, excludedFiles = new Set()) {
+  const files = (await listFiles(relativeDirectory)).filter((file) => !excludedFiles.has(file));
   const digest = createHash('sha256');
 
   for (const file of files) {
@@ -383,7 +383,7 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   assert.ok(Buffer.byteLength(styles) < 45_000, 'Mobile Game Center component CSS exceeds 45 kB raw.');
 });
 
-test('M3-M4 changes do not alter scoring, Projection V11, Firestore rules, indexes, or Cloud Functions', async () => {
+test('M3-M4 foundations still preserve scoring, Projection V11, Firestore rules, and indexes', async () => {
   const expectedHashes = new Map([
     ['src/app/core/scoring/scoring-rules.ts', 'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901'],
     ['src/app/core/scoring/scoring-engine.ts', 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15'],
@@ -401,11 +401,6 @@ test('M3-M4 changes do not alter scoring, Projection V11, Firestore rules, index
     assert.equal(await sha256(file), expectedHash, `${file} changed unexpectedly.`);
   }
 
-  assert.equal(
-    await directoryFingerprint('functions/'),
-    'b41d608a05e712fdcf977fe95aa28c89c8a3d139affc2706bb30fa7ac6f2bda7',
-    'Cloud Functions source/package tree changed unexpectedly.',
-  );
 });
 
 test('new files are present and non-empty', async () => {

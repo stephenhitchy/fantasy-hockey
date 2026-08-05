@@ -61,10 +61,11 @@ test('Free Agents composes shared pool, filter, waiver, comparison, and confirma
     'waiver-tab-panel waiver-queue-card rr-data-panel',
     'asset-row decision-asset-card rr-list-row',
     '<app-action-sheet',
-    'selected-player-summary compact-selected-player',
-    'slot-choice-card rr-choice-card',
-    'move-comparison-panel rr-data-panel',
-    'confirm-move-button rr-button rr-button--primary',
+    'incoming-scout-card',
+    'transaction-player-incoming',
+    'replacement-card-rail',
+    'selected-final-comparison',
+    'top-confirm-move-button rr-button rr-button--primary',
   ]) {
     assert.match(html, new RegExp(marker));
   }

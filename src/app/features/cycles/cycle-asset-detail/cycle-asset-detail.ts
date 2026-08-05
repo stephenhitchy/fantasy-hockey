@@ -190,6 +190,113 @@ export class CycleAssetDetail implements OnDestroy {
     this.scoreSummary()?.gamesLeft ?? Math.max(0, this.scheduledGames() - this.countedGames()),
   );
 
+  readonly frozenProjectionPoints = computed(() => {
+    const asset = this.asset();
+
+    if (!asset) {
+      return null;
+    }
+
+    const value = asset.frozenCycleProjectionPoints ?? asset.projectedCyclePoints;
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  });
+
+  readonly expectedPointsThroughCurrentGame = computed(() => {
+    const projection = this.frozenProjectionPoints();
+    const scheduledGames = Math.max(1, this.scheduledGames());
+    const countedGames = Math.min(scheduledGames, Math.max(0, this.countedGames()));
+
+    if (projection === null) {
+      return null;
+    }
+
+    return Number(((projection * countedGames) / scheduledGames).toFixed(1));
+  });
+
+  readonly projectionDelta = computed(() => {
+    const expectedThroughCurrentGame = this.expectedPointsThroughCurrentGame();
+
+    return expectedThroughCurrentGame === null
+      ? null
+      : Number((this.totalFantasyPoints() - expectedThroughCurrentGame).toFixed(1));
+  });
+
+  readonly pointsRemainingToProjection = computed(() => {
+    const projection = this.frozenProjectionPoints();
+
+    if (projection === null) {
+      return null;
+    }
+
+    return Number(Math.max(0, projection - this.totalFantasyPoints()).toFixed(1));
+  });
+
+  readonly projectionCompletionPercent = computed(() => {
+    const projection = this.frozenProjectionPoints();
+
+    if (projection === null || projection <= 0) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, (this.totalFantasyPoints() / projection) * 100));
+  });
+
+  readonly countedMissedGames = computed(() =>
+    this.gameRows().filter((row) => row.counted && !row.appeared).length,
+  );
+
+  readonly aggregateBreakdownLines = computed(() => {
+    const totals = new Map<string, number>();
+
+    for (const row of this.gameRows()) {
+      for (const line of row.breakdownLines) {
+        if (
+          line.label === 'Saved Game Center score' ||
+          line.label === 'Scoring reconciliation' ||
+          line.label.toLowerCase().includes('did not play')
+        ) {
+          continue;
+        }
+
+        totals.set(line.label, (totals.get(line.label) ?? 0) + line.points);
+      }
+    }
+
+    return [...totals.entries()]
+      .map(([label, points]) => ({
+        label,
+        points: Number(points.toFixed(1)),
+      }))
+      .filter((line) => Math.abs(line.points) >= 0.05)
+      .sort((first, second) => Math.abs(second.points) - Math.abs(first.points))
+      .slice(0, 10);
+  });
+
+  readonly largestAggregateContribution = computed(() =>
+    this.aggregateBreakdownLines().reduce(
+      (largest, line) => Math.max(largest, Math.abs(line.points)),
+      0,
+    ),
+  );
+
+  readonly bestGame = computed(() => {
+    const scoredGames = this.gameRows().filter(
+      (row) => typeof row.fantasyPoints === 'number',
+    );
+
+    return scoredGames.sort(
+      (first, second) => (second.fantasyPoints ?? 0) - (first.fantasyPoints ?? 0),
+    )[0] ?? null;
+  });
+
+  readonly pointsPerAppearance = computed(() => {
+    const appearances = this.actualGamesPlayed();
+
+    return appearances > 0
+      ? Number((this.totalFantasyPoints() / appearances).toFixed(1))
+      : null;
+  });
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -426,6 +533,168 @@ export class CycleAssetDetail implements OnDestroy {
     return this.getProjectionDisplay(
       asset.frozenCycleProjectionPoints ?? asset.projectedCyclePoints ?? null,
     );
+  }
+
+  getProjectionDeltaLabel(): string {
+    const delta = this.projectionDelta();
+    const countedGames = this.countedGames();
+
+    if (delta === null) {
+      return 'Projection pace is not available yet';
+    }
+
+    if (countedGames === 0) {
+      return 'The six-game projection is frozen and waiting for Game 1';
+    }
+
+    if (Math.abs(delta) < 0.05) {
+      return `Exactly on expected pace after ${countedGames} ${countedGames === 1 ? 'game' : 'games'}`;
+    }
+
+    return `${delta > 0 ? '+' : ''}${delta.toFixed(1)} vs expected pace after ${countedGames} ${countedGames === 1 ? 'game' : 'games'}`;
+  }
+
+  getProjectionDeltaClass(): string {
+    const delta = this.projectionDelta();
+
+    if (delta === null || Math.abs(delta) < 0.05) {
+      return 'projection-delta-even';
+    }
+
+    return delta > 0 ? 'projection-delta-ahead' : 'projection-delta-behind';
+  }
+
+  getBestGameLabel(): string {
+    const row = this.bestGame();
+
+    if (!row || typeof row.fantasyPoints !== 'number') {
+      return 'No scored game yet';
+    }
+
+    return `${row.fantasyPoints.toFixed(1)} pts · Game ${row.cycleGameNumber}`;
+  }
+
+  getPointsPerAppearanceLabel(): string {
+    const value = this.pointsPerAppearance();
+
+    return value === null ? '—' : value.toFixed(1);
+  }
+
+  getExpectedPaceLabel(): string {
+    const value = this.expectedPointsThroughCurrentGame();
+
+    return value === null ? '—' : value.toFixed(1);
+  }
+
+  getProjectionRemainingLabel(): string {
+    const projection = this.frozenProjectionPoints();
+    const remaining = this.pointsRemainingToProjection();
+
+    if (projection === null || remaining === null) {
+      return '—';
+    }
+
+    return this.totalFantasyPoints() >= projection
+      ? 'Projection reached'
+      : `${remaining.toFixed(1)} pts`;
+  }
+
+  getProjectionRangeLabel(asset: DraftableAsset): string {
+    const floor = asset.projectionFloorPoints;
+    const ceiling = asset.projectionCeilingPoints;
+
+    if (
+      typeof floor !== 'number' ||
+      !Number.isFinite(floor) ||
+      typeof ceiling !== 'number' ||
+      !Number.isFinite(ceiling)
+    ) {
+      return 'Range unavailable';
+    }
+
+    return `${floor.toFixed(1)}–${ceiling.toFixed(1)} pts`;
+  }
+
+  getAggregateContributionPercent(points: number): number {
+    const maximum = this.largestAggregateContribution();
+
+    if (maximum <= 0) {
+      return 0;
+    }
+
+    return Math.max(5, Math.min(100, (Math.abs(points) / maximum) * 100));
+  }
+
+  getAggregateContributionClass(points: number): string {
+    return points < 0 ? 'negative-contribution' : 'positive-contribution';
+  }
+
+  getGameTapeClass(row: CycleAssetGameDetail): string {
+    return [
+      'game-tape-cell',
+      this.getGameRowClass(row),
+      row.gameId === this.bestGame()?.gameId ? 'best-game-cell' : '',
+    ].filter(Boolean).join(' ');
+  }
+
+  getGameStatusBadgeClass(row: CycleAssetGameDetail): string {
+    if (!row.final) {
+      return row.statusLabel.toLowerCase().includes('live')
+        ? 'game-status-live'
+        : 'game-status-upcoming';
+    }
+
+    if (row.appeared) {
+      return 'game-status-played';
+    }
+
+    return row.counted ? 'game-status-missed' : 'game-status-pending';
+  }
+
+  getGameStatusShortLabel(row: CycleAssetGameDetail): string {
+    if (!row.final) {
+      return row.statusLabel.toLowerCase().includes('live') ? 'Live' : 'Upcoming';
+    }
+
+    return row.appeared ? 'Played' : row.counted ? 'Missed · 0' : 'Pending';
+  }
+
+  getGameHeadline(row: CycleAssetGameDetail): string {
+    if (!row.final) {
+      return row.statusLabel.toLowerCase().includes('live')
+        ? 'Scoring is still changing'
+        : 'Scheduled NHL team game';
+    }
+
+    if (!row.appeared && row.counted) {
+      return 'Team played, player did not appear';
+    }
+
+    return row.appeared ? 'Fantasy points earned' : 'No counted result yet';
+  }
+
+  getTopBreakdownLines(row: CycleAssetGameDetail): DetailBreakdownLine[] {
+    return [...row.breakdownLines]
+      .sort((first, second) => Math.abs(second.points) - Math.abs(first.points))
+      .slice(0, 3);
+  }
+
+  getRemainingBreakdownCount(row: CycleAssetGameDetail): number {
+    return Math.max(0, row.breakdownLines.length - this.getTopBreakdownLines(row).length);
+  }
+
+  getGameExplanation(row: CycleAssetGameDetail): string {
+    if (!row.final) {
+      return row.statusLabel.toLowerCase().includes('live')
+        ? 'This game is live. RinkRat will keep updating the saved score until the NHL result is final.'
+        : 'This is one of the six scheduled NHL team games assigned to this roster slot.';
+    }
+
+    if (!row.appeared && row.counted) {
+      return 'The NHL team played, so this used one of the roster slot’s six games. The player did not appear and receives 0 fantasy points.';
+    }
+
+    return 'The player appeared in this scheduled team game. The categories below show exactly how the saved fantasy score was built.';
   }
 
   getFrozenProjectionSourceLabel(asset: DraftableAsset): string {

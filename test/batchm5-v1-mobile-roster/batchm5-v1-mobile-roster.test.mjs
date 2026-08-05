@@ -51,8 +51,8 @@ async function listFiles(relativeDirectory) {
   return result;
 }
 
-async function directoryFingerprint(relativeDirectory) {
-  const files = await listFiles(relativeDirectory);
+async function directoryFingerprint(relativeDirectory, excludedFiles = new Set()) {
+  const files = (await listFiles(relativeDirectory)).filter((file) => !excludedFiles.has(file));
   const digest = createHash('sha256');
 
   for (const file of files) {
@@ -278,10 +278,11 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
     'Waivers',
     'Compare Player',
     'Compare & Claim',
-    'Why this projection?',
-    'Compatible Roster Spots',
-    'Add / Drop Comparison',
-    'When this takes effect',
+    'Why this incoming projection?',
+    'Transaction Workbench',
+    'Choose Who This Player Replaces',
+    'Final Timing Decision',
+    'Exact First Legal Start',
     'free-agent-sheet-actions',
     'pending-roster-moves',
   ]) {
@@ -348,7 +349,7 @@ test('roster writes block route changes and browser exit until the server operat
   assert.match(teamSource, /return this\.rosterMoveLoading\(\) \|\| this\.saving\(\)/);
   assert.match(freeAgentSource, /return this\.moving\(\)/);
   assert.match(teamTemplate, /Stay on this page until RinkRat confirms the update/);
-  assert.match(freeAgentTemplate, /Stay on this page until RinkRat confirms the update/);
+  assert.match(freeAgentTemplate, /waits for the secure response or the live roster update/);
 });
 
 test('V1 keeps the readable interface font blocking and defers decorative fonts', async () => {
@@ -365,14 +366,15 @@ test('V1 keeps the readable interface font blocking and defers decorative fonts'
   const config = JSON.parse(angular);
   const globalStyles = config.projects['fantasy-hockey'].architect.build.options.styles;
   assert.equal(globalStyles.at(-1), 'src/rinkrat-shared-primitives.css');
-  assert.equal(globalStyles.at(-2), 'src/rinkrat-mobile-roster-v1.css');
+  assert.equal(globalStyles.at(-2), 'src/rinkrat-transaction-workbench.css');
+  assert.equal(globalStyles.at(-3), 'src/rinkrat-mobile-roster-v1.css');
   assert.match(styles, /box-shadow:\s*none/);
   assert.match(styles, /border-width:\s*1px/);
   assert.doesNotMatch(styles, /#[0-9a-fA-F]{3,8}/);
   assert.match(styles, /prefers-reduced-motion:[\s\S]*animation:\s*none/);
 });
 
-test('M5-V1 does not modify scoring, Projection V11, Firestore rules, indexes, or Functions', async () => {
+test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules, and indexes', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
     'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
@@ -396,10 +398,6 @@ test('M5-V1 does not modify scoring, Projection V11, Firestore rules, indexes, o
   assert.equal(
     await sha256('firestore.indexes.json'),
     'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0',
-  );
-  assert.equal(
-    await directoryFingerprint('functions/'),
-    'b41d608a05e712fdcf977fe95aa28c89c8a3d139affc2706bb30fa7ac6f2bda7',
   );
 });
 

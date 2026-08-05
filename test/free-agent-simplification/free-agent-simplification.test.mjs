@@ -52,25 +52,27 @@ test('waiver cards use the same compact decision hierarchy', async () => {
   assert.match(defaultView, /processLeagueWaiver\(waiver\)/);
 });
 
-test('six-game markers and estimated final totals remain available after selecting a player', async () => {
+test('exact six-game schedules and estimated final totals remain available after selecting a player', async () => {
   const html = await source(htmlPath);
   const listEnd = html.indexOf('<app-action-sheet');
   const listMarkup = html.slice(0, listEnd);
   const comparisonMarkup = html.slice(listEnd);
 
-  assert.doesNotMatch(listMarkup, /cycle-decision-block--details/);
-  assert.equal((comparisonMarkup.match(/cycle-decision-block--details/g) ?? []).length, 1);
+  assert.doesNotMatch(listMarkup, /workbench-game-strip-section/);
+  assert.equal((comparisonMarkup.match(/workbench-game-strip-section/g) ?? []).length, 1);
   assert.equal((comparisonMarkup.match(/Estimated final total/g) ?? []).length, 1);
-  assert.match(comparisonMarkup, /getCurrentCycleMarker\(addAsset, dotIndex\)/);
-  assert.match(comparisonMarkup, /Why this projection\?/);
+  assert.match(comparisonMarkup, /incomingCurrentComparisonGames\(\)/);
+  assert.match(comparisonMarkup, /incomingStartComparisonGames\(\)/);
+  assert.match(comparisonMarkup, /Why this incoming projection\?/);
 });
 
 test('the full current-season scoring breakdown is preserved in the comparison sheet', async () => {
   const html = await source(htmlPath);
 
-  assert.match(html, /Stat totals → fantasy points/);
+  assert.match(html, /Raw NHL totals → RinkRat fantasy points/);
   assert.match(html, /getStatBreakdown\(addAsset\)/);
-  assert.match(html, /Combined scoring-category contribution/);
+  assert.match(html, /Every stat behind/);
+  assert.match(html, /getCandidateStatBreakdown\(candidate\)/);
 });
 
 test('the compact cards retain the primary add and waiver actions', async () => {

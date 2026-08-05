@@ -86,6 +86,11 @@ import {
   type RosterManagementActionId,
   type RosterManagementArea,
 } from './roster-mobile-management.util';
+import {
+  isRosterRemovalObserved,
+  type RosterRemovalExpectation,
+  type RosterRemovalObservation,
+} from './roster-operation-confirmation.util';
 
 import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
@@ -179,6 +184,7 @@ export class TeamSettings implements OnDestroy {
   private stopMatchupsListener: (() => void) | null = null;
   private stopCurrentNavigationMatchupListener: (() => void) | null = null;
   private stopSharedScoringListener: (() => void) | null = null;
+  private rosterOperationGeneration = 0;
 
   readonly currentMatchup = computed(() => {
     const userId = this.userId;
@@ -361,6 +367,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.rosterOperationGeneration += 1;
     this.stopRosterListener?.();
     this.stopTeamListener?.();
     this.stopPicksListener?.();
@@ -1191,15 +1198,33 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const previousAssetKey = this.getRosterAssetKey(pendingDrop.asset);
+
+    if (!previousAssetKey) {
+      this.rosterMoveError.set('Unable to verify the selected roster asset. Refresh and try again.');
+      return;
+    }
+
     this.rosterMoveLoading.set(true);
+    const operationGeneration = ++this.rosterOperationGeneration;
+
+    // Close the confirmation dialog before waiting for Firebase. Mobile Safari
+    // can lose a callable response after Firestore has already committed; a
+    // modal backdrop must never remain pinned over the page while that settles.
+    this.rosterDropSource.set(null);
+    this.rosterDropSlotId.set('');
 
     try {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const assetName = this.getRosterAssetName(pendingDrop.asset);
       const sourceLabel = this.getRosterDropSourceLabel(pendingDrop.sourceRosterArea);
-
-      const execution = await dropRosterAssetToWaivers({
+      const expectation: RosterRemovalExpectation = {
+        sourceRosterArea: pendingDrop.sourceRosterArea,
+        slotId: pendingDrop.slotId,
+        previousAssetKey,
+      };
+      const request = dropRosterAssetToWaivers({
         leagueId: this.leagueId,
         ownerId: this.userId,
         sourceRosterArea: pendingDrop.sourceRosterArea,
@@ -1208,21 +1233,25 @@ export class TeamSettings implements OnDestroy {
         effectiveLabel,
       });
 
-      this.rosterMoveMessage.set(
-        pendingDrop.sourceRosterArea === 'active' && execution.mode === 'immediate'
-          ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. Its untouched Matchup ${execution.effectiveCycleNumber} assignment was removed immediately, so the open slot can still be filled for that matchup.`
-          : pendingDrop.sourceRosterArea === 'active'
-            ? `${assetName} was dropped from your ${sourceLabel} and placed on waivers. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${effectiveCycleNumber}.`
-            : `${assetName} was dropped from your ${sourceLabel} and placed on waivers immediately.`,
+      await this.awaitRosterRemovalConfirmation(
+        request,
+        expectation,
+        operationGeneration,
       );
 
-      this.rosterDropSource.set(null);
-      this.rosterDropSlotId.set('');
+      this.rosterMoveMessage.set(
+        pendingDrop.sourceRosterArea === 'active'
+          ? `${assetName} was removed from your ${sourceLabel} and placed on waivers. An untouched assignment opens immediately; an already-started six-game scoring history remains preserved, and the open slot can change in Matchup ${effectiveCycleNumber}.`
+          : `${assetName} was removed from your ${sourceLabel} and placed on waivers immediately.`,
+      );
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to drop this player or goalie unit.',
       );
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
     }
   }
@@ -2439,6 +2468,122 @@ export class TeamSettings implements OnDestroy {
     } catch (error: unknown) {
       console.warn('Unable to load player pool projection fallback.', error);
     }
+  }
+
+  private getRosterRemovalObservation(): RosterRemovalObservation {
+    const roster = this.roster();
+
+    return {
+      activeSlots: (roster?.activeSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+      })),
+      benchSlots: (roster?.benchSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+      })),
+      irSlots: (roster?.irSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+      })),
+    };
+  }
+
+  private isRosterRemovalConfirmed(expectation: RosterRemovalExpectation): boolean {
+    return isRosterRemovalObserved(expectation, this.getRosterRemovalObservation());
+  }
+
+  private async waitForRosterRemovalObservation(
+    expectation: RosterRemovalExpectation,
+    timeoutMs: number,
+    generation: number,
+  ): Promise<boolean> {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+
+    while (
+      this.rosterOperationGeneration === generation &&
+      Date.now() <= deadline
+    ) {
+      if (this.isRosterRemovalConfirmed(expectation)) {
+        return true;
+      }
+
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(resolve, 120);
+      });
+    }
+
+    return this.isRosterRemovalConfirmed(expectation);
+  }
+
+  private async awaitRosterRemovalConfirmation(
+    actionPromise: Promise<unknown>,
+    expectation: RosterRemovalExpectation,
+    generation: number,
+  ): Promise<void> {
+    let settled = false;
+    let rejected = false;
+    let settledError: unknown;
+
+    void actionPromise.then(
+      () => {
+        settled = true;
+      },
+      (error: unknown) => {
+        settled = true;
+        rejected = true;
+        settledError = error;
+      },
+    );
+
+    const deadline = Date.now() + 20_000;
+
+    while (
+      this.rosterOperationGeneration === generation &&
+      Date.now() <= deadline
+    ) {
+      if (this.isRosterRemovalConfirmed(expectation)) {
+        return;
+      }
+
+      if (settled) {
+        if (!rejected) {
+          return;
+        }
+
+        if (
+          await this.waitForRosterRemovalObservation(
+            expectation,
+            2_500,
+            generation,
+          )
+        ) {
+          return;
+        }
+
+        throw settledError;
+      }
+
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(resolve, 120);
+      });
+    }
+
+    if (this.isRosterRemovalConfirmed(expectation)) {
+      return;
+    }
+
+    if (settled && !rejected) {
+      return;
+    }
+
+    if (settled && rejected) {
+      throw settledError;
+    }
+
+    throw new Error(
+      'RinkRat did not receive a final server or live-roster confirmation. The page has been unlocked so it cannot remain stuck. Check My Team before retrying because the drop may still finish in the background.',
+    );
   }
 
   private getRosterAssetKey(asset: unknown): string {

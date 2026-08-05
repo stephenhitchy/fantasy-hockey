@@ -1,9 +1,7 @@
 @if (loading()) {
-  <p class="page-loading">Loading player detail...</p>
+  <p class="page-loading">Loading player game film...</p>
 } @else if (!league()) {
-  <p class="page-loading">
-    {{ errorMessage() || 'League not found.' }}
-  </p>
+  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   <section class="asset-detail-page">
     <a
@@ -18,172 +16,286 @@
     @if (!cycle()) {
       <section class="empty-card">
         <h1>Matchup {{ cycleNumber }} has not started.</h1>
-        <p>This player detail page will work once the matchup is ready.</p>
+        <p>This game-film page will be ready when the roster slot opens its six-game window.</p>
       </section>
     } @else if (!picksLoaded()) {
       <section class="empty-card">
-        <h1>Loading drafted player...</h1>
-        <p>Finding this player or goalie unit in the league draft results.</p>
+        <h1>Loading player...</h1>
+        <p>Finding the exact roster-slot assignment used for this matchup.</p>
       </section>
     } @else if (!asset()) {
       <section class="empty-card">
         <h1>Player not found.</h1>
-        <p>This player or goalie unit was not found in the draft results.</p>
+        <p>This player or goalie unit is not part of the saved Matchup {{ cycleNumber }} roster.</p>
       </section>
     } @else {
       @if (asset(); as selectedAsset) {
-        <header class="asset-detail-header">
-          <div class="asset-title-row">
+        <header class="asset-film-hero">
+          <div class="film-hero-rink" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+
+          <div class="film-player-identity">
             @if (getAssetLogoUrl(selectedAsset); as logoUrl) {
               <img [src]="logoUrl" [alt]="getAssetTeamLabel(selectedAsset) + ' logo'" />
             }
-
             <div>
-              <span class="eyebrow">Matchup {{ cycleNumber }} Detail</span>
+              <span class="eyebrow">Matchup {{ cycleNumber }} · Game Film</span>
               <h1>{{ getAssetName(selectedAsset) }}</h1>
               <p>
-                {{ getAssetTeamLabel(selectedAsset) }}
-                ·
-                {{ selectedAsset.position }}
-                · Drafted by {{ getDraftedByLabel() }}
+                {{ getAssetTeamLabel(selectedAsset) }} · {{ selectedAsset.position }}
+                · {{ getDraftedByLabel() }}
               </p>
             </div>
           </div>
 
-          <div class="summary-score-card">
-            <strong>{{ getProjectionDisplay(totalFantasyPoints()) }}</strong>
-            <span>Current Points</span>
+          <div class="film-scoreboard" aria-label="Current score versus projection">
+            <article class="film-score-current">
+              <span>Current</span>
+              <strong>{{ getProjectionDisplay(totalFantasyPoints()) }}</strong>
+              <small>Fantasy points</small>
+            </article>
+            <span class="film-score-versus">vs</span>
+            <article>
+              <span>Frozen projection</span>
+              <strong>{{ getFrozenProjectionDisplay(selectedAsset) }}</strong>
+              <small>Set when this window began</small>
+            </article>
+            <p [class]="'film-projection-delta ' + getProjectionDeltaClass()">
+              {{ getProjectionDeltaLabel() }}
+            </p>
           </div>
         </header>
 
-        <section class="summary-grid">
+        <section class="six-game-tape" aria-labelledby="six-game-tape-title">
+          <div class="film-section-heading">
+            <div>
+              <span class="eyebrow">The Six-Game Tape</span>
+              <h2 id="six-game-tape-title">Every NHL team game assigned to this roster slot</h2>
+            </div>
+            <strong>{{ countedGames() }} / {{ scheduledGames() }} used</strong>
+          </div>
+
+          @if (gameRows().length === 0 && !detailLoading()) {
+            <p class="empty-copy">The exact six-game schedule is still being prepared.</p>
+          } @else {
+            <ol class="game-tape-grid">
+              @for (row of gameRows(); track row.gameId) {
+                <li [class]="getGameTapeClass(row)">
+                  <span class="game-tape-number">{{ row.cycleGameNumber }}</span>
+                  <strong>{{ row.gameDate }}</strong>
+                  <small>{{ row.scheduleLabel }}</small>
+                  <em [class]="getGameStatusBadgeClass(row)">{{ getGameStatusShortLabel(row) }}</em>
+                  <b>{{ getFantasyPointDisplay(row.fantasyPoints) }}</b>
+                  @if (row.gameId === bestGame()?.gameId && row.appeared) {
+                    <span class="best-game-marker">Best</span>
+                  }
+                </li>
+              }
+            </ol>
+          }
+        </section>
+
+        <section class="film-highlight-grid" aria-label="Matchup highlights">
           <article>
-            <span>Roster-Slot Schedule</span>
+            <span>Roster-slot dates</span>
             <strong>{{ getCycleGameRangeLabel() }}</strong>
           </article>
-
           <article>
-            <span>Counted Games</span>
-            <strong>{{ countedGames() }} / {{ scheduledGames() }}</strong>
+            <span>Player appearances</span>
+            <strong>{{ actualGamesPlayed() }} / {{ countedGames() }}</strong>
+            <small>Team games still count when the player misses one</small>
           </article>
-
           <article>
-            <span>Actual Games Played</span>
-            <strong>{{ actualGamesPlayed() }}</strong>
-          </article>
-
-          <article>
-            <span>Games Left</span>
+            <span>Games left</span>
             <strong>{{ gamesLeft() }}</strong>
           </article>
-
           <article>
-            <span>Frozen Projection</span>
-            <strong>{{ getFrozenProjectionDisplay(selectedAsset) }}</strong>
-            <small>{{ getFrozenProjectionSourceLabel(selectedAsset) }}</small>
+            <span>Best game</span>
+            <strong>{{ getBestGameLabel() }}</strong>
+          </article>
+          <article>
+            <span>Points per appearance</span>
+            <strong>{{ getPointsPerAppearanceLabel() }}</strong>
+          </article>
+        </section>
+
+        <section class="film-insight-grid" aria-label="Matchup score insights">
+          <article class="projection-pace-card">
+            <div class="film-section-heading compact-film-heading">
+              <div>
+                <span class="eyebrow">Projection Pace</span>
+                <h2>Where this six-game window stands</h2>
+              </div>
+              <strong>{{ getProjectionDeltaLabel() }}</strong>
+            </div>
+
+            <div class="projection-pace-score">
+              <strong>{{ getProjectionDisplay(totalFantasyPoints()) }}</strong>
+              <span>of {{ getFrozenProjectionDisplay(selectedAsset) }} projected points</span>
+            </div>
+            <div
+              class="projection-pace-track"
+              role="progressbar"
+              aria-label="Projection progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuenow]="projectionCompletionPercent().toFixed(0)"
+            >
+              <span [style.width.%]="projectionCompletionPercent()"></span>
+            </div>
+
+            <dl class="projection-pace-metrics">
+              <div>
+                <dt>Expected through now</dt>
+                <dd>{{ getExpectedPaceLabel() }} pts</dd>
+              </div>
+              <div>
+                <dt>To reach projection</dt>
+                <dd>{{ getProjectionRemainingLabel() }}</dd>
+              </div>
+              <div>
+                <dt>Likely range</dt>
+                <dd>{{ getProjectionRangeLabel(selectedAsset) }}</dd>
+              </div>
+              <div>
+                <dt>Counted misses</dt>
+                <dd>{{ countedMissedGames() }}</dd>
+              </div>
+            </dl>
           </article>
 
-          <article>
-            <span>Projection Generated</span>
-            <strong>{{
-              formatProjectionTimestamp(
-                selectedAsset.frozenProjectionGeneratedAt ?? selectedAsset.projectionGeneratedAt
-              )
-            }}</strong>
-            <small>
-              Projection frozen {{ formatProjectionTimestamp(selectedAsset.frozenProjectionFrozenAt) }}
-            </small>
-          </article>
+          @if (aggregateBreakdownLines().length > 0) {
+            <article class="score-drivers-card">
+              <div class="film-section-heading compact-film-heading">
+                <div>
+                  <span class="eyebrow">Score Drivers</span>
+                  <h2>What created the matchup total</h2>
+                  <p>Largest scoring categories across the games played so far.</p>
+                </div>
+              </div>
+
+              <div class="score-driver-list">
+                @for (line of aggregateBreakdownLines(); track line.label) {
+                  <div [class]="'score-driver-row ' + getAggregateContributionClass(line.points)">
+                    <span>{{ line.label }}</span>
+                    <div class="score-driver-track" aria-hidden="true">
+                      <i [style.width.%]="getAggregateContributionPercent(line.points)"></i>
+                    </div>
+                    <strong>{{ getProjectionDisplay(line.points) }}</strong>
+                  </div>
+                }
+              </div>
+            </article>
+          }
         </section>
 
         <aside
           class="detail-source-notice"
           [class.historical-replay-notice]="isHistoricalReplayDetail()"
         >
-          <strong>{{ isHistoricalReplayDetail() ? 'Historical Replay Detail' : 'Game Center Detail' }}</strong>
+          <strong>{{ isHistoricalReplayDetail() ? 'Historical Replay Source' : 'Saved Game Center Source' }}</strong>
           <span>{{ getDetailSourceNotice() }}</span>
         </aside>
 
+        <details class="projection-metadata-card">
+          <summary>Projection and data details</summary>
+          <div class="projection-metadata-grid">
+            <article>
+              <span>Projection model</span>
+              <strong>{{ getFrozenProjectionSourceLabel(selectedAsset) }}</strong>
+            </article>
+            <article>
+              <span>Generated</span>
+              <strong>{{ formatProjectionTimestamp(selectedAsset.frozenProjectionGeneratedAt ?? selectedAsset.projectionGeneratedAt) }}</strong>
+            </article>
+            <article>
+              <span>Frozen for matchup</span>
+              <strong>{{ formatProjectionTimestamp(selectedAsset.frozenProjectionFrozenAt) }}</strong>
+            </article>
+          </div>
+        </details>
+
         @if (detailLoading()) {
-          <p class="status-card">Loading game-by-game stats...</p>
+          <p class="status-card">Updating exact NHL game stats and point details...</p>
         }
 
         @if (detailError()) {
-          <p class="status-card error-card">
-            {{ detailError() }}
-          </p>
+          <p class="status-card error-card">{{ detailError() }}</p>
         }
 
-        <section class="game-list-card">
-          <div class="section-heading">
-            <span class="eyebrow">Game Breakdown</span>
-            <h2>Fantasy Scoring by Counted NHL Team Game</h2>
-            <p>
-              Injured, scratched, benched, or otherwise missed games still count once the player's
-              NHL team plays that game. Missed games are worth 0 points.
-            </p>
+        <section class="game-film-card" aria-labelledby="game-film-title">
+          <div class="film-section-heading">
+            <div>
+              <span class="eyebrow">Game-by-Game Film</span>
+              <h2 id="game-film-title">How every point was earned</h2>
+              <p>Open the full formula only when you need it. The most important scoring contributors stay visible.</p>
+            </div>
           </div>
 
           @if (gameRows().length === 0 && !detailLoading()) {
-            <p class="empty-copy">
-              No NHL team games were found for this player or goalie unit in Matchup {{ cycleNumber }}.
-            </p>
+            <p class="empty-copy">No NHL team games were found for this roster-slot window.</p>
           } @else {
-            <div class="game-list">
+            <div class="game-film-list">
               @for (row of gameRows(); track row.gameId) {
-                <article
-                  class="game-detail-row"
-                  [class.played-game]="row.appeared"
-                  [class.counted-dnp-game]="!row.appeared && row.counted"
-                  [class.scheduled-game]="!row.final"
-                >
-                  <div class="game-main">
-                    <div>
-                      <strong>
-                        Roster-Slot Game {{ row.cycleGameNumber }}
-                        ·
-                        {{ row.gameDate }}
-                      </strong>
-
-                      <span>
-                        {{ row.scheduleLabel }}
-                        ·
-                        {{ row.scoreLabel }}
-                      </span>
+                <article [class]="'game-film-row ' + getGameRowClass(row)">
+                  <header class="game-film-row-header">
+                    <div class="game-film-matchup">
+                      <span class="game-film-number">Game {{ row.cycleGameNumber }} · Roster-Slot Game</span>
+                      <div>
+                        <strong>{{ row.gameDate }} · {{ row.scheduleLabel }}</strong>
+                        <small>{{ row.scoreLabel }}</small>
+                      </div>
                     </div>
+                    <div class="game-film-result">
+                      <em [class]="getGameStatusBadgeClass(row)">{{ getGameStatusShortLabel(row) }}</em>
+                      <strong>{{ getFantasyPointDisplay(row.fantasyPoints) }}</strong>
+                      <span>Fantasy pts</span>
+                    </div>
+                  </header>
 
-                    <em>{{ row.statusLabel }}</em>
-                  </div>
-
-                  <div class="game-points">
-                    <strong>
-                      {{ getFantasyPointDisplay(row.fantasyPoints) }}
-                    </strong>
-                    <span>Fantasy Points</span>
+                  <div class="game-film-explanation">
+                    <strong>{{ getGameHeadline(row) }}</strong>
+                    <p>{{ getGameExplanation(row) }}</p>
                   </div>
 
                   @if (row.statChips.length > 0) {
-                    <div class="stat-chip-list">
+                    <div class="film-stat-chip-list" aria-label="NHL game statistics">
                       @for (chip of row.statChips; track chip.label) {
-                        <span>
-                          <strong>{{ chip.value }}</strong>
-                          {{ chip.label }}
-                        </span>
+                        <span><strong>{{ chip.value }}</strong>{{ chip.label }}</span>
                       }
                     </div>
                   }
 
+                  @if (getTopBreakdownLines(row).length > 0) {
+                    <section class="film-top-contributors">
+                      <span class="eyebrow">Biggest point contributors</span>
+                      <div>
+                        @for (line of getTopBreakdownLines(row); track line.label) {
+                          <article>
+                            <span>{{ line.label }}</span>
+                            <strong>{{ getProjectionDisplay(line.points) }}</strong>
+                          </article>
+                        }
+                      </div>
+                    </section>
+                  }
+
                   @if (row.breakdownLines.length > 0) {
                     <details class="breakdown-details">
-                      <summary>Point Breakdown</summary>
-
+                      <summary>
+                        Full point formula
+                        @if (getRemainingBreakdownCount(row) > 0) {
+                          <span>+{{ getRemainingBreakdownCount(row) }} more categories</span>
+                        }
+                      </summary>
                       <div class="breakdown-line-list">
                         @for (line of row.breakdownLines; track line.label) {
                           <div>
                             <span>{{ line.label }}</span>
-                            <strong>
-                              {{ getProjectionDisplay(line.points) }}
-                            </strong>
+                            <strong>{{ getProjectionDisplay(line.points) }}</strong>
                           </div>
                         }
                       </div>

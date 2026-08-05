@@ -60,6 +60,7 @@ const IDLE_REFRESH_INTERVAL_MILLISECONDS = 6 * 60 * 60 * 1000;
 const ERROR_RETRY_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 const MAX_TRANSITION_PASSES = 3;
 const MAX_PARALLEL_LEAGUES = 2;
+const HISTORICAL_REPLAY_LEASE_RETRY_DELAYS_MILLISECONDS = [0, 500, 1_250, 2_250] as const;
 
 type LeagueAutomationTrigger =
   | 'scheduled'
@@ -1100,6 +1101,22 @@ async function runLeagueAutomation(
   trigger: LeagueAutomationTrigger,
 ): Promise<LeagueAutomationResult> {
   const startedAt = Date.now();
+
+  // Historical replay leagues advance only when a platform administrator
+  // releases the next simulated NHL date. The scheduled live scorer must not
+  // compete for the same league lease or process that replay date on its own.
+  if (trigger === 'scheduled' && await getHistoricalReplayControl(leagueId)) {
+    return {
+      leagueId,
+      status: 'skipped',
+      activeCycleNumbers: [],
+      publishedSnapshotCount: 0,
+      skippedSnapshotCount: 0,
+      cycleOneCreated: false,
+      durationMilliseconds: Date.now() - startedAt,
+    };
+  }
+
   const workerId = `${SERVER_WORKER_PREFIX}${randomUUID()}`;
   const lease = await claimLeagueAutomationLease(
     leagueId,
@@ -1349,6 +1366,52 @@ async function runLeagueAutomation(
 
     throw error;
   }
+}
+
+async function delay(milliseconds: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, Math.max(0, milliseconds));
+  });
+}
+
+/**
+ * A manual replay step can briefly overlap the final seconds of a worker that
+ * already owned the league lease. Scheduled scoring now excludes replay-enabled
+ * leagues, so retries are deliberately short. Reprocessing the same saved
+ * simulated date is safe because scoring is ledger-based and the replay date is
+ * advanced only once before this helper runs.
+ */
+async function runHistoricalReplayAutomationWithRetry(
+  leagueId: string,
+): Promise<LeagueAutomationResult> {
+  let lastResult: LeagueAutomationResult | null = null;
+
+  for (const retryDelay of HISTORICAL_REPLAY_LEASE_RETRY_DELAYS_MILLISECONDS) {
+    if (retryDelay > 0) {
+      await delay(retryDelay);
+    }
+
+    const result = await runLeagueAutomation(
+      leagueId,
+      true,
+      'historical-replay',
+    );
+    lastResult = result;
+
+    if (result.status !== 'skipped') {
+      return result;
+    }
+  }
+
+  return lastResult ?? {
+    leagueId,
+    status: 'skipped',
+    activeCycleNumbers: [],
+    publishedSnapshotCount: 0,
+    skippedSnapshotCount: 0,
+    cycleOneCreated: false,
+    durationMilliseconds: 0,
+  };
 }
 
 async function getCompletedDraftLeagueIds(): Promise<string[]> {
@@ -2022,16 +2085,12 @@ export const advanceHistoricalReplayDay = onCall(
         ),
       ]);
 
-      const result = await runLeagueAutomation(
-        leagueId,
-        true,
-        'historical-replay',
-      );
+      const result = await runHistoricalReplayAutomationWithRetry(leagueId);
 
       if (result.status === 'skipped') {
         throw new HttpsError(
           'aborted',
-          'Another server scoring update is currently finishing. Wait a moment and press Advance One Day again.',
+          'Another server scoring update kept the league lease through every automatic retry. The simulated date was not skipped; wait a moment and press Advance One Day again to retry that same date.',
         );
       }
 

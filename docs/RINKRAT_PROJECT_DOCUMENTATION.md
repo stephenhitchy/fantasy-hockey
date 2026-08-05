@@ -1,3 +1,196 @@
+## Batch M5.3 — Transaction Workbench, Game Film, and Historical Replay Resilience
+
+### Purpose
+
+Batch M5.3 finishes the add/drop decision flow, repairs the remaining stuck-overlay case when a roster drop commits but the mobile browser loses the callable response, modernizes the individual player scoring-detail page, and makes the platform-administrator historical replay more tolerant of brief scoring-lease collisions.
+
+The competitive architecture remains unchanged: every active roster slot owns an independent immutable six-game window, completed games are never reassigned, and an incoming player begins only in the first legal roster-slot matchup.
+
+### 1. Roster-drop confirmation no longer leaves a fuzzy locked screen
+
+A player or team-goalie-unit drop could successfully commit in Firestore while Mobile Safari continued waiting for the callable HTTP response. The roster listener already showed the player removed, but the page remained in its pending state, leaving the backdrop visible, navigation blocked, and the cursor or spinner running indefinitely.
+
+The My Team drop flow now:
+
+1. Captures the exact source roster area, slot ID, and outgoing asset key.
+2. Closes the confirmation dialog before beginning the network wait.
+3. Watches both the secure callable and the authoritative live roster listener.
+4. Accepts a successful callable response or a listener-confirmed removal/replacement as completion.
+5. Briefly reconciles a callable transport error against the live roster in case the Firestore transaction committed first.
+6. Releases the page after a bounded 20-second wait instead of allowing a permanent pending state.
+7. Shows a compact status dock rather than another full-screen blurred shield.
+8. Tells the manager to inspect My Team before retrying when final confirmation remains uncertain, because the original operation may still complete.
+
+The confirmation logic supports active, bench, Injured Reserve, skater, and team-goalie-unit slots.
+
+### 2. Incoming-player-first add/drop transaction workbench
+
+The Available Players comparison sheet is now organized around the player or goalie unit being acquired.
+
+The incoming report appears first and includes:
+
+- NHL team logo, player or goalie-unit name, and position.
+- Current matchup number and exact six-game progress, such as `4 / 6`.
+- Current-season fantasy points.
+- Recent form and recent points-per-game pace.
+- Next-six-game projection and expected availability.
+- The exact current six-game NHL block with game number, date, opponent, and final/live/missed/upcoming/pending state.
+- Every current-season scoring category that contributes to the fantasy total, showing raw NHL production and RinkRat fantasy-point contribution separately.
+
+All legal roster destinations then appear in a horizontal, scroll-snapping replacement rail. Active starters are shown first. Each candidate includes:
+
+- Exact active or bench roster slot.
+- Current player or open-slot identity.
+- Matchup number and six-game progress.
+- Season points, form, next-six projection, and availability.
+- The exact current roster-slot window and its individual game states.
+- The projected first legal matchup for the incoming player.
+- The player or roster boundary controlling any delay.
+
+Same-position active and bench comparisons include the full scoring-category breakdown. A flexible bench choice at another position retains the player, matchup, progress, schedule, totals, projection, and timing information while omitting the large category-by-category comparison.
+
+The primary confirmation button remains at the top of the workbench, while the detailed comparison can scroll independently below it.
+
+### 3. Exact asynchronous transaction timing
+
+The workbench evaluates the selected roster slot and incoming NHL block separately. It can explain:
+
+- **No delay:** both assignments are untouched and the move can begin immediately.
+- **Same matchup:** both sides are aligned to the same matchup number.
+- **Outgoing player delay:** the named current player has already started the immutable six-game roster-slot window.
+- **Incoming player delay:** the incoming player's applicable NHL block already contains games that cannot be acquired retroactively.
+- **Both players holding the move:** both histories have started and must remain intact.
+- **Incoming player behind or ahead:** the workbench shows the matchup-number difference and explains the no-backfill rule.
+- **Roster-boundary wait:** the outgoing count is complete, but the next immutable roster-slot assignment has not opened yet.
+- **Bench ownership:** the player may be owned immediately but does not score until entering a legal active slot.
+- **Waiver condition:** the timing applies only after the manager wins the claim.
+
+The **Exact First Legal Start** section shows the expected matchup number and six NHL team games for the incoming player's first legal scoring window. Before the window begins, that schedule may still react to an NHL postponement or other official schedule change. Once the first game is counted, the assignment becomes immutable.
+
+### 4. Add/drop submission recovery
+
+The Available Players flow continues to use both completion signals introduced in M5.2:
+
+- Secure callable response.
+- Authoritative roster or waiver listener observation.
+
+M5.3 keeps the comparison from being trapped behind a blurred overlay by closing the sheet before the long network wait and presenting progress in a compact status dock. NHL schedule prerequisites and final transaction confirmation remain bounded, duplicate submissions remain blocked, and navigation stays protected only while the competitive operation is genuinely pending.
+
+### 5. Game Film player scoring detail
+
+The individual player fantasy-game breakdown has been redesigned as **Game Film**. The initial view now emphasizes what a manager is most likely trying to understand:
+
+1. Player and matchup identity.
+2. Current fantasy score.
+3. Frozen matchup projection and difference from projection.
+4. The complete six-game roster-slot tape.
+5. Player appearances versus counted NHL team games.
+6. Games remaining, best game, and points per appearance.
+7. Game-by-game scoring highlights.
+
+Each of the six games is clearly labeled as final and played, final but missed, live, upcoming, or waiting for the roster-slot window. A missed appearance explains that the NHL team game still consumes one of the slot's six scheduled games and scores zero.
+
+The most important scoring contributors stay visible on each game card. The complete point formula remains available under an expandable detail section for managers who want to audit every category without overwhelming the default presentation.
+
+Historical replay continues to display the simulated matchup date and opponent while loading detailed NHL statistics from the mapped source season. The authoritative saved Game Center score remains available if a detail endpoint is temporarily unavailable.
+
+### 6. Historical replay `409` and lease-collision resilience
+
+Opening Game Film or another player detail page is read-only and does not acquire the league scoring lease. The intermittent `409` was caused by a manual replay step briefly overlapping another scoring worker that still held the league automation lease.
+
+The server now retries a skipped historical-replay automation attempt after short delays of 500 ms, 1.25 seconds, and 2.25 seconds. Scheduled scoring excludes replay-enabled leagues, so these retries are intentionally bounded rather than turning every replay click into a long wait.
+
+Additional safeguards:
+
+- The browser blocks another **Advance One Day** submission while either its local request or the saved replay control reports `advancing`.
+- A lease collision never silently skips the simulated NHL date.
+- If every retry still finds the lease occupied, the control records an error and the next click retries that same date.
+- Ledger-based scoring keeps same-date retries idempotent.
+- A clear error explains that another server scoring update retained the lease.
+
+### Competitive behavior preserved
+
+This batch does not change:
+
+- Production Scoring V3.
+- Projection V11.
+- Draft order, draft timer, or Auto-Draft authority.
+- Add/drop, waiver, bench, or Injured Reserve server legality.
+- The roster, transaction, waiver, or scoring schemas.
+- Per-slot six-game windows or seventh-game rollover.
+- Standings, playoffs, or playoff backfill.
+- Firestore rules or indexes.
+
+The historical replay callable changes only orchestration and retry behavior. It does not alter the scoring formula or published game ledger.
+
+### Automated verification
+
+Run the complete dependency-backed verification on the development Mac:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm5-3
+npm run build:all
+```
+
+The focused M5.3 suite verifies:
+
+- Active, bench, and Injured Reserve roster-removal observation.
+- A bounded roster-operation timeout.
+- Player and goalie-unit drop completion through the authoritative roster listener.
+- Incoming-player-first workbench hierarchy.
+- Horizontal legal-replacement rail.
+- Compact non-blurred transaction status.
+- Game Film presentation and historical detail source.
+- Historical replay lease retry and duplicate-click protection.
+- Production Scoring V3 and Projection V11 preservation.
+
+The packaged source also passes 275/275 cumulative dependency-free, non-emulator regression tests, all seven design/accessibility/migration/mobile/beginner audits, syntax validation for 229 TypeScript files, structural validation for 52 CSS files and 53 HTML templates, parsing of 16 JSON/JSONC files, resolution of 817 relative TypeScript imports, and resolution of 97 Angular component assets.
+
+### Deployment
+
+This batch changes the manual replay callable, the scheduled league-automation worker, and the Hosting application. Deploy both automation Functions first so scheduled scoring stops competing with replay leagues, then deploy Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions:advanceHistoricalReplayDay,functions:runScheduledLeagueAutomation -m "Batch M5.3 replay lease resilience"
+firebase deploy --only hosting:app -m "Batch M5.3 transaction workbench and Game Film"
+```
+
+No Firestore rules, indexes, or data migration are required.
+
+### Manual checklist
+
+1. Add and then drop a team-goalie unit from My Team.
+2. Confirm the dialog closes before the network wait and the compact status dock disappears after the roster updates.
+3. Repeat with an active skater, bench skater, and Injured Reserve skater.
+4. Simulate a slow or interrupted connection and confirm the page eventually unlocks rather than remaining blurred indefinitely.
+5. Select a free agent and confirm the incoming player report appears before all replacement choices.
+6. Verify logo, name, position, matchup number, `N / 6` progress, season points, form, next-six projection, exact games, and complete point formula.
+7. Horizontally scroll through every legal active and bench destination.
+8. Confirm same-position candidates show full category details and cross-position flexible bench candidates use the reduced comparison.
+9. Test immediate, outgoing-delayed, incoming-delayed, both-started, one-matchup-behind, bench, and waiver-contingent scenarios.
+10. Confirm the workbench names the player controlling the delay and identifies the exact first legal matchup.
+11. Submit an immediate add/drop, scheduled add/drop, open-slot addition, bench replacement, and waiver claim.
+12. Confirm no fuzzy overlay or endless cursor remains after the server or live listener confirms the result.
+13. Open Game Film for a player with played, missed, live, upcoming, and pending roster-slot games.
+14. Confirm current score, frozen projection, score difference, six-game tape, best game, points per appearance, and expandable formula are correct.
+15. During historical replay, advance several dates and confirm already-open Game Film data refreshes from the authoritative snapshot.
+16. Press **Advance One Day** once per completed request and confirm duplicate clicks are disabled while status is `advancing`.
+17. If a lease error occurs, confirm the next click retries the same simulated date rather than skipping it.
+18. Repeat representative flows at 320px, 360px, 390px, and 430px in Mobile Safari and Mobile Chrome, plus desktop Chrome and Safari.
+19. Repeat in Rink Dark, Light Ice, OLED Black, reduced motion, landscape orientation, and 200% text zoom.
+
+### Rollback guidance
+
+A Hosting rollback to the approved M5.2 build is safe. The M5.3 `advanceHistoricalReplayDay` and `runScheduledLeagueAutomation` Functions may remain deployed because their same-date retry and replay-league isolation behavior is backward-compatible with the prior client. If the Functions themselves must be rolled back, deploy the prior known-good versions before continuing the historical replay and verify that the saved replay control is not left in `advancing` status. No roster, waiver, matchup, scoring, or projection data migration is needed.
+
+---
+
 ## Batch M5.2 — Side-by-Side Add/Drop Comparison and Transaction Confirmation Recovery
 
 ### Purpose

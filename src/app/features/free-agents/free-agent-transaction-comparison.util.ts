@@ -191,6 +191,39 @@ export function buildOutgoingWindowComparisonGames(
   });
 }
 
+
+export function buildProjectionMarkerComparisonGames(
+  projectionMarkers: readonly ProjectionCycleGameMarker[] | null | undefined,
+  requiredGames: number,
+): FreeAgentComparisonGame[] {
+  const gameCount = normalizeRequiredGames(requiredGames);
+  const markers = projectionMarkers ?? [];
+
+  return Array.from({ length: gameCount }, (_, index) => {
+    const marker = markers[index];
+
+    if (!marker) {
+      return createPendingGame(index + 1);
+    }
+
+    const state: FreeAgentComparisonGameState = marker.status === 'played'
+      ? 'appeared'
+      : marker.status === 'missed'
+        ? 'missed'
+        : 'upcoming';
+
+    return {
+      gameNumber: index + 1,
+      gameId: marker.gameId,
+      gameDate: marker.gameDate,
+      opponentLabel: `${marker.venue === 'home' ? 'vs' : '@'} ${marker.opponentAbbreviation}`,
+      state,
+      fantasyPoints: null,
+      counted: marker.status === 'played' || marker.status === 'missed',
+    };
+  });
+}
+
 function toOpponentLabel(game: RosterMoveEligibilityGame): string {
   return `${game.venue === 'home' ? 'vs' : '@'} ${game.opponentAbbreviation}`;
 }

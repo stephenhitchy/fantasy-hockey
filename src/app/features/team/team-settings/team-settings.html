@@ -1463,15 +1463,13 @@
     }
 
     @if (isRosterOperationPending()) {
-      <div class="roster-action-shield" appViewportOverlayPortal role="status" aria-live="assertive" aria-atomic="true">
-        <div class="roster-action-shield-card">
-          <span class="roster-action-spinner" aria-hidden="true"></span>
-          <div>
-            <strong>{{ rosterMoveLoading() ? 'Saving roster change…' : 'Saving team settings…' }}</strong>
-            <small>Stay on this page until RinkRat confirms the update.</small>
-          </div>
+      <aside class="roster-operation-status-dock" role="status" aria-live="assertive" aria-atomic="true">
+        <span class="roster-action-spinner" aria-hidden="true"></span>
+        <div>
+          <strong>{{ rosterMoveLoading() ? 'Confirming roster change…' : 'Saving team settings…' }}</strong>
+          <small>The dialog is closed while RinkRat waits for the secure response or the live roster update. Navigation remains protected until one is confirmed. Stay on this page until RinkRat confirms the update.</small>
         </div>
-      </div>
+      </aside>
     }
 
   </section>

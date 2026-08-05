@@ -244,7 +244,10 @@ export class CycleOne implements OnDestroy {
   }
 
   async advanceReplayOneDay(): Promise<void> {
-    if (this.historicalReplayAdvancing()) {
+    if (
+      this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'advancing'
+    ) {
       return;
     }
 
