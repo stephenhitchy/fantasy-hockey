@@ -501,3 +501,123 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* P1A: browser-only client health panel for invite-beta validation. */
+.client-health-card {
+  border-top-color: var(--rr-info);
+}
+
+.client-health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.client-health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.client-health-grid article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.client-health-grid article > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.client-health-grid article > strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.client-health-grid article > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.client-health-grid .client-health-alert {
+  border-color: color-mix(in srgb, var(--rr-danger) 64%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-danger) 8%, var(--surface-2));
+}
+
+.client-listener-details {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+
+.client-listener-details > summary {
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 900;
+}
+
+.client-listener-details p {
+  color: var(--text-secondary);
+}
+
+.client-listener-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.client-listener-grid span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.client-listener-grid strong {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 16px;
+}
+
+@media (max-width: 900px) {
+  .client-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .client-health-actions,
+  .client-health-actions button {
+    width: 100%;
+  }
+
+  .client-health-grid,
+  .client-listener-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

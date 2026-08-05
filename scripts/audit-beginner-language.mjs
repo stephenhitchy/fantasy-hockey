@@ -31,6 +31,7 @@ const templatePaths = [
   'src/app/features/leagues/league-detail/league-detail.html',
   'src/app/features/leagues/league-standings/league-standings.html',
   'src/app/features/cycles/cycle-one/cycle-one.html',
+  'src/app/features/cycles/cycle-asset-detail/cycle-asset-detail.html',
   'src/app/features/cycles/cycle-one/components/cycle-page-header/cycle-page-header.html',
   'src/app/features/cycles/cycle-one/components/cycle-matchup-toolbar/cycle-matchup-toolbar.html',
   'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html',
@@ -198,7 +199,7 @@ for (const [expression, label] of forbiddenManagerPhrases) {
 }
 
 requireMatch(templates, /Next 6 Games/, 'Primary templates do not use the beginner-facing Next 6 Games label.');
-requireMatch(templates, /Six-Game Progress/, 'Game Center does not use Six-Game Progress.');
+requireMatch(templates, /The Six-Game Tape/, 'Game Film does not explain the six-game assignment clearly.');
 requireMatch(templates, /Injured Reserve \(IR\)/, 'Injured Reserve is not expanded before its abbreviation.');
 requireMatch(templates, /No favorite yet/, 'Neutral onboarding choice is not visible.');
 

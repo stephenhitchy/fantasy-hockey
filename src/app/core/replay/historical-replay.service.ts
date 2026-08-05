@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
@@ -76,7 +77,7 @@ export function listenToHistoricalReplayControl(
   callback: (control: HistoricalReplayControl | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('replay:control', () => onSnapshot(
     getHistoricalReplayControlRef(leagueId),
     (snapshot) => {
       callback(
@@ -92,7 +93,7 @@ export function listenToHistoricalReplayControl(
           : new Error('Unable to load the historical replay control.'),
       );
     },
-  );
+  ));
 }
 
 export async function advanceHistoricalReplayDay(

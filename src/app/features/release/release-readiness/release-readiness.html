@@ -129,6 +129,77 @@
         </article>
       </section>
 
+      @if (clientPerformance(); as client) {
+        <section class="readiness-card client-health-card">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">This browser session</span>
+              <h2>Client health and performance</h2>
+            </div>
+            <div class="client-health-actions">
+              <button type="button" class="secondary-button" (click)="refreshClientHealth()">
+                Refresh Device Check
+              </button>
+              <button type="button" class="secondary-button" (click)="copyClientHealthReport()">
+                Copy Health Report
+              </button>
+            </div>
+          </div>
+
+          <p class="section-copy">
+            These values stay in this browser except for sanitized performance totals sent through
+            the existing analytics pipeline. League IDs, matchup IDs, player IDs, and roster data
+            are not included.
+          </p>
+
+          <div class="client-health-grid">
+            <article [class.client-health-alert]="!client.connection.online">
+              <span>Connection</span>
+              <strong>{{ getConnectionSummary(client) }}</strong>
+              <small>Data saver: {{ client.connection.saveData ? 'On' : 'Off' }}</small>
+            </article>
+            <article>
+              <span>Active listeners</span>
+              <strong>{{ client.firestoreListeners.total }}</strong>
+              <small>Longest open {{ formatPerformanceMilliseconds(client.firestoreListeners.longestActiveMilliseconds) }}</small>
+            </article>
+            <article>
+              <span>Latest route ready</span>
+              <strong>{{ formatPerformanceMilliseconds(client.metrics.latestRouteReadyMilliseconds) }}</strong>
+              <small>Slowest {{ formatPerformanceMilliseconds(client.metrics.slowestRouteReadyMilliseconds) }}</small>
+            </article>
+            <article>
+              <span>Largest paint</span>
+              <strong>{{ formatPerformanceMilliseconds(client.metrics.largestContentfulPaintMilliseconds) }}</strong>
+              <small>First content {{ formatPerformanceMilliseconds(client.metrics.firstContentfulPaintMilliseconds) }}</small>
+            </article>
+            <article>
+              <span>Interaction latency</span>
+              <strong>{{ formatPerformanceMilliseconds(client.metrics.interactionToNextPaintMilliseconds) }}</strong>
+              <small>98th-percentile session estimate</small>
+            </article>
+            <article>
+              <span>Layout shift</span>
+              <strong>{{ formatLayoutShift(client.metrics.cumulativeLayoutShift) }}</strong>
+              <small>{{ client.metrics.longTaskCount }} long tasks · longest {{ formatPerformanceMilliseconds(client.metrics.longestTaskMilliseconds) }}</small>
+            </article>
+          </div>
+
+          <details class="client-listener-details">
+            <summary>View active Firestore listener groups</summary>
+            @if (client.firestoreListeners.total) {
+              <div class="client-listener-grid">
+                @for (entry of client.firestoreListeners.byLabel | keyvalue; track entry.key) {
+                  <span><strong>{{ entry.value }}</strong>{{ entry.key }}</span>
+                }
+              </div>
+            } @else {
+              <p>No monitored Firestore listeners are active on this route.</p>
+            }
+          </details>
+        </section>
+      }
+
       <section class="readiness-card simulator-card">
         <div class="section-heading">
           <div>

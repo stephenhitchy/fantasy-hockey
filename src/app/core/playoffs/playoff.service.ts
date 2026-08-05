@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   doc,
   getDoc,
@@ -229,7 +230,7 @@ export function listenToFantasyPlayoffs(
   callback: (playoffs: FantasyPlayoffs | null) => void,
   onError?: (error: Error) => void
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('playoffs:state', () => onSnapshot(
     getFantasyPlayoffsRef(leagueId),
     (snapshot) => {
       callback(
@@ -252,7 +253,7 @@ export function listenToFantasyPlayoffs(
 
       console.error('Unable to load the playoff bracket.', error);
     }
-  );
+  ));
 }
 
 function createPlayoffSeeds(

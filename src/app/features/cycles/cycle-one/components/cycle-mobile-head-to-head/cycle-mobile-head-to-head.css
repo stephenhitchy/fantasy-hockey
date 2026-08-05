@@ -2,8 +2,7 @@
   display: contents;
 }
 
-.mobile-head-to-head-roster,
-.mobile-asset-sheet-backdrop {
+.mobile-head-to-head-roster {
   display: none;
 }
 
@@ -50,7 +49,6 @@
 
   .mobile-matchup-mode-selector button:focus-visible,
   .mobile-live-player:focus-visible,
-  .mobile-asset-sheet button:focus-visible,
   .mobile-live-position-section > summary:focus-visible {
     outline: 3px solid var(--user-team-accent);
     outline-offset: 2px;
@@ -526,259 +524,7 @@
     background: var(--rr-warning);
   }
 
-  .mobile-asset-sheet-backdrop {
-    position: fixed;
-    z-index: var(--rr-z-viewport-overlay, 2000);
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: max(10px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--rr-scoreboard) 72%, transparent);
-    backdrop-filter: blur(4px);
-  }
 
-  .mobile-asset-sheet {
-    width: min(100%, 620px);
-    max-height: min(92dvh, 820px);
-    overflow: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-gutter: stable;
-    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
-    border: 1px solid var(--border-strong);
-    border-top: 4px solid var(--user-team-primary);
-    border-radius: 18px;
-    color: var(--text-primary);
-    background: var(--surface-1);
-    box-shadow: 0 -20px 55px color-mix(in srgb, var(--rr-scoreboard) 50%, transparent);
-  }
-
-  .mobile-asset-sheet-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .mobile-asset-sheet-identity {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .mobile-asset-sheet-identity img {
-    flex: 0 0 auto;
-    width: 42px;
-    height: 42px;
-    object-fit: contain;
-  }
-
-  .mobile-asset-sheet-identity div {
-    min-width: 0;
-  }
-
-  .mobile-asset-sheet-identity span,
-  .mobile-asset-sheet-identity h3,
-  .mobile-asset-sheet-identity p {
-    margin: 0;
-  }
-
-  .mobile-asset-sheet-identity span {
-    display: block;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 750;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-asset-sheet-identity h3 {
-    overflow: hidden;
-    margin-top: 2px;
-    font-family: var(--rr-font-interface);
-    font-size: 20px;
-    font-weight: 900;
-    line-height: 1.05;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-asset-sheet-identity p {
-    margin-top: 3px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .mobile-asset-sheet-close {
-    flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    color: var(--text-primary);
-    background: var(--surface-3);
-    font-size: 28px;
-    font-weight: 600;
-    line-height: 1;
-  }
-
-  .mobile-asset-sheet-status {
-    margin: 12px 0 0;
-    padding: 9px 10px;
-    border-left: 3px solid var(--rr-info);
-    border-radius: 8px;
-    color: var(--text-secondary);
-    background: color-mix(in srgb, var(--rr-info) 8%, var(--surface-2));
-    font-size: 13px;
-    font-weight: 750;
-    line-height: 1.3;
-  }
-
-  .mobile-asset-sheet-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 10px;
-  }
-
-  .mobile-asset-sheet-metrics article {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-    padding: 9px 5px;
-    border: 1px solid var(--border-soft);
-    border-radius: 9px;
-    background: var(--surface-2);
-    text-align: center;
-  }
-
-  .mobile-asset-sheet-metrics span {
-    color: var(--text-secondary);
-    font-size: var(--rr-mobile-text-micro);
-    font-weight: 750;
-  }
-
-  .mobile-asset-sheet-metrics strong {
-    overflow: hidden;
-    font-family: var(--rr-font-numeric);
-    font-size: 20px;
-    font-weight: 900;
-    text-overflow: ellipsis;
-  }
-
-  .mobile-asset-sheet-metrics small {
-    color: var(--text-muted);
-    font-size: var(--rr-mobile-text-micro);
-    font-weight: 750;
-    line-height: 1;
-  }
-
-  .mobile-asset-sheet-projection-note,
-  .mobile-asset-sheet-bench-note {
-    display: grid;
-    gap: 4px;
-    margin-top: 10px;
-    padding: 10px;
-    border: 1px solid var(--border-soft);
-    border-radius: 9px;
-    background: var(--surface-2);
-  }
-
-  .mobile-asset-sheet-projection-note strong,
-  .mobile-asset-sheet-bench-note strong {
-    font-size: 14px;
-  }
-
-  .mobile-asset-sheet-projection-note span,
-  .mobile-asset-sheet-bench-note span {
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 1.35;
-  }
-
-  .mobile-asset-sheet-games {
-    margin-top: 14px;
-  }
-
-  .mobile-asset-sheet-games > header h4,
-  .mobile-asset-sheet-games > header p {
-    margin: 0;
-  }
-
-  .mobile-asset-sheet-games > header h4 {
-    font-family: var(--rr-font-interface);
-    font-size: 17px;
-    font-weight: 900;
-  }
-
-  .mobile-asset-sheet-games > header p {
-    margin-top: 4px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 1.35;
-  }
-
-  .mobile-asset-sheet-game-list {
-    display: grid;
-    gap: 7px;
-    margin-top: 9px;
-  }
-
-  .mobile-asset-sheet-game {
-    display: grid;
-    grid-template-columns: 27px minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 9px;
-    min-width: 0;
-    padding: 9px;
-    border: 1px solid var(--border-soft);
-    border-radius: 9px;
-    background: var(--surface-2);
-  }
-
-  .mobile-asset-sheet-game > div {
-    min-width: 0;
-  }
-
-  .mobile-asset-sheet-game strong,
-  .mobile-asset-sheet-game p {
-    margin: 0;
-  }
-
-  .mobile-asset-sheet-game strong {
-    display: block;
-    font-size: 13px;
-    line-height: 1.25;
-  }
-
-  .mobile-asset-sheet-game p {
-    margin-top: 3px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .mobile-asset-sheet-game b {
-    color: var(--text-primary);
-    font-family: var(--rr-font-numeric);
-    font-size: 13px;
-    white-space: nowrap;
-  }
-
-  .mobile-asset-sheet-full-detail {
-    width: 100%;
-    min-height: 46px;
-    margin-top: 14px;
-    border: 1px solid var(--user-team-outline);
-    border-radius: 10px;
-    color: var(--user-team-on-primary);
-    background: var(--user-team-primary);
-    font-weight: 900;
-  }
 }
 
 @media (max-width: 430px) {
@@ -880,17 +626,6 @@
     font-size: 11px;
   }
 
-  .mobile-asset-sheet {
-    padding-inline: 11px;
-  }
-
-  .mobile-asset-sheet-game {
-    grid-template-columns: 25px minmax(0, 1fr);
-  }
-
-  .mobile-asset-sheet-game b {
-    grid-column: 2;
-  }
 }
 
 @keyframes mobile-live-marker-pulse {

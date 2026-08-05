@@ -6,6 +6,23 @@
 
 <app-navbar></app-navbar>
 
+@if (clientHealth.connectionNotice(); as notice) {
+  <aside
+    class="client-connection-notice"
+    [class.client-connection-notice-offline]="notice.state === 'offline'"
+    [class.client-connection-notice-restored]="notice.state === 'restored'"
+    role="status"
+    aria-live="assertive"
+    aria-atomic="true"
+  >
+    <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
+    <div>
+      <strong>{{ notice.title }}</strong>
+      <span>{{ notice.detail }}</span>
+    </div>
+  </aside>
+}
+
 @if (scoringRuntime.effectiveMode === 'historical' || scoringRuntime.historicalModeBlocked) {
   <aside
     class="runtime-warning"
@@ -27,7 +44,11 @@
   </aside>
 }
 
-<div class="global-team-ribbon" aria-hidden="true">
+<div
+  class="global-team-ribbon"
+  [class.global-team-ribbon-paused]="clientHealth.shouldPauseDecorations()"
+  aria-hidden="true"
+>
   <div class="global-team-ribbon-track">
     @for (logo of teamRibbon; track $index) {
       <span class="global-team-logo-chip">

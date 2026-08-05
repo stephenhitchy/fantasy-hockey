@@ -343,7 +343,7 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
   assert.ok(Buffer.byteLength(styles) < 45_000, 'Draft Room component CSS exceeds 45 kB raw.');
 });
 
-test('Game Center phone view uses perspective tabs, grouped accordions, compact six-game rows, and an accessible detail sheet', async () => {
+test('Game Center phone view uses perspective tabs, grouped accordions, compact six-game rows, and direct Game Film navigation', async () => {
   const [template, source, styles] = await Promise.all([
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.ts'),
@@ -358,11 +358,8 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
     'mobile-live-position-section',
     'mobile-window-markers',
     'mobile-live-bench-section',
-    'Why each game counts',
-    'mobile-asset-sheet-backdrop',
-    'appDialogFocusTrap',
-    'dialogEscape',
-    'Open full scoring breakdown',
+    '(click)="openActiveDetail(pick)"',
+    '(click)="openBenchDetail(asset',
   ]) {
     assert.match(template, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
@@ -373,12 +370,14 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
     template,
     /<details class="mobile-live-position-section mobile-live-bench-section" open>/,
   );
+  assert.doesNotMatch(template, /mobile-asset-sheet|Open full scoring breakdown|Why each game counts/);
   assert.match(source, /groupMobileMatchupPositions/);
-  assert.match(source, /getMobileGameMarkerExplanation/);
-  assert.match(source, /openBenchDetail\([\s\S]*ownerId:\s*string \| null/);
+  assert.match(source, /openAssetDetail\(pick\.asset\)/);
+  assert.match(source, /openBenchAssetDetail\(asset\)/);
+  assert.doesNotMatch(source, /selectedDetail|DialogFocusTrapDirective|ViewportOverlayPortalDirective/);
   assert.match(styles, /@media \(max-width:\s*780px\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(styles, /max-height:\s*min\((?:90|92)dvh/);
+  assert.doesNotMatch(styles, /mobile-asset-sheet/);
   assert.match(styles, /prefers-reduced-motion/);
   assert.ok(Buffer.byteLength(styles) < 45_000, 'Mobile Game Center component CSS exceeds 45 kB raw.');
 });

@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   collection,
   doc,
@@ -371,7 +372,7 @@ export function listenToCycleTeamWindows(
   callback: (teamWindows: FantasyTeamCycleWindows[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:team-windows', () => onSnapshot(
     getTeamWindowsCollectionRef(leagueId, cycleNumber),
     (snapshot) => {
       callback(
@@ -397,7 +398,7 @@ export function listenToCycleTeamWindows(
 
       console.error('Unable to load cycle-window progress.', error);
     },
-  );
+  ));
 }
 
 /**

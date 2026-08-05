@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   collection,
   doc,
@@ -952,7 +953,7 @@ export function listenToCycle(
   callback: (cycle: FantasyCycle | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:single', () => onSnapshot(
     getCycleRef(leagueId, cycleNumber),
     (snapshot) => {
       if (!snapshot.exists()) {
@@ -965,7 +966,7 @@ export function listenToCycle(
     (error) => {
       reportCycleListenerError(error, `Unable to load Cycle ${cycleNumber}.`, onError);
     },
-  );
+  ));
 }
 
 export function listenToLeagueCycles(
@@ -975,7 +976,7 @@ export function listenToLeagueCycles(
 ): () => void {
   const cyclesQuery = query(getCyclesRef(leagueId), orderBy('cycleNumber', 'asc'));
 
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:list', () => onSnapshot(
     cyclesQuery,
     (snapshot) => {
       callback(
@@ -989,7 +990,7 @@ export function listenToLeagueCycles(
     (error) => {
       reportCycleListenerError(error, 'Unable to load league cycles.', onError);
     },
-  );
+  ));
 }
 
 export function listenToLatestCycle(
@@ -999,7 +1000,7 @@ export function listenToLatestCycle(
 ): () => void {
   const latestCycleQuery = query(getCyclesRef(leagueId), orderBy('cycleNumber', 'desc'), limit(1));
 
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:latest', () => onSnapshot(
     latestCycleQuery,
     (snapshot) => {
       const latestCycleDoc = snapshot.docs[0];
@@ -1016,7 +1017,7 @@ export function listenToLatestCycle(
     (error) => {
       reportCycleListenerError(error, 'Unable to load the latest cycle.', onError);
     },
-  );
+  ));
 }
 
 export async function getLatestCycle(leagueId: string): Promise<FantasyCycle | null> {
@@ -1042,7 +1043,7 @@ export function listenToCycleMatchups(
 ): () => void {
   const matchupsQuery = query(getCycleMatchupsRef(leagueId, cycleNumber), orderBy('id', 'asc'));
 
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:matchups', () => onSnapshot(
     matchupsQuery,
     (snapshot) => {
       callback(
@@ -1054,7 +1055,7 @@ export function listenToCycleMatchups(
     (error) => {
       reportCycleListenerError(error, `Unable to load Cycle ${cycleNumber} matchups.`, onError);
     },
-  );
+  ));
 }
 
 /**
@@ -1220,7 +1221,7 @@ export function listenToCycleRosterPicks(
     orderBy('overallPick', 'asc'),
   );
 
-  return onSnapshot(
+  return monitorFirestoreListener('cycle:roster-picks', () => onSnapshot(
     rosterPicksQuery,
     (snapshot) => {
       callback(snapshot.docs.map((pickDoc) => pickDoc.data() as DraftPick));
@@ -1232,7 +1233,7 @@ export function listenToCycleRosterPicks(
         onError,
       );
     },
-  );
+  ));
 }
 
 export async function startCycle(

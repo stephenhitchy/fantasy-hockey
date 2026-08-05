@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import { Signal, signal } from '@angular/core';
 import {
   doc,
@@ -316,7 +317,7 @@ export function startGlobalPlayerAvailabilityListener(): void {
     void globalListenerReadyPromise.catch(() => undefined);
   }
 
-  stopGlobalListener = onSnapshot(
+  stopGlobalListener = monitorFirestoreListener('availability:global', () => onSnapshot(
     getGlobalAvailabilityReference(),
     (snapshot) => {
       globalListenerRetryCount = 0;
@@ -339,7 +340,9 @@ export function startGlobalPlayerAvailabilityListener(): void {
       resolveGlobalListenerReady = null;
       rejectGlobalListenerReady = null;
       globalListenerReadyPromise = null;
+      const stopFailedListener = stopGlobalListener;
       stopGlobalListener = null;
+      stopFailedListener?.();
 
       console.warn(
         'The shared player-availability listener disconnected and will retry.',
@@ -347,7 +350,7 @@ export function startGlobalPlayerAvailabilityListener(): void {
       );
       scheduleGlobalListenerRetry(userId);
     },
-  );
+  ));
 }
 
 export function stopGlobalPlayerAvailabilityListener(): void {

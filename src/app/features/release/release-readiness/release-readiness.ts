@@ -1,8 +1,13 @@
-import { Component, computed, signal } from '@angular/core';
+import { KeyValuePipe } from '@angular/common';
+import { Component, computed, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { onAuthStateChanged } from 'firebase/auth';
 
 import { getScoringRuntimeState } from '../../../core/cycle/cycle-runtime.config';
+import {
+  ClientPerformanceMonitorService,
+  type ClientPerformanceSnapshot,
+} from '../../../core/observability/client-performance-monitor.service';
 import { auth } from '../../../core/firebase';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import {
@@ -21,11 +26,11 @@ import { runFullSeasonLifecycleSimulator } from '../../../core/release/season-li
 
 @Component({
   selector: 'app-release-readiness',
-  imports: [RouterLink],
+  imports: [KeyValuePipe, RouterLink],
   templateUrl: './release-readiness.html',
   styleUrl: './release-readiness.css',
 })
-export class ReleaseReadiness {
+export class ReleaseReadiness implements OnDestroy {
   readonly leagueId: string;
   readonly league = signal<League | null>(null);
   readonly loading = signal(true);
@@ -37,6 +42,7 @@ export class ReleaseReadiness {
   readonly actionInProgress = signal(false);
   readonly targetProjectionCycle = signal(1);
   readonly runtime = getScoringRuntimeState();
+  readonly clientPerformance = signal<ClientPerformanceSnapshot | null>(null);
 
   readonly requiredChecks = computed(
     () => this.snapshot()?.checks.filter((check) => check.requiredForLiveLaunch) ?? [],
@@ -66,9 +72,27 @@ export class ReleaseReadiness {
       .filter((group) => group.checks.length > 0);
   });
 
-  constructor(route: ActivatedRoute) {
+  private clientHealthTimer: number | null = null;
+
+  constructor(
+    route: ActivatedRoute,
+    private readonly performanceMonitor: ClientPerformanceMonitorService,
+  ) {
     this.leagueId = route.snapshot.paramMap.get('leagueId') ?? '';
+    this.refreshClientHealth();
+
+    if (typeof window !== 'undefined') {
+      this.clientHealthTimer = window.setInterval(() => this.refreshClientHealth(), 2_500);
+    }
+
     void this.initialize();
+  }
+
+  ngOnDestroy(): void {
+    if (this.clientHealthTimer !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.clientHealthTimer);
+      this.clientHealthTimer = null;
+    }
   }
 
   async refreshReadiness(): Promise<void> {
@@ -135,6 +159,47 @@ export class ReleaseReadiness {
     }
 
     return check.level === 'warning' ? '!' : '×';
+  }
+
+  refreshClientHealth(): void {
+    this.clientPerformance.set(this.performanceMonitor.getSnapshot());
+  }
+
+  async copyClientHealthReport(): Promise<void> {
+    const snapshot = this.performanceMonitor.getSnapshot();
+    this.clientPerformance.set(snapshot);
+
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      this.errorMessage.set('Clipboard access is unavailable in this browser.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
+      this.actionMessage.set('This device health report was copied to the clipboard.');
+      this.errorMessage.set('');
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'Unable to copy the device health report.',
+      );
+    }
+  }
+
+  formatPerformanceMilliseconds(value: number | null): string {
+    return value === null ? 'Collecting' : `${Math.round(value)} ms`;
+  }
+
+  formatLayoutShift(value: number): string {
+    return value.toFixed(3);
+  }
+
+  getConnectionSummary(snapshot: ClientPerformanceSnapshot): string {
+    if (!snapshot.connection.online) {
+      return 'Offline';
+    }
+
+    const type = snapshot.connection.effectiveConnectionType;
+    return type === 'unknown' ? 'Online' : `Online · ${type.toUpperCase()}`;
   }
 
   formatTimestamp(value: string | null): string {

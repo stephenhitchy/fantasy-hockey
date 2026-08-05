@@ -91,7 +91,9 @@
     "test:batchm5-2:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-2-add-drop-comparison/*.test.mjs",
     "verify:batchm5-2": "npm run verify:batchm5-1 && npm run test:batchm5-2:run",
     "test:batchm5-3:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-3-transaction-workbench/*.test.mjs",
-    "verify:batchm5-3": "npm run verify:batchm5-2 && npm run test:batchm5-3:run"
+    "verify:batchm5-3": "npm run verify:batchm5-2 && npm run test:batchm5-3:run",
+    "test:batchp1a:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1a-client-health/*.test.mjs",
+    "verify:batchp1a": "npm run verify:batchm5-3 && npm run test:batchp1a:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

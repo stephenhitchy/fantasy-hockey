@@ -194,7 +194,7 @@ test('all recently added modal-style interfaces use the shared viewport portal',
   };
 
   assert.match(files.actionSheet, /rr-action-sheet-backdrop[\s\S]*appViewportOverlayPortal/);
-  assert.match(files.gameCenter, /mobile-asset-sheet-backdrop[\s\S]*appViewportOverlayPortal/);
+  assert.doesNotMatch(files.gameCenter, /mobile-asset-sheet-backdrop|appViewportOverlayPortal/);
   assert.match(files.league, /draft-live-overlay[\s\S]*appViewportOverlayPortal/);
   assert.match(files.draft, /draft-pick-submission-shield[\s\S]*appViewportOverlayPortal/);
   assert.match(files.draftSetup, /draft-save-lock[\s\S]*appViewportOverlayPortal/);
@@ -203,9 +203,10 @@ test('all recently added modal-style interfaces use the shared viewport portal',
   assert.ok((files.team.match(/appViewportOverlayPortal/g) ?? []).length >= 4);
 });
 
-test('mobile sheets open inside the current visual viewport instead of below the page', async () => {
-  const [actionCss, gameCss, tokens] = await Promise.all([
+test('shared mobile sheets open inside the current visual viewport while Game Center rows navigate directly', async () => {
+  const [actionCss, gameTemplate, gameCss, tokens] = await Promise.all([
     read('src/app/shared/action-sheet/action-sheet.css'),
+    read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.css'),
     read('src/rinkrat-design-tokens.css'),
   ]);
@@ -214,9 +215,8 @@ test('mobile sheets open inside the current visual viewport instead of below the
   assert.match(actionCss, /z-index:\s*var\(--rr-z-viewport-overlay/);
   assert.match(actionCss, /max-height:\s*min\(94dvh/);
   assert.match(actionCss, /-webkit-overflow-scrolling:\s*touch/);
-  assert.match(gameCss, /align-items:\s*center/);
-  assert.match(gameCss, /max-height:\s*min\(92dvh/);
-  assert.match(gameCss, /data-overlay-scroll-root|overflow:\s*auto/);
+  assert.doesNotMatch(gameTemplate, /mobile-asset-sheet-backdrop/);
+  assert.doesNotMatch(gameCss, /mobile-asset-sheet/);
   assert.match(tokens, /--rr-z-viewport-overlay:\s*2000/);
 });
 

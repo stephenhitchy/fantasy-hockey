@@ -1,3 +1,164 @@
+## Batch P1A — Direct Mobile Game Film and Client Health
+
+### Purpose
+
+Batch P1A removes the extra mobile Game Center summary sheet and sends a manager directly to the complete **Game Film** scoring page when a starter or bench player is selected. It also begins the performance, connection-safety, and Firebase-listener visibility work needed before the controlled invite beta.
+
+This batch is presentation and browser observability only. It does not change Production Scoring V3, Projection V11, draft authority, roster legality, waiver processing, independent six-game windows, historical replay, standings, playoffs, Cloud Functions, Firestore rules, or Firestore indexes.
+
+### 1. Mobile Game Center opens the complete scoring page directly
+
+The compact mobile matchup rows no longer open an intermediate blurred/detail sheet before the full player scoring page. Selecting an active player or bench player now routes immediately to that player's existing Game Film page.
+
+The destination continues to receive the current Game Center URL as `returnTo`, so the Game Film return control leads back to the exact matchup rather than a generic league page. The desktop Game Center behavior remains unchanged.
+
+The complete Game Film page remains the single place for:
+
+- Current matchup points and frozen projection.
+- Difference from projected pace.
+- The exact immutable six-game roster-slot assignment.
+- Played, missed, live, upcoming, and pending game states.
+- Appearance count, games remaining, best game, and points per appearance.
+- Category highlights and the expandable complete scoring formula.
+- Historical-replay source-game reconciliation.
+
+This removes one tap and avoids presenting two competing versions of the same scoring explanation on a phone.
+
+### 2. Global connection status
+
+The main application shell now listens for browser online/offline and visibility changes.
+
+When the device goes offline, a compact notice appears above the mobile bottom navigation and explains that scores may be stale and that competitive actions should not be submitted until the connection returns. When connectivity returns, a short confirmation explains that live subscriptions are reconnecting.
+
+The notice:
+
+- Does not cover or blur the page.
+- Respects mobile safe areas.
+- Does not intercept pointer input.
+- Remains visible above the bottom navigation.
+- Uses an accessible live-region announcement.
+
+Decorative team-logo ribbon animation pauses while the tab is hidden, the device is offline, or the browser reports data-saver mode. This reduces unnecessary phone work without changing league data.
+
+### 3. Browser performance monitoring
+
+A root client-performance monitor now records privacy-limited session measurements supported by the current browser:
+
+- First Contentful Paint.
+- Largest Contentful Paint.
+- Cumulative Layout Shift.
+- Interaction latency estimate from Event Timing entries.
+- Long-task count and longest task.
+- Route-navigation-to-ready duration after two animation frames.
+- Current connection category and data-saver state.
+
+Sanitized aggregate measurements use the existing Firebase Analytics service. Route sanitization replaces league, matchup, player, asset, and matchup-number identifiers before telemetry is sent. Player names, roster contents, scores, email addresses, and raw Firestore documents are never included.
+
+Unsupported browser performance entry types are skipped safely. Monitoring failure never blocks navigation or league actions.
+
+### 4. Firestore listener registry
+
+All 20 browser `onSnapshot` streams now pass through a lightweight listener registry. The registry preserves the exact existing Firestore subscription and unsubscribe behavior while recording:
+
+- Total active listeners.
+- Active listeners grouped by purpose.
+- Longest currently active listener.
+- Duplicate listener pressure during local or explicitly enabled debugging.
+
+The monitor warns in development when more than 32 listeners are active or when more than four listeners with the same label are open. The returned unsubscribe function is idempotent, preventing the monitor itself from creating duplicate teardown work.
+
+Listener labels include draft state, picks, queues, transactions, waivers, roster, team list, cycles, matchups, cycle windows, scoring snapshot/control, player availability, replay control, and playoffs.
+
+### 5. Release Readiness device report
+
+The platform-administrator Release Readiness page now includes a **Client health and performance** card for the current browser session. It shows:
+
+- Online state and reported connection category.
+- Data-saver state.
+- Active Firestore listener count and grouped labels.
+- Latest and slowest route-ready duration.
+- Largest and first content paint.
+- Interaction-latency estimate.
+- Cumulative layout shift.
+- Long-task count and longest task.
+
+The administrator can refresh the values or copy a JSON health report for troubleshooting a specific device. The copied report contains only the sanitized route, browser measurements, connection summary, and listener labels/counts.
+
+For local debugging, the monitor is enabled automatically on `localhost`. It can also be enabled for one production troubleshooting session by adding `?rinkratHealth=1`, or by setting:
+
+```js
+localStorage.setItem('rinkrat:client-health-monitor', '1');
+```
+
+Then the browser console can print the current report with:
+
+```js
+window.__RINKRAT_CLIENT_HEALTH__.print();
+```
+
+Remove the local-storage flag after troubleshooting:
+
+```js
+localStorage.removeItem('rinkrat:client-health-monitor');
+```
+
+### Automated verification
+
+Run the complete dependency-backed verification on the development Mac:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchp1a
+npm run build:all
+```
+
+The focused P1A suite verifies:
+
+- Mobile starter and bench rows route directly to Game Film.
+- The removed intermediate mobile sheet and its styles do not remain.
+- Stable viewport, interaction, and telemetry calculations.
+- Idempotent Firestore listener teardown.
+- Every browser Firestore snapshot stream is monitored.
+- Global connection messaging and decoration pausing.
+- Release Readiness device reporting.
+- Production scoring, Projection V11, server automation, rules, and indexes remain unchanged.
+
+The packaged source also passes 283/283 available dependency-free non-emulator regression tests, all seven design/accessibility/migration/mobile/beginner audits, syntax-transpile validation for 233 TypeScript files, structural validation for 52 CSS files and 53 HTML templates, parsing of 16 JSON/JSONC files, resolution of 834 relative TypeScript imports, and resolution of 97 Angular component assets.
+
+### Deployment
+
+P1A changes only the browser application. Deploy Hosting after the Mac verification succeeds:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch P1A direct Game Film and client health"
+```
+
+Do not deploy Functions, Firestore rules, or Firestore indexes for this batch.
+
+### Post-deployment validation
+
+1. On Mobile Safari and Mobile Chrome, open Game Center and tap an active starter. Confirm Game Film opens directly without an intermediate sheet.
+2. Repeat with a bench player and confirm the page explains that the bench player does not score until legally entering a starter slot.
+3. Use Game Film's return control and confirm it returns to the same matchup.
+4. Disable network access. Confirm the compact offline notice appears above the bottom navigation without blocking page content.
+5. Restore network access. Confirm the restored notice clears automatically and live Firestore data reconnects.
+6. Background the tab and confirm the decorative team ribbon pauses.
+7. Open Release Readiness as the platform administrator and inspect listener counts and client measurements.
+8. Navigate among Dashboard, Draft, Game Center, My Team, and Available Players. Confirm listener groups fall when routes are left rather than continually increasing.
+9. Enable the debug bridge and run `window.__RINKRAT_CLIENT_HEALTH__.print()` in the console.
+10. Repeat at 320px, 390px, and 430px in Rink Dark, Light Ice, and OLED Black, with reduced motion and 200% text zoom.
+
+### Rollback guidance
+
+P1A is Hosting-only and does not write a new schema. A rollback is therefore a normal Hosting rollback to the approved M5.3 build. Existing Firestore documents, Functions, rules, indexes, scoring snapshots, projections, and transactions require no reversal.
+
+---
+
 ## Batch M5.3 — Transaction Workbench, Game Film, and Historical Replay Resilience
 
 ### Purpose

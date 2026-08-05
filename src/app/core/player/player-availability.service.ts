@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   computed,
   Signal,
@@ -346,7 +347,7 @@ export function startPlayerAvailabilityListenerForLeague(
     where('source', '==', 'commissioner')
   );
 
-  stopDatabaseListener = onSnapshot(
+  stopDatabaseListener = monitorFirestoreListener('availability:commissioner-overrides', () => onSnapshot(
     manualRecordsQuery,
     (snapshot) => {
       const nextRecords = new Map<
@@ -374,13 +375,15 @@ export function startPlayerAvailabilityListenerForLeague(
         error
       );
 
+      const stopFailedListener = stopDatabaseListener;
       stopDatabaseListener = null;
+      stopFailedListener?.();
       activeLeagueId = '';
       activeUserId = '';
       manualDatabaseRecordsLoaded = false;
       manualDatabaseRecordsSignal.set(new Map());
     }
-  );
+  ));
 }
 
 export function getPlayerAvailabilityDatabaseRecord(

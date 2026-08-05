@@ -2,6 +2,7 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  inject,
   OnDestroy,
   signal,
   ViewChild,
@@ -17,6 +18,7 @@ import { Title } from '@angular/platform-browser';
 import { filter, Subscription } from 'rxjs';
 
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
+import { ClientHealthService } from '../../core/observability/client-health.service';
 import { Navbar } from '../../shared/navbar/navbar';
 import { CoachHelp } from '../../shared/coach-help/coach-help';
 import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
@@ -30,6 +32,7 @@ import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/p
 export class MainLayout implements AfterViewInit, OnDestroy {
   @ViewChild('mainContent') private mainContent?: ElementRef<HTMLElement>;
 
+  protected readonly clientHealth = inject(ClientHealthService);
   readonly scoringRuntime = getScoringRuntimeState();
   readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
   readonly routeAnnouncement = signal('');

@@ -311,6 +311,7 @@ test('Batch M2 removes planned engineering jargon from primary manager templates
     'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/leagues/league-standings/league-standings.html',
     'src/app/features/cycles/cycle-one/cycle-one.html',
+    'src/app/features/cycles/cycle-asset-detail/cycle-asset-detail.html',
     'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html',
     'src/app/features/cycles/matchup-overview/cycle-matchup-overview.html',
     'src/app/features/cycles/schedule-preview/cycle-schedule-preview.html',
@@ -343,6 +344,6 @@ test('Batch M2 removes planned engineering jargon from primary manager templates
   }
 
   assert.match(source, /Next 6 Games/);
-  assert.match(source, /Six-Game Progress/);
+  assert.match(source, /The Six-Game Tape/);
   assert.match(source, /Injured Reserve \(IR\)/);
 });

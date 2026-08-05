@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   collection,
   doc,
@@ -656,7 +657,7 @@ export function listenToFantasyDraft(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('draft:state', () => onSnapshot(
     getDraftRef(leagueId),
     { includeMetadataChanges: true },
     (snapshot) => {
@@ -672,7 +673,7 @@ export function listenToFantasyDraft(
     (error) => {
       reportDraftListenerError(error, 'Unable to load the league draft.', onError);
     },
-  );
+  ));
 }
 
 export function listenToDraftPicks(
@@ -683,7 +684,7 @@ export function listenToDraftPicks(
 ): () => void {
   const picksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
 
-  return onSnapshot(
+  return monitorFirestoreListener('draft:picks', () => onSnapshot(
     picksQuery,
     { includeMetadataChanges: true },
     (snapshot) => {
@@ -693,7 +694,7 @@ export function listenToDraftPicks(
     (error) => {
       reportDraftListenerError(error, 'Unable to load draft picks.', onError);
     },
-  );
+  ));
 }
 
 export function listenToDraftQueue(
@@ -703,7 +704,7 @@ export function listenToDraftQueue(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('draft:queue-owner', () => onSnapshot(
     getDraftQueueRef(leagueId, ownerId),
     { includeMetadataChanges: true },
     (snapshot) => {
@@ -718,7 +719,7 @@ export function listenToDraftQueue(
     (error) => {
       reportDraftListenerError(error, 'Unable to load your draft queue.', onError);
     },
-  );
+  ));
 }
 
 export function listenToDraftQueues(
@@ -727,7 +728,7 @@ export function listenToDraftQueues(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('draft:queues', () => onSnapshot(
     getDraftQueuesRef(leagueId),
     { includeMetadataChanges: true },
     (snapshot) => {
@@ -741,7 +742,7 @@ export function listenToDraftQueues(
     (error) => {
       reportDraftListenerError(error, 'Unable to load draft queues.', onError);
     },
-  );
+  ));
 }
 
 export async function saveDraftQueue(
@@ -810,7 +811,7 @@ export function listenToOwnerTransactions(
     limit(50),
   );
 
-  return onSnapshot(
+  return monitorFirestoreListener('draft:transactions', () => onSnapshot(
     transactionsQuery,
     (snapshot) => {
       callback(
@@ -825,7 +826,7 @@ export function listenToOwnerTransactions(
     (error) => {
       reportDraftListenerError(error, 'Unable to load roster transactions.', onError);
     },
-  );
+  ));
 }
 
 export function listenToLeagueWaivers(
@@ -835,7 +836,7 @@ export function listenToLeagueWaivers(
 ): () => void {
   const waiversQuery = query(getWaiversRef(leagueId), orderBy('createdAt', 'desc'), limit(100));
 
-  return onSnapshot(
+  return monitorFirestoreListener('draft:waivers', () => onSnapshot(
     waiversQuery,
     (snapshot) => {
       callback(
@@ -865,7 +866,7 @@ export function listenToLeagueWaivers(
     (error) => {
       reportDraftListenerError(error, 'Unable to load league waivers.', onError);
     },
-  );
+  ));
 }
 
 export async function saveFantasyDraft(leagueId: string, draft: FantasyDraft): Promise<void> {

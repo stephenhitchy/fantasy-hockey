@@ -71,7 +71,7 @@ describe('Batch 6A Game Center component boundaries', () => {
     for (const requiredCall of [
       'getWindowGameMarkers',
       'getAssetGamesPlayed',
-      'getAssetGamesLeft',
+      'getPositionGamesLeft',
       'getPendingWindowCallout',
       'isFutureWindowPending',
     ]) {

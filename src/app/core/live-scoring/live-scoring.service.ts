@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   doc,
   getDoc,
@@ -269,7 +270,7 @@ export function listenToSharedCycleScoring(
   callback: (snapshot: SharedCycleScoringSnapshot | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('scoring:snapshot', () => onSnapshot(
     getCycleSnapshotRef(leagueId, cycleNumber),
     (snapshot) => {
       callback(
@@ -292,7 +293,7 @@ export function listenToSharedCycleScoring(
         console.warn('Unable to load shared cycle scoring.', error);
       }
     },
-  );
+  ));
 }
 
 export function listenToSharedLiveScoringControl(
@@ -300,7 +301,7 @@ export function listenToSharedLiveScoringControl(
   callback: (control: SharedLiveScoringControl | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('scoring:control', () => onSnapshot(
     getControlRef(leagueId),
     (snapshot) => {
       callback(
@@ -315,7 +316,7 @@ export function listenToSharedLiveScoringControl(
 
       onError?.(normalized);
     },
-  );
+  ));
 }
 
 export function getLeagueLiveScoringSessionInfo(leagueId: string): LocalLiveScoringSessionInfo {

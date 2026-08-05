@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   doc,
   getDoc,
@@ -190,7 +191,7 @@ export function listenToFantasyRoster(
   callback: (roster: FantasyRoster | null) => void,
   onError?: (error: Error) => void
 ): () => void {
-  return onSnapshot(
+  return monitorFirestoreListener('roster:owner', () => onSnapshot(
     getFantasyRosterRef(leagueId, ownerId),
     (snapshot) => {
       if (!snapshot.exists()) {
@@ -219,7 +220,7 @@ export function listenToFantasyRoster(
         error
       );
     }
-  );
+  ));
 }
 
 export async function saveFantasyRoster(

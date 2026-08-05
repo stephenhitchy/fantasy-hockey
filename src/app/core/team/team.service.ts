@@ -1,3 +1,4 @@
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   collection,
   doc,
@@ -117,7 +118,7 @@ export function listenToLeagueTeams(
     orderBy('teamName', 'asc')
   );
 
-  return onSnapshot(
+  return monitorFirestoreListener('team:list', () => onSnapshot(
     teamsQuery,
     (snapshot) => {
       callback(
@@ -141,7 +142,7 @@ export function listenToLeagueTeams(
         error
       );
     }
-  );
+  ));
 }
 
 
