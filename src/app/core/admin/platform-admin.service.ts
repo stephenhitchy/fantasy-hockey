@@ -123,6 +123,7 @@ export class PlatformAdminService {
     const callable = httpsCallable<Record<string, never>, AdminInboxData>(
       functions,
       'getAdminInbox',
+      { timeout: 65_000 },
     );
     const response = await callable({});
     return response.data;
@@ -136,6 +137,7 @@ export class PlatformAdminService {
     const callable = httpsCallable<UpdateFeedbackRequest, { updated: boolean }>(
       functions,
       'updateAdminFeedback',
+      { timeout: 35_000 },
     );
     await callable({ feedbackId, status, adminNotes });
   }
@@ -148,6 +150,7 @@ export class PlatformAdminService {
     const callable = httpsCallable<UpdateErrorRequest, { updated: boolean }>(
       functions,
       'updateAdminErrorReview',
+      { timeout: 35_000 },
     );
     await callable({ fingerprint, status, adminNotes });
   }
@@ -157,6 +160,7 @@ export class PlatformAdminService {
       const callable = httpsCallable<Record<string, never>, PlatformAdminAccess>(
         functions,
         'getPlatformAdminAccess',
+        { timeout: 25_000 },
       );
       const response = await callable({});
       this.accessLoaded.set(true);

@@ -469,7 +469,7 @@ async function performServerPlayerAvailabilityRefresh(input: {
   const callable = httpsCallable<
     RefreshDailyPlayerAvailabilityRequest,
     DailyPlayerAvailabilityRefreshResult
-  >(functions, 'refreshDailyPlayerAvailability');
+  >(functions, 'refreshDailyPlayerAvailability', { timeout: 600_000 });
   const response = await callable({
     leagueId,
     force: input.force === true,

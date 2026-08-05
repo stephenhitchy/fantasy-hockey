@@ -24,7 +24,7 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-async function hashTree(relativeDirectory) {
+async function hashTree(relativeDirectory, excludedPaths = new Set()) {
   const rootPath = path.join(root, relativeDirectory);
   const files = [];
 
@@ -38,6 +38,10 @@ async function hashTree(relativeDirectory) {
 
       const childPath = path.join(currentPath, entry.name);
       const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+      if (excludedPaths.has(childRelativePath)) {
+        continue;
+      }
 
       if (entry.isDirectory()) {
         await visit(childPath, childRelativePath);
@@ -352,7 +356,7 @@ test('R1B-P1D verification, Release Candidate 6, and documentation links are wir
   assert.match(projectDocs, /^## Batch R1B-P1D — Invite Beta Launch Gate and High-Scale Handoff/m);
 });
 
-test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authority, and all Functions behavior', async () => {
+test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authority, and Functions unrelated to later draft recovery', async () => {
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
     read('src/app/core/scoring/scoring-rules.ts'),
     read('src/app/core/scoring/scoring-engine.ts'),
@@ -366,5 +370,15 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), 'a37d7c47e9ffcb6a4549e5ad078a918b812619c014fcf01373025bacfa9c1a8c');
   assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0');
-  assert.equal(await hashTree('functions'), 'd74791976054f44bfc035259b345e7ac2e3e9da6344bc19c69e901d4fa1466e0');
+  assert.equal(
+    await hashTree(
+      'functions',
+      new Set([
+        'src/draft-authority.ts',
+        'src/draft-automation.ts',
+        'src/shared/core/draft/draft.models.ts',
+      ]),
+    ),
+    '8d278968d163577207e39a5dee7ee542e657850fdd827fd54cbe2de42f8d30fe',
+  );
 });

@@ -5,6 +5,12 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import {
+  isOperationDeadlineError,
+  waitForOperationDelay,
+  waitForOperationCondition,
+  withOperationDeadline,
+} from '../../../core/async/bounded-operation.util';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -640,6 +646,34 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
+  private runBoundedRosterOperation<T>(
+    operation: Promise<T>,
+    actionLabel: string,
+  ): Promise<T> {
+    return withOperationDeadline(
+      operation,
+      45_000,
+      `${actionLabel} was not confirmed within the safety window. This page has been unlocked. Check My Team before retrying because the server request may still finish.`,
+    );
+  }
+
+  private getRosterOperationError(
+    error: unknown,
+    fallbackMessage: string,
+  ): { message: string; outcome: 'error' | 'uncertain' } {
+    if (isOperationDeadlineError(error)) {
+      return {
+        message: error.message,
+        outcome: 'uncertain',
+      };
+    }
+
+    return {
+      message: error instanceof Error ? error.message : fallbackMessage,
+      outcome: 'error',
+    };
+  }
+
   async saveTeamName(): Promise<void> {
     this.errorMessage.set('');
     this.successMessage.set('');
@@ -661,7 +695,11 @@ export class TeamSettings implements OnDestroy {
     this.saving.set(true);
 
     try {
-      await updateTeamName(this.leagueId, user.uid, updatedName);
+      await withOperationDeadline(
+        updateTeamName(this.leagueId, user.uid, updatedName),
+        25_000,
+        'RinkRat stopped waiting for the team-name save. The page has been unlocked; reload My Team before submitting the same name again.',
+      );
 
       const currentTeam = this.team();
 
@@ -1330,26 +1368,40 @@ export class TeamSettings implements OnDestroy {
     }
 
     const actionHandle = this.actionMonitor.begin('injured-reserve');
-    let actionOutcome: 'success' | 'error' = 'error';
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const previousRosterFingerprint = this.getRosterOperationFingerprint();
     this.rosterMoveLoading.set(true);
+
     try {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
-      await moveBenchRosterAssetToIr({
+      const request = moveBenchRosterAssetToIr({
         leagueId: this.leagueId,
         ownerId: this.userId,
         benchSlotId: slotId,
         effectiveCycleNumber,
         effectiveLabel: `Cycle ${effectiveCycleNumber}`,
       });
+
+      await this.awaitRosterMutationConfirmation(
+        request,
+        previousRosterFingerprint,
+        operationGeneration,
+      );
       this.rosterMoveMessage.set(
         `${this.getRosterAssetName(slot.asset)} moved from the bench to Injured Reserve (IR). Bench players do not score, so the ownership move is immediate.`,
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this bench player to Injured Reserve (IR).',
-      );
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to move this bench player to Injured Reserve (IR).';
+      this.rosterMoveError.set(message);
+      actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -1426,31 +1478,52 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const incomingName = this.getRosterAssetName(benchSlot.asset);
     const actionHandle = this.actionMonitor.begin('lineup-swap');
-    let actionOutcome: 'success' | 'error' = 'error';
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const previousRosterFingerprint = this.getRosterOperationFingerprint();
+
+    // Close the portaled confirmation dialog before any network wait. The
+    // compact roster status dock remains visible while Firestore reconciles.
+    this.benchSwapSlotId.set('');
+    this.benchSwapTargetSlotId.set('');
     this.rosterMoveLoading.set(true);
     this.rosterMoveError.set('');
+
     try {
-      const execution = await queueActiveBenchSwap({
+      const request = queueActiveBenchSwap({
         leagueId: this.leagueId,
         ownerId: this.userId,
         activeSlotId: targetSlot.slotId,
         benchSlotId: benchSlot.slotId,
       });
+      const execution = await this.awaitRosterMutationConfirmation(
+        request,
+        previousRosterFingerprint,
+        operationGeneration,
+      );
+      const effectiveCycleNumber = execution?.effectiveCycleNumber ?? this.getRosterMoveEffectiveCycleNumber();
+      const observedTarget = this.roster()?.activeSlots.find((slot) => slot.slotId === targetSlot.slotId);
+      const incomingKey = this.getRosterAssetKey(benchSlot.asset);
+      const observedImmediate = this.getRosterAssetKey(observedTarget?.asset) === incomingKey;
+      const observedQueued = this.getRosterAssetKey(observedTarget?.pendingMove?.incomingAsset) === incomingKey;
+      const mode = execution?.mode ?? (observedImmediate ? 'immediate' : observedQueued ? 'queued' : 'queued');
 
       this.rosterMoveMessage.set(
-        execution.mode === 'immediate'
-          ? `${this.getRosterAssetName(benchSlot.asset)} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${execution.effectiveCycleNumber}.`
-          : `${this.getRosterAssetName(benchSlot.asset)} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${execution.effectiveCycleNumber}.`,
+        mode === 'immediate'
+          ? `${incomingName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${effectiveCycleNumber}.`
+          : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}.`,
       );
-      this.benchSwapSlotId.set('');
-      this.benchSwapTargetSlotId.set('');
       actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to schedule the bench swap.',
-      );
+      const message = error instanceof Error ? error.message : 'Unable to schedule the bench swap.';
+      this.rosterMoveError.set(message);
+      actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -1550,13 +1623,21 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const playerName = this.getRosterAssetName(irSlot.asset);
+    const replacedAsset = targetSlot.asset;
     const actionHandle = this.actionMonitor.begin('injured-reserve');
-    let actionOutcome: 'success' | 'error' = 'error';
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const previousRosterFingerprint = this.getRosterOperationFingerprint();
+
+    this.irBenchActivationSlotId.set('');
+    this.irBenchActivationTargetSlotId.set('');
     this.rosterMoveLoading.set(true);
     this.rosterMoveError.set('');
+
     try {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
-      await activateIrRosterAssetToBench({
+      const request = activateIrRosterAssetToBench({
         leagueId: this.leagueId,
         ownerId: this.userId,
         irSlotId: irSlot.slotId,
@@ -1564,18 +1645,26 @@ export class TeamSettings implements OnDestroy {
         effectiveCycleNumber,
         effectiveLabel: `Cycle ${effectiveCycleNumber}`,
       });
-      const replacedAsset = targetSlot.asset;
+
+      await this.awaitRosterMutationConfirmation(
+        request,
+        previousRosterFingerprint,
+        operationGeneration,
+      );
       this.rosterMoveMessage.set(replacedAsset
-        ? `${this.getRosterAssetName(irSlot.asset)} moved from Injured Reserve (IR) to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
-        : `${this.getRosterAssetName(irSlot.asset)} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`);
-      this.irBenchActivationSlotId.set('');
-      this.irBenchActivationTargetSlotId.set('');
+        ? `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
+        : `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`);
       actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this player from Injured Reserve (IR) to the bench.',
-      );
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to move this player from Injured Reserve (IR) to the bench.';
+      this.rosterMoveError.set(message);
+      actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -1605,7 +1694,9 @@ export class TeamSettings implements OnDestroy {
     }
 
     const actionHandle = this.actionMonitor.begin('injured-reserve');
-    let actionOutcome: 'success' | 'error' = 'error';
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const previousRosterFingerprint = this.getRosterOperationFingerprint();
     this.rosterMoveLoading.set(true);
 
     try {
@@ -1613,26 +1704,37 @@ export class TeamSettings implements OnDestroy {
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const playerName = this.getRosterAssetName(slot.asset);
       const availabilityLabel = this.getPlayerAvailability(slot.asset)?.label ?? 'Injured Reserve eligible';
-
-      const execution = await moveRosterAssetToIr({
+      const request = moveRosterAssetToIr({
         leagueId: this.leagueId,
         ownerId: this.userId,
         activeSlotId: slotId,
         effectiveCycleNumber,
         effectiveLabel,
       });
+      const execution = await this.awaitRosterMutationConfirmation(
+        request,
+        previousRosterFingerprint,
+        operationGeneration,
+      );
+      const mode = execution?.mode ?? 'queued';
+      const confirmedCycle = execution?.effectiveCycleNumber ?? effectiveCycleNumber;
 
       this.rosterMoveMessage.set(
-        execution.mode === 'immediate'
-          ? `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The untouched Matchup ${execution.effectiveCycleNumber} assignment was removed immediately, so a bench player or free agent can fill that slot now.`
-          : `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${effectiveCycleNumber}.`,
+        mode === 'immediate'
+          ? `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The untouched Matchup ${confirmedCycle} assignment was removed immediately, so a bench player or free agent can fill that slot now.`
+          : `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${confirmedCycle}.`,
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to move this player to Injured Reserve (IR).',
-      );
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to move this player to Injured Reserve (IR).';
+      this.rosterMoveError.set(message);
+      actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -1664,17 +1766,21 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const playerName = this.getRosterAssetName(irSlot.asset);
+    const replacedPlayerName = targetSlot.asset ? this.getRosterAssetName(targetSlot.asset) : '';
     const actionHandle = this.actionMonitor.begin('injured-reserve');
-    let actionOutcome: 'success' | 'error' = 'error';
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const previousRosterFingerprint = this.getRosterOperationFingerprint();
+
+    this.irActivationSlotId.set('');
+    this.irActivationTargetSlotId.set('');
     this.rosterMoveLoading.set(true);
 
     try {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
-      const playerName = this.getRosterAssetName(irSlot.asset);
-      const replacedPlayerName = targetSlot.asset ? this.getRosterAssetName(targetSlot.asset) : '';
-
-      const execution = await activateIrRosterAsset({
+      const request = activateIrRosterAsset({
         leagueId: this.leagueId,
         ownerId: this.userId,
         irSlotId: irSlot.slotId,
@@ -1682,11 +1788,21 @@ export class TeamSettings implements OnDestroy {
         effectiveCycleNumber,
         effectiveLabel,
       });
-
-      const activationLabel = `Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}`;
+      const execution = await this.awaitRosterMutationConfirmation(
+        request,
+        previousRosterFingerprint,
+        operationGeneration,
+      );
+      const confirmedCycle = execution?.effectiveCycleNumber ?? effectiveCycleNumber;
+      const activationLabel = `Matchup ${confirmedCycle}`;
+      const observedTarget = this.roster()?.activeSlots.find((slot) => slot.slotId === targetSlot.slotId);
+      const playerKey = this.getRosterAssetKey(irSlot.asset);
+      const mode = execution?.mode ?? (
+        this.getRosterAssetKey(observedTarget?.asset) === playerKey ? 'immediate' : 'queued'
+      );
 
       this.rosterMoveMessage.set(
-        execution.mode === 'immediate'
+        mode === 'immediate'
           ? replacedPlayerName
             ? `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. ${replacedPlayerName} was placed on waivers, and the untouched six-game count now belongs to ${playerName} in ${activationLabel}.`
             : `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately for ${activationLabel}.`
@@ -1694,15 +1810,17 @@ export class TeamSettings implements OnDestroy {
             ? `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} was placed on waivers, while the already-started six-game count remains unchanged until ${activationLabel}.`
             : `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. Scoring eligibility begins with ${activationLabel}.`,
       );
-
-      this.irActivationSlotId.set('');
-      this.irActivationTargetSlotId.set('');
       actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to activate this player from Injured Reserve (IR).',
-      );
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to activate this player from Injured Reserve (IR).';
+      this.rosterMoveError.set(message);
+      actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
+      if (this.rosterOperationGeneration === operationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -2559,6 +2677,113 @@ export class TeamSettings implements OnDestroy {
     } catch (error: unknown) {
       console.warn('Unable to load player pool projection fallback.', error);
     }
+  }
+
+  private getRosterOperationFingerprint(): string {
+    const roster = this.roster();
+
+    if (!roster) {
+      return 'roster:missing';
+    }
+
+    const active = roster.activeSlots.map((slot) => [
+      slot.slotId,
+      this.getRosterAssetKey(slot.asset),
+      this.getRosterAssetKey(slot.pendingMove?.incomingAsset),
+      slot.pendingMove?.id ?? '',
+      slot.pendingMove?.requestedEffectiveCycleNumber ?? null,
+      slot.openFromCycleNumber ?? null,
+    ]);
+    const bench = roster.benchSlots.map((slot) => [
+      slot.slotId,
+      this.getRosterAssetKey(slot.asset),
+    ]);
+    const injuredReserve = roster.irSlots.map((slot) => [
+      slot.slotId,
+      this.getRosterAssetKey(slot.asset),
+    ]);
+
+    return JSON.stringify({ active, bench, injuredReserve });
+  }
+
+  private async awaitRosterMutationConfirmation<T>(
+    actionPromise: Promise<T>,
+    previousRosterFingerprint: string,
+    generation: number,
+  ): Promise<T | null> {
+    let settled = false;
+    let rejected = false;
+    let settledValue: T | null = null;
+    let settledError: unknown;
+
+    // Attach both handlers immediately so a request that finishes after the UI
+    // safety deadline can never produce an unhandled rejection.
+    void actionPromise.then(
+      (value) => {
+        settled = true;
+        settledValue = value;
+      },
+      (error: unknown) => {
+        settled = true;
+        rejected = true;
+        settledError = error;
+      },
+    );
+
+    const rosterChanged = (): boolean =>
+      this.getRosterOperationFingerprint() !== previousRosterFingerprint;
+    const deadline = Date.now() + 20_000;
+
+    while (
+      this.rosterOperationGeneration === generation &&
+      Date.now() <= deadline
+    ) {
+      if (rosterChanged()) {
+        return settled && !rejected ? settledValue : null;
+      }
+
+      if (settled) {
+        if (!rejected) {
+          return settledValue;
+        }
+
+        if (
+          await waitForOperationCondition(
+            rosterChanged,
+            2_500,
+            120,
+          )
+        ) {
+          return null;
+        }
+
+        throw settledError;
+      }
+
+      await waitForOperationDelay(120);
+    }
+
+    if (rosterChanged()) {
+      return settled && !rejected ? settledValue : null;
+    }
+
+    if (settled && !rejected) {
+      return settledValue;
+    }
+
+    if (settled && rejected) {
+      throw settledError;
+    }
+
+    throw new Error(
+      'RinkRat did not receive a final server or live-roster confirmation. The screen has been unlocked so it cannot remain stuck. Check My Team before retrying because the roster move may still finish in the background.',
+    );
+  }
+
+  private isUncertainRosterOperationMessage(message: string): boolean {
+    return /may still finish|may still have saved|check my team before retrying|final server or live-roster confirmation|screen has been unlocked/i.test(
+      message,
+    );
   }
 
   private getRosterRemovalObservation(): RosterRemovalObservation {

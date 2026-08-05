@@ -607,6 +607,10 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
     clockUpdatedBy: data.clockUpdatedBy ?? null,
     clockUpdatedAt: data.clockUpdatedAt,
     lastPickId: data.lastPickId ?? null,
+    lastSettingsSubmissionId:
+      typeof data.lastSettingsSubmissionId === 'string'
+        ? data.lastSettingsSubmissionId
+        : null,
     serverDraftProjectionSnapshotId:
       typeof data.serverDraftProjectionSnapshotId === 'string'
         ? data.serverDraftProjectionSnapshotId
@@ -638,6 +642,7 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     pausedRemainingSeconds: null,
     clockUpdatedBy: null,
     lastPickId: null,
+    lastSettingsSubmissionId: null,
     serverDraftProjectionSnapshotId: null,
   };
 }
@@ -901,12 +906,17 @@ export function listenToLeagueWaivers(
   ));
 }
 
-export async function saveFantasyDraft(leagueId: string, draft: FantasyDraft): Promise<void> {
+export async function saveFantasyDraft(
+  leagueId: string,
+  draft: FantasyDraft,
+  submissionId?: string,
+): Promise<void> {
   const scheduledStart = getScheduledStartDate(draft);
 
   await executeDraftCommand({
     leagueId,
     action: 'save-settings',
+    submissionId,
     roundOneOrder: [...draft.roundOneOrder],
     scheduledStartAt: scheduledStart?.toISOString() ?? null,
     pickSeconds: normalizePickSeconds(draft.pickSeconds),
@@ -1332,8 +1342,15 @@ export async function makeDraftPick(
   leagueId: string,
   _selectingUserId: string,
   asset: DraftableAsset,
+  submissionId: string,
+  expectedOverallPick: number,
 ): Promise<DraftPick> {
-  return makeSecureDraftPick(leagueId, asset.assetKey);
+  return makeSecureDraftPick(
+    leagueId,
+    asset.assetKey,
+    submissionId,
+    expectedOverallPick,
+  );
 }
 
 function assertDraftComplete(draft: FantasyDraft): void {

@@ -44,6 +44,7 @@ const DEFAULT_BENCH_SLOTS = 3;
 const DEFAULT_TOTAL_ROUNDS = 17;
 const MAX_LEAGUE_TEAMS = 32;
 const MAX_ASSET_KEY_LENGTH = 180;
+const MAX_DRAFT_SUBMISSION_ID_LENGTH = 120;
 
 export type DraftCommandAction =
   | 'save-settings'
@@ -55,6 +56,7 @@ export type DraftCommandAction =
 interface DraftCommandRequest {
   leagueId?: unknown;
   action?: unknown;
+  submissionId?: unknown;
   roundOneOrder?: unknown;
   scheduledStartAt?: unknown;
   pickSeconds?: unknown;
@@ -64,11 +66,14 @@ interface DraftCommandResult {
   applied: true;
   action: DraftCommandAction;
   message: string;
+  submissionId?: string | null;
 }
 
 interface SecureDraftPickRequest {
   leagueId?: unknown;
   assetKey?: unknown;
+  submissionId?: unknown;
+  expectedOverallPick?: unknown;
 }
 
 export interface SecureDraftPickResult {
@@ -101,6 +106,66 @@ function requireAssetKey(value: unknown): string {
   }
 
   return assetKey;
+}
+
+function getOptionalDraftSubmissionId(value: unknown): string | null {
+  const submissionId = asString(value);
+
+  // Keep one deployment window backward-compatible with older open tabs.
+  // The new client always supplies an idempotency key, while a legacy client
+  // can still complete its current turn before Hosting asks it to reload.
+  if (!submissionId) {
+    return null;
+  }
+
+  if (
+    submissionId.length < 8 ||
+    submissionId.length > MAX_DRAFT_SUBMISSION_ID_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/.test(submissionId)
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'The draft submission identifier is invalid. Refresh the draft page and try again.',
+    );
+  }
+
+  return submissionId;
+}
+
+function getOptionalExpectedOverallPick(value: unknown): number | null {
+  if (value === null || typeof value === 'undefined' || value === '') {
+    return null;
+  }
+
+  if (!Number.isInteger(value) || Number(value) <= 0 || Number(value) > 10_000) {
+    throw new HttpsError(
+      'invalid-argument',
+      'The expected draft pick number is invalid. Refresh the Draft Room and try again.',
+    );
+  }
+
+  return Number(value);
+}
+
+function draftPickMatchesSubmission(
+  pick: DraftPick,
+  input: {
+    submissionId: string | null;
+    expectedOverallPick: number;
+    assetKey: string;
+    userId: string;
+  },
+): boolean {
+  if (!input.submissionId) {
+    return false;
+  }
+
+  return (
+    pick.overallPick === input.expectedOverallPick &&
+    pick.asset?.assetKey === input.assetKey &&
+    pick.submissionId === input.submissionId &&
+    (pick.ownerId === input.userId || pick.selectedByUserId === input.userId)
+  );
 }
 
 function requireAuthenticatedUserId(auth: { uid?: string } | undefined): string {
@@ -169,6 +234,10 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     clockUpdatedBy: value.clockUpdatedBy ?? null,
     clockUpdatedAt: value.clockUpdatedAt,
     lastPickId: value.lastPickId ?? null,
+    lastSettingsSubmissionId:
+      typeof value.lastSettingsSubmissionId === 'string'
+        ? value.lastSettingsSubmissionId
+        : null,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
@@ -311,6 +380,7 @@ async function saveDraftSettings(
 ): Promise<DraftCommandResult> {
   await requireCommissioner(leagueId, userId);
 
+  const submissionId = getOptionalDraftSubmissionId(request.submissionId);
   const roundOneOrder = parseRoundOneOrder(request.roundOneOrder);
   const scheduledStartAt = parseScheduledStartAt(request.scheduledStartAt);
   const pickSeconds = normalizePickSeconds(request.pickSeconds);
@@ -358,6 +428,32 @@ async function saveDraftSettings(
       ? normalizeDraft(snapshot.data() as Partial<FantasyDraft>)
       : null;
 
+    if (submissionId && existingDraft?.lastSettingsSubmissionId === submissionId) {
+      const existingStartAt = asTimestampDate(existingDraft.scheduledStartAt);
+      const expectedStatus = scheduledStartAt ? 'scheduled' : 'setup';
+      const sameStart =
+        (existingStartAt?.getTime() ?? null) === (scheduledStartAt?.getTime() ?? null);
+      const sameOrder =
+        existingDraft.roundOneOrder.length === roundOneOrder.length &&
+        existingDraft.roundOneOrder.every(
+          (ownerId, index) => ownerId === roundOneOrder[index],
+        );
+
+      if (
+        existingDraft.status !== expectedStatus ||
+        !sameOrder ||
+        !sameStart ||
+        existingDraft.pickSeconds !== pickSeconds
+      ) {
+        throw new HttpsError(
+          'already-exists',
+          'That draft-settings submission identifier was already used for different settings. Refresh Draft Setup before trying again.',
+        );
+      }
+
+      return;
+    }
+
     if (
       existingDraft &&
       (
@@ -397,6 +493,7 @@ async function saveDraftSettings(
         clockUpdatedBy: null,
         clockUpdatedAt: timestamp,
         lastPickId: null,
+        lastSettingsSubmissionId: submissionId ?? null,
         serverDraftProjectionSnapshotId: null,
         serverAutomationStatus: status === 'scheduled' ? 'scheduled' : 'waiting',
         serverAutomationMessage: status === 'scheduled'
@@ -416,6 +513,7 @@ async function saveDraftSettings(
     message: scheduledStartAt
       ? 'Draft settings and scheduled start were saved.'
       : 'Draft order was saved.',
+    submissionId,
   };
 }
 
@@ -751,6 +849,8 @@ export const makeSecureDraftPick = onCall(
       : {};
     const leagueId = requireLeagueId(input.leagueId);
     const assetKey = requireAssetKey(input.assetKey);
+    const submissionId = getOptionalDraftSubmissionId(input.submissionId);
+    const requestedOverallPick = getOptionalExpectedOverallPick(input.expectedOverallPick);
     const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
     const [preflightDraftSnapshot, preflightMember, preflightTeam] = await Promise.all([
       draftRef.get(),
@@ -769,9 +869,40 @@ export const makeSecureDraftPick = onCall(
     const preflightDraft = normalizeDraft(
       preflightDraftSnapshot.data() as Partial<FantasyDraft>,
     );
+    const expectedOverallPick = requestedOverallPick ?? preflightDraft.nextOverallPick;
+    const pickId = String(expectedOverallPick).padStart(3, '0');
+    const pickRef = db.doc(`leagues/${leagueId}/draft/current/picks/${pickId}`);
+    const submissionIdentity = {
+      submissionId,
+      expectedOverallPick,
+      assetKey,
+      userId,
+    };
+    const preflightPickSnapshot = await pickRef.get();
+
+    if (preflightPickSnapshot.exists) {
+      const existingPick = preflightPickSnapshot.data() as DraftPick;
+
+      if (draftPickMatchesSubmission(existingPick, submissionIdentity)) {
+        return { pick: existingPick };
+      }
+
+      throw new HttpsError(
+        'already-exists',
+        `Pick ${expectedOverallPick} has already been completed. Refresh the live draft board before submitting another selection.`,
+      );
+    }
+
+    if (preflightDraft.nextOverallPick !== expectedOverallPick) {
+      throw new HttpsError(
+        'aborted',
+        `The live board advanced from pick ${expectedOverallPick}. Refresh before making another selection.`,
+      );
+    }
+
     const preflightPick = getDraftPickAtOverall(
       preflightDraft,
-      preflightDraft.nextOverallPick,
+      expectedOverallPick,
     );
 
     if (!preflightPick || preflightPick.ownerId !== userId) {
@@ -807,12 +938,32 @@ export const makeSecureDraftPick = onCall(
     }
 
     const result = await db.runTransaction(async (transaction): Promise<SecureDraftPickResult> => {
-      const [draftSnapshot, leagueSnapshot, memberSnapshot, teamSnapshot] = await Promise.all([
+      const [
+        draftSnapshot,
+        leagueSnapshot,
+        memberSnapshot,
+        teamSnapshot,
+        existingPickSnapshot,
+      ] = await Promise.all([
         transaction.get(draftRef),
         transaction.get(db.doc(`leagues/${leagueId}`)),
         transaction.get(db.doc(`leagues/${leagueId}/members/${userId}`)),
         transaction.get(db.doc(`leagues/${leagueId}/teams/${userId}`)),
+        transaction.get(pickRef),
       ]);
+
+      if (existingPickSnapshot.exists) {
+        const existingPick = existingPickSnapshot.data() as DraftPick;
+
+        if (draftPickMatchesSubmission(existingPick, submissionIdentity)) {
+          return { pick: existingPick };
+        }
+
+        throw new HttpsError(
+          'already-exists',
+          `Pick ${expectedOverallPick} was completed by another submission. Refresh the live board.`,
+        );
+      }
 
       if (!draftSnapshot.exists || !leagueSnapshot.exists) {
         throw new HttpsError('not-found', 'Draft or league setup was not found.');
@@ -826,6 +977,13 @@ export const makeSecureDraftPick = onCall(
 
       if (draft.status !== 'live') {
         throw new HttpsError('failed-precondition', 'The draft is not live.');
+      }
+
+      if (draft.nextOverallPick !== expectedOverallPick) {
+        throw new HttpsError(
+          'aborted',
+          `The draft advanced from pick ${expectedOverallPick} while the request was being processed.`,
+        );
       }
 
       if (draft.clockStatus === 'stopped') {
@@ -851,7 +1009,7 @@ export const makeSecureDraftPick = onCall(
         throw new HttpsError('failed-precondition', 'This draft is already complete.');
       }
 
-      const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
+      const currentPick = getDraftPickAtOverall(draft, expectedOverallPick);
 
       if (!currentPick || currentPick.ownerId !== userId) {
         throw new HttpsError('permission-denied', 'You are no longer on the clock.');
@@ -931,8 +1089,6 @@ export const makeSecureDraftPick = onCall(
       }
 
       const updatedRoster = applyDraftAssetToRoster(roster, canonicalAsset, destination);
-      const pickId = String(currentPick.overallPick).padStart(3, '0');
-      const pickRef = db.doc(`leagues/${leagueId}/draft/current/picks/${pickId}`);
       const pick: DraftPick = {
         ...currentPick,
         asset: canonicalAsset,
@@ -941,6 +1097,7 @@ export const makeSecureDraftPick = onCall(
         selectionType: 'manual',
         selectedByUserId: userId,
         autoPickReason: null,
+        submissionId: submissionId ?? null,
       };
       const nextOverallPick = currentPick.overallPick + 1;
       const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);

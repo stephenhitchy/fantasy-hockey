@@ -3,6 +3,8 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Subscription } from 'rxjs';
 
+import { repairViewportOverlayLock } from './shared/accessibility/viewport-overlay-portal.directive';
+
 import { auth } from './core/firebase-auth';
 import { ClientPerformanceMonitorService } from './core/observability/client-performance-monitor.service';
 import { CompetitiveActionMonitorService } from './core/observability/competitive-action-monitor.service';
@@ -115,6 +117,12 @@ export class App implements OnDestroy {
       if (!(event instanceof NavigationEnd)) {
         return;
       }
+
+      // A route transition must never leave Safari's body fixed or visually
+      // blurred after a dialog or pending operation has already disappeared.
+      // The overlay portal also repairs itself through DOM/page lifecycle
+      // observers; this route-level pass covers abrupt Angular navigation.
+      repairViewportOverlayLock();
 
       const match = event.urlAfterRedirects.match(/^\/leagues\/([^/?#]+)/);
       const segment = match?.[1] ?? '';

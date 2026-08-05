@@ -4,6 +4,7 @@ export interface PendingDraftPickIdentity {
   overallPick: number;
   assetKey: string;
   ownerId: string;
+  submissionId?: string | null;
 }
 
 function cleanKey(value: unknown): string {
@@ -29,6 +30,13 @@ export function draftPickMatchesPending(
     return false;
   }
 
+  const expectedSubmissionId = cleanKey(pending.submissionId);
+  const observedSubmissionId = cleanKey(pick.submissionId);
+
+  if (expectedSubmissionId && observedSubmissionId !== expectedSubmissionId) {
+    return false;
+  }
+
   return pick.ownerId === pending.ownerId || pick.selectedByUserId === pending.ownerId;
 }
 
@@ -42,6 +50,16 @@ export function draftStateShowsPendingPickCommitted(
   pending: PendingDraftPickIdentity,
 ): boolean {
   if (!draft) {
+    return false;
+  }
+
+  // New manual submissions carry an exact idempotency key on the pick
+  // document. The aggregate draft document does not contain that key, so it
+  // must not settle a new submission by itself. The callable response, live
+  // pick listener, or bounded direct pick-document read provides the exact
+  // confirmation. This legacy fallback remains only for old records/tests
+  // that predate submission identifiers.
+  if (cleanKey(pending.submissionId)) {
     return false;
   }
 

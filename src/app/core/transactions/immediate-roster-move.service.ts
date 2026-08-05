@@ -29,7 +29,7 @@ export interface ImmediateRosterMoveResult {
 const applyImmediateRosterMoveCallable = httpsCallable<
   ImmediateRosterMoveRequest,
   ImmediateRosterMoveResult
->(functions, 'applyImmediateRosterMove');
+>(functions, 'applyImmediateRosterMove', { timeout: 65_000 });
 
 export async function applyImmediateRosterMove(
   request: ImmediateRosterMoveRequest,

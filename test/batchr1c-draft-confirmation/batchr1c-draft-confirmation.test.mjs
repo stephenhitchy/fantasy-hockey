@@ -48,9 +48,25 @@ test('an exact pick can be confirmed from ownerId or selectedByUserId without ac
     false,
   );
   assert.equal(draftPickMatchesPending(pick({ overallPick: 4 }), pending), false);
+
+  const identifiedPending = { ...pending, submissionId: 'pick_3_exact_request' };
+  assert.equal(
+    draftPickMatchesPending(
+      pick({ submissionId: 'pick_3_exact_request' }),
+      identifiedPending,
+    ),
+    true,
+  );
+  assert.equal(
+    draftPickMatchesPending(
+      pick({ submissionId: 'pick_3_other_request' }),
+      identifiedPending,
+    ),
+    false,
+  );
 });
 
-test('the authoritative draft document independently proves a committed pick', () => {
+test('the aggregate draft document remains a legacy confirmation path only', () => {
   assert.equal(
     draftStateShowsPendingPickCommitted(
       {
@@ -100,6 +116,19 @@ test('the authoritative draft document independently proves a committed pick', (
     false,
     'a cumulative draftedAssetKeys match must not confirm the wrong overall pick',
   );
+  assert.equal(
+    draftStateShowsPendingPickCommitted(
+      {
+        status: 'live',
+        nextOverallPick: 4,
+        draftedAssetKeys: ['player:8478402'],
+        lastPickId: '003',
+      },
+      { ...pending, submissionId: 'pick_3_exact_request' },
+    ),
+    false,
+    'new idempotent submissions require the exact pick document or callable result',
+  );
 });
 
 test('server-confirmed picks merge without duplicate overall selections', () => {
@@ -129,37 +158,38 @@ test('Draft Room reconciles from both live listeners and direct server reads', a
   assert.match(room, /A mobile or browser transport can fail after Firestore committed/);
   assert.match(service, /getDocFromServer/);
   assert.match(service, /export async function getDraftPickFromServer/);
-  assert.match(authority, /makeSecureDraftPick[")',\s\{[\s\S]*timeout:\s*65_000/);
+  assert.match(authority, /makeSecureDraftPick[\s\S]*submissionId:[\s\S]*expectedOverallPick:/);
+  assert.match(authority, /makeSecureDraftPick[\s\S]*timeout:\s*25_000/);
+  assert.match(room, /settleOperationWithin\([\s\S]*getFantasyDraftFromServer\(this\.leagueId\)[\s\S]*6_000/);
+  assert.match(room, /settleOperationWithin\([\s\S]*getDraftPickFromServer\(this\.leagueId, pending\.overallPick\)[\s\S]*6_000/);
 
-  const watchdogIndex = room.indexOf('this.armPickSubmissionOverlayWatchdog(requestId);');
+  const reconciliationIndex = room.indexOf('this.armPendingPickReconciliationLoop(requestId);');
   const deadlineIndex = room.indexOf('this.armPendingPickConfirmationTimeout(requestId);');
-  const callableIndex = room.indexOf('await makeDraftPick(this.leagueId, this.userId, asset);');
-  assert.ok(watchdogIndex >= 0 && watchdogIndex < callableIndex);
+  const callableIndex = room.indexOf('const pick = await makeDraftPick(');
+  assert.ok(reconciliationIndex >= 0 && reconciliationIndex < callableIndex);
   assert.ok(deadlineIndex >= 0 && deadlineIndex < callableIndex);
-  assert.match(room, /68_000/);
-  assert.match(room, /this\.pickSubmissionPhase\(\) !== 'idle'[\s\S]*previous pick/);
+  assert.match(room, /}, 45_000\);/);
+  assert.match(room, /requestRealtimeConfirmation\('manual'\)/);
 });
 
-test('a delayed board sync never keeps the fuzzy full-screen shield indefinitely', async () => {
-  const [room, template, styles, componentStyles] = await Promise.all([
+test('a delayed board sync uses a compact dock and never restores the fuzzy full-screen shield', async () => {
+  const [room, template, componentStyles] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-room.html'),
-    read('src/rinkrat-arena-phase3.css'),
     read('src/app/features/draft/draft-room/draft-room.css'),
   ]);
 
-  assert.match(room, /armPickSubmissionOverlayWatchdog\(requestId\)/);
-  assert.match(room, /this\.pickSubmissionOverlayVisible\.set\(false\);[\s\S]*8_000/);
-  assert.match(template, /@if \(pickSubmissionOverlayVisible\(\)\)/);
-  assert.match(template, /pickSubmissionPhase\(\) !== 'idle' && !pickSubmissionOverlayVisible\(\)/);
-  assert.match(template, /Pick accepted — syncing the board/);
-  assert.match(styles, /\.draft-pick-sync-dock/);
-  assert.match(styles, /pointer-events:\s*auto/);
+  assert.match(room, /armPendingPickReconciliationLoop\(requestId\)/);
+  assert.match(room, /this\.pickSubmissionPhase\.set\('confirming'\)/);
+  assert.match(template, /@if \(pickSubmissionPhase\(\) !== 'idle'\)/);
+  assert.match(template, /class="draft-pick-sync-dock/);
+  assert.match(template, /Sending selection securely/);
+  assert.match(template, /Checking the live draft board/);
+  assert.match(componentStyles, /\.draft-pick-sync-dock/);
+  assert.match(componentStyles, /position:\s*fixed/);
   assert.match(template, /Check Now/);
-  assert.doesNotMatch(
-    componentStyles.match(/\.draft-pick-submission-shield\s*\{[\s\S]*?\}/)?.[0] ?? '',
-    /backdrop-filter/,
-  );
+  assert.doesNotMatch(template, /draft-pick-submission-shield|appViewportOverlayPortal/);
+  assert.doesNotMatch(componentStyles, /\.draft-pick-submission-shield\s*\{/);
 });
 
 test('navigation remains protected only while the secure pick submission is unresolved', async () => {

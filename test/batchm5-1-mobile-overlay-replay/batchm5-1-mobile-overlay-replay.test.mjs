@@ -179,7 +179,8 @@ test('viewport overlays are portaled to document.body and restore the exact scro
   assert.match(source, /body\.style\.top = `\$\{-lockedScrollY\}px`/);
   assert.match(source, /this\.originalParent\.insertBefore/);
   assert.match(source, /window\.scrollTo\(scrollX, scrollY\)/);
-  assert.match(source, /activeViewportOverlayCount/);
+  assert.match(source, /activeViewportOverlays = new Set<HTMLElement>/);
+  assert.match(source, /repairViewportOverlayLock/);
 });
 
 test('all recently added modal-style interfaces use the shared viewport portal', async () => {
@@ -196,8 +197,10 @@ test('all recently added modal-style interfaces use the shared viewport portal',
   assert.match(files.actionSheet, /rr-action-sheet-backdrop[\s\S]*appViewportOverlayPortal/);
   assert.doesNotMatch(files.gameCenter, /mobile-asset-sheet-backdrop|appViewportOverlayPortal/);
   assert.match(files.league, /draft-live-overlay[\s\S]*appViewportOverlayPortal/);
-  assert.match(files.draft, /draft-pick-submission-shield[\s\S]*appViewportOverlayPortal/);
-  assert.match(files.draftSetup, /draft-save-lock[\s\S]*appViewportOverlayPortal/);
+  assert.match(files.draft, /draft-pick-sync-dock/);
+  assert.doesNotMatch(files.draft, /draft-pick-submission-shield|appViewportOverlayPortal/);
+  assert.match(files.draftSetup, /draft-save-status-dock/);
+  assert.doesNotMatch(files.draftSetup, /draft-save-lock|appViewportOverlayPortal/);
   assert.match(files.freeAgents, /roster-operation-status-dock/);
   assert.doesNotMatch(files.freeAgents, /roster-operation-status-dock[\s\S]*appViewportOverlayPortal/);
   assert.ok((files.team.match(/appViewportOverlayPortal/g) ?? []).length >= 4);

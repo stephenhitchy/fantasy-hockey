@@ -195,6 +195,7 @@ export async function getPublicManagerProfilesForLeague(
   const callable = httpsCallable<PublicManagerProfilesRequest, PublicManagerProfilesResponse>(
     functions,
     'getPublicManagerProfiles',
+    { timeout: 35_000 },
   );
   const response = await callable({ leagueId: leagueId.trim(), userIds: uniqueUserIds });
   const profiles = Array.isArray(response.data.profiles) ? response.data.profiles : [];

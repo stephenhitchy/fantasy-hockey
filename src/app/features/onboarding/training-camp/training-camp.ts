@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase-auth';
+import { withOperationDeadline } from '../../../core/async/bounded-operation.util';
 import {
   completeTrainingCamp,
   CURRENT_TRAINING_CAMP_VERSION,
@@ -145,7 +146,11 @@ export class TrainingCamp {
     this.errorMessage.set('');
 
     try {
-      await completeTrainingCamp(this.userId);
+      await withOperationDeadline(
+        completeTrainingCamp(this.userId),
+        25_000,
+        'RinkRat stopped waiting for Training Camp to save. The button has been released; reload before submitting again because the completion may still have saved.',
+      );
 
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.removeItem(`fantasy-hockey-dashboard-v4:${this.userId}`);

@@ -43,6 +43,71 @@ const MAX_CLOCK_SECONDS = 10 * 60;
 const DEFAULT_PICK_SECONDS = 60;
 const DRAFT_AUTOMATION_LEASE_MILLISECONDS = 90_000;
 const DRAFT_AUTOMATION_CONTENTION_RETRY_DELAYS = [125, 300, 700, 1_500];
+const DRAFT_PROJECTION_CACHE_TTL_MILLISECONDS = 5 * 60 * 1000;
+const MAX_DRAFT_PROJECTION_CACHE_ENTRIES = 12;
+
+interface CachedDraftProjection {
+  snapshot: SharedProjectionSnapshot;
+  expiresAt: number;
+}
+
+const draftProjectionCache = new Map<string, CachedDraftProjection>();
+
+function getDraftProjectionCacheKey(leagueId: string, snapshotId: string): string {
+  return `${leagueId}:${snapshotId}`;
+}
+
+function getCachedDraftProjection(
+  leagueId: string,
+  snapshotId: string,
+): SharedProjectionSnapshot | null {
+  const key = getDraftProjectionCacheKey(leagueId, snapshotId);
+  const cached = draftProjectionCache.get(key);
+
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    draftProjectionCache.delete(key);
+    return null;
+  }
+
+  // Refresh insertion order so this bounded map behaves like a small LRU.
+  draftProjectionCache.delete(key);
+  draftProjectionCache.set(key, cached);
+  return cached.snapshot;
+}
+
+function cacheDraftProjection(
+  leagueId: string,
+  snapshot: SharedProjectionSnapshot,
+): SharedProjectionSnapshot {
+  const snapshotId = snapshot.metadata.activeSnapshotId;
+
+  if (!snapshotId) {
+    return snapshot;
+  }
+
+  const key = getDraftProjectionCacheKey(leagueId, snapshotId);
+  draftProjectionCache.delete(key);
+  draftProjectionCache.set(key, {
+    snapshot,
+    expiresAt: Date.now() + DRAFT_PROJECTION_CACHE_TTL_MILLISECONDS,
+  });
+
+  while (draftProjectionCache.size > MAX_DRAFT_PROJECTION_CACHE_ENTRIES) {
+    const oldestKey = draftProjectionCache.keys().next().value as string | undefined;
+
+    if (!oldestKey) {
+      break;
+    }
+
+    draftProjectionCache.delete(oldestKey);
+  }
+
+  return snapshot;
+}
 
 interface DraftAutomationRunResult {
   leagueId: string;
@@ -456,7 +521,14 @@ export async function loadProjectionSnapshotForDraft(
   const pinnedSnapshotId = draft.serverDraftProjectionSnapshotId;
 
   if (typeof pinnedSnapshotId === 'string' && pinnedSnapshotId) {
-    return loadVerifiedProjectionSnapshotById(leagueId, pinnedSnapshotId);
+    const cached = getCachedDraftProjection(leagueId, pinnedSnapshotId);
+
+    if (cached) {
+      return cached;
+    }
+
+    const loaded = await loadVerifiedProjectionSnapshotById(leagueId, pinnedSnapshotId);
+    return loaded ? cacheDraftProjection(leagueId, loaded) : null;
   }
 
   const projection = await loadVerifiedDraftProjectionSnapshot(leagueId);
@@ -472,7 +544,7 @@ export async function loadProjectionSnapshotForDraft(
     );
   }
 
-  return projection;
+  return projection ? cacheDraftProjection(leagueId, projection) : null;
 }
 
 function getDraftClockTaskQueue() {
@@ -635,6 +707,10 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     clockUpdatedBy: value.clockUpdatedBy ?? null,
     clockUpdatedAt: value.clockUpdatedAt,
     lastPickId: value.lastPickId ?? null,
+    lastSettingsSubmissionId:
+      typeof value.lastSettingsSubmissionId === 'string'
+        ? value.lastSettingsSubmissionId
+        : null,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId

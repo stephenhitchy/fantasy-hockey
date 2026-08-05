@@ -487,6 +487,7 @@ export async function deleteLeaguePermanently(
   const callable = httpsCallable<DeleteLeagueRequest, DeleteLeagueResponse>(
     functions,
     'deleteLeague',
+    { timeout: 600_000 },
   );
 
   try {

@@ -1127,14 +1127,18 @@ export class FreeAgents implements OnDestroy {
       );
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
 
-      await processWaiver({
-        leagueId: this.leagueId,
-        commissionerId: this.userId,
-        waiverId: waiver.id,
-        leagueTeams: this.teams(),
-        effectiveCycleNumber,
-        effectiveLabel,
-      });
+      await withFreeAgentOperationTimeout(
+        processWaiver({
+          leagueId: this.leagueId,
+          commissionerId: this.userId,
+          waiverId: waiver.id,
+          leagueTeams: this.teams(),
+          effectiveCycleNumber,
+          effectiveLabel,
+        }),
+        25_000,
+        'RinkRat stopped waiting for the waiver-processing response. The page has been unlocked; refresh the waiver list before processing again because the result may already have saved.',
+      );
 
       const claimCount = waiver.claims?.length ?? 0;
 
@@ -2086,11 +2090,15 @@ export class FreeAgents implements OnDestroy {
     this.moving.set(true);
 
     try {
-      await cancelQueuedRosterMove({
-        leagueId: this.leagueId,
-        ownerId: this.userId,
-        rosterSlotId: entry.slot.slotId,
-      });
+      await withFreeAgentOperationTimeout(
+        cancelQueuedRosterMove({
+          leagueId: this.leagueId,
+          ownerId: this.userId,
+          rosterSlotId: entry.slot.slotId,
+        }),
+        20_000,
+        'RinkRat stopped waiting for the cancellation response. The page has been unlocked; refresh My Team before trying again because the scheduled move may already be canceled.',
+      );
 
       this.successMessage.set(
         `Canceled the scheduled move for ${entry.slot.position} Slot ${entry.slot.slotNumber}. ${this.getRosterAssetName(entry.move.incomingAsset)} is available again.`,

@@ -5,7 +5,15 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
-import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
+import {
+  settleOperationWithin,
+  waitForOperationDelay,
+  withOperationDeadline,
+} from '../../../core/async/bounded-operation.util';
+import {
+  CompetitiveActionMonitorService,
+  type CompetitiveActionHandle,
+} from '../../../core/observability/competitive-action-monitor.service';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -18,16 +26,22 @@ import {
   DEFAULT_DRAFT_TOTAL_ROUNDS,
   DRAFT_PICK_SECONDS_OPTIONS,
   getFantasyDraft,
+  getFantasyDraftFromServer,
   getScheduledStartDate,
   isDraftStartTimeReached,
   saveFantasyDraft,
 } from '../../../core/draft/draft.service';
 
 import { DraftPickPreview, FantasyDraft } from '../../../core/draft/draft.models';
+import {
+  draftSettingsMatchExpectation,
+  type DraftSettingsExpectation,
+} from './draft-settings-confirmation.util';
 
 import {
   generateSharedProjectionSnapshot,
-  PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
+  isSharedProjectionSnapshotFreshForDraft,
+  loadSharedProjectionSnapshotMetadata,
   SHARED_PROJECTION_VERSION,
 } from '../../../core/projection/projection-snapshot.service';
 
@@ -55,7 +69,7 @@ interface DraftRoundPreview {
 
 @Component({
   selector: 'app-draft-setup',
-  imports: [FormsModule, RouterLink, ManagerAvatar, ViewportOverlayPortalDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-setup.html',
   styleUrl: './draft-setup.css',
 })
@@ -69,6 +83,7 @@ export class DraftSetup implements OnDestroy {
 
   loading = signal(true);
   saving = signal(false);
+  savePhase = signal<'idle' | 'preparing' | 'saving' | 'confirming'>('idle');
   errorMessage = signal('');
   successMessage = signal('');
   projectionPreparationWarning = signal('');
@@ -84,6 +99,9 @@ export class DraftSetup implements OnDestroy {
   private readonly clockTimer = setInterval(() => {
     this.now.set(Date.now());
   }, 1000);
+
+  private draftSaveGeneration = 0;
+  private pendingDraftSaveAction: CompetitiveActionHandle | null = null;
 
   readonly totalRounds = DEFAULT_DRAFT_TOTAL_ROUNDS;
 
@@ -165,12 +183,16 @@ export class DraftSetup implements OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
     this.loadDraftSetup();
   }
 
   ngOnDestroy(): void {
     clearInterval(this.clockTimer);
+    this.draftSaveGeneration += 1;
+    this.pendingDraftSaveAction?.finish('cancelled');
+    this.pendingDraftSaveAction = null;
   }
 
   canLeaveDraftSetup(): boolean {
@@ -319,6 +341,42 @@ export class DraftSetup implements OnDestroy {
     return status === 'live' || status === 'complete' || this.startTimeReached();
   }
 
+  getDraftSaveStatusTitle(): string {
+    switch (this.savePhase()) {
+      case 'preparing':
+        return `Preparing Projection V${SHARED_PROJECTION_VERSION} rankings…`;
+      case 'saving':
+        return 'Sending draft settings…';
+      case 'confirming':
+        return 'Confirming the saved draft time…';
+      default:
+        return 'Draft settings are ready.';
+    }
+  }
+
+  getDraftSaveStatusDetail(): string {
+    switch (this.savePhase()) {
+      case 'preparing':
+        return 'RinkRat is building the verified draft board. The page stays readable and the operation releases automatically if a data request stops responding.';
+      case 'saving':
+        return 'The secure draft command is being sent. Navigation remains protected until the server or the authoritative draft document confirms the save.';
+      case 'confirming':
+        return 'RinkRat is checking the saved draft document directly. A slow browser response cannot keep this page pending forever.';
+      default:
+        return '';
+    }
+  }
+
+  private createDraftSettingsSubmissionId(): string {
+    const randomPart =
+      typeof globalThis.crypto !== 'undefined' &&
+      typeof globalThis.crypto.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID().replaceAll('-', '')
+        : `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+
+    return `settings_${Date.now().toString(36)}_${randomPart}`.slice(0, 120);
+  }
+
   async saveDraftOrder(): Promise<void> {
     if (this.saving()) {
       return;
@@ -354,7 +412,13 @@ export class DraftSetup implements OnDestroy {
       return;
     }
 
+    const generation = ++this.draftSaveGeneration;
+    const submissionId = this.createDraftSettingsSubmissionId();
     this.saving.set(true);
+    this.savePhase.set(scheduledStartDate ? 'preparing' : 'saving');
+    this.pendingDraftSaveAction?.finish('cancelled');
+    this.pendingDraftSaveAction = this.actionMonitor.begin('draft-settings');
+    let outcome: 'success' | 'error' | 'uncertain' = 'error';
 
     try {
       const existingDraft = this.draft();
@@ -362,26 +426,59 @@ export class DraftSetup implements OnDestroy {
 
       if (scheduledStartDate) {
         this.successMessage.set(
-          `Building verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
+          `Checking verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
         );
 
         try {
-          const snapshot = await generateSharedProjectionSnapshot({
+          const projectionInput = {
             leagueId: this.leagueId,
             teamCount: Math.max(this.teams().length, 2),
             requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
-            generationReason: 'draft-setup',
-          });
+            generationReason: 'draft-setup' as const,
+          };
+          const metadataResult = await settleOperationWithin(
+            loadSharedProjectionSnapshotMetadata(this.leagueId),
+            7_000,
+          );
+          const existingMetadata = metadataResult.status === 'fulfilled'
+            ? metadataResult.value
+            : null;
 
           if (
-            snapshot.metadata.status !== 'ready' ||
-            snapshot.metadata.generationReason === 'server-emergency' ||
-            snapshot.assets.length === 0
+            isSharedProjectionSnapshotFreshForDraft(existingMetadata, {
+              teamCount: projectionInput.teamCount,
+              requiredGamesPerCycle: projectionInput.requiredGamesPerCycle,
+              now: new Date(),
+            })
           ) {
-            throw new Error('The verified ranking snapshot was incomplete.');
-          }
+            preparedAssetCount = existingMetadata?.assetCount ?? null;
+            this.successMessage.set(
+              `Using the existing verified Projection V${SHARED_PROJECTION_VERSION} draft board…`,
+            );
+          } else {
+            this.successMessage.set(
+              `Building verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
+            );
+            const snapshot = await withOperationDeadline(
+              generateSharedProjectionSnapshot(projectionInput),
+              75_000,
+              `Projection V${SHARED_PROJECTION_VERSION} preparation took too long. The page has been released without changing the saved draft settings. Check the connection and try again.`,
+            );
 
-          preparedAssetCount = snapshot.metadata.assetCount;
+            if (generation !== this.draftSaveGeneration) {
+              return;
+            }
+
+            if (
+              snapshot.metadata.status !== 'ready' ||
+              snapshot.metadata.generationReason === 'server-emergency' ||
+              snapshot.assets.length === 0
+            ) {
+              throw new Error('The verified ranking snapshot was incomplete.');
+            }
+
+            preparedAssetCount = snapshot.metadata.assetCount;
+          }
         } catch (projectionError: unknown) {
           const detail = projectionError instanceof Error
             ? projectionError.message
@@ -412,11 +509,31 @@ export class DraftSetup implements OnDestroy {
         pausedRemainingSeconds: null,
         clockUpdatedBy: null,
         lastPickId: existingDraft?.lastPickId ?? null,
+        lastSettingsSubmissionId: submissionId,
         serverDraftProjectionSnapshotId: null,
       };
+      const expectation: DraftSettingsExpectation = {
+        submissionId,
+        roundOneOrder: [...order],
+        scheduledStartAtMilliseconds: scheduledStartDate?.getTime() ?? null,
+        pickSeconds: this.pickSecondsInput,
+        status: scheduledStartDate ? 'scheduled' : 'setup',
+      };
 
-      await saveFantasyDraft(this.leagueId, draftToSave);
-      this.draft.set(draftToSave);
+      this.savePhase.set('saving');
+      const savePromise = saveFantasyDraft(this.leagueId, draftToSave, submissionId);
+      this.savePhase.set('confirming');
+      const observedDraft = await this.awaitDraftSettingsConfirmation(
+        savePromise,
+        expectation,
+        generation,
+      );
+
+      if (generation !== this.draftSaveGeneration) {
+        return;
+      }
+
+      this.draft.set(observedDraft ?? draftToSave);
 
       if (scheduledStartDate) {
         this.successMessage.set(
@@ -425,13 +542,123 @@ export class DraftSetup implements OnDestroy {
       } else {
         this.successMessage.set('Draft order saved. No start time is scheduled yet.');
       }
+      outcome = 'success';
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to save the draft settings.',
-      );
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to save the draft settings.';
+      this.errorMessage.set(message);
+      outcome = /may still have saved|check the saved draft settings|could not confirm/i.test(message)
+        ? 'uncertain'
+        : 'error';
     } finally {
-      this.saving.set(false);
+      if (generation === this.draftSaveGeneration) {
+        this.saving.set(false);
+        this.savePhase.set('idle');
+        this.pendingDraftSaveAction?.finish(outcome);
+        this.pendingDraftSaveAction = null;
+      }
     }
+  }
+
+  private isPossiblyCommittedDraftSettingsError(error: unknown): boolean {
+    const rawCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    const code = rawCode.toLowerCase();
+
+    return [
+      'deadline-exceeded',
+      'unavailable',
+      'internal',
+      'unknown',
+      'cancelled',
+      'network-request-failed',
+    ].some((candidate) => code.includes(candidate));
+  }
+
+  private async awaitDraftSettingsConfirmation(
+    actionPromise: Promise<void>,
+    expectation: DraftSettingsExpectation,
+    generation: number,
+  ): Promise<FantasyDraft | null> {
+    let actionSettled = false;
+    let actionRejected = false;
+    let actionError: unknown;
+
+    void actionPromise.then(
+      () => {
+        actionSettled = true;
+      },
+      (error: unknown) => {
+        actionSettled = true;
+        actionRejected = true;
+        actionError = error;
+      },
+    );
+
+    const deadline = Date.now() + 35_000;
+
+    while (generation === this.draftSaveGeneration && Date.now() <= deadline) {
+      if (actionSettled && !actionRejected) {
+        return null;
+      }
+
+      const probe = await settleOperationWithin(
+        getFantasyDraftFromServer(this.leagueId),
+        4_000,
+      );
+
+      if (generation !== this.draftSaveGeneration) {
+        return null;
+      }
+
+      if (
+        probe.status === 'fulfilled' &&
+        draftSettingsMatchExpectation(probe.value, expectation)
+      ) {
+        return probe.value;
+      }
+
+      if (
+        actionSettled &&
+        actionRejected &&
+        !this.isPossiblyCommittedDraftSettingsError(actionError)
+      ) {
+        throw actionError;
+      }
+
+      await waitForOperationDelay(1_000);
+    }
+
+    if (actionSettled && !actionRejected) {
+      return null;
+    }
+
+    const finalProbe = await settleOperationWithin(
+      getFantasyDraftFromServer(this.leagueId),
+      5_000,
+    );
+
+    if (
+      finalProbe.status === 'fulfilled' &&
+      draftSettingsMatchExpectation(finalProbe.value, expectation)
+    ) {
+      return finalProbe.value;
+    }
+
+    if (
+      actionSettled &&
+      actionRejected &&
+      !this.isPossiblyCommittedDraftSettingsError(actionError)
+    ) {
+      throw actionError;
+    }
+
+    throw new Error(
+      'RinkRat could not confirm the saved draft settings within the safety window. The page has been unlocked. Check the saved draft time before retrying because the server request may still have saved it.',
+    );
   }
 
   private getSelectedDraftStartDate(): Date | null {

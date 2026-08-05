@@ -99,6 +99,7 @@ export class ClientErrorReporterService {
     const callable = httpsCallable<ClientErrorReportRequest, ClientErrorReportResponse>(
       functions,
       'reportClientError',
+      { timeout: 20_000 },
     );
 
     void callable({

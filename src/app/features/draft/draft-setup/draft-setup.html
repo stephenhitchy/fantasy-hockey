@@ -4,23 +4,18 @@
   <p>{{ errorMessage() || 'League not found.' }}</p>
 } @else {
   @if (saving()) {
-    <div
-      class="draft-save-lock"
-      appViewportOverlayPortal
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="draft-save-lock-title"
-      aria-describedby="draft-save-lock-description"
+    <aside
+      class="draft-save-status-dock rr-notice rr-notice--info"
+      role="status"
+      aria-live="assertive"
+      aria-atomic="true"
     >
-      <div class="draft-save-lock-card">
-        <span class="pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
-        <strong id="draft-save-lock-title">Saving draft settings</strong>
-        <p id="draft-save-lock-description">
-          Keep this page open while RinkRat builds the verified rankings and confirms the draft time.
-        </p>
-        <small>Navigation will unlock automatically when the save finishes.</small>
+      <span class="draft-save-status-spinner" aria-hidden="true"></span>
+      <div>
+        <strong>{{ getDraftSaveStatusTitle() }}</strong>
+        <small>{{ getDraftSaveStatusDetail() }}</small>
       </div>
-    </div>
+    </aside>
   }
 
   <section class="draft-setup-page rr-page-shell" [attr.aria-busy]="saving()">

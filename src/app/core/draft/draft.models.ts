@@ -322,6 +322,8 @@ export interface FantasyDraft {
   clockUpdatedBy?: string | null;
   clockUpdatedAt?: unknown;
   lastPickId?: string | null;
+  /** Exact client request that most recently saved commissioner settings. */
+  lastSettingsSubmissionId?: string | null;
 
   /** Verified shared projection snapshot frozen for the entire draft. */
   serverDraftProjectionSnapshotId?: string | null;
@@ -355,6 +357,15 @@ export interface DraftPick extends DraftPickPreview {
   selectionType?: DraftSelectionType;
   selectedByUserId?: string;
   autoPickReason?: DraftAutoPickReason | null;
+
+  /**
+   * Client-generated idempotency key for a manual pick submission. Automatic
+   * picks and legacy draft records may omit it. Retrying the same request with
+   * this identifier must return the original committed pick instead of
+   * creating or attempting a second selection.
+   */
+  submissionId?: string | null;
+
   madeAt?: unknown;
 }
 

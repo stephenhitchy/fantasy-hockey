@@ -5,6 +5,7 @@ export type CompetitiveActionKind =
   | 'draft-queue'
   | 'draft-auto'
   | 'draft-clock'
+  | 'draft-settings'
   | 'historical-replay'
   | 'lineup-swap'
   | 'injured-reserve'
@@ -69,6 +70,7 @@ const ACTION_KINDS = new Set<CompetitiveActionKind>([
   'draft-queue',
   'draft-auto',
   'draft-clock',
+  'draft-settings',
   'historical-replay',
   'lineup-swap',
   'injured-reserve',
@@ -242,6 +244,8 @@ export function getCompetitiveActionLabel(action: CompetitiveActionKind): string
       return 'Auto-Draft setting';
     case 'draft-clock':
       return 'Draft clock';
+    case 'draft-settings':
+      return 'Draft settings';
     case 'historical-replay':
       return 'Replay advance';
     case 'lineup-swap':

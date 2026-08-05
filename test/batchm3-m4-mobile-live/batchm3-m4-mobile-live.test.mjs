@@ -305,7 +305,7 @@ test('draft listeners expose metadata, errors, and server-confirmed snapshot sta
   assert.match(service, /Unable to load draft queues/);
 });
 
-test('Draft Room has focused phone views, stale-state protection, queue reasons, and a confirmed-pick shield', async () => {
+test('Draft Room has focused phone views, stale-state protection, queue reasons, and bounded pick reconciliation', async () => {
   const [template, source, styles, routes, guard] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.html'),
     read('src/app/features/draft/draft-room/draft-room.ts'),
@@ -321,7 +321,7 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
     "setMobilePanel('queue')",
     "setMobilePanel('roster')",
     'draft-mobile-selection-bar',
-    'draft-pick-submission-shield',
+    'draft-pick-sync-dock',
     'Retry Connection',
     'queue-row-unavailable',
     'getQueueEntryStatusLabel',
@@ -332,6 +332,8 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
   assert.match(source, /@HostListener\('window:beforeunload'/);
   assert.match(source, /confirmPendingPickIfObserved/);
   assert.match(source, /draftPickMatchesPending\(/);
+  assert.match(source, /armPendingPickReconciliationLoop/);
+  assert.match(source, /armPendingPickConfirmationTimeout/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /navigator\.onLine/);
   assert.match(source, /rinkrat:draft-auto-pick-dismissed/);

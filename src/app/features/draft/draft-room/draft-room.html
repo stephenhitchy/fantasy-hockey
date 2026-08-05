@@ -985,7 +985,7 @@
         </section>
       }
 
-      @if (pickSubmissionPhase() !== 'idle' && !pickSubmissionOverlayVisible()) {
+      @if (pickSubmissionPhase() !== 'idle') {
         <section
           class="draft-pick-sync-dock rr-notice rr-notice--info"
           role="status"
@@ -994,12 +994,12 @@
           <span class="draft-submit-spinner draft-submit-spinner--compact" aria-hidden="true"></span>
           <div>
             <strong>
-              {{ pickSubmissionPhase() === 'submitting' ? 'Checking the server pick record…' : 'Pick accepted — syncing the board' }}
+              {{ pickSubmissionPhase() === 'submitting' ? 'Sending selection securely…' : 'Checking the live draft board…' }}
             </strong>
             <p>
               {{ pickSubmissionPhase() === 'submitting'
-                ? 'You can keep reading the Draft Room. Draft actions remain paused until the request is confirmed or safely released.'
-                : 'The pick is saved. This tab is reconciling the next manager, roster, and live board.'
+                ? 'The Draft Room stays usable while the request begins. RinkRat will switch to direct server checks automatically if the transport is slow.'
+                : 'RinkRat is checking the exact pick and draft documents. The page will always release this pending state by the safety deadline.'
               }}
             </p>
           </div>
@@ -1013,22 +1013,6 @@
         </section>
       }
 
-      @if (pickSubmissionOverlayVisible()) {
-        <div
-          class="draft-pick-submission-shield"
-          appViewportOverlayPortal
-          role="status"
-          aria-live="assertive"
-        >
-          <div class="draft-pick-submission-card rr-card rr-card--padded">
-            <span class="draft-submit-spinner" aria-hidden="true"></span>
-            <strong>Submitting your pick…</strong>
-            <p>
-              RinkRat is sending this selection to the secure draft server. The full-screen wait automatically collapses after eight seconds so the page cannot remain trapped behind a spinner.
-            </p>
-          </div>
-        </div>
-      }
     }
   </section>
 }

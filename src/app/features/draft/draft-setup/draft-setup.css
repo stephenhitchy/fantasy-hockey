@@ -744,62 +744,63 @@
   color: #dceafe;
 }
 
-.draft-save-lock {
+
+.draft-save-status-dock {
   position: fixed;
-  z-index: 5000;
-  inset: 0;
+  z-index: 220;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--page-bg) 82%, transparent);
-  backdrop-filter: blur(5px);
-  cursor: progress;
-  touch-action: none;
-}
-
-.draft-save-lock-card {
-  display: grid;
-  width: min(460px, 100%);
-  justify-items: center;
-  gap: 10px;
-  padding: 26px 24px;
-  border: 3px solid var(--user-team-accent);
-  background: var(--surface-1);
-  box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--surface-1) 65%, white 35%),
-    7px 7px 0 color-mix(in srgb, var(--page-bg) 68%, black 32%);
-  color: var(--text-primary);
-  text-align: center;
-}
-
-.draft-save-lock-card strong {
-  font-family: var(--rr-font-display, inherit);
-  font-size: clamp(1.35rem, 4vw, 2rem);
-  line-height: 1.1;
-}
-
-.draft-save-lock-card p {
+  width: min(430px, calc(100vw - 32px));
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
   margin: 0;
+  padding: 14px 16px;
+  border: 2px solid color-mix(in srgb, var(--rr-info) 70%, var(--user-team-accent));
+  background: color-mix(in srgb, var(--surface-1) 96%, var(--page-bg));
+  box-shadow: 0 14px 36px color-mix(in srgb, black 32%, transparent);
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.draft-save-status-dock strong,
+.draft-save-status-dock small {
+  display: block;
+}
+
+.draft-save-status-dock small {
+  margin-top: 3px;
   color: var(--text-secondary);
-  font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.35;
 }
 
-.draft-save-lock-card small {
-  color: var(--text-muted);
-  font-family: var(--rr-font-micro, inherit);
-  font-size: 0.68rem;
-  letter-spacing: 0.05em;
-  line-height: 1.45;
-  text-transform: uppercase;
+.draft-save-status-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid color-mix(in srgb, var(--rr-info) 24%, transparent);
+  border-top-color: var(--rr-info);
+  border-radius: 50%;
+  animation: rr-draft-save-spin 0.9s linear infinite;
 }
 
-@media (max-width: 560px) {
-  .draft-save-lock {
-    padding: 16px;
+@keyframes rr-draft-save-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 680px) {
+  .draft-save-status-dock {
+    right: 8px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 8px;
+    width: auto;
+    padding: 11px 12px;
   }
+}
 
-  .draft-save-lock-card {
-    padding: 22px 16px;
+@media (prefers-reduced-motion: reduce) {
+  .draft-save-status-spinner {
+    animation: none;
+    border-color: var(--rr-info);
   }
 }

@@ -252,7 +252,7 @@ test('V1B-P1B verification, contrast audit, release label, and documentation are
   assert.match(documentation, /Hosting-only/i);
 });
 
-test('competitive scoring, Projection V11, rules, indexes, and unrelated Functions remain unchanged', async () => {
+test('competitive scoring, Projection V11, rules, indexes, and Functions unrelated to later replay or draft recovery remain unchanged', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
     'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
@@ -280,8 +280,11 @@ test('competitive scoring, Projection V11, rules, indexes, and unrelated Functio
         'src/league-automation.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',
+        'src/draft-authority.ts',
+        'src/draft-automation.ts',
+        'src/shared/core/draft/draft.models.ts',
       ]),
     ),
-    '6298ef9c3513ded9c5fcbdadb5ceee7b55faa7da6dd41ad0a32a129eeed75595',
+    '32222396c7eed31cdfe81463070c1b71a5dab091c7d85db9338667623d9bc2f4',
   );
 });

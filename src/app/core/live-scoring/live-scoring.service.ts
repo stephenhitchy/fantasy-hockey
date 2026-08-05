@@ -48,22 +48,22 @@ export interface OpenNextCompetitionPeriodResult {
 const requestServerLiveScoringRefresh = httpsCallable<
   { leagueId: string },
   ManualLiveScoringRefreshResult
->(functions, 'requestLeagueLiveScoringRefresh');
+>(functions, 'requestLeagueLiveScoringRefresh', { timeout: 600_000 });
 
 const openNextCompetitionPeriodCallable = httpsCallable<
   { leagueId: string; currentCycleNumber: number },
   OpenNextCompetitionPeriodResult
->(functions, 'openNextCompetitionPeriod');
+>(functions, 'openNextCompetitionPeriod', { timeout: 600_000 });
 
 const releaseServerLiveScoringHandoff = httpsCallable<
   { leagueId: string },
   LiveScoringControlResetResult
->(functions, 'releaseLeagueLiveScoringHandoff');
+>(functions, 'releaseLeagueLiveScoringHandoff', { timeout: 35_000 });
 
 const clearServerLiveScoringLease = httpsCallable<
   { leagueId: string },
   LiveScoringControlResetResult
->(functions, 'clearExpiredOrErroredLiveScoringLease');
+>(functions, 'clearExpiredOrErroredLiveScoringLease', { timeout: 35_000 });
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {

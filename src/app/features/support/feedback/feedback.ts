@@ -85,6 +85,7 @@ export class FeedbackPage {
       const callable = httpsCallable<SubmitFeedbackRequest, SubmitFeedbackResponse>(
         functions,
         'submitFeedback',
+        { timeout: 35_000 },
       );
       const leagueId = this.currentLeagueId();
       const result = await callable({

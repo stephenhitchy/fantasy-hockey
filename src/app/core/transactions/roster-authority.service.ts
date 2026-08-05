@@ -44,7 +44,7 @@ export interface SecureRosterActionResult {
 const executeSecureRosterActionCallable = httpsCallable<
   SecureRosterActionRequest,
   SecureRosterActionResult
->(functions, 'executeSecureRosterAction');
+>(functions, 'executeSecureRosterAction', { timeout: 65_000 });
 
 export async function executeSecureRosterAction(
   request: SecureRosterActionRequest,
@@ -66,7 +66,7 @@ interface EnsureFantasyRosterResult {
 const ensureFantasyRosterCallable = httpsCallable<
   EnsureFantasyRosterRequest,
   EnsureFantasyRosterResult
->(functions, 'ensureFantasyRoster');
+>(functions, 'ensureFantasyRoster', { timeout: 35_000 });
 
 export async function ensureFantasyRoster(
   leagueId: string,

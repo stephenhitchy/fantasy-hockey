@@ -16,11 +16,13 @@ interface InlineStyleSnapshot {
   paddingRight: string;
 }
 
-let activeViewportOverlayCount = 0;
+const activeViewportOverlays = new Set<HTMLElement>();
 let lockedScrollX = 0;
 let lockedScrollY = 0;
 let bodyStyleSnapshot: InlineStyleSnapshot | null = null;
 let htmlOverflowSnapshot = '';
+let overlayMutationObserver: MutationObserver | null = null;
+let globalRecoveryListenersInstalled = false;
 
 function captureBodyStyle(body: HTMLElement): InlineStyleSnapshot {
   return {
@@ -46,12 +48,100 @@ function restoreBodyStyle(body: HTMLElement, snapshot: InlineStyleSnapshot): voi
   body.style.paddingRight = snapshot.paddingRight;
 }
 
-function acquireViewportLock(): void {
+function restoreViewportScrollLock(): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     return;
   }
 
-  if (activeViewportOverlayCount === 0) {
+  if (!bodyStyleSnapshot) {
+    document.body.classList.remove('rr-viewport-overlay-open');
+    document.documentElement.style.overflow = htmlOverflowSnapshot;
+    return;
+  }
+
+  const body = document.body;
+  const html = document.documentElement;
+  const scrollX = lockedScrollX;
+  const scrollY = lockedScrollY;
+
+  restoreBodyStyle(body, bodyStyleSnapshot);
+  html.style.overflow = htmlOverflowSnapshot;
+  body.classList.remove('rr-viewport-overlay-open');
+
+  bodyStyleSnapshot = null;
+  htmlOverflowSnapshot = '';
+  lockedScrollX = 0;
+  lockedScrollY = 0;
+
+  window.requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+  });
+}
+
+/**
+ * Removes overlay entries whose Angular view has already disappeared.
+ *
+ * Safari occasionally preserves body-lock styles after an overlay view is
+ * torn down during a route change or a delayed async callback. A Set of the
+ * actual overlay nodes is safer than a blind counter because disconnected
+ * nodes can be pruned and the page can recover automatically.
+ */
+export function repairViewportOverlayLock(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  for (const overlay of [...activeViewportOverlays]) {
+    if (!overlay.isConnected || overlay.getAttribute('data-viewport-overlay-portaled') !== 'true') {
+      activeViewportOverlays.delete(overlay);
+    }
+  }
+
+  if (activeViewportOverlays.size === 0) {
+    restoreViewportScrollLock();
+  }
+}
+
+function installOverlayRecoveryWatchers(): void {
+  if (
+    globalRecoveryListenersInstalled ||
+    typeof document === 'undefined' ||
+    typeof window === 'undefined' ||
+    typeof MutationObserver === 'undefined'
+  ) {
+    return;
+  }
+
+  globalRecoveryListenersInstalled = true;
+
+  overlayMutationObserver = new MutationObserver(() => {
+    queueMicrotask(repairViewportOverlayLock);
+  });
+  overlayMutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  window.addEventListener('pageshow', repairViewportOverlayLock);
+  window.addEventListener('pagehide', repairViewportOverlayLock);
+  window.addEventListener('popstate', repairViewportOverlayLock);
+  window.addEventListener('hashchange', repairViewportOverlayLock);
+  document.addEventListener('visibilitychange', repairViewportOverlayLock);
+}
+
+function acquireViewportLock(host: HTMLElement): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return;
+  }
+
+  installOverlayRecoveryWatchers();
+  repairViewportOverlayLock();
+
+  if (activeViewportOverlays.has(host)) {
+    return;
+  }
+
+  if (activeViewportOverlays.size === 0) {
     const body = document.body;
     const html = document.documentElement;
 
@@ -79,41 +169,12 @@ function acquireViewportLock(): void {
     body.classList.add('rr-viewport-overlay-open');
   }
 
-  activeViewportOverlayCount += 1;
+  activeViewportOverlays.add(host);
 }
 
-function releaseViewportLock(): void {
-  if (typeof document === 'undefined' || typeof window === 'undefined') {
-    return;
-  }
-
-  activeViewportOverlayCount = Math.max(0, activeViewportOverlayCount - 1);
-
-  if (activeViewportOverlayCount > 0) {
-    return;
-  }
-
-  const body = document.body;
-  const html = document.documentElement;
-
-  if (bodyStyleSnapshot) {
-    restoreBodyStyle(body, bodyStyleSnapshot);
-  }
-
-  html.style.overflow = htmlOverflowSnapshot;
-  body.classList.remove('rr-viewport-overlay-open');
-
-  const scrollX = lockedScrollX;
-  const scrollY = lockedScrollY;
-
-  bodyStyleSnapshot = null;
-  htmlOverflowSnapshot = '';
-  lockedScrollX = 0;
-  lockedScrollY = 0;
-
-  window.requestAnimationFrame(() => {
-    window.scrollTo(scrollX, scrollY);
-  });
+function releaseViewportLock(host: HTMLElement): void {
+  activeViewportOverlays.delete(host);
+  repairViewportOverlayLock();
 }
 
 /**
@@ -151,7 +212,7 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
     document.body.appendChild(this.host);
     this.host.setAttribute('data-viewport-overlay-portaled', 'true');
     this.portaled = true;
-    acquireViewportLock();
+    acquireViewportLock(this.host);
 
     this.resetFrame = window.requestAnimationFrame(() => {
       this.resetFrame = null;
@@ -191,6 +252,6 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
     }
 
     this.portaled = false;
-    releaseViewportLock();
+    releaseViewportLock(this.host);
   }
 }

@@ -13,6 +13,7 @@ export type DraftCommandAction =
 export interface DraftCommandRequest {
   leagueId: string;
   action: DraftCommandAction;
+  submissionId?: string;
   roundOneOrder?: string[];
   scheduledStartAt?: string | null;
   pickSeconds?: number;
@@ -22,12 +23,18 @@ export interface DraftCommandResult {
   applied: true;
   action: DraftCommandAction;
   message: string;
+  submissionId?: string | null;
 }
 
 const executeDraftCommandCallable = httpsCallable<
   DraftCommandRequest,
   DraftCommandResult
->(functions, 'executeDraftCommand');
+>(functions, 'executeDraftCommand', {
+  // Draft commands run on a 60-second Function ceiling. A slightly longer
+  // transport timeout prevents the browser from reporting failure just before
+  // the committed draft document reaches the live listener.
+  timeout: 65_000,
+});
 
 export async function executeDraftCommand(
   request: DraftCommandRequest,
@@ -39,6 +46,8 @@ export async function executeDraftCommand(
 interface SecureDraftPickRequest {
   leagueId: string;
   assetKey: string;
+  submissionId: string;
+  expectedOverallPick: number;
 }
 
 interface SecureDraftPickResult {
@@ -49,16 +58,25 @@ const makeSecureDraftPickCallable = httpsCallable<
   SecureDraftPickRequest,
   SecureDraftPickResult
 >(functions, 'makeSecureDraftPick', {
-  // The Function itself has a 60-second ceiling. Keep the browser transport
-  // alive slightly longer so a healthy cold start cannot be reported as a
-  // client-side timeout immediately before the server response arrives.
-  timeout: 65_000,
+  // The server can continue through its 60-second ceiling after a browser
+  // transport closes. End the direct wait sooner and let the Draft Room
+  // reconcile the exact draft and pick documents, preventing a tab from
+  // remaining stuck on ‘sending selection’ while a committed pick is already
+  // visible in Firestore.
+  timeout: 25_000,
 });
 
 export async function makeSecureDraftPick(
   leagueId: string,
   assetKey: string,
+  submissionId: string,
+  expectedOverallPick: number,
 ): Promise<DraftPick> {
-  const response = await makeSecureDraftPickCallable({ leagueId, assetKey });
+  const response = await makeSecureDraftPickCallable({
+    leagueId,
+    assetKey,
+    submissionId,
+    expectedOverallPick,
+  });
   return response.data.pick;
 }

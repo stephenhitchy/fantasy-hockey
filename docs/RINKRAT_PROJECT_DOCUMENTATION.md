@@ -9572,3 +9572,71 @@ Deployment is Hosting-only:
 ```bash
 firebase deploy --only hosting:app -m "Batch R1C draft confirmation recovery and coach placement"
 ```
+
+
+# Batch R1D — Universal Async Recovery and Idempotent Draft Actions
+
+## Purpose
+
+R1D fixes the site-wide failure mode where Firebase successfully committed an action but the browser transport or live listener remained pending, leaving a fuzzy full-screen blocker, an endless spinner, or a button permanently labeled **Submitting**. The Draft Room and Draft Setup receive exact idempotency and Firestore reconciliation, while shared overlays and the remaining manager-facing callables receive bounded visual and transport recovery.
+
+## Draft picks
+
+- Each new manual pick receives a stable `submissionId` and `expectedOverallPick`.
+- The server checks the exact pick document before and inside its transaction.
+- Retrying the same submission returns the original committed pick rather than creating a second pick.
+- Old open tabs remain compatible because the new request fields are optional server-side.
+- The browser begins direct Firestore reconciliation after 2.5 seconds and repeats every four seconds.
+- Draft and exact pick reads each have a six-second local limit.
+- The initial full-screen shield has been removed. A compact draft synchronization dock keeps the board visible.
+- The local pending state releases after 45 seconds without waiting on another network request.
+- A warm Function instance caches the pinned immutable projection snapshot for five minutes, reducing repeated Firestore projection reads during a live draft.
+
+## Draft settings
+
+- Each settings save receives a stable submission ID stored in `lastSettingsSubmissionId`.
+- The exact order, scheduled time, clock duration, status, and submission ID are confirmed through the live document or bounded direct reads.
+- A fresh verified Projection V11 snapshot is reused when possible.
+- Projection generation has a 75-second local deadline.
+- Save confirmation has a 35-second reconciliation window plus a final five-second document check.
+- The Draft Setup remains readable behind a compact status dock; no full-screen save lock remains.
+
+## Shared site-wide recovery
+
+- A shared bounded-operation utility safely observes late Firebase resolution or rejection without producing an unhandled promise rejection.
+- Every browser `httpsCallable` definition has an explicit transport timeout.
+- Draft queue, Auto-Draft, clock controls, roster changes, goalie-unit changes, Injured Reserve actions, waiver actions, account/profile operations, feedback, and administrative actions use bounded waits or live-document reconciliation.
+- Busy action sheets visually release after 12 seconds while their page continues authoritative reconciliation in a compact status dock.
+- The viewport overlay portal tracks connected nodes through a `Set`, repairs disconnected overlays with a `MutationObserver`, and restores scrolling on page lifecycle events.
+- Every Angular `NavigationEnd` also repairs stale Safari body and overlay locks.
+
+## Competitive preservation
+
+Production Scoring V3, Projection V11 calculations, draft order, Auto-Draft selection logic, roster legality, waivers, asynchronous six-game windows, seventh-game rollover, standings, playoffs, Firestore rules, and indexes are unchanged.
+
+## Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+npm ci
+npm --prefix functions ci
+npm run verify:batchr1d
+```
+
+## Deployment
+
+Functions first:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions:makeSecureDraftPick,functions:executeDraftCommand -m "Batch R1D idempotent draft submissions"
+```
+
+Then Hosting:
+
+```bash
+firebase deploy --only hosting:app -m "Batch R1D universal async recovery"
+```
+
+No Firestore rules, indexes, or data migration are required.

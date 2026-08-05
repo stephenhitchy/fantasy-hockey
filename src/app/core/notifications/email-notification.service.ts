@@ -20,6 +20,7 @@ export async function requestPasswordResetEmail(email: string): Promise<void> {
   const callable = httpsCallable<{ email: string }, PasswordResetResponse>(
     functions,
     'requestPasswordResetEmail',
+    { timeout: 35_000 },
   );
 
   await callable({ email });
@@ -29,6 +30,7 @@ export async function requestVerificationEmail(): Promise<VerificationEmailRespo
   const callable = httpsCallable<Record<string, never>, VerificationEmailResponse>(
     functions,
     'resendVerificationEmail',
+    { timeout: 35_000 },
   );
   const result = await callable({});
   return result.data;
@@ -41,6 +43,7 @@ export async function requestTestInjuryEmail(
   const callable = httpsCallable<{ leagueId: string }, TestInjuryEmailResponse>(
     functions,
     'sendTestInjuryEmail',
+    { timeout: 35_000 },
   );
 
   try {

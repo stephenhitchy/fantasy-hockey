@@ -51,7 +51,7 @@ interface SaveManagerProfileResponse {
 const saveManagerProfileCallable = httpsCallable<
   SaveManagerProfileRequest,
   SaveManagerProfileResponse
->(functions, 'saveManagerProfile');
+>(functions, 'saveManagerProfile', { timeout: 35_000 });
 
 async function saveManagerProfile(
   request: SaveManagerProfileRequest,

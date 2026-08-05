@@ -173,16 +173,19 @@ test('P1C verification, deployment order, and consolidated documentation are pre
   assert.match(documentation, /No Firestore rules, indexes, or data migration are required/);
 });
 
-test('P1C changes only replay responsiveness paths inside the Functions tree', async () => {
+test('P1C replay paths remain isolated from later draft recovery changes inside the Functions tree', async () => {
   const exclusions = new Set([
     'src/league-automation.ts',
     'src/shared/core/cycle/cycle.service.ts',
     'src/shared/core/projection/window-projection.service.ts',
+    'src/draft-authority.ts',
+    'src/draft-automation.ts',
+    'src/shared/core/draft/draft.models.ts',
   ]);
 
   assert.equal(
     await hashTree('functions', exclusions),
-    '6298ef9c3513ded9c5fcbdadb5ceee7b55faa7da6dd41ad0a32a129eeed75595',
+    '32222396c7eed31cdfe81463070c1b71a5dab091c7d85db9338667623d9bc2f4',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([

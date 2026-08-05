@@ -110,7 +110,7 @@ test('Batch M2.2 Training Camp position identity and glossary containment', asyn
   });
 });
 
-test('Batch M2.2 draft settings save lock', async (suite) => {
+test('Batch M2.2 draft settings save protection', async (suite) => {
   const [routes, guard, component, template, styles] = await Promise.all([
     read('src/app/app.routes.ts'),
     read('src/app/core/guards/pending-draft-save.guard.ts'),
@@ -132,12 +132,15 @@ test('Batch M2.2 draft settings save lock', async (suite) => {
     assert.match(component, /event\.returnValue = ''/);
   });
 
-  await suite.test('covers the page with a progress barrier until projections and time finish saving', () => {
+  await suite.test('keeps the page readable and releases the save state through authoritative confirmation', () => {
     assert.match(template, /@if \(saving\(\)\)/);
-    assert.match(template, /class="draft-save-lock"/);
-    assert.match(template, /Navigation will unlock automatically/);
+    assert.match(template, /class="draft-save-status-dock/);
+    assert.doesNotMatch(template, /class="draft-save-lock"/);
     assert.match(template, /\[attr\.aria-busy\]="saving\(\)"/);
-    assert.match(styles, /\.draft-save-lock\s*\{[\s\S]*position:\s*fixed;[\s\S]*z-index:\s*5000;/);
-    assert.match(styles, /cursor:\s*progress/);
+    assert.match(component, /awaitDraftSettingsConfirmation/);
+    assert.match(component, /getFantasyDraftFromServer\(this\.leagueId\)/);
+    assert.match(component, /Date\.now\(\) \+ 35_000/);
+    assert.match(styles, /\.draft-save-status-dock\s*\{[\s\S]*position:\s*fixed;/);
+    assert.doesNotMatch(styles, /\.draft-save-lock\s*\{/);
   });
 });

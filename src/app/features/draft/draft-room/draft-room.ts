@@ -5,7 +5,11 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
-import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
+import {
+  isOperationDeadlineError,
+  settleOperationWithin,
+  withOperationDeadline,
+} from '../../../core/async/bounded-operation.util';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { ReleaseUpdateService } from '../../../core/release/release-update.service';
 import { auth } from '../../../core/firebase';
@@ -142,6 +146,7 @@ interface DraftQueueEntryView {
 }
 
 interface PendingPickConfirmation extends PendingDraftPickIdentity {
+  submissionId: string;
   requestId: number;
   assetName: string;
   startedAt: number;
@@ -149,7 +154,7 @@ interface PendingPickConfirmation extends PendingDraftPickIdentity {
 
 @Component({
   selector: 'app-draft-room',
-  imports: [FormsModule, RouterLink, ManagerAvatar, ViewportOverlayPortalDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-room.html',
   styleUrl: './draft-room.css',
 })
@@ -194,7 +199,6 @@ export class DraftRoom implements OnDestroy {
   mobilePanel = signal<DraftMobilePanel>('players');
   selectedAssetKey = signal<string | null>(null);
   pickSubmissionPhase = signal<'idle' | 'submitting' | 'confirming'>('idle');
-  pickSubmissionOverlayVisible = signal(false);
   browserOnline = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
   draftServerSyncAt = signal<number | null>(null);
   picksServerSyncAt = signal<number | null>(null);
@@ -623,7 +627,7 @@ export class DraftRoom implements OnDestroy {
   private hiddenAt: number | null = null;
   private pendingPickConfirmation: PendingPickConfirmation | null = null;
   private pendingPickConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingPickBlockingTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPickProbeTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPickServerProbeInProgress = false;
   private pendingPickRequestCounter = 0;
   private pendingPickAction: CompetitiveActionHandle | null = null;
@@ -965,11 +969,10 @@ export class DraftRoom implements OnDestroy {
       clearTimeout(this.pendingPickConfirmationTimer);
     }
 
-    if (this.pendingPickBlockingTimer) {
-      clearTimeout(this.pendingPickBlockingTimer);
+    if (this.pendingPickProbeTimer) {
+      clearTimeout(this.pendingPickProbeTimer);
     }
 
-    this.pickSubmissionOverlayVisible.set(false);
     this.pendingPickAction?.finish('cancelled');
     this.pendingPickAction = null;
 
@@ -1466,9 +1469,9 @@ export class DraftRoom implements OnDestroy {
       this.pendingPickConfirmationTimer = null;
     }
 
-    if (this.pendingPickBlockingTimer) {
-      clearTimeout(this.pendingPickBlockingTimer);
-      this.pendingPickBlockingTimer = null;
+    if (this.pendingPickProbeTimer) {
+      clearTimeout(this.pendingPickProbeTimer);
+      this.pendingPickProbeTimer = null;
     }
   }
 
@@ -1479,7 +1482,6 @@ export class DraftRoom implements OnDestroy {
 
     this.pendingPickConfirmation = null;
     this.clearPendingPickTimers();
-    this.pickSubmissionOverlayVisible.set(false);
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.selectedAssetKey.set(null);
@@ -1505,7 +1507,6 @@ export class DraftRoom implements OnDestroy {
 
     this.pendingPickConfirmation = null;
     this.clearPendingPickTimers();
-    this.pickSubmissionOverlayVisible.set(false);
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.selectedAssetKey.set(null);
@@ -1527,7 +1528,6 @@ export class DraftRoom implements OnDestroy {
 
     this.pendingPickConfirmation = null;
     this.clearPendingPickTimers();
-    this.pickSubmissionOverlayVisible.set(false);
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.errorMessage.set(message);
@@ -1542,12 +1542,11 @@ export class DraftRoom implements OnDestroy {
 
     this.pendingPickConfirmation = null;
     this.clearPendingPickTimers();
-    this.pickSubmissionOverlayVisible.set(false);
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.selectedAssetKey.set(null);
     this.realtimeListenerError.set(
-      `RinkRat could not verify pick #${pending.overallPick} in this tab. The full-screen wait has ended; refresh the live board before attempting another pick.`,
+      `RinkRat could not verify pick #${pending.overallPick} in this tab. The pending state has been released; refresh the live board before attempting another pick.`,
     );
     this.realtimeConfirmationStartedAt.set(Date.now());
     this.realtimeReconnectReason.set('listener-error');
@@ -1609,9 +1608,15 @@ export class DraftRoom implements OnDestroy {
     this.pendingPickServerProbeInProgress = true;
 
     try {
-      const [serverDraftResult, serverPickResult] = await Promise.allSettled([
-        getFantasyDraftFromServer(this.leagueId),
-        getDraftPickFromServer(this.leagueId, pending.overallPick),
+      const [serverDraftResult, serverPickResult] = await Promise.all([
+        settleOperationWithin(
+          getFantasyDraftFromServer(this.leagueId),
+          6_000,
+        ),
+        settleOperationWithin(
+          getDraftPickFromServer(this.leagueId, pending.overallPick),
+          6_000,
+        ),
       ]);
 
       if (!this.isPendingPickRequestActive(requestId)) {
@@ -1651,28 +1656,38 @@ export class DraftRoom implements OnDestroy {
     }
   }
 
-  private armPickSubmissionOverlayWatchdog(requestId: number): void {
-    if (this.pendingPickBlockingTimer) {
-      clearTimeout(this.pendingPickBlockingTimer);
+  private armPendingPickReconciliationLoop(requestId: number): void {
+    if (this.pendingPickProbeTimer) {
+      clearTimeout(this.pendingPickProbeTimer);
     }
 
-    this.pendingPickBlockingTimer = setTimeout(() => {
-      if (
-        !this.isPendingPickRequestActive(requestId) ||
-        this.pickSubmissionPhase() !== 'submitting'
-      ) {
-        return;
-      }
+    const scheduleProbe = (delayMilliseconds: number): void => {
+      this.pendingPickProbeTimer = setTimeout(async () => {
+        this.pendingPickProbeTimer = null;
 
-      // Keep the competitive action protected, but never leave the manager
-      // trapped behind a fuzzy full-screen layer while the transport settles.
-      this.pickSubmissionOverlayVisible.set(false);
-      this.successMessage.set(
-        'This pick is taking longer than usual. RinkRat is checking the authoritative server record without blocking the page.',
-      );
-      this.requestRealtimeConfirmation('manual');
-      void this.reconcilePendingPickFromServer(requestId);
-    }, 8_000);
+        if (!this.isPendingPickRequestActive(requestId)) {
+          return;
+        }
+
+        if (this.pickSubmissionPhase() === 'submitting') {
+          // The browser transport can remain open after Firestore commits.
+          // Move immediately into a non-blocking reconciliation state instead
+          // of leaving the manager behind a full-screen spinner.
+          this.pickSubmissionPhase.set('confirming');
+          this.successMessage.set(
+            'RinkRat is checking the authoritative draft record. You can keep reading the Draft Room while the live board catches up.',
+          );
+        }
+
+        await this.reconcilePendingPickFromServer(requestId);
+
+        if (this.isPendingPickRequestActive(requestId)) {
+          scheduleProbe(4_000);
+        }
+      }, Math.max(0, delayMilliseconds));
+    };
+
+    scheduleProbe(2_500);
   }
 
   private armPendingPickConfirmationTimeout(requestId: number): void {
@@ -1680,13 +1695,11 @@ export class DraftRoom implements OnDestroy {
       clearTimeout(this.pendingPickConfirmationTimer);
     }
 
-    this.pendingPickConfirmationTimer = setTimeout(async () => {
-      if (!this.isPendingPickRequestActive(requestId)) {
-        return;
-      }
-
-      await this.reconcilePendingPickFromServer(requestId);
-
+    // This safety release must never await Firebase, a listener restart, or a
+    // direct document read. Those paths continue independently, but the
+    // browser-side pending state is guaranteed to end even when Safari leaves
+    // a network promise unresolved after the pick has committed.
+    this.pendingPickConfirmationTimer = setTimeout(() => {
       if (!this.isPendingPickRequestActive(requestId)) {
         return;
       }
@@ -1696,7 +1709,7 @@ export class DraftRoom implements OnDestroy {
       if (pending) {
         this.finishPendingPickUncertain(pending);
       }
-    }, 68_000);
+    }, 45_000);
   }
 
   async checkPendingPickNow(): Promise<void> {
@@ -2382,6 +2395,23 @@ export class DraftRoom implements OnDestroy {
     return false;
   }
 
+  private getBoundedDraftActionError(
+    error: unknown,
+    fallbackMessage: string,
+  ): { message: string; outcome: 'error' | 'uncertain' } {
+    if (isOperationDeadlineError(error)) {
+      return {
+        message: error.message,
+        outcome: 'uncertain',
+      };
+    }
+
+    return {
+      message: error instanceof Error ? error.message : fallbackMessage,
+      outcome: 'error',
+    };
+  }
+
   async toggleMyAutoDraft(): Promise<void> {
     if (this.queueSaving() || !this.ensureRealtimeActionReady()) {
       return;
@@ -2392,13 +2422,19 @@ export class DraftRoom implements OnDestroy {
     const actionHandle = this.actionMonitor.begin('draft-auto');
 
     try {
-      await setDraftAutoDraftEnabled(this.leagueId, this.userId, !this.myQueue().autoDraftEnabled);
+      await withOperationDeadline(
+        setDraftAutoDraftEnabled(this.leagueId, this.userId, !this.myQueue().autoDraftEnabled),
+        20_000,
+        'RinkRat stopped waiting for the Auto-Draft response. Refresh the live Draft Room before trying again because the setting may still have saved.',
+      );
       actionHandle.finish('success');
     } catch (error: unknown) {
-      actionHandle.finish('error');
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to update your auto-draft preference.',
+      const result = this.getBoundedDraftActionError(
+        error,
+        'Unable to update your auto-draft preference.',
       );
+      actionHandle.finish(result.outcome);
+      this.errorMessage.set(result.message);
     } finally {
       this.queueSaving.set(false);
     }
@@ -2427,14 +2463,20 @@ export class DraftRoom implements OnDestroy {
     const actionHandle = this.actionMonitor.begin('draft-clock');
 
     try {
-      await startDraftClock(this.leagueId, this.userId);
+      await withOperationDeadline(
+        startDraftClock(this.leagueId, this.userId),
+        20_000,
+        'RinkRat stopped waiting for the draft-clock response. Check the live clock before trying again because it may already have started.',
+      );
       actionHandle.finish('success');
       this.successMessage.set('The draft clock has started. You are on the clock.');
     } catch (error: unknown) {
-      actionHandle.finish('error');
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to start the draft clock.',
+      const result = this.getBoundedDraftActionError(
+        error,
+        'Unable to start the draft clock.',
       );
+      actionHandle.finish(result.outcome);
+      this.errorMessage.set(result.message);
     } finally {
       this.clockActionInProgress.set(false);
     }
@@ -2459,16 +2501,26 @@ export class DraftRoom implements OnDestroy {
 
     try {
       if (draft.clockStatus === 'paused') {
-        await resumeDraftClock(this.leagueId, this.userId);
+        await withOperationDeadline(
+          resumeDraftClock(this.leagueId, this.userId),
+          20_000,
+          'RinkRat stopped waiting for the draft-clock response. Check the live board before trying again.',
+        );
       } else {
-        await pauseDraftClock(this.leagueId, this.userId);
+        await withOperationDeadline(
+          pauseDraftClock(this.leagueId, this.userId),
+          20_000,
+          'RinkRat stopped waiting for the draft-clock response. Check the live board before trying again.',
+        );
       }
       actionHandle.finish('success');
     } catch (error: unknown) {
-      actionHandle.finish('error');
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to change the draft clock.',
+      const result = this.getBoundedDraftActionError(
+        error,
+        'Unable to change the draft clock.',
       );
+      actionHandle.finish(result.outcome);
+      this.errorMessage.set(result.message);
     } finally {
       this.clockActionInProgress.set(false);
     }
@@ -2522,13 +2574,19 @@ export class DraftRoom implements OnDestroy {
     const actionHandle = this.actionMonitor.begin('draft-queue');
 
     try {
-      await saveDraftQueue(this.leagueId, this.userId, assetKeys, this.myQueue().autoDraftEnabled);
+      await withOperationDeadline(
+        saveDraftQueue(this.leagueId, this.userId, assetKeys, this.myQueue().autoDraftEnabled),
+        20_000,
+        'RinkRat stopped waiting for the queue response. Refresh the live Draft Room before changing the queue again because the update may still have saved.',
+      );
       actionHandle.finish('success');
     } catch (error: unknown) {
-      actionHandle.finish('error');
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to update your draft queue.',
+      const result = this.getBoundedDraftActionError(
+        error,
+        'Unable to update your draft queue.',
       );
+      actionHandle.finish(result.outcome);
+      this.errorMessage.set(result.message);
     } finally {
       this.queueSaving.set(false);
     }
@@ -2914,6 +2972,15 @@ export class DraftRoom implements OnDestroy {
     return 'Draft';
   }
 
+  private createDraftPickSubmissionId(overallPick: number): string {
+    const randomPart =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replaceAll('-', '')
+        : `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+
+    return `pick_${overallPick}_${Date.now().toString(36)}_${randomPart}`.slice(0, 120);
+  }
+
   async selectAsset(asset: DraftableAsset): Promise<void> {
     this.errorMessage.set('');
     this.successMessage.set('');
@@ -2929,13 +2996,14 @@ export class DraftRoom implements OnDestroy {
     }
 
     const requestId = ++this.pendingPickRequestCounter;
+    const submissionId = this.createDraftPickSubmissionId(currentPick.overallPick);
 
     this.makingPickAssetKey.set(asset.assetKey);
     this.pickSubmissionPhase.set('submitting');
-    this.pickSubmissionOverlayVisible.set(true);
     this.pendingPickAction?.finish('cancelled');
     this.pendingPickAction = this.actionMonitor.begin('draft-pick');
     this.pendingPickConfirmation = {
+      submissionId,
       requestId,
       overallPick: currentPick.overallPick,
       assetKey: asset.assetKey,
@@ -2943,11 +3011,17 @@ export class DraftRoom implements OnDestroy {
       ownerId: this.userId,
       startedAt: Date.now(),
     };
-    this.armPickSubmissionOverlayWatchdog(requestId);
+    this.armPendingPickReconciliationLoop(requestId);
     this.armPendingPickConfirmationTimeout(requestId);
 
     try {
-      const pick = await makeDraftPick(this.leagueId, this.userId, asset);
+      const pick = await makeDraftPick(
+        this.leagueId,
+        this.userId,
+        asset,
+        submissionId,
+        currentPick.overallPick,
+      );
 
       if (!this.isPendingPickRequestActive(requestId)) {
         return;
@@ -2974,11 +3048,8 @@ export class DraftRoom implements OnDestroy {
         mergeConfirmedDraftPick(currentPicks, pick),
       );
       this.pickSubmissionPhase.set('confirming');
-      this.pickSubmissionOverlayVisible.set(false);
       this.confirmPendingPickIfObserved();
     } catch (error: unknown) {
-      this.pickSubmissionOverlayVisible.set(false);
-
       // A mobile or browser transport can fail after Firestore committed the
       // pick. Check the authoritative draft and pick documents before showing
       // an error or allowing a retry.

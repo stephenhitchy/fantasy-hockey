@@ -33,6 +33,7 @@ export async function getAccountDeletionReadiness(): Promise<AccountDeletionRead
   const callable = httpsCallable<Record<string, never>, AccountDeletionReadiness>(
     functions,
     'getAccountDeletionReadiness',
+    { timeout: 65_000 },
   );
   const response = await callable({});
 
@@ -57,6 +58,7 @@ export async function deleteCurrentUserAccount(
   const callable = httpsCallable<DeleteMyAccountRequest, DeleteMyAccountResult>(
     functions,
     'deleteMyAccount',
+    { timeout: 600_000 },
   );
   const response = await callable({ confirmationUsername });
 
