@@ -95,7 +95,9 @@
     "test:batchp1a:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1a-client-health/*.test.mjs",
     "verify:batchp1a": "npm run verify:batchm5-3 && npm run test:batchp1a:run",
     "test:batchm5-4:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-4-transaction-layout/*.test.mjs",
-    "verify:batchm5-4": "npm run verify:batchp1a && npm run test:batchm5-4:run"
+    "verify:batchm5-4": "npm run verify:batchp1a && npm run test:batchm5-4:run",
+    "test:batchm5-5:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-5-progressive-disclosure-replay/*.test.mjs",
+    "verify:batchm5-5": "npm run verify:batchm5-4 && npm run test:batchm5-5:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

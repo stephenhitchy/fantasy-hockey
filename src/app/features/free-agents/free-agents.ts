@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -130,7 +131,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink, ActionSheet],
+  imports: [FormsModule, RouterLink, ActionSheet, NgTemplateOutlet],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })
@@ -169,6 +170,11 @@ export class FreeAgents implements OnDestroy {
   selectedWaiverId = signal('');
   selectedDropSlotId = signal('');
   flowStep = signal<FreeAgentFlowStep>('player-pool');
+  incomingScheduleExpanded = signal(false);
+  incomingScoringExpanded = signal(false);
+  expandedCandidateSlotId = signal('');
+  showFlexibleBenchOptions = signal(false);
+  startWindowScheduleExpanded = signal(false);
   selectedAssetEligibility = signal<RosterMoveAssetCycleEligibility | null>(null);
   eligibilityLoading = signal(false);
   eligibilityError = signal('');
@@ -466,6 +472,36 @@ export class FreeAgents implements OnDestroy {
     return this.dropCandidates().find((candidate) => candidate.slotId === selectedSlotId) ?? null;
   });
 
+  readonly primaryDropCandidates = computed(() => {
+    const incoming = this.selectedAddAsset();
+
+    if (!incoming) {
+      return [];
+    }
+
+    return this.dropCandidates().filter(
+      (candidate) =>
+        candidate.rosterArea === 'active' ||
+        !candidate.asset ||
+        candidate.asset.position === incoming.position,
+    );
+  });
+
+  readonly flexibleBenchDropCandidates = computed(() => {
+    const incoming = this.selectedAddAsset();
+
+    if (!incoming) {
+      return [];
+    }
+
+    return this.dropCandidates().filter(
+      (candidate) =>
+        candidate.rosterArea === 'bench' &&
+        Boolean(candidate.asset) &&
+        candidate.asset?.position !== incoming.position,
+    );
+  });
+
   readonly transactionTiming = computed((): FreeAgentTransactionTimingDecision | null => {
     const candidate = this.selectedDropCandidate();
 
@@ -724,6 +760,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set(asset.assetKey);
     this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.resetTransactionDisclosureState();
     this.flowStep.set('roster-slot');
 
     if (this.positionFilter() === 'ALL') {
@@ -741,6 +778,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set(waiver.asset.assetKey);
     this.selectedWaiverId.set(waiver.id);
     this.selectedDropSlotId.set('');
+    this.resetTransactionDisclosureState();
     this.flowStep.set('roster-slot');
 
     if (this.positionFilter() === 'ALL') {
@@ -760,6 +798,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set('');
     this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.resetTransactionDisclosureState();
     this.selectedAssetEligibility.set(null);
     this.eligibilityError.set('');
     this.restoredEligibilityKey = '';
@@ -779,7 +818,35 @@ export class FreeAgents implements OnDestroy {
 
   selectDropCandidate(candidate: DropCandidate): void {
     this.selectedDropSlotId.set(candidate.slotId);
+    this.expandedCandidateSlotId.set('');
+    this.startWindowScheduleExpanded.set(false);
     this.persistFreeAgentViewState();
+  }
+
+  toggleIncomingSchedule(): void {
+    this.incomingScheduleExpanded.update((expanded) => !expanded);
+  }
+
+  toggleIncomingScoring(): void {
+    this.incomingScoringExpanded.update((expanded) => !expanded);
+  }
+
+  toggleCandidateDetails(candidate: DropCandidate): void {
+    this.expandedCandidateSlotId.update((slotId) =>
+      slotId === candidate.slotId ? '' : candidate.slotId,
+    );
+  }
+
+  isCandidateDetailsExpanded(candidate: DropCandidate): boolean {
+    return this.expandedCandidateSlotId() === candidate.slotId;
+  }
+
+  toggleFlexibleBenchOptions(): void {
+    this.showFlexibleBenchOptions.update((expanded) => !expanded);
+  }
+
+  toggleStartWindowSchedule(): void {
+    this.startWindowScheduleExpanded.update((expanded) => !expanded);
   }
 
   selectDropCandidateWithKeyboard(event: KeyboardEvent, candidate: DropCandidate): void {
@@ -1220,6 +1287,73 @@ export class FreeAgents implements OnDestroy {
     return `${direction} ${Math.abs(difference).toFixed(1)} projected ${
       metric === 'NEXT_CYCLE' ? 'next-six-games' : 'rest-of-season'
     } points`;
+  }
+
+  getCandidateProjectionDelta(
+    candidate: DropCandidate,
+    metric: 'NEXT_CYCLE' | 'REST_OF_SEASON',
+  ): number | null {
+    const incoming = this.selectedAddAsset();
+
+    if (!incoming) {
+      return null;
+    }
+
+    const incomingProjection = this.getProjectionAsset(incoming);
+    const outgoing = this.getDropCandidateProjectionAsset(candidate);
+    const incomingValue = metric === 'NEXT_CYCLE'
+      ? incomingProjection.projectedCyclePoints
+      : incomingProjection.projectedRestOfSeasonPoints;
+
+    if (typeof incomingValue !== 'number') {
+      return null;
+    }
+
+    if (!outgoing) {
+      return incomingValue;
+    }
+
+    const outgoingProjection = this.getProjectionAsset(outgoing);
+    const outgoingValue = metric === 'NEXT_CYCLE'
+      ? outgoingProjection.projectedCyclePoints
+      : outgoingProjection.projectedRestOfSeasonPoints;
+
+    return typeof outgoingValue === 'number' ? incomingValue - outgoingValue : null;
+  }
+
+  getCandidateProjectionDeltaLabel(
+    candidate: DropCandidate,
+    metric: 'NEXT_CYCLE' | 'REST_OF_SEASON',
+  ): string {
+    const difference = this.getCandidateProjectionDelta(candidate, metric);
+    const metricLabel = metric === 'NEXT_CYCLE' ? 'next 6' : 'rest of season';
+
+    if (difference === null) {
+      return `${metricLabel} comparison unavailable`;
+    }
+
+    if (!candidate.asset) {
+      return `Adds ${Math.abs(difference).toFixed(1)} projected ${metricLabel} pts`;
+    }
+
+    if (Math.abs(difference) < 0.05) {
+      return `Even projected ${metricLabel} value`;
+    }
+
+    return `${difference > 0 ? '+' : '−'}${Math.abs(difference).toFixed(1)} projected ${metricLabel} pts`;
+  }
+
+  getCandidateProjectionDeltaClass(
+    candidate: DropCandidate,
+    metric: 'NEXT_CYCLE' | 'REST_OF_SEASON',
+  ): string {
+    const difference = this.getCandidateProjectionDelta(candidate, metric);
+
+    if (difference === null || Math.abs(difference) < 0.05) {
+      return 'candidate-impact-neutral';
+    }
+
+    return difference > 0 ? 'candidate-impact-positive' : 'candidate-impact-negative';
   }
 
   getRecentFormAdjustment(asset: DraftableAsset): number | null {
@@ -2365,6 +2499,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set('');
     this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.resetTransactionDisclosureState();
     this.selectedAssetEligibility.set(null);
     this.flowStep.set('player-pool');
     this.preferredSlotId.set('');
@@ -2372,6 +2507,14 @@ export class FreeAgents implements OnDestroy {
     this.restoredEligibilityKey = '';
     this.persistFreeAgentViewState();
     this.restorePlayerPoolScroll();
+  }
+
+  private resetTransactionDisclosureState(): void {
+    this.incomingScheduleExpanded.set(false);
+    this.incomingScoringExpanded.set(false);
+    this.expandedCandidateSlotId.set('');
+    this.showFlexibleBenchOptions.set(false);
+    this.startWindowScheduleExpanded.set(false);
   }
 
   private getFreeAgentOperationObservation(): FreeAgentOperationObservation {
@@ -2570,6 +2713,7 @@ export class FreeAgents implements OnDestroy {
       this.selectedAddAssetKey.set('');
       this.selectedWaiverId.set('');
       this.selectedDropSlotId.set('');
+      this.resetTransactionDisclosureState();
       this.selectedAssetEligibility.set(null);
       this.eligibilityError.set('');
       this.restoredEligibilityKey = '';

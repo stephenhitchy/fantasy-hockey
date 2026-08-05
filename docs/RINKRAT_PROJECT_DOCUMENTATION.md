@@ -8822,3 +8822,130 @@ Do not deploy Functions, Firestore rules, or indexes for this batch.
 8. Open the timing disclosure and confirm both six-game verification explanations remain available.
 9. Test at 320px, 360px, 390px, 430px, tablet width, and desktop width in Rink Dark, Light Ice, and OLED Black.
 10. Complete immediate, scheduled, bench, open-slot, goalie-unit, and waiver transactions and confirm no competitive behavior changed.
+
+---
+
+## Batch M5.5 — Progressive Transaction Decisions and Replay Control Recovery
+
+### Why this batch was needed
+
+The transaction workbench contained accurate information, but too much of it competed for attention at the same time. Incoming-player schedules, full scoring formulas, every replacement player's six-game tape, and all cross-position bench choices were rendered together. Managers primarily need four answers: whether the incoming player improves the roster, which player should be replaced, when the change can legally begin, and what projected value changes.
+
+The historical replay control had a separate client-state problem. The server could finish scoring, publish the roster and score updates, and save `historicalReplay/control.status = ready` in roughly 30 seconds while the browser's callable request remained pending for several minutes. The local `historicalReplayAdvancing` flag therefore kept the button disabled long after the authoritative work was complete.
+
+### Summary-first transaction workbench
+
+The incoming player or team-goalie unit remains the first report and always shows the decision essentials:
+
+- identity, NHL team, and position,
+- current matchup or NHL block,
+- six-game progress,
+- current-season fantasy points,
+- recent form,
+- next-six projection,
+- availability and timing status.
+
+The exact six-game schedule and complete season scoring formula are now separate, accessible **View exact games** and **View point formula** disclosures. They are not created in the page until the manager opens them.
+
+Each replacement card keeps the key decision information visible:
+
+- exact roster slot,
+- current player or open-slot identity,
+- matchup and six-game progress,
+- season points, form, and next-six projection,
+- projected next-six and rest-of-season change,
+- the player or timeline controlling the transaction delay,
+- the first legal matchup.
+
+The exact game tape and category-by-category point formula are contained under **View full comparison**. Only one replacement comparison can be open at a time.
+
+Directly comparable choices—active slots, open spots, and same-position bench players—appear first. Different-position bench alternatives remain legal but are collapsed under **Show other bench options** until requested. The incoming player's exact first legal six-game schedule is also collapsed by default.
+
+The final selected-move review was shortened to one current-to-new summary with projection deltas and legal-start timing. It no longer repeats two full player cards that were already shown above.
+
+### Broader information-density audit
+
+The same principle was reviewed on other dense manager-facing screens. Game Film already keeps projection metadata and the complete scoring formula inside disclosures, and the ordinary Available Players list already limits each row to the most important decision metrics. My Team actions are already state-specific rather than displaying every possible action. Those surfaces were preserved instead of adding another layer of UI.
+
+### Firestore-authoritative replay unlock
+
+The replay button now uses two completion signals:
+
+1. the HTTPS callable response, and
+2. the live Firestore historical replay control.
+
+The Firestore control is authoritative. When its saved status changes to `ready` or `error` for the current request, the local pending state clears immediately—even if the callable transport remains unresolved in Safari or another browser.
+
+A request baseline records the replay date, days advanced, released-game counts, saved message/error, status, and Firestore `updatedAt` value. This prevents the existing `ready` snapshot from unlocking a brand-new request before the server starts. It also supports same-date retries where the replay position does not change but the server writes a newer completion timestamp.
+
+A generation token ignores late callable success or failure responses after Firestore has already settled the request. Route changes and component destruction invalidate the pending generation and clear reconciliation timers. The button still remains disabled whenever the authoritative control says `advancing`, so the recovery cannot enable duplicate replay submissions while the server is genuinely working.
+
+### Competitive architecture preserved
+
+M5.5 does not modify:
+
+- Production Scoring V3,
+- Projection V11,
+- add/drop or waiver legality,
+- roster and transaction schemas,
+- independent six-game roster-slot windows,
+- scheduled-move activation,
+- historical replay server automation,
+- Cloud Functions,
+- Firestore rules,
+- Firestore indexes,
+- standings or playoffs.
+
+This is a Hosting-only decision-presentation and client-state recovery update.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchm5-5
+npm run build:all
+```
+
+The focused M5.5 suite verifies:
+
+- unchanged terminal replay snapshots do not prematurely unlock a new request,
+- advancing-to-ready and advancing-to-error Firestore transitions settle the local control,
+- same-date retries settle from a newer Firestore update even if an intermediate snapshot is missed,
+- incoming schedules and formulas are collapsed by default,
+- replacement timing and projected impact remain visible,
+- only one full replacement comparison opens at a time,
+- different-position bench options and first-legal-start schedules are collapsed,
+- the final move summary does not duplicate two full player cards,
+- Game Film and projection explanations retain their existing progressive disclosures,
+- scoring, Projection V11, and the complete Functions tree remain unchanged.
+
+### Deployment
+
+M5.5 is Hosting-only:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M5.5 transaction clarity and replay control recovery"
+```
+
+Do not deploy Functions, Firestore rules, or indexes for this batch.
+
+### Manual verification
+
+1. Open an add/drop transaction for a skater and a team-goalie unit.
+2. Confirm the incoming report initially shows only the decision essentials.
+3. Open and close **View exact games** and **View point formula** independently.
+4. Confirm each replacement card shows timing and projected impact without opening full detail.
+5. Open one **View full comparison**, then another, and verify only the second remains open.
+6. Confirm different-position bench choices remain under **Show other bench options**.
+7. Select a replacement and confirm the compact final summary clearly names the old and new assignments, projected change, and first legal matchup.
+8. Open the first-legal-start schedule only when needed.
+9. Advance one historical replay day and watch the scores and roster update.
+10. Confirm the button unlocks as soon as the saved replay control becomes `ready`, even if the browser request remains visible in the Network panel.
+11. Confirm a second click is still blocked while the saved control remains `advancing`.
+12. Navigate away during a completed request and confirm no late callable response changes the new page state.
+13. Repeat at 320px, 390px, 430px, tablet width, and desktop width in Rink Dark, Light Ice, and OLED Black.

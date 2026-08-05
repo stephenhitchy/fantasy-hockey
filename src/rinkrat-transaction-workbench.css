@@ -1,4 +1,4 @@
-/* Batch M5.4: vertically stacked transaction workbench and scrollable dialog chrome. */
+/* Batch M5.5: summary-first transaction workbench with details on demand. */
 
 .roster-operation-status-dock {
   position: fixed;
@@ -72,6 +72,81 @@
   font-size: 12px;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.workbench-disclosure-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.workbench-disclosure-button,
+.candidate-details-toggle,
+.additional-options-toggle,
+.start-window-schedule-toggle {
+  border: 1px solid var(--rr-color-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 94%, transparent);
+  color: var(--rr-color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.workbench-disclosure-button {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.workbench-disclosure-button:hover,
+.workbench-disclosure-button:focus-visible,
+.candidate-details-toggle:hover,
+.candidate-details-toggle:focus-visible,
+.additional-options-toggle:hover,
+.additional-options-toggle:focus-visible,
+.start-window-schedule-toggle:hover,
+.start-window-schedule-toggle:focus-visible {
+  border-color: var(--rr-color-warning);
+  background: color-mix(in srgb, var(--rr-color-warning) 8%, var(--rr-color-surface-raised));
+}
+
+.workbench-disclosure-button span {
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.workbench-disclosure-button strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.workbench-collapsible-panel,
+.candidate-expanded-details {
+  animation: rr-workbench-reveal 150ms ease-out;
+}
+
+@keyframes rr-workbench-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-collapsible-panel,
+  .candidate-expanded-details {
+    animation: none;
+  }
 }
 
 .incoming-scout-card,
@@ -159,7 +234,7 @@
 .workbench-player-identity p,
 .replacement-workbench-heading p,
 .workbench-section-heading p,
-.selected-final-player small {
+.selected-final-copy p {
   margin: 5px 0 0;
   color: var(--rr-color-text-secondary);
   font-weight: 700;
@@ -379,6 +454,86 @@
   gap: 16px;
 }
 
+.replacement-option-group {
+  display: grid;
+  gap: 12px;
+}
+
+.replacement-option-group + .replacement-option-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rr-color-border);
+}
+
+.replacement-option-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.replacement-option-group-heading h3 {
+  margin: 3px 0 0;
+  color: var(--rr-color-text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.replacement-option-group-heading > strong {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--rr-color-border);
+  border-radius: 999px;
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-warning);
+  font-size: 13px;
+}
+
+.additional-options-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 11px 13px;
+}
+
+.additional-options-toggle > span {
+  display: grid;
+  gap: 4px;
+}
+
+.additional-options-toggle strong,
+.additional-options-toggle small {
+  display: block;
+}
+
+.additional-options-toggle strong {
+  font-size: 13px;
+}
+
+.additional-options-toggle small {
+  color: var(--rr-color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.additional-options-toggle b {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-color-info) 14%, var(--rr-color-surface));
+  color: var(--rr-color-info);
+  font-size: 12px;
+}
+
 /*
  * The older slot-choice component used a multi-column grid. These cards are a
  * full-width reading flow now, so explicitly reset every legacy grid track to
@@ -471,6 +626,62 @@
   line-height: 1.45;
 }
 
+.candidate-impact-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.candidate-impact-strip > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--rr-color-border);
+  border-left: 4px solid var(--rr-color-text-muted);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 94%, transparent);
+}
+
+.candidate-impact-strip small,
+.candidate-impact-strip strong {
+  display: block;
+}
+
+.candidate-impact-strip small {
+  color: var(--rr-color-text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.candidate-impact-strip strong {
+  color: var(--rr-color-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.candidate-impact-strip .candidate-impact-positive {
+  border-left-color: var(--rr-color-success);
+}
+
+.candidate-impact-strip .candidate-impact-positive strong {
+  color: var(--rr-color-success);
+}
+
+.candidate-impact-strip .candidate-impact-negative {
+  border-left-color: var(--rr-color-warning);
+}
+
+.candidate-impact-strip .candidate-impact-negative strong {
+  color: var(--rr-color-warning);
+}
+
+.candidate-impact-strip .candidate-impact-neutral {
+  border-left-color: var(--rr-color-info);
+}
+
 .replacement-subheading {
   display: grid;
   gap: 3px;
@@ -549,6 +760,53 @@
   line-height: 1.45;
 }
 
+.candidate-details-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 11px;
+}
+
+.candidate-details-toggle span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.candidate-details-toggle small {
+  color: var(--rr-color-text-secondary);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.candidate-details-toggle::after {
+  color: var(--rr-color-warning);
+  content: '+';
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.candidate-details-toggle[aria-expanded='true']::after {
+  content: '−';
+}
+
+.candidate-expanded-details {
+  display: grid;
+  gap: 14px;
+  padding: 0 12px 12px;
+  border: 1px solid var(--rr-color-border);
+  border-top: 0;
+  border-radius: 0 0 11px 11px;
+  background: color-mix(in srgb, var(--rr-color-page) 42%, transparent);
+}
+
+.candidate-expanded-details .replacement-game-section,
+.candidate-expanded-details .workbench-stat-section {
+  margin-top: 12px;
+}
+
 .selected-candidate-action {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(12rem, auto);
@@ -589,26 +847,36 @@
   font-size: 18px;
 }
 
-.selected-final-player {
-  display: grid;
-  gap: 4px;
+.selected-final-copy {
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--rr-color-border);
-  border-radius: 10px;
-  background: var(--rr-color-surface-raised);
 }
 
-.selected-final-player > span {
-  color: var(--rr-color-text-muted);
-  font-size: 10px;
+.selected-final-copy h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 18px;
+}
+
+.selected-final-copy h3 > span {
+  color: var(--rr-color-warning);
+}
+
+.selected-final-copy p {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.start-window-schedule-toggle {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
   font-weight: 900;
-  text-transform: uppercase;
-}
-
-.selected-final-player > strong {
-  color: var(--text-primary, white);
-  font-size: 17px;
 }
 
 @media (max-width: 900px) {
@@ -662,6 +930,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .workbench-disclosure-toolbar,
+  .candidate-impact-strip {
+    grid-template-columns: 1fr;
+  }
+
   .workbench-section-heading > span,
   .workbench-section-heading > small {
     text-align: left;
@@ -669,6 +942,10 @@
 
   .replacement-card-list {
     gap: 13px;
+  }
+
+  .replacement-option-group-heading {
+    align-items: flex-start;
   }
 
   .replacement-player-card {
@@ -704,6 +981,11 @@
     width: 100%;
   }
 
+  .start-window-schedule-toggle {
+    width: 100%;
+  }
+
+  /* Retained for compatibility with older comparison markup during staged rollouts. */
   .transaction-player-pair {
     grid-template-columns: 1fr;
   }

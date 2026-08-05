@@ -1553,6 +1553,20 @@ app-cycle-one .disable-replay-button:disabled {
   opacity: 0.55;
 }
 
+app-cycle-one .historical-replay-transport-note {
+  display: block;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 42%, var(--rr-color-border));
+  border-left: 4px solid var(--rr-color-info);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--rr-color-info) 8%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 app-cycle-one .historical-replay-safety-note {
   color: #91a6bc;
   font-size: 10px;

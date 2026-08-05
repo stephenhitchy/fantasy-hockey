@@ -157,7 +157,7 @@ test('historical replay is isolated from scheduled scoring, retries briefly, and
   assert.doesNotMatch(functionSource, /collectionGroup\('historicalReplay'\)/);
   assert.match(functionSource, /The simulated date was not skipped/);
   assert.match(clientSource, /historicalReplayControl\(\)\?\.status === 'advancing'/);
-  assert.match(template, /historicalReplayControl\(\)\?\.status === 'advancing'/);
+  assert.match(template, /\[disabled\]="isHistoricalReplayAdvanceLocked\(\)"/);
 });
 
 test('production scoring and Projection V11 remain unchanged', async () => {

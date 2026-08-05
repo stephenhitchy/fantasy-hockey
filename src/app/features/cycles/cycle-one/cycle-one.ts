@@ -138,6 +138,11 @@ import {
   MatchupFinishDateResult,
   MatchupFinishSlotInput,
 } from './cycle-matchup-finish-date.util';
+import {
+  createHistoricalReplayAdvanceBaseline,
+  evaluateHistoricalReplayAdvance,
+  type HistoricalReplayAdvanceBaseline,
+} from './historical-replay-ui-state.util';
 
 @Component({
   selector: 'app-cycle-one',
@@ -188,6 +193,7 @@ export class CycleOne implements OnDestroy {
   historicalReplayAdvancing = signal(false);
   historicalReplayMessage = signal('');
   historicalReplayError = signal('');
+  historicalReplayTransportNotice = signal('');
   matchupView = signal<MatchupViewMode>('both');
   scoreDeltaAnimations = signal<Record<string, ScoreDeltaAnimation>>({});
 
@@ -243,7 +249,7 @@ export class CycleOne implements OnDestroy {
     }
   }
 
-  async advanceReplayOneDay(): Promise<void> {
+  advanceReplayOneDay(): void {
     if (
       this.historicalReplayAdvancing() ||
       this.historicalReplayControl()?.status === 'advancing'
@@ -254,17 +260,87 @@ export class CycleOne implements OnDestroy {
     this.historicalReplayAdvancing.set(true);
     this.historicalReplayMessage.set('');
     this.historicalReplayError.set('');
+    this.historicalReplayTransportNotice.set(
+      'Scores may finish before the browser request closes. This button unlocks as soon as the saved replay control confirms completion.',
+    );
+    this.clearReplayAdvanceReconciliationTimer();
 
-    try {
-      const result = await advanceHistoricalReplayDay(this.leagueId);
-      this.historicalReplayMessage.set(result.message);
-    } catch (error: unknown) {
-      this.historicalReplayError.set(
-        error instanceof Error ? error.message : 'Unable to advance the historical replay.',
-      );
-    } finally {
-      this.historicalReplayAdvancing.set(false);
-    }
+    const generation = ++this.replayAdvanceGeneration;
+    this.replayAdvanceBaseline = createHistoricalReplayAdvanceBaseline(
+      this.historicalReplayControl(),
+    );
+    this.replayAdvanceSawServerStart = false;
+
+    void advanceHistoricalReplayDay(this.leagueId)
+      .then((result) => {
+        if (!this.isCurrentReplayAdvance(generation)) {
+          return;
+        }
+
+        this.historicalReplayMessage.set(result.message);
+
+        // The callable can resolve a moment before the Firestore listener sees
+        // status=ready. Keep the authoritative control as the final lock.
+        if (this.historicalReplayControl()?.status !== 'advancing') {
+          this.finishReplayAdvanceRequest(generation);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!this.isCurrentReplayAdvance(generation)) {
+          return;
+        }
+
+        // Mobile Safari can occasionally leave an HTTPS callable pending or
+        // report a transport failure after the server already committed the
+        // replay day. Give the live Firestore control a brief chance to confirm
+        // the authoritative result before surfacing an error or keeping the
+        // button locked.
+        this.clearReplayAdvanceReconciliationTimer();
+        this.replayAdvanceReconciliationTimer = setTimeout(() => {
+          if (!this.isCurrentReplayAdvance(generation)) {
+            return;
+          }
+
+          const control = this.historicalReplayControl();
+          const baseline = this.replayAdvanceBaseline;
+
+          if (baseline) {
+            const evaluation = evaluateHistoricalReplayAdvance(
+              baseline,
+              control,
+              this.replayAdvanceSawServerStart,
+            );
+
+            if (evaluation.state === 'ready') {
+              this.historicalReplayMessage.set(
+                control?.message || 'The replay day finished and the saved scores are current.',
+              );
+              this.finishReplayAdvanceRequest(generation);
+              return;
+            }
+
+            if (evaluation.state === 'error') {
+              this.historicalReplayError.set(
+                control?.lastError || control?.message || 'Unable to advance the historical replay.',
+              );
+              this.finishReplayAdvanceRequest(generation);
+              return;
+            }
+          }
+
+          this.historicalReplayError.set(
+            error instanceof Error ? error.message : 'Unable to advance the historical replay.',
+          );
+          this.finishReplayAdvanceRequest(generation);
+        }, 1_750);
+      });
+  }
+
+  isHistoricalReplayAdvanceLocked(): boolean {
+    return Boolean(
+      this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'advancing',
+    );
   }
 
   getHistoricalReplayDateLabel(): string {
@@ -851,6 +927,10 @@ export class CycleOne implements OnDestroy {
   private stopSharedScoringListener: (() => void) | null = null;
   private stopLiveScoringControlListener: (() => void) | null = null;
   private stopHistoricalReplayListener: (() => void) | null = null;
+  private replayAdvanceGeneration = 0;
+  private replayAdvanceBaseline: HistoricalReplayAdvanceBaseline | null = null;
+  private replayAdvanceSawServerStart = false;
+  private replayAdvanceReconciliationTimer: ReturnType<typeof setTimeout> | null = null;
   private stopRosterListeners = new Map<string, () => void>();
   private displayedRosterOwnerIds = new Set<string>();
   private loadedRosterOwnerIds = new Set<string>();
@@ -1639,7 +1719,76 @@ export class CycleOne implements OnDestroy {
     this.stopLiveListeners();
   }
 
+  private isCurrentReplayAdvance(generation: number): boolean {
+    return Boolean(
+      this.historicalReplayAdvancing() &&
+      this.replayAdvanceBaseline &&
+      generation === this.replayAdvanceGeneration,
+    );
+  }
+
+  private finishReplayAdvanceRequest(generation: number): void {
+    if (generation !== this.replayAdvanceGeneration) {
+      return;
+    }
+
+    this.clearReplayAdvanceReconciliationTimer();
+    this.historicalReplayAdvancing.set(false);
+    this.historicalReplayTransportNotice.set('');
+    this.replayAdvanceBaseline = null;
+    this.replayAdvanceSawServerStart = false;
+  }
+
+  private clearReplayAdvanceReconciliationTimer(): void {
+    if (this.replayAdvanceReconciliationTimer) {
+      clearTimeout(this.replayAdvanceReconciliationTimer);
+      this.replayAdvanceReconciliationTimer = null;
+    }
+  }
+
+  private reconcileReplayAdvanceFromControl(
+    control: HistoricalReplayControl | null,
+  ): void {
+    const baseline = this.replayAdvanceBaseline;
+
+    if (!this.historicalReplayAdvancing() || !baseline) {
+      return;
+    }
+
+    const evaluation = evaluateHistoricalReplayAdvance(
+      baseline,
+      control,
+      this.replayAdvanceSawServerStart,
+    );
+    this.replayAdvanceSawServerStart = evaluation.sawServerStart;
+
+    if (evaluation.state === 'ready') {
+      this.historicalReplayMessage.set(
+        control?.message || 'The replay day finished and the saved scores are current.',
+      );
+      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration);
+      return;
+    }
+
+    if (evaluation.state === 'error') {
+      this.historicalReplayError.set(
+        control?.lastError || control?.message || 'Unable to advance the historical replay.',
+      );
+      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration);
+    }
+  }
+
+  private cancelReplayAdvanceTracking(): void {
+    this.replayAdvanceGeneration += 1;
+    this.clearReplayAdvanceReconciliationTimer();
+    this.historicalReplayAdvancing.set(false);
+    this.historicalReplayTransportNotice.set('');
+    this.replayAdvanceBaseline = null;
+    this.replayAdvanceSawServerStart = false;
+  }
+
   private stopLiveListeners(): void {
+    this.cancelReplayAdvanceTracking();
     this.stopCyclesListener?.();
     this.stopCycleListener?.();
     this.stopMatchupsListener?.();
@@ -1827,6 +1976,7 @@ export class CycleOne implements OnDestroy {
         (control) => {
           const previousDate = this.historicalReplayControl()?.simulatedDate;
           this.historicalReplayControl.set(control);
+          this.reconcileReplayAdvanceFromControl(control);
 
           if (control?.status === 'error' && control.lastError) {
             this.historicalReplayError.set(control.lastError);

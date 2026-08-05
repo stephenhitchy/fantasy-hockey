@@ -340,7 +340,7 @@ test('the transaction workbench keeps confirmation at the top, introduces the in
   assert.match(template, /action-sheet-top-actions[\s\S]*top-confirm-move-button/);
   assert.match(template, /\[wide\]="true"/);
   assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
-  assert.match(template, /Current player on the left · new player on the right/);
+  assert.match(template, /selected-final-copy[\s\S]*Final Move Summary/);
   assert.match(template, /getCandidateComparisonGames\(candidate\)/);
   assert.match(template, /incomingCurrentComparisonGames\(\)/);
   assert.match(template, /incomingStartComparisonGames\(\)/);
