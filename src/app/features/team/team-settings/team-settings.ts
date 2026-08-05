@@ -405,6 +405,14 @@ export class TeamSettings implements OnDestroy {
     return this.clientHealth.competitiveActionBlockReason();
   }
 
+  getCompetitiveActionButtonBlockLabel(): string {
+    if (this.clientHealth.competitiveActionNeedsReload()) {
+      return 'Reload RinkRat';
+    }
+
+    return this.clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue';
+  }
+
   private ensureCompetitiveActionReady(): boolean {
     if (this.clientHealth.competitiveActionsReady()) {
       return true;

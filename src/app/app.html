@@ -1,1 +1,35 @@
+@if (releaseUpdate.updateAvailable()) {
+  <aside
+    class="release-update-banner"
+    role="alert"
+    aria-live="assertive"
+    aria-atomic="true"
+  >
+    <span class="release-update-icon" aria-hidden="true">↻</span>
+    <div class="release-update-copy">
+      <strong>{{ getReleaseUpdateTitle() }}</strong>
+      <span>{{ getReleaseUpdateDetail() }}</span>
+      <small>{{ getReleaseBuildTransition() }}</small>
+    </div>
+    <button
+      type="button"
+      class="release-update-button"
+      [disabled]="updateReloadBlocked()"
+      (click)="reloadForReleaseUpdate()"
+    >
+      {{ getReleaseUpdateButtonLabel() }}
+    </button>
+    @if (releaseMessage()) {
+      <p class="release-update-message">{{ releaseMessage() }}</p>
+    }
+  </aside>
+}
+
+@if (appliedUpdateNotice()) {
+  <p class="release-applied-notice" role="status" aria-live="polite">
+    <span aria-hidden="true">✓</span>
+    {{ appliedUpdateNotice() }}
+  </p>
+}
+
 <router-outlet></router-outlet>

@@ -45,20 +45,67 @@
         Current build: <strong>{{ releaseLabel }}</strong>. Copy a privacy-limited report when a
         draft, add/drop, waiver, roster, or testing action behaves unexpectedly.
       </p>
+      @if (releaseDeployment(); as deployment) {
+        <div class="support-build-fingerprint">
+          <span>
+            This tab
+            <strong>{{ formatBuildIdentifier(deployment.bundled.buildId) }}</strong>
+          </span>
+          <span>
+            Deployed
+            <strong>
+              {{
+                deployment.latest
+                  ? formatBuildIdentifier(deployment.latest.buildId)
+                  : deployment.checking
+                    ? 'Checking…'
+                    : 'Not checked yet'
+              }}
+            </strong>
+          </span>
+          <span
+            class="support-build-state"
+            [class.support-build-state-update]="deployment.updateAvailable"
+            [class.support-build-state-pending]="!deployment.updateAvailable && deployment.status !== 'current'"
+          >
+            {{ getDeploymentStatusLabel(deployment) }}
+          </span>
+        </div>
+      }
       <small>
         The report excludes league IDs, player IDs, names, scores, roster contents, email addresses,
         and raw Firestore documents.
       </small>
     </div>
 
-    <button
-      type="button"
-      class="rr-button rr-button--secondary support-diagnostics-button"
-      [disabled]="copyingDiagnostics()"
-      (click)="copyBetaDiagnostics()"
-    >
-      {{ copyingDiagnostics() ? 'Copying…' : 'Copy Beta Diagnostics' }}
-    </button>
+    <div class="support-diagnostics-actions">
+      <button
+        type="button"
+        class="rr-button rr-button--secondary support-diagnostics-button"
+        [disabled]="releaseDeployment()?.checking"
+        (click)="checkForUpdates()"
+      >
+        {{ releaseDeployment()?.checking ? 'Checking…' : 'Check for Update' }}
+      </button>
+      <button
+        type="button"
+        class="rr-button rr-button--secondary support-diagnostics-button"
+        [disabled]="copyingDiagnostics()"
+        (click)="copyBetaDiagnostics()"
+      >
+        {{ copyingDiagnostics() ? 'Copying…' : 'Copy Beta Diagnostics' }}
+      </button>
+      @if (releaseDeployment()?.updateAvailable) {
+        <button
+          type="button"
+          class="rr-button rr-button--commit support-diagnostics-button"
+          [disabled]="releaseReloadBlocked()"
+          (click)="reloadForUpdate()"
+        >
+          {{ releaseReloadBlocked() ? 'Finishing Current Action…' : 'Reload RinkRat' }}
+        </button>
+      }
+    </div>
 
     @if (diagnosticMessage()) {
       <p class="support-diagnostics-success" role="status" aria-live="polite">

@@ -1,5 +1,6 @@
 import { computed, Injectable, OnDestroy, signal } from '@angular/core';
 
+import { ReleaseUpdateService } from '../release/release-update.service';
 import { TelemetryService } from './telemetry.service';
 
 export type ClientConnectionNoticeState = 'offline' | 'restored';
@@ -84,8 +85,14 @@ export class ClientHealthService implements OnDestroy {
     return null;
   });
 
+  readonly competitiveActionNeedsReload = computed(
+    () => this.releaseUpdate.updateAvailable(),
+  );
+
   readonly competitiveActionsReady = computed(
-    () => this.online() && !this.restoredNoticeVisible(),
+    () =>
+      this.online() && !this.restoredNoticeVisible() &&
+      !this.competitiveActionNeedsReload(),
   );
 
   readonly competitiveActionBlockReason = computed(() => {
@@ -95,6 +102,10 @@ export class ClientHealthService implements OnDestroy {
 
     if (this.restoredNoticeVisible()) {
       return 'Connection restored. RinkRat is refreshing live league data for a few seconds before competitive actions unlock.';
+    }
+
+    if (this.releaseUpdate.updateAvailable()) {
+      return 'A different RinkRat build is now live. Reload this page before submitting another roster, waiver, draft, or testing action.';
     }
 
     return '';
@@ -154,7 +165,10 @@ export class ClientHealthService implements OnDestroy {
     this.readConnectionInformation();
   };
 
-  constructor(private readonly telemetry: TelemetryService) {
+  constructor(
+    private readonly telemetry: TelemetryService,
+    private readonly releaseUpdate: ReleaseUpdateService,
+  ) {
     this.readConnectionInformation();
 
     if (typeof window !== 'undefined') {

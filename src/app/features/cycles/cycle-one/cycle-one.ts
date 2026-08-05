@@ -365,6 +365,10 @@ export class CycleOne implements OnDestroy {
 
   getHistoricalReplayAdvanceButtonLabel(): string {
     if (!this.clientHealth.competitiveActionsReady()) {
+      if (this.clientHealth.competitiveActionNeedsReload()) {
+        return 'Reload RinkRat';
+      }
+
       return this.clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Advance';
     }
 

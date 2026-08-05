@@ -7,6 +7,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
+import { ReleaseUpdateService } from '../../../core/release/release-update.service';
 import { auth } from '../../../core/firebase';
 import {
   CompetitiveActionMonitorService,
@@ -721,7 +722,10 @@ export class DraftRoom implements OnDestroy {
   );
 
   readonly canUseLiveDraftActions = computed(
-    () => this.realtimeConnectionState() === 'connected' && this.pickSubmissionPhase() === 'idle',
+    () =>
+      this.realtimeConnectionState() === 'connected' &&
+      this.pickSubmissionPhase() === 'idle' &&
+      !this.releaseUpdate.updateAvailable(),
   );
 
   readonly latestAutoPickNotice = computed<DraftAutoPickExplanation | null>(() => {
@@ -926,6 +930,7 @@ export class DraftRoom implements OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private readonly actionMonitor: CompetitiveActionMonitorService,
+    private readonly releaseUpdate: ReleaseUpdateService,
   ) {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this.handleBrowserOnline);
@@ -2130,6 +2135,13 @@ export class DraftRoom implements OnDestroy {
   }
 
   private ensureRealtimeActionReady(): boolean {
+    if (this.releaseUpdate.updateAvailable()) {
+      this.errorMessage.set(
+        'A different RinkRat build is now live. Reload this tab before changing the queue, clock, Auto-Draft, or making another pick.',
+      );
+      return false;
+    }
+
     if (this.realtimeConnectionState() === 'connected') {
       return true;
     }
@@ -2147,10 +2159,13 @@ export class DraftRoom implements OnDestroy {
 
     this.queueSaving.set(true);
     this.errorMessage.set('');
+    const actionHandle = this.actionMonitor.begin('draft-auto');
 
     try {
       await setDraftAutoDraftEnabled(this.leagueId, this.userId, !this.myQueue().autoDraftEnabled);
+      actionHandle.finish('success');
     } catch (error: unknown) {
+      actionHandle.finish('error');
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to update your auto-draft preference.',
       );
@@ -2179,12 +2194,14 @@ export class DraftRoom implements OnDestroy {
     this.clockActionInProgress.set(true);
     this.errorMessage.set('');
     this.successMessage.set('');
+    const actionHandle = this.actionMonitor.begin('draft-clock');
 
     try {
       await startDraftClock(this.leagueId, this.userId);
-
+      actionHandle.finish('success');
       this.successMessage.set('The draft clock has started. You are on the clock.');
     } catch (error: unknown) {
+      actionHandle.finish('error');
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to start the draft clock.',
       );
@@ -2208,6 +2225,7 @@ export class DraftRoom implements OnDestroy {
 
     this.clockActionInProgress.set(true);
     this.errorMessage.set('');
+    const actionHandle = this.actionMonitor.begin('draft-clock');
 
     try {
       if (draft.clockStatus === 'paused') {
@@ -2215,7 +2233,9 @@ export class DraftRoom implements OnDestroy {
       } else {
         await pauseDraftClock(this.leagueId, this.userId);
       }
+      actionHandle.finish('success');
     } catch (error: unknown) {
+      actionHandle.finish('error');
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to change the draft clock.',
       );
@@ -2269,10 +2289,13 @@ export class DraftRoom implements OnDestroy {
 
     this.queueSaving.set(true);
     this.errorMessage.set('');
+    const actionHandle = this.actionMonitor.begin('draft-queue');
 
     try {
       await saveDraftQueue(this.leagueId, this.userId, assetKeys, this.myQueue().autoDraftEnabled);
+      actionHandle.finish('success');
     } catch (error: unknown) {
+      actionHandle.finish('error');
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to update your draft queue.',
       );
@@ -2618,6 +2641,10 @@ export class DraftRoom implements OnDestroy {
   getDraftButtonLabel(asset: DraftableAsset): string {
     if (this.makingPickAssetKey() === asset.assetKey) {
       return this.pickSubmissionPhase() === 'confirming' ? 'Confirming...' : 'Drafting...';
+    }
+
+    if (this.releaseUpdate.updateAvailable()) {
+      return 'Reload RinkRat';
     }
 
     if (this.realtimeConnectionState() !== 'connected') {

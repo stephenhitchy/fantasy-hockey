@@ -129,6 +129,83 @@
         </article>
       </section>
 
+      @if (releaseDeployment(); as deployment) {
+        <section
+          class="readiness-card release-deployment-card"
+          [class.release-deployment-card-update]="deployment.updateAvailable"
+        >
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Safe beta deployments</span>
+              <h2>Client build freshness</h2>
+            </div>
+            <span
+              class="release-deployment-status"
+              [class.release-deployment-status-update]="deployment.updateAvailable"
+              [class.release-deployment-status-neutral]="!deployment.updateAvailable && deployment.status !== 'current'"
+            >
+              {{ getDeploymentStatusLabel(deployment) }}
+            </span>
+          </div>
+
+          <p class="section-copy">
+            RinkRat checks a no-cache deployment manifest when this tab opens, reconnects, and
+            returns from the background. A stale tab cannot submit another competitive action until
+            it reloads. Any action already in progress is allowed to finish first.
+          </p>
+
+          <div class="release-deployment-grid">
+            <article>
+              <span>This tab</span>
+              <strong>{{ deployment.bundled.releaseLabel }}</strong>
+              <small>{{ formatBuildIdentifier(deployment.bundled.buildId) }}</small>
+            </article>
+            <article>
+              <span>Built</span>
+              <strong>{{ formatTimestamp(deployment.bundled.builtAt) }}</strong>
+              <small>{{ formatSourceRevision(deployment.bundled.sourceRevision) }}</small>
+            </article>
+            <article>
+              <span>Model versions</span>
+              <strong>Scoring V{{ deployment.bundled.scoringRulesVersion }}</strong>
+              <small>Projection V{{ deployment.bundled.projectionVersion }}</small>
+            </article>
+            <article>
+              <span>Deployed build</span>
+              <strong>{{ deployment.latest?.releaseLabel ?? 'Not checked yet' }}</strong>
+              <small>
+                {{
+                  deployment.latest
+                    ? formatBuildIdentifier(deployment.latest.buildId)
+                    : deployment.errorMessage || 'Waiting for the first deployment check'
+                }}
+              </small>
+            </article>
+          </div>
+
+          <div class="release-deployment-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              [disabled]="deployment.checking"
+              (click)="checkForReleaseUpdate()"
+            >
+              {{ deployment.checking ? 'Checking…' : 'Check Deployed Build' }}
+            </button>
+            @if (deployment.updateAvailable) {
+              <button
+                type="button"
+                class="primary-button"
+                [disabled]="releaseReloadBlocked()"
+                (click)="reloadForReleaseUpdate()"
+              >
+                {{ releaseReloadBlocked() ? 'Finishing Current Action…' : 'Reload Deployed Build' }}
+              </button>
+            }
+          </div>
+        </section>
+      }
+
       @if (clientPerformance(); as client) {
         <section class="readiness-card client-health-card">
           <div class="section-heading">

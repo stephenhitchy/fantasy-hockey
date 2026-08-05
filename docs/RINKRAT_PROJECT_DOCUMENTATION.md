@@ -1,3 +1,193 @@
+## Batch R1A.1 — Release Manifest Ignore Hotfix
+
+### Purpose
+
+R1A generates `public/release-manifest.json` and
+`src/environments/generated-release-manifest.ts` before development, testing, and production
+builds. These deployment fingerprints must remain outside Git so a rebuild does not create
+meaningless timestamp-only source changes.
+
+The first R1A package contained the correct `.gitignore` rules, but `.gitignore` is hidden in
+macOS Finder. A manual project replacement can therefore leave the older project `.gitignore`
+in place even when every visible file was replaced. The release-safety test then correctly
+stops because the generated manifest is no longer protected from an accidental commit.
+
+### Self-healing behavior
+
+`scripts/generate-release-manifest.mjs` now runs a tested ignore-rule repair before it creates a
+release fingerprint. It checks for:
+
+```text
+/public/release-manifest.json
+/src/environments/generated-release-manifest.ts
+```
+
+When either rule is absent—or the hidden `.gitignore` file itself is absent—the generator
+preserves every existing ignore rule and appends only the missing deployment-fingerprint rules
+under `# Generated deployment fingerprints`. A second run makes no changes.
+
+This keeps the original release-safety test strict while making the normal manual replacement
+workflow resilient. If the generator repairs `.gitignore`, include that one visible Git change
+in the next commit, then run the final production build after committing so the deployed
+fingerprint contains a clean source revision.
+
+### Validation and deployment
+
+Run:
+
+```bash
+npm run verify:batchr1a-1
+```
+
+This hotfix changes build tooling and tests only. No separate Firebase deployment is required.
+After verification succeeds, continue with the original R1A Hosting-only deployment procedure.
+Production Scoring V3, Projection V11, Cloud Functions, Firestore rules, indexes, and all
+competitive behavior remain unchanged.
+
+## Batch R1A — Safe Updates and Release Preflight
+
+### Purpose
+
+Batch R1A adds a safe client-update path for the controlled invite beta. RinkRat can now identify the exact browser build that is open, compare it with the build currently deployed to Firebase Hosting, warn a manager when a different build is live, and prevent a stale tab from starting another protected competitive action. An action already in progress is allowed to settle before reload becomes available.
+
+This is a **Hosting-only** release-safety and diagnostics batch. It does not change Production Scoring V3, Projection V11, draft order, roster legality, waiver priority, independent six-game roster-slot windows, historical replay authority, standings, playoffs, Cloud Functions, Firestore rules, or Firestore indexes.
+
+The application release label advances to **Release Candidate 5**.
+
+### 1. Build-time release manifest
+
+Every development start and production build now runs `generate:release-manifest` after the existing team-logo preparation step. The generator creates two synchronized files:
+
+- `public/release-manifest.json` for the deployed Firebase Hosting build.
+- `src/environments/generated-release-manifest.ts` for the JavaScript bundle opened in the manager's tab.
+
+The generated source and public manifest are intentionally ignored by Git. They are recreated before development, tests, and production builds, so routine builds do not leave timestamp-only changes in the working tree. The generator also excludes these two generated fingerprints when deciding whether the source revision is dirty.
+
+The manifest records only release metadata:
+
+- Schema version.
+- Release label.
+- Unique build ID.
+- UTC build timestamp.
+- Source revision when Git or a deployment environment provides one.
+- Package version.
+- Production scoring-rules version.
+- Shared projection version.
+
+It contains no manager, league, roster, player, score, email, invite-code, or Firestore-document data.
+
+Firebase Hosting serves `/release-manifest.json` with `no-cache, no-store, must-revalidate`. Hashed JavaScript and CSS assets retain their existing immutable cache policy. This lets ordinary assets stay fast while the small deployment fingerprint always reflects the current Hosting release.
+
+### 2. Automatic deployed-build checks
+
+The root application starts a lightweight release check:
+
+- Four seconds after the tab opens.
+- Every two minutes while the tab remains open.
+- When the device reconnects to the internet.
+- When a backgrounded tab becomes visible again.
+
+Requests use `cache: 'no-store'`, same-origin credentials, and a cache-busting query value. An invalid or unreachable manifest never prevents the application from opening. When no trustworthy comparison is available, the client fails open and preserves existing server-side authorization.
+
+The comparison distinguishes:
+
+- **Current:** the bundled and deployed build IDs match.
+- **Newer deployment:** a later build is live.
+- **Rollback:** Firebase Hosting now contains an older approved build.
+- **Different build:** build IDs differ but timestamps cannot establish a direction.
+
+Both a forward deployment and a rollback require the open tab to reload before another protected competitive action.
+
+### 3. Compact global update notice
+
+When a different build is detected, a compact gold-and-ice notice appears above the application. It does not blur the page, create a modal backdrop, or prevent ordinary reading and navigation. It identifies the open and deployed release labels and provides **Reload RinkRat**.
+
+If a protected competitive action is still running, the reload control changes to **Finishing action…** and remains disabled. The browser reload becomes available as soon as the session action monitor reports that every active action has settled. This avoids interrupting a draft pick, queue save, Auto-Draft preference, draft-clock change, add/drop, waiver claim, lineup change, Injured Reserve move, roster drop, or historical replay advance after the request has already begun.
+
+A request that remains unresolved for 60 seconds exposes an explicit **Reload Anyway** escape instead of trapping the manager forever. The notice warns the manager to verify whether the last action already registered before repeating it.
+
+Before reload, RinkRat stores a short-lived session marker containing only the source and target build IDs. After the requested build opens successfully, a brief confirmation states that the update was applied. Private or hardened browser modes can omit this confirmation without affecting the reload.
+
+### 4. Stale-tab competitive-action protection
+
+A stale tab is blocked from starting the protected browser actions already covered by client connection safety:
+
+- Add/drop and open-slot additions.
+- Waiver claims.
+- Draft picks, queue changes, Auto-Draft changes, and draft clock controls.
+- Active/bench lineup swaps.
+- Injured Reserve moves and activations.
+- Roster drops.
+- Historical replay advancement.
+
+The manager receives a clear explanation and affected action buttons display **Reload RinkRat** rather than the misleading **Reconnecting…** label. The server remains the final authority for every action; this browser gate is an additional safeguard against submitting from outdated interface code.
+
+The gate does not cancel a request that has already been submitted. Active operations finish through their existing callable and Firestore-confirmation paths, and only then may the tab reload.
+
+### 5. Support and Release Readiness fingerprints
+
+The Support page and platform-administrator Release Readiness page now display privacy-limited build fingerprints for:
+
+- The release bundled into the current tab.
+- The latest manifest retrieved from Firebase Hosting.
+- Build ID and build timestamp.
+- Source revision when available.
+- Scoring and Projection model versions.
+- Current, checking, offline, unavailable, rollback, or reload-required status.
+
+Both pages can perform an immediate deployed-build check. Their existing **Copy Beta Diagnostics** reports now include the same release snapshot alongside browser performance, Firestore listener health, connection state, and sanitized competitive-action timing. A reload control is shown only when a different build is confirmed and waits for active actions to finish.
+
+### 6. Validation and release procedure
+
+Run the complete dependency-backed verification on the development Mac:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchr1a
+npm run build:all
+```
+
+`prebuild` regenerates the release manifest immediately before Angular bundles the application. `validate:release-manifest` confirms that the public JSON, bundled TypeScript constant, development and production release labels, Scoring V3 version, Projection V11 version, and Firebase no-store header agree.
+
+The focused R1A suite verifies manifest normalization and comparison, deployment polling, safe reload behavior, stale-client action gates, Support and Release Readiness fingerprints, build scripts, documentation, cache policy, and preservation of scoring, projections, Functions, rules, and indexes.
+
+### Deployment
+
+R1A is **Hosting-only**:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch R1A safe updates and release preflight"
+```
+
+Do not deploy Cloud Functions, Firestore rules, or Firestore indexes for this batch.
+
+### Post-deployment validation
+
+1. Open RinkRat in two browser tabs before deployment.
+2. Deploy the new Hosting build and leave both old tabs open.
+3. Wait for the automatic check or background and restore one tab. Confirm the compact update notice appears.
+4. Confirm ordinary page navigation remains usable and no fuzzy overlay is created.
+5. Begin a protected action in a test environment, then expose a different manifest. Confirm the action may finish but reload remains disabled until it settles.
+6. Confirm a stale tab cannot submit a new add/drop, waiver claim, draft action, lineup change, Injured Reserve action, roster drop, or replay advance.
+7. Confirm affected buttons say **Reload RinkRat** rather than **Reconnecting…**.
+8. Reload and confirm the applied-update notice appears and protected actions unlock.
+9. Open Support and Release Readiness and confirm the tab and deployed fingerprints match.
+10. Copy Beta Diagnostics and confirm that no league, player, matchup, score, roster, email, invite-code, or raw Firestore data appears.
+11. Repeat the update check after going offline, reconnecting, and returning from a backgrounded mobile tab.
+
+### Rollback guidance
+
+A Firebase Hosting rollback is treated as another deployment change. Existing tabs are asked to reload into the approved rollback build before beginning another protected competitive action.
+
+Because R1A writes no Firestore schema and changes no server code, the safest rollback is to redeploy the approved V1B–P1B Hosting build. Cloud Functions, rules, indexes, scoring snapshots, projections, rosters, transactions, waivers, standings, and playoff data require no reversal.
+
+---
+
 ## Batch V1B–P1B — High-Visibility Competitive Actions and Action Health
 
 ### Purpose

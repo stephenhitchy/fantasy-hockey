@@ -162,3 +162,75 @@
     width: 100%;
   }
 }
+
+/* R1A: deployment fingerprint and safe update controls. */
+.support-build-fingerprint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.support-build-fingerprint > span {
+  display: inline-grid;
+  gap: 2px;
+  min-width: 145px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.support-build-fingerprint > span strong {
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.support-build-fingerprint .support-build-state {
+  min-width: auto;
+  align-self: stretch;
+  place-content: center;
+  border-color: color-mix(in srgb, var(--rr-success) 48%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-success) 10%, var(--surface-raised));
+  color: var(--rr-success);
+}
+
+.support-build-fingerprint .support-build-state-update {
+  border-color: color-mix(in srgb, var(--rr-warning) 60%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-warning) 16%, var(--surface-raised));
+  color: var(--text-strong);
+}
+
+.support-build-fingerprint .support-build-state-pending {
+  border-color: var(--border-soft);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+}
+
+.support-diagnostics-actions {
+  display: grid;
+  min-width: 220px;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .support-build-fingerprint {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .support-build-fingerprint > span,
+  .support-diagnostics-actions {
+    width: 100%;
+    min-width: 0;
+  }
+}

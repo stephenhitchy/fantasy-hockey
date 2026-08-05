@@ -2173,6 +2173,10 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (!this.clientHealth.competitiveActionsReady()) {
+      if (this.clientHealth.competitiveActionNeedsReload()) {
+        return 'Reload RinkRat';
+      }
+
       return this.clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue';
     }
 

@@ -52,3 +52,7 @@ functions/lib/
 functions/.env*
 !functions/.env.example
 functions/.secret.local
+
+# Generated deployment fingerprints
+/public/release-manifest.json
+/src/environments/generated-release-manifest.ts

@@ -2,3 +2,164 @@
   display: block;
   min-height: 100vh;
 }
+
+.release-update-banner,
+.release-applied-notice {
+  position: fixed;
+  z-index: calc(var(--rr-z-viewport-overlay, 2000) - 20);
+  right: 12px;
+  left: 12px;
+  width: min(720px, calc(100% - 24px));
+  margin-inline: auto;
+  border: 2px solid var(--rr-commit-edge);
+  color: var(--rr-commit-ink);
+  box-shadow:
+    0 4px 0 var(--rr-commit-edge),
+    0 14px 30px color-mix(in srgb, var(--rr-commit-ink) 34%, transparent);
+}
+
+.release-update-banner {
+  top: calc(10px + env(safe-area-inset-top));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--rr-commit-highlight) 72%, transparent), transparent 44%),
+    linear-gradient(180deg, var(--rr-commit-face-top), var(--rr-commit-face-bottom));
+}
+
+.release-update-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid var(--rr-commit-edge);
+  background: var(--rr-commit-highlight);
+  font-size: 24px;
+  font-weight: 1000;
+  line-height: 1;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--rr-commit-ink) 24%, transparent);
+}
+
+.release-update-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.release-update-copy strong {
+  font-family: var(--rr-font-display, sans-serif);
+  font-size: clamp(16px, 2.2vw, 21px);
+  line-height: 1.05;
+}
+
+.release-update-copy span {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.release-update-copy small {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.055em;
+  opacity: 0.78;
+  text-transform: uppercase;
+}
+
+.release-update-button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 2px solid var(--rr-commit-edge);
+  background: var(--rr-commit-ink);
+  color: var(--rr-commit-highlight);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 1000;
+  letter-spacing: 0.025em;
+  cursor: pointer;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--rr-commit-ink) 35%, transparent);
+}
+
+.release-update-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--rr-commit-ink) 82%, var(--rr-commit-highlight));
+}
+
+.release-update-button:focus-visible {
+  outline: 3px solid var(--rr-commit-highlight);
+  outline-offset: 2px;
+}
+
+.release-update-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.release-update-message {
+  grid-column: 2 / -1;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.release-applied-notice {
+  top: calc(10px + env(safe-area-inset-top));
+  display: flex;
+  max-width: 440px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--rr-success) 16%, var(--rr-commit-highlight));
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.release-applied-notice span {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+@media (max-width: 620px) {
+  .release-update-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 10px;
+    padding: 9px 10px;
+  }
+
+  .release-update-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 21px;
+  }
+
+  .release-update-copy span {
+    font-size: 12px;
+  }
+
+  .release-update-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .release-update-message {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .release-update-banner,
+  .release-applied-notice,
+  .release-update-button {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

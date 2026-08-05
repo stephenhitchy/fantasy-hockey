@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 
 import { ClientHealthService } from './client-health.service';
 import {
@@ -28,6 +28,8 @@ function createActionId(action: CompetitiveActionKind): string {
 
 @Injectable({ providedIn: 'root' })
 export class CompetitiveActionMonitorService {
+  readonly activeCount = signal(0);
+
   private readonly activeActions = new Map<string, ActiveCompetitiveActionRecord>();
   private completedRecords: CompetitiveActionRecord[] = [];
 
@@ -52,6 +54,7 @@ export class CompetitiveActionMonitorService {
     };
 
     this.activeActions.set(id, active);
+    this.activeCount.set(this.activeActions.size);
     let finished = false;
 
     return {
@@ -85,6 +88,7 @@ export class CompetitiveActionMonitorService {
     outcome: CompetitiveActionOutcome,
   ): void {
     this.activeActions.delete(active.id);
+    this.activeCount.set(this.activeActions.size);
     const finishedAtMilliseconds = Date.now();
     const record: CompetitiveActionRecord = {
       id: active.id,

@@ -1242,7 +1242,7 @@
                 <span class="rr-commit-mark" aria-hidden="true">✓</span>
                 <span class="rr-commit-copy">
                   <small>Final lineup action</small>
-                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Activating...' : 'Confirm Activation' }}</strong>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? getCompetitiveActionButtonBlockLabel() : rosterMoveLoading() ? 'Activating...' : 'Confirm Activation' }}</strong>
                 </span>
               </button>
             </footer>
@@ -1293,7 +1293,7 @@
                 <span class="rr-commit-mark" aria-hidden="true">✓</span>
                 <span class="rr-commit-copy">
                   <small>Final roster action</small>
-                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Moving...' : 'Move to Bench' }}</strong>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? getCompetitiveActionButtonBlockLabel() : rosterMoveLoading() ? 'Moving...' : 'Move to Bench' }}</strong>
                 </span>
               </button>
             </footer>
@@ -1367,7 +1367,7 @@
                 <span class="rr-commit-mark" aria-hidden="true">✓</span>
                 <span class="rr-commit-copy">
                   <small>Final lineup action</small>
-                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Applying...' : 'Confirm Swap' }}</strong>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? getCompetitiveActionButtonBlockLabel() : rosterMoveLoading() ? 'Applying...' : 'Confirm Swap' }}</strong>
                 </span>
               </button>
             </footer>

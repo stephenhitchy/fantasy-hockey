@@ -19,6 +19,7 @@ import {
 } from '../../../core/observability/competitive-action-health.util';
 import { auth } from '../../../core/firebase';
 import { getLeagueById, League } from '../../../core/league/league.service';
+import type { ReleaseUpdateSnapshot } from '../../../core/release/release-manifest.models';
 import {
   ReleaseReadinessCheck,
   ReleaseReadinessSnapshot,
@@ -32,6 +33,7 @@ import {
   retryReleaseReadinessScoring,
 } from '../../../core/release/release-readiness.service';
 import { runFullSeasonLifecycleSimulator } from '../../../core/release/season-lifecycle-simulator';
+import { ReleaseUpdateService } from '../../../core/release/release-update.service';
 
 @Component({
   selector: 'app-release-readiness',
@@ -53,6 +55,10 @@ export class ReleaseReadiness implements OnDestroy {
   readonly runtime = getScoringRuntimeState();
   readonly clientPerformance = signal<ClientPerformanceSnapshot | null>(null);
   readonly competitiveActions = signal<CompetitiveActionHealthSnapshot | null>(null);
+  readonly releaseDeployment = signal<ReleaseUpdateSnapshot | null>(null);
+  readonly releaseReloadBlocked = computed(
+    () => this.actionMonitor.activeCount() > 0 || this.releaseUpdate.reloadRequested(),
+  );
 
   readonly requiredChecks = computed(
     () => this.snapshot()?.checks.filter((check) => check.requiredForLiveLaunch) ?? [],
@@ -88,6 +94,7 @@ export class ReleaseReadiness implements OnDestroy {
     route: ActivatedRoute,
     private readonly performanceMonitor: ClientPerformanceMonitorService,
     private readonly actionMonitor: CompetitiveActionMonitorService,
+    private readonly releaseUpdate: ReleaseUpdateService,
   ) {
     this.leagueId = route.snapshot.paramMap.get('leagueId') ?? '';
     this.refreshClientHealth();
@@ -175,6 +182,7 @@ export class ReleaseReadiness implements OnDestroy {
   refreshClientHealth(): void {
     this.clientPerformance.set(this.performanceMonitor.getSnapshot());
     this.competitiveActions.set(this.actionMonitor.getSnapshot());
+    this.releaseDeployment.set(this.releaseUpdate.getSnapshot());
   }
 
   async copyClientHealthReport(): Promise<void> {
@@ -194,6 +202,7 @@ export class ReleaseReadiness implements OnDestroy {
         generatedAt: new Date().toISOString(),
         clientPerformance,
         competitiveActions,
+        releaseDeployment: this.releaseUpdate.getSnapshot(),
       }, null, 2));
       this.actionMessage.set('This browser’s beta diagnostics were copied to the clipboard.');
       this.errorMessage.set('');
@@ -201,6 +210,68 @@ export class ReleaseReadiness implements OnDestroy {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to copy the beta diagnostics.',
       );
+    }
+  }
+
+
+  async checkForReleaseUpdate(): Promise<void> {
+    this.actionMessage.set('');
+    this.errorMessage.set('');
+
+    try {
+      const updateAvailable = await this.releaseUpdate.checkForUpdate(true);
+      this.releaseDeployment.set(this.releaseUpdate.getSnapshot());
+      this.actionMessage.set(
+        updateAvailable
+          ? 'A different deployed build is available. Reload before another competitive action.'
+          : 'This tab matches the currently deployed RinkRat build.',
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(this.getErrorMessage(error));
+    }
+  }
+
+  reloadForReleaseUpdate(): void {
+    if (this.actionMonitor.activeCount() > 0) {
+      this.errorMessage.set('Finish the active competitive action before reloading this tab.');
+      return;
+    }
+
+    if (!this.releaseUpdate.requestReload()) {
+      this.errorMessage.set('The release reload could not start. Refresh this page once manually.');
+    }
+  }
+
+  formatBuildIdentifier(value: string): string {
+    return value.length <= 28 ? value : `${value.slice(0, 18)}…${value.slice(-8)}`;
+  }
+
+  formatSourceRevision(value: string): string {
+    if (value === 'unversioned') {
+      return 'Local / unversioned';
+    }
+
+    return value.endsWith('-dirty')
+      ? `${value.slice(0, 10)} · uncommitted`
+      : value.slice(0, 12);
+  }
+
+  getDeploymentStatusLabel(snapshot: ReleaseUpdateSnapshot): string {
+    if (snapshot.updateAvailable) {
+      return snapshot.direction === 'rollback' ? 'Reload for deployed rollback' : 'Reload required';
+    }
+
+    switch (snapshot.status) {
+      case 'checking':
+        return 'Checking deployment';
+      case 'offline':
+        return 'Offline';
+      case 'error':
+        return 'Check unavailable';
+      case 'idle':
+        return snapshot.latest ? 'Current build' : 'Not checked yet';
+      default:
+        return 'Current build';
     }
   }
 

@@ -2,6 +2,9 @@ export type CompetitiveActionKind =
   | 'add-drop'
   | 'waiver-claim'
   | 'draft-pick'
+  | 'draft-queue'
+  | 'draft-auto'
+  | 'draft-clock'
   | 'historical-replay'
   | 'lineup-swap'
   | 'injured-reserve'
@@ -63,6 +66,9 @@ const ACTION_KINDS = new Set<CompetitiveActionKind>([
   'add-drop',
   'waiver-claim',
   'draft-pick',
+  'draft-queue',
+  'draft-auto',
+  'draft-clock',
   'historical-replay',
   'lineup-swap',
   'injured-reserve',
@@ -230,6 +236,12 @@ export function getCompetitiveActionLabel(action: CompetitiveActionKind): string
       return 'Waiver claim';
     case 'draft-pick':
       return 'Draft pick';
+    case 'draft-queue':
+      return 'Draft queue';
+    case 'draft-auto':
+      return 'Auto-Draft setting';
+    case 'draft-clock':
+      return 'Draft clock';
     case 'historical-replay':
       return 'Replay advance';
     case 'lineup-swap':
