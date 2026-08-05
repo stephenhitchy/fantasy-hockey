@@ -1715,3 +1715,64 @@ app-cycle-one .team-roster-progress-fill {
     transition: none;
   }
 }
+
+/* R1C: a server-accepted pick may wait briefly for the ordered live-board
+   listener. Keep that reconciliation visible without trapping the manager
+   behind another full-screen blur. */
+.draft-pick-sync-dock {
+  position: fixed;
+  z-index: calc(var(--rr-z-mobile-nav, 1300) + 24);
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: min(520px, calc(100vw - 36px));
+  margin: 0;
+  padding: 12px 14px;
+  border: 2px solid color-mix(in srgb, var(--rr-info) 55%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface-1) 96%, var(--rr-info) 4%);
+  color: var(--text-primary);
+  box-shadow: var(--rr-panel-shadow);
+  pointer-events: auto;
+}
+
+.draft-pick-sync-dock strong,
+.draft-pick-sync-dock p {
+  display: block;
+}
+
+.draft-pick-sync-dock p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.draft-submit-spinner--compact {
+  width: 24px;
+  height: 24px;
+  border-width: 3px;
+}
+
+.draft-pick-sync-check {
+  min-height: 42px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+@media (max-width: 780px) {
+  .draft-pick-sync-dock {
+    right: 10px;
+    bottom: calc(154px + env(safe-area-inset-bottom));
+    grid-template-columns: auto minmax(0, 1fr);
+    width: calc(100vw - 20px);
+    padding: 10px 12px;
+  }
+
+  .draft-pick-sync-check {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}

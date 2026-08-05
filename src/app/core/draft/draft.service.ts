@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -649,6 +650,37 @@ export async function getFantasyDraft(leagueId: string): Promise<FantasyDraft | 
   }
 
   return normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
+}
+
+/**
+ * Bypasses the local cache when a just-submitted draft pick must be reconciled.
+ * This is intentionally separate from the normal real-time listener so a slow
+ * ordered picks query cannot leave the Draft Room visually locked.
+ */
+export async function getFantasyDraftFromServer(
+  leagueId: string,
+): Promise<FantasyDraft | null> {
+  const snapshot = await getDocFromServer(getDraftRef(leagueId));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
+}
+
+export async function getDraftPickFromServer(
+  leagueId: string,
+  overallPick: number,
+): Promise<DraftPick | null> {
+  if (!Number.isInteger(overallPick) || overallPick <= 0) {
+    return null;
+  }
+
+  const pickId = String(overallPick).padStart(3, '0');
+  const snapshot = await getDocFromServer(doc(getDraftPicksRef(leagueId), pickId));
+
+  return snapshot.exists() ? (snapshot.data() as DraftPick) : null;
 }
 
 export function listenToFantasyDraft(

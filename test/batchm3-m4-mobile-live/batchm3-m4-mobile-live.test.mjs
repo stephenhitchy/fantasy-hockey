@@ -331,7 +331,7 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
 
   assert.match(source, /@HostListener\('window:beforeunload'/);
   assert.match(source, /confirmPendingPickIfObserved/);
-  assert.match(source, /pick\.asset\.assetKey === pending\.assetKey/);
+  assert.match(source, /draftPickMatchesPending\(/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /navigator\.onLine/);
   assert.match(source, /rinkrat:draft-auto-pick-dismissed/);

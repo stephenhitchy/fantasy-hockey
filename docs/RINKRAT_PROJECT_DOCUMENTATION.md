@@ -9523,3 +9523,52 @@ Do not deploy Functions, Firestore rules, or indexes for this batch.
 11. Open `docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md` and verify the future queue migration, NHL caching, load test, and rollback instructions are available in the project.
 12. Use the launch gate only for a controlled invite cohort, not as proof of public 100,000-manager readiness.
 
+
+# Batch R1C — Draft Pick Confirmation Recovery and Coach Placement
+
+## Purpose
+
+R1C fixes a release-blocking Draft Room state where the secure manual-pick transaction could complete, but the browser remained behind a full-screen “Confirming your pick” shield while waiting for the ordered live-picks listener. It also moves the global Coach’s Clipboard trigger and panel to the left side so the helper does not cover draft and roster actions on the right.
+
+## Draft confirmation architecture
+
+A manual pick now has three independent confirmation paths:
+
+1. The live ordered picks listener sees the exact overall pick, asset, and manager.
+2. The live draft document advances beyond the submitted overall pick, contains the selected asset in `draftedAssetKeys`, and reports that exact zero-padded overall pick as `lastPickId`.
+3. A one-time cache-bypassing Firestore read retrieves the exact draft and pick documents directly from the server.
+
+The exact `lastPickId` requirement matters because `draftedAssetKeys` is cumulative. A later manager drafting the same asset can never make an older pending request look successful. The draft document is still an independent confirmation source because the pick and draft-state update are committed in the same server transaction.
+
+## Transport and overlay behavior
+
+- The full-screen submission shield is used only while the secure callable is initially unresolved.
+- An eight-second watchdog removes that shield if the transport remains slow, while keeping competitive Draft actions disabled.
+- The callable transport is explicitly capped at 65 seconds, slightly beyond the Function's 60-second ceiling.
+- A 68-second client recovery ceiling guarantees that a stale browser can never leave the Draft Room spinning indefinitely.
+- After the callable succeeds, the returned pick is authoritative, is merged into the local board immediately, and the page performs one fresh draft/picks/queue listener handshake before another action is allowed.
+- A delayed or failed browser transport is reconciled against Firestore before an error is shown.
+- A direct server check runs when the eight-second shield collapses, when the manager selects **Check Now**, and once more at the final bounded recovery deadline.
+- If this tab still cannot reconcile after the bounded recovery period, it exits the spinner state and requires a Draft Room reload before another pick.
+- Navigation is blocked only during the unresolved secure submission. Once the server accepts the pick, leaving the page cannot duplicate or undo it.
+- Queue, Auto-Draft, and clock controls also reject input while a prior pick is still being confirmed.
+
+No Draft authority, selection order, Auto-Draft logic, queue rules, roster requirements, scoring, projections, Firestore rules, indexes, or Cloud Functions were changed.
+
+## Coach placement
+
+The Coach’s Clipboard trigger now uses the lower-left corner on desktop and mobile. The opened desktop panel also anchors to the left. Mobile bottom-sheet behavior remains full width.
+
+## Verification
+
+Run:
+
+```bash
+npm run verify:batchr1c
+```
+
+Deployment is Hosting-only:
+
+```bash
+firebase deploy --only hosting:app -m "Batch R1C draft confirmation recovery and coach placement"
+```

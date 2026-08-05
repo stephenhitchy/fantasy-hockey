@@ -6,7 +6,8 @@
 .coach-help-trigger {
   position: fixed;
   z-index: 1450;
-  right: 20px;
+  right: auto;
+  left: 20px;
   bottom: 24px;
   display: flex;
   min-height: 54px;
@@ -70,7 +71,7 @@
   inset: 0;
   display: flex;
   align-items: flex-end;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 18px;
   background: rgba(3, 8, 15, .62);
 }
@@ -210,7 +211,8 @@
 
 @media (max-width: 780px) {
   .coach-help-trigger {
-    right: 10px;
+    right: auto;
+    left: max(10px, env(safe-area-inset-left));
     bottom: calc(82px + env(safe-area-inset-bottom));
     min-height: 48px;
     padding: 5px;

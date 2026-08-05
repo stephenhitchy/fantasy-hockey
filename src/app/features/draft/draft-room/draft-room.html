@@ -985,7 +985,35 @@
         </section>
       }
 
-      @if (pickSubmissionPhase() !== 'idle') {
+      @if (pickSubmissionPhase() !== 'idle' && !pickSubmissionOverlayVisible()) {
+        <section
+          class="draft-pick-sync-dock rr-notice rr-notice--info"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="draft-submit-spinner draft-submit-spinner--compact" aria-hidden="true"></span>
+          <div>
+            <strong>
+              {{ pickSubmissionPhase() === 'submitting' ? 'Checking the server pick record…' : 'Pick accepted — syncing the board' }}
+            </strong>
+            <p>
+              {{ pickSubmissionPhase() === 'submitting'
+                ? 'You can keep reading the Draft Room. Draft actions remain paused until the request is confirmed or safely released.'
+                : 'The pick is saved. This tab is reconciling the next manager, roster, and live board.'
+              }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rr-button rr-button--secondary draft-pick-sync-check"
+            (click)="checkPendingPickNow()"
+          >
+            Check Now
+          </button>
+        </section>
+      }
+
+      @if (pickSubmissionOverlayVisible()) {
         <div
           class="draft-pick-submission-shield"
           appViewportOverlayPortal
@@ -994,11 +1022,9 @@
         >
           <div class="draft-pick-submission-card rr-card rr-card--padded">
             <span class="draft-submit-spinner" aria-hidden="true"></span>
-            <strong>
-              {{ pickSubmissionPhase() === 'submitting' ? 'Submitting your pick…' : 'Confirming the live draft board…' }}
-            </strong>
+            <strong>Submitting your pick…</strong>
             <p>
-              Keep this page open until RinkRat receives the server-confirmed pick and advances the board.
+              RinkRat is sending this selection to the secure draft server. The full-screen wait automatically collapses after eight seconds so the page cannot remain trapped behind a spinner.
             </p>
           </div>
         </div>

@@ -117,7 +117,9 @@
     "verify:batchp1c": "npm run verify:batchr1a-1 && npm run test:batchp1c:run && npm run capacity:100k",
     "test:batchr1b-p1d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1b-p1d-launch-scale/*.test.mjs",
     "audit:invite-beta-release": "node scripts/audit-invite-beta-release.mjs",
-    "verify:batchr1b-p1d": "npm run verify:batchp1c && npm run test:batchr1b-p1d:run && npm run audit:invite-beta-release && npm run capacity:100k:draft-night && npm run capacity:100k:game-night"
+    "verify:batchr1b-p1d": "npm run verify:batchp1c && npm run test:batchr1b-p1d:run && npm run audit:invite-beta-release && npm run capacity:100k:draft-night && npm run capacity:100k:game-night",
+    "test:batchr1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1c-draft-confirmation/*.test.mjs",
+    "verify:batchr1c": "npm run verify:batchr1b-p1d && npm run test:batchr1c:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

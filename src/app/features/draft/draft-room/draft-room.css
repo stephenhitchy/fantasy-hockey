@@ -1866,8 +1866,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: color-mix(in srgb, var(--rr-scoreboard) 72%, transparent);
-  backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--rr-scoreboard) 58%, transparent);
 }
 
 .draft-pick-submission-card {

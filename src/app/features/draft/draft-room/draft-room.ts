@@ -28,7 +28,9 @@ import {
   getCurrentDraftPick,
   getDraftClockRemainingSeconds,
   getDraftPickAtOverall,
+  getDraftPickFromServer,
   getDraftTotalPickCount,
+  getFantasyDraftFromServer,
   getScheduledStartDate,
   isDraftClockExpired,
   isDraftStartTimeReached,
@@ -94,6 +96,13 @@ import {
   resolveDraftRealtimeConnectionState,
 } from './draft-mobile-resilience.util';
 
+import {
+  draftPickMatchesPending,
+  draftStateShowsPendingPickCommitted,
+  mergeConfirmedDraftPick,
+  type PendingDraftPickIdentity,
+} from './draft-pick-confirmation.util';
+
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
     return Promise.resolve(auth.currentUser);
@@ -132,9 +141,8 @@ interface DraftQueueEntryView {
   available: boolean;
 }
 
-interface PendingPickConfirmation {
-  overallPick: number;
-  assetKey: string;
+interface PendingPickConfirmation extends PendingDraftPickIdentity {
+  requestId: number;
   assetName: string;
   startedAt: number;
 }
@@ -186,6 +194,7 @@ export class DraftRoom implements OnDestroy {
   mobilePanel = signal<DraftMobilePanel>('players');
   selectedAssetKey = signal<string | null>(null);
   pickSubmissionPhase = signal<'idle' | 'submitting' | 'confirming'>('idle');
+  pickSubmissionOverlayVisible = signal(false);
   browserOnline = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
   draftServerSyncAt = signal<number | null>(null);
   picksServerSyncAt = signal<number | null>(null);
@@ -614,6 +623,9 @@ export class DraftRoom implements OnDestroy {
   private hiddenAt: number | null = null;
   private pendingPickConfirmation: PendingPickConfirmation | null = null;
   private pendingPickConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPickBlockingTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPickServerProbeInProgress = false;
+  private pendingPickRequestCounter = 0;
   private pendingPickAction: CompetitiveActionHandle | null = null;
   private realtimeRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly handleBrowserOnline = () => {
@@ -953,6 +965,11 @@ export class DraftRoom implements OnDestroy {
       clearTimeout(this.pendingPickConfirmationTimer);
     }
 
+    if (this.pendingPickBlockingTimer) {
+      clearTimeout(this.pendingPickBlockingTimer);
+    }
+
+    this.pickSubmissionOverlayVisible.set(false);
     this.pendingPickAction?.finish('cancelled');
     this.pendingPickAction = null;
 
@@ -976,7 +993,10 @@ export class DraftRoom implements OnDestroy {
   }
 
   canLeaveDraftRoom(): boolean {
-    return this.pickSubmissionPhase() === 'idle';
+    // Once the secure callable has accepted the pick, only the local board is
+    // catching up. Leaving at that point cannot duplicate or undo the server
+    // transaction, so only the actual submission phase blocks navigation.
+    return this.pickSubmissionPhase() !== 'submitting';
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -1436,30 +1456,30 @@ export class DraftRoom implements OnDestroy {
     return 'No legal roster spot is available';
   }
 
-  private confirmPendingPickIfObserved(): void {
-    const pending = this.pendingPickConfirmation;
+  private isPendingPickRequestActive(requestId: number): boolean {
+    return this.pendingPickConfirmation?.requestId === requestId && !this.destroyed;
+  }
 
-    if (!pending) {
-      return;
-    }
-
-    const matchingPick = this.picks().find(
-      (pick) =>
-        pick.overallPick === pending.overallPick &&
-        pick.ownerId === this.userId &&
-        pick.asset.assetKey === pending.assetKey,
-    );
-    if (!matchingPick) {
-      return;
-    }
-
-    this.pendingPickConfirmation = null;
-
+  private clearPendingPickTimers(): void {
     if (this.pendingPickConfirmationTimer) {
       clearTimeout(this.pendingPickConfirmationTimer);
       this.pendingPickConfirmationTimer = null;
     }
 
+    if (this.pendingPickBlockingTimer) {
+      clearTimeout(this.pendingPickBlockingTimer);
+      this.pendingPickBlockingTimer = null;
+    }
+  }
+
+  private finishPendingPickConfirmation(pending: PendingPickConfirmation): void {
+    if (!this.isPendingPickRequestActive(pending.requestId)) {
+      return;
+    }
+
+    this.pendingPickConfirmation = null;
+    this.clearPendingPickTimers();
+    this.pickSubmissionOverlayVisible.set(false);
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.selectedAssetKey.set(null);
@@ -1468,41 +1488,244 @@ export class DraftRoom implements OnDestroy {
     );
     this.pendingPickAction?.finish('success');
     this.pendingPickAction = null;
+
+    // A pick document can arrive before the draft and queue listeners. Force
+    // one fresh three-listener handshake before another competitive action is
+    // allowed, preventing a duplicate click against an old current-pick view.
+    this.requestRealtimeConfirmation('manual');
   }
 
-  private armPendingPickConfirmationTimeout(): void {
+  private finishPendingPickConflict(
+    pending: PendingPickConfirmation,
+    observedPick: DraftPick,
+  ): void {
+    if (!this.isPendingPickRequestActive(pending.requestId)) {
+      return;
+    }
+
+    this.pendingPickConfirmation = null;
+    this.clearPendingPickTimers();
+    this.pickSubmissionOverlayVisible.set(false);
+    this.pickSubmissionPhase.set('idle');
+    this.makingPickAssetKey.set(null);
+    this.selectedAssetKey.set(null);
+    this.errorMessage.set(
+      `Pick #${pending.overallPick} was completed with ${this.getAssetName(observedPick.asset)} before ${pending.assetName} could be confirmed. RinkRat is refreshing the live board.`,
+    );
+    this.pendingPickAction?.finish('error');
+    this.pendingPickAction = null;
+    this.requestRealtimeConfirmation('manual');
+  }
+
+  private finishPendingPickError(
+    pending: PendingPickConfirmation,
+    message: string,
+  ): void {
+    if (!this.isPendingPickRequestActive(pending.requestId)) {
+      return;
+    }
+
+    this.pendingPickConfirmation = null;
+    this.clearPendingPickTimers();
+    this.pickSubmissionOverlayVisible.set(false);
+    this.pickSubmissionPhase.set('idle');
+    this.makingPickAssetKey.set(null);
+    this.errorMessage.set(message);
+    this.pendingPickAction?.finish('error');
+    this.pendingPickAction = null;
+  }
+
+  private finishPendingPickUncertain(pending: PendingPickConfirmation): void {
+    if (!this.isPendingPickRequestActive(pending.requestId)) {
+      return;
+    }
+
+    this.pendingPickConfirmation = null;
+    this.clearPendingPickTimers();
+    this.pickSubmissionOverlayVisible.set(false);
+    this.pickSubmissionPhase.set('idle');
+    this.makingPickAssetKey.set(null);
+    this.selectedAssetKey.set(null);
+    this.realtimeListenerError.set(
+      `RinkRat could not verify pick #${pending.overallPick} in this tab. The full-screen wait has ended; refresh the live board before attempting another pick.`,
+    );
+    this.realtimeConfirmationStartedAt.set(Date.now());
+    this.realtimeReconnectReason.set('listener-error');
+    this.pendingPickAction?.finish('uncertain');
+    this.pendingPickAction = null;
+
+    if (this.browserOnline()) {
+      this.scheduleRealtimeListenerRestart(60);
+    }
+  }
+
+  private confirmPendingPickIfObserved(): void {
+    const pending = this.pendingPickConfirmation;
+
+    if (!pending) {
+      return;
+    }
+
+    const observedPick = this.picks().find(
+      (pick) => pick.overallPick === pending.overallPick,
+    );
+
+    if (observedPick) {
+      if (draftPickMatchesPending(observedPick, pending)) {
+        this.finishPendingPickConfirmation(pending);
+      } else {
+        this.finishPendingPickConflict(pending, observedPick);
+      }
+      return;
+    }
+
+    const draftConfirmed = draftStateShowsPendingPickCommitted(
+      this.draft(),
+      pending,
+    );
+
+    if (!draftConfirmed) {
+      return;
+    }
+
+    this.finishPendingPickConfirmation(pending);
+  }
+
+  private async reconcilePendingPickFromServer(requestId: number): Promise<boolean> {
+    if (
+      !this.isPendingPickRequestActive(requestId) ||
+      this.pendingPickServerProbeInProgress ||
+      !this.leagueId
+    ) {
+      return !this.isPendingPickRequestActive(requestId);
+    }
+
+    const pending = this.pendingPickConfirmation;
+
+    if (!pending) {
+      return true;
+    }
+
+    this.pendingPickServerProbeInProgress = true;
+
+    try {
+      const [serverDraftResult, serverPickResult] = await Promise.allSettled([
+        getFantasyDraftFromServer(this.leagueId),
+        getDraftPickFromServer(this.leagueId, pending.overallPick),
+      ]);
+
+      if (!this.isPendingPickRequestActive(requestId)) {
+        return true;
+      }
+
+      const serverDraft = serverDraftResult.status === 'fulfilled'
+        ? serverDraftResult.value
+        : null;
+      const serverPick = serverPickResult.status === 'fulfilled'
+        ? serverPickResult.value
+        : null;
+
+      if (serverDraft) {
+        this.draft.set(serverDraft);
+      }
+
+      if (serverPick) {
+        if (draftPickMatchesPending(serverPick, pending)) {
+          this.picks.update((currentPicks) =>
+            mergeConfirmedDraftPick(currentPicks, serverPick),
+          );
+        } else {
+          this.finishPendingPickConflict(pending, serverPick);
+          return true;
+        }
+      }
+
+      this.confirmPendingPickIfObserved();
+      return !this.isPendingPickRequestActive(requestId);
+    } catch {
+      // The live listeners remain the primary path. A one-off server read can
+      // fail during a reconnect without turning a committed pick into an error.
+      return false;
+    } finally {
+      this.pendingPickServerProbeInProgress = false;
+    }
+  }
+
+  private armPickSubmissionOverlayWatchdog(requestId: number): void {
+    if (this.pendingPickBlockingTimer) {
+      clearTimeout(this.pendingPickBlockingTimer);
+    }
+
+    this.pendingPickBlockingTimer = setTimeout(() => {
+      if (
+        !this.isPendingPickRequestActive(requestId) ||
+        this.pickSubmissionPhase() !== 'submitting'
+      ) {
+        return;
+      }
+
+      // Keep the competitive action protected, but never leave the manager
+      // trapped behind a fuzzy full-screen layer while the transport settles.
+      this.pickSubmissionOverlayVisible.set(false);
+      this.successMessage.set(
+        'This pick is taking longer than usual. RinkRat is checking the authoritative server record without blocking the page.',
+      );
+      this.requestRealtimeConfirmation('manual');
+      void this.reconcilePendingPickFromServer(requestId);
+    }, 8_000);
+  }
+
+  private armPendingPickConfirmationTimeout(requestId: number): void {
     if (this.pendingPickConfirmationTimer) {
       clearTimeout(this.pendingPickConfirmationTimer);
     }
 
-    this.pendingPickConfirmationTimer = setTimeout(() => {
-      if (!this.pendingPickConfirmation || this.destroyed) {
+    this.pendingPickConfirmationTimer = setTimeout(async () => {
+      if (!this.isPendingPickRequestActive(requestId)) {
         return;
       }
 
-      this.successMessage.set(
-        'The server accepted the pick. RinkRat is reconnecting to confirm the updated board.',
-      );
-      this.requestRealtimeConfirmation('manual');
+      await this.reconcilePendingPickFromServer(requestId);
 
-      this.pendingPickConfirmationTimer = setTimeout(() => {
-        if (!this.pendingPickConfirmation || this.destroyed) {
-          return;
-        }
+      if (!this.isPendingPickRequestActive(requestId)) {
+        return;
+      }
 
-        this.pendingPickConfirmation = null;
-        this.pickSubmissionPhase.set('idle');
-        this.makingPickAssetKey.set(null);
-        this.selectedAssetKey.set(null);
-        this.realtimeListenerError.set(
-          'The pick response was received, but the live board could not be confirmed. Refresh the connection before drafting again.',
-        );
-        this.realtimeConfirmationStartedAt.set(Date.now());
-        this.realtimeReconnectReason.set('listener-error');
-        this.pendingPickAction?.finish('uncertain');
-        this.pendingPickAction = null;
-      }, 18_000);
-    }, 12_000);
+      const pending = this.pendingPickConfirmation;
+
+      if (pending) {
+        this.finishPendingPickUncertain(pending);
+      }
+    }, 68_000);
+  }
+
+  async checkPendingPickNow(): Promise<void> {
+    const pending = this.pendingPickConfirmation;
+
+    if (!pending || this.pendingPickServerProbeInProgress) {
+      return;
+    }
+
+    this.successMessage.set('Checking the live draft record now…');
+    this.requestRealtimeConfirmation('manual');
+    await this.reconcilePendingPickFromServer(pending.requestId);
+  }
+
+  private isPossiblyCommittedDraftPickError(error: unknown): boolean {
+    const rawCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    const code = rawCode.toLowerCase();
+
+    return [
+      'deadline-exceeded',
+      'unavailable',
+      'internal',
+      'unknown',
+      'cancelled',
+      'network-request-failed',
+    ].some((candidate) => code.includes(candidate));
   }
 
   async loadPlayerPool(): Promise<void> {
@@ -2142,6 +2365,13 @@ export class DraftRoom implements OnDestroy {
       return false;
     }
 
+    if (this.pickSubmissionPhase() !== 'idle') {
+      this.errorMessage.set(
+        'RinkRat is still confirming your previous pick. Wait for the live board to refresh before changing another draft setting.',
+      );
+      return false;
+    }
+
     if (this.realtimeConnectionState() === 'connected') {
       return true;
     }
@@ -2698,43 +2928,85 @@ export class DraftRoom implements OnDestroy {
       return;
     }
 
+    const requestId = ++this.pendingPickRequestCounter;
+
     this.makingPickAssetKey.set(asset.assetKey);
     this.pickSubmissionPhase.set('submitting');
+    this.pickSubmissionOverlayVisible.set(true);
     this.pendingPickAction?.finish('cancelled');
     this.pendingPickAction = this.actionMonitor.begin('draft-pick');
     this.pendingPickConfirmation = {
+      requestId,
       overallPick: currentPick.overallPick,
       assetKey: asset.assetKey,
       assetName: this.getAssetName(asset),
+      ownerId: this.userId,
       startedAt: Date.now(),
     };
+    this.armPickSubmissionOverlayWatchdog(requestId);
+    this.armPendingPickConfirmationTimeout(requestId);
 
     try {
       const pick = await makeDraftPick(this.leagueId, this.userId, asset);
 
-      if (this.pendingPickConfirmation) {
+      if (!this.isPendingPickRequestActive(requestId)) {
+        return;
+      }
+
+      const pending = this.pendingPickConfirmation;
+
+      if (!pending || !draftPickMatchesPending(pick, pending)) {
+        if (pending) {
+          this.finishPendingPickError(
+            pending,
+            'The draft server returned a different pick than this tab submitted. RinkRat is refreshing the live board before another action is allowed.',
+          );
+          this.requestRealtimeConfirmation('manual');
+        }
+        return;
+      }
+
+      // A successful callable response is authoritative: the atomic Firestore
+      // transaction committed. Merge the returned pick immediately, then force
+      // the normal live listeners through one fresh handshake before another
+      // competitive action can begin.
+      this.picks.update((currentPicks) =>
+        mergeConfirmedDraftPick(currentPicks, pick),
+      );
+      this.pickSubmissionPhase.set('confirming');
+      this.pickSubmissionOverlayVisible.set(false);
+      this.confirmPendingPickIfObserved();
+    } catch (error: unknown) {
+      this.pickSubmissionOverlayVisible.set(false);
+
+      // A mobile or browser transport can fail after Firestore committed the
+      // pick. Check the authoritative draft and pick documents before showing
+      // an error or allowing a retry.
+      const reconciled = await this.reconcilePendingPickFromServer(requestId);
+
+      if (reconciled || !this.isPendingPickRequestActive(requestId)) {
+        return;
+      }
+
+      const pending = this.pendingPickConfirmation;
+
+      if (!pending) {
+        return;
+      }
+
+      if (this.isPossiblyCommittedDraftPickError(error)) {
         this.pickSubmissionPhase.set('confirming');
         this.successMessage.set(
-          `${this.getAssetName(pick.asset)} was accepted at pick #${pick.overallPick}. Confirming the live draft board...`,
+          'The network response ended before the pick could be verified. RinkRat is still checking the authoritative draft record, so do not retry yet.',
         );
-        this.armPendingPickConfirmationTimeout();
-        this.confirmPendingPickIfObserved();
-      }
-    } catch (error: unknown) {
-      this.pendingPickConfirmation = null;
-
-      if (this.pendingPickConfirmationTimer) {
-        clearTimeout(this.pendingPickConfirmationTimer);
-        this.pendingPickConfirmationTimer = null;
+        this.requestRealtimeConfirmation('manual');
+        return;
       }
 
-      this.pickSubmissionPhase.set('idle');
-      this.makingPickAssetKey.set(null);
-      this.errorMessage.set(
+      this.finishPendingPickError(
+        pending,
         error instanceof Error ? error.message : 'Unable to make this draft pick.',
       );
-      this.pendingPickAction?.finish('error');
-      this.pendingPickAction = null;
     }
   }
 

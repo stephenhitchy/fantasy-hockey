@@ -48,7 +48,12 @@ interface SecureDraftPickResult {
 const makeSecureDraftPickCallable = httpsCallable<
   SecureDraftPickRequest,
   SecureDraftPickResult
->(functions, 'makeSecureDraftPick');
+>(functions, 'makeSecureDraftPick', {
+  // The Function itself has a 60-second ceiling. Keep the browser transport
+  // alive slightly longer so a healthy cold start cannot be reported as a
+  // client-side timeout immediately before the server response arrives.
+  timeout: 65_000,
+});
 
 export async function makeSecureDraftPick(
   leagueId: string,
