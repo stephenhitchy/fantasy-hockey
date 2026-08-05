@@ -9313,12 +9313,12 @@ It is intentionally labeled **capacity-estimate-not-live-load-test**. It does no
 
 The current 100,000-user model identifies the following release-scale risks:
 
-- scheduled draft automation scans only 250 leagues and processes them sequentially,
-- scheduled league scoring processes two leagues concurrently in one ten-minute sweep,
-- the NHL proxy is capped at ten instances,
+- scheduled league scoring processes only two leagues concurrently in one ten-minute sweep and remains the primary red automation risk,
+- exact draft deadlines already use deterministic per-pick Cloud Tasks, while the 250-league sequential scan is a recovery fallback whose coverage and throughput still require staging measurements,
+- the NHL API Proxy is capped at ten instances and its fastest cache is process-local,
 - a simultaneous cold start could create millions of document reads and a large listener fanout.
 
-Firebase Hosting is not the leading risk. The principal risks are centralized scheduled automation, NHL upstream fanout, Firestore read cost, and reconnect/cold-start bursts.
+Firebase Hosting is not the leading risk. The principal risks are centralized league-scoring discovery/execution, NHL upstream fanout, Firestore read cost, reconnect/cold-start bursts, and unmeasured queue throughput.
 
 The complete staging strategy is documented in `docs/RINKRAT_100K_CAPACITY_PLAN.md`. Large tests must use a separate billed staging project, synthetic accounts and leagues, gradual ramps, explicit billing alerts, and predefined pass/fail criteria. The production Firebase project must never be used as the load target.
 
@@ -9369,3 +9369,157 @@ No Firestore rules, indexes, or data migration are required.
 8. Confirm queued add/drop moves still activate at their legal roster-slot boundaries.
 9. Inspect the newly frozen future projection. During rapid historical replay it may use a saved V11 snapshot rather than pausing the score update for a full NHL projection rebuild.
 10. Run all three capacity-model commands and save the output before planning a staged load test.
+
+---
+
+## Batch R1B-P1D — Invite Beta Launch Gate and High-Scale Handoff
+
+### Why this batch exists
+
+RinkRat now has enough competitive functionality that the next release risk is no longer a missing manager feature. The immediate risk is opening an invite beta without one repeatable decision board, while the longer-term risk is forgetting the exact automation changes required before much larger traffic.
+
+R1B-P1D addresses both without introducing a rushed production queue migration:
+
+1. Release Readiness now contains a build-specific invite-beta validation board.
+2. The repository now contains a source-controlled high-scale automation blueprint with exact concern areas and recommended solutions.
+3. The capacity model now distinguishes the existing exact draft-deadline task queue from its fallback recovery sweep.
+4. App Check client readiness is included in the launch gate, but enforcement remains a separately monitored production decision.
+
+This batch is intentionally scoped to a small, controlled invite cohort. It does not certify public 100,000-manager scale.
+
+### Invite Beta Validation Board
+
+The platform-administrator Release Readiness page now combines:
+
+- existing automated readiness checks,
+- the deterministic full-season simulator,
+- the current exact build identifier and deployment freshness,
+- browser connection state,
+- active, failed, and uncertain competitive actions,
+- a manual fresh-league lifecycle checklist.
+
+Manual results are saved in browser `localStorage` under the exact generated build ID and league. Deploying another build starts a new board rather than carrying old approval forward under a reusable release label.
+
+The required manual board covers:
+
+- account creation, neutral/NHL identity, a second manager, and league entry;
+- draft settings, a complete mobile draft, Auto-Draft, and reconnect recovery;
+- score refresh, independent seventh-game rollover, Game Film, and matchup finish dates;
+- immediate and scheduled add/drop, waivers, Injured Reserve, and goalie-unit add/remove;
+- Mobile Safari, Mobile Chrome, narrow widths, desktop utility layouts, themes, 200% zoom, reduced motion, and overlay placement;
+- offline write blocking, privacy-limited diagnostics, App Check monitoring, rollback rehearsal, one injury email, disposable deletion, and one completely fresh league lifecycle.
+
+Each item can be marked **Not Tested**, **Pass**, or **Needs Attention** and can retain a short manual note. The copied validation report includes those notes and build/device labels but automatically omits league IDs, player IDs, matchup IDs, scores, roster data, email addresses, invite codes, and raw Firestore documents.
+
+The gate reports:
+
+- **Testing** while required evidence is incomplete;
+- **Blocked** when a required automated/manual item fails, the browser is offline, a competitive action is unresolved, or the open tab is stale relative to Hosting;
+- **Ready** only when the exact build passes all required automated, simulator, connection, action-health, and manual conditions.
+
+### App Check readiness
+
+The release version registry and automated checks now expose whether the production App Check web client is actually enabled with a configured reCAPTCHA Enterprise site key. The manual board requires verified monitor-mode traffic across ordinary login, Draft, roster, scoring, feedback, and deletion workflows before enforcement is considered.
+
+App Check is complementary protection. Authentication, Firestore rules, callable authorization, rate limits, leases, and idempotency remain required even after App Check enforcement.
+
+### Corrected high-scale architecture interpretation
+
+The capacity model now recognizes that `functions/src/draft-automation.ts` already contains:
+
+- `scheduleDraftClockTask()`;
+- deterministic `buildDraftClockTaskId()` values;
+- the exact `processDraftClockDeadline` task-queue Function;
+- expected-pick and expected-start-time validation;
+- a per-league automation lease;
+- `runScheduledDraftAutomation` as fallback recovery.
+
+Therefore, Draft is no longer labeled as lacking a queue. Its remaining risks are queue throughput, deadline drift, retry behavior under contention, and the 250-league sequential recovery scan.
+
+The primary red automation concern remains `functions/src/league-automation.ts`:
+
+- `runScheduledLeagueAutomation` discovers completed-draft leagues centrally every ten minutes;
+- `MAX_PARALLEL_LEAGUES` is `2`;
+- discovery, execution, retries, and summary publication occur inside one scheduled invocation;
+- one slow league consumes one of the two worker slots.
+
+At the balanced 100,000-manager estimate, roughly 8,500 scoring leagues would be active. To finish a ten-minute interval, approximate worker concurrency would be 71 at five seconds per league, 142 at ten seconds per league, or 425 at thirty seconds per league. These are planning estimates, not recommended production settings.
+
+### Exact future scale solution preserved in the project
+
+The complete handoff is in:
+
+```text
+docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md
+```
+
+It records:
+
+1. the exact source files and constants causing the present capacity boundary;
+2. a `processLeagueAutomationTask` design that reuses the existing authoritative `runLeagueAutomation(leagueId)` logic;
+3. one idempotent task per league and scoring-ledger version;
+4. a deterministic idempotency key;
+5. per-league due-time scheduling documents with stable shards;
+6. explicit queue dispatch limits, retries, terminal-failure records, and backlog metrics;
+7. shadow-mode comparison before any production cutover;
+8. canary progression from one internal league through staged percentages;
+9. retention of the current sweep as paginated recovery during migration;
+10. rollback through feature flags without changing score or roster-window schemas;
+11. draft recovery pagination/sharding while preserving the exact deadline task path;
+12. an NHL API Proxy/shared-ingestion redesign so competitive NHL data is fetched once and reused;
+13. Firestore listener measurement, reconnect-storm testing, and gradual traffic ramps;
+14. an explicit staged load-test sequence through 100,000 clients only after earlier gates pass.
+
+Do not implement the queue cutover directly in production without the staging, shadow, canary, observability, and rollback phases described there.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchr1b-p1d
+```
+
+The focused R1B-P1D suite verifies:
+
+- exact-build isolation of manual validation evidence;
+- fresh-league workflow coverage;
+- automated/simulator/manual/connection/action/build launch-gate behavior;
+- privacy-limited exported reports;
+- Release Readiness integration;
+- App Check client readiness;
+- exact Draft Cloud Task recognition;
+- scheduled league scoring as the primary red automation risk;
+- high-scale blueprint coverage of source areas, task design, staging, observability, and rollback;
+- Release Candidate 6 wiring;
+- unchanged Production Scoring V3, Projection V11, Firestore rules, indexes, and complete Functions behavior.
+
+### Deployment
+
+R1B-P1D is Hosting-only:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch R1B-P1D invite beta launch gate and scale handoff"
+```
+
+Do not deploy Functions, Firestore rules, or indexes for this batch.
+
+### Manual verification
+
+1. Open Release Readiness as the platform administrator.
+2. Confirm the board identifies the exact bundled build rather than only `Release Candidate 6`.
+3. Run the full-season simulator and refresh automated checks.
+4. Mark one manual item **Pass**, reload, and confirm it persists for the same build and league.
+5. Mark one required item **Needs Attention** and confirm the gate is blocked.
+6. Deploy or simulate a different build ID and confirm the old manual approval does not carry forward.
+7. Copy the validation report and inspect the privacy declaration and manual notes.
+8. Confirm App Check appears as not configured until the production client is intentionally enabled.
+9. Run the balanced, Draft-night, and game-night capacity commands.
+10. Confirm Draft deadline tasks and recovery are amber while scheduled league scoring remains red.
+11. Open `docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md` and verify the future queue migration, NHL caching, load test, and rollback instructions are available in the project.
+12. Use the launch gate only for a controlled invite cohort, not as proof of public 100,000-manager readiness.
+

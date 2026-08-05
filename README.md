@@ -1,17 +1,19 @@
 # RinkRat Fantasy
 
-The consolidated project context, update history, setup guidance, and historical test checklists are in:
+Core project references:
 
-- [`docs/RINKRAT_PROJECT_DOCUMENTATION.md`](docs/RINKRAT_PROJECT_DOCUMENTATION.md)
+- [`docs/RINKRAT_PROJECT_DOCUMENTATION.md`](docs/RINKRAT_PROJECT_DOCUMENTATION.md) — consolidated architecture, update history, deployment, and testing guidance.
+- [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — current capacity-model interpretation and safe staged-test sequence.
+- [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — exact future changes for queued league scoring, draft recovery, NHL data caching, observability, and high-user rollout.
 
-## Standard verification
+## Current verification
 
 ```bash
 cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batch6c
+npm run verify:batchr1b-p1d
 ```
 
-The Batch 6C verification runs the approved security, build, authority, Game Center, and documentation-cleanliness suites. The retired live browser workflow is no longer part of the verification command.
+The current chain includes the existing authority, Firestore-rules, design, accessibility, mobile, projection, replay, release-safety, invite-beta launch-gate, and capacity-model checks, followed by the Angular and Functions builds through the inherited verification chain.

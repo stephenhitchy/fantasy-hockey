@@ -155,6 +155,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/leagues/join-league/join-league.html',
     'src/app/features/legal/privacy/privacy.html',
     'src/app/features/legal/terms/terms.html',
+    'src/app/features/release/invite-beta-validation/invite-beta-validation.html',
     'src/app/features/support/feedback/feedback.html',
     'src/app/features/support/support-home/support-home.html',
   ]);

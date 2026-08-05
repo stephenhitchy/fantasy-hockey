@@ -150,9 +150,10 @@ test('the generated public and bundled manifests agree with runtime model versio
     ]);
   const deployed = JSON.parse(manifestSource);
 
-  assert.equal(deployed.releaseLabel, 'Release Candidate 5');
-  assert.match(developmentConfig, /releaseLabel:\s*'Release Candidate 5'/);
-  assert.match(productionConfig, /releaseLabel:\s*'Release Candidate 5'/);
+  const escapedReleaseLabel = deployed.releaseLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assert.match(deployed.releaseLabel, /^Release Candidate \d+$/);
+  assert.match(developmentConfig, new RegExp(`releaseLabel:\\s*['"]${escapedReleaseLabel}['"]`));
+  assert.match(productionConfig, new RegExp(`releaseLabel:\\s*['"]${escapedReleaseLabel}['"]`));
   assert.match(scoring, new RegExp(`CURRENT_SCORING_RULES_VERSION\\s*=\\s*${deployed.scoringRulesVersion}`));
   assert.match(projection, new RegExp(`SHARED_PROJECTION_VERSION\\s*=\\s*${deployed.projectionVersion}`));
   assert.match(generatedSource, /import type \{ ReleaseManifest \}/);

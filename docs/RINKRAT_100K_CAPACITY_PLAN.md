@@ -10,33 +10,44 @@ npm run capacity:100k:draft-night
 npm run capacity:100k:game-night
 ```
 
-The model reads the current Functions source and combines the deployed scaling settings with explicit route assumptions. It estimates concurrent Firestore listeners, initial document reads, steady-state reads, draft-pick request rate, and roster-action request rate.
+The dependency-free model reads current Functions source settings and combines them with explicit route assumptions. It estimates concurrent Firestore listeners, initial document reads, steady-state reads, draft-pick request rate, roster-action request rate, and the approximate scoring-worker concurrency required at several average per-league durations.
 
-This is deliberately labeled a **capacity estimate**, not a live load test. It is useful for identifying architectural bottlenecks before spending money on distributed traffic.
+This is deliberately labeled a **capacity estimate**, not a live load test. It does not create 100,000 authenticated browsers or Firestore streams.
 
-## Current 100,000-user conclusion
+## Current conclusion
 
-RinkRat's static Hosting layer and Firestore read model can be designed for traffic at this scale when users are spread across many leagues. The current release is not yet ready for 100,000 simultaneous active managers because several server automation paths remain centralized:
+RinkRat is suitable for continued controlled invite-beta work, but it is not yet certified for 100,000 simultaneously active managers.
 
-- Scheduled draft automation scans at most 250 active drafts and processes them sequentially from one scheduled function instance.
-- Scheduled league scoring processes only two leagues concurrently in a ten-minute sweep.
-- The NHL API proxy is capped at ten instances and could become a cold-load bottleneck.
-- A 100,000-user cold start would create millions of Firestore reads and requires staged ramp-up, billing alerts, and a dedicated test environment.
+The most important current findings are:
 
-Per-league draft and roster transactions are safer because writes are distributed by league and the server remains authoritative. A single league with 100,000 people watching the same documents is a different workload from 100,000 managers distributed across 10,000 leagues and must be tested separately.
+- **Scheduled league scoring is the primary red risk.** One ten-minute sweep processes only two leagues concurrently.
+- **Draft deadlines already use exact Cloud Tasks.** `processDraftClockDeadline` is the primary path, with deterministic task IDs and scheduled delivery. The 250-league sequential scan is a fallback recovery path, not the only clock engine.
+- **Draft task throughput and fallback coverage still need staging tests.** Ten concurrent task dispatches may or may not be sufficient depending on measured task duration and Firestore contention.
+- **The NHL proxy remains an amber risk.** It is capped at ten instances and its fastest cache is process-local.
+- **Cold starts and reconnect storms can create millions of Firestore reads.** Listener counts must be measured by route and traffic must be ramped gradually.
+- **Firebase Hosting is not the leading risk.** Static Angular assets are CDN-friendly.
+
+The exact recommended migration is preserved in:
+
+```text
+docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md
+```
+
+That document names the exact source files, task payloads, scheduling fields, idempotency strategy, migration sequence, observability requirements, rollback path, and staged test gates.
 
 ## Safe real-load sequence
 
-1. Create a separate billed Firebase project with synthetic users and synthetic leagues. Never point the large test at production.
-2. Run emulator and staging tests at 100, 500, 2,000, and 5,000 concurrent clients.
-3. Inspect Firestore usage, Key Visualizer, Function concurrency, error rates, p95/p99 latency, cold starts, and billing after every stage.
-4. Follow Firestore's gradual traffic ramp guidance instead of jumping directly to 100,000 users.
-5. Refactor scheduled scoring and draft automation into sharded per-league tasks before the 20,000- and 100,000-user stages.
-6. Run separate scenarios for read-only Game Center traffic, simultaneous draft rooms, add/drop bursts, and score-update fanout.
-7. Define pass/fail thresholds before testing, including no lost draft picks, no duplicate transactions, no skipped roster-slot windows, p95 action latency, and acceptable error rate.
+1. Create a separate billed Firebase project with synthetic users and leagues. Never point a large test at production.
+2. Run staged tests at 100, 500, 2,000, and 5,000 concurrent clients.
+3. Measure Firestore usage, Key Visualizer, Function concurrency, Cloud Tasks queue age, error rates, p95/p99 latency, cold starts, and billing after every stage.
+4. Replace the centralized league-scoring sweep with idempotent per-league Cloud Tasks before the 20,000- and 100,000-user stages.
+5. Keep the exact draft-deadline task path and paginate or shard only its recovery sweep.
+6. Run separate scenarios for read-only Game Center traffic, simultaneous drafts, add/drop bursts, score-update fanout, cold app launches, and reconnect storms.
+7. Define pass/fail thresholds before testing, including no duplicate picks, no duplicate scoring, no skipped roster windows, bounded deadline drift, acceptable score freshness, and backlog recovery.
+8. Follow Firestore's gradual traffic-ramp guidance rather than jumping directly to peak traffic.
 
-## Replay responsiveness change in this batch
+## Replay responsiveness retained
 
-The browser callable timeout now exceeds the server replay timeout, preventing the Firebase JavaScript SDK's default 70-second deadline from falsely reporting failure while the server is still healthy.
+The browser replay callable timeout remains longer than the server timeout and the Firebase JavaScript callable default 70-second deadline, preventing the client transport from falsely reporting failure while the worker is still healthy.
 
-Historical replay window rollover also uses the best saved Projection V11 snapshot instead of synchronously rebuilding the entire NHL projection pool on the score-advance critical path. Live scoring still refreshes projections normally. Replay scoring, queued transactions, independent six-game rollover, standings, and playoff transitions remain server-authoritative.
+Historical replay window rollover also uses the best saved Projection V11 snapshot instead of synchronously rebuilding the full NHL projection pool on the score-advance critical path. Live scoring still refreshes projections normally. Replay scoring, queued transactions, independent six-game rollover, standings, and playoff transitions remain server-authoritative.

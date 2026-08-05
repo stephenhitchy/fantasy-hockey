@@ -114,7 +114,10 @@
     "capacity:100k:draft-night": "node scripts/capacity/rinkrat-capacity-model.mjs --users=100000 --scenario=draft-night",
     "capacity:100k:game-night": "node scripts/capacity/rinkrat-capacity-model.mjs --users=100000 --scenario=game-night",
     "test:batchp1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1c-replay-capacity/*.test.mjs",
-    "verify:batchp1c": "npm run verify:batchr1a-1 && npm run test:batchp1c:run && npm run capacity:100k"
+    "verify:batchp1c": "npm run verify:batchr1a-1 && npm run test:batchp1c:run && npm run capacity:100k",
+    "test:batchr1b-p1d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1b-p1d-launch-scale/*.test.mjs",
+    "audit:invite-beta-release": "node scripts/audit-invite-beta-release.mjs",
+    "verify:batchr1b-p1d": "npm run verify:batchp1c && npm run test:batchr1b-p1d:run && npm run audit:invite-beta-release && npm run capacity:100k:draft-night && npm run capacity:100k:game-night"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

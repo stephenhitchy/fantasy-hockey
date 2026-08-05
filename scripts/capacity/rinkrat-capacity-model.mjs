@@ -183,26 +183,67 @@ async function inspectArchitecture() {
       /for \(const leagueId of leagueIds\) \{\s*results\.push\(await processLeagueDraftAutomation/.test(
         draftAutomation,
       ),
+    draftDeadlineTaskQueuePresent:
+      /export const processDraftClockDeadline = onTaskDispatched/.test(draftAutomation) &&
+      /getFunctions\(\)\.taskQueue<.*>\(\s*['"]processDraftClockDeadline['"]/.test(draftAutomation),
+    draftDeadlineTaskMaxConcurrentDispatches: extractNumber(
+      draftAutomation,
+      /export const processDraftClockDeadline[\s\S]*?maxConcurrentDispatches:\s*([\d_]+)/,
+      null,
+    ),
+    draftDeadlineTaskMaxAttempts: extractNumber(
+      draftAutomation,
+      /export const processDraftClockDeadline[\s\S]*?maxAttempts:\s*([\d_]+)/,
+      null,
+    ),
+    draftDeadlineTaskDeterministicIds:
+      /function buildDraftClockTaskId/.test(draftAutomation) &&
+      /enqueue\(payload,\s*\{[\s\S]*?id:\s*buildDraftClockTaskId\(payload\)/.test(draftAutomation),
+    draftDeadlineTaskScheduledDelivery:
+      /scheduleTime:\s*new Date/.test(draftAutomation),
   };
 }
 
 function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architecture, scenario }) {
   const warnings = [];
 
-  const draftScansNeeded = scenario.draftPickSecondsPerLeague
-    ? activeDraftLeagues
-    : 0;
+  if (scenario.draftPickSecondsPerLeague && activeDraftLeagues > 0) {
+    if (
+      architecture.draftDeadlineTaskQueuePresent &&
+      architecture.draftDeadlineTaskDeterministicIds &&
+      architecture.draftDeadlineTaskScheduledDelivery
+    ) {
+      warnings.push({
+        severity: 'amber',
+        area: 'Draft Deadline Task Queue',
+        finding:
+          `Each live pick already receives an exact Cloud Tasks deadline with deterministic ` +
+          `deduplication. The worker currently allows ` +
+          `${architecture.draftDeadlineTaskMaxConcurrentDispatches ?? 'an unknown number of'} concurrent dispatches.`,
+        consequence:
+          'This is the correct primary architecture, but task duration, queue age, and deadline drift still need staged draft-night measurement before claiming 100,000-user capacity.',
+      });
+    } else {
+      warnings.push({
+        severity: 'red',
+        area: 'Draft Deadline Automation',
+        finding: 'The source does not expose a complete exact per-pick task-queue path.',
+        consequence:
+          'Draft expiration would depend on periodic scanning and could miss or delay turns during a large draft-night spike.',
+      });
+    }
 
-  if (draftScansNeeded > architecture.draftAutomationScanLimit) {
-    warnings.push({
-      severity: 'red',
-      area: 'Scheduled Draft Automation',
-      finding:
-        `${draftScansNeeded.toLocaleString()} active drafts exceed the current ` +
-        `${architecture.draftAutomationScanLimit.toLocaleString()}-league scan limit.`,
-      consequence:
-        'Clock-expiry and Auto-Draft recovery would not be checked for every league each minute.',
-    });
+    if (activeDraftLeagues > architecture.draftAutomationScanLimit) {
+      warnings.push({
+        severity: 'amber',
+        area: 'Draft Recovery Sweeper',
+        finding:
+          `${activeDraftLeagues.toLocaleString()} active drafts exceed the fallback ` +
+          `${architecture.draftAutomationScanLimit.toLocaleString()}-league recovery scan.`,
+        consequence:
+          'Exact Cloud Tasks remain the primary clock path, but a queue incident could leave some drafts outside the one-minute recovery sweep until the scan is paginated or sharded.',
+      });
+    }
   }
 
   if (activeScoringLeagues > architecture.leagueAutomationParallelism * 100) {
@@ -214,7 +255,7 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
         `${architecture.leagueAutomationParallelism} leagues concurrently every ` +
         `${architecture.leagueAutomationIntervalMinutes} minutes.`,
       consequence:
-        'A large game-night backlog would develop unless scoring work is sharded or queued per league.',
+        'A large game-night backlog would develop unless scoring work is dispatched as idempotent per-league tasks with bounded queue throughput.',
     });
   }
 
@@ -223,9 +264,9 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
       severity: 'amber',
       area: 'NHL API Proxy',
       finding:
-        `The NHL proxy is capped at ${architecture.nhlProxyMaxInstances} instances.`,
+        `The NHL proxy is capped at ${architecture.nhlProxyMaxInstances} instances and its fastest cache is process-local.`,
       consequence:
-        'A 100,000-user cold-load burst could queue or reject uncached NHL requests even when Firestore is healthy.',
+        'A cold-load or reconnect burst could repeat upstream requests across instances. Competitive NHL data should be ingested once into a shared ledger and reused by leagues and browsers.',
     });
   }
 
@@ -235,7 +276,7 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
     finding:
       'The estimated opening read burst is measured in millions of document reads.',
     consequence:
-      'The database can scale, but traffic must be ramped gradually and billing alerts must be active.',
+      'The database can scale, but route listener counts must be measured, traffic must be ramped gradually, and billing alerts must be active.',
   });
 
   warnings.push({
@@ -244,7 +285,7 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
     finding:
       'Angular bundles and local image assets are served through Firebase Hosting/CDN.',
     consequence:
-      'Static delivery is not the leading 100,000-user risk; live data fanout and automation are.',
+      'Static delivery is not the leading 100,000-user risk; live data fanout and background automation are.',
   });
 
   return warnings;
@@ -267,6 +308,13 @@ export async function buildCapacityReport(options) {
     : 0;
   const rosterActionRequestsPerSecond =
     (options.users * scenario.rosterActionsPerUserPerHour) / 3600;
+  const scoringIntervalSeconds = architecture.leagueAutomationIntervalMinutes * 60;
+  const scoringConcurrencyTargets = Object.fromEntries(
+    [5, 10, 30].map((averageLeagueSeconds) => [
+      `${averageLeagueSeconds}s`,
+      Math.ceil((activeScoringLeagues * averageLeagueSeconds) / scoringIntervalSeconds),
+    ]),
+  );
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -291,6 +339,7 @@ export async function buildCapacityReport(options) {
       ),
       draftPickRequestsPerSecond: Number(draftPickRequestsPerSecond.toFixed(2)),
       rosterActionRequestsPerSecond: Number(rosterActionRequestsPerSecond.toFixed(2)),
+      scoringConcurrencyTargets,
     },
     architecture,
     findings: classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architecture, scenario }),
@@ -330,6 +379,11 @@ function printText(report) {
   console.log(
     `Roster actions/sec:         ${estimates.rosterActionRequestsPerSecond.toLocaleString()}`,
   );
+  console.log(
+    `Scoring workers needed:     ${estimates.scoringConcurrencyTargets['5s']} @ 5s/league, ` +
+      `${estimates.scoringConcurrencyTargets['10s']} @ 10s, ` +
+      `${estimates.scoringConcurrencyTargets['30s']} @ 30s`,
+  );
   console.log('');
   console.log('Current architecture signals');
   console.log('-'.repeat(72));
@@ -338,7 +392,12 @@ function printText(report) {
       `${architecture.leagueAutomationIntervalMinutes}-minute sweep`,
   );
   console.log(
-    `Draft automation: scan ${architecture.draftAutomationScanLimit} leagues, ` +
+    `Draft deadlines: taskQueue=${architecture.draftDeadlineTaskQueuePresent}, ` +
+      `maxConcurrentDispatches=${architecture.draftDeadlineTaskMaxConcurrentDispatches}, ` +
+      `deterministicIds=${architecture.draftDeadlineTaskDeterministicIds}`,
+  );
+  console.log(
+    `Draft recovery: scan ${architecture.draftAutomationScanLimit} leagues, ` +
       `maxInstances ${architecture.draftAutomationMaxInstances}, ` +
       `sequential=${architecture.draftAutomationSequentialLoop}`,
   );

@@ -34,10 +34,11 @@ import {
 } from '../../../core/release/release-readiness.service';
 import { runFullSeasonLifecycleSimulator } from '../../../core/release/season-lifecycle-simulator';
 import { ReleaseUpdateService } from '../../../core/release/release-update.service';
+import { InviteBetaValidation } from '../invite-beta-validation/invite-beta-validation';
 
 @Component({
   selector: 'app-release-readiness',
-  imports: [KeyValuePipe, RouterLink],
+  imports: [KeyValuePipe, RouterLink, InviteBetaValidation],
   templateUrl: './release-readiness.html',
   styleUrl: './release-readiness.css',
 })
@@ -58,6 +59,12 @@ export class ReleaseReadiness implements OnDestroy {
   readonly releaseDeployment = signal<ReleaseUpdateSnapshot | null>(null);
   readonly releaseReloadBlocked = computed(
     () => this.actionMonitor.activeCount() > 0 || this.releaseUpdate.reloadRequested(),
+  );
+  readonly validationReleaseKey = computed(
+    () => this.releaseDeployment()?.bundled.buildId ?? this.runtime.releaseLabel,
+  );
+  readonly validationReleaseLabel = computed(
+    () => this.releaseDeployment()?.bundled.releaseLabel ?? this.runtime.releaseLabel,
   );
 
   readonly requiredChecks = computed(

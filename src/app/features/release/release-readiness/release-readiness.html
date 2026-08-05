@@ -433,6 +433,19 @@
         }
       </section>
 
+      <app-invite-beta-validation
+        [leagueId]="leagueId"
+        [releaseKey]="validationReleaseKey()"
+        [releaseLabel]="validationReleaseLabel()"
+        [releaseManifest]="releaseDeployment()?.bundled ?? null"
+        [releaseUpdateAvailable]="releaseDeployment()?.updateAvailable ?? false"
+        [releaseCheckStatus]="releaseDeployment()?.status ?? 'idle'"
+        [automatedChecks]="current.checks"
+        [simulation]="simulation()"
+        [clientPerformance]="clientPerformance()"
+        [competitiveActions]="competitiveActions()"
+      />
+
       <section class="readiness-card">
         <div class="section-heading">
           <div>
@@ -611,6 +624,10 @@
           <article>
             <span>Matchup completion</span
             ><strong>v{{ current.versions.matchupCompletionSchemaVersion }}</strong>
+          </article>
+          <article>
+            <span>App Check client</span
+            ><strong>{{ current.versions.appCheckClientEnabled ? 'Monitor ready' : 'Not configured' }}</strong>
           </article>
         </div>
       </section>

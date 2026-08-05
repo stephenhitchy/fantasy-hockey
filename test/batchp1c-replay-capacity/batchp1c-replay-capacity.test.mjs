@@ -107,11 +107,17 @@ test('the 100K capacity model inspects real source limits and labels itself as a
   assert.equal(report.scenario.leagues, 10_000);
   assert.ok(report.estimates.concurrentFirestoreListeners >= 500_000);
   assert.ok(report.estimates.coldStartDocumentReads >= 1_000_000);
+  assert.equal(report.architecture.draftDeadlineTaskQueuePresent, true);
+  assert.equal(report.architecture.draftDeadlineTaskDeterministicIds, true);
+  assert.equal(report.architecture.draftDeadlineTaskMaxConcurrentDispatches, 10);
   assert.equal(report.architecture.draftAutomationScanLimit, 250);
   assert.equal(report.architecture.leagueAutomationParallelism, 2);
   assert.equal(report.architecture.nhlProxyMaxInstances, 10);
   assert.ok(report.findings.some((finding) =>
-    finding.severity === 'red' && finding.area === 'Scheduled Draft Automation'
+    finding.severity === 'amber' && finding.area === 'Draft Deadline Task Queue'
+  ));
+  assert.ok(report.findings.some((finding) =>
+    finding.severity === 'amber' && finding.area === 'Draft Recovery Sweeper'
   ));
   assert.ok(report.findings.some((finding) =>
     finding.severity === 'red' && finding.area === 'Scheduled League Scoring'
@@ -145,9 +151,9 @@ test('draft-night and game-night scenarios expose different peak traffic shapes'
 test('capacity documentation requires a separate staged project instead of production traffic', async () => {
   const documentation = await read('docs/RINKRAT_100K_CAPACITY_PLAN.md');
 
-  assert.match(documentation, /Never point the large test at production/);
+  assert.match(documentation, /Never point (?:a|the) large test at production/);
   assert.match(documentation, /100, 500, 2,000, and 5,000 concurrent clients/);
-  assert.match(documentation, /sharded per-league tasks/);
+  assert.match(documentation, /idempotent per-league Cloud Tasks/);
   assert.match(documentation, /default 70-second deadline/);
 });
 

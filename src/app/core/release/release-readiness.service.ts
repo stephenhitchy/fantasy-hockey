@@ -1,3 +1,4 @@
+import { FIREBASE_APP_CHECK_CONFIG } from '../../../environments/app-check.config';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 import { getScoringRuntimeState } from '../cycle/cycle-runtime.config';
@@ -37,6 +38,9 @@ export const RELEASE_VERSION_SUMMARY: ReleaseVersionSummary = {
   playoffFormatVersion: 2,
   cycleWindowSchemaVersion: 2,
   matchupCompletionSchemaVersion: 1,
+  appCheckClientEnabled:
+    FIREBASE_APP_CHECK_CONFIG.enabled &&
+    FIREBASE_APP_CHECK_CONFIG.recaptchaEnterpriseSiteKey.trim().length > 0,
 };
 
 function toIso(value: unknown): string | null {
@@ -205,6 +209,24 @@ export async function loadReleaseReadinessSnapshot(
         : 'Production-facing pages do not display temporary simulator controls.',
       runtime.developerToolsEnabled ? 'warning' : 'pass',
       false,
+    ),
+  );
+
+  const appCheckClientReady =
+    FIREBASE_APP_CHECK_CONFIG.enabled &&
+    FIREBASE_APP_CHECK_CONFIG.recaptchaEnterpriseSiteKey.trim().length > 0;
+  checks.push(
+    createCheck(
+      'app-check-client',
+      'configuration',
+      appCheckClientReady
+        ? 'Firebase App Check client tokens are enabled'
+        : 'Firebase App Check monitor client is not configured',
+      appCheckClientReady
+        ? 'The production browser can send reCAPTCHA Enterprise App Check tokens. Review verified request metrics before enabling enforcement in Firebase Console.'
+        : 'Register the production web app in Firebase App Check, add the public reCAPTCHA Enterprise site key, deploy the client, and monitor legitimate traffic before enforcement.',
+      appCheckClientReady ? 'pass' : 'warning',
+      true,
     ),
   );
 

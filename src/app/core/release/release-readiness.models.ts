@@ -17,6 +17,7 @@ export interface ReleaseVersionSummary {
   playoffFormatVersion: number;
   cycleWindowSchemaVersion: number;
   matchupCompletionSchemaVersion: number;
+  appCheckClientEnabled: boolean;
 }
 
 export interface ReleaseReadinessSnapshot {

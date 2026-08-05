@@ -1,0 +1,271 @@
+<section class="readiness-card invite-beta-board" aria-labelledby="invite-beta-board-title">
+  <header class="invite-beta-heading">
+    <div>
+      <span class="eyebrow">Controlled invite launch</span>
+      <h2 id="invite-beta-board-title">Invite Beta Validation Board</h2>
+      <p>
+        Turn the final fresh-league test into a repeatable launch decision. Results are saved only
+        in this browser for this league and exact build.
+      </p>
+    </div>
+
+    <span class="invite-beta-build" title="Generated build identifier">
+      {{ buildLabel }}
+    </span>
+  </header>
+
+  <section
+    class="invite-beta-gate"
+    [class.invite-beta-gate--ready]="gate.status === 'ready'"
+    [class.invite-beta-gate--testing]="gate.status === 'testing'"
+    [class.invite-beta-gate--blocked]="gate.status === 'blocked'"
+    aria-live="polite"
+  >
+    <span class="invite-beta-gate-icon" aria-hidden="true">
+      {{ gate.status === 'ready' ? '✓' : gate.status === 'blocked' ? '!' : '…' }}
+    </span>
+    <div>
+      <span>Launch gate</span>
+      <strong>{{ gate.headline }}</strong>
+      <p>{{ gate.detail }}</p>
+    </div>
+  </section>
+
+  <p class="invite-beta-scale-note">
+    This gate approves only a small controlled invite cohort. It does not certify public
+    100,000-manager scale. The exact future automation work is preserved in
+    <code>docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md</code>.
+  </p>
+
+  <div class="invite-beta-summary-grid">
+    <article>
+      <span>Automated safeguards</span>
+      <strong>{{ gate.automatedPassedCount }} / {{ gate.automatedRequiredCount }}</strong>
+      <small>Required checks passed</small>
+    </article>
+    <article>
+      <span>Manual workflows</span>
+      <strong>{{ gate.manualPassedCount }} / {{ gate.manualRequiredCount }}</strong>
+      <small>{{ gate.manualUntestedCount }} not tested</small>
+    </article>
+    <article [class.summary-alert]="gate.manualAttentionCount > 0">
+      <span>Needs attention</span>
+      <strong>{{ gate.manualAttentionCount }}</strong>
+      <small>Required manual items</small>
+    </article>
+    <article [class.summary-alert]="gate.simulationStatus === 'failed'">
+      <span>Season simulator</span>
+      <strong>
+        {{
+          gate.simulationStatus === 'passed'
+            ? 'Passed'
+            : gate.simulationStatus === 'failed'
+              ? 'Failed'
+              : 'Not run'
+        }}
+      </strong>
+      <small>Deterministic lifecycle</small>
+    </article>
+  </div>
+
+  @if (gate.blockers.length || gate.advisories.length) {
+    <div class="invite-beta-findings">
+      @if (gate.blockers.length) {
+        <section>
+          <h3>{{ gate.status === 'blocked' ? 'Launch blockers' : 'Still required' }}</h3>
+          <ul>
+            @for (blocker of gate.blockers.slice(0, 6); track blocker) {
+              <li>{{ blocker }}</li>
+            }
+          </ul>
+          @if (gate.blockers.length > 6) {
+            <small>And {{ gate.blockers.length - 6 }} more item{{ gate.blockers.length - 6 === 1 ? '' : 's' }} below.</small>
+          }
+        </section>
+      }
+
+      @if (gate.advisories.length) {
+        <section class="invite-beta-advisory">
+          <h3>Review before inviting managers</h3>
+          <ul>
+            @for (advisory of gate.advisories; track advisory) {
+              <li>{{ advisory }}</li>
+            }
+          </ul>
+        </section>
+      }
+    </div>
+  }
+
+  <section class="invite-beta-session" aria-labelledby="invite-beta-session-title">
+    <div>
+      <span class="eyebrow">Testing session</span>
+      <h3 id="invite-beta-session-title">Who and where</h3>
+      <p>Optional labels make an exported report useful without adding account or league data.</p>
+    </div>
+
+    <label>
+      <span>Tester label</span>
+      <input
+        type="text"
+        maxlength="80"
+        placeholder="Example: Stephen"
+        [value]="session().testerLabel"
+        (input)="setIdentity('testerLabel', $any($event.target).value)"
+      />
+    </label>
+
+    <label>
+      <span>Device or browser</span>
+      <input
+        type="text"
+        maxlength="120"
+        placeholder="Example: iPhone 15 · Mobile Safari"
+        [value]="session().deviceLabel"
+        (input)="setIdentity('deviceLabel', $any($event.target).value)"
+      />
+    </label>
+  </section>
+
+  <div class="invite-beta-groups">
+    @for (group of groups; track group.definition.id; let groupIndex = $index) {
+      <details
+        class="invite-beta-group"
+        [attr.open]="groupIndex === 0 || group.attentionCount > 0 ? '' : null"
+      >
+        <summary>
+          <span>
+            <strong>{{ group.definition.label }}</strong>
+            <small>{{ group.definition.description }}</small>
+          </span>
+          <span class="invite-beta-group-progress">
+            {{ group.passedRequiredCount }} / {{ group.requiredCount }}
+            @if (group.attentionCount) {
+              <em>{{ group.attentionCount }} attention</em>
+            }
+          </span>
+        </summary>
+
+        <div class="invite-beta-test-list">
+          @for (item of group.items; track item.definition.id) {
+            <article
+              class="invite-beta-test"
+              [class.invite-beta-test--pass]="item.state.status === 'pass'"
+              [class.invite-beta-test--attention]="item.state.status === 'attention'"
+            >
+              <header>
+                <span class="invite-beta-test-status" aria-hidden="true">
+                  {{ item.state.status === 'pass' ? '✓' : item.state.status === 'attention' ? '!' : '○' }}
+                </span>
+                <div>
+                  <h4>{{ item.definition.title }}</h4>
+                  <p>{{ item.definition.instruction }}</p>
+                </div>
+                @if (item.definition.required) {
+                  <span class="required-badge">Required</span>
+                }
+              </header>
+
+              <p class="invite-beta-evidence">
+                <strong>Pass when:</strong> {{ item.definition.evidenceHint }}
+              </p>
+
+              <div
+                class="invite-beta-status-controls"
+                role="group"
+                [attr.aria-label]="item.definition.title + ' result'"
+              >
+                <button
+                  type="button"
+                  [class.is-selected]="item.state.status === 'untested'"
+                  [attr.aria-pressed]="item.state.status === 'untested'"
+                  (click)="setItemStatus(item.definition.id, 'untested')"
+                >
+                  Not Tested
+                </button>
+                <button
+                  type="button"
+                  class="status-pass"
+                  [class.is-selected]="item.state.status === 'pass'"
+                  [attr.aria-pressed]="item.state.status === 'pass'"
+                  (click)="setItemStatus(item.definition.id, 'pass')"
+                >
+                  Pass
+                </button>
+                <button
+                  type="button"
+                  class="status-attention"
+                  [class.is-selected]="item.state.status === 'attention'"
+                  [attr.aria-pressed]="item.state.status === 'attention'"
+                  (click)="setItemStatus(item.definition.id, 'attention')"
+                >
+                  Needs Attention
+                </button>
+              </div>
+
+              <label class="invite-beta-note">
+                <span>Optional note or evidence</span>
+                <textarea
+                  rows="2"
+                  maxlength="600"
+                  placeholder="Device, result, error reference, or follow-up needed"
+                  [value]="item.state.note"
+                  (input)="setItemNote(item.definition.id, $any($event.target).value)"
+                ></textarea>
+              </label>
+
+              @if (item.state.updatedAt) {
+                <small class="invite-beta-updated">
+                  {{ getStatusLabel(item.state.status) }} · {{ formatTimestamp(item.state.updatedAt) }}
+                </small>
+              }
+            </article>
+          }
+        </div>
+      </details>
+    }
+  </div>
+
+  <footer class="invite-beta-actions">
+    <div>
+      <strong>Release-specific validation</strong>
+      <small>
+        A new build identifier starts a fresh board. Copied reports automatically exclude league,
+        player, matchup, score, roster, email, and Firestore-document data. Your manual notes are included.
+      </small>
+    </div>
+
+    <div class="invite-beta-action-buttons">
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="copying()"
+        (click)="copyReport()"
+      >
+        {{ copying() ? 'Copying…' : 'Copy Validation Report' }}
+      </button>
+      <button
+        type="button"
+        class="rr-button invite-beta-reset"
+        [class.invite-beta-reset--armed]="resetArmed()"
+        (click)="requestReset()"
+      >
+        {{ resetArmed() ? 'Confirm Reset' : 'Reset Validation' }}
+      </button>
+    </div>
+  </footer>
+
+  @if (!storageAvailable()) {
+    <p class="invite-beta-error" role="alert">
+      This browser is not saving the board. Copy the report before leaving this page.
+    </p>
+  }
+
+  @if (message()) {
+    <p class="invite-beta-message" role="status" aria-live="polite">{{ message() }}</p>
+  }
+
+  @if (error()) {
+    <p class="invite-beta-error" role="alert">{{ error() }}</p>
+  }
+</section>

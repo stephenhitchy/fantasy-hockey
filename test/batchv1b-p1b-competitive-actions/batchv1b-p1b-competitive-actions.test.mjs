@@ -244,8 +244,10 @@ test('V1B-P1B verification, contrast audit, release label, and documentation are
   assert.match(packageJson.scripts['test:batchv1b-p1b:run'], /batchv1b-p1b-competitive-actions/);
   assert.match(packageJson.scripts['audit:competitive-action-contrast'], /audit-competitive-action-contrast/);
   assert.match(packageJson.scripts['verify:batchv1b-p1b'], /verify:batchm5-5/);
-  assert.match(developmentConfig, /Release Candidate 5/);
-  assert.match(productionConfig, /Release Candidate 5/);
+  const developmentRelease = developmentConfig.match(/releaseLabel:\s*['"]([^'"]+)['"]/)?.[1];
+  const productionRelease = productionConfig.match(/releaseLabel:\s*['"]([^'"]+)['"]/)?.[1];
+  assert.match(developmentRelease ?? '', /^Release Candidate \d+$/);
+  assert.equal(productionRelease, developmentRelease);
   assert.match(documentation, /^## Batch V1B–P1B — High-Visibility Competitive Actions and Action Health/m);
   assert.match(documentation, /Hosting-only/i);
 });
