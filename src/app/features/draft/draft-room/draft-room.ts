@@ -8,6 +8,10 @@ import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
+import {
+  CompetitiveActionMonitorService,
+  type CompetitiveActionHandle,
+} from '../../../core/observability/competitive-action-monitor.service';
 
 import {
   DraftableAsset,
@@ -609,6 +613,7 @@ export class DraftRoom implements OnDestroy {
   private hiddenAt: number | null = null;
   private pendingPickConfirmation: PendingPickConfirmation | null = null;
   private pendingPickConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPickAction: CompetitiveActionHandle | null = null;
   private realtimeRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly handleBrowserOnline = () => {
     this.browserOnline.set(true);
@@ -920,6 +925,7 @@ export class DraftRoom implements OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this.handleBrowserOnline);
@@ -941,6 +947,9 @@ export class DraftRoom implements OnDestroy {
     if (this.pendingPickConfirmationTimer) {
       clearTimeout(this.pendingPickConfirmationTimer);
     }
+
+    this.pendingPickAction?.finish('cancelled');
+    this.pendingPickAction = null;
 
     if (this.realtimeRestartTimer) {
       clearTimeout(this.realtimeRestartTimer);
@@ -1452,6 +1461,8 @@ export class DraftRoom implements OnDestroy {
     this.successMessage.set(
       `${pending.assetName} was confirmed at pick #${pending.overallPick}.`,
     );
+    this.pendingPickAction?.finish('success');
+    this.pendingPickAction = null;
   }
 
   private armPendingPickConfirmationTimeout(): void {
@@ -1483,6 +1494,8 @@ export class DraftRoom implements OnDestroy {
         );
         this.realtimeConfirmationStartedAt.set(Date.now());
         this.realtimeReconnectReason.set('listener-error');
+        this.pendingPickAction?.finish('uncertain');
+        this.pendingPickAction = null;
       }, 18_000);
     }, 12_000);
   }
@@ -2660,6 +2673,8 @@ export class DraftRoom implements OnDestroy {
 
     this.makingPickAssetKey.set(asset.assetKey);
     this.pickSubmissionPhase.set('submitting');
+    this.pendingPickAction?.finish('cancelled');
+    this.pendingPickAction = this.actionMonitor.begin('draft-pick');
     this.pendingPickConfirmation = {
       overallPick: currentPick.overallPick,
       assetKey: asset.assetKey,
@@ -2691,6 +2706,8 @@ export class DraftRoom implements OnDestroy {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to make this draft pick.',
       );
+      this.pendingPickAction?.finish('error');
+      this.pendingPickAction = null;
     }
   }
 

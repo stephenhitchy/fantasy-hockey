@@ -1016,3 +1016,49 @@
   }
 }
 
+
+/* V1B: the final transaction commitment should visually outrank every
+   comparison card without becoming another sticky screen obstruction. */
+.free-agent-confirmation-bar .rr-button--commit,
+.selected-candidate-action .rr-button--commit {
+  align-self: stretch;
+}
+
+.free-agent-confirmation-bar.transaction-timing-ready {
+  border: 2px solid color-mix(in srgb, var(--rr-commit-face-bottom) 64%, var(--rr-color-border));
+  border-left-width: 6px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-commit-face-bottom) 10%, transparent), transparent 62%),
+    color-mix(in srgb, var(--rr-color-surface-raised) 96%, transparent);
+}
+
+.competitive-action-gate-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 11px 13px;
+  border: 2px solid color-mix(in srgb, var(--rr-color-warning) 68%, var(--rr-color-border));
+  border-left-width: 5px;
+  background: color-mix(in srgb, var(--rr-color-warning) 9%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text);
+}
+
+.competitive-action-gate-note > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--rr-color-warning);
+  color: var(--rr-color-warning);
+  font-weight: 1000;
+}
+
+.competitive-action-gate-note p {
+  margin: 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.4;
+}

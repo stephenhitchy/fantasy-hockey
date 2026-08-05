@@ -79,6 +79,8 @@ import { getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data'
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
+import { ClientHealthService } from '../../../core/observability/client-health.service';
+import { CompetitiveActionMonitorService } from '../../../core/observability/competitive-action-monitor.service';
 import {
   buildFreeAgentRosterTargetQuery,
   buildRosterManagementActions,
@@ -362,6 +364,8 @@ export class TeamSettings implements OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    readonly clientHealth: ClientHealthService,
+    private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
     this.loadTeam();
   }
@@ -395,6 +399,19 @@ export class TeamSettings implements OnDestroy {
 
   isRosterOperationPending(): boolean {
     return this.rosterMoveLoading() || this.saving();
+  }
+
+  getCompetitiveActionBlockReason(): string {
+    return this.clientHealth.competitiveActionBlockReason();
+  }
+
+  private ensureCompetitiveActionReady(): boolean {
+    if (this.clientHealth.competitiveActionsReady()) {
+      return true;
+    }
+
+    this.rosterMoveError.set(this.getCompetitiveActionBlockReason());
+    return false;
   }
 
   async loadTeam(): Promise<void> {
@@ -929,6 +946,7 @@ export class TeamSettings implements OnDestroy {
       this.isPlayerIrEligible(slot.asset) &&
       this.getOpenIrSlotCount() > 0 &&
       !slot.pendingMove &&
+      this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
     );
   }
@@ -1058,7 +1076,12 @@ export class TeamSettings implements OnDestroy {
     const irSlot = this.getPendingIrActivationSlot();
     const targetSlotId = this.irActivationTargetSlotId();
 
-    if (!irSlot?.asset || !targetSlotId || this.rosterMoveLoading()) {
+    if (
+      !irSlot?.asset ||
+      !targetSlotId ||
+      !this.clientHealth.competitiveActionsReady() ||
+      this.rosterMoveLoading()
+    ) {
       return false;
     }
 
@@ -1173,7 +1196,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   canConfirmRosterDrop(): boolean {
-    return Boolean(this.getPendingRosterDrop() && !this.rosterMoveLoading());
+    return Boolean(
+      this.clientHealth.competitiveActionsReady() &&
+      this.getPendingRosterDrop() &&
+      !this.rosterMoveLoading(),
+    );
   }
 
   getRosterDropSourceLabel(sourceRosterArea: RosterDropSource): string {
@@ -1187,6 +1214,10 @@ export class TeamSettings implements OnDestroy {
   async confirmRosterDrop(): Promise<void> {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
+
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
 
     const pendingDrop = this.getPendingRosterDrop();
 
@@ -1205,6 +1236,8 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('roster-drop');
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
     this.rosterMoveLoading.set(true);
     const operationGeneration = ++this.rosterOperationGeneration;
 
@@ -1244,15 +1277,22 @@ export class TeamSettings implements OnDestroy {
           ? `${assetName} was removed from your ${sourceLabel} and placed on waivers. An untouched assignment opens immediately; an already-started six-game scoring history remains preserved, and the open slot can change in Matchup ${effectiveCycleNumber}.`
           : `${assetName} was removed from your ${sourceLabel} and placed on waivers immediately.`,
       );
+      actionOutcome = 'success';
     } catch (error: unknown) {
-      this.rosterMoveError.set(
-        error instanceof Error ? error.message : 'Unable to drop this player or goalie unit.',
-      );
+      const message =
+        error instanceof Error ? error.message : 'Unable to drop this player or goalie unit.';
+      this.rosterMoveError.set(message);
+      actionOutcome = /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
+        message,
+      )
+        ? 'uncertain'
+        : 'error';
     } finally {
       if (this.rosterOperationGeneration === operationGeneration) {
         this.rosterOperationGeneration += 1;
       }
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 
@@ -1262,6 +1302,7 @@ export class TeamSettings implements OnDestroy {
       slot.asset.assetType === 'skater' &&
       this.isPlayerIrEligible(slot.asset) &&
       this.getOpenIrSlotCount() > 0 &&
+      this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
     );
   }
@@ -1270,12 +1311,18 @@ export class TeamSettings implements OnDestroy {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
 
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
+
     const slot = this.roster()?.benchSlots.find((candidate) => candidate.slotId === slotId);
     if (!slot?.asset || slot.asset.assetType !== 'skater') {
       this.rosterMoveError.set('That bench skater is no longer available.');
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('injured-reserve');
+    let actionOutcome: 'success' | 'error' = 'error';
     this.rosterMoveLoading.set(true);
     try {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
@@ -1289,12 +1336,14 @@ export class TeamSettings implements OnDestroy {
       this.rosterMoveMessage.set(
         `${this.getRosterAssetName(slot.asset)} moved from the bench to Injured Reserve (IR). Bench players do not score, so the ownership move is immediate.`,
       );
+      actionOutcome = 'success';
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to move this bench player to Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 
@@ -1349,11 +1398,16 @@ export class TeamSettings implements OnDestroy {
       this.getBenchSwapTargetSlots().some(
         (slot) => slot.slotId === this.benchSwapTargetSlotId(),
       ) &&
+      this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
     );
   }
 
   async confirmBenchSwap(): Promise<void> {
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
+
     const benchSlot = this.getPendingBenchSwapSlot();
     const targetSlot = this.getBenchSwapTargetSlots().find(
       (slot) => slot.slotId === this.benchSwapTargetSlotId(),
@@ -1364,6 +1418,8 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('lineup-swap');
+    let actionOutcome: 'success' | 'error' = 'error';
     this.rosterMoveLoading.set(true);
     this.rosterMoveError.set('');
     try {
@@ -1381,12 +1437,14 @@ export class TeamSettings implements OnDestroy {
       );
       this.benchSwapSlotId.set('');
       this.benchSwapTargetSlotId.set('');
+      actionOutcome = 'success';
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to schedule the bench swap.',
       );
     } finally {
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 
@@ -1466,10 +1524,15 @@ export class TeamSettings implements OnDestroy {
     return !!irSlot?.asset &&
       !!targetSlot &&
       !this.isBenchSlotReservedForActiveSwap(targetSlot) &&
+      this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading();
   }
 
   async confirmIrBenchActivation(): Promise<void> {
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
+
     const irSlot = this.getPendingIrBenchActivationSlot();
     const targetSlot = this.getIrBenchActivationTargets().find(
       (slot) => slot.slotId === this.irBenchActivationTargetSlotId(),
@@ -1479,6 +1542,8 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('injured-reserve');
+    let actionOutcome: 'success' | 'error' = 'error';
     this.rosterMoveLoading.set(true);
     this.rosterMoveError.set('');
     try {
@@ -1497,18 +1562,24 @@ export class TeamSettings implements OnDestroy {
         : `${this.getRosterAssetName(irSlot.asset)} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`);
       this.irBenchActivationSlotId.set('');
       this.irBenchActivationTargetSlotId.set('');
+      actionOutcome = 'success';
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to move this player from Injured Reserve (IR) to the bench.',
       );
     } finally {
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 
   async moveActiveSlotToIr(slotId: string): Promise<void> {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
+
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
 
     const roster = this.roster();
     const slot = roster?.activeSlots.find((candidate) => candidate.slotId === slotId);
@@ -1525,6 +1596,8 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('injured-reserve');
+    let actionOutcome: 'success' | 'error' = 'error';
     this.rosterMoveLoading.set(true);
 
     try {
@@ -1546,18 +1619,24 @@ export class TeamSettings implements OnDestroy {
           ? `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The untouched Matchup ${execution.effectiveCycleNumber} assignment was removed immediately, so a bench player or free agent can fill that slot now.`
           : `${playerName} moved to Injured Reserve (IR) with a ${availabilityLabel} designation. The player’s already-started six-game count remains unchanged, and a replacement begins in Matchup ${effectiveCycleNumber}.`,
       );
+      actionOutcome = 'success';
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to move this player to Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 
   async confirmIrActivation(): Promise<void> {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
+
+    if (!this.ensureCompetitiveActionReady()) {
+      return;
+    }
 
     const irSlot = this.getPendingIrActivationSlot();
     const targetSlotId = this.irActivationTargetSlotId();
@@ -1577,6 +1656,8 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const actionHandle = this.actionMonitor.begin('injured-reserve');
+    let actionOutcome: 'success' | 'error' = 'error';
     this.rosterMoveLoading.set(true);
 
     try {
@@ -1608,12 +1689,14 @@ export class TeamSettings implements OnDestroy {
 
       this.irActivationSlotId.set('');
       this.irActivationTargetSlotId.set('');
+      actionOutcome = 'success';
     } catch (error: unknown) {
       this.rosterMoveError.set(
         error instanceof Error ? error.message : 'Unable to activate this player from Injured Reserve (IR).',
       );
     } finally {
       this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
     }
   }
 

@@ -972,11 +972,15 @@
           </div>
           <button
             type="button"
-            class="draft-mobile-selection-submit rr-button rr-button--primary"
+            class="draft-mobile-selection-submit rr-button rr-button--commit"
             (click)="draftSelectedAsset()"
             [disabled]="!canDraftAsset(selectedAsset) || makingPickAssetKey() !== null"
           >
-            {{ getDraftButtonLabel(selectedAsset) }}
+            <span class="rr-commit-mark" aria-hidden="true">✓</span>
+            <span class="rr-commit-copy">
+              <small>Final draft action</small>
+              <strong>{{ getDraftButtonLabel(selectedAsset) }}</strong>
+            </span>
           </button>
         </section>
       }

@@ -37,6 +37,42 @@
     </article>
   </section>
 
+  <section class="support-diagnostics rr-card rr-card--raised rr-card--padded" aria-labelledby="support-diagnostics-title">
+    <div class="support-diagnostics-copy">
+      <span class="eyebrow">Invite-beta troubleshooting</span>
+      <h2 id="support-diagnostics-title">Build &amp; browser diagnostics</h2>
+      <p>
+        Current build: <strong>{{ releaseLabel }}</strong>. Copy a privacy-limited report when a
+        draft, add/drop, waiver, roster, or testing action behaves unexpectedly.
+      </p>
+      <small>
+        The report excludes league IDs, player IDs, names, scores, roster contents, email addresses,
+        and raw Firestore documents.
+      </small>
+    </div>
+
+    <button
+      type="button"
+      class="rr-button rr-button--secondary support-diagnostics-button"
+      [disabled]="copyingDiagnostics()"
+      (click)="copyBetaDiagnostics()"
+    >
+      {{ copyingDiagnostics() ? 'Copying…' : 'Copy Beta Diagnostics' }}
+    </button>
+
+    @if (diagnosticMessage()) {
+      <p class="support-diagnostics-success" role="status" aria-live="polite">
+        {{ diagnosticMessage() }}
+      </p>
+    }
+
+    @if (diagnosticError()) {
+      <p class="support-diagnostics-error" role="alert">
+        {{ diagnosticError() }}
+      </p>
+    }
+  </section>
+
   <section class="support-checklist rr-card rr-card--raised rr-card--padded">
     <h2>Before submitting a bug</h2>
     <ol>

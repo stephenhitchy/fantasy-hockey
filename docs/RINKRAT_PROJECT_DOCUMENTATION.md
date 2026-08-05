@@ -1,3 +1,127 @@
+## Batch V1B–P1B — High-Visibility Competitive Actions and Action Health
+
+### Purpose
+
+Batch V1B–P1B makes final competitive confirmations unmistakable across every RinkRat team and background theme, beginning with the add/drop decision that managers said was easy to overlook. It also adds privacy-limited action-health monitoring and connection gates so invite-beta testing can distinguish a fast confirmed operation from a failed, uncertain, cancelled, or unusually slow one.
+
+This is a browser-only safety, presentation, and observability batch. It does not change Production Scoring V3, Projection V11, draft order, add/drop legality, waiver priority, independent six-game roster-slot windows, scheduled-move activation, standings, playoffs, historical replay authority, Cloud Functions, Firestore rules, or Firestore indexes.
+
+### 1. Universal final-action treatment
+
+Final positive competitive actions use a semantic `rr-button--commit` treatment instead of favorite-team colors. The treatment uses a warm gold-to-ice face, nearly black text and border, a strong pixel-style bottom edge, a visible focus ring, and a restrained glow. The palette is intentionally fixed so the action cannot disappear inside a gold, yellow, white, dark, or low-contrast NHL theme.
+
+The add/drop workbench now presents the final action in two places:
+
+- At the top of the workbench after the exact roster slot and six-game timing are verified.
+- Inside the selected replacement card, so a manager who reviewed a long comparison does not have to scroll back to the top.
+
+Both controls identify the operation as the final roster action, display a clear check mark, and use a subtle ready-state sheen when submission is legal. Reduced-motion users receive the same high-contrast control without animation.
+
+The same semantic hierarchy is used selectively for other positive final decisions, including the mobile Draft action, active/bench swap confirmation, and Injured Reserve activation. Destructive drop controls remain danger-colored and are not made visually equivalent to a positive commit.
+
+A dedicated contrast audit verifies readable text on both ends of the commit gradient and a visible button boundary against Rink Dark, OLED Black, Ice Gray, and Light Ice backgrounds.
+
+### 2. Connection-safe competitive actions
+
+A browser that is offline—or is inside the short connection-restored revalidation period—cannot submit a final add/drop, waiver, roster, lineup, Injured Reserve, or historical replay action. The manager receives a plain-language explanation before any request is sent.
+
+This protection supplements the existing Draft Room live-listener checks. It does not replace server authorization. The server remains the final authority for every competitive operation.
+
+The historical replay testing button now follows the same connection gate. Its label changes to **Reconnect to Advance** or **Reconnecting…** when appropriate, and an explanatory notice appears beside the private testing controls.
+
+### 3. Session competitive-action health
+
+A new browser-session monitor records only sanitized operation metadata for:
+
+- Add/drop.
+- Waiver claim.
+- Draft pick.
+- Historical replay advance.
+- Active/bench lineup swap.
+- Injured Reserve move or activation.
+- Roster drop.
+
+Each record contains the action type, sanitized route, start and finish time, duration, starting connection category, and outcome: confirmed, failed, uncertain, or cancelled. At most 30 recent records are retained in `sessionStorage`, and records older than 12 hours are discarded.
+
+The monitor does not store league IDs, matchup IDs, player IDs, player names, scores, roster contents, email addresses, invite codes, or raw Firestore documents. Sanitized aggregate action, outcome, duration, connection type, and online state are sent through the existing telemetry service.
+
+An operation is marked slow when it takes five seconds or longer. This threshold is diagnostic only and never changes roster, draft, waiver, scoring, or replay behavior.
+
+### 4. Release Readiness and Support diagnostics
+
+The platform-administrator Release Readiness page now adds **Session action health** to the existing client-performance card. It shows:
+
+- Completed and currently active operations.
+- Confirmed, failed, uncertain, and cancelled counts.
+- Average and slowest response time.
+- Number of operations at or above five seconds.
+- Aggregate results by action type.
+- The ten most recent sanitized outcomes.
+
+**Copy Beta Diagnostics** now copies one report containing the Release Candidate label, browser performance, Firestore listener health, connection summary, and competitive-action health.
+
+The public Support page also shows the current Release Candidate and includes **Copy Beta Diagnostics**. This gives a tester a simple way to attach useful browser information to the signed-in feedback form without exposing competitive or personal data.
+
+The build label advances to **Release Candidate 4** in development and production runtime configuration.
+
+### Automated verification
+
+Run the complete dependency-backed verification on the development Mac:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchv1b-p1b
+npm run build:all
+```
+
+The focused suite verifies action-history normalization, aggregate timing and outcome reporting, connection gates, instrumentation across all supported competitive actions, semantic commit markup, Release Readiness and Support diagnostics, release labels, contrast, documentation, and preservation of scoring, projections, Functions, rules, and indexes.
+
+Packaging-environment verification completed with:
+
+- 9/9 focused V1B–P1B tests.
+- 310/310 available dependency-free, non-emulator regression tests.
+- Design-system, accessibility, shared-interface, page-interface, competition-interface, mobile-readability, beginner-language, and competitive-action contrast audits.
+- Syntax validation of 236 TypeScript files.
+- Structural validation of 52 CSS files and 53 Angular HTML templates.
+- Parsing of 16 JSON/JSONC files.
+- Resolution of 850 relative TypeScript imports and 97 Angular component assets.
+- Estimated largest optimized component stylesheet of 42,814 bytes, below the configured 45 kB error ceiling.
+
+The complete Angular production build could not finish in the packaging workspace because the prebuild official-NHL-logo sync requires outbound asset access and timed out there. That workspace also uses Node 22.16.0, below the project requirement. The Mac verification commands above remain the definitive compiler and emulator check.
+
+### Deployment
+
+V1B–P1B is **Hosting-only**:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch V1B-P1B competitive action visibility and health"
+```
+
+Do not deploy Functions, Firestore rules, or Firestore indexes for this batch.
+
+### Post-deployment validation
+
+1. Test the add/drop workbench in Rink Dark, Light Ice, OLED Black, neutral RinkRat colors, and several light/gold NHL themes. Confirm the final button is immediately noticeable.
+2. Confirm both the top action and selected-card action use the same label and submit the same selected roster transaction.
+3. Enable reduced motion and confirm the button remains prominent without the sheen animation.
+4. Disable network access and confirm add/drop, waiver, lineup, IR, drop, and replay actions remain disabled before a request is sent.
+5. Restore connectivity and confirm the actions unlock after the brief live-data revalidation notice clears.
+6. Complete an add/drop, waiver claim, draft pick, lineup swap, IR move, roster drop, and replay advance in a test league.
+7. Open Release Readiness and confirm the session action totals and durations update.
+8. Copy Beta Diagnostics from Release Readiness and Support, then verify that no league, player, matchup, score, roster, email, or raw Firestore data is present.
+9. Repeat at 320px, 390px, 430px, tablet width, and desktop width with keyboard focus and 200% text zoom.
+
+### Rollback guidance
+
+This batch changes only Hosting assets and writes no new Firestore schema. Roll back by redeploying the approved M5.5 Hosting build. Existing Functions, rules, indexes, score snapshots, projections, roster windows, transactions, waivers, standings, and playoff data require no reversal.
+
+---
+
 ## Batch P1A — Direct Mobile Game Film and Client Health
 
 ### Purpose

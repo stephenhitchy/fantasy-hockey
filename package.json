@@ -97,7 +97,10 @@
     "test:batchm5-4:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-4-transaction-layout/*.test.mjs",
     "verify:batchm5-4": "npm run verify:batchp1a && npm run test:batchm5-4:run",
     "test:batchm5-5:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchm5-5-progressive-disclosure-replay/*.test.mjs",
-    "verify:batchm5-5": "npm run verify:batchm5-4 && npm run test:batchm5-5:run"
+    "verify:batchm5-5": "npm run verify:batchm5-4 && npm run test:batchm5-5:run",
+    "test:batchv1b-p1b:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchv1b-p1b-competitive-actions/*.test.mjs",
+    "audit:competitive-action-contrast": "node scripts/audit-competitive-action-contrast.mjs",
+    "verify:batchv1b-p1b": "npm run verify:batchm5-5 && npm run test:batchv1b-p1b:run && npm run audit:competitive-action-contrast"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

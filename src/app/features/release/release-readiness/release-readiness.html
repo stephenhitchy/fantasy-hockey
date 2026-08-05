@@ -141,7 +141,7 @@
                 Refresh Device Check
               </button>
               <button type="button" class="secondary-button" (click)="copyClientHealthReport()">
-                Copy Health Report
+                Copy Beta Diagnostics
               </button>
             </div>
           </div>
@@ -184,6 +184,87 @@
               <small>{{ client.metrics.longTaskCount }} long tasks · longest {{ formatPerformanceMilliseconds(client.metrics.longestTaskMilliseconds) }}</small>
             </article>
           </div>
+
+          @if (competitiveActions(); as actions) {
+            <section class="competitive-action-health" aria-labelledby="competitive-action-health-heading">
+              <div class="competitive-action-health-heading">
+                <div>
+                  <span class="eyebrow">Competitive operations</span>
+                  <h3 id="competitive-action-health-heading">Session action health</h3>
+                </div>
+                <small>Slow means 5 seconds or longer.</small>
+              </div>
+
+              <div class="competitive-action-health-grid">
+                <article>
+                  <span>Completed</span>
+                  <strong>{{ actions.completedCount }}</strong>
+                  <small>{{ actions.activeCount }} currently active</small>
+                </article>
+                <article class="competitive-action-success">
+                  <span>Confirmed</span>
+                  <strong>{{ actions.successCount }}</strong>
+                  <small>Server or live-data confirmation</small>
+                </article>
+                <article [class.competitive-action-alert]="actions.errorCount + actions.uncertainCount > 0">
+                  <span>Needs attention</span>
+                  <strong>{{ actions.errorCount + actions.uncertainCount }}</strong>
+                  <small>{{ actions.errorCount }} failed · {{ actions.uncertainCount }} uncertain</small>
+                </article>
+                <article>
+                  <span>Average response</span>
+                  <strong>{{ formatCompetitiveActionDuration(actions.averageDurationMilliseconds) }}</strong>
+                  <small>Slowest {{ formatCompetitiveActionDuration(actions.slowestDurationMilliseconds) }}</small>
+                </article>
+                <article [class.competitive-action-alert]="actions.slowActionCount > 0">
+                  <span>Slow operations</span>
+                  <strong>{{ actions.slowActionCount }}</strong>
+                  <small>Add/drop, draft, replay, and roster actions</small>
+                </article>
+                <article>
+                  <span>Cancelled</span>
+                  <strong>{{ actions.cancelledCount }}</strong>
+                  <small>Usually caused by leaving during a pending action</small>
+                </article>
+              </div>
+
+              <details class="competitive-action-details">
+                <summary>View action types and recent results</summary>
+
+                @if (actions.byAction.length) {
+                  <div class="competitive-action-aggregate-list">
+                    @for (aggregate of actions.byAction; track aggregate.action) {
+                      <article>
+                        <div>
+                          <strong>{{ getCompetitiveActionLabel(aggregate.action) }}</strong>
+                          <small>{{ aggregate.total }} completed · {{ aggregate.successes }} confirmed</small>
+                        </div>
+                        <span>{{ formatCompetitiveActionDuration(aggregate.averageDurationMilliseconds) }} average</span>
+                      </article>
+                    }
+                  </div>
+                } @else {
+                  <p>No monitored competitive actions have finished in this browser session yet.</p>
+                }
+
+                @if (actions.recent.length) {
+                  <div class="competitive-action-recent-list">
+                    @for (record of actions.recent; track record.id) {
+                      <article>
+                        <div>
+                          <strong>{{ getCompetitiveActionLabel(record.action) }}</strong>
+                          <small>{{ formatTimestamp(record.finishedAt) }} · {{ formatCompetitiveActionDuration(record.durationMilliseconds) }}</small>
+                        </div>
+                        <span [class]="getCompetitiveActionOutcomeClass(record.outcome)">
+                          {{ getCompetitiveActionOutcomeLabel(record.outcome) }}
+                        </span>
+                      </article>
+                    }
+                  </div>
+                }
+              </details>
+            </section>
+          }
 
           <details class="client-listener-details">
             <summary>View active Firestore listener groups</summary>

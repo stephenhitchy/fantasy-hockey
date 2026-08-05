@@ -387,14 +387,20 @@
         >
           <button
             type="button"
-            class="top-confirm-move-button rr-button rr-button--primary confirm-move-button"
+            class="top-confirm-move-button rr-button rr-button--primary rr-button--commit confirm-move-button"
             (click)="confirmAddDrop()"
             [disabled]="!canConfirmMove() || moving()"
+            [attr.data-commit-ready]="canConfirmMove() && !moving() ? 'true' : 'false'"
           >
             @if (moving()) {
               <span class="inline-confirm-spinner" aria-hidden="true"></span>
+            } @else {
+              <span class="rr-commit-mark" aria-hidden="true">✓</span>
             }
-            {{ getConfirmButtonLabel() }}
+            <span class="rr-commit-copy">
+              <small>{{ canConfirmMove() ? 'Ready to submit' : 'Final roster action' }}</small>
+              <strong>{{ getConfirmButtonLabel() }}</strong>
+            </span>
           </button>
           <div class="top-confirmation-copy">
             <span>{{ getTransactionDelayLabel() }}</span>
@@ -403,6 +409,13 @@
         </div>
 
         <section class="transaction-workbench">
+          @if (!clientHealth.competitiveActionsReady()) {
+            <div class="competitive-action-gate-note" role="status">
+              <span aria-hidden="true">!</span>
+              <p>{{ getCompetitiveActionBlockReason() }}</p>
+            </div>
+          }
+
           <details class="transaction-workbench-help">
             <summary>How RinkRat verifies the move</summary>
             <div>
@@ -745,14 +758,20 @@
                   </div>
                   <button
                     type="button"
-                    class="rr-button rr-button--primary confirm-move-button"
+                    class="rr-button rr-button--commit confirm-move-button"
                     (click)="confirmAddDrop()"
                     [disabled]="!canConfirmMove() || moving()"
+                    [attr.data-commit-ready]="canConfirmMove() && !moving() ? 'true' : 'false'"
                   >
                     @if (moving()) {
                       <span class="inline-confirm-spinner" aria-hidden="true"></span>
+                    } @else {
+                      <span class="rr-commit-mark" aria-hidden="true">✓</span>
                     }
-                    {{ getConfirmButtonLabel() }}
+                    <span class="rr-commit-copy">
+                      <small>{{ canConfirmMove() ? 'Ready to submit' : 'Final roster action' }}</small>
+                      <strong>{{ getConfirmButtonLabel() }}</strong>
+                    </span>
                   </button>
                 </div>
               }

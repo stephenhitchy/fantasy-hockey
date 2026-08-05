@@ -8,6 +8,15 @@ import {
   ClientPerformanceMonitorService,
   type ClientPerformanceSnapshot,
 } from '../../../core/observability/client-performance-monitor.service';
+import {
+  CompetitiveActionMonitorService,
+} from '../../../core/observability/competitive-action-monitor.service';
+import {
+  getCompetitiveActionLabel,
+  type CompetitiveActionHealthSnapshot,
+  type CompetitiveActionKind,
+  type CompetitiveActionOutcome,
+} from '../../../core/observability/competitive-action-health.util';
 import { auth } from '../../../core/firebase';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import {
@@ -43,6 +52,7 @@ export class ReleaseReadiness implements OnDestroy {
   readonly targetProjectionCycle = signal(1);
   readonly runtime = getScoringRuntimeState();
   readonly clientPerformance = signal<ClientPerformanceSnapshot | null>(null);
+  readonly competitiveActions = signal<CompetitiveActionHealthSnapshot | null>(null);
 
   readonly requiredChecks = computed(
     () => this.snapshot()?.checks.filter((check) => check.requiredForLiveLaunch) ?? [],
@@ -77,6 +87,7 @@ export class ReleaseReadiness implements OnDestroy {
   constructor(
     route: ActivatedRoute,
     private readonly performanceMonitor: ClientPerformanceMonitorService,
+    private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
     this.leagueId = route.snapshot.paramMap.get('leagueId') ?? '';
     this.refreshClientHealth();
@@ -163,11 +174,14 @@ export class ReleaseReadiness implements OnDestroy {
 
   refreshClientHealth(): void {
     this.clientPerformance.set(this.performanceMonitor.getSnapshot());
+    this.competitiveActions.set(this.actionMonitor.getSnapshot());
   }
 
   async copyClientHealthReport(): Promise<void> {
-    const snapshot = this.performanceMonitor.getSnapshot();
-    this.clientPerformance.set(snapshot);
+    const clientPerformance = this.performanceMonitor.getSnapshot();
+    const competitiveActions = this.actionMonitor.getSnapshot();
+    this.clientPerformance.set(clientPerformance);
+    this.competitiveActions.set(competitiveActions);
 
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
       this.errorMessage.set('Clipboard access is unavailable in this browser.');
@@ -175,12 +189,17 @@ export class ReleaseReadiness implements OnDestroy {
     }
 
     try {
-      await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
-      this.actionMessage.set('This device health report was copied to the clipboard.');
+      await navigator.clipboard.writeText(JSON.stringify({
+        releaseLabel: this.runtime.releaseLabel,
+        generatedAt: new Date().toISOString(),
+        clientPerformance,
+        competitiveActions,
+      }, null, 2));
+      this.actionMessage.set('This browser’s beta diagnostics were copied to the clipboard.');
       this.errorMessage.set('');
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to copy the device health report.',
+        error instanceof Error ? error.message : 'Unable to copy the beta diagnostics.',
       );
     }
   }
@@ -191,6 +210,35 @@ export class ReleaseReadiness implements OnDestroy {
 
   formatLayoutShift(value: number): string {
     return value.toFixed(3);
+  }
+
+  formatCompetitiveActionDuration(value: number): string {
+    if (value < 1_000) {
+      return `${Math.round(value)} ms`;
+    }
+
+    return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)} s`;
+  }
+
+  getCompetitiveActionLabel(action: CompetitiveActionKind): string {
+    return getCompetitiveActionLabel(action);
+  }
+
+  getCompetitiveActionOutcomeLabel(outcome: CompetitiveActionOutcome): string {
+    switch (outcome) {
+      case 'success':
+        return 'Confirmed';
+      case 'error':
+        return 'Failed';
+      case 'uncertain':
+        return 'Needs roster check';
+      case 'cancelled':
+        return 'Cancelled';
+    }
+  }
+
+  getCompetitiveActionOutcomeClass(outcome: CompetitiveActionOutcome): string {
+    return `competitive-action-outcome--${outcome}`;
   }
 
   getConnectionSummary(snapshot: ClientPerformanceSnapshot): string {

@@ -102,6 +102,11 @@ import {
 } from '../../../core/player/player-availability.service';
 import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
+import { ClientHealthService } from '../../../core/observability/client-health.service';
+import {
+  CompetitiveActionMonitorService,
+  type CompetitiveActionHandle,
+} from '../../../core/observability/competitive-action-monitor.service';
 
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
 import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
@@ -162,6 +167,8 @@ import {
 })
 export class CycleOne implements OnDestroy {
   private readonly platformAdminService = inject(PlatformAdminService);
+  private readonly clientHealth = inject(ClientHealthService);
+  private readonly actionMonitor = inject(CompetitiveActionMonitorService);
 
   readonly presenter = this;
   readonly developerToolsEnabled = areDeveloperToolsEnabled();
@@ -257,6 +264,14 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
+    if (!this.clientHealth.competitiveActionsReady()) {
+      this.historicalReplayMessage.set('');
+      this.historicalReplayError.set(this.getHistoricalReplayActionBlockReason());
+      return;
+    }
+
+    this.replayActionHandle?.finish('cancelled');
+    this.replayActionHandle = this.actionMonitor.begin('historical-replay');
     this.historicalReplayAdvancing.set(true);
     this.historicalReplayMessage.set('');
     this.historicalReplayError.set('');
@@ -282,7 +297,7 @@ export class CycleOne implements OnDestroy {
         // The callable can resolve a moment before the Firestore listener sees
         // status=ready. Keep the authoritative control as the final lock.
         if (this.historicalReplayControl()?.status !== 'advancing') {
-          this.finishReplayAdvanceRequest(generation);
+          this.finishReplayAdvanceRequest(generation, 'success');
         }
       })
       .catch((error: unknown) => {
@@ -315,7 +330,7 @@ export class CycleOne implements OnDestroy {
               this.historicalReplayMessage.set(
                 control?.message || 'The replay day finished and the saved scores are current.',
               );
-              this.finishReplayAdvanceRequest(generation);
+              this.finishReplayAdvanceRequest(generation, 'success');
               return;
             }
 
@@ -323,7 +338,7 @@ export class CycleOne implements OnDestroy {
               this.historicalReplayError.set(
                 control?.lastError || control?.message || 'Unable to advance the historical replay.',
               );
-              this.finishReplayAdvanceRequest(generation);
+              this.finishReplayAdvanceRequest(generation, 'error');
               return;
             }
           }
@@ -331,16 +346,38 @@ export class CycleOne implements OnDestroy {
           this.historicalReplayError.set(
             error instanceof Error ? error.message : 'Unable to advance the historical replay.',
           );
-          this.finishReplayAdvanceRequest(generation);
+          this.finishReplayAdvanceRequest(generation, 'error');
         }, 1_750);
       });
   }
 
   isHistoricalReplayAdvanceLocked(): boolean {
     return Boolean(
+      !this.clientHealth.competitiveActionsReady() ||
       this.historicalReplayAdvancing() ||
       this.historicalReplayControl()?.status === 'advancing',
     );
+  }
+
+  getHistoricalReplayActionBlockReason(): string {
+    return this.clientHealth.competitiveActionBlockReason();
+  }
+
+  getHistoricalReplayAdvanceButtonLabel(): string {
+    if (!this.clientHealth.competitiveActionsReady()) {
+      return this.clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Advance';
+    }
+
+    if (
+      this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'advancing'
+    ) {
+      return 'Processing Day…';
+    }
+
+    return this.historicalReplayControl()?.enabled
+      ? 'Advance One NHL Day'
+      : 'Start Replay + Advance One Day';
   }
 
   getHistoricalReplayDateLabel(): string {
@@ -931,6 +968,7 @@ export class CycleOne implements OnDestroy {
   private replayAdvanceBaseline: HistoricalReplayAdvanceBaseline | null = null;
   private replayAdvanceSawServerStart = false;
   private replayAdvanceReconciliationTimer: ReturnType<typeof setTimeout> | null = null;
+  private replayActionHandle: CompetitiveActionHandle | null = null;
   private stopRosterListeners = new Map<string, () => void>();
   private displayedRosterOwnerIds = new Set<string>();
   private loadedRosterOwnerIds = new Set<string>();
@@ -1727,7 +1765,10 @@ export class CycleOne implements OnDestroy {
     );
   }
 
-  private finishReplayAdvanceRequest(generation: number): void {
+  private finishReplayAdvanceRequest(
+    generation: number,
+    outcome: 'success' | 'error' | 'uncertain' = 'success',
+  ): void {
     if (generation !== this.replayAdvanceGeneration) {
       return;
     }
@@ -1737,6 +1778,8 @@ export class CycleOne implements OnDestroy {
     this.historicalReplayTransportNotice.set('');
     this.replayAdvanceBaseline = null;
     this.replayAdvanceSawServerStart = false;
+    this.replayActionHandle?.finish(outcome);
+    this.replayActionHandle = null;
   }
 
   private clearReplayAdvanceReconciliationTimer(): void {
@@ -1766,7 +1809,7 @@ export class CycleOne implements OnDestroy {
       this.historicalReplayMessage.set(
         control?.message || 'The replay day finished and the saved scores are current.',
       );
-      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration);
+      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration, 'success');
       return;
     }
 
@@ -1774,7 +1817,7 @@ export class CycleOne implements OnDestroy {
       this.historicalReplayError.set(
         control?.lastError || control?.message || 'Unable to advance the historical replay.',
       );
-      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration);
+      this.finishReplayAdvanceRequest(this.replayAdvanceGeneration, 'error');
     }
   }
 
@@ -1785,6 +1828,8 @@ export class CycleOne implements OnDestroy {
     this.historicalReplayTransportNotice.set('');
     this.replayAdvanceBaseline = null;
     this.replayAdvanceSawServerStart = false;
+    this.replayActionHandle?.finish('cancelled');
+    this.replayActionHandle = null;
   }
 
   private stopLiveListeners(): void {

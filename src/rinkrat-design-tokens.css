@@ -68,6 +68,17 @@
   --rr-danger: #e15d6f;
   --rr-info: #78b7ff;
 
+  /* High-visibility competitive commit action. This palette intentionally
+     stays independent from favorite-team colors so the final button cannot
+     disappear inside a light, gold, yellow, or low-contrast team theme. */
+  --rr-commit-face-top: #fff2a8;
+  --rr-commit-face-bottom: #ffbd24;
+  --rr-commit-ink: #111820;
+  --rr-commit-edge: #111820;
+  --rr-commit-bottom: #7a4100;
+  --rr-commit-glow: rgba(255, 176, 0, 0.42);
+  --rr-commit-highlight: #fffbe5;
+
   --rr-cut-small: 5px;
   --rr-cut-medium: 8px;
   --rr-control-shadow: 0 4px 0 #050b13;

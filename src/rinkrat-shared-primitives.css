@@ -875,3 +875,180 @@ html[data-background-theme='light-ice'] :is(.rr-field, .rr-textarea)::placeholde
     flex-direction: column-reverse;
   }
 }
+
+/* V1B: semantic competitive commit action ---------------------------------
+   A final roster, waiver, draft, or lineup confirmation must remain obvious
+   across neutral, NHL-team, Light Ice, Rink Dark, and OLED themes. */
+.rr-button--commit {
+  --rr-button-face: linear-gradient(
+    180deg,
+    var(--rr-commit-face-top) 0%,
+    var(--rr-commit-face-bottom) 100%
+  );
+  --rr-button-background: var(--rr-button-face);
+  --rr-button-ink: var(--rr-commit-ink);
+  --rr-button-color: var(--rr-commit-ink);
+  --rr-button-edge: var(--rr-commit-edge);
+  --rr-button-border: var(--rr-commit-edge);
+  --rr-button-bottom: var(--rr-commit-bottom);
+  --rr-button-border-width: 3px;
+  --rr-button-min-height: 52px;
+  --rr-button-padding: 0.72rem 1.1rem;
+  --rr-control-shadow:
+    0 5px 0 var(--rr-commit-bottom),
+    0 0 0 2px color-mix(in srgb, var(--rr-commit-highlight) 76%, transparent),
+    0 12px 28px var(--rr-commit-glow);
+  --rr-control-shadow-hover:
+    0 7px 0 var(--rr-commit-bottom),
+    0 0 0 3px color-mix(in srgb, var(--rr-commit-highlight) 84%, transparent),
+    0 16px 34px var(--rr-commit-glow);
+
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-width: min(100%, 13.5rem);
+  color: var(--rr-commit-ink);
+  font-size: 0.95rem;
+  font-weight: 950;
+  letter-spacing: 0.035em;
+  text-shadow: none;
+  text-transform: uppercase;
+}
+
+.rr-button--commit::after {
+  position: absolute;
+  inset: 2px 2px auto;
+  height: 3px;
+  background: color-mix(in srgb, var(--rr-commit-highlight) 82%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.rr-button--commit:not(:disabled):not([aria-disabled='true']) {
+  filter: saturate(1.08);
+}
+
+.rr-button--commit:hover:not(:disabled):not([aria-disabled='true']) {
+  filter: brightness(1.04) saturate(1.12);
+}
+
+.rr-button--commit:focus-visible {
+  box-shadow:
+    0 0 0 3px var(--rr-color-page),
+    0 0 0 7px var(--rr-commit-face-bottom),
+    var(--rr-control-shadow);
+}
+
+.rr-button--commit:disabled,
+.rr-button--commit[aria-disabled='true'] {
+  --rr-button-face: color-mix(in srgb, var(--rr-color-surface-strong) 84%, var(--rr-color-text-muted));
+  --rr-button-background: var(--rr-button-face);
+  --rr-button-ink: color-mix(in srgb, var(--rr-color-text-secondary) 84%, transparent);
+  --rr-button-color: var(--rr-button-ink);
+  --rr-button-edge: var(--rr-color-border-strong);
+  --rr-button-border: var(--rr-button-edge);
+  --rr-button-bottom: var(--rr-color-page);
+  opacity: 0.82;
+}
+
+.rr-button--commit:disabled::after,
+.rr-button--commit[aria-disabled='true']::after {
+  display: none;
+}
+
+.rr-commit-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 2px solid currentColor;
+  background: color-mix(in srgb, var(--rr-commit-highlight) 38%, transparent);
+  font-family: var(--rr-font-interface);
+  font-size: 1.05rem;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.rr-button--commit:disabled .rr-commit-mark,
+.rr-button--commit[aria-disabled='true'] .rr-commit-mark {
+  background: transparent;
+}
+
+.rr-commit-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.rr-commit-copy > small {
+  color: currentColor;
+  font-family: var(--rr-font-micro);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.065em;
+  line-height: 1.15;
+  opacity: 0.78;
+  text-transform: uppercase;
+}
+
+.rr-commit-copy > strong {
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+
+@media (max-width: 560px) {
+  .rr-button--commit {
+    width: 100%;
+  }
+}
+
+/* The add/drop workbench marks a fully verified final action explicitly. */
+.rr-button--commit[data-commit-ready='true'] {
+  outline: 2px solid color-mix(in srgb, var(--rr-commit-face-top) 86%, white);
+  outline-offset: 3px;
+}
+
+.rr-button--commit[data-commit-ready='true']::before {
+  position: absolute;
+  z-index: -1;
+  top: -35%;
+  bottom: -35%;
+  left: -45%;
+  width: 28%;
+  transform: skewX(-18deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, white 62%, transparent),
+    transparent
+  );
+  content: '';
+  pointer-events: none;
+  animation: rr-commit-ready-sheen 3.25s ease-in-out 0.45s infinite;
+}
+
+@keyframes rr-commit-ready-sheen {
+  0%,
+  68% {
+    left: -45%;
+    opacity: 0;
+  }
+
+  74% {
+    opacity: 0.72;
+  }
+
+  88%,
+  100% {
+    left: 125%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-button--commit[data-commit-ready='true']::before {
+    animation: none;
+  }
+}

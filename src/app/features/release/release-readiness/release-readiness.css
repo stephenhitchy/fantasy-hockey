@@ -621,3 +621,186 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* P1B: privacy-limited competitive action diagnostics for invite-beta testing. */
+.competitive-action-health {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.competitive-action-health-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.competitive-action-health-heading h3 {
+  margin: 3px 0 0;
+  color: var(--text-primary);
+  font-size: clamp(18px, 2vw, 22px);
+}
+
+.competitive-action-health-heading > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.competitive-action-health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.competitive-action-health-grid article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 94%, var(--rr-info));
+}
+
+.competitive-action-health-grid article > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.competitive-action-health-grid article > strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.competitive-action-health-grid article > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.competitive-action-health-grid .competitive-action-success {
+  border-color: color-mix(in srgb, var(--rr-success) 52%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-success) 8%, var(--surface-2));
+}
+
+.competitive-action-health-grid .competitive-action-alert {
+  border-color: color-mix(in srgb, var(--rr-warning) 64%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-warning) 10%, var(--surface-2));
+}
+
+.competitive-action-details {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.competitive-action-details > summary {
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 900;
+}
+
+.competitive-action-details > p {
+  color: var(--text-secondary);
+}
+
+.competitive-action-aggregate-list,
+.competitive-action-recent-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.competitive-action-recent-list {
+  margin-top: 14px;
+}
+
+.competitive-action-aggregate-list article,
+.competitive-action-recent-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.competitive-action-aggregate-list article > div,
+.competitive-action-recent-list article > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.competitive-action-aggregate-list strong,
+.competitive-action-recent-list strong {
+  color: var(--text-primary);
+}
+
+.competitive-action-aggregate-list small,
+.competitive-action-recent-list small,
+.competitive-action-aggregate-list article > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.competitive-action-recent-list article > span {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.competitive-action-recent-list article > .competitive-action-outcome--success {
+  color: var(--rr-success);
+  border-color: color-mix(in srgb, var(--rr-success) 50%, var(--border-soft));
+}
+
+.competitive-action-recent-list article > .competitive-action-outcome--error {
+  color: var(--rr-danger);
+  border-color: color-mix(in srgb, var(--rr-danger) 55%, var(--border-soft));
+}
+
+.competitive-action-recent-list article > .competitive-action-outcome--uncertain {
+  color: var(--rr-warning);
+  border-color: color-mix(in srgb, var(--rr-warning) 58%, var(--border-soft));
+}
+
+.competitive-action-outcome--cancelled {
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .competitive-action-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .competitive-action-health-heading,
+  .competitive-action-aggregate-list article,
+  .competitive-action-recent-list article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .competitive-action-health-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

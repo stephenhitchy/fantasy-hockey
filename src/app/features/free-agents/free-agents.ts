@@ -69,6 +69,11 @@ import {
 } from '../../core/replay/historical-replay.service';
 
 import { ActionSheet } from '../../shared/action-sheet/action-sheet';
+import { ClientHealthService } from '../../core/observability/client-health.service';
+import {
+  CompetitiveActionMonitorService,
+  type CompetitiveActionHandle,
+} from '../../core/observability/competitive-action-monitor.service';
 import {
   parseFreeAgentMobileViewState,
   resolveFreeAgentRoutePreferences,
@@ -559,6 +564,8 @@ export class FreeAgents implements OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    readonly clientHealth: ClientHealthService,
+    private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
     this.loadPage();
   }
@@ -869,6 +876,7 @@ export class FreeAgents implements OnDestroy {
 
   canConfirmMove(): boolean {
     return Boolean(
+      this.clientHealth.competitiveActionsReady() &&
       this.selectedAddAsset() &&
       this.selectedDropCandidate() &&
       this.selectedAssetEligibility() &&
@@ -878,6 +886,10 @@ export class FreeAgents implements OnDestroy {
     );
   }
 
+  getCompetitiveActionBlockReason(): string {
+    return this.clientHealth.competitiveActionBlockReason();
+  }
+
   async confirmAddDrop(): Promise<void> {
     const addAsset = this.selectedAddAsset();
 
@@ -885,6 +897,11 @@ export class FreeAgents implements OnDestroy {
     this.errorMessage.set('');
     this.rosterOperationHeadline.set('');
     this.rosterOperationDetail.set('');
+
+    if (!this.clientHealth.competitiveActionsReady()) {
+      this.errorMessage.set(this.getCompetitiveActionBlockReason());
+      return;
+    }
 
     if (!addAsset || !this.selectedDropCandidate()) {
       this.errorMessage.set('Choose a player and an eligible active or bench roster spot.');
@@ -900,6 +917,11 @@ export class FreeAgents implements OnDestroy {
 
     const submittedCandidate = this.selectedDropCandidate()!;
     const submittedTiming = this.resolveCandidateTransactionTiming(submittedCandidate);
+    const actionHandle: CompetitiveActionHandle = this.actionMonitor.begin(
+      this.selectedWaiver() ? 'waiver-claim' : 'add-drop',
+    );
+    let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
+
     this.rosterOperationHeadline.set(
       this.selectedWaiver() ? 'Submitting waiver claim…' : 'Confirming add / drop…',
     );
@@ -1052,16 +1074,23 @@ export class FreeAgents implements OnDestroy {
       }
 
       completed = true;
+      actionOutcome = 'success';
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to complete this roster move.',
-      );
+      const message =
+        error instanceof Error ? error.message : 'Unable to complete this roster move.';
+      this.errorMessage.set(message);
+      actionOutcome = /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
+        message,
+      )
+        ? 'uncertain'
+        : 'error';
       reopenComparison = true;
     } finally {
       if (this.operationWatchGeneration === operationWatchGeneration) {
         this.operationWatchGeneration += 1;
       }
       this.moving.set(false);
+      actionHandle.finish(actionOutcome);
     }
 
     if (completed) {
@@ -2143,6 +2172,10 @@ export class FreeAgents implements OnDestroy {
       return this.selectedWaiver() ? 'Submitting & Confirming…' : 'Saving & Confirming…';
     }
 
+    if (!this.clientHealth.competitiveActionsReady()) {
+      return this.clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue';
+    }
+
     if (!this.selectedDropCandidate()) {
       return 'Choose Roster Spot';
     }
@@ -2156,6 +2189,10 @@ export class FreeAgents implements OnDestroy {
 
   getTopConfirmationDetail(): string {
     const timing = this.transactionTiming();
+
+    if (!this.clientHealth.competitiveActionsReady()) {
+      return this.getCompetitiveActionBlockReason();
+    }
 
     if (this.moving()) {
       return 'RinkRat is waiting for either the secure server response or the live roster update. This panel will unlock automatically when one is confirmed.';

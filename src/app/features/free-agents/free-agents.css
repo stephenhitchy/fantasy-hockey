@@ -736,9 +736,7 @@ button:disabled {
 
 .confirm-move-button {
   flex: 0 0 auto;
-  min-width: 190px;
-  background: linear-gradient(135deg, #ffd166, var(--rr-free-agents-migration-color-10));
-  color: var(--rr-free-agents-migration-color-01);
+  min-width: 220px;
 }
 
 .pending-moves-card {

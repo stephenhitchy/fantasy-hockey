@@ -1235,11 +1235,15 @@
 
               <button
                 type="button"
-                class="ir-activation-confirm rr-button rr-button--primary"
+                class="ir-activation-confirm rr-button rr-button--commit"
                 (click)="confirmIrActivation()"
                 [disabled]="!canConfirmIrActivation()"
               >
-                {{ rosterMoveLoading() ? 'Activating...' : 'Confirm Activation' }}
+                <span class="rr-commit-mark" aria-hidden="true">✓</span>
+                <span class="rr-commit-copy">
+                  <small>Final lineup action</small>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Activating...' : 'Confirm Activation' }}</strong>
+                </span>
               </button>
             </footer>
           </section>
@@ -1285,8 +1289,12 @@
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
               <button type="button" class="ir-activation-cancel rr-button rr-button--secondary" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">Cancel</button>
-              <button type="button" class="ir-activation-confirm rr-button rr-button--primary" (click)="confirmIrBenchActivation()" [disabled]="!canConfirmIrBenchActivation()">
-                {{ rosterMoveLoading() ? 'Moving...' : 'Move to Bench' }}
+              <button type="button" class="ir-activation-confirm rr-button rr-button--commit" (click)="confirmIrBenchActivation()" [disabled]="!canConfirmIrBenchActivation()">
+                <span class="rr-commit-mark" aria-hidden="true">✓</span>
+                <span class="rr-commit-copy">
+                  <small>Final roster action</small>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Moving...' : 'Move to Bench' }}</strong>
+                </span>
               </button>
             </footer>
           </section>
@@ -1355,8 +1363,12 @@
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
               <button type="button" class="ir-activation-cancel rr-button rr-button--secondary" (click)="cancelBenchSwap()" [disabled]="rosterMoveLoading()">Cancel</button>
-              <button type="button" class="ir-activation-confirm rr-button rr-button--primary" (click)="confirmBenchSwap()" [disabled]="!canConfirmBenchSwap()">
-                {{ rosterMoveLoading() ? 'Applying...' : 'Confirm Swap' }}
+              <button type="button" class="ir-activation-confirm rr-button rr-button--commit" (click)="confirmBenchSwap()" [disabled]="!canConfirmBenchSwap()">
+                <span class="rr-commit-mark" aria-hidden="true">✓</span>
+                <span class="rr-commit-copy">
+                  <small>Final lineup action</small>
+                  <strong>{{ !clientHealth.competitiveActionsReady() ? (clientHealth.online() ? 'Reconnecting…' : 'Reconnect to Continue') : rosterMoveLoading() ? 'Applying...' : 'Confirm Swap' }}</strong>
+                </span>
               </button>
             </footer>
           </section>

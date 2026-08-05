@@ -74,18 +74,19 @@
               <button
                 type="button"
                 class="advance-replay-button rr-button rr-button--secondary"
+                title="Advance One NHL Day when historical replay is active"
                 (click)="advanceReplayOneDay()"
                 [disabled]="isHistoricalReplayAdvanceLocked()"
               >
-                {{
-                  isHistoricalReplayAdvanceLocked()
-                    ? 'Processing Day...'
-                    : historicalReplayControl()?.enabled
-                      ? 'Advance One NHL Day'
-                      : 'Start Replay + Advance One Day'
-                }}
+                {{ getHistoricalReplayAdvanceButtonLabel() }}
               </button>
             </div>
+
+            @if (getHistoricalReplayActionBlockReason()) {
+              <small class="historical-replay-connection-note rr-notice rr-notice--warning" role="status">
+                {{ getHistoricalReplayActionBlockReason() }}
+              </small>
+            }
 
             @if (historicalReplayTransportNotice()) {
               <small class="historical-replay-transport-note" role="status" aria-live="polite">

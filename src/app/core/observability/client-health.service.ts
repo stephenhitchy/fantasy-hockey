@@ -84,6 +84,22 @@ export class ClientHealthService implements OnDestroy {
     return null;
   });
 
+  readonly competitiveActionsReady = computed(
+    () => this.online() && !this.restoredNoticeVisible(),
+  );
+
+  readonly competitiveActionBlockReason = computed(() => {
+    if (!this.online()) {
+      return 'Reconnect to the internet before submitting a competitive action. No roster, waiver, draft, or testing request has been sent.';
+    }
+
+    if (this.restoredNoticeVisible()) {
+      return 'Connection restored. RinkRat is refreshing live league data for a few seconds before competitive actions unlock.';
+    }
+
+    return '';
+  });
+
   readonly shouldPauseDecorations = computed(
     () => !this.online() || !this.visible() || this.saveData(),
   );
