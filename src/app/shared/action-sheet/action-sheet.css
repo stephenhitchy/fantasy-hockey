@@ -15,7 +15,7 @@
 
 .rr-action-sheet {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: min(42rem, 100%);
   max-height: min(88dvh, 52rem);
   overflow: hidden;
@@ -24,6 +24,10 @@
   background: var(--rr-color-surface);
   color: var(--rr-color-text);
   box-shadow: var(--rr-shadow-deep);
+}
+
+.rr-action-sheet--wide {
+  width: min(68rem, 100%);
 }
 
 .rr-action-sheet__header {
@@ -86,6 +90,16 @@
   opacity: 0.6;
 }
 
+.rr-action-sheet__top-actions:empty {
+  display: none;
+}
+
+.rr-action-sheet__top-actions:not(:empty) {
+  padding: var(--rr-space-3) var(--rr-space-5);
+  border-bottom: 1px solid color-mix(in srgb, var(--rr-color-border) 78%, transparent);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 92%, var(--rr-color-surface));
+}
+
 .rr-action-sheet__content {
   min-height: 0;
   overflow-y: auto;
@@ -123,6 +137,10 @@
   .rr-action-sheet__header,
   .rr-action-sheet__content {
     padding: var(--rr-space-4);
+  }
+
+  .rr-action-sheet__top-actions:not(:empty) {
+    padding-inline: var(--rr-space-4);
   }
 
   .rr-action-sheet__footer:not(:empty) {

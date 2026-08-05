@@ -58,8 +58,14 @@ import { defaultScoringRules } from '../../core/scoring/scoring-rules';
 
 import {
   resolveRosterMoveAssetCycleEligibility,
-  RosterMoveAssetCycleEligibility,
+  type RosterMoveAssetCycleEligibility,
+  type RosterMoveEligibilityOptions,
 } from '../../core/transactions/roster-move-eligibility.service';
+
+import {
+  listenToHistoricalReplayControl,
+  type HistoricalReplayControl,
+} from '../../core/replay/historical-replay.service';
 
 import { ActionSheet } from '../../shared/action-sheet/action-sheet';
 import { ViewportOverlayPortalDirective } from '../../shared/accessibility/viewport-overlay-portal.directive';
@@ -70,6 +76,20 @@ import {
   type FreeAgentMobileViewState,
   type FreeAgentPoolTab,
 } from './free-agent-mobile-flow.util';
+import {
+  buildFreeAgentStatComparisonRows,
+  buildIncomingEligibilityComparisonGames,
+  buildOutgoingWindowComparisonGames,
+  resolveFreeAgentTransactionTiming,
+  type FreeAgentComparisonGame,
+  type FreeAgentTransactionTimingDecision,
+} from './free-agent-transaction-comparison.util';
+import {
+  isFreeAgentOperationObserved,
+  withFreeAgentOperationTimeout,
+  type FreeAgentOperationExpectation,
+  type FreeAgentOperationObservation,
+} from './free-agent-operation-resolution.util';
 
 type FreeAgentPositionFilter = 'ALL' | DraftPosition;
 type FreeAgentSortMode =
@@ -150,6 +170,9 @@ export class FreeAgents implements OnDestroy {
   selectedAssetEligibility = signal<RosterMoveAssetCycleEligibility | null>(null);
   eligibilityLoading = signal(false);
   eligibilityError = signal('');
+  historicalReplayControl = signal<HistoricalReplayControl | null>(null);
+  historicalReplayControlLoaded = signal(false);
+  historicalReplayControlError = signal('');
 
   readonly positionFilters: FreeAgentPositionFilter[] = ['ALL', 'LW', 'C', 'RW', 'D', 'G'];
   readonly cycleDotSlots = [0, 1, 2, 3, 4, 5];
@@ -166,6 +189,7 @@ export class FreeAgents implements OnDestroy {
   private stopTeamsListener: (() => void) | null = null;
   private stopLeagueCyclesListener: (() => void) | null = null;
   private stopWaiversListener: (() => void) | null = null;
+  private stopHistoricalReplayListener: (() => void) | null = null;
   private rosterListeners: Record<string, () => void> = {};
   private teamWindowListeners: Record<number, () => void> = {};
   private eligibilityRequestKey = '';
@@ -173,6 +197,7 @@ export class FreeAgents implements OnDestroy {
   private hasReceivedWaivers = false;
   private viewStateRestored = false;
   private focusPendingMovesRequested = false;
+  private operationWatchGeneration = 0;
 
   readonly selectedAddAsset = computed(
     () =>
@@ -428,6 +453,90 @@ export class FreeAgents implements OnDestroy {
     return this.dropCandidates().find((candidate) => candidate.slotId === selectedSlotId) ?? null;
   });
 
+  readonly transactionTiming = computed((): FreeAgentTransactionTimingDecision | null => {
+    const addAsset = this.selectedAddAsset();
+    const candidate = this.selectedDropCandidate();
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!addAsset || !candidate) {
+      return null;
+    }
+
+    const outgoingWindow = candidate.currentWindow;
+
+    return resolveFreeAgentTransactionTiming({
+      incomingName: this.getAssetName(addAsset),
+      outgoingName: candidate.asset ? this.getRosterAssetName(candidate.asset) : null,
+      rosterArea: candidate.rosterArea,
+      isWaiver: Boolean(this.selectedWaiver()),
+      seasonHasStarted: this.hasStartedCycleWindows(),
+      canApplyImmediately: candidate.canApplyImmediately,
+      effectiveCycleNumber: candidate.effectiveCycleNumber,
+      slotNextCycleNumber: candidate.slotNextCycleNumber,
+      outgoingCycleNumber: outgoingWindow?.cycleNumber ??
+        (candidate.rosterArea === 'active' ? candidate.slotNextCycleNumber : null),
+      outgoingWindowStatus: outgoingWindow?.status ?? null,
+      outgoingFinalGames: outgoingWindow?.gamesPlayed ?? 0,
+      outgoingLiveGames: outgoingWindow?.liveGameIds.length ?? 0,
+      outgoingScheduledGames: outgoingWindow?.scheduledGames ?? this.getRequiredGamesPerCycle(),
+      incomingCurrentCycleNumber: eligibility?.currentCycleNumber ?? null,
+      incomingFinalGames: eligibility?.completedGamesInCurrentCycle ?? 0,
+      incomingLiveGames: eligibility?.liveGamesInCurrentCycle ?? 0,
+      incomingScheduledGames: eligibility?.scheduledGamesInCurrentCycle ??
+        this.getRequiredGamesPerCycle(),
+      incomingHasStarted: eligibility?.currentCycleHasStarted ?? false,
+      incomingEarliestCycleNumber: eligibility?.earliestEligibleCycleNumber ?? null,
+    });
+  });
+
+  readonly outgoingComparisonGames = computed(() =>
+    buildOutgoingWindowComparisonGames(
+      this.selectedDropCandidate()?.currentWindow ?? null,
+      this.getRequiredGamesPerCycle(),
+    ),
+  );
+
+  readonly incomingCurrentComparisonGames = computed(() => {
+    const addAsset = this.selectedAddAsset();
+    const eligibility = this.selectedAssetEligibility();
+    const projectionMarkers = addAsset
+      ? this.getProjectionAsset(addAsset).currentTeamCycleGames
+      : null;
+
+    return buildIncomingEligibilityComparisonGames(
+      eligibility,
+      eligibility?.currentCycleNumber ?? null,
+      projectionMarkers,
+      this.getRequiredGamesPerCycle(),
+    );
+  });
+
+  readonly incomingStartComparisonGames = computed(() => {
+    const addAsset = this.selectedAddAsset();
+    const candidate = this.selectedDropCandidate();
+    const eligibility = this.selectedAssetEligibility();
+    const projectionMarkers = addAsset
+      ? this.getProjectionAsset(addAsset).currentTeamCycleGames
+      : null;
+
+    return buildIncomingEligibilityComparisonGames(
+      eligibility,
+      candidate?.effectiveCycleNumber ?? null,
+      projectionMarkers,
+      this.getRequiredGamesPerCycle(),
+    );
+  });
+
+  readonly statComparisonRows = computed(() => {
+    const incoming = this.selectedAddAsset();
+    const outgoing = this.getSelectedOutgoingProjectionAsset();
+
+    return buildFreeAgentStatComparisonRows(
+      outgoing ? this.getStatBreakdown(outgoing) : [],
+      incoming ? this.getStatBreakdown(incoming) : [],
+    );
+  });
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -436,11 +545,13 @@ export class FreeAgents implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.operationWatchGeneration += 1;
     this.persistFreeAgentViewState();
     this.stopDraftListener?.();
     this.stopTeamsListener?.();
     this.stopLeagueCyclesListener?.();
     this.stopWaiversListener?.();
+    this.stopHistoricalReplayListener?.();
     this.clearRosterListeners();
     this.clearTeamWindowListeners();
   }
@@ -461,6 +572,10 @@ export class FreeAgents implements OnDestroy {
 
   isRosterOperationPending(): boolean {
     return this.moving();
+  }
+
+  shouldShowRosterActionShield(): boolean {
+    return this.moving() && this.flowStep() !== 'roster-slot';
   }
 
   async loadPage(): Promise<void> {
@@ -487,6 +602,44 @@ export class FreeAgents implements OnDestroy {
       }
 
       this.league.set(league);
+
+      this.stopHistoricalReplayListener = listenToHistoricalReplayControl(
+        leagueId,
+        (control) => {
+          const wasLoaded = this.historicalReplayControlLoaded();
+          const previousSignature = this.getHistoricalReplayControlSignature(
+            this.historicalReplayControl(),
+          );
+          const nextSignature = this.getHistoricalReplayControlSignature(control);
+
+          this.historicalReplayControl.set(control);
+          this.historicalReplayControlLoaded.set(true);
+          this.historicalReplayControlError.set('');
+
+          if (wasLoaded && previousSignature === nextSignature) {
+            return;
+          }
+
+          const selectedAsset = this.selectedAddAsset();
+
+          if (selectedAsset) {
+            void this.loadSelectedAssetEligibility(selectedAsset, true);
+          }
+        },
+        (error) => {
+          console.warn('Unable to load historical replay timing for add/drop.', error);
+          const message =
+            'RinkRat could not verify whether historical replay is active. Reload the page before submitting an add/drop so the matchup timing cannot be calculated from the wrong NHL date.';
+
+          this.historicalReplayControlLoaded.set(true);
+          this.historicalReplayControlError.set(message);
+
+          if (this.selectedAddAsset()) {
+            this.selectedAssetEligibility.set(null);
+            this.eligibilityError.set(message);
+          }
+        },
+      );
 
       this.stopDraftListener = listenToFantasyDraft(leagueId, (draft) => {
         this.draft.set(draft);
@@ -646,6 +799,15 @@ export class FreeAgents implements OnDestroy {
     this.persistFreeAgentViewState();
   }
 
+  clearSelectedDropCandidate(): void {
+    if (this.moving()) {
+      return;
+    }
+
+    this.selectedDropSlotId.set('');
+    this.persistFreeAgentViewState();
+  }
+
   canConfirmMove(): boolean {
     return Boolean(
       this.selectedAddAsset() &&
@@ -676,6 +838,8 @@ export class FreeAgents implements OnDestroy {
     }
 
     this.moving.set(true);
+    const operationWatchGeneration = ++this.operationWatchGeneration;
+    let completed = false;
 
     try {
       await this.loadSelectedAssetEligibility(addAsset, true);
@@ -698,11 +862,22 @@ export class FreeAgents implements OnDestroy {
       const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const leagueOwnerIds = this.teams().map((team) => team.ownerId);
+      const expectation: FreeAgentOperationExpectation = waiver
+        ? {
+            kind: 'waiver-claim',
+            waiverId: waiver.id,
+            ownerId: this.userId,
+          }
+        : {
+            kind: 'roster-slot',
+            rosterArea: dropCandidate.rosterArea,
+            slotId: dropCandidate.slotId,
+            incomingAssetKey: addAsset.assetKey,
+          };
 
       if (waiver) {
         const moveType: FantasyWaiverClaimMoveType = dropCandidate.moveType;
-
-        await placeWaiverClaim({
+        const request = placeWaiverClaim({
           leagueId: this.leagueId,
           ownerId: this.userId,
           waiverId: waiver.id,
@@ -713,11 +888,26 @@ export class FreeAgents implements OnDestroy {
           effectiveLabel,
         });
 
+        await this.awaitRosterActionConfirmation(
+          request,
+          expectation,
+          undefined,
+          operationWatchGeneration,
+        );
+
         this.successMessage.set(
           `Claim submitted for ${this.getAssetName(addAsset)}. If awarded, the player is reserved for this slot and cannot activate before Matchup ${effectiveCycleNumber}.`,
         );
       } else if (dropCandidate.moveType === 'open-slot') {
-        const execution = await addFreeAgentToOpenRosterSlot({
+        const fallbackExecution = {
+          mode: dropCandidate.rosterArea === 'bench'
+            ? 'ownership-only' as const
+            : dropCandidate.canApplyImmediately
+              ? 'immediate' as const
+              : 'queued' as const,
+          effectiveCycleNumber,
+        };
+        const request = addFreeAgentToOpenRosterSlot({
           leagueId: this.leagueId,
           ownerId: this.userId,
           targetSlotId: dropCandidate.slotId,
@@ -727,6 +917,12 @@ export class FreeAgents implements OnDestroy {
           leagueOwnerIds,
           preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
         });
+        const execution = await this.awaitRosterActionConfirmation(
+          request,
+          expectation,
+          fallbackExecution,
+          operationWatchGeneration,
+        );
 
         this.successMessage.set(dropCandidate.rosterArea === 'bench'
           ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
@@ -740,7 +936,15 @@ export class FreeAgents implements OnDestroy {
           throw new Error('The selected drop option is missing a roster player or goalie unit.');
         }
 
-        const execution = await addDropRosterAsset({
+        const fallbackExecution = {
+          mode: dropCandidate.rosterArea === 'bench'
+            ? 'ownership-only' as const
+            : dropCandidate.canApplyImmediately
+              ? 'immediate' as const
+              : 'queued' as const,
+          effectiveCycleNumber,
+        };
+        const request = addDropRosterAsset({
           leagueId: this.leagueId,
           ownerId: this.userId,
           dropSlotId: dropCandidate.slotId,
@@ -750,6 +954,12 @@ export class FreeAgents implements OnDestroy {
           leagueOwnerIds,
           preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
         });
+        const execution = await this.awaitRosterActionConfirmation(
+          request,
+          expectation,
+          fallbackExecution,
+          operationWatchGeneration,
+        );
 
         this.successMessage.set(dropCandidate.rosterArea === 'bench'
           ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
@@ -760,22 +970,24 @@ export class FreeAgents implements OnDestroy {
               : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`);
       }
 
-      this.selectedAddAssetKey.set('');
-      this.selectedWaiverId.set('');
-      this.selectedDropSlotId.set('');
-      this.selectedAssetEligibility.set(null);
-      this.flowStep.set('player-pool');
-      this.preferredSlotId.set('');
-      this.preferredRosterArea.set('');
-      this.restoredEligibilityKey = '';
-      this.persistFreeAgentViewState();
-      this.restorePlayerPoolScroll();
+      completed = true;
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to complete this roster move.',
       );
     } finally {
+      if (this.operationWatchGeneration === operationWatchGeneration) {
+        this.operationWatchGeneration += 1;
+      }
       this.moving.set(false);
+    }
+
+    if (completed) {
+      // Let Angular remove the busy state while the action sheet is still in the
+      // viewport. Closing it on the following frame avoids a Safari portal-lock
+      // race that could otherwise leave the dimmed screen behind after success.
+      await this.waitForUiUnlockFrame();
+      this.finishSuccessfulRosterMove();
     }
   }
 
@@ -785,10 +997,14 @@ export class FreeAgents implements OnDestroy {
     this.moving.set(true);
 
     try {
-      const eligibility = await resolveRosterMoveAssetCycleEligibility(
-        waiver.asset,
-        this.getRequiredGamesPerCycle(),
-        { forceRefresh: true },
+      const eligibility = await withFreeAgentOperationTimeout(
+        resolveRosterMoveAssetCycleEligibility(
+          waiver.asset,
+          this.getRequiredGamesPerCycle(),
+          this.getRosterMoveEligibilityOptions(true),
+        ),
+        15_000,
+        'The NHL schedule check took too long. Waiver processing has been unlocked; check the connection and try again.',
       );
       const effectiveCycleNumber = Math.max(
         this.getFallbackNextCycleNumber(),
@@ -1255,6 +1471,19 @@ export class FreeAgents implements OnDestroy {
     return `${value} ${item.statUnit}`;
   }
 
+  getStatComparisonValueLabel(item: ProjectionStatBreakdownItem | null): string {
+    return item ? this.getBreakdownStatLabel(item) : '—';
+  }
+
+  getStatComparisonPointsLabel(item: ProjectionStatBreakdownItem | null): string {
+    if (!item) {
+      return 'No contribution';
+    }
+
+    const prefix = item.fantasyPoints >= 0 ? '+' : '';
+    return `${prefix}${item.fantasyPoints.toFixed(1)} fantasy pts`;
+  }
+
   getProjectionSourceLabel(asset: DraftableAsset): string {
     const source = this.getProjectionAsset(asset).projectionDataSource;
 
@@ -1583,10 +1812,188 @@ export class FreeAgents implements OnDestroy {
 
   getConfirmButtonLabel(): string {
     if (this.moving()) {
-      return this.selectedWaiver() ? 'Submitting Claim...' : 'Saving Move...';
+      return this.selectedWaiver() ? 'Submitting & Confirming…' : 'Saving & Confirming…';
+    }
+
+    if (!this.selectedDropCandidate()) {
+      return 'Choose Roster Spot';
+    }
+
+    if (this.eligibilityLoading()) {
+      return 'Checking Matchup Timing...';
     }
 
     return this.selectedWaiver() ? 'Submit Waiver Claim' : 'Confirm Add / Drop';
+  }
+
+  getTopConfirmationDetail(): string {
+    const timing = this.transactionTiming();
+
+    if (this.moving()) {
+      return 'RinkRat is waiting for either the secure server response or the live roster update. This panel will unlock automatically when one is confirmed.';
+    }
+
+    if (!this.selectedDropCandidate()) {
+      return 'Choose the exact roster spot below. The button unlocks only after RinkRat verifies both six-game timelines.';
+    }
+
+    if (this.eligibilityLoading()) {
+      return 'Refreshing the incoming player’s exact NHL six-game block before this move can be submitted.';
+    }
+
+    if (this.eligibilityError()) {
+      return this.eligibilityError();
+    }
+
+    return timing
+      ? `${timing.startLabel} · ${timing.headline}`
+      : 'Review the selected roster spot and matchup timing before confirming.';
+  }
+
+  getTransactionTimingClass(): string {
+    return `transaction-timing-${this.transactionTiming()?.tone ?? 'waiting'}`;
+  }
+
+  getTransactionDelayLabel(): string {
+    switch (this.transactionTiming()?.delaySource) {
+      case 'outgoing-player':
+        return 'Delayed by current player';
+      case 'incoming-player':
+        return 'Delayed by incoming player';
+      case 'both-players':
+        return 'Both players affect timing';
+      case 'roster-boundary':
+        return 'Waiting for roster-slot boundary';
+      case 'bench':
+        return 'Bench ownership updates now';
+      case 'waiver':
+        return 'Waiver result required';
+      case 'none':
+        return 'No matchup delay';
+      default:
+        return 'Timing check';
+    }
+  }
+
+  getOutgoingComparisonMatchupLabel(candidate: DropCandidate): string {
+    if (candidate.rosterArea === 'bench') {
+      return 'Bench · not currently scoring';
+    }
+
+    const window = candidate.currentWindow;
+
+    if (!window) {
+      return `Matchup ${candidate.slotNextCycleNumber} · six-game window not started`;
+    }
+
+    const liveSuffix = window.liveGameIds.length > 0
+      ? ` · ${window.liveGameIds.length} live`
+      : '';
+
+    return `Matchup ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames || this.getRequiredGamesPerCycle()} team games final${liveSuffix}`;
+  }
+
+  getIncomingComparisonMatchupLabel(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility) {
+      return this.eligibilityLoading()
+        ? 'Checking exact NHL six-game block…'
+        : 'Incoming matchup status unavailable';
+    }
+
+    const liveSuffix = eligibility.liveGamesInCurrentCycle > 0
+      ? ` · ${eligibility.liveGamesInCurrentCycle} live`
+      : '';
+    const replaySuffix = eligibility.evaluationMode === 'historical-replay'
+      ? ` · replay through ${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}`
+      : '';
+
+    return `Matchup ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} team games final${liveSuffix}${replaySuffix}`;
+  }
+
+  getEligibilityEvaluationLabel(): string {
+    const eligibility = this.selectedAssetEligibility();
+
+    if (!eligibility || eligibility.evaluationMode !== 'historical-replay') {
+      return '';
+    }
+
+    return `Historical replay timing uses the simulated NHL schedule through ${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}, not today’s live NHL date.`;
+  }
+
+  getComparisonGameClass(game: FreeAgentComparisonGame): string {
+    return `transaction-game transaction-game-${game.state}`;
+  }
+
+  getComparisonGameDate(game: FreeAgentComparisonGame): string {
+    if (!game.gameDate) {
+      return 'Date pending';
+    }
+
+    const parsed = new Date(`${game.gameDate}T12:00:00Z`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return game.gameDate;
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(parsed);
+  }
+
+  getComparisonGameStatusLabel(
+    game: FreeAgentComparisonGame,
+    perspective: 'outgoing' | 'incoming' | 'start',
+  ): string {
+    switch (game.state) {
+      case 'appeared':
+        return perspective === 'outgoing' && typeof game.fantasyPoints === 'number'
+          ? `Played · ${game.fantasyPoints.toFixed(1)} pts`
+          : 'Player appeared';
+      case 'missed':
+        return 'Team played · player did not appear';
+      case 'final':
+        return 'NHL team game final';
+      case 'live':
+        return perspective === 'outgoing' && typeof game.fantasyPoints === 'number'
+          ? `Live · ${game.fantasyPoints.toFixed(1)} pts`
+          : 'Game live now';
+      case 'upcoming':
+        return perspective === 'start' ? 'Scheduled start-window game' : 'Upcoming';
+      case 'pending':
+      default:
+        return 'Schedule not available yet';
+    }
+  }
+
+  getIncomingStartWindowTitle(): string {
+    const candidate = this.selectedDropCandidate();
+
+    return candidate
+      ? `First legal start · Matchup ${candidate.effectiveCycleNumber}`
+      : 'First legal start';
+  }
+
+  getIncomingStartWindowDetail(): string {
+    const candidate = this.selectedDropCandidate();
+    const addAsset = this.selectedAddAsset();
+
+    if (!candidate || !addAsset) {
+      return 'Choose a roster spot to calculate the incoming player’s first legal six-game window.';
+    }
+
+    const scheduledGames = this.incomingStartComparisonGames().filter(
+      (game) => game.gameId !== null,
+    ).length;
+
+    if (scheduledGames === 0) {
+      return `The exact ${this.getRequiredGamesPerCycle()} NHL team games will appear when the Matchup ${candidate.effectiveCycleNumber} schedule is available and will freeze when this roster slot opens.`;
+    }
+
+    return `These are ${this.getAssetTeamLabel(addAsset)}’s currently scheduled NHL team games for Matchup ${candidate.effectiveCycleNumber}. They become immutable for this roster slot when the move activates; postponements before activation can still update the preview.`;
   }
 
   getPreferredRosterTargetLabel(): string {
@@ -1756,6 +2163,163 @@ export class FreeAgents implements OnDestroy {
         ? 'roster-slot'
         : 'player-pool',
     );
+  }
+
+  private finishSuccessfulRosterMove(): void {
+    this.selectedAddAssetKey.set('');
+    this.selectedWaiverId.set('');
+    this.selectedDropSlotId.set('');
+    this.selectedAssetEligibility.set(null);
+    this.flowStep.set('player-pool');
+    this.preferredSlotId.set('');
+    this.preferredRosterArea.set('');
+    this.restoredEligibilityKey = '';
+    this.persistFreeAgentViewState();
+    this.restorePlayerPoolScroll();
+  }
+
+  private getFreeAgentOperationObservation(): FreeAgentOperationObservation {
+    const roster = this.myRoster();
+
+    return {
+      activeSlots: (roster?.activeSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset),
+        pendingIncomingAssetKey: this.getRosterAssetKey(
+          slot.pendingMove?.incomingAsset ?? null,
+        ),
+      })),
+      benchSlots: (roster?.benchSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset),
+        pendingIncomingAssetKey: null,
+      })),
+      waivers: this.waivers().map((waiver) => ({
+        waiverId: waiver.id,
+        claimOwnerIds: (waiver.claims ?? []).map((claim) => claim.ownerId),
+      })),
+    };
+  }
+
+  private isFreeAgentOperationConfirmed(
+    expectation: FreeAgentOperationExpectation,
+  ): boolean {
+    return isFreeAgentOperationObserved(
+      expectation,
+      this.getFreeAgentOperationObservation(),
+    );
+  }
+
+  private async waitForFreeAgentOperationObservation(
+    expectation: FreeAgentOperationExpectation,
+    timeoutMs: number,
+    generation: number,
+  ): Promise<boolean> {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+
+    while (
+      this.operationWatchGeneration === generation &&
+      Date.now() <= deadline
+    ) {
+      if (this.isFreeAgentOperationConfirmed(expectation)) {
+        return true;
+      }
+
+      await this.delay(120);
+    }
+
+    return this.isFreeAgentOperationConfirmed(expectation);
+  }
+
+  private async awaitRosterActionConfirmation<T>(
+    actionPromise: Promise<T>,
+    expectation: FreeAgentOperationExpectation,
+    listenerFallbackValue: T,
+    generation: number,
+  ): Promise<T> {
+    let settled = false;
+    let rejected = false;
+    let settledValue: T | undefined;
+    let settledError: unknown;
+
+    void actionPromise.then(
+      (value) => {
+        settled = true;
+        settledValue = value;
+      },
+      (error: unknown) => {
+        settled = true;
+        rejected = true;
+        settledError = error;
+      },
+    );
+
+    const deadline = Date.now() + 20_000;
+
+    while (
+      this.operationWatchGeneration === generation &&
+      Date.now() <= deadline
+    ) {
+      if (this.isFreeAgentOperationConfirmed(expectation)) {
+        return listenerFallbackValue;
+      }
+
+      if (settled) {
+        if (!rejected) {
+          return settledValue as T;
+        }
+
+        // A mobile browser can receive a callable transport error a fraction of
+        // a second before the authoritative Firestore listener reports the
+        // committed transaction. Give that listener a brief reconciliation
+        // window before surfacing an error to the manager.
+        if (
+          await this.waitForFreeAgentOperationObservation(
+            expectation,
+            2_500,
+            generation,
+          )
+        ) {
+          return listenerFallbackValue;
+        }
+
+        throw settledError;
+      }
+
+      await this.delay(120);
+    }
+
+    if (this.isFreeAgentOperationConfirmed(expectation)) {
+      return listenerFallbackValue;
+    }
+
+    if (settled && !rejected) {
+      return settledValue as T;
+    }
+
+    if (settled && rejected) {
+      throw settledError;
+    }
+
+    throw new Error(
+      'RinkRat did not receive a final server or live-roster confirmation. The screen has been unlocked so it cannot remain stuck. Check My Team before retrying because the transaction may still finish in the background.',
+    );
+  }
+
+  private delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, Math.max(0, milliseconds));
+    });
+  }
+
+  private waitForUiUnlockFrame(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
   }
 
   private persistFreeAgentViewState(): void {
@@ -1932,10 +2496,14 @@ export class FreeAgents implements OnDestroy {
     this.eligibilityError.set('');
 
     try {
-      const eligibility = await resolveRosterMoveAssetCycleEligibility(
-        asset,
-        this.getRequiredGamesPerCycle(),
-        { forceRefresh },
+      const eligibility = await withFreeAgentOperationTimeout(
+        resolveRosterMoveAssetCycleEligibility(
+          asset,
+          this.getRequiredGamesPerCycle(),
+          this.getRosterMoveEligibilityOptions(forceRefresh),
+        ),
+        15_000,
+        'The NHL schedule check took too long. The screen has been unlocked; check your connection and press Retry Check before submitting the move again.',
       );
 
       if (
@@ -1964,6 +2532,93 @@ export class FreeAgents implements OnDestroy {
         this.eligibilityLoading.set(false);
       }
     }
+  }
+
+  private getRosterMoveEligibilityOptions(
+    forceRefresh: boolean,
+  ): RosterMoveEligibilityOptions {
+    if (!this.historicalReplayControlLoaded()) {
+      throw new Error(
+        'RinkRat is checking whether historical replay is active. Wait a moment and retry the add/drop timing check.',
+      );
+    }
+
+    if (this.historicalReplayControlError()) {
+      throw new Error(this.historicalReplayControlError());
+    }
+
+    const replay = this.historicalReplayControl();
+
+    if (!replay?.enabled) {
+      return { forceRefresh };
+    }
+
+    if (replay.status === 'advancing') {
+      throw new Error(
+        'Historical replay is advancing to the next day. Wait for the replay to finish before checking or submitting this roster move.',
+      );
+    }
+
+    if (replay.status === 'error') {
+      throw new Error(
+        'Historical replay must recover from its last error before RinkRat can determine the correct add/drop matchup.',
+      );
+    }
+
+    if (!replay.simulatedDate) {
+      throw new Error(
+        'The historical replay date is not ready yet. Wait a moment and retry the add/drop timing check.',
+      );
+    }
+
+    const referenceDate = new Date(`${replay.simulatedDate}T12:00:00Z`);
+
+    if (Number.isNaN(referenceDate.getTime())) {
+      throw new Error(
+        'The historical replay date is invalid. Advance or reset the replay before submitting this roster move.',
+      );
+    }
+
+    return {
+      forceRefresh,
+      referenceDate,
+      seasonOverride: replay.targetSeason,
+      completedThroughDate: replay.simulatedDate,
+    };
+  }
+
+  private getHistoricalReplayControlSignature(
+    control: HistoricalReplayControl | null,
+  ): string {
+    if (!control) {
+      return 'none';
+    }
+
+    return [
+      control.enabled ? 'enabled' : 'disabled',
+      control.status,
+      control.simulatedDate ?? 'no-date',
+      control.targetSeason,
+    ].join('::');
+  }
+
+  private getReplayEvaluationDateLabel(date: string | null): string {
+    if (!date) {
+      return 'the current simulated date';
+    }
+
+    const parsed = new Date(`${date}T12:00:00Z`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return date;
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(parsed);
   }
 
   private refreshTeamWindowListeners(cycles: FantasyCycle[]): void {

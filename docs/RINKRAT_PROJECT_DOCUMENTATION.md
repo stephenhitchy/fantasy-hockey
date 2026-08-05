@@ -1,3 +1,142 @@
+## Batch M5.2 — Side-by-Side Add/Drop Comparison and Transaction Confirmation Recovery
+
+### Purpose
+
+This Hosting-only refinement follows Batch M5.1 and addresses two issues found during add/drop testing:
+
+1. managers needed a more direct old-player-versus-new-player comparison that explained the exact asynchronous matchup timing; and
+2. a roster transaction could commit successfully while the callable response remained pending or failed to reach mobile Safari, leaving the compare sheet dimmed with an endless busy indicator until the page was refreshed.
+
+The batch changes presentation and client-side confirmation recovery only. Production Scoring V3, Projection V11, waiver priority, roster authority, scheduled-move authority, independent six-game windows, Cloud Functions, Firestore rules, and indexes remain unchanged.
+
+### Side-by-side decision surface
+
+The Available Players comparison sheet now supports a wider desktop surface while retaining a two-column comparison on phones:
+
+- the current roster player or open slot is always on the left;
+- the incoming player or goalie unit is always on the right;
+- the primary confirmation action is fixed at the top of the sheet rather than after the long comparison;
+- season points, next-six projection, and rest-of-season estimate are shown for both sides; and
+- the full current-season scoring-category table shows the raw NHL total and RinkRat fantasy-point contribution for every category available on either player.
+
+The top action stays disabled until the manager selects a compatible roster slot and the incoming player's NHL-team schedule has been refreshed. While a request is pending, the same visible sheet explains that RinkRat is waiting for either the secure callable response or the authoritative live roster update.
+
+### Exact six-game and matchup explanation
+
+The comparison uses the actual asynchronous state of both sides rather than a generic league-wide week:
+
+- the outgoing side shows the immutable roster-slot matchup, exact six saved NHL team games, dates, opponents, final/live/upcoming state, appearance or missed-game status, and saved fantasy points where available;
+- the incoming side shows the player's current NHL six-game block, exact game dates and opponents, played/missed/live/upcoming markers, and current matchup number;
+- a separate **Exact First Legal Start** section shows the six currently scheduled NHL team games for the first matchup in which the incoming player can legally own the selected roster slot; and
+- the preview states that postponements may update an unstarted schedule, while the roster-slot schedule becomes immutable when that window begins.
+
+Timing copy names the source of any delay:
+
+- **No matchup delay** when both assignments are untouched and can be replaced safely;
+- the current player by name when their active six-game roster window must finish;
+- the incoming player by name when their NHL block has already started and prior games cannot be acquired;
+- **Both players affect timing** when both histories have started;
+- the roster-slot boundary when the old player is complete but the next immutable window has not opened; or
+- a waiver condition when the move first depends on winning the claim.
+
+When both sides are aligned, the sheet explicitly states that they are in the same matchup. When the incoming player is one or more matchups behind, it states the exact difference, explains that no prior games are backfilled, and identifies the next clean matchup window in which the change can begin.
+
+Historical replay timing is evaluated from the replay control's simulated target-season date rather than from the real-world NHL API state. Games on or before that simulated date are treated as completed for the incoming player's six-game eligibility calculation, even though the target-season NHL schedule still labels them as future games in the live API. The comparison labels the replay date being used. While replay is actively advancing or recovering from an error, the add/drop timing check is blocked with a plain-language message so a manager cannot submit a move against an in-between replay state.
+
+### Resilient post-submit confirmation
+
+The previous client awaited only the callable promise. A committed Firebase transaction could therefore be visible in Firestore while a slow, interrupted, or failed mobile HTTP response kept `moving` true indefinitely. Because the shared action sheet treats a busy dialog as non-dismissible, the manager saw a dimmed page and spinning pointer even though the transaction appeared after refresh.
+
+Batch M5.2 now accepts either of two authoritative completion signals:
+
+1. the callable returns successfully; or
+2. the live Firestore listener observes the expected result.
+
+The listener confirms:
+
+- an immediately activated player in the selected active slot;
+- an incoming player reserved in that active slot's scheduled move;
+- a player added to the selected bench slot; or
+- the signed-in manager's claim recorded on the selected waiver.
+
+If the callable reports a transport error just before the listener receives the committed update, the client allows a brief reconciliation period before showing an error. A hard 20-second ceiling prevents an endless pending state. If neither signal arrives, the interface unlocks and tells the manager to check My Team before retrying because the original request may still complete in the background.
+
+The NHL schedule prerequisite has its own 15-second ceiling. A stalled schedule request therefore cannot keep the sheet busy before the roster callable is even submitted. Commissioner waiver processing uses the same bounded replay-aware eligibility check.
+
+After success, Angular first removes the busy state while the sheet remains mounted, waits one animation frame, and only then closes and restores the player pool. This avoids a Safari portal/body-lock race that could otherwise leave the backdrop or fixed-body state behind after a successful transaction.
+
+Other roster operations continue to use the existing full-page pending shield. The add/drop compare step deliberately remains visible during submission so managers see the transaction and confirmation status instead of a fuzzy screen.
+
+### Shared action-sheet extension
+
+The reusable action sheet now supports:
+
+- an optional 68rem wide presentation for data-heavy comparisons; and
+- a projected top-action row between the title and independently scrollable content.
+
+Sheets that do not use these options retain their prior dimensions and layout.
+
+### Automated verification
+
+After manually replacing the project files:
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+
+npm run verify:batchm5-2
+npm run build:all
+```
+
+The focused M5.2 suite verifies:
+
+- same-matchup, incoming-behind, incoming-ahead, outgoing-delay, incoming-delay, and both-player timing explanations;
+- no-backfill messaging and the exact first legal matchup;
+- outgoing immutable game dates, opponents, appearances, missed games, live games, and saved points;
+- incoming current-block and first-start schedules;
+- unioned current-season stat categories in old-left/new-right order;
+- simulated-date-aware historical replay eligibility even while target-season games retain live `FUT` states;
+- immediate, queued, boundary-activated, bench, and waiver listener confirmation;
+- top-positioned confirmation and wide action-sheet composition;
+- the compare sheet remaining visible instead of being replaced by a blurred full-screen shield; and
+- preservation of all earlier dependency-free regression, design, accessibility, mobile, and beginner-language contracts.
+
+### Deployment
+
+This is a Hosting-only batch:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Batch M5.2 add drop comparison and transaction confirmation"
+```
+
+Do not deploy Functions, Firestore rules, or indexes for this batch.
+
+### Post-deployment checks
+
+1. Open Available Players and select a normal free agent.
+2. Confirm the primary action is visible at the top before scrolling and remains disabled until a roster spot is selected.
+3. Select an active player whose six-game window has started. Confirm that player appears on the left, the incoming player appears on the right, and the timing message names the outgoing player as the delay.
+4. Verify all six outgoing games show the exact dates, opponents, states, appearance status, and points.
+5. Verify the incoming current block and first legal start block show the correct matchup numbers and exact scheduled games.
+6. Test two players aligned to the same matchup and confirm the sheet says so.
+7. Test an incoming player one matchup behind and confirm the sheet says the move uses the next clean matchup with no backfill.
+8. Compare skater-versus-skater and goalie-unit-versus-goalie-unit category tables.
+9. Submit an immediate add/drop, a scheduled add/drop, an open-slot addition, a bench replacement, and a waiver claim.
+10. On iPhone Safari, interrupt the connection immediately after submitting. Confirm the sheet either closes after the live roster update or unlocks with a clear recovery message within 20 seconds; it must not remain fuzzy or spin indefinitely.
+11. After success, confirm the player pool returns to its saved search, filters, and scroll position and that the page itself scrolls normally.
+12. In a historical replay league, advance the simulated date into the incoming player's second six-game NHL block. Confirm the comparison names the replay date and does not treat all target-season games as unplayed merely because the live NHL API still marks them as future.
+13. Repeat at 320px, 360px, 390px, and 430px in Rink Dark, Light Ice, and OLED Black.
+
+### Rollback
+
+A Hosting-only rollback to the approved M5.1 build is safe for competition data because M5.2 adds no schema and changes no server authority. The transaction itself remains server-authoritative in either build. Rolling back would restore the older single-sided comparison and the possibility that a committed operation remains visually pending when its callable response is lost.
+
+---
+
 ## Batch M5.1 — Mobile Viewport Overlays, Compact Draft Controls, Replay Scoring Detail, and League Return Navigation
 
 ### Purpose

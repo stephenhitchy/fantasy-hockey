@@ -22,6 +22,7 @@ export class ActionSheet {
   @Input() closeLabel = 'Close';
   @Input() dialogId = 'rr-action-sheet-title';
   @Input() busy = false;
+  @Input() wide = false;
 
   @Output() close = new EventEmitter<void>();
 
