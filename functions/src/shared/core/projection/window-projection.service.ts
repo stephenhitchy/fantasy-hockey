@@ -18,6 +18,10 @@ export type WindowProjectionBundleSource =
   | 'current-snapshot-fallback'
   | 'none';
 
+export type WindowProjectionRefreshPolicy =
+  | 'refresh-if-needed'
+  | 'saved-only';
+
 export interface EnsureWindowProjectionBundleInput {
   leagueId: string;
   teamCount: number;
@@ -25,6 +29,15 @@ export interface EnsureWindowProjectionBundleInput {
   targetCycleNumber: number;
   forceRefresh?: boolean;
   now?: Date;
+
+  /**
+   * Historical replay advances must stay responsive even when the public NHL
+   * projection endpoints are slow. `saved-only` uses the best already-saved
+   * snapshot and never starts a full league-wide Projection V11 rebuild on
+   * the replay worker's critical path. Live window openings retain the normal
+   * `refresh-if-needed` policy.
+   */
+  refreshPolicy?: WindowProjectionRefreshPolicy;
 }
 
 export interface WindowProjectionBundle {
@@ -83,10 +96,14 @@ export async function ensureWindowProjectionBundle(
     targetCycleNumber,
   );
 
-  if (
+  const targetSnapshotIsFresh =
     !input.forceRefresh &&
-    isSharedProjectionSnapshotFreshForWindow(targetSnapshot?.metadata ?? null, freshnessInput)
-  ) {
+    isSharedProjectionSnapshotFreshForWindow(
+      targetSnapshot?.metadata ?? null,
+      freshnessInput,
+    );
+
+  if (targetSnapshotIsFresh) {
     return {
       metadata: targetSnapshot?.metadata ?? null,
       assetsByKey: toAssetMap(targetSnapshot),
@@ -94,6 +111,35 @@ export async function ensureWindowProjectionBundle(
       refreshed: false,
       usedFallback: false,
       errorMessage: '',
+    };
+  }
+
+  if (input.refreshPolicy === 'saved-only') {
+    if (targetSnapshot?.metadata.status === 'ready') {
+      return {
+        metadata: targetSnapshot.metadata,
+        assetsByKey: toAssetMap(targetSnapshot),
+        source: 'stale-target-fallback',
+        refreshed: false,
+        usedFallback: true,
+        errorMessage:
+          'Historical replay used the best saved target-matchup projection so score advancement could finish without waiting for a full NHL projection rebuild.',
+      };
+    }
+
+    const currentSnapshot = await loadSharedProjectionSnapshot(
+      input.leagueId,
+    ).catch(() => null);
+
+    return {
+      metadata: currentSnapshot?.metadata ?? null,
+      assetsByKey: toAssetMap(currentSnapshot),
+      source: currentSnapshot ? 'current-snapshot-fallback' : 'none',
+      refreshed: false,
+      usedFallback: true,
+      errorMessage: currentSnapshot
+        ? 'Historical replay used the latest saved projection pool so the scoring worker did not wait for a league-wide projection rebuild.'
+        : 'Historical replay opened the roster window with roster or draft projection fallbacks because no saved shared projection pool was available.',
     };
   }
 

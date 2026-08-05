@@ -9263,3 +9263,109 @@ Do not deploy Functions, Firestore rules, or indexes for this batch.
 11. Confirm a second click is still blocked while the saved control remains `advancing`.
 12. Navigate away during a completed request and confirm no late callable response changes the new page state.
 13. Repeat at 320px, 390px, 430px, tablet width, and desktop width in Rink Dark, Light Ice, and OLED Black.
+
+---
+
+## Batch P1C — Replay Responsiveness and 100K Capacity Lab
+
+### Problem corrected
+
+The historical replay callable is configured to run for as long as 540 seconds, but the Firebase browser callable used its default transport timeout. A replay could therefore publish the new scores and roster state successfully, then keep processing roster-slot transitions and Projection V11 window preparation after the browser had already reported `deadline-exceeded`. The live Firestore control correctly remained `advancing`, so the interface continued to protect the button even though the visible scores had already changed.
+
+Historical replay also allowed an independently opening roster slot to synchronously request a complete shared Projection V11 rebuild. That refresh is appropriate for ordinary live window openings, but it can require many NHL schedule and statistics requests and should not block an administrator's score-replay control.
+
+### Replay transport and authoritative completion
+
+The browser callable timeout is now 600 seconds, longer than the replay Function's configured 540-second limit. The live Firestore historical replay control remains the final completion signal.
+
+If a browser transport error occurs after Firestore has already shown that the server worker began, Game Center no longer converts the healthy server run into a false failure. It continues listening until the authoritative control becomes `ready` or `error`. The button still cannot submit two simulated dates at once.
+
+### Non-blocking historical projection policy
+
+Roster-slot advancement now accepts an explicit projection refresh policy:
+
+- `refresh-if-needed` remains the default for ordinary live scoring and live window openings.
+- `saved-only` is used only by historical replay.
+
+During replay, a newly opened window uses the best already-saved target-matchup Projection V11 snapshot, then the latest saved shared snapshot, then the roster or draft projection already carried by the asset. It does not synchronously regenerate the full NHL projection pool on the score-advance critical path.
+
+This changes projection freshness during rapid historical testing, not competitive scoring. Production Scoring V3, the shared scoring ledger, queued roster transactions, independent six-game windows, seventh-game rollover, standings, and playoffs remain server-authoritative. Live season window openings continue using the full Projection V11 refresh policy.
+
+### 100,000-user capacity model
+
+The project now includes a dependency-free architecture model:
+
+```bash
+npm run capacity:100k
+npm run capacity:100k:draft-night
+npm run capacity:100k:game-night
+```
+
+The model reads current source settings—including scheduled scoring parallelism, scheduled draft scan limits, Function instance caps, and selected route assumptions—and estimates:
+
+- simultaneous Firestore listeners,
+- initial document reads,
+- steady reads per minute,
+- draft-pick request rate,
+- roster-action request rate.
+
+It is intentionally labeled **capacity-estimate-not-live-load-test**. It does not claim to create 100,000 authenticated browsers or Firestore streaming connections.
+
+The current 100,000-user model identifies the following release-scale risks:
+
+- scheduled draft automation scans only 250 leagues and processes them sequentially,
+- scheduled league scoring processes two leagues concurrently in one ten-minute sweep,
+- the NHL proxy is capped at ten instances,
+- a simultaneous cold start could create millions of document reads and a large listener fanout.
+
+Firebase Hosting is not the leading risk. The principal risks are centralized scheduled automation, NHL upstream fanout, Firestore read cost, and reconnect/cold-start bursts.
+
+The complete staging strategy is documented in `docs/RINKRAT_100K_CAPACITY_PLAN.md`. Large tests must use a separate billed staging project, synthetic accounts and leagues, gradual ramps, explicit billing alerts, and predefined pass/fail criteria. The production Firebase project must never be used as the load target.
+
+### Automated verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+
+npm ci
+npm --prefix functions ci
+npm run verify:batchp1c
+npm run build:all
+```
+
+The focused P1C suite verifies:
+
+- a 600-second callable transport timeout,
+- Firestore-authoritative handling of late transport errors,
+- replay-only saved-projection behavior,
+- unchanged live projection refresh behavior,
+- source-aware 100,000-user capacity estimates,
+- separate draft-night and game-night workload shapes,
+- staging-only load-test guidance,
+- unchanged Production Scoring V3, Projection V11, Firestore rules, indexes, and all unrelated Function files.
+
+### Deployment
+
+Deploy the replay Function first, then Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions:advanceHistoricalReplayDay -m "Batch P1C replay responsiveness"
+firebase deploy --only hosting:app -m "Batch P1C replay responsiveness and capacity lab"
+```
+
+No Firestore rules, indexes, or data migration are required.
+
+### Manual verification
+
+1. Open a historical replay league in Game Center.
+2. Press **Advance One NHL Day** once.
+3. Confirm scores and roster-slot transitions appear normally.
+4. Confirm no default 70-second browser deadline is shown.
+5. Confirm the control unlocks when Firestore saves `status: ready` rather than remaining locked for several minutes.
+6. Confirm a second click remains blocked while Firestore genuinely reports `advancing`.
+7. Advance through a sixth-to-seventh-game boundary and confirm the next independent roster-slot window opens.
+8. Confirm queued add/drop moves still activate at their legal roster-slot boundaries.
+9. Inspect the newly frozen future projection. During rapid historical replay it may use a saved V11 snapshot rather than pausing the score update for a full NHL projection rebuild.
+10. Run all three capacity-model commands and save the output before planning a staged load test.

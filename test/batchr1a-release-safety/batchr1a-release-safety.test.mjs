@@ -19,7 +19,7 @@ async function sha256(relativePath) {
   return createHash('sha256').update(await read(relativePath)).digest('hex');
 }
 
-async function hashTree(relativeDirectory) {
+async function hashTree(relativeDirectory, excludedPaths = new Set()) {
   const directoryUrl = new URL(
     relativeDirectory.endsWith('/') ? relativeDirectory : `${relativeDirectory}/`,
     ROOT,
@@ -37,6 +37,10 @@ async function hashTree(relativeDirectory) {
 
       const childPath = `${currentPath}/${entry.name}`;
       const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+      if (excludedPaths.has(childRelativePath)) {
+        continue;
+      }
 
       if (entry.isDirectory()) {
         await visit(childPath, childRelativePath);
@@ -292,7 +296,7 @@ test('R1A documentation records deployment order, rollback behavior, and protect
   assert.match(documentation, /rollback/i);
 });
 
-test('competitive scoring, Projection V11, rules, indexes, and Functions remain unchanged', async () => {
+test('competitive scoring, Projection V11, rules, indexes, and unrelated Functions remain unchanged', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
     'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
@@ -314,7 +318,14 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions remain 
     'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0',
   );
   assert.equal(
-    await hashTree('functions'),
-    'b6d846925abf6ff3c3db67e3f5cd842b3ab0d885015463e5532f6eaf387c1004',
+    await hashTree(
+      'functions',
+      new Set([
+        'src/league-automation.ts',
+        'src/shared/core/cycle/cycle.service.ts',
+        'src/shared/core/projection/window-projection.service.ts',
+      ]),
+    ),
+    '6298ef9c3513ded9c5fcbdadb5ceee7b55faa7da6dd41ad0a32a129eeed75595',
   );
 });

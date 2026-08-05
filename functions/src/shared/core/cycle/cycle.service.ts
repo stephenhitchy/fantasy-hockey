@@ -68,6 +68,7 @@ import {
   createFrozenWindowProjectionFields,
   ensureWindowProjectionBundle,
   FrozenWindowProjectionFields,
+  WindowProjectionRefreshPolicy,
 } from '../projection/window-projection.service';
 
 import { defaultScoringRules } from '../scoring/scoring-rules';
@@ -507,12 +508,14 @@ async function loadWindowProjectionAssetsByKey(
   leagueId: string,
   teamCount: number,
   targetCycleNumber: number,
+  refreshPolicy: WindowProjectionRefreshPolicy = 'refresh-if-needed',
 ): Promise<Map<string, DraftableAsset>> {
   const bundle = await ensureWindowProjectionBundle({
     leagueId,
     teamCount,
     requiredGamesPerCycle: defaultScoringRules.requiredGamesPerCycle,
     targetCycleNumber,
+    refreshPolicy,
   });
 
   if (bundle.errorMessage) {
@@ -611,6 +614,7 @@ async function buildCurrentRosterSnapshotPicks(
   draftPicks: DraftPick[],
   cycleNumber: number,
   includedOwnerIds?: Set<string>,
+  projectionRefreshPolicy: WindowProjectionRefreshPolicy = 'refresh-if-needed',
 ): Promise<DraftPick[]> {
   const draftPickByOwnerAndAssetKey = new Map<string, DraftPick>();
 
@@ -637,7 +641,12 @@ async function buildCurrentRosterSnapshotPicks(
         };
       }),
     ),
-    loadWindowProjectionAssetsByKey(leagueId, teams.length, cycleNumber),
+    loadWindowProjectionAssetsByKey(
+      leagueId,
+      teams.length,
+      cycleNumber,
+      projectionRefreshPolicy,
+    ),
   ]);
 
   const snapshotPicks: DraftPick[] = [];
@@ -1207,10 +1216,15 @@ export async function startCycle(
   });
 }
 
+export interface StartNextCycleOptions {
+  projectionRefreshPolicy?: WindowProjectionRefreshPolicy;
+}
+
 export async function startNextCycle(
   leagueId: string,
   teams: FantasyTeam[],
   currentCycleNumber: number,
+  options: StartNextCycleOptions = {},
 ): Promise<FantasyCycle | null> {
   if (teams.length < 2) {
     throw new Error('At least two teams are required to start the next cycle.');
@@ -1296,6 +1310,7 @@ export async function startNextCycle(
         draftPicks,
         playoffState.regularSeasonCycleCount + 1,
         allPlayoffOwnerIds,
+        options.projectionRefreshPolicy,
       );
       initialBankPayloads = createInitialPlayoffBankPayloads(playoffState, allPlayoffPicks);
     }
@@ -1319,6 +1334,7 @@ export async function startNextCycle(
           draftPicks,
           playoffState.regularSeasonCycleCount + 1,
           allPlayoffOwnerIds,
+          options.projectionRefreshPolicy,
         );
         initialBankPayloads = createInitialPlayoffBankPayloads(playoffState, allPlayoffPicks);
       }
@@ -1374,6 +1390,8 @@ export async function startNextCycle(
       teams,
       draftPicks,
       nextCycleNumber,
+      undefined,
+      options.projectionRefreshPolicy,
     );
   }
 
@@ -1643,6 +1661,7 @@ async function buildNextWindowSnapshotPicks(
   completedWindowKeys: Set<string>,
   currentWindowSlotKeys: Set<string>,
   nextCycleNumber: number,
+  projectionRefreshPolicy: WindowProjectionRefreshPolicy,
 ): Promise<{
   picks: DraftPick[];
   expectedRosterSlotIdsByOwner: Record<string, string[]>;
@@ -1652,7 +1671,12 @@ async function buildNextWindowSnapshotPicks(
   const draftPicksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
   const [draftPicksSnapshot, projectionAssetsByKey, rosterSnapshots] = await Promise.all([
     getDocs(draftPicksQuery),
-    loadWindowProjectionAssetsByKey(leagueId, teams.length, nextCycleNumber),
+    loadWindowProjectionAssetsByKey(
+      leagueId,
+      teams.length,
+      nextCycleNumber,
+      projectionRefreshPolicy,
+    ),
     Promise.all(
       teams.map(async (team) => {
         const snapshot = await getDoc(getTeamRosterRef(leagueId, team.ownerId));
@@ -1789,12 +1813,17 @@ async function buildNextWindowSnapshotPicks(
  * Playoff windows use the separate bank-and-route flow implemented by the
  * playoff window bank service.
  */
+export interface AdvanceCompletedWindowOptions {
+  projectionRefreshPolicy?: WindowProjectionRefreshPolicy;
+}
+
 export async function advanceCompletedRegularSeasonAssetWindows(
   leagueId: string,
   teams: FantasyTeam[],
   currentCycle: FantasyCycle,
   currentPicks: DraftPick[],
   scoring: CycleScoringResult,
+  options: AdvanceCompletedWindowOptions = {},
 ): Promise<FantasyCycle | null> {
   if (currentCycle.phase !== 'regular_season' || currentCycle.status !== 'active') {
     return null;
@@ -1824,6 +1853,7 @@ export async function advanceCompletedRegularSeasonAssetWindows(
     completedWindowKeys,
     currentWindowSlotKeys,
     nextCycleNumber,
+    options.projectionRefreshPolicy ?? 'refresh-if-needed',
   );
   const expectedRosterSlotIdsByOwner =
     Object.keys(currentCycle.expectedRosterSlotIdsByOwner ?? {}).length > 0

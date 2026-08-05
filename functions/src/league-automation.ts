@@ -895,6 +895,7 @@ async function persistServerScoring(
   scoringRules: ScoringRules,
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
   gameLogSeason?: string,
+  projectionRefreshPolicy: 'refresh-if-needed' | 'saved-only' = 'refresh-if-needed',
 ): Promise<boolean> {
   const matchups = await getCycleMatchupsOnce(
     leagueId,
@@ -925,6 +926,7 @@ async function persistServerScoring(
       cycle,
       picks,
       result,
+      { projectionRefreshPolicy },
     );
 
     if (completion.cycleCompleted) {
@@ -932,6 +934,7 @@ async function persistServerScoring(
         leagueId,
         teams,
         cycle.cycleNumber,
+        { projectionRefreshPolicy },
       ).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : '';
 
@@ -994,6 +997,7 @@ async function persistServerScoring(
     leagueId,
     teams,
     cycle.cycleNumber,
+    { projectionRefreshPolicy },
   ).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : '';
 
@@ -1158,6 +1162,9 @@ async function runLeagueAutomation(
       teams,
     );
     replayControl = await getHistoricalReplayControl(leagueId);
+    const projectionRefreshPolicy = replayControl
+      ? 'saved-only' as const
+      : 'refresh-if-needed' as const;
     const liveSeason = getNhlSeasonForDate(new Date());
     const dataSeason = replayControl?.sourceSeason ?? liveSeason;
     const snapshotSeason = replayControl
@@ -1260,6 +1267,7 @@ async function runLeagueAutomation(
           scoringRules,
           replayContext?.gamesByAssetKey,
           replayControl?.sourceSeason,
+          projectionRefreshPolicy,
         );
 
         passTransitionOccurred =

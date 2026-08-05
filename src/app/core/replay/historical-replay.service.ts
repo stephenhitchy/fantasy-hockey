@@ -70,7 +70,18 @@ function normalizeControl(value: Partial<HistoricalReplayControl>): HistoricalRe
 const advanceReplayCallable = httpsCallable<
   { leagueId: string },
   AdvanceHistoricalReplayResult
->(functions, 'advanceHistoricalReplayDay');
+>(
+  functions,
+  'advanceHistoricalReplayDay',
+  {
+    // The browser SDK otherwise cancels callable requests after 70 seconds,
+    // even though the replay worker is intentionally allowed to finish a
+    // longer server-authoritative scoring pass. Firestore remains the final
+    // completion signal, but the extended transport timeout prevents a false
+    // `deadline-exceeded` error while the worker is still healthy.
+    timeout: 600_000,
+  },
+);
 
 export function listenToHistoricalReplayControl(
   leagueId: string,

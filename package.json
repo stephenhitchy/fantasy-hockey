@@ -109,7 +109,12 @@
     "verify:batchr1a": "npm run verify:batchv1b-p1b && npm run test:batchr1a:run && npm run validate:release-manifest",
     "pretest:batchr1a-1:run": "npm run generate:release-manifest",
     "test:batchr1a-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1a-1-release-manifest-gitignore/*.test.mjs",
-    "verify:batchr1a-1": "npm run verify:batchr1a && npm run test:batchr1a-1:run && npm run validate:release-manifest"
+    "verify:batchr1a-1": "npm run verify:batchr1a && npm run test:batchr1a-1:run && npm run validate:release-manifest",
+    "capacity:100k": "node scripts/capacity/rinkrat-capacity-model.mjs --users=100000 --scenario=balanced",
+    "capacity:100k:draft-night": "node scripts/capacity/rinkrat-capacity-model.mjs --users=100000 --scenario=draft-night",
+    "capacity:100k:game-night": "node scripts/capacity/rinkrat-capacity-model.mjs --users=100000 --scenario=game-night",
+    "test:batchp1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1c-replay-capacity/*.test.mjs",
+    "verify:batchp1c": "npm run verify:batchr1a-1 && npm run test:batchp1c:run && npm run capacity:100k"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

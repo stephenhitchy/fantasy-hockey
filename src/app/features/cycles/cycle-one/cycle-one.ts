@@ -325,6 +325,7 @@ export class CycleOne implements OnDestroy {
               control,
               this.replayAdvanceSawServerStart,
             );
+            this.replayAdvanceSawServerStart = evaluation.sawServerStart;
 
             if (evaluation.state === 'ready') {
               this.historicalReplayMessage.set(
@@ -339,6 +340,18 @@ export class CycleOne implements OnDestroy {
                 control?.lastError || control?.message || 'Unable to advance the historical replay.',
               );
               this.finishReplayAdvanceRequest(generation, 'error');
+              return;
+            }
+
+            if (control?.status === 'advancing' || evaluation.sawServerStart) {
+              // A callable transport deadline does not mean the replay worker
+              // stopped. Keep following the authoritative Firestore control
+              // and avoid turning a healthy long-running update into a false
+              // error. The live listener will unlock the button at ready/error.
+              this.historicalReplayError.set('');
+              this.historicalReplayTransportNotice.set(
+                'The browser response timed out, but the replay worker is still finishing safely on the server. RinkRat will unlock this control as soon as Firestore confirms completion.',
+              );
               return;
             }
           }
