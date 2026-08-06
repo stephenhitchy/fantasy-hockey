@@ -1,3 +1,59 @@
+## Batch R1F — Draft Queue Turn Handoff Recovery
+
+### Purpose
+
+R1F fixes a beta-blocking Draft Room case where an automatic queue selection committed successfully,
+but one or both open browser sessions continued showing the prior manager as waiting. The server
+transaction already writes the pick, roster, queue, and next draft turn atomically; the failure was
+caused by a delayed or interrupted handoff between the ordered picks listener, the live draft document,
+and the private queue listener.
+
+### Turn handoff authority
+
+The server now exposes `repairDraftTurnHandoff` and also runs
+`reconcileDraftTurnAfterCommittedPick` whenever a new pick document is created. The recovery logic:
+
+- walks only contiguous committed pick documents;
+- never skips a missing pick number;
+- advances a genuinely stale `nextOverallPick`;
+- restores a missing next-pick clock without changing the draft order;
+- verifies that the saved draft order still exactly matches the league teams;
+- schedules the deterministic deadline task for the recovered turn; and
+- safely no-ops when the draft transaction is already synchronized.
+
+### Browser recovery and queue isolation
+
+The Draft Room now distinguishes the authoritative **draft board** listeners from the manager's
+private **queue** listener. A slow queue listener can temporarily disable queue and Auto-Draft edits,
+but it cannot prevent the next manager from making a manual pick when the live draft document and
+ordered pick list are current.
+
+When a committed pick appears before the next turn, the page shows a compact **Opening the next
+pick** notice, performs bounded direct reads, requests the server repair only when necessary, and
+provides **Retry Turn Sync** if the mismatch remains. It never introduces a fuzzy full-screen lock.
+
+### Verification
+
+```bash
+npm run verify:batchr1f
+```
+
+### Deployment order
+
+Deploy the Draft Functions before Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only functions:repairDraftTurnHandoff,functions:reconcileDraftTurnAfterCommittedPick,functions:continueServerDraftAutomation,functions:processAutoDraftQueueChange,functions:processDraftClockDeadline,functions:runScheduledDraftAutomation -m "Batch R1F draft turn handoff recovery"
+
+firebase deploy --only hosting:app -m "Batch R1F draft queue turn handoff recovery"
+```
+
+No Firestore rules, indexes, scoring, projection, roster-window, waiver, or playoff migration is
+required. This release is labeled **Release Candidate 9**, so its exact-build validation board begins
+fresh after deployment.
+
 ## Batch P1F.1 — Functions Document Snapshot Type Hotfix
 
 ### Purpose

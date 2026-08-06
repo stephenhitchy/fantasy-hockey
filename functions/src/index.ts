@@ -3334,12 +3334,14 @@ export {
   continueServerDraftAutomation,
   processAutoDraftQueueChange,
   processDraftClockDeadline,
+  reconcileDraftTurnAfterCommittedPick,
   runScheduledDraftAutomation,
 } from './draft-automation';
 
 export {
   executeDraftCommand,
   makeSecureDraftPick,
+  repairDraftTurnHandoff,
 } from './draft-authority';
 
 export { saveManagerProfile } from './manager-profile-authority';

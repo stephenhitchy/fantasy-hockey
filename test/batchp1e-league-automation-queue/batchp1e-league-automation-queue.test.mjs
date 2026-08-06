@@ -163,8 +163,8 @@ test('P1E scripts, exports, documentation, and safe deployment order are recorde
   assert.match(documentation, /Functions first/);
   assert.match(blueprint, /P1E foundation implemented/);
   assert.match(readme, /verify:batchp1(?:e|f)/);
-  assert.match(runtime, /Release Candidate 8/);
-  assert.match(productionRuntime, /Release Candidate 8/);
+  assert.match(runtime, /Release Candidate 9/);
+  assert.match(productionRuntime, /Release Candidate 9/);
 });
 
 test('competitive scoring, Projection V11, Firestore rules, and indexes remain unchanged', async () => {

@@ -130,7 +130,9 @@
     "test:batchp1f:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1f-scoring-queue-control-center/*.test.mjs",
     "verify:batchp1f": "npm run verify:batchp1e && npm run test:batchp1f:run",
     "test:batchp1f-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1f-1-functions-build-hotfix/*.test.mjs",
-    "verify:batchp1f-1": "npm run verify:batchp1f && npm run test:batchp1f-1:run"
+    "verify:batchp1f-1": "npm run verify:batchp1f && npm run test:batchp1f-1:run",
+    "test:batchr1f:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1f-draft-turn-handoff/*.test.mjs",
+    "verify:batchr1f": "npm run verify:batchp1f-1 && npm run test:batchr1f:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

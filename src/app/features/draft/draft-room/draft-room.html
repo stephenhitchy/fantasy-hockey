@@ -26,7 +26,7 @@
             [class.enabled]="myQueue().autoDraftEnabled"
             [class.forced-auto-draft]="myQueue().autoDraftActivatedByTimeout"
             (click)="toggleMyAutoDraft()"
-            [disabled]="queueSaving() || !canUseLiveDraftActions()"
+            [disabled]="queueSaving() || !canUseDraftQueueActions()"
           >
             {{ getMyAutoDraftButtonLabel() }}
           </button>
@@ -146,6 +146,34 @@
           </button>
         }
       </section>
+
+      @if (shouldShowDraftHandoffNotice()) {
+        <section
+          class="draft-turn-handoff-notice rr-notice"
+          [class.draft-turn-handoff-error]="draftHandoffError()"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="draft-turn-handoff-icon" aria-hidden="true">⇥</span>
+          <div>
+            <strong>{{ getDraftHandoffTitle() }}</strong>
+            <span>{{ getDraftHandoffDetail() }}</span>
+          </div>
+
+          @if (draftHandoffError()) {
+            <button
+              type="button"
+              class="rr-button rr-button--secondary"
+              (click)="retryDraftTurnHandoff()"
+              [disabled]="draftHandoffRepairInProgress() || !browserOnline()"
+            >
+              Retry Turn Sync
+            </button>
+          } @else {
+            <span class="draft-turn-handoff-progress" aria-hidden="true"></span>
+          }
+        </section>
+      }
 
       @if (latestAutoPickNotice(); as autoPickNotice) {
         <section
@@ -628,7 +656,7 @@
                       class="queue-button rr-button rr-button--secondary"
                       [class.queued]="isAssetQueued(asset)"
                       (click)="toggleAssetInQueue(asset)"
-                      [disabled]="queueSaving() || draft()?.status === 'complete' || !canUseLiveDraftActions()"
+                      [disabled]="queueSaving() || draft()?.status === 'complete' || !canUseDraftQueueActions()"
                     >
                       {{ isAssetQueued(asset) ? 'Queued' : '+ Queue' }}
                     </button>
@@ -753,7 +781,7 @@
                         type="button"
                         aria-label="Move queued player up"
                         (click)="moveQueueAsset(entry.assetKey, -1)"
-                        [disabled]="entry.index === 0 || queueSaving() || !canUseLiveDraftActions()"
+                        [disabled]="entry.index === 0 || queueSaving() || !canUseDraftQueueActions()"
                       >
                         ↑
                       </button>
@@ -762,7 +790,7 @@
                         type="button"
                         aria-label="Move queued player down"
                         (click)="moveQueueAsset(entry.assetKey, 1)"
-                        [disabled]="entry.index === queueEntries().length - 1 || queueSaving() || !canUseLiveDraftActions()"
+                        [disabled]="entry.index === queueEntries().length - 1 || queueSaving() || !canUseDraftQueueActions()"
                       >
                         ↓
                       </button>
@@ -772,7 +800,7 @@
                         class="remove-queue-button rr-button rr-button--quiet"
                         aria-label="Remove queued player"
                         (click)="removeAssetFromQueue(entry.assetKey)"
-                        [disabled]="queueSaving() || !canUseLiveDraftActions()"
+                        [disabled]="queueSaving() || !canUseDraftQueueActions()"
                       >
                         ×
                       </button>

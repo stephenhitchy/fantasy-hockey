@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '../firebase-functions';
-import { DraftPick } from './draft.models';
+import { DraftPick, FantasyDraft } from './draft.models';
 
 export type DraftCommandAction =
   | 'save-settings'
@@ -79,4 +79,32 @@ export async function makeSecureDraftPick(
     expectedOverallPick,
   });
   return response.data.pick;
+}
+
+export interface RepairDraftTurnHandoffResult {
+  repaired: boolean;
+  status: FantasyDraft['status'];
+  nextOverallPick: number;
+  currentOwnerId: string | null;
+  clockTaskScheduled: boolean;
+  message: string;
+}
+
+const repairDraftTurnHandoffCallable = httpsCallable<
+  { leagueId: string },
+  RepairDraftTurnHandoffResult
+>(functions, 'repairDraftTurnHandoff', {
+  timeout: 30_000,
+});
+
+/**
+ * Reconciles the exact live turn from committed pick documents. This is a
+ * bounded recovery path for the rare case where a pick is visible before the
+ * next draft turn or clock becomes usable in the browser.
+ */
+export async function repairDraftTurnHandoff(
+  leagueId: string,
+): Promise<RepairDraftTurnHandoffResult> {
+  const response = await repairDraftTurnHandoffCallable({ leagueId });
+  return response.data;
 }

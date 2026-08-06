@@ -18,6 +18,8 @@ import {
   type CompetitiveActionHandle,
 } from '../../../core/observability/competitive-action-monitor.service';
 
+import { repairDraftTurnHandoff } from '../../../core/draft/draft-authority.service';
+
 import {
   DraftableAsset,
   DraftPick,
@@ -99,6 +101,11 @@ import {
   getDraftConnectionStatusLabel,
   resolveDraftRealtimeConnectionState,
 } from './draft-mobile-resilience.util';
+
+import {
+  assessDraftTurnHandoff,
+  type DraftTurnHandoffAssessment,
+} from './draft-turn-handoff.util';
 
 import {
   draftPickMatchesPending,
@@ -210,6 +217,11 @@ export class DraftRoom implements OnDestroy {
   realtimeListenerError = signal<string | null>(null);
   dismissedAutoPickOverall = signal(0);
   autoPickNoticePick = signal<DraftPick | null>(null);
+  draftBoardListenerError = signal<string | null>(null);
+  draftQueueListenerError = signal<string | null>(null);
+  draftHandoffRepairInProgress = signal(false);
+  draftHandoffMessage = signal('');
+  draftHandoffError = signal('');
 
   readonly rosterPositions: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
   setSortMode(value: string): void {
@@ -632,12 +644,17 @@ export class DraftRoom implements OnDestroy {
   private pendingPickRequestCounter = 0;
   private pendingPickAction: CompetitiveActionHandle | null = null;
   private realtimeRestartTimer: ReturnType<typeof setTimeout> | null = null;
+  private draftHandoffCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  private draftHandoffAttemptedAt = 0;
+  private lastDraftHandoffAttemptKey = '';
   private readonly handleBrowserOnline = () => {
     this.browserOnline.set(true);
     this.requestRealtimeConfirmation('online');
   };
   private readonly handleBrowserOffline = () => {
     this.browserOnline.set(false);
+    this.draftBoardListenerError.set(null);
+    this.draftQueueListenerError.set(null);
     this.realtimeListenerError.set(null);
   };
   private readonly handleVisibilityChange = () => {
@@ -722,6 +739,28 @@ export class DraftRoom implements OnDestroy {
     return this.playerPool().find((asset) => asset.assetKey === assetKey) ?? null;
   });
 
+  readonly draftTurnHandoff = computed<DraftTurnHandoffAssessment>(() =>
+    assessDraftTurnHandoff(
+      this.draft(),
+      this.picks(),
+      this.teams().map((team) => team.ownerId),
+    ),
+  );
+
+  readonly draftBoardConnectionState = computed<DraftRealtimeConnectionState>(() =>
+    resolveDraftRealtimeConnectionState({
+      online: this.browserOnline(),
+      confirmationStartedAt: this.realtimeConfirmationStartedAt(),
+      criticalServerSyncTimes: [
+        this.draftServerSyncAt(),
+        this.picksServerSyncAt(),
+      ],
+      listenerError: this.draftBoardListenerError(),
+      reconnectReason: this.realtimeReconnectReason(),
+      now: this.now(),
+    }),
+  );
+
   readonly realtimeConnectionState = computed<DraftRealtimeConnectionState>(() =>
     resolveDraftRealtimeConnectionState({
       online: this.browserOnline(),
@@ -737,12 +776,28 @@ export class DraftRoom implements OnDestroy {
     }),
   );
 
-  readonly canUseLiveDraftActions = computed(
+  readonly canUseDraftBoardActions = computed(
+    () =>
+      this.draftBoardConnectionState() === 'connected' &&
+      this.pickSubmissionPhase() === 'idle' &&
+      !this.releaseUpdate.updateAvailable() &&
+      !this.draftHandoffRepairInProgress() &&
+      this.draftTurnHandoff().status === 'healthy',
+  );
+
+  readonly canUseDraftQueueActions = computed(
     () =>
       this.realtimeConnectionState() === 'connected' &&
       this.pickSubmissionPhase() === 'idle' &&
-      !this.releaseUpdate.updateAvailable(),
+      !this.releaseUpdate.updateAvailable() &&
+      !this.draftHandoffRepairInProgress() &&
+      this.draftTurnHandoff().status === 'healthy',
   );
+
+  // Existing templates and draft-button helpers use this name. Drafting now
+  // depends only on the authoritative board listeners; a slow private queue
+  // listener cannot freeze the next manager's turn.
+  readonly canUseLiveDraftActions = computed(() => this.canUseDraftBoardActions());
 
   readonly latestAutoPickNotice = computed<DraftAutoPickExplanation | null>(() => {
     const latestPick = this.autoPickNoticePick();
@@ -980,6 +1035,10 @@ export class DraftRoom implements OnDestroy {
       clearTimeout(this.realtimeRestartTimer);
     }
 
+    if (this.draftHandoffCheckTimer) {
+      clearTimeout(this.draftHandoffCheckTimer);
+    }
+
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleBrowserOnline);
       window.removeEventListener('offline', this.handleBrowserOffline);
@@ -1137,6 +1196,7 @@ export class DraftRoom implements OnDestroy {
         const previousStatus = this.lastObservedDraftStatus;
         this.lastObservedDraftStatus = draft?.status ?? null;
         this.draft.set(draft);
+        this.scheduleDraftTurnHandoffCheck();
         this.confirmPendingPickIfObserved();
         this.clearSelectedAssetIfUnavailable();
         this.scheduleDraftTimelineScroll();
@@ -1160,6 +1220,7 @@ export class DraftRoom implements OnDestroy {
       (picks) => {
         if (!this.destroyed) {
           this.picks.set(picks);
+          this.scheduleDraftTurnHandoffCheck();
           this.updateAutoPickNotice(picks);
           this.confirmPendingPickIfObserved();
           this.clearSelectedAssetIfUnavailable();
@@ -1185,23 +1246,40 @@ export class DraftRoom implements OnDestroy {
       this.picksServerSyncAt.set(state.receivedAt);
     } else {
       this.queueServerSyncAt.set(state.receivedAt);
+      this.draftQueueListenerError.set(null);
     }
 
     const confirmationStartedAt = this.realtimeConfirmationStartedAt();
-    const allConfirmed = [
+    const boardConfirmed = [
       this.draftServerSyncAt(),
       this.picksServerSyncAt(),
-      this.queueServerSyncAt(),
     ].every(
       (syncedAt) =>
         syncedAt !== null &&
         (confirmationStartedAt === null || syncedAt >= confirmationStartedAt),
     );
 
+    if (boardConfirmed) {
+      this.draftBoardListenerError.set(null);
+    }
+
+    const allConfirmed = boardConfirmed && [this.queueServerSyncAt()].every(
+      (syncedAt) =>
+        syncedAt !== null &&
+        (confirmationStartedAt === null || syncedAt >= confirmationStartedAt),
+    );
+
+    this.refreshRealtimeListenerErrorState();
+
     if (allConfirmed) {
-      this.realtimeListenerError.set(null);
       this.realtimeReconnectReason.set(null);
     }
+  }
+
+  private refreshRealtimeListenerErrorState(): void {
+    this.realtimeListenerError.set(
+      this.draftBoardListenerError() ?? this.draftQueueListenerError(),
+    );
   }
 
   private handleRealtimeListenerError(
@@ -1212,9 +1290,16 @@ export class DraftRoom implements OnDestroy {
       return;
     }
 
-    this.realtimeListenerError.set(
-      `${source === 'draft' ? 'Draft' : source === 'picks' ? 'Pick' : 'Queue'} connection: ${error.message}`,
-    );
+    const message =
+      `${source === 'draft' ? 'Draft' : source === 'picks' ? 'Pick' : 'Queue'} connection: ${error.message}`;
+
+    if (source === 'queue') {
+      this.draftQueueListenerError.set(message);
+    } else {
+      this.draftBoardListenerError.set(message);
+    }
+
+    this.refreshRealtimeListenerErrorState();
     this.realtimeConfirmationStartedAt.set(Date.now());
     this.realtimeReconnectReason.set('listener-error');
 
@@ -1246,10 +1331,13 @@ export class DraftRoom implements OnDestroy {
 
     this.realtimeConfirmationStartedAt.set(Date.now());
     this.realtimeReconnectReason.set(reason);
+    this.draftBoardListenerError.set(null);
+    this.draftQueueListenerError.set(null);
     this.realtimeListenerError.set(null);
 
     if (this.browserOnline()) {
       this.scheduleRealtimeListenerRestart(60);
+      this.scheduleDraftTurnHandoffCheck(500);
     }
   }
 
@@ -1266,40 +1354,268 @@ export class DraftRoom implements OnDestroy {
   }
 
   getRealtimeConnectionLabel(): string {
+    if (
+      this.draftBoardConnectionState() === 'connected' &&
+      this.realtimeConnectionState() !== 'connected'
+    ) {
+      return 'Draft Board Connected';
+    }
+
     return getDraftConnectionStatusLabel(this.realtimeConnectionState());
   }
 
   getRealtimeConnectionDetail(): string {
+    if (
+      this.draftBoardConnectionState() === 'connected' &&
+      this.realtimeConnectionState() !== 'connected'
+    ) {
+      return 'The live turn and picks are current. Your private queue is still syncing; drafting remains available.';
+    }
+
     return this.realtimeListenerError() ||
       getDraftConnectionStatusDetail(this.realtimeConnectionState());
   }
 
   getRealtimeConnectionClass(): string {
+    if (this.draftBoardConnectionState() === 'connected') {
+      return 'draft-connection-connected';
+    }
+
     return `draft-connection-${this.realtimeConnectionState()}`;
   }
 
   getLastServerConfirmationLabel(): string {
-    const syncTimes = [
+    const boardSyncTimes = [
       this.draftServerSyncAt(),
       this.picksServerSyncAt(),
-      this.queueServerSyncAt(),
     ].filter((value): value is number => value !== null);
 
-    if (syncTimes.length < 3) {
-      return 'Waiting for server confirmation';
+    if (boardSyncTimes.length < 2) {
+      return 'Waiting for draft-board confirmation';
     }
 
-    const secondsAgo = Math.max(0, Math.floor((this.now() - Math.min(...syncTimes)) / 1000));
+    const secondsAgo = Math.max(
+      0,
+      Math.floor((this.now() - Math.min(...boardSyncTimes)) / 1000),
+    );
+    const freshness = secondsAgo < 2
+      ? 'Draft board confirmed now'
+      : secondsAgo < 60
+        ? `Draft board confirmed ${secondsAgo}s ago`
+        : `Draft board confirmed ${Math.floor(secondsAgo / 60)}m ago`;
 
-    if (secondsAgo < 2) {
-      return 'Server confirmed now';
+    return this.realtimeConnectionState() === 'connected'
+      ? freshness
+      : `${freshness} · queue syncing`;
+  }
+
+  shouldShowDraftHandoffNotice(): boolean {
+    const assessment = this.draftTurnHandoff();
+
+    return (
+      this.draftHandoffRepairInProgress() ||
+      Boolean(this.draftHandoffError()) ||
+      (
+        this.draft()?.status === 'live' &&
+        assessment.status !== 'healthy' &&
+        assessment.status !== 'inactive' &&
+        !(assessment.status === 'complete' && !assessment.requiresServerRepair)
+      )
+    );
+  }
+
+  getDraftHandoffTitle(): string {
+    if (this.draftHandoffError()) {
+      return 'Draft turn needs attention';
     }
 
-    if (secondsAgo < 60) {
-      return `Server confirmed ${secondsAgo}s ago`;
+    if (this.draftTurnHandoff().status === 'draft-ahead') {
+      return 'Refreshing the completed pick';
     }
 
-    return `Server confirmed ${Math.floor(secondsAgo / 60)}m ago`;
+    return 'Opening the next pick';
+  }
+
+  getDraftHandoffDetail(): string {
+    return this.draftHandoffError() ||
+      this.draftHandoffMessage() ||
+      this.draftTurnHandoff().message;
+  }
+
+  private scheduleDraftTurnHandoffCheck(delayMilliseconds = 850): void {
+    if (this.draftHandoffCheckTimer) {
+      clearTimeout(this.draftHandoffCheckTimer);
+      this.draftHandoffCheckTimer = null;
+    }
+
+    const assessment = this.draftTurnHandoff();
+
+    if (
+      assessment.status === 'healthy' ||
+      assessment.status === 'inactive' ||
+      (assessment.status === 'complete' && !assessment.requiresServerRepair)
+    ) {
+      this.draftHandoffMessage.set('');
+      this.draftHandoffError.set('');
+      this.lastDraftHandoffAttemptKey = '';
+      return;
+    }
+
+    this.draftHandoffMessage.set(assessment.message);
+
+    if (
+      this.destroyed ||
+      !this.browserOnline() ||
+      !this.leagueId ||
+      this.pickSubmissionPhase() !== 'idle' ||
+      this.draftHandoffRepairInProgress()
+    ) {
+      return;
+    }
+
+    this.draftHandoffCheckTimer = setTimeout(() => {
+      this.draftHandoffCheckTimer = null;
+      void this.reconcileDraftTurnHandoff();
+    }, Math.max(250, delayMilliseconds));
+  }
+
+  async retryDraftTurnHandoff(): Promise<void> {
+    await this.reconcileDraftTurnHandoff(true);
+  }
+
+  private getDraftHandoffAttemptKey(assessment: DraftTurnHandoffAssessment): string {
+    const draft = this.draft();
+
+    return [
+      assessment.status,
+      assessment.expectedNextOverallPick,
+      assessment.lastContiguousOverallPick,
+      draft?.nextOverallPick ?? 0,
+      draft?.clockStatus ?? 'none',
+    ].join(':');
+  }
+
+  private async reconcileDraftTurnHandoff(force = false): Promise<void> {
+    if (
+      this.destroyed ||
+      !this.browserOnline() ||
+      !this.leagueId ||
+      this.pickSubmissionPhase() !== 'idle' ||
+      this.draftHandoffRepairInProgress()
+    ) {
+      return;
+    }
+
+    let assessment = this.draftTurnHandoff();
+
+    if (
+      assessment.status === 'healthy' ||
+      assessment.status === 'inactive' ||
+      (assessment.status === 'complete' && !assessment.requiresServerRepair)
+    ) {
+      this.draftHandoffMessage.set('');
+      this.draftHandoffError.set('');
+      return;
+    }
+
+    const attemptKey = this.getDraftHandoffAttemptKey(assessment);
+    const now = Date.now();
+
+    if (
+      !force &&
+      attemptKey === this.lastDraftHandoffAttemptKey &&
+      now - this.draftHandoffAttemptedAt < 10_000
+    ) {
+      return;
+    }
+
+    this.lastDraftHandoffAttemptKey = attemptKey;
+    this.draftHandoffAttemptedAt = now;
+    this.draftHandoffRepairInProgress.set(true);
+    this.draftHandoffError.set('');
+    this.draftHandoffMessage.set(assessment.message);
+
+    try {
+      const serverDraftResult = await settleOperationWithin(
+        getFantasyDraftFromServer(this.leagueId),
+        7_000,
+      );
+
+      if (serverDraftResult.status === 'fulfilled' && serverDraftResult.value) {
+        this.draft.set(serverDraftResult.value);
+      }
+
+      if (assessment.status === 'owner-missing') {
+        const teamsResult = await settleOperationWithin(
+          getLeagueTeams(this.leagueId),
+          7_000,
+        );
+
+        if (teamsResult.status === 'fulfilled') {
+          this.teams.set(teamsResult.value);
+        }
+      }
+
+      assessment = this.draftTurnHandoff();
+
+      if (assessment.status === 'draft-ahead') {
+        this.draftHandoffMessage.set(
+          'The server already opened the next turn. RinkRat is refreshing the ordered pick list before enabling another selection.',
+        );
+        this.requestRealtimeConfirmation('manual');
+        return;
+      }
+
+      if (assessment.requiresServerRepair) {
+        const repairResult = await settleOperationWithin(
+          repairDraftTurnHandoff(this.leagueId),
+          22_000,
+        );
+
+        if (repairResult.status === 'timed-out') {
+          throw new Error(
+            'The turn-repair request is still reconciling. Use Retry Turn Sync if the next manager is not opened shortly.',
+          );
+        }
+
+        if (repairResult.status === 'rejected') {
+          throw repairResult.error;
+        }
+
+        this.draftHandoffMessage.set(repairResult.value.message);
+      }
+
+      const refreshedDraftResult = await settleOperationWithin(
+        getFantasyDraftFromServer(this.leagueId),
+        7_000,
+      );
+
+      if (refreshedDraftResult.status === 'fulfilled' && refreshedDraftResult.value) {
+        this.draft.set(refreshedDraftResult.value);
+      }
+
+      this.requestRealtimeConfirmation('manual');
+      assessment = this.draftTurnHandoff();
+
+      if (
+        assessment.status === 'healthy' ||
+        (assessment.status === 'complete' && !assessment.requiresServerRepair)
+      ) {
+        this.draftHandoffError.set('');
+        this.draftHandoffMessage.set('The next draft turn is open.');
+      } else {
+        this.draftHandoffMessage.set(assessment.message);
+      }
+    } catch (error: unknown) {
+      this.draftHandoffError.set(
+        error instanceof Error
+          ? error.message
+          : 'RinkRat could not verify the next draft turn.',
+      );
+      this.requestRealtimeConfirmation('manual');
+    } finally {
+      this.draftHandoffRepairInProgress.set(false);
+    }
   }
 
   setMobilePanel(panel: DraftMobilePanel): void {
@@ -1545,9 +1861,10 @@ export class DraftRoom implements OnDestroy {
     this.pickSubmissionPhase.set('idle');
     this.makingPickAssetKey.set(null);
     this.selectedAssetKey.set(null);
-    this.realtimeListenerError.set(
+    this.draftBoardListenerError.set(
       `RinkRat could not verify pick #${pending.overallPick} in this tab. The pending state has been released; refresh the live board before attempting another pick.`,
     );
+    this.refreshRealtimeListenerErrorState();
     this.realtimeConfirmationStartedAt.set(Date.now());
     this.realtimeReconnectReason.set('listener-error');
     this.pendingPickAction?.finish('uncertain');
@@ -2370,7 +2687,7 @@ export class DraftRoom implements OnDestroy {
     await this.saveMyQueue(assetKeys);
   }
 
-  private ensureRealtimeActionReady(): boolean {
+  private ensureRealtimeActionReady(scope: 'board' | 'queue' = 'board'): boolean {
     if (this.releaseUpdate.updateAvailable()) {
       this.errorMessage.set(
         'A different RinkRat build is now live. Reload this tab before changing the queue, clock, Auto-Draft, or making another pick.',
@@ -2385,12 +2702,26 @@ export class DraftRoom implements OnDestroy {
       return false;
     }
 
-    if (this.realtimeConnectionState() === 'connected') {
+    if (this.draftHandoffRepairInProgress() || this.draftTurnHandoff().status !== 'healthy') {
+      this.errorMessage.set(
+        'RinkRat is opening the next live draft turn. Wait for the next manager and clock to be confirmed before submitting another action.',
+      );
+      this.scheduleDraftTurnHandoffCheck(250);
+      return false;
+    }
+
+    const ready = scope === 'queue'
+      ? this.canUseDraftQueueActions()
+      : this.canUseDraftBoardActions();
+
+    if (ready) {
       return true;
     }
 
     this.errorMessage.set(
-      'Draft actions are paused until RinkRat confirms the live server state. Use Retry Connection if this message remains.',
+      scope === 'queue'
+        ? 'Queue and Auto-Draft changes are paused until your private queue receives a fresh server confirmation.'
+        : 'Draft-board actions are paused until RinkRat confirms the live turn and ordered picks. Use Retry Connection if this message remains.',
     );
     return false;
   }
@@ -2413,7 +2744,7 @@ export class DraftRoom implements OnDestroy {
   }
 
   async toggleMyAutoDraft(): Promise<void> {
-    if (this.queueSaving() || !this.ensureRealtimeActionReady()) {
+    if (this.queueSaving() || !this.ensureRealtimeActionReady('queue')) {
       return;
     }
 
@@ -2545,6 +2876,13 @@ export class DraftRoom implements OnDestroy {
       return 'Draft Complete';
     }
 
+    if (
+      this.draftHandoffRepairInProgress() ||
+      (draft?.status === 'live' && this.draftTurnHandoff().status !== 'healthy')
+    ) {
+      return 'Opening Next Pick';
+    }
+
     if (draft?.clockStatus === 'stopped') {
       return this.isMyTurn()
         ? 'Start Clock When Ready'
@@ -2565,7 +2903,7 @@ export class DraftRoom implements OnDestroy {
   }
 
   private async saveMyQueue(assetKeys: string[]): Promise<void> {
-    if (!this.ensureRealtimeActionReady()) {
+    if (!this.ensureRealtimeActionReady('queue')) {
       return;
     }
 
@@ -2935,8 +3273,15 @@ export class DraftRoom implements OnDestroy {
       return 'Reload RinkRat';
     }
 
-    if (this.realtimeConnectionState() !== 'connected') {
-      return this.realtimeConnectionState() === 'offline' ? 'Offline' : 'Reconnecting';
+    if (
+      this.draftHandoffRepairInProgress() ||
+      (this.draft()?.status === 'live' && this.draftTurnHandoff().status !== 'healthy')
+    ) {
+      return 'Opening Next Pick';
+    }
+
+    if (this.draftBoardConnectionState() !== 'connected') {
+      return this.draftBoardConnectionState() === 'offline' ? 'Offline' : 'Reconnecting';
     }
 
     if (this.draft()?.clockStatus === 'stopped') {

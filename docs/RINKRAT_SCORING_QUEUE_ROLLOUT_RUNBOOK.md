@@ -1,6 +1,6 @@
 # RinkRat Scoring Queue Rollout Runbook
 
-**Current release:** Release Candidate 8 / Batch P1F.1
+**Current release:** Release Candidate 9 / Batch P1F.1
 
 **Production default:** Shadow mode
 
@@ -23,7 +23,7 @@ hotfix only and does not change rollout behavior.
 - **Primary** routes every eligible live league through the queued scorer.
 - Canary and Primary use the **same worker**; the difference is the number of leagues allowed to use it.
 
-The mode does not change queue capacity. In Release Candidate 8, the worker ceiling remains four concurrent scoring tasks and the global queued/processing ceiling remains 24. Those limits must be tuned later from measured task duration, Firestore contention, queue age, retries, NHL-data behavior, and cost.
+The mode does not change queue capacity. In Release Candidate 9, the worker ceiling remains four concurrent scoring tasks and the global queued/processing ceiling remains 24. Those limits must be tuned later from measured task duration, Firestore contention, queue age, retries, NHL-data behavior, and cost.
 
 ## Where to manage it
 

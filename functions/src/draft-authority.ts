@@ -26,7 +26,11 @@ import {
   hasExactDraftOwnerSet,
   rosterContainsDraftAsset,
 } from './draft-pick-engine';
-import { loadProjectionSnapshotForDraft } from './draft-automation';
+import {
+  ensureCurrentDraftClockTask,
+  loadProjectionSnapshotForDraft,
+  repairDraftTurnFromCommittedPicks,
+} from './draft-automation';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -78,6 +82,19 @@ interface SecureDraftPickRequest {
 
 export interface SecureDraftPickResult {
   pick: DraftPick;
+}
+
+interface RepairDraftTurnHandoffRequest {
+  leagueId?: unknown;
+}
+
+export interface RepairDraftTurnHandoffResult {
+  repaired: boolean;
+  status: FantasyDraft['status'];
+  nextOverallPick: number;
+  currentOwnerId: string | null;
+  clockTaskScheduled: boolean;
+  message: string;
 }
 
 function asString(value: unknown): string {
@@ -830,6 +847,64 @@ export const executeDraftCommand = onCall(
     }
 
     throw new HttpsError('invalid-argument', 'That draft command is not supported.');
+  },
+);
+
+export const repairDraftTurnHandoff = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    maxInstances: 30,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<RepairDraftTurnHandoffResult> => {
+    const userId = requireAuthenticatedUserId(request.auth);
+    const input = request.data && typeof request.data === 'object'
+      ? request.data as RepairDraftTurnHandoffRequest
+      : {};
+    const leagueId = requireLeagueId(input.leagueId);
+    const [memberSnapshot, teamSnapshot] = await Promise.all([
+      db.doc(`leagues/${leagueId}/members/${userId}`).get(),
+      db.doc(`leagues/${leagueId}/teams/${userId}`).get(),
+    ]);
+
+    if (!memberSnapshot.exists && !teamSnapshot.exists) {
+      throw new HttpsError(
+        'permission-denied',
+        'You must be an active league member to reconcile its draft turn.',
+      );
+    }
+
+    try {
+      const result = await repairDraftTurnFromCommittedPicks(
+        leagueId,
+        `member:${userId}:draft-handoff-repair`,
+      );
+      const clockTaskScheduled = result.status === 'live'
+        ? await ensureCurrentDraftClockTask(leagueId)
+        : true;
+
+      return {
+        ...result,
+        clockTaskScheduled,
+        message: clockTaskScheduled
+          ? result.message
+          : `${result.message} The live turn is open, but the exact deadline task needs the scheduled recovery worker.`,
+      };
+    } catch (error: unknown) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      throw new HttpsError(
+        'internal',
+        error instanceof Error
+          ? error.message
+          : 'RinkRat could not reconcile the next draft turn.',
+      );
+    }
   },
 );
 

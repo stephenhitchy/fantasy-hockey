@@ -14,7 +14,12 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchp1f-1
+npm run verify:batchr1f
 ```
 
-The current P1F.1 chain includes the existing authority, Firestore-rules, design, accessibility, mobile, projection, replay, release-safety, invite-beta launch-gate, and capacity-model checks, followed by the Angular and Functions builds through the inherited verification chain.
+The current R1F chain includes the existing authority, Firestore-rules, design, accessibility, mobile, projection, replay, release-safety, invite-beta launch-gate, and capacity-model checks, followed by the Angular and Functions builds through the inherited verification chain.
+
+
+Current release: **Release Candidate 9** — Draft queue turn handoff recovery.
+
+Inherited release verification remains available through `verify:batchp1f` and `verify:batchp1f-1`; `verify:batchr1f` runs those checks before the R1F handoff suite.

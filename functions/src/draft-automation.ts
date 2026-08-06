@@ -128,6 +128,14 @@ interface DraftClockTaskPayload {
   expectedDueAtMilliseconds: number;
 }
 
+export interface DraftTurnRepairResult {
+  repaired: boolean;
+  status: FantasyDraft['status'];
+  nextOverallPick: number;
+  currentOwnerId: string | null;
+  message: string;
+}
+
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -647,6 +655,24 @@ async function scheduleDraftClockTask(
   }
 }
 
+export async function ensureCurrentDraftClockTask(
+  leagueId: string,
+): Promise<boolean> {
+  const draftSnapshot = await db.doc(`leagues/${leagueId}/draft/current`).get();
+
+  if (!draftSnapshot.exists) {
+    return false;
+  }
+
+  const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+
+  if (draft.status !== 'live' || draft.clockStatus !== 'running') {
+    return true;
+  }
+
+  return scheduleDraftClockTask(leagueId, draft);
+}
+
 function normalizePickSeconds(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(MAX_CLOCK_SECONDS, Math.max(15, Math.ceil(value)))
@@ -739,6 +765,169 @@ function normalizeQueue(ownerId: string, value: Partial<DraftQueue> | undefined)
       value?.autoDraftActivatedByTimeout === true && value?.autoDraftEnabled === true,
     updatedAt: value?.updatedAt,
   };
+}
+
+
+export async function repairDraftTurnFromCommittedPicks(
+  leagueId: string,
+  actorId: string,
+): Promise<DraftTurnRepairResult> {
+  const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+
+  const result = await withContentionRetry(
+    () => db.runTransaction(async (transaction): Promise<DraftTurnRepairResult> => {
+      const draftSnapshot = await transaction.get(draftRef);
+
+      if (!draftSnapshot.exists) {
+        throw new Error('Draft setup was not found.');
+      }
+
+      const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+      const totalPickCount = getDraftTotalPickCount(draft);
+
+      if (draft.status === 'complete') {
+        return {
+          repaired: false,
+          status: 'complete',
+          nextOverallPick: draft.nextOverallPick,
+          currentOwnerId: null,
+          message: 'The draft is already complete.',
+        };
+      }
+
+      if (draft.status !== 'live') {
+        return {
+          repaired: false,
+          status: draft.status,
+          nextOverallPick: draft.nextOverallPick,
+          currentOwnerId: null,
+          message: 'The live draft has not started.',
+        };
+      }
+
+      const completedAhead: DraftPick[] = [];
+      let expectedNextOverallPick = draft.nextOverallPick;
+
+      while (expectedNextOverallPick <= totalPickCount) {
+        const pickId = String(expectedNextOverallPick).padStart(3, '0');
+        const pickSnapshot = await transaction.get(
+          db.doc(`leagues/${leagueId}/draft/current/picks/${pickId}`),
+        );
+
+        if (!pickSnapshot.exists) {
+          break;
+        }
+
+        const pick = pickSnapshot.data() as DraftPick;
+
+        if (
+          pick.overallPick !== expectedNextOverallPick ||
+          !pick.asset ||
+          typeof pick.asset.assetKey !== 'string' ||
+          !pick.asset.assetKey
+        ) {
+          throw new Error(
+            `Draft pick ${pickId} is malformed, so RinkRat did not advance the turn automatically.`,
+          );
+        }
+
+        completedAhead.push(pick);
+        expectedNextOverallPick += 1;
+      }
+
+      const nextPick = getDraftPickAtOverall(draft, expectedNextOverallPick);
+      const clockMissing =
+        expectedNextOverallPick <= totalPickCount &&
+        (
+          (draft.clockStatus === 'running' && !asTimestampDate(draft.pickStartedAt)) ||
+          (draft.nextOverallPick > 1 && draft.clockStatus === 'stopped')
+        );
+      const draftBehind = expectedNextOverallPick > draft.nextOverallPick;
+      const completionMismatch = expectedNextOverallPick > totalPickCount;
+
+      if (!draftBehind && !clockMissing && !completionMismatch) {
+        return {
+          repaired: false,
+          status: draft.status,
+          nextOverallPick: draft.nextOverallPick,
+          currentOwnerId: nextPick?.ownerId ?? null,
+          message: 'The draft turn is already synchronized.',
+        };
+      }
+
+      const teamSnapshot = await transaction.get(
+        db.collection(`leagues/${leagueId}/teams`),
+      );
+      const currentTeamOwnerIds = teamSnapshot.docs.map((document) => document.id);
+
+      if (!hasExactDraftOwnerSet(draft, currentTeamOwnerIds)) {
+        throw new Error(
+          'League membership no longer matches the saved draft order. The commissioner must repair the team list before the turn can advance.',
+        );
+      }
+
+      const draftComplete = expectedNextOverallPick > totalPickCount;
+      const preservePause = !draftComplete && draft.clockStatus === 'paused';
+      const adoptedAssetKeys = completedAhead
+        .map((pick) => pick.asset.assetKey)
+        .filter((assetKey) => !draft.draftedAssetKeys.includes(assetKey));
+      const lastAdoptedPick = completedAhead.at(-1) ?? null;
+      const lastCompletedOverallPick = Math.max(0, expectedNextOverallPick - 1);
+      const lastCompletedPickId = lastAdoptedPick
+        ? String(lastAdoptedPick.overallPick).padStart(3, '0')
+        : draft.lastPickId ??
+          (lastCompletedOverallPick > 0
+            ? String(lastCompletedOverallPick).padStart(3, '0')
+            : null);
+      const timestamp = FieldValue.serverTimestamp();
+
+      transaction.set(
+        draftRef,
+        {
+          status: draftComplete ? 'complete' : 'live',
+          nextOverallPick: expectedNextOverallPick,
+          draftedAssetKeys: [...draft.draftedAssetKeys, ...adoptedAssetKeys],
+          clockStatus: draftComplete
+            ? 'complete'
+            : preservePause
+              ? 'paused'
+              : 'running',
+          pickStartedAt: draftComplete
+            ? null
+            : preservePause
+              ? draft.pickStartedAt
+              : timestamp,
+          currentPickSeconds: draft.pickSeconds,
+          pausedRemainingSeconds: preservePause
+            ? draft.pausedRemainingSeconds ?? draft.pickSeconds
+            : null,
+          clockUpdatedBy: actorId,
+          clockUpdatedAt: timestamp,
+          lastPickId: lastCompletedPickId,
+          serverAutomationStatus: draftComplete ? 'complete' : 'healthy',
+          serverAutomationMessage: draftComplete
+            ? 'RinkRat reconciled the final committed pick and completed the draft.'
+            : `RinkRat repaired the handoff to pick ${expectedNextOverallPick}.`,
+          serverAutomationUpdatedAt: timestamp,
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      );
+
+      return {
+        repaired: true,
+        status: draftComplete ? 'complete' : 'live',
+        nextOverallPick: expectedNextOverallPick,
+        currentOwnerId: draftComplete ? null : nextPick?.ownerId ?? null,
+        message: draftComplete
+          ? 'The final committed pick was reconciled and the draft is complete.'
+          : `The live draft handoff was repaired at pick ${expectedNextOverallPick}.`,
+      };
+    }),
+    `repair draft turn handoff for ${leagueId}`,
+  );
+
+  return result;
 }
 
 function isScheduledStartReached(draft: FantasyDraft, now = new Date()): boolean {
@@ -1385,6 +1574,39 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       picksMade: result.picksMade,
       message: result.message,
     });
+  },
+);
+
+export const reconcileDraftTurnAfterCommittedPick = onDocumentWritten(
+  {
+    document: 'leagues/{leagueId}/draft/current/picks/{pickId}',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    retry: true,
+  },
+  async (event) => {
+    if (event.data?.before.exists || !event.data?.after.exists) {
+      return;
+    }
+
+    const leagueId = event.params.leagueId;
+    const result = await repairDraftTurnFromCommittedPicks(
+      leagueId,
+      `${SERVER_DRAFT_ACTOR}:pick-handoff`,
+    );
+
+    if (result.status !== 'live') {
+      return;
+    }
+
+    const taskScheduled = await ensureCurrentDraftClockTask(leagueId);
+
+    if (!taskScheduled) {
+      throw new Error(
+        `Pick ${event.params.pickId} committed, but RinkRat could not schedule the next exact draft deadline.`,
+      );
+    }
   },
 );
 

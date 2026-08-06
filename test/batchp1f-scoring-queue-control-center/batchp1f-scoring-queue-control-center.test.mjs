@@ -168,8 +168,8 @@ test('P1F scripts, Release Candidate 8, runbook, and deployment order are docume
 
   assert.match(packageJson.scripts['test:batchp1f:run'], /batchp1f-scoring-queue-control-center/);
   assert.match(packageJson.scripts['verify:batchp1f'], /verify:batchp1e/);
-  assert.match(runtime, /Release Candidate 8/);
-  assert.match(productionRuntime, /Release Candidate 8/);
+  assert.match(runtime, /Release Candidate 9/);
+  assert.match(productionRuntime, /Release Candidate 9/);
   assert.match(documentation, /^## Batch P1F — Scoring Queue Control Center and Safe Canary Rollout/m);
   assert.match(blueprint, /Batch P1F control and rollout layer implemented/);
   assert.match(capacity, /P1F rollout-control update/);

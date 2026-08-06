@@ -2537,3 +2537,93 @@ html[data-background-theme='light-ice'] app-league-detail .status-scheduled {
     transition: none;
   }
 }
+
+/* Batch R1F: visible, bounded recovery when a committed pick and next live turn arrive out of order. */
+.draft-turn-handoff-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--rr-phase3-gold) 52%, transparent);
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-phase3-gold) 12%, var(--rr-ice-white));
+  color: var(--rr-draft-room-migration-color-08);
+}
+
+.draft-turn-handoff-notice > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.draft-turn-handoff-notice strong,
+.draft-turn-handoff-notice span {
+  display: block;
+}
+
+.draft-turn-handoff-notice strong {
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.draft-turn-handoff-notice div > span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.draft-turn-handoff-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--rr-phase3-gold) 62%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--rr-phase3-gold) 18%, transparent);
+  font-size: 19px;
+  font-weight: 950;
+}
+
+.draft-turn-handoff-progress {
+  width: 18px;
+  height: 18px;
+  border: 3px solid color-mix(in srgb, var(--rr-phase3-gold) 30%, transparent);
+  border-top-color: var(--rr-phase3-gold);
+  border-radius: 50%;
+  animation: rr-draft-handoff-spin 0.85s linear infinite;
+}
+
+.draft-turn-handoff-error {
+  border-color: color-mix(in srgb, var(--rr-danger) 52%, transparent);
+  background: color-mix(in srgb, var(--rr-danger) 10%, var(--rr-ice-white));
+}
+
+@keyframes rr-draft-handoff-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 780px) {
+  .draft-turn-handoff-notice {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 9px 10px;
+  }
+
+  .draft-turn-handoff-notice button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .draft-turn-handoff-progress {
+    justify-self: end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-turn-handoff-progress {
+    animation: none;
+    border-color: var(--rr-phase3-gold);
+  }
+}
