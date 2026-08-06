@@ -1,3 +1,164 @@
+## Batch P1F.1 — Functions Document Snapshot Type Hotfix
+
+### Purpose
+
+P1F.1 fixes the Functions TypeScript build failure in the Scoring Queue Control Center league loader:
+
+```text
+TS2345: DocumentSnapshot is not assignable to QueryDocumentSnapshot
+```
+
+The newest-leagues query returns `QueryDocumentSnapshot` objects, while the extra configured or
+focused leagues loaded through `db.getAll()` return the wider `DocumentSnapshot` type. TypeScript
+therefore inferred an array that was too narrow for the direct-document results.
+
+The loader now explicitly declares:
+
+```ts
+const leagueDocuments: DocumentSnapshot<DocumentData, DocumentData>[] = [
+  ...snapshot.docs,
+];
+```
+
+This preserves both sources safely: query snapshots remain valid members of the wider array, and
+existing direct snapshots can be inserted after their `exists` check. Runtime behavior, league
+selection, scoring queue modes, scoring, projections, rules, indexes, and data schemas are
+unchanged.
+
+### Verification
+
+```bash
+npm run verify:batchp1f-1
+```
+
+Deploy the same four P1F Functions after the Functions build passes, followed by Hosting.
+
+## Batch P1F — Scoring Queue Control Center and Safe Canary Rollout
+
+### Purpose
+
+P1F turns the P1E shadow/canary/primary configuration into a guarded platform-admin workflow for
+Release Candidate 8. The app no longer requires a production administrator to edit the queue
+configuration document manually. Release Readiness now shows exact league IDs, eligibility,
+current scoring paths, queue health, rollout gates, safe rollback, and recent audit history.
+
+The release remains in **Shadow by default**. P1F improves operational safety; it does not increase
+the four-worker queue ceiling or claim additional production capacity.
+
+### Platform-admin control center
+
+The new `Scoring Queue Control Center` is embedded in Release Readiness and uses three authenticated
+callables:
+
+```text
+getLeagueAutomationQueueControlCenter
+updateLeagueAutomationQueueConfig
+queueLeagueAutomationCanaryCheck
+```
+
+The server returns the newest 200 leagues plus every exact configured canary, internal test league,
+and the current focus league. Each row identifies:
+
+- exact league name and ID;
+- Draft state;
+- Historical Replay isolation;
+- schedule coverage;
+- scoring-enabled state;
+- current scoring path;
+- queue state, next due time, latest result, duration, active task, and error;
+- whether the league is eligible for Canary.
+
+`Internal Test` is audit metadata only. `Route Through Canary` changes eligibility after the
+configuration is saved in Canary mode.
+
+### Safe mode changes
+
+Every change is platform-admin-only, revision checked, request-idempotent, and written to:
+
+```text
+leagueAutomationConfigAudit/{requestId}
+```
+
+Canary requires at least one exact completed live league and the phrase:
+
+```text
+ENABLE CANARY
+```
+
+Primary cannot be selected directly from Shadow. It remains locked until the server verifies
+Canary evidence, three successful queued tasks, complete schedule coverage, a fresh dispatcher,
+zero latest enqueue failures, zero latest stale recoveries, no active tasks, and a known Firebase
+environment. Production also requires a separate time-limited Admin-SDK-only approval document and
+the phrase:
+
+```text
+ENABLE PRIMARY IN PRODUCTION
+```
+
+Staging uses:
+
+```text
+ENABLE PRIMARY IN STAGING
+```
+
+The promotion gates are checked again inside the same Firestore transaction that saves Primary, so
+a stale browser cannot promote after queue health changes.
+
+### Manual canary verification
+
+A configured live canary can run one immediate task from its inline **Run Canary Now** control. The
+second press is the confirmation. The task uses the same `processLeagueAutomationTask` worker as
+Primary and forces one lease-protected scoring pass even when the ordinary live refresh time is not
+yet due. It cannot select a Historical Replay league or an unfinished Draft.
+
+### Safe Shadow rollback
+
+**Return to Shadow** uses a two-step inline confirmation and is intentionally allowed even when a
+previous canary becomes ineligible. Existing idempotent tasks may finish, but no new normal queued
+work is admitted and the legacy scorer resumes as primary. **Copy Current Rollback** preserves the
+exact project, revision, mode, allowlists, and dispatcher admission limit before a change.
+
+### Source-controlled runbook
+
+The exact operating procedure is stored at:
+
+```text
+docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md
+```
+
+It records the recommended Historical Regression League and Live Canary League split, acceptance
+checks, staging Primary procedure, production lock, rollback steps, audit fields, deployment order,
+and the distinction between rollout mode and actual queue capacity.
+
+### Verification and deployment
+
+Run:
+
+```bash
+npm run verify:batchp1f
+```
+
+Deploy Functions first:
+
+```bash
+firebase deploy --only functions:getLeagueAutomationQueueControlCenter,functions:updateLeagueAutomationQueueConfig,functions:queueLeagueAutomationCanaryCheck,functions:processLeagueAutomationTask -m "Batch P1F scoring queue control center"
+```
+
+Then deploy Hosting:
+
+```bash
+firebase deploy --only hosting:app -m "Batch P1F safe canary rollout controls"
+```
+
+No Firestore rules, indexes, or data migration are required. Leave Production in Shadow during the
+invite beta.
+
+### Architecture preserved
+
+P1F does not change Production Scoring V3, Projection V11, Draft authority, roster rules, waivers,
+Injured Reserve, immutable six-game windows, seventh-game rollover, standings, playoffs,
+Historical Replay, Firestore rules, or Firestore indexes.
+
 ## Batch P1E — Live League Scoring Queue Foundation
 
 ### Purpose
@@ -48,7 +209,10 @@ Supported values are:
 {
   mode: 'shadow' | 'canary' | 'primary',
   canaryLeagueIds: string[],
+  internalTestLeagueIds: string[],
   maxEnqueuePerRun: number,
+  canarySuccessBaseline: number, // server-managed proof baseline
+  revision: number,
 }
 ```
 
@@ -58,7 +222,10 @@ A missing or invalid document always normalizes to:
 {
   mode: 'shadow',
   canaryLeagueIds: [],
+  internalTestLeagueIds: [],
   maxEnqueuePerRun: 100,
+  canarySuccessBaseline: 0,
+  revision: 0,
 }
 ```
 

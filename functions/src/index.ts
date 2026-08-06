@@ -3315,16 +3315,19 @@ export {
   cleanupLeagueAutomationTaskHistory,
   clearExpiredOrErroredLiveScoringLease,
   dispatchDueLeagueAutomation,
+  getLeagueAutomationQueueControlCenter,
   initializeSeasonAfterDraft,
   openNextCompetitionPeriod,
   processHistoricalReplayAdvance,
   processLeagueAutomationTask,
+  queueLeagueAutomationCanaryCheck,
   recoverStaleLeagueAutomationQueue,
   recoverStaleHistoricalReplayQueue,
   releaseLeagueLiveScoringHandoff,
   requestLeagueLiveScoringRefresh,
   runScheduledLeagueAutomation,
   runSeasonStartAutomation,
+  updateLeagueAutomationQueueConfig,
 } from './league-automation';
 
 export {

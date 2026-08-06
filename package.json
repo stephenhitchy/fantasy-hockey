@@ -126,7 +126,11 @@
     "test:batchr1e:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1e-multi-league-replay/*.test.mjs",
     "verify:batchr1e": "npm run verify:batchr1d && npm run test:batchr1e:run",
     "test:batchp1e:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1e-league-automation-queue/*.test.mjs",
-    "verify:batchp1e": "npm run verify:batchr1e && npm run test:batchp1e:run && npm run capacity:100k"
+    "verify:batchp1e": "npm run verify:batchr1e && npm run test:batchp1e:run && npm run capacity:100k",
+    "test:batchp1f:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1f-scoring-queue-control-center/*.test.mjs",
+    "verify:batchp1f": "npm run verify:batchp1e && npm run test:batchp1f:run",
+    "test:batchp1f-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1f-1-functions-build-hotfix/*.test.mjs",
+    "verify:batchp1f-1": "npm run verify:batchp1f && npm run test:batchp1f-1:run"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

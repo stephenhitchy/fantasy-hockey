@@ -353,8 +353,8 @@ test('R1B-P1D verification, the current release candidate, and documentation lin
   assert.match(packageJson.scripts['test:batchr1b-p1d:run'], /batchr1b-p1d-launch-scale/);
   assert.match(packageJson.scripts['verify:batchr1b-p1d'], /verify:batchp1c/);
   assert.match(packageJson.scripts['verify:batchr1b-p1d'], /audit:invite-beta-release/);
-  assert.match(developmentConfig, /Release Candidate 7/);
-  assert.match(productionConfig, /Release Candidate 7/);
+  assert.match(developmentConfig, /Release Candidate 8/);
+  assert.match(productionConfig, /Release Candidate 8/);
   assert.match(readme, /RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT/);
   assert.match(projectDocs, /^## Batch R1B-P1D — Invite Beta Launch Gate and High-Scale Handoff/m);
 });

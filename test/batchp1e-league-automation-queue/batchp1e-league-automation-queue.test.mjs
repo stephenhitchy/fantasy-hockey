@@ -73,7 +73,7 @@ test('at-least-once task delivery cannot double-publish a league run', async () 
 
   assert.match(automation, /activeTaskId !== taskId/);
   assert.match(automation, /expectedDueAt !== Math\.trunc\(payload\.expectedDueAtMilliseconds\)/);
-  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*false,[\s\S]*'queue-task'/);
+  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual',[\s\S]*'queue-task'/);
   assert.match(automation, /claimLeagueAutomationLease/);
   assert.match(automation, /result\.skipReason === 'another-server-worker'/);
   assert.match(automation, /league-automation-lease-busy/);
@@ -162,9 +162,9 @@ test('P1E scripts, exports, documentation, and safe deployment order are recorde
   assert.match(documentation, /shadow mode/);
   assert.match(documentation, /Functions first/);
   assert.match(blueprint, /P1E foundation implemented/);
-  assert.match(readme, /verify:batchp1e/);
-  assert.match(runtime, /Release Candidate 7/);
-  assert.match(productionRuntime, /Release Candidate 7/);
+  assert.match(readme, /verify:batchp1(?:e|f)/);
+  assert.match(runtime, /Release Candidate 8/);
+  assert.match(productionRuntime, /Release Candidate 8/);
 });
 
 test('competitive scoring, Projection V11, Firestore rules, and indexes remain unchanged', async () => {

@@ -293,7 +293,7 @@ test('roster, waiver, queue, clock, profile, and support callables have bounded 
     ['scripts/audit-async-operation-safety.mjs'],
     { cwd: root },
   );
-  assert.match(stdout, /25 browser callables have explicit timeouts/);
+  assert.match(stdout, /28 browser callables have explicit timeouts/);
 });
 
 test('R1D scripts and documentation record the required Functions-first deployment', async () => {

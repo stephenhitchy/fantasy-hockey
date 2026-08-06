@@ -4,6 +4,32 @@
 
 **Important boundary:** this document is not a blocker for a small controlled invite beta. It is the source-controlled handoff for a later scale phase. Do not point a large load test at the production Firebase project.
 
+
+## Batch P1F control and rollout layer implemented
+
+Release Candidate 8 adds a platform-admin Scoring Queue Control Center on top of the P1E queue
+foundation. It does not change worker capacity. It makes the future cutover safer by adding:
+
+- searchable exact league identities and scoring-path labels;
+- separate internal-test metadata and canary allowlisting;
+- revision-checked, idempotent, audited configuration changes;
+- server-side Canary eligibility validation;
+- a manual single-league task that uses the exact Primary worker;
+- a two-step Return to Shadow control;
+- Primary promotion gates checked again inside the save transaction;
+- a production-only, time-limited server approval requirement;
+- a source-controlled rollout runbook.
+
+Operational instructions are maintained in:
+
+```text
+docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md
+```
+
+The production posture remains Shadow through invite beta. Canary should begin with one fake live
+league after real NHL games begin. Primary should be exercised first in a separate staging Firebase
+project containing only disposable leagues.
+
 ## P1E foundation implemented
 
 Release Candidate 7 now contains the first production-safe implementation layer from this

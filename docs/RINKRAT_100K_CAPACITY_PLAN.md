@@ -14,6 +14,30 @@ The dependency-free model reads current Functions source settings and combines t
 
 This is deliberately labeled a **capacity estimate**, not a live load test. It does not create 100,000 authenticated browsers or Firestore streams.
 
+
+## P1F rollout-control update
+
+Batch P1F does not increase the modelled throughput. It adds the guarded operational layer needed
+to test the existing P1E queue without risking every league:
+
+- Shadow remains the Production default.
+- Canary uses exact allowlisted completed live leagues.
+- A manual canary check executes the same worker used by Primary.
+- Primary proof counts only successful queue tasks completed after the current canary allowlist was activated.
+- Primary is locked behind measured queue-health gates and a separate production approval.
+- Return to Shadow is always available through a two-step platform-admin control.
+- Configuration changes are revisioned, idempotent, and audited.
+
+The current source of truth remains four concurrent scoring tasks and a maximum global pending depth
+of 24. Canary and Primary are rollout scopes, not higher-capacity tiers. Increasing throughput
+requires measured staging tests, a Functions code change, and redeployment.
+
+See:
+
+```text
+docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md
+```
+
 ## Current conclusion
 
 RinkRat is suitable for continued controlled invite-beta work, but it is not yet certified for 100,000 simultaneously active managers.

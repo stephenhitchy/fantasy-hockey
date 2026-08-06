@@ -1,0 +1,574 @@
+<section class="queue-control-card" aria-labelledby="scoring-queue-control-heading">
+  <header class="queue-control-header">
+    <div>
+      <span class="queue-eyebrow">Platform admin · scoring rollout</span>
+      <h2 id="scoring-queue-control-heading">Scoring Queue Control Center</h2>
+      <p>
+        Choose exactly which live leagues may use the queued scorer, verify one canary safely,
+        and keep a one-click route back to shadow mode. Historical replay remains separate.
+      </p>
+    </div>
+
+    @if (snapshot(); as current) {
+      <div
+        class="environment-badge"
+        [class.environment-production]="current.environment === 'production'"
+        [class.environment-staging]="current.environment === 'staging'"
+        [class.environment-emulator]="current.environment === 'emulator'"
+      >
+        <span>{{ getEnvironmentLabel(current.environment) }}</span>
+        <strong>{{ current.projectId }}</strong>
+      </div>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="queue-state-card" role="status">
+      <span class="queue-state-pulse" aria-hidden="true"></span>
+      <div>
+        <strong>Loading server-owned scoring controls…</strong>
+        <p>Checking league schedules, queue health, rollout gates, and recent changes.</p>
+      </div>
+    </div>
+  } @else if (errorMessage() && !snapshot()) {
+    <div class="queue-message queue-message-error" role="alert">
+      <strong>Control center unavailable</strong>
+      <span>{{ errorMessage() }}</span>
+      <button type="button" class="queue-button queue-button-secondary" (click)="refresh()">
+        Try Again
+      </button>
+    </div>
+  } @else if (snapshot(); as current) {
+    @if (actionMessage()) {
+      <p class="queue-message queue-message-success" role="status">{{ actionMessage() }}</p>
+    }
+
+    @if (errorMessage()) {
+      <p class="queue-message queue-message-error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <section
+      class="current-mode-banner"
+      [class.current-mode-shadow]="current.mode === 'shadow'"
+      [class.current-mode-canary]="current.mode === 'canary'"
+      [class.current-mode-primary]="current.mode === 'primary'"
+      aria-labelledby="current-queue-mode-heading"
+    >
+      <div class="mode-symbol" aria-hidden="true">
+        @switch (current.mode) {
+          @case ('canary') { C }
+          @case ('primary') { P }
+          @default { S }
+        }
+      </div>
+      <div>
+        <span>Current server mode</span>
+        <h3 id="current-queue-mode-heading">{{ getModeLabel(current.mode) }}</h3>
+        <p>{{ getModeDescription(current.mode) }}</p>
+      </div>
+      <dl>
+        <div>
+          <dt>Revision</dt>
+          <dd>{{ current.revision }}</dd>
+        </div>
+        <div>
+          <dt>Exact canaries</dt>
+          <dd>{{ current.canaryLeagueIds.length }}</dd>
+        </div>
+        <div>
+          <dt>Updated</dt>
+          <dd>{{ formatTimestamp(current.updatedAt) }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="queue-health-section" aria-labelledby="queue-health-heading">
+      <div class="section-heading-row">
+        <div>
+          <span class="queue-eyebrow">Live queue health</span>
+          <h3 id="queue-health-heading">What the server is seeing</h3>
+        </div>
+        <button
+          type="button"
+          class="queue-button queue-button-secondary"
+          [disabled]="busy()"
+          (click)="refresh()"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div class="queue-health-grid">
+        <article>
+          <span>Dispatcher</span>
+          <strong>{{ current.health.queueLastDispatchStatus ?? 'Not recorded' }}</strong>
+          <small>{{ formatTimestamp(current.health.queueLastDispatchAt ?? null) }}</small>
+        </article>
+        <article>
+          <span>Schedule coverage</span>
+          <strong>
+            {{ current.health.queueScheduleCoverageCount ?? 0 }} /
+            {{ current.health.queueScheduleCoverageCompletedDraftCount ?? 0 }}
+          </strong>
+          <small>Completed-draft leagues mirrored</small>
+        </article>
+        <article [class.health-attention]="(current.health.queueActivePendingTaskCount ?? 0) > 0">
+          <span>Active tasks</span>
+          <strong>
+            {{ current.health.queueActivePendingTaskCount ?? 0 }} /
+            {{ current.health.queueTaskMaxPendingTasks ?? 24 }}
+          </strong>
+          <small>Queued or processing globally</small>
+        </article>
+        <article>
+          <span>Current canary proof</span>
+          <strong>{{ current.successfulTasksSinceCanary }} / 3</strong>
+          <small>
+            {{ current.health.queueTaskSuccessCount ?? 0 }} successful task(s) overall ·
+            {{ current.health.queueTaskRetryAttemptCount ?? 0 }} retry attempts
+          </small>
+        </article>
+        <article [class.health-attention]="(current.health.queueFailedEnqueueCount ?? 0) > 0">
+          <span>Latest enqueue failures</span>
+          <strong>{{ current.health.queueFailedEnqueueCount ?? 0 }}</strong>
+          <small>{{ current.health.queueLastRecoveryCount ?? 0 }} stale recoveries</small>
+        </article>
+        <article>
+          <span>Worker ceiling</span>
+          <strong>{{ current.health.queueTaskMaxConcurrentDispatches ?? 4 }}</strong>
+          <small>Concurrent scoring tasks in this build</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="rollout-section" aria-labelledby="queue-rollout-heading">
+      <div class="section-heading-row">
+        <div>
+          <span class="queue-eyebrow">Controlled rollout</span>
+          <h3 id="queue-rollout-heading">Choose the intended mode</h3>
+        </div>
+        <button
+          type="button"
+          class="queue-button queue-button-quiet"
+          (click)="copyRollbackConfiguration()"
+        >
+          Copy Current Rollback
+        </button>
+      </div>
+
+      <div class="mode-choice-grid" role="radiogroup" aria-label="Scoring queue rollout mode">
+        <button
+          type="button"
+          class="mode-choice"
+          [class.mode-choice-selected]="selectedMode() === 'shadow'"
+          [attr.aria-checked]="selectedMode() === 'shadow'"
+          role="radio"
+          [disabled]="busy()"
+          (click)="selectMode('shadow')"
+        >
+          <span class="mode-choice-code">S</span>
+          <span class="mode-choice-copy">
+            <strong>Shadow</strong>
+            <small>Observe schedules and health. The legacy ten-minute scorer handles every live league.</small>
+          </span>
+          <span class="mode-choice-state">Safest</span>
+        </button>
+
+        <button
+          type="button"
+          class="mode-choice"
+          [class.mode-choice-selected]="selectedMode() === 'canary'"
+          [attr.aria-checked]="selectedMode() === 'canary'"
+          role="radio"
+          [disabled]="busy()"
+          (click)="selectMode('canary')"
+        >
+          <span class="mode-choice-code">C</span>
+          <span class="mode-choice-copy">
+            <strong>Canary</strong>
+            <small>Only exact selected live leagues use the queued worker. Every other league remains on legacy scoring.</small>
+          </span>
+          <span class="mode-choice-state">Test path</span>
+        </button>
+
+        <button
+          type="button"
+          class="mode-choice mode-choice-danger"
+          [class.mode-choice-selected]="selectedMode() === 'primary'"
+          [attr.aria-checked]="selectedMode() === 'primary'"
+          role="radio"
+          [disabled]="busy() || !current.primaryPromotionAllowed"
+          (click)="selectMode('primary')"
+        >
+          <span class="mode-choice-code">P</span>
+          <span class="mode-choice-copy">
+            <strong>Primary</strong>
+            <small>Every eligible live league uses the queue. The old scorer becomes recovery-only.</small>
+          </span>
+          <span class="mode-choice-state">
+            {{ current.primaryPromotionAllowed ? 'Unlocked' : 'Locked' }}
+          </span>
+        </button>
+      </div>
+
+      <div class="mode-explainer">
+        <strong>Canary and Primary use the same worker.</strong>
+        <p>
+          The difference is scope, not speed: Canary routes only named leagues; Primary routes every
+          eligible live league. Concurrency stays at
+          {{ current.health.queueTaskMaxConcurrentDispatches ?? 4 }} until the Functions code is
+          intentionally tuned and redeployed. The Primary proof counter resets whenever the exact
+          canary allowlist changes, so successes from an older test group cannot unlock a new one.
+        </p>
+      </div>
+
+      <details class="promotion-gates" [open]="selectedMode() === 'primary'">
+        <summary>
+          Primary promotion gates
+          <span>
+            {{ current.primaryPromotionAllowed ? 'All passed' : 'Still locked' }}
+          </span>
+        </summary>
+        <div class="promotion-gate-list">
+          @for (gate of current.promotionGates; track gate.id) {
+            <article [class.gate-pass]="gate.passed" [class.gate-fail]="!gate.passed">
+              <span aria-hidden="true">{{ gate.passed ? '✓' : '!' }}</span>
+              <div>
+                <strong>{{ gate.label }}</strong>
+                <p>{{ gate.detail }}</p>
+              </div>
+            </article>
+          }
+        </div>
+
+        @if (current.production && !current.primaryApproval.valid) {
+          <p class="production-lock-note">
+            Production Primary remains intentionally locked. A separate, time-limited server-only
+            approval document is required even after every health gate passes.
+          </p>
+        }
+      </details>
+    </section>
+
+    <section class="league-selector-section" aria-labelledby="league-selector-heading">
+      <div class="section-heading-row league-selector-heading-row">
+        <div>
+          <span class="queue-eyebrow">Exact league routing</span>
+          <h3 id="league-selector-heading">Choose safe test leagues</h3>
+          <p>
+            Internal Test is only a label. Canary changes the scoring route after you save the
+            configuration.
+          </p>
+        </div>
+        <div class="league-count">
+          <strong>{{ filteredLeagues().length }}</strong>
+          <span>shown</span>
+        </div>
+      </div>
+
+      <div class="league-tools">
+        <label class="league-search">
+          <span>Search name or exact league ID</span>
+          <input
+            type="search"
+            [ngModel]="searchText()"
+            (ngModelChange)="setSearchText($event)"
+            placeholder="RinkRat Live Canary or league ID"
+          />
+        </label>
+        <label>
+          <span>Show</span>
+          <select [ngModel]="filter()" (ngModelChange)="setFilter($event)">
+            <option value="all">All loaded leagues</option>
+            <option value="eligible">Canary eligible</option>
+            <option value="canary">Selected canaries</option>
+            <option value="internal">Internal test leagues</option>
+            <option value="attention">Needs attention</option>
+          </select>
+        </label>
+      </div>
+
+      @if (current.truncated) {
+        <p class="queue-note">
+          The newest 200 leagues are shown, plus every configured canary, internal test league, and
+          the league used to open this page.
+        </p>
+      }
+
+      @if (filteredLeagues().length) {
+        <div class="league-control-list">
+          @for (league of filteredLeagues(); track league.leagueId) {
+            <article
+              class="league-control-row"
+              [class.league-control-row-canary]="isSelectedCanary(league.leagueId)"
+              [class.league-control-row-attention]="league.lastError || !league.scheduleExists"
+            >
+              <div class="league-identity">
+                <div>
+                  <span [class]="'scoring-path ' + getScoringPathClass(league)">
+                    {{ getScoringPathLabel(league) }}
+                  </span>
+                  @if (isSelectedInternalTest(league.leagueId)) {
+                    <span class="internal-test-badge">Internal Test</span>
+                  }
+                </div>
+                <h4>{{ league.leagueName }}</h4>
+                <button
+                  type="button"
+                  class="league-id-button"
+                  title="Copy exact league ID"
+                  (click)="copyLeagueId(league.leagueId)"
+                >
+                  {{ league.leagueId }}
+                </button>
+              </div>
+
+              <dl class="league-facts">
+                <div>
+                  <dt>Draft</dt>
+                  <dd>{{ league.draftStatus }}</dd>
+                </div>
+                <div>
+                  <dt>Queue</dt>
+                  <dd>{{ league.queueStatus }}</dd>
+                </div>
+                <div>
+                  <dt>Next scoring check</dt>
+                  <dd>{{ formatTimestamp(league.nextScoringAt) }}</dd>
+                </div>
+                <div>
+                  <dt>Last queued result</dt>
+                  <dd>{{ league.lastOutcome }} · {{ formatDuration(league.lastDurationMilliseconds) }}</dd>
+                </div>
+              </dl>
+
+              @if (!league.canaryEligible) {
+                <p class="league-eligibility-note">{{ league.canaryEligibilityReason }}</p>
+              }
+
+              @if (league.lastError) {
+                <p class="league-error-note">{{ league.lastError }}</p>
+              }
+
+              <div class="league-controls">
+                <label class="toggle-control">
+                  <input
+                    type="checkbox"
+                    [checked]="isSelectedInternalTest(league.leagueId)"
+                    [disabled]="busy()"
+                    (change)="toggleInternalTest(league.leagueId)"
+                  />
+                  <span>
+                    <strong>Internal Test</strong>
+                    <small>Labels this as one of your disposable or controlled leagues.</small>
+                  </span>
+                </label>
+
+                <label
+                  class="toggle-control toggle-control-canary"
+                  [class.toggle-control-disabled]="!league.canaryEligible"
+                >
+                  <input
+                    type="checkbox"
+                    [checked]="isSelectedCanary(league.leagueId)"
+                    [disabled]="busy() || !league.canaryEligible"
+                    (change)="toggleCanary(league)"
+                  />
+                  <span>
+                    <strong>Route Through Canary</strong>
+                    <small>{{ league.canaryEligibilityReason }}</small>
+                  </span>
+                </label>
+              </div>
+
+              @if (
+                current.mode === 'canary' &&
+                league.isCanary &&
+                league.canaryEligible
+              ) {
+                <div class="manual-canary-panel">
+                  <div>
+                    <strong>Run one real queued scoring check</strong>
+                    <p>
+                      This forces one safe scoring pass through the same worker used by Primary.
+                      It does not activate Primary for other leagues.
+                    </p>
+                  </div>
+                  <div class="manual-canary-actions">
+                    <button
+                      type="button"
+                      class="queue-button queue-button-canary"
+                      [class.queue-button-confirm]="canaryRunArmedLeagueId() === league.leagueId"
+                      [disabled]="busy()"
+                      (click)="armCanaryRun(league.leagueId)"
+                    >
+                      @if (canaryRunLeagueId() === league.leagueId) {
+                        Queueing…
+                      } @else if (canaryRunArmedLeagueId() === league.leagueId) {
+                        Confirm Live Scoring Run
+                      } @else {
+                        Run Canary Now
+                      }
+                    </button>
+                    @if (canaryRunArmedLeagueId() === league.leagueId) {
+                      <button
+                        type="button"
+                        class="queue-button queue-button-quiet"
+                        [disabled]="busy()"
+                        (click)="cancelCanaryRun()"
+                      >
+                        Cancel
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="queue-empty-state">
+          <strong>No leagues match this view.</strong>
+          <p>Clear the search or choose a different filter.</p>
+        </div>
+      }
+    </section>
+
+    <section class="configuration-section" aria-labelledby="queue-configuration-heading">
+      <div class="section-heading-row">
+        <div>
+          <span class="queue-eyebrow">Save deliberately</span>
+          <h3 id="queue-configuration-heading">Configuration review</h3>
+        </div>
+        <span class="unsaved-badge" [class.unsaved-badge-active]="hasChanges()">
+          {{ hasChanges() ? 'Unsaved changes' : 'Matches server' }}
+        </span>
+      </div>
+
+      <div class="configuration-summary">
+        <article>
+          <span>Selected mode</span>
+          <strong>{{ getModeLabel(selectedMode()) }}</strong>
+        </article>
+        <article>
+          <span>Canary leagues</span>
+          <strong>{{ selectedCanaryLeagueIds().length }}</strong>
+        </article>
+        <article>
+          <span>Internal test leagues</span>
+          <strong>{{ selectedInternalTestLeagueIds().length }}</strong>
+        </article>
+      </div>
+
+      <div class="configuration-fields">
+        <label>
+          <span>Maximum leagues admitted per dispatcher pass</span>
+          <input
+            type="number"
+            min="1"
+            max="300"
+            [ngModel]="maxEnqueuePerRun()"
+            (ngModelChange)="setMaxEnqueuePerRun($event)"
+          />
+          <small>
+            This does not change the four-worker concurrency ceiling. It only limits how many due
+            leagues the dispatcher may attempt to admit in one minute.
+          </small>
+        </label>
+
+        <label>
+          <span>Reason for this change</span>
+          <textarea
+            rows="3"
+            maxlength="500"
+            [ngModel]="changeReason()"
+            (ngModelChange)="changeReason.set($event)"
+            placeholder="Example: Add the internal live canary after three clean shadow nights."
+          ></textarea>
+          <small>Stored in the server-side audit trail. Minimum 8 characters.</small>
+        </label>
+
+        @if (requiredConfirmationPhrase(); as phrase) {
+          <label class="confirmation-field">
+            <span>Type this exact phrase to confirm</span>
+            <code>{{ phrase }}</code>
+            <input
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              [ngModel]="confirmationText()"
+              (ngModelChange)="confirmationText.set($event)"
+            />
+          </label>
+        }
+      </div>
+
+      <div class="configuration-actions">
+        <button
+          type="button"
+          class="queue-button queue-button-primary"
+          [disabled]="!canSave()"
+          (click)="saveConfiguration()"
+        >
+          {{ busy() ? 'Saving…' : 'Save Queue Configuration' }}
+        </button>
+
+        @if (current.mode !== 'shadow') {
+          <button
+            type="button"
+            class="queue-button queue-button-shadow"
+            [class.queue-button-confirm]="shadowRollbackArmed()"
+            [disabled]="busy()"
+            (click)="armShadowRollback()"
+          >
+            {{ shadowRollbackArmed() ? 'Confirm Return to Shadow' : 'Return to Shadow' }}
+          </button>
+          @if (shadowRollbackArmed()) {
+            <button
+              type="button"
+              class="queue-button queue-button-quiet"
+              [disabled]="busy()"
+              (click)="cancelShadowRollback()"
+            >
+              Cancel
+            </button>
+          }
+        }
+      </div>
+    </section>
+
+    <details class="queue-audit-section">
+      <summary>
+        Recent scoring-queue changes
+        <span>{{ current.audit.length }} records</span>
+      </summary>
+      @if (current.audit.length) {
+        <div class="queue-audit-list">
+          @for (entry of current.audit; track entry.auditId) {
+            <article>
+              <div>
+                <strong>{{ getAuditActionLabel(entry.action) }}</strong>
+                <small>
+                  {{ formatTimestamp(entry.createdAt) }} · {{ entry.adminId || 'Platform admin' }} ·
+                  Rev {{ entry.revisionBefore }} → {{ entry.revisionAfter }}
+                </small>
+              </div>
+              <p>
+                {{ entry.reason || 'No reason recorded.' }}
+                @if (entry.leagueId) {
+                  <code>{{ entry.leagueId }}</code>
+                }
+              </p>
+              <span>
+                {{ getModeLabel(entry.modeBefore) }} → {{ getModeLabel(entry.modeAfter) }} ·
+                {{ entry.canaryLeagueIdsAfter.length }} canary league(s)
+              </span>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="queue-note">No queue configuration changes have been recorded yet.</p>
+      }
+    </details>
+  }
+</section>

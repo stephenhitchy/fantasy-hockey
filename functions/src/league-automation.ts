@@ -5,6 +5,7 @@ import {
   FieldValue,
   Timestamp,
 } from 'firebase-admin/firestore';
+import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { getFunctions } from 'firebase-admin/functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -82,6 +83,12 @@ const LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT = 100;
 const LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT = 500;
 const LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT = 500;
+const LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT = 200;
+const LEAGUE_AUTOMATION_ADMIN_AUDIT_LIMIT = 20;
+const LEAGUE_AUTOMATION_PRODUCTION_PROJECT_ID = 'nhl-fantasy-app-ab673';
+const LEAGUE_AUTOMATION_CANARY_CONFIRMATION = 'ENABLE CANARY';
+const LEAGUE_AUTOMATION_STAGING_PRIMARY_CONFIRMATION = 'ENABLE PRIMARY IN STAGING';
+const LEAGUE_AUTOMATION_PRODUCTION_PRIMARY_CONFIRMATION = 'ENABLE PRIMARY IN PRODUCTION';
 
 type LeagueAutomationTrigger =
   | 'scheduled'
@@ -178,7 +185,98 @@ interface HistoricalReplayAdvanceResult {
 interface LeagueAutomationQueueConfig {
   mode: LeagueAutomationQueueMode;
   canaryLeagueIds: string[];
+  internalTestLeagueIds: string[];
   maxEnqueuePerRun: number;
+  canarySuccessBaseline: number;
+  revision: number;
+}
+
+type LeagueAutomationEnvironment = 'production' | 'staging' | 'emulator' | 'unknown';
+
+interface LeagueAutomationPromotionGate {
+  id: string;
+  label: string;
+  passed: boolean;
+  blocking: boolean;
+  detail: string;
+}
+
+interface LeagueAutomationPrimaryApproval {
+  enabled: boolean;
+  expiresAtMilliseconds: number;
+  projectId: string;
+  note: string;
+}
+
+interface LeagueAutomationAdminLeague {
+  leagueId: string;
+  leagueName: string;
+  createdAt: string | null;
+  draftStatus: string;
+  historicalReplayEnabled: boolean;
+  scheduleExists: boolean;
+  scoringEnabled: boolean;
+  queueStatus: string;
+  nextScoringAt: string | null;
+  lastCompletedAt: string | null;
+  lastOutcome: string;
+  lastTrigger: string;
+  lastDurationMilliseconds: number | null;
+  lastError: string;
+  activeTaskId: string;
+  activeTaskLeaseExpiresAt: string | null;
+  isCanary: boolean;
+  isInternalTest: boolean;
+  canaryEligible: boolean;
+  canaryEligibilityReason: string;
+  scoringPath: 'legacy' | 'queued-canary' | 'queued-primary' | 'historical-replay' | 'draft-incomplete' | 'paused';
+}
+
+interface LeagueAutomationQueueAdminSnapshot {
+  generatedAt: string;
+  projectId: string;
+  environment: LeagueAutomationEnvironment;
+  production: boolean;
+  mode: LeagueAutomationQueueMode;
+  canaryLeagueIds: string[];
+  internalTestLeagueIds: string[];
+  maxEnqueuePerRun: number;
+  canarySuccessBaseline: number;
+  successfulTasksSinceCanary: number;
+  revision: number;
+  updatedAt: string | null;
+  updatedBy: string;
+  changeReason: string;
+  primaryApproval: {
+    enabled: boolean;
+    valid: boolean;
+    expiresAt: string | null;
+    note: string;
+  };
+  primaryPromotionAllowed: boolean;
+  primaryConfirmationPhrase: string;
+  promotionGates: LeagueAutomationPromotionGate[];
+  health: Record<string, unknown>;
+  leagues: LeagueAutomationAdminLeague[];
+  truncated: boolean;
+  audit: Array<{
+    auditId: string;
+    action: string;
+    modeBefore: LeagueAutomationQueueMode;
+    modeAfter: LeagueAutomationQueueMode;
+    canaryLeagueIdsBefore: string[];
+    canaryLeagueIdsAfter: string[];
+    internalTestLeagueIdsBefore: string[];
+    internalTestLeagueIdsAfter: string[];
+    reason: string;
+    adminId: string;
+    leagueId: string;
+    maxEnqueuePerRunBefore: number;
+    maxEnqueuePerRunAfter: number;
+    revisionBefore: number;
+    revisionAfter: number;
+    createdAt: string | null;
+  }>;
 }
 
 interface LeagueAutomationTaskPayload {
@@ -186,7 +284,7 @@ interface LeagueAutomationTaskPayload {
   leagueId: string;
   expectedDueAtMilliseconds: number;
   dueBucket: string;
-  reason: 'scheduled' | 'recovery';
+  reason: 'scheduled' | 'recovery' | 'canary-manual';
 }
 
 interface DueLeagueAutomationSchedule {
@@ -275,7 +373,7 @@ function normalizeLeagueAutomationQueueMode(value: unknown): LeagueAutomationQue
     : LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE;
 }
 
-function normalizeLeagueAutomationCanaryIds(value: unknown): string[] {
+function normalizeLeagueAutomationLeagueIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -284,9 +382,23 @@ function normalizeLeagueAutomationCanaryIds(value: unknown): string[] {
     value
       .filter((entry): entry is string => typeof entry === 'string')
       .map((entry) => entry.trim())
-      .filter(Boolean)
+      .filter((entry) => /^[A-Za-z0-9_-]{6,128}$/.test(entry))
       .slice(0, 100),
   )].sort();
+}
+
+function normalizeLeagueAutomationCanaryIds(value: unknown): string[] {
+  return normalizeLeagueAutomationLeagueIds(value);
+}
+
+function normalizeLeagueAutomationInternalTestIds(value: unknown): string[] {
+  return normalizeLeagueAutomationLeagueIds(value);
+}
+
+function normalizeLeagueAutomationRevision(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
 }
 
 function normalizeLeagueAutomationMaxEnqueuePerRun(value: unknown): number {
@@ -305,10 +417,749 @@ async function getLeagueAutomationQueueConfig(): Promise<LeagueAutomationQueueCo
   return {
     mode: normalizeLeagueAutomationQueueMode(data['mode']),
     canaryLeagueIds: normalizeLeagueAutomationCanaryIds(data['canaryLeagueIds']),
+    internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+      data['internalTestLeagueIds'],
+    ),
     maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
       data['maxEnqueuePerRun'],
     ),
+    canarySuccessBaseline: normalizeLeagueAutomationRevision(
+      data['canarySuccessBaseline'],
+    ),
+    revision: normalizeLeagueAutomationRevision(data['revision']),
   };
+}
+
+
+async function requireLeagueAutomationPlatformAdmin(request: {
+  auth?: {
+    uid: string;
+    token: Record<string, unknown>;
+  } | null;
+}): Promise<string> {
+  const userId = request.auth?.uid;
+
+  if (!userId) {
+    throw new HttpsError(
+      'unauthenticated',
+      'Sign in before opening the scoring queue controls.',
+    );
+  }
+
+  if (request.auth?.token?.['platformAdmin'] === true) {
+    return userId;
+  }
+
+  const adminSnapshot = await db.doc(`platformAdmins/${userId}`).get();
+
+  if (!adminSnapshot.exists || adminSnapshot.data()?.['enabled'] !== true) {
+    throw new HttpsError(
+      'permission-denied',
+      'This account does not have RinkRat platform-administrator access.',
+    );
+  }
+
+  return userId;
+}
+
+function getLeagueAutomationProjectId(): string {
+  const direct = [
+    process.env['GCLOUD_PROJECT'],
+    process.env['GOOGLE_CLOUD_PROJECT'],
+    process.env['GCP_PROJECT'],
+  ].find((value) => typeof value === 'string' && value.trim().length > 0);
+
+  if (direct) {
+    return direct.trim();
+  }
+
+  const firebaseConfig = process.env['FIREBASE_CONFIG'];
+
+  if (firebaseConfig) {
+    try {
+      const parsed = JSON.parse(firebaseConfig) as Record<string, unknown>;
+      const projectId = parsed['projectId'];
+
+      if (typeof projectId === 'string' && projectId.trim()) {
+        return projectId.trim();
+      }
+    } catch {
+      // A malformed environment value should not prevent the control center from loading.
+    }
+  }
+
+  return 'unknown-project';
+}
+
+function getLeagueAutomationEnvironment(projectId: string): LeagueAutomationEnvironment {
+  if (process.env['FUNCTIONS_EMULATOR'] === 'true') {
+    return 'emulator';
+  }
+
+  if (projectId === LEAGUE_AUTOMATION_PRODUCTION_PROJECT_ID) {
+    return 'production';
+  }
+
+  if (projectId && projectId !== 'unknown-project') {
+    return 'staging';
+  }
+
+  return 'unknown';
+}
+
+function getLeagueAutomationAuditRef(auditId: string) {
+  return db.doc(`leagueAutomationConfigAudit/${auditId}`);
+}
+
+function normalizeLeagueAutomationAdminRequestId(value: unknown): string {
+  const cleaned = typeof value === 'string'
+    ? value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96)
+    : '';
+
+  return cleaned || randomUUID().replaceAll('-', '');
+}
+
+function normalizeLeagueAutomationChangeReason(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').slice(0, 500)
+    : '';
+}
+
+function getLeagueAutomationString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function getLeagueAutomationNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function getLeagueAutomationIso(value: unknown): string | null {
+  const milliseconds = toMilliseconds(value);
+  return milliseconds > 0 ? new Date(milliseconds).toISOString() : null;
+}
+
+function getLeagueAutomationAgeMilliseconds(value: unknown, now = Date.now()): number | null {
+  const milliseconds = toMilliseconds(value);
+  return milliseconds > 0 ? Math.max(0, now - milliseconds) : null;
+}
+
+function normalizeLeagueAutomationPrimaryApproval(
+  value: DocumentData | undefined,
+): LeagueAutomationPrimaryApproval {
+  return {
+    enabled: value?.['enabled'] === true,
+    expiresAtMilliseconds: toMilliseconds(value?.['expiresAt']),
+    projectId: getLeagueAutomationString(value?.['projectId']),
+    note: getLeagueAutomationString(value?.['note']).slice(0, 500),
+  };
+}
+
+function isLeagueAutomationPrimaryApprovalValid(
+  approval: LeagueAutomationPrimaryApproval,
+  projectId: string,
+  now = Date.now(),
+): boolean {
+  return approval.enabled &&
+    approval.projectId === projectId &&
+    approval.expiresAtMilliseconds > now;
+}
+
+function buildLeagueAutomationPromotionGates(input: {
+  config: LeagueAutomationQueueConfig;
+  health: DocumentData | undefined;
+  approval: LeagueAutomationPrimaryApproval;
+  projectId: string;
+  environment: LeagueAutomationEnvironment;
+  now?: number;
+}): LeagueAutomationPromotionGate[] {
+  const now = input.now ?? Date.now();
+  const coverageCount = getLeagueAutomationNumber(
+    input.health?.['queueScheduleCoverageCount'],
+  ) ?? 0;
+  const coverageTarget = getLeagueAutomationNumber(
+    input.health?.['queueScheduleCoverageCompletedDraftCount'],
+  ) ?? 0;
+  const dispatchAge = getLeagueAutomationAgeMilliseconds(
+    input.health?.['queueLastDispatchAt'],
+    now,
+  );
+  const failedEnqueueCount = getLeagueAutomationNumber(
+    input.health?.['queueFailedEnqueueCount'],
+  ) ?? 0;
+  const recoveredStaleCount = getLeagueAutomationNumber(
+    input.health?.['queueLastRecoveryCount'],
+  ) ?? 0;
+  const pendingCount = getLeagueAutomationNumber(
+    input.health?.['queueActivePendingTaskCount'],
+  ) ?? 0;
+  const queueSuccessCount = getLeagueAutomationNumber(
+    input.health?.['queueTaskSuccessCount'],
+  ) ?? 0;
+  const successfulTasksSinceCanary = Math.max(
+    0,
+    queueSuccessCount - input.config.canarySuccessBaseline,
+  );
+  const approvalValid = isLeagueAutomationPrimaryApprovalValid(
+    input.approval,
+    input.projectId,
+    now,
+  );
+
+  return [
+    {
+      id: 'canary-mode-proven',
+      label: 'Canary mode has been exercised',
+      passed: input.config.mode === 'canary' && input.config.canaryLeagueIds.length > 0,
+      blocking: true,
+      detail: input.config.mode === 'canary'
+        ? `${input.config.canaryLeagueIds.length} exact canary league(s) are configured.`
+        : 'Primary promotion begins only after selected leagues have run in canary mode.',
+    },
+    {
+      id: 'queue-task-success',
+      label: 'Queued scoring has completed successfully',
+      passed: successfulTasksSinceCanary >= 3,
+      blocking: true,
+      detail: `${successfulTasksSinceCanary} successful queued scoring task(s) are recorded since the current canary allowlist was activated; at least 3 are required before promotion.`,
+    },
+    {
+      id: 'schedule-coverage',
+      label: 'Every completed league has a scoring schedule',
+      passed: coverageTarget > 0 && coverageCount >= coverageTarget,
+      blocking: true,
+      detail: `${coverageCount}/${coverageTarget || 'unknown'} completed-draft league schedules are covered.`,
+    },
+    {
+      id: 'dispatcher-fresh',
+      label: 'The one-minute dispatcher is healthy',
+      passed: dispatchAge !== null && dispatchAge <= 5 * 60 * 1000,
+      blocking: true,
+      detail: dispatchAge === null
+        ? 'No dispatcher heartbeat is available yet.'
+        : `The latest dispatcher heartbeat is ${Math.max(0, Math.round(dispatchAge / 1_000))} seconds old.`,
+    },
+    {
+      id: 'no-enqueue-failures',
+      label: 'The latest dispatcher pass had no enqueue failures',
+      passed: failedEnqueueCount === 0,
+      blocking: true,
+      detail: `${failedEnqueueCount} enqueue failure(s) were recorded in the latest pass.`,
+    },
+    {
+      id: 'no-stale-recovery',
+      label: 'The latest recovery sweep found no abandoned tasks',
+      passed: recoveredStaleCount === 0,
+      blocking: true,
+      detail: `${recoveredStaleCount} stale task(s) were recovered in the latest sweep.`,
+    },
+    {
+      id: 'queue-idle-for-cutover',
+      label: 'No scoring task is active during the mode change',
+      passed: pendingCount === 0,
+      blocking: true,
+      detail: `${pendingCount} queued or processing task(s) are currently active.`,
+    },
+    {
+      id: 'known-environment',
+      label: 'The Firebase project environment is identified',
+      passed: input.environment !== 'unknown',
+      blocking: true,
+      detail: input.environment === 'unknown'
+        ? 'The Function runtime could not identify its Firebase project. Primary mode remains locked.'
+        : `Project ${input.projectId} is classified as ${input.environment}.`,
+    },
+    {
+      id: 'production-approval',
+      label: input.environment === 'production'
+        ? 'Production primary cutover has a separate time-limited approval'
+        : 'This is not the production Firebase project',
+      passed: input.environment !== 'production' || approvalValid,
+      blocking: true,
+      detail: input.environment === 'production'
+        ? approvalValid
+          ? `Production approval is valid until ${new Date(input.approval.expiresAtMilliseconds).toISOString()}.`
+          : 'Production primary mode remains locked until a separate server-only approval document is intentionally created.'
+        : `Project ${input.projectId} is classified as ${input.environment}.`,
+    },
+  ];
+}
+
+
+function getLeagueAutomationScoringPath(input: {
+  config: LeagueAutomationQueueConfig;
+  leagueId: string;
+  draftStatus: string;
+  historicalReplayEnabled: boolean;
+  scoringEnabled: boolean;
+}): LeagueAutomationAdminLeague['scoringPath'] {
+  if (input.historicalReplayEnabled) {
+    return 'historical-replay';
+  }
+
+  if (input.draftStatus !== 'complete') {
+    return 'draft-incomplete';
+  }
+
+  if (!input.scoringEnabled) {
+    return 'paused';
+  }
+
+  if (input.config.mode === 'primary') {
+    return 'queued-primary';
+  }
+
+  if (
+    input.config.mode === 'canary' &&
+    input.config.canaryLeagueIds.includes(input.leagueId)
+  ) {
+    return 'queued-canary';
+  }
+
+  return 'legacy';
+}
+
+function getLeagueAutomationCanaryEligibility(input: {
+  draftStatus: string;
+  historicalReplayEnabled: boolean;
+  scheduleExists: boolean;
+  scoringEnabled: boolean;
+}): { eligible: boolean; reason: string } {
+  if (input.draftStatus !== 'complete') {
+    return {
+      eligible: false,
+      reason: 'Finish this league’s draft before using it as a live-scoring canary.',
+    };
+  }
+
+  if (input.historicalReplayEnabled) {
+    return {
+      eligible: false,
+      reason: 'Historical replay leagues use the separate serialized replay queue.',
+    };
+  }
+
+  if (!input.scheduleExists) {
+    return {
+      eligible: false,
+      reason: 'The server-owned scoring schedule has not been bootstrapped yet.',
+    };
+  }
+
+  if (!input.scoringEnabled) {
+    return {
+      eligible: false,
+      reason: 'Live scoring is paused for this league.',
+    };
+  }
+
+  return {
+    eligible: true,
+    reason: 'This completed live league can use the queued scoring worker.',
+  };
+}
+
+async function loadLeagueAutomationAdminLeagues(
+  config: LeagueAutomationQueueConfig,
+  focusLeagueId: string,
+): Promise<{ leagues: LeagueAutomationAdminLeague[]; truncated: boolean }> {
+  const snapshot = await db.collection('leagues')
+    .orderBy('createdAt', 'desc')
+    .limit(LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT)
+    .get();
+  const leagueDocuments: DocumentSnapshot<DocumentData, DocumentData>[] = [
+    ...snapshot.docs,
+  ];
+  const explicitlyManagedLeagueIds = [...new Set([
+    focusLeagueId,
+    ...config.canaryLeagueIds,
+    ...config.internalTestLeagueIds,
+  ].filter(Boolean))];
+  const missingManagedLeagueRefs = explicitlyManagedLeagueIds
+    .filter((leagueId) =>
+      !leagueDocuments.some((document) => document.id === leagueId)
+    )
+    .map((leagueId) => db.doc(`leagues/${leagueId}`));
+
+  if (missingManagedLeagueRefs.length > 0) {
+    const managedSnapshots = await db.getAll(...missingManagedLeagueRefs);
+
+    for (const managedSnapshot of managedSnapshots) {
+      if (managedSnapshot.exists) {
+        leagueDocuments.unshift(managedSnapshot);
+      }
+    }
+  }
+
+  const uniqueDocuments = [...new Map(
+    leagueDocuments.map((document) => [document.id, document]),
+  ).values()];
+  const leagueIds = uniqueDocuments.map((document) => document.id);
+  const draftRefs = leagueIds.map((leagueId) =>
+    db.doc(`leagues/${leagueId}/draft/current`),
+  );
+  const replayRefs = leagueIds.map((leagueId) =>
+    getHistoricalReplayControlRef(leagueId),
+  );
+  const scheduleRefs = leagueIds.map((leagueId) =>
+    getLeagueAutomationScheduleRef(leagueId),
+  );
+  const [draftSnapshots, replaySnapshots, scheduleSnapshots] = await Promise.all([
+    draftRefs.length > 0 ? db.getAll(...draftRefs) : Promise.resolve([]),
+    replayRefs.length > 0 ? db.getAll(...replayRefs) : Promise.resolve([]),
+    scheduleRefs.length > 0 ? db.getAll(...scheduleRefs) : Promise.resolve([]),
+  ]);
+
+  const leagues = uniqueDocuments.map((leagueDocument, index) => {
+    const leagueData = leagueDocument.data() ?? {};
+    const draftData = draftSnapshots[index]?.data() ?? {};
+    const replayData = replaySnapshots[index]?.data() ?? {};
+    const scheduleSnapshot = scheduleSnapshots[index];
+    const scheduleData = scheduleSnapshot?.data() ?? {};
+    const draftStatus = getLeagueAutomationString(draftData['status'], 'not-created');
+    const historicalReplayEnabled = replayData['enabled'] === true;
+    const scheduleExists = scheduleSnapshot?.exists === true;
+    const scoringEnabled = scheduleExists && scheduleData['scoringEnabled'] !== false;
+    const eligibility = getLeagueAutomationCanaryEligibility({
+      draftStatus,
+      historicalReplayEnabled,
+      scheduleExists,
+      scoringEnabled,
+    });
+
+    return {
+      leagueId: leagueDocument.id,
+      leagueName: getLeagueAutomationString(
+        leagueData['name'],
+        `League ${leagueDocument.id.slice(0, 8)}`,
+      ).slice(0, 140),
+      createdAt: getLeagueAutomationIso(leagueData['createdAt']),
+      draftStatus,
+      historicalReplayEnabled,
+      scheduleExists,
+      scoringEnabled,
+      queueStatus: getLeagueAutomationString(scheduleData['queueStatus'], 'not-scheduled'),
+      nextScoringAt: getLeagueAutomationIso(scheduleData['nextScoringAt']),
+      lastCompletedAt: getLeagueAutomationIso(scheduleData['lastCompletedAt']),
+      lastOutcome: getLeagueAutomationString(scheduleData['lastOutcome'], 'not-run'),
+      lastTrigger: getLeagueAutomationString(scheduleData['lastTrigger'], 'none'),
+      lastDurationMilliseconds: getLeagueAutomationNumber(
+        scheduleData['lastDurationMilliseconds'],
+      ),
+      lastError: getLeagueAutomationString(
+        scheduleData['lastError'] || scheduleData['lastQueueError'],
+      ).slice(0, 500),
+      activeTaskId: getLeagueAutomationString(scheduleData['activeTaskId']),
+      activeTaskLeaseExpiresAt: getLeagueAutomationIso(
+        scheduleData['activeTaskLeaseExpiresAt'],
+      ),
+      isCanary: config.canaryLeagueIds.includes(leagueDocument.id),
+      isInternalTest: config.internalTestLeagueIds.includes(leagueDocument.id),
+      canaryEligible: eligibility.eligible,
+      canaryEligibilityReason: eligibility.reason,
+      scoringPath: getLeagueAutomationScoringPath({
+        config,
+        leagueId: leagueDocument.id,
+        draftStatus,
+        historicalReplayEnabled,
+        scoringEnabled,
+      }),
+    } satisfies LeagueAutomationAdminLeague;
+  });
+
+  leagues.sort((left, right) => {
+    if (left.leagueId === focusLeagueId) return -1;
+    if (right.leagueId === focusLeagueId) return 1;
+    if (left.isCanary !== right.isCanary) return left.isCanary ? -1 : 1;
+    if (left.isInternalTest !== right.isInternalTest) return left.isInternalTest ? -1 : 1;
+    return left.leagueName.localeCompare(right.leagueName);
+  });
+
+  return {
+    leagues,
+    truncated: snapshot.size >= LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT,
+  };
+}
+
+async function loadLeagueAutomationConfigAudit(): Promise<LeagueAutomationQueueAdminSnapshot['audit']> {
+  const snapshot = await db.collection('leagueAutomationConfigAudit')
+    .orderBy('createdAt', 'desc')
+    .limit(LEAGUE_AUTOMATION_ADMIN_AUDIT_LIMIT)
+    .get();
+
+  return snapshot.docs.map((document) => {
+    const data = document.data();
+
+    return {
+      auditId: document.id,
+      action: getLeagueAutomationString(data['action'], 'configuration-updated'),
+      modeBefore: normalizeLeagueAutomationQueueMode(data['modeBefore']),
+      modeAfter: normalizeLeagueAutomationQueueMode(data['modeAfter']),
+      canaryLeagueIdsBefore: normalizeLeagueAutomationCanaryIds(
+        data['canaryLeagueIdsBefore'],
+      ),
+      canaryLeagueIdsAfter: normalizeLeagueAutomationCanaryIds(
+        data['canaryLeagueIdsAfter'],
+      ),
+      internalTestLeagueIdsBefore: normalizeLeagueAutomationInternalTestIds(
+        data['internalTestLeagueIdsBefore'],
+      ),
+      internalTestLeagueIdsAfter: normalizeLeagueAutomationInternalTestIds(
+        data['internalTestLeagueIdsAfter'],
+      ),
+      reason: getLeagueAutomationString(data['reason']).slice(0, 500),
+      adminId: getLeagueAutomationString(data['adminId']),
+      leagueId: getLeagueAutomationString(data['leagueId']),
+      maxEnqueuePerRunBefore: normalizeLeagueAutomationMaxEnqueuePerRun(
+        data['maxEnqueuePerRunBefore'],
+      ),
+      maxEnqueuePerRunAfter: normalizeLeagueAutomationMaxEnqueuePerRun(
+        data['maxEnqueuePerRunAfter'],
+      ),
+      revisionBefore: normalizeLeagueAutomationRevision(data['revisionBefore']),
+      revisionAfter: normalizeLeagueAutomationRevision(data['revisionAfter']),
+      createdAt: getLeagueAutomationIso(data['createdAt']),
+    };
+  });
+}
+
+async function buildLeagueAutomationQueueAdminSnapshot(
+  focusLeagueId = '',
+): Promise<LeagueAutomationQueueAdminSnapshot> {
+  const projectId = getLeagueAutomationProjectId();
+  const environment = getLeagueAutomationEnvironment(projectId);
+  const [configSnapshot, healthSnapshot, approvalSnapshot, audit] = await Promise.all([
+    db.doc('appData/leagueAutomationQueueConfig').get(),
+    db.doc('appData/leagueAutomation').get(),
+    db.doc('appData/leagueAutomationPrimaryApproval').get(),
+    loadLeagueAutomationConfigAudit(),
+  ]);
+  const configData = configSnapshot.data() ?? {};
+  const healthData = healthSnapshot.data() ?? {};
+  const approval = normalizeLeagueAutomationPrimaryApproval(
+    approvalSnapshot.data(),
+  );
+  const config: LeagueAutomationQueueConfig = {
+    mode: normalizeLeagueAutomationQueueMode(configData['mode']),
+    canaryLeagueIds: normalizeLeagueAutomationCanaryIds(
+      configData['canaryLeagueIds'],
+    ),
+    internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+      configData['internalTestLeagueIds'],
+    ),
+    maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+      configData['maxEnqueuePerRun'],
+    ),
+    canarySuccessBaseline: normalizeLeagueAutomationRevision(
+      configData['canarySuccessBaseline'],
+    ),
+    revision: normalizeLeagueAutomationRevision(configData['revision']),
+  };
+  const promotionGates = buildLeagueAutomationPromotionGates({
+    config,
+    health: healthData,
+    approval,
+    projectId,
+    environment,
+  });
+  const primaryPromotionAllowed = promotionGates
+    .filter((gate) => gate.blocking)
+    .every((gate) => gate.passed);
+  const leagueResult = await loadLeagueAutomationAdminLeagues(
+    config,
+    focusLeagueId,
+  );
+  const approvalValid = isLeagueAutomationPrimaryApprovalValid(
+    approval,
+    projectId,
+  );
+  const totalQueueSuccessCount = getLeagueAutomationNumber(
+    healthData['queueTaskSuccessCount'],
+  ) ?? 0;
+  const successfulTasksSinceCanary = config.mode === 'shadow'
+    ? 0
+    : Math.max(
+        0,
+        totalQueueSuccessCount - config.canarySuccessBaseline,
+      );
+
+  return {
+    generatedAt: new Date().toISOString(),
+    projectId,
+    environment,
+    production: environment === 'production',
+    mode: config.mode,
+    canaryLeagueIds: config.canaryLeagueIds,
+    internalTestLeagueIds: config.internalTestLeagueIds,
+    maxEnqueuePerRun: config.maxEnqueuePerRun,
+    canarySuccessBaseline: config.canarySuccessBaseline,
+    successfulTasksSinceCanary,
+    revision: config.revision,
+    updatedAt: getLeagueAutomationIso(configData['updatedAt']),
+    updatedBy: getLeagueAutomationString(configData['updatedBy']),
+    changeReason: getLeagueAutomationString(configData['changeReason']).slice(0, 500),
+    primaryApproval: {
+      enabled: approval.enabled,
+      valid: approvalValid,
+      expiresAt: approval.expiresAtMilliseconds > 0
+        ? new Date(approval.expiresAtMilliseconds).toISOString()
+        : null,
+      note: approval.note,
+    },
+    primaryPromotionAllowed,
+    primaryConfirmationPhrase: environment === 'production'
+      ? LEAGUE_AUTOMATION_PRODUCTION_PRIMARY_CONFIRMATION
+      : LEAGUE_AUTOMATION_STAGING_PRIMARY_CONFIRMATION,
+    promotionGates,
+    health: {
+      queueMode: getLeagueAutomationString(healthData['queueMode'], 'shadow'),
+      queueLastDispatchAt: getLeagueAutomationIso(healthData['queueLastDispatchAt']),
+      queueLastDispatchStatus: getLeagueAutomationString(
+        healthData['queueLastDispatchStatus'],
+        'not-recorded',
+      ),
+      queueDueScheduleSampleCount: getLeagueAutomationNumber(
+        healthData['queueDueScheduleSampleCount'],
+      ) ?? 0,
+      queueEligibleDueCount: getLeagueAutomationNumber(
+        healthData['queueEligibleDueCount'],
+      ) ?? 0,
+      queueSelectedForEnqueueCount: getLeagueAutomationNumber(
+        healthData['queueSelectedForEnqueueCount'],
+      ) ?? 0,
+      queueActivePendingTaskCount: getLeagueAutomationNumber(
+        healthData['queueActivePendingTaskCount'],
+      ) ?? 0,
+      queueTaskMaxPendingTasks: getLeagueAutomationNumber(
+        healthData['queueTaskMaxPendingTasks'],
+      ) ?? LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS,
+      queueFailedEnqueueCount: getLeagueAutomationNumber(
+        healthData['queueFailedEnqueueCount'],
+      ) ?? 0,
+      queueLastRecoveryCount: getLeagueAutomationNumber(
+        healthData['queueLastRecoveryCount'],
+      ) ?? 0,
+      queueTaskSuccessCount: getLeagueAutomationNumber(
+        healthData['queueTaskSuccessCount'],
+      ) ?? 0,
+      queueTaskRetryAttemptCount: getLeagueAutomationNumber(
+        healthData['queueTaskRetryAttemptCount'],
+      ) ?? 0,
+      queueOldestDueAgeMilliseconds: getLeagueAutomationNumber(
+        healthData['queueOldestDueAgeMilliseconds'],
+      ),
+      queueScheduleCoverageCount: getLeagueAutomationNumber(
+        healthData['queueScheduleCoverageCount'],
+      ) ?? 0,
+      queueScheduleCoverageCompletedDraftCount: getLeagueAutomationNumber(
+        healthData['queueScheduleCoverageCompletedDraftCount'],
+      ) ?? 0,
+      queueTaskMaxConcurrentDispatches:
+        LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+    },
+    leagues: leagueResult.leagues,
+    truncated: leagueResult.truncated,
+    audit,
+  };
+}
+
+async function validateLeagueAutomationAdminLeagueIds(
+  leagueIds: string[],
+  requireCanaryEligibility: boolean,
+): Promise<void> {
+  if (leagueIds.length === 0) {
+    return;
+  }
+
+  const leagueRefs = leagueIds.map((leagueId) => db.doc(`leagues/${leagueId}`));
+  const draftRefs = leagueIds.map((leagueId) =>
+    db.doc(`leagues/${leagueId}/draft/current`),
+  );
+  const replayRefs = leagueIds.map((leagueId) =>
+    getHistoricalReplayControlRef(leagueId),
+  );
+  const scheduleRefs = leagueIds.map((leagueId) =>
+    getLeagueAutomationScheduleRef(leagueId),
+  );
+  const [leagueSnapshots, draftSnapshots, replaySnapshots, scheduleSnapshots] = await Promise.all([
+    db.getAll(...leagueRefs),
+    db.getAll(...draftRefs),
+    db.getAll(...replayRefs),
+    db.getAll(...scheduleRefs),
+  ]);
+
+  for (let index = 0; index < leagueIds.length; index += 1) {
+    const leagueId = leagueIds[index];
+
+    if (!leagueSnapshots[index]?.exists) {
+      throw new HttpsError(
+        'not-found',
+        `League ${leagueId} no longer exists. Refresh the queue control center.`,
+      );
+    }
+
+    if (!requireCanaryEligibility) {
+      continue;
+    }
+
+    const draftStatus = getLeagueAutomationString(
+      draftSnapshots[index]?.data()?.['status'],
+      'not-created',
+    );
+    const replayEnabled = replaySnapshots[index]?.data()?.['enabled'] === true;
+    const scheduleSnapshot = scheduleSnapshots[index];
+    const eligibility = getLeagueAutomationCanaryEligibility({
+      draftStatus,
+      historicalReplayEnabled: replayEnabled,
+      scheduleExists: scheduleSnapshot?.exists === true,
+      scoringEnabled:
+        scheduleSnapshot?.exists === true &&
+        scheduleSnapshot.data()?.['scoringEnabled'] !== false,
+    });
+
+    if (!eligibility.eligible) {
+      throw new HttpsError(
+        'failed-precondition',
+        `${getLeagueAutomationString(leagueSnapshots[index]?.data()?.['name'], leagueId)} cannot be a canary: ${eligibility.reason}`,
+      );
+    }
+  }
+}
+
+async function assertLeagueAutomationPrimaryPromotionAllowed(
+  config: LeagueAutomationQueueConfig,
+  confirmationText: string,
+): Promise<void> {
+  const projectId = getLeagueAutomationProjectId();
+  const environment = getLeagueAutomationEnvironment(projectId);
+  const [healthSnapshot, approvalSnapshot] = await Promise.all([
+    db.doc('appData/leagueAutomation').get(),
+    db.doc('appData/leagueAutomationPrimaryApproval').get(),
+  ]);
+  const gates = buildLeagueAutomationPromotionGates({
+    config,
+    health: healthSnapshot.data(),
+    approval: normalizeLeagueAutomationPrimaryApproval(approvalSnapshot.data()),
+    projectId,
+    environment,
+  });
+  const failedGates = gates.filter((gate) => gate.blocking && !gate.passed);
+  const expectedConfirmation = environment === 'production'
+    ? LEAGUE_AUTOMATION_PRODUCTION_PRIMARY_CONFIRMATION
+    : LEAGUE_AUTOMATION_STAGING_PRIMARY_CONFIRMATION;
+
+  if (confirmationText !== expectedConfirmation) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Type “${expectedConfirmation}” exactly before enabling primary mode.`,
+    );
+  }
+
+  if (failedGates.length > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Primary mode remains locked: ${failedGates.map((gate) => gate.label).join('; ')}.`,
+    );
+  }
 }
 
 function getLeagueAutomationShard(leagueId: string): number {
@@ -2436,6 +3287,532 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
   };
 }
 
+
+export const getLeagueAutomationQueueControlCenter = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    maxInstances: 5,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<LeagueAutomationQueueAdminSnapshot> => {
+    await requireLeagueAutomationPlatformAdmin(request);
+    const data = request.data && typeof request.data === 'object'
+      ? request.data as Record<string, unknown>
+      : {};
+    const focusLeagueId = getLeagueAutomationString(data['focusLeagueId']);
+
+    if (
+      focusLeagueId &&
+      !/^[A-Za-z0-9_-]{6,128}$/.test(focusLeagueId)
+    ) {
+      throw new HttpsError('invalid-argument', 'The focus league id is invalid.');
+    }
+
+    return buildLeagueAutomationQueueAdminSnapshot(focusLeagueId);
+  },
+);
+
+export const updateLeagueAutomationQueueConfig = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    maxInstances: 3,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<{
+    updated: boolean;
+    revision: number;
+    mode: LeagueAutomationQueueMode;
+    message: string;
+  }> => {
+    const adminId = await requireLeagueAutomationPlatformAdmin(request);
+    const data = request.data && typeof request.data === 'object'
+      ? request.data as Record<string, unknown>
+      : {};
+    const requestId = normalizeLeagueAutomationAdminRequestId(data['requestId']);
+    const requestedMode = data['mode'];
+    const mode: LeagueAutomationQueueMode =
+      requestedMode === 'shadow' ||
+      requestedMode === 'canary' ||
+      requestedMode === 'primary'
+        ? requestedMode
+        : 'shadow';
+    const canaryLeagueIds = normalizeLeagueAutomationCanaryIds(
+      data['canaryLeagueIds'],
+    );
+    const internalTestLeagueIds = normalizeLeagueAutomationInternalTestIds(
+      data['internalTestLeagueIds'],
+    );
+    const maxEnqueuePerRun = normalizeLeagueAutomationMaxEnqueuePerRun(
+      data['maxEnqueuePerRun'],
+    );
+    const expectedRevision = normalizeLeagueAutomationRevision(
+      data['expectedRevision'],
+    );
+    const confirmationText = getLeagueAutomationString(data['confirmationText']);
+    const changeReason = normalizeLeagueAutomationChangeReason(data['changeReason']);
+
+    if (
+      requestedMode !== 'shadow' &&
+      requestedMode !== 'canary' &&
+      requestedMode !== 'primary'
+    ) {
+      throw new HttpsError('invalid-argument', 'Choose shadow, canary, or primary mode.');
+    }
+
+    if (changeReason.length < 8) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Add a short reason for this queue configuration change.',
+      );
+    }
+
+    if (mode === 'canary') {
+      if (canaryLeagueIds.length === 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Select at least one completed live league before enabling canary mode.',
+        );
+      }
+
+      if (confirmationText !== LEAGUE_AUTOMATION_CANARY_CONFIRMATION) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Type “${LEAGUE_AUTOMATION_CANARY_CONFIRMATION}” exactly before enabling canary mode.`,
+        );
+      }
+    }
+
+    if (mode !== 'shadow') {
+      await Promise.all([
+        validateLeagueAutomationAdminLeagueIds(canaryLeagueIds, true),
+        validateLeagueAutomationAdminLeagueIds(internalTestLeagueIds, false),
+      ]);
+    }
+
+    const currentConfig = await getLeagueAutomationQueueConfig();
+
+    if (mode === 'primary') {
+      await assertLeagueAutomationPrimaryPromotionAllowed(
+        currentConfig,
+        confirmationText,
+      );
+    }
+
+    const configRef = db.doc('appData/leagueAutomationQueueConfig');
+    const healthRef = db.doc('appData/leagueAutomation');
+    const approvalRef = db.doc('appData/leagueAutomationPrimaryApproval');
+    const auditRef = getLeagueAutomationAuditRef(requestId);
+    const projectId = getLeagueAutomationProjectId();
+    const environment = getLeagueAutomationEnvironment(projectId);
+    const transactionResult = await db.runTransaction(async (transaction) => {
+      const [configSnapshot, auditSnapshot, healthSnapshot, approvalSnapshot] = await Promise.all([
+        transaction.get(configRef),
+        transaction.get(auditRef),
+        transaction.get(healthRef),
+        transaction.get(approvalRef),
+      ]);
+      const configData = configSnapshot.data() ?? {};
+      const before: LeagueAutomationQueueConfig = {
+        mode: normalizeLeagueAutomationQueueMode(configData['mode']),
+        canaryLeagueIds: normalizeLeagueAutomationCanaryIds(
+          configData['canaryLeagueIds'],
+        ),
+        internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+          configData['internalTestLeagueIds'],
+        ),
+        maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+          configData['maxEnqueuePerRun'],
+        ),
+        canarySuccessBaseline: normalizeLeagueAutomationRevision(
+          configData['canarySuccessBaseline'],
+        ),
+        revision: normalizeLeagueAutomationRevision(configData['revision']),
+      };
+
+      if (auditSnapshot.exists) {
+        const auditData = auditSnapshot.data() ?? {};
+        return {
+          updated: false,
+          revision: normalizeLeagueAutomationRevision(
+            auditData['revisionAfter'],
+          ),
+          mode: normalizeLeagueAutomationQueueMode(auditData['modeAfter']),
+          message: 'This exact queue configuration request was already applied.',
+        };
+      }
+
+      if (before.revision !== expectedRevision) {
+        throw new HttpsError(
+          'aborted',
+          'The scoring queue configuration changed in another tab. Refresh before saving again.',
+        );
+      }
+
+      if (mode === 'primary' && before.mode !== 'canary') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Promote from canary mode only. Shadow cannot jump directly to primary.',
+        );
+      }
+
+      if (mode === 'primary') {
+        const transactionGates = buildLeagueAutomationPromotionGates({
+          config: before,
+          health: healthSnapshot.data(),
+          approval: normalizeLeagueAutomationPrimaryApproval(
+            approvalSnapshot.data(),
+          ),
+          projectId,
+          environment,
+        });
+        const failedTransactionGates = transactionGates.filter(
+          (gate) => gate.blocking && !gate.passed,
+        );
+
+        if (failedTransactionGates.length > 0) {
+          throw new HttpsError(
+            'failed-precondition',
+            `Primary mode remains locked: ${failedTransactionGates.map((gate) => gate.label).join('; ')}.`,
+          );
+        }
+      }
+
+      const canaryLeagueSelectionChanged =
+        JSON.stringify(before.canaryLeagueIds) !== JSON.stringify(canaryLeagueIds);
+      const enteringOrChangingCanary =
+        mode === 'canary' &&
+        (before.mode !== 'canary' || canaryLeagueSelectionChanged);
+      const currentQueueSuccessCount = getLeagueAutomationNumber(
+        healthSnapshot.data()?.['queueTaskSuccessCount'],
+      ) ?? 0;
+      const nextCanarySuccessBaseline = enteringOrChangingCanary
+        ? currentQueueSuccessCount
+        : before.canarySuccessBaseline;
+      const unchanged =
+        before.mode === mode &&
+        before.maxEnqueuePerRun === maxEnqueuePerRun &&
+        !canaryLeagueSelectionChanged &&
+        JSON.stringify(before.internalTestLeagueIds) === JSON.stringify(internalTestLeagueIds);
+
+      if (unchanged) {
+        transaction.set(
+          auditRef,
+          {
+            schemaVersion: 1,
+            action: 'configuration-no-change',
+            requestId,
+            adminId,
+            projectId,
+            environment,
+            modeBefore: before.mode,
+            modeAfter: before.mode,
+            canaryLeagueIdsBefore: before.canaryLeagueIds,
+            canaryLeagueIdsAfter: before.canaryLeagueIds,
+            internalTestLeagueIdsBefore: before.internalTestLeagueIds,
+            internalTestLeagueIdsAfter: before.internalTestLeagueIds,
+            maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
+            maxEnqueuePerRunAfter: before.maxEnqueuePerRun,
+            canarySuccessBaselineBefore: before.canarySuccessBaseline,
+            canarySuccessBaselineAfter: before.canarySuccessBaseline,
+            revisionBefore: before.revision,
+            revisionAfter: before.revision,
+            reason: changeReason,
+            createdAt: FieldValue.serverTimestamp(),
+          },
+          { merge: false },
+        );
+
+        return {
+          updated: false,
+          revision: before.revision,
+          mode: before.mode,
+          message: 'No scoring queue settings changed.',
+        };
+      }
+
+      const nextRevision = before.revision + 1;
+      const action = mode !== before.mode
+        ? mode === 'shadow'
+          ? 'queue-returned-to-shadow'
+          : mode === 'canary'
+            ? 'queue-promoted-to-canary'
+            : 'queue-promoted-to-primary'
+        : 'queue-selection-updated';
+
+      transaction.set(
+        configRef,
+        {
+          schemaVersion: 2,
+          mode,
+          canaryLeagueIds,
+          internalTestLeagueIds,
+          maxEnqueuePerRun,
+          canarySuccessBaseline: nextCanarySuccessBaseline,
+          revision: nextRevision,
+          updatedBy: adminId,
+          updatedAt: FieldValue.serverTimestamp(),
+          changeReason,
+          configuredProjectId: projectId,
+          configuredEnvironment: environment,
+          lastMutationId: requestId,
+        },
+        { merge: true },
+      );
+      transaction.set(
+        healthRef,
+        {
+          queueConfiguredMode: mode,
+          queueConfiguredCanaryLeagueCount: canaryLeagueIds.length,
+          queueConfiguredInternalTestLeagueCount: internalTestLeagueIds.length,
+          queueConfigRevision: nextRevision,
+          queueConfigUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      transaction.set(
+        auditRef,
+        {
+          schemaVersion: 1,
+          action,
+          requestId,
+          adminId,
+          projectId,
+          environment,
+          modeBefore: before.mode,
+          modeAfter: mode,
+          canaryLeagueIdsBefore: before.canaryLeagueIds,
+          canaryLeagueIdsAfter: canaryLeagueIds,
+          internalTestLeagueIdsBefore: before.internalTestLeagueIds,
+          internalTestLeagueIdsAfter: internalTestLeagueIds,
+          maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
+          maxEnqueuePerRunAfter: maxEnqueuePerRun,
+          canarySuccessBaselineBefore: before.canarySuccessBaseline,
+          canarySuccessBaselineAfter: nextCanarySuccessBaseline,
+          revisionBefore: before.revision,
+          revisionAfter: nextRevision,
+          reason: changeReason,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: false },
+      );
+
+      return {
+        updated: true,
+        revision: nextRevision,
+        mode,
+        message: mode === 'shadow'
+          ? 'The queued scorer returned to observation mode. The legacy scorer remains primary.'
+          : mode === 'canary'
+            ? `${canaryLeagueIds.length} exact league(s) are now routed through queued scoring.`
+            : 'Queued scoring is now the primary live-league dispatcher for this Firebase project.',
+      };
+    });
+
+    return transactionResult;
+  },
+);
+
+export const queueLeagueAutomationCanaryCheck = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    maxInstances: 3,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<{
+    queued: boolean;
+    status: 'enqueued' | 'active' | 'stale';
+    taskId: string;
+    message: string;
+  }> => {
+    const adminId = await requireLeagueAutomationPlatformAdmin(request);
+    const data = request.data && typeof request.data === 'object'
+      ? request.data as Record<string, unknown>
+      : {};
+    const requestId = normalizeLeagueAutomationAdminRequestId(data['requestId']);
+    const leagueId = getLeagueAutomationString(data['leagueId']);
+    const confirmationText = getLeagueAutomationString(data['confirmationText']);
+
+    if (!/^[A-Za-z0-9_-]{6,128}$/.test(leagueId)) {
+      throw new HttpsError('invalid-argument', 'Choose a valid canary league.');
+    }
+
+    if (confirmationText !== 'RUN CANARY') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Type “RUN CANARY” exactly before requesting an immediate scoring task.',
+      );
+    }
+
+    const config = await getLeagueAutomationQueueConfig();
+
+    if (config.mode !== 'canary' || !config.canaryLeagueIds.includes(leagueId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This league must be included in the active canary allowlist before it can run a canary check.',
+      );
+    }
+
+    await validateLeagueAutomationAdminLeagueIds([leagueId], true);
+
+    const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
+    const auditRef = getLeagueAutomationAuditRef(`canary-${requestId}`);
+    const now = Date.now();
+    const prepared = await db.runTransaction(async (transaction) => {
+      const [scheduleSnapshot, auditSnapshot] = await Promise.all([
+        transaction.get(scheduleRef),
+        transaction.get(auditRef),
+      ]);
+
+      if (auditSnapshot.exists) {
+        const auditData = auditSnapshot.data() ?? {};
+        return {
+          alreadyHandled: true,
+          expectedDueAtMilliseconds: getLeagueAutomationNumber(
+            auditData['expectedDueAtMilliseconds'],
+          ) ?? now,
+          activeTaskId: getLeagueAutomationString(auditData['taskId']),
+          active: auditData['queueResult'] === 'active',
+        };
+      }
+
+      if (!scheduleSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The scoring schedule is missing. Wait for the hourly bootstrap or refresh the control center.',
+        );
+      }
+
+      const scheduleData = scheduleSnapshot.data() ?? {};
+      const queueStatus = getLeagueAutomationString(
+        scheduleData['queueStatus'],
+        'idle',
+      );
+      const activeTaskId = getLeagueAutomationString(scheduleData['activeTaskId']);
+      const activeLeaseExpiresAt = toMilliseconds(
+        scheduleData['activeTaskLeaseExpiresAt'],
+      );
+      const active =
+        (queueStatus === 'queued' || queueStatus === 'processing') &&
+        activeLeaseExpiresAt > now;
+
+      transaction.set(
+        auditRef,
+        {
+          schemaVersion: 1,
+          action: 'manual-canary-run-requested',
+          requestId,
+          adminId,
+          projectId: getLeagueAutomationProjectId(),
+          environment: getLeagueAutomationEnvironment(getLeagueAutomationProjectId()),
+          modeBefore: config.mode,
+          modeAfter: config.mode,
+          canaryLeagueIdsBefore: config.canaryLeagueIds,
+          canaryLeagueIdsAfter: config.canaryLeagueIds,
+          internalTestLeagueIdsBefore: config.internalTestLeagueIds,
+          internalTestLeagueIdsAfter: config.internalTestLeagueIds,
+          maxEnqueuePerRunBefore: config.maxEnqueuePerRun,
+          maxEnqueuePerRunAfter: config.maxEnqueuePerRun,
+          canarySuccessBaselineBefore: config.canarySuccessBaseline,
+          canarySuccessBaselineAfter: config.canarySuccessBaseline,
+          revisionBefore: config.revision,
+          revisionAfter: config.revision,
+          leagueId,
+          expectedDueAtMilliseconds: now,
+          taskId: activeTaskId,
+          queueResult: active ? 'active' : 'preparing',
+          reason: 'Manual platform-admin canary scoring verification.',
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: false },
+      );
+
+      if (active) {
+        return {
+          alreadyHandled: false,
+          expectedDueAtMilliseconds: now,
+          activeTaskId,
+          active: true,
+        };
+      }
+
+      transaction.set(
+        scheduleRef,
+        {
+          nextScoringAt: Timestamp.fromMillis(now),
+          queueStatus: 'idle',
+          activeTaskId: null,
+          activeTaskDueAt: FieldValue.delete(),
+          activeTaskLeaseExpiresAt: FieldValue.delete(),
+          lastManualCanaryRequestedAt: FieldValue.serverTimestamp(),
+          lastManualCanaryRequestedBy: adminId,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return {
+        alreadyHandled: false,
+        expectedDueAtMilliseconds: now,
+        activeTaskId: '',
+        active: false,
+      };
+    });
+
+    if (prepared.active) {
+      return {
+        queued: false,
+        status: 'active',
+        taskId: prepared.activeTaskId,
+        message: 'This canary league already has a healthy scoring task in progress.',
+      };
+    }
+
+    const schedule: DueLeagueAutomationSchedule = {
+      leagueId,
+      expectedDueAtMilliseconds: prepared.expectedDueAtMilliseconds,
+      queueStatus: 'idle',
+      activeTaskId: '',
+      activeTaskLeaseExpiresAtMilliseconds: 0,
+    };
+    const queueResult = await enqueueLeagueAutomationSchedule(
+      schedule,
+      'canary-manual',
+    );
+    const payload = buildLeagueAutomationTaskPayload(schedule, 'canary-manual');
+    const taskId = buildLeagueAutomationTaskId(payload);
+
+    await auditRef.set(
+      {
+        taskId,
+        queueResult,
+        queuedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      queued: queueResult === 'enqueued',
+      status: queueResult,
+      taskId,
+      message: queueResult === 'enqueued'
+        ? 'The exact canary league scoring task was queued. Watch its schedule status and Game Center results.'
+        : queueResult === 'active'
+          ? 'A scoring task became active before the manual request completed.'
+          : 'The schedule changed before the canary task could be claimed. Refresh before trying again.',
+    };
+  },
+);
+
 export const bootstrapLeagueAutomationSchedules = onSchedule(
   {
     schedule: 'every 60 minutes',
@@ -2589,7 +3966,9 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
       !Number.isFinite(payload.expectedDueAtMilliseconds) ||
       typeof payload.dueBucket !== 'string' ||
       !payload.dueBucket ||
-      (payload.reason !== 'scheduled' && payload.reason !== 'recovery')
+      (payload.reason !== 'scheduled' &&
+        payload.reason !== 'recovery' &&
+        payload.reason !== 'canary-manual')
     ) {
       console.warn('Ignored malformed league automation task.', { payload });
       return;
@@ -2672,7 +4051,7 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
     try {
       const result = await runLeagueAutomation(
         payload.leagueId,
-        false,
+        payload.reason === 'canary-manual',
         'queue-task',
       );
 
