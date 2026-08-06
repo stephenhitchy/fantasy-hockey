@@ -374,11 +374,13 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
     await hashTree(
       'functions',
       new Set([
+        'src/index.ts',
+        'src/league-automation.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',
       ]),
     ),
-    '8d278968d163577207e39a5dee7ee542e657850fdd827fd54cbe2de42f8d30fe',
+    '2979df5eaf4b83f22387b2cb14dc1c7b6ba1f4bd5db779f063728631e23d28e6',
   );
 });

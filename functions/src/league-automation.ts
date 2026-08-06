@@ -1,13 +1,15 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   DocumentData,
   FieldValue,
   Timestamp,
 } from 'firebase-admin/firestore';
+import { getFunctions } from 'firebase-admin/functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
@@ -61,6 +63,10 @@ const ERROR_RETRY_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 const MAX_TRANSITION_PASSES = 3;
 const MAX_PARALLEL_LEAGUES = 2;
 const HISTORICAL_REPLAY_LEASE_RETRY_DELAYS_MILLISECONDS = [0, 500, 1_250, 2_250] as const;
+const HISTORICAL_REPLAY_TASK_DISPATCH_DEADLINE_SECONDS = 540;
+const HISTORICAL_REPLAY_REQUEST_LEASE_MILLISECONDS = 10 * 60 * 1000;
+const HISTORICAL_REPLAY_REQUEST_STALE_MILLISECONDS = 12 * 60 * 1000;
+const HISTORICAL_REPLAY_STALE_SWEEP_LIMIT = 100;
 
 type LeagueAutomationTrigger =
   | 'scheduled'
@@ -111,7 +117,7 @@ interface LeaseClaimResult {
 
 interface HistoricalReplayControl {
   enabled: boolean;
-  status: 'inactive' | 'advancing' | 'ready' | 'error';
+  status: 'inactive' | 'queued' | 'advancing' | 'ready' | 'error';
   targetSeason: string;
   sourceSeason: string;
   simulatedDate: string | null;
@@ -119,6 +125,32 @@ interface HistoricalReplayControl {
   daysAdvanced: number;
   lastReleasedGameCount: number;
   totalReleasedGameCount: number;
+  message: string;
+}
+
+interface HistoricalReplayAdvanceTaskPayload {
+  requestId: string;
+  leagueId: string;
+  requestedBy: string;
+}
+
+interface HistoricalReplayQueuedResult {
+  enabled: true;
+  status: 'queued';
+  requestId: string;
+  message: string;
+}
+
+interface HistoricalReplayAdvanceResult {
+  enabled: true;
+  status: 'ready';
+  simulatedDate: string;
+  seasonStartDate: string;
+  targetSeason: string;
+  sourceSeason: string;
+  daysAdvanced: number;
+  releasedGameCount: number;
+  activeCycleNumbers: number[];
   message: string;
 }
 
@@ -170,6 +202,43 @@ function getHistoricalReplayControlRef(leagueId: string) {
   return db.doc(`leagues/${leagueId}/historicalReplay/control`);
 }
 
+function getHistoricalReplayRequestRef(requestId: string) {
+  return db.doc(`historicalReplayRequests/${requestId}`);
+}
+
+function getHistoricalReplayTaskQueue() {
+  return getFunctions().taskQueue<HistoricalReplayAdvanceTaskPayload>(
+    'processHistoricalReplayAdvance',
+  );
+}
+
+function normalizeHistoricalReplayRequestId(value: unknown): string {
+  const cleaned = typeof value === 'string'
+    ? value.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 96)
+    : '';
+
+  return cleaned || randomUUID().replaceAll('-', '');
+}
+
+function buildHistoricalReplayTaskId(payload: HistoricalReplayAdvanceTaskPayload): string {
+  return createHash('sha256')
+    .update(`${payload.leagueId}:${payload.requestId}:${payload.requestedBy}`)
+    .digest('hex')
+    .slice(0, 40);
+}
+
+function isHistoricalReplayTaskAlreadyExistsError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown };
+  const code = typeof candidate.code === 'string' ? candidate.code : '';
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+
+  return code.includes('task-already-exists') || /already exists/i.test(message);
+}
+
 function getHistoricalReplayAssetRef(leagueId: string, assetKey: string) {
   return db.doc(`leagues/${leagueId}/historicalReplayAssets/${assetKey}`);
 }
@@ -178,6 +247,7 @@ function normalizeReplayControl(value: DocumentData | undefined): HistoricalRepl
   return {
     enabled: value?.['enabled'] === true,
     status:
+      value?.['status'] === 'queued' ||
       value?.['status'] === 'advancing' ||
       value?.['status'] === 'ready' ||
       value?.['status'] === 'error'
@@ -225,7 +295,13 @@ async function getHistoricalReplayControl(
   }
 
   const control = normalizeReplayControl(snapshot.data());
-  return control.enabled && control.simulatedDate ? control : null;
+  return control.enabled && (
+    Boolean(control.simulatedDate) ||
+    control.status === 'queued' ||
+    control.status === 'advancing'
+  )
+    ? control
+    : null;
 }
 
 function addUtcDays(dateString: string, days: number): string {
@@ -1974,187 +2050,707 @@ export const clearExpiredOrErroredLiveScoringLease = onCall(
   },
 );
 
+async function requireHistoricalReplayReadyLeague(leagueId: string): Promise<void> {
+  const league = await getServerLeague(leagueId);
+
+  if (!league) {
+    throw new HttpsError('not-found', 'League not found.');
+  }
+
+  const draftSnapshot = await db.doc(`leagues/${leagueId}/draft/current`).get();
+
+  if (!draftSnapshot.exists || draftSnapshot.data()?.['status'] !== 'complete') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Complete the draft before starting the historical season replay.',
+    );
+  }
+}
+
+function getReplayRequestRetryDate(controlData: DocumentData | undefined): string | null {
+  const previous = normalizeReplayControl(controlData);
+  const savedFailedSimulatedDate =
+    typeof controlData?.['lastFailedSimulatedDate'] === 'string'
+      ? controlData['lastFailedSimulatedDate']
+      : null;
+  const retryLegacyFailedDate =
+    previous.status === 'error' &&
+    Boolean(previous.simulatedDate) &&
+    !Object.prototype.hasOwnProperty.call(controlData ?? {}, 'lastFailedSimulatedDate');
+
+  return previous.status === 'error' &&
+    Boolean(previous.simulatedDate) &&
+    (savedFailedSimulatedDate === previous.simulatedDate || retryLegacyFailedDate)
+      ? previous.simulatedDate
+      : null;
+}
+
+function isHistoricalReplayRequestStale(
+  value: DocumentData | undefined,
+  nowMilliseconds: number,
+): boolean {
+  if (!value) {
+    return true;
+  }
+
+  const status = typeof value['status'] === 'string' ? value['status'] : '';
+  const leaseExpiresAt = toMilliseconds(value['leaseExpiresAt']);
+  const updatedAt = toMilliseconds(value['updatedAt']);
+
+  if (status === 'processing') {
+    return leaseExpiresAt <= nowMilliseconds;
+  }
+
+  if (status === 'queued') {
+    return updatedAt > 0 && nowMilliseconds - updatedAt >= HISTORICAL_REPLAY_REQUEST_STALE_MILLISECONDS;
+  }
+
+  return status === 'error' || status === 'cancelled' || status === 'completed';
+}
+
+async function performHistoricalReplayAdvance(
+  leagueId: string,
+  userId: string,
+  requestId: string,
+  retrySimulatedDate: string | null,
+): Promise<HistoricalReplayAdvanceResult> {
+  await requireHistoricalReplayReadyLeague(leagueId);
+
+  const controlRef = getHistoricalReplayControlRef(leagueId);
+  const controlSnapshot = await controlRef.get();
+  const previous = normalizeReplayControl(controlSnapshot.data());
+  const retryFailedDate = Boolean(
+    retrySimulatedDate && previous.simulatedDate === retrySimulatedDate,
+  );
+  let attemptedDate: string | null = null;
+
+  try {
+    const seasonStartDate = previous.seasonStartDate ??
+      await getHistoricalReplaySeasonStartDate(HISTORICAL_REPLAY_TARGET_SEASON);
+    const currentDate = retryFailedDate && previous.simulatedDate
+      ? addUtcDays(previous.simulatedDate, -1)
+      : previous.enabled && previous.simulatedDate
+        ? previous.simulatedDate
+        : addUtcDays(seasonStartDate, -1);
+    const nextDate = addUtcDays(currentDate, 1);
+    attemptedDate = nextDate;
+    const releasedGameCount = await countNhlGamesOnReplayDate(
+      nextDate,
+      HISTORICAL_REPLAY_TARGET_SEASON,
+    );
+    const nextDaysAdvanced = retryFailedDate
+      ? Math.max(1, previous.daysAdvanced)
+      : previous.enabled
+        ? previous.daysAdvanced + 1
+        : 1;
+    const nextTotalReleasedGameCount = retryFailedDate
+      ? previous.totalReleasedGameCount
+      : (previous.enabled ? previous.totalReleasedGameCount : 0) + releasedGameCount;
+
+    await Promise.all([
+      controlRef.set(
+        {
+          schemaVersion: 2,
+          enabled: true,
+          status: 'advancing',
+          activeRequestId: requestId,
+          targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
+          sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
+          seasonStartDate,
+          simulatedDate: nextDate,
+          daysAdvanced: nextDaysAdvanced,
+          lastReleasedGameCount: releasedGameCount,
+          totalReleasedGameCount: nextTotalReleasedGameCount,
+          requestedBy: userId,
+          lastAdvanceStartedAt: FieldValue.serverTimestamp(),
+          message: retryFailedDate
+            ? `Retrying the simulated NHL date ${nextDate}.`
+            : `Processing the simulated NHL date ${nextDate}.`,
+          lastError: '',
+          lastFailedSimulatedDate: null,
+          createdAt: controlSnapshot.exists
+            ? controlSnapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+      getControlRef(leagueId).set(
+        {
+          id: 'control',
+          schemaVersion: 2,
+          automationMode: 'historical-replay',
+          serverAutomationEnabled: true,
+          historicalReplayEnabled: true,
+          historicalReplayDate: nextDate,
+          nextRefreshAt: Timestamp.fromMillis(Date.now()),
+          refreshRequestedAt: FieldValue.serverTimestamp(),
+          lastRefreshReason: 'manual',
+          lastError: '',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    ]);
+
+    const result = await runHistoricalReplayAutomationWithRetry(leagueId);
+
+    if (result.status === 'skipped') {
+      throw new HttpsError(
+        'aborted',
+        'Another server scoring update kept the league lease through every automatic retry. The simulated date was not skipped; RinkRat will preserve this date so it can be retried safely.',
+      );
+    }
+
+    const message = releasedGameCount > 0
+      ? `${nextDate} processed. ${releasedGameCount} NHL ${releasedGameCount === 1 ? 'game was' : 'games were'} released into the replay ledger.`
+      : `${nextDate} processed. No NHL games were scheduled, so individual player windows remained where they were.`;
+
+    await controlRef.set(
+      {
+        status: 'ready',
+        activeRequestId: null,
+        lastCompletedRequestId: requestId,
+        lastAdvanceCompletedAt: FieldValue.serverTimestamp(),
+        lastActiveCycleNumbers: result.activeCycleNumbers,
+        lastPublishedSnapshotCount: result.publishedSnapshotCount,
+        message,
+        lastError: '',
+        lastFailedSimulatedDate: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      enabled: true,
+      status: 'ready',
+      simulatedDate: nextDate,
+      seasonStartDate,
+      targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
+      sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
+      daysAdvanced: nextDaysAdvanced,
+      releasedGameCount,
+      activeCycleNumbers: result.activeCycleNumbers,
+      message,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error
+      ? error.message
+      : 'Unable to advance the historical replay.';
+
+    await controlRef.set(
+      {
+        enabled: true,
+        status: 'error',
+        activeRequestId: null,
+        lastFailedRequestId: requestId,
+        message,
+        lastError: message.slice(0, 500),
+        lastFailedSimulatedDate: attemptedDate,
+        lastAdvanceFailedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(() => undefined);
+
+    throw error instanceof HttpsError
+      ? error
+      : new HttpsError('unavailable', message);
+  }
+}
+
 export const advanceHistoricalReplayDay = onCall(
   {
     region: FUNCTION_REGION,
-    timeoutSeconds: 540,
-    memory: '1GiB',
+    timeoutSeconds: 60,
+    memory: '256MiB',
     cors: TRUSTED_WEB_ORIGINS,
   },
-  async (request) => {
+  async (request): Promise<HistoricalReplayQueuedResult> => {
     const userId = await requireHistoricalReplayPlatformAdmin(request);
     const leagueId =
       request.data && typeof request.data.leagueId === 'string'
         ? request.data.leagueId.trim()
         : '';
+    const requestId = normalizeHistoricalReplayRequestId(
+      request.data && typeof request.data === 'object'
+        ? (request.data as Record<string, unknown>)['requestId']
+        : null,
+    );
 
     if (!leagueId) {
       throw new HttpsError('invalid-argument', 'A league id is required.');
     }
 
-    const league = await getServerLeague(leagueId);
-
-    if (!league) {
-      throw new HttpsError('not-found', 'League not found.');
-    }
-
-    const draftSnapshot = await db.doc(`leagues/${leagueId}/draft/current`).get();
-
-    if (!draftSnapshot.exists || draftSnapshot.data()?.['status'] !== 'complete') {
-      throw new HttpsError(
-        'failed-precondition',
-        'Complete the draft before starting the historical season replay.',
-      );
-    }
+    await requireHistoricalReplayReadyLeague(leagueId);
 
     const controlRef = getHistoricalReplayControlRef(leagueId);
-    const controlSnapshot = await controlRef.get();
-    const savedControl = controlSnapshot.data() ?? {};
-    const previous = normalizeReplayControl(controlSnapshot.data());
-    const savedFailedSimulatedDate =
-      typeof savedControl['lastFailedSimulatedDate'] === 'string'
-        ? savedControl['lastFailedSimulatedDate']
-        : null;
-    const retryLegacyFailedDate =
-      previous.status === 'error' &&
-      Boolean(previous.simulatedDate) &&
-      !Object.prototype.hasOwnProperty.call(savedControl, 'lastFailedSimulatedDate');
-    const retryFailedDate =
-      previous.status === 'error' &&
-      Boolean(previous.simulatedDate) &&
-      (savedFailedSimulatedDate === previous.simulatedDate || retryLegacyFailedDate);
-    let attemptedDate: string | null = null;
-
-    try {
-      const seasonStartDate = previous.seasonStartDate ??
-        await getHistoricalReplaySeasonStartDate(HISTORICAL_REPLAY_TARGET_SEASON);
-      const currentDate = retryFailedDate && previous.simulatedDate
-        ? addUtcDays(previous.simulatedDate, -1)
-        : previous.enabled && previous.simulatedDate
-          ? previous.simulatedDate
-          : addUtcDays(seasonStartDate, -1);
-      const nextDate = addUtcDays(currentDate, 1);
-      attemptedDate = nextDate;
-      const releasedGameCount = await countNhlGamesOnReplayDate(
-        nextDate,
-        HISTORICAL_REPLAY_TARGET_SEASON,
-      );
-      const nextDaysAdvanced = retryFailedDate
-        ? Math.max(1, previous.daysAdvanced)
-        : previous.enabled
-          ? previous.daysAdvanced + 1
-          : 1;
-      const nextTotalReleasedGameCount = retryFailedDate
-        ? previous.totalReleasedGameCount
-        : (previous.enabled ? previous.totalReleasedGameCount : 0) + releasedGameCount;
-
-      await Promise.all([
-        controlRef.set(
-          {
-            schemaVersion: 1,
-            enabled: true,
-            status: 'advancing',
-            targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
-            sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
-            seasonStartDate,
-            simulatedDate: nextDate,
-            daysAdvanced: nextDaysAdvanced,
-            lastReleasedGameCount: releasedGameCount,
-            totalReleasedGameCount: nextTotalReleasedGameCount,
-            requestedBy: userId,
-            lastAdvanceStartedAt: FieldValue.serverTimestamp(),
-            message: retryFailedDate
-              ? `Retrying the simulated NHL date ${nextDate}.`
-              : `Processing the simulated NHL date ${nextDate}.`,
-            lastError: '',
-            lastFailedSimulatedDate: null,
-            createdAt: controlSnapshot.exists
-              ? controlSnapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
-              : FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        ),
-        getControlRef(leagueId).set(
-          {
-            id: 'control',
-            schemaVersion: 2,
-            automationMode: 'historical-replay',
-            serverAutomationEnabled: true,
-            historicalReplayEnabled: true,
-            historicalReplayDate: nextDate,
-            nextRefreshAt: Timestamp.fromMillis(Date.now()),
-            refreshRequestedAt: FieldValue.serverTimestamp(),
-            lastRefreshReason: 'manual',
-            lastError: '',
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        ),
+    const requestRef = getHistoricalReplayRequestRef(requestId);
+    const now = Date.now();
+    const queueState = await db.runTransaction(async (transaction) => {
+      const [controlSnapshot, requestSnapshot] = await Promise.all([
+        transaction.get(controlRef),
+        transaction.get(requestRef),
       ]);
+      const controlData = controlSnapshot.data() ?? {};
+      const existingRequest = requestSnapshot.data();
 
-      const result = await runHistoricalReplayAutomationWithRetry(leagueId);
+      if (requestSnapshot.exists) {
+        if (
+          existingRequest?.['leagueId'] !== leagueId ||
+          existingRequest?.['requestedBy'] !== userId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'This replay request identifier belongs to a different operation.',
+          );
+        }
 
-      if (result.status === 'skipped') {
-        throw new HttpsError(
-          'aborted',
-          'Another server scoring update kept the league lease through every automatic retry. The simulated date was not skipped; wait a moment and press Advance One Day again to retry that same date.',
-        );
+        return {
+          retrySimulatedDate:
+            typeof existingRequest?.['retrySimulatedDate'] === 'string'
+              ? existingRequest['retrySimulatedDate']
+              : null,
+          alreadyQueued: true,
+        };
       }
 
-      const message = releasedGameCount > 0
-        ? `${nextDate} processed. ${releasedGameCount} NHL ${releasedGameCount === 1 ? 'game was' : 'games were'} released into the replay ledger.`
-        : `${nextDate} processed. No NHL games were scheduled, so individual player windows remained where they were.`;
+      const activeRequestId =
+        typeof controlData['activeRequestId'] === 'string'
+          ? controlData['activeRequestId']
+          : '';
+      const controlStatus =
+        typeof controlData['status'] === 'string'
+          ? controlData['status']
+          : 'inactive';
 
-      await controlRef.set(
+      if (
+        activeRequestId &&
+        activeRequestId !== requestId &&
+        (controlStatus === 'queued' || controlStatus === 'advancing')
+      ) {
+        const activeRequestRef = getHistoricalReplayRequestRef(activeRequestId);
+        const activeRequestSnapshot = await transaction.get(activeRequestRef);
+
+        if (!isHistoricalReplayRequestStale(activeRequestSnapshot.data(), now)) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This league already has a replay day queued or processing. Wait for that request to finish before adding another day.',
+          );
+        }
+
+        if (activeRequestSnapshot.exists) {
+          transaction.set(
+            activeRequestRef,
+            {
+              status: 'cancelled',
+              cancellationReason: 'stale-request-replaced',
+              cancelledAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      }
+
+      const retrySimulatedDate = getReplayRequestRetryDate(controlData);
+      transaction.create(requestRef, {
+        documentType: 'historical-replay-advance-request',
+        schemaVersion: 1,
+        requestId,
+        leagueId,
+        requestedBy: userId,
+        status: 'queued',
+        retrySimulatedDate,
+        targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
+        sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
+        queuedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(
+        controlRef,
         {
-          status: 'ready',
-          lastAdvanceCompletedAt: FieldValue.serverTimestamp(),
-          lastActiveCycleNumbers: result.activeCycleNumbers,
-          lastPublishedSnapshotCount: result.publishedSnapshotCount,
-          message,
+          schemaVersion: 2,
+          enabled: true,
+          status: 'queued',
+          activeRequestId: requestId,
+          requestedBy: userId,
+          targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
+          sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
+          message: 'Queued safely. RinkRat processes historical test leagues one at a time so they cannot compete for scoring resources.',
           lastError: '',
-          lastFailedSimulatedDate: null,
+          queuedAt: FieldValue.serverTimestamp(),
+          createdAt: controlSnapshot.exists
+            ? controlData['createdAt'] ?? FieldValue.serverTimestamp()
+            : FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
 
       return {
-        enabled: true,
-        status: 'ready',
-        simulatedDate: nextDate,
-        seasonStartDate,
-        targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
-        sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
-        daysAdvanced: nextDaysAdvanced,
-        releasedGameCount,
-        activeCycleNumbers: result.activeCycleNumbers,
-        message,
+        retrySimulatedDate,
+        alreadyQueued: false,
       };
+    });
+
+    const payload: HistoricalReplayAdvanceTaskPayload = {
+      requestId,
+      leagueId,
+      requestedBy: userId,
+    };
+
+    try {
+      await getHistoricalReplayTaskQueue().enqueue(payload, {
+        id: buildHistoricalReplayTaskId(payload),
+        scheduleTime: new Date(Date.now() + 250),
+        dispatchDeadlineSeconds: HISTORICAL_REPLAY_TASK_DISPATCH_DEADLINE_SECONDS,
+      });
+    } catch (error: unknown) {
+      if (!isHistoricalReplayTaskAlreadyExistsError(error)) {
+        const message = error instanceof Error
+          ? error.message
+          : 'The historical replay queue could not accept this request.';
+
+        await Promise.all([
+          requestRef.set(
+            {
+              status: 'error',
+              lastError: message.slice(0, 500),
+              failedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          controlRef.set(
+            {
+              status: 'error',
+              activeRequestId: null,
+              message,
+              lastError: message.slice(0, 500),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          ),
+        ]).catch(() => undefined);
+
+        throw new HttpsError('unavailable', message);
+      }
+    }
+
+    return {
+      enabled: true,
+      status: 'queued',
+      requestId,
+      message: queueState.alreadyQueued
+        ? 'This replay request was already queued. RinkRat will keep following its saved status.'
+        : 'Replay day queued. Multiple test leagues are processed one at a time, so you can safely queue another league without starting competing score workers.',
+    };
+  },
+);
+
+export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayAdvanceTaskPayload>(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    retryConfig: {
+      maxAttempts: 1,
+    },
+    rateLimits: {
+      maxConcurrentDispatches: 1,
+    },
+  },
+  async (request) => {
+    const payload = request.data;
+
+    if (
+      !payload ||
+      typeof payload.requestId !== 'string' ||
+      !payload.requestId ||
+      typeof payload.leagueId !== 'string' ||
+      !payload.leagueId ||
+      typeof payload.requestedBy !== 'string' ||
+      !payload.requestedBy
+    ) {
+      console.warn('Ignored malformed historical replay task.', { payload });
+      return;
+    }
+
+    const requestRef = getHistoricalReplayRequestRef(payload.requestId);
+    const controlRef = getHistoricalReplayControlRef(payload.leagueId);
+    const now = Date.now();
+    const claimed = await db.runTransaction(async (transaction) => {
+      const [requestSnapshot, controlSnapshot] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(controlRef),
+      ]);
+
+      if (!requestSnapshot.exists) {
+        return false;
+      }
+
+      const requestData = requestSnapshot.data() ?? {};
+      const status = typeof requestData['status'] === 'string'
+        ? requestData['status']
+        : '';
+
+      if (status === 'completed' || status === 'error' || status === 'cancelled') {
+        return false;
+      }
+
+      if (
+        requestData['leagueId'] !== payload.leagueId ||
+        requestData['requestedBy'] !== payload.requestedBy
+      ) {
+        transaction.set(
+          requestRef,
+          {
+            status: 'error',
+            lastError: 'Historical replay task payload did not match the queued request.',
+            failedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        return false;
+      }
+
+      if (
+        status === 'processing' &&
+        toMilliseconds(requestData['leaseExpiresAt']) > now
+      ) {
+        return false;
+      }
+
+      const controlData = controlSnapshot.data() ?? {};
+      const activeRequestId =
+        typeof controlData['activeRequestId'] === 'string'
+          ? controlData['activeRequestId']
+          : '';
+
+      if (activeRequestId && activeRequestId !== payload.requestId) {
+        transaction.set(
+          requestRef,
+          {
+            status: 'cancelled',
+            cancellationReason: 'league-request-replaced',
+            cancelledAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        return false;
+      }
+
+      transaction.set(
+        requestRef,
+        {
+          status: 'processing',
+          attemptCount: FieldValue.increment(1),
+          startedAt: FieldValue.serverTimestamp(),
+          leaseExpiresAt: Timestamp.fromMillis(
+            now + HISTORICAL_REPLAY_REQUEST_LEASE_MILLISECONDS,
+          ),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      transaction.set(
+        controlRef,
+        {
+          schemaVersion: 2,
+          enabled: true,
+          status: 'advancing',
+          activeRequestId: payload.requestId,
+          message: 'Replay worker started. Scores and roster windows will update from the saved historical NHL ledger.',
+          lastError: '',
+          workerStartedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return true;
+    });
+
+    if (!claimed) {
+      return;
+    }
+
+    const requestSnapshot = await requestRef.get();
+    const retrySimulatedDate =
+      typeof requestSnapshot.data()?.['retrySimulatedDate'] === 'string'
+        ? requestSnapshot.data()?.['retrySimulatedDate'] as string
+        : null;
+
+    try {
+      const result = await performHistoricalReplayAdvance(
+        payload.leagueId,
+        payload.requestedBy,
+        payload.requestId,
+        retrySimulatedDate,
+      );
+
+      await requestRef.set(
+        {
+          status: 'completed',
+          simulatedDate: result.simulatedDate,
+          daysAdvanced: result.daysAdvanced,
+          releasedGameCount: result.releasedGameCount,
+          activeCycleNumbers: result.activeCycleNumbers,
+          message: result.message,
+          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
     } catch (error: unknown) {
       const message = error instanceof Error
         ? error.message
         : 'Unable to advance the historical replay.';
 
-      await controlRef.set(
+      await requestRef.set(
         {
-          enabled: true,
           status: 'error',
-          message,
           lastError: message.slice(0, 500),
-          lastFailedSimulatedDate: attemptedDate,
-          lastAdvanceFailedAt: FieldValue.serverTimestamp(),
+          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+          failedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       ).catch(() => undefined);
 
-      if (error instanceof HttpsError) {
-        throw error;
+      console.error('Historical replay queue task failed.', {
+        requestId: payload.requestId,
+        leagueId: payload.leagueId,
+        message,
+      });
+    }
+  },
+);
+
+export const recoverStaleHistoricalReplayQueue = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    timeZone: 'America/Los_Angeles',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const now = Date.now();
+    const requestSnapshot = await db.collection('historicalReplayRequests')
+      .where('status', 'in', ['queued', 'processing'])
+      .limit(HISTORICAL_REPLAY_STALE_SWEEP_LIMIT)
+      .get();
+    let recoveredCount = 0;
+
+    for (const requestDocument of requestSnapshot.docs) {
+      const requestData = requestDocument.data();
+
+      if (!isHistoricalReplayRequestStale(requestData, now)) {
+        continue;
       }
 
-      throw new HttpsError('unavailable', message);
+      const leagueId =
+        typeof requestData['leagueId'] === 'string'
+          ? requestData['leagueId']
+          : '';
+
+      if (!leagueId) {
+        await requestDocument.ref.set(
+          {
+            status: 'error',
+            lastError: 'Stale replay request did not contain a league identifier.',
+            failedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        recoveredCount += 1;
+        continue;
+      }
+
+      const controlRef = getHistoricalReplayControlRef(leagueId);
+      await db.runTransaction(async (transaction) => {
+        const [freshRequestSnapshot, controlSnapshot] = await Promise.all([
+          transaction.get(requestDocument.ref),
+          transaction.get(controlRef),
+        ]);
+
+        if (!freshRequestSnapshot.exists) {
+          return;
+        }
+
+        const freshRequestData = freshRequestSnapshot.data() ?? {};
+
+        if (!isHistoricalReplayRequestStale(freshRequestData, now)) {
+          return;
+        }
+
+        const controlData = controlSnapshot.data() ?? {};
+        const activeRequestId =
+          typeof controlData['activeRequestId'] === 'string'
+            ? controlData['activeRequestId']
+            : '';
+        const controlStatus =
+          typeof controlData['status'] === 'string'
+            ? controlData['status']
+            : '';
+        const simulatedDate =
+          typeof controlData['simulatedDate'] === 'string'
+            ? controlData['simulatedDate']
+            : null;
+        const message =
+          'The historical replay queue stopped reporting progress and was released automatically. No date was intentionally skipped; press Advance One NHL Day to retry after reviewing the saved scores.';
+
+        transaction.set(
+          requestDocument.ref,
+          {
+            status: 'error',
+            lastError: message,
+            recoveryReason: 'stale-queue-request',
+            leaseExpiresAt: Timestamp.fromMillis(now),
+            failedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        if (activeRequestId === requestDocument.id) {
+          transaction.set(
+            controlRef,
+            {
+              status: 'error',
+              activeRequestId: null,
+              lastFailedRequestId: requestDocument.id,
+              ...(controlStatus === 'advancing' && simulatedDate
+                ? { lastFailedSimulatedDate: simulatedDate }
+                : {}),
+              message,
+              lastError: message,
+              lastAdvanceFailedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      });
+
+      recoveredCount += 1;
+    }
+
+    if (recoveredCount > 0) {
+      console.warn('Recovered stale historical replay queue requests.', {
+        recoveredCount,
+        inspectedCount: requestSnapshot.size,
+      });
     }
   },
 );

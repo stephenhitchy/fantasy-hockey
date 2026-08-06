@@ -3314,6 +3314,8 @@ export {
   clearExpiredOrErroredLiveScoringLease,
   initializeSeasonAfterDraft,
   openNextCompetitionPeriod,
+  processHistoricalReplayAdvance,
+  recoverStaleHistoricalReplayQueue,
   releaseLeagueLiveScoringHandoff,
   requestLeagueLiveScoringRefresh,
   runScheduledLeagueAutomation,

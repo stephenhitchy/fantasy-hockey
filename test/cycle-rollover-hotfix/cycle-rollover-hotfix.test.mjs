@@ -138,14 +138,21 @@ test('a repaired slot never reuses finalized scores from the outgoing player', (
 });
 
 test('historical replay retries the failed simulated date instead of skipping ahead', () => {
-  const callable = section(
+  const retryDateHelper = section(
     automationSource,
+    'function getReplayRequestRetryDate(',
+    'function isHistoricalReplayRequestStale(',
+  );
+  const replayWorker = section(
+    automationSource,
+    'async function performHistoricalReplayAdvance(',
     'export const advanceHistoricalReplayDay = onCall(',
-    '\n);',
   );
 
-  assert.match(callable, /retryFailedDate/);
-  assert.match(callable, /lastFailedSimulatedDate/);
-  assert.match(callable, /Retrying the simulated NHL date/);
-  assert.match(callable, /daysAdvanced: nextDaysAdvanced/);
+  assert.match(retryDateHelper, /lastFailedSimulatedDate/);
+  assert.match(replayWorker, /retrySimulatedDate/);
+  assert.match(replayWorker, /const retryFailedDate = Boolean/);
+  assert.match(replayWorker, /Retrying the simulated NHL date/);
+  assert.match(replayWorker, /lastFailedSimulatedDate: attemptedDate/);
+  assert.match(replayWorker, /daysAdvanced: nextDaysAdvanced/);
 });

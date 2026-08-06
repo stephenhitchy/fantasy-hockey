@@ -2942,9 +2942,11 @@ export class FreeAgents implements OnDestroy {
       return { forceRefresh };
     }
 
-    if (replay.status === 'advancing') {
+    if (replay.status === 'queued' || replay.status === 'advancing') {
       throw new Error(
-        'Historical replay is advancing to the next day. Wait for the replay to finish before checking or submitting this roster move.',
+        replay.status === 'queued'
+          ? 'Historical replay is queued for this league. Wait for the queued replay day to finish before checking or submitting this roster move.'
+          : 'Historical replay is advancing to the next day. Wait for the replay to finish before checking or submitting this roster move.',
       );
     }
 

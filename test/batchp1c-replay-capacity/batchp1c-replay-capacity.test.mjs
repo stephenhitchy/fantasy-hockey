@@ -58,11 +58,12 @@ async function hashTree(relativeDirectory, excludedPaths = new Set()) {
   return digest.digest('hex');
 }
 
-test('replay callable extends the browser transport timeout beyond the Firebase 70-second default', async () => {
+test('replay callable no longer depends on a long browser transport deadline', async () => {
   const source = await read('src/app/core/replay/historical-replay.service.ts');
 
-  assert.match(source, /advanceHistoricalReplayDay'[\s\S]*timeout:\s*600_000/);
-  assert.match(source, /deadline-exceeded/);
+  assert.match(source, /QueueHistoricalReplayResult/);
+  assert.match(source, /advanceHistoricalReplayDay'[\s\S]*timeout:\s*60_000/);
+  assert.match(source, /Firestore remains the authoritative queued\/advancing\/ready signal/);
 });
 
 test('historical replay uses saved projections without blocking score advancement on a league-wide rebuild', async () => {
@@ -90,9 +91,9 @@ test('historical replay uses saved projections without blocking score advancemen
 test('a browser transport deadline no longer turns a healthy replay worker into a false error', async () => {
   const source = await read('src/app/features/cycles/cycle-one/cycle-one.ts');
 
-  assert.match(source, /control\?\.status === 'advancing' \|\| evaluation\.sawServerStart/);
+  assert.match(source, /control\?\.status === 'queued'[\s\S]*control\?\.status === 'advancing'/);
   assert.match(source, /browser response timed out, but the replay worker is still finishing safely/);
-  assert.match(source, /The live listener will unlock the button at ready\/error/);
+  assert.match(source, /listener unlocks at ready\/error/);
 });
 
 test('the 100K capacity model inspects real source limits and labels itself as an estimate', async () => {
@@ -175,6 +176,7 @@ test('P1C verification, deployment order, and consolidated documentation are pre
 
 test('P1C replay paths remain isolated from later draft recovery changes inside the Functions tree', async () => {
   const exclusions = new Set([
+    'src/index.ts',
     'src/league-automation.ts',
     'src/shared/core/cycle/cycle.service.ts',
     'src/shared/core/projection/window-projection.service.ts',
@@ -185,7 +187,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
   assert.equal(
     await hashTree('functions', exclusions),
-    '32222396c7eed31cdfe81463070c1b71a5dab091c7d85db9338667623d9bc2f4',
+    '8abd041f045f31ea1a51a484f74ec7b7a2f5ca40364e33360a0455d2623d12c2',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([

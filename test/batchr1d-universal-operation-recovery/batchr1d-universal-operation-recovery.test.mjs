@@ -335,12 +335,14 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
 
   const unchangedFunctions = await hashFunctionTreeExcept(new Set([
+    'index.ts',
+    'league-automation.ts',
     'draft-authority.ts',
     'draft-automation.ts',
     'shared/core/draft/draft.models.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 40,
-    digest: 'ecaee1be5e912576da850df702b49408250d90bb701bc4fe613a02f5102a09af',
+    count: 38,
+    digest: 'fb0976a682516cb7ae3ecd42da62f79c10f0528b9b30531d1a7ce4e0be5c10f3',
   });
 });

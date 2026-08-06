@@ -322,6 +322,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
     await hashTree(
       'functions',
       new Set([
+        'src/index.ts',
         'src/league-automation.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',
@@ -330,6 +331,6 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/draft/draft.models.ts',
       ]),
     ),
-    '32222396c7eed31cdfe81463070c1b71a5dab091c7d85db9338667623d9bc2f4',
+    '8abd041f045f31ea1a51a484f74ec7b7a2f5ca40364e33360a0455d2623d12c2',
   );
 });

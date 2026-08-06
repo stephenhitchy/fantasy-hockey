@@ -1,4 +1,4 @@
-export type HistoricalReplayStatusLike = 'inactive' | 'advancing' | 'ready' | 'error';
+export type HistoricalReplayStatusLike = 'inactive' | 'queued' | 'advancing' | 'ready' | 'error';
 
 export interface HistoricalReplayControlLike {
   status: HistoricalReplayStatusLike;
@@ -92,7 +92,8 @@ export function evaluateHistoricalReplayAdvance(
     };
   }
 
-  const nextSawServerStart = sawServerStart || control.status === 'advancing';
+  const nextSawServerStart =
+    sawServerStart || control.status === 'queued' || control.status === 'advancing';
   const replayPositionChanged =
     control.daysAdvanced !== baseline.daysAdvanced ||
     control.simulatedDate !== baseline.simulatedDate ||

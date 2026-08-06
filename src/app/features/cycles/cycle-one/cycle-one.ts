@@ -259,6 +259,7 @@ export class CycleOne implements OnDestroy {
   advanceReplayOneDay(): void {
     if (
       this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'queued' ||
       this.historicalReplayControl()?.status === 'advancing'
     ) {
       return;
@@ -276,7 +277,7 @@ export class CycleOne implements OnDestroy {
     this.historicalReplayMessage.set('');
     this.historicalReplayError.set('');
     this.historicalReplayTransportNotice.set(
-      'Scores may finish before the browser request closes. This button unlocks as soon as the saved replay control confirms completion.',
+      'RinkRat will queue this test league and process historical replay leagues one at a time. The button unlocks when the saved replay control confirms completion.',
     );
     this.clearReplayAdvanceReconciliationTimer();
 
@@ -293,12 +294,13 @@ export class CycleOne implements OnDestroy {
         }
 
         this.historicalReplayMessage.set(result.message);
+        this.historicalReplayTransportNotice.set(
+          'Replay day queued safely. Another test league may finish first; this league will begin automatically when the shared replay worker is available.',
+        );
 
-        // The callable can resolve a moment before the Firestore listener sees
-        // status=ready. Keep the authoritative control as the final lock.
-        if (this.historicalReplayControl()?.status !== 'advancing') {
-          this.finishReplayAdvanceRequest(generation, 'success');
-        }
+        // The callable now returns after queue admission. Do not release the
+        // local action from the transport response; the queued/advancing/ready
+        // Firestore control is the only completion authority.
       })
       .catch((error: unknown) => {
         if (!this.isCurrentReplayAdvance(generation)) {
@@ -343,14 +345,20 @@ export class CycleOne implements OnDestroy {
               return;
             }
 
-            if (control?.status === 'advancing' || evaluation.sawServerStart) {
+            if (
+              control?.status === 'queued' ||
+              control?.status === 'advancing' ||
+              evaluation.sawServerStart
+            ) {
               // A callable transport deadline does not mean the replay worker
-              // stopped. Keep following the authoritative Firestore control
-              // and avoid turning a healthy long-running update into a false
-              // error. The live listener will unlock the button at ready/error.
+              // or queue stopped. Keep following the authoritative Firestore
+              // control and avoid turning a healthy queued or long-running
+              // update into a false error. The listener unlocks at ready/error.
               this.historicalReplayError.set('');
               this.historicalReplayTransportNotice.set(
-                'The browser response timed out, but the replay worker is still finishing safely on the server. RinkRat will unlock this control as soon as Firestore confirms completion.',
+                control?.status === 'queued'
+                  ? 'The browser response timed out, but this league is still queued safely. RinkRat will start it automatically after the current test league finishes.'
+                  : 'The browser response timed out, but the replay worker is still finishing safely on the server. RinkRat will unlock this control as soon as Firestore confirms completion.',
               );
               return;
             }
@@ -368,6 +376,7 @@ export class CycleOne implements OnDestroy {
     return Boolean(
       !this.clientHealth.competitiveActionsReady() ||
       this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'queued' ||
       this.historicalReplayControl()?.status === 'advancing',
     );
   }
@@ -387,8 +396,13 @@ export class CycleOne implements OnDestroy {
 
     if (
       this.historicalReplayAdvancing() ||
+      this.historicalReplayControl()?.status === 'queued' ||
       this.historicalReplayControl()?.status === 'advancing'
     ) {
+      if (this.historicalReplayControl()?.status === 'queued') {
+        return 'Queued for Replay…';
+      }
+
       return 'Processing Day…';
     }
 
@@ -415,6 +429,10 @@ export class CycleOne implements OnDestroy {
 
   getHistoricalReplayStatusLabel(): string {
     const control = this.historicalReplayControl();
+
+    if (control?.status === 'queued') {
+      return 'Waiting for shared replay worker';
+    }
 
     if (this.historicalReplayAdvancing() || control?.status === 'advancing') {
       return 'Processing simulated NHL day';

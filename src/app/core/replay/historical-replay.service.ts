@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db } from '../firebase';
 import { functions } from '../firebase-functions';
 
-export type HistoricalReplayStatus = 'inactive' | 'advancing' | 'ready' | 'error';
+export type HistoricalReplayStatus = 'inactive' | 'queued' | 'advancing' | 'ready' | 'error';
 
 export interface HistoricalReplayControl {
   enabled: boolean;
@@ -23,16 +23,10 @@ export interface HistoricalReplayControl {
   updatedAt?: unknown;
 }
 
-export interface AdvanceHistoricalReplayResult {
+export interface QueueHistoricalReplayResult {
   enabled: true;
-  status: 'ready';
-  simulatedDate: string;
-  seasonStartDate: string;
-  targetSeason: string;
-  sourceSeason: string;
-  daysAdvanced: number;
-  releasedGameCount: number;
-  activeCycleNumbers: number[];
+  status: 'queued';
+  requestId: string;
   message: string;
 }
 
@@ -44,7 +38,10 @@ function normalizeControl(value: Partial<HistoricalReplayControl>): HistoricalRe
   return {
     enabled: value.enabled === true,
     status:
-      value.status === 'advancing' || value.status === 'ready' || value.status === 'error'
+      value.status === 'queued' ||
+      value.status === 'advancing' ||
+      value.status === 'ready' ||
+      value.status === 'error'
         ? value.status
         : 'inactive',
     targetSeason: typeof value.targetSeason === 'string' ? value.targetSeason : '20262027',
@@ -68,20 +65,27 @@ function normalizeControl(value: Partial<HistoricalReplayControl>): HistoricalRe
 }
 
 const advanceReplayCallable = httpsCallable<
-  { leagueId: string },
-  AdvanceHistoricalReplayResult
+  { leagueId: string; requestId: string },
+  QueueHistoricalReplayResult
 >(
   functions,
   'advanceHistoricalReplayDay',
   {
-    // The browser SDK otherwise cancels callable requests after 70 seconds,
-    // even though the replay worker is intentionally allowed to finish a
-    // longer server-authoritative scoring pass. Firestore remains the final
-    // completion signal, but the extended transport timeout prevents a false
-    // `deadline-exceeded` error while the worker is still healthy.
-    timeout: 600_000,
+    // The callable now queues the heavy replay worker and returns quickly.
+    // Firestore remains the authoritative queued/advancing/ready signal.
+    timeout: 60_000,
   },
 );
+
+function createHistoricalReplayRequestId(leagueId: string): string {
+  const randomPart =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID().replaceAll('-', '')
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  const leaguePart = leagueId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
+
+  return `replay_${leaguePart}_${randomPart}`.slice(0, 96);
+}
 
 export function listenToHistoricalReplayControl(
   leagueId: string,
@@ -109,7 +113,10 @@ export function listenToHistoricalReplayControl(
 
 export async function advanceHistoricalReplayDay(
   leagueId: string,
-): Promise<AdvanceHistoricalReplayResult> {
-  const response = await advanceReplayCallable({ leagueId });
+): Promise<QueueHistoricalReplayResult> {
+  const response = await advanceReplayCallable({
+    leagueId,
+    requestId: createHistoricalReplayRequestId(leagueId),
+  });
   return response.data;
 }

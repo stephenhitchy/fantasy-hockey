@@ -200,6 +200,14 @@ export const INVITE_BETA_VALIDATION_DEFINITIONS: readonly InviteBetaValidationDe
     required: true,
   },
   {
+    id: 'multi-league-replay-queue',
+    groupId: 'scoring',
+    title: 'Queue several historical test leagues safely',
+    instruction: 'From two or three completed test leagues, press Advance One NHL Day once in each league without waiting for the prior league to finish.',
+    evidenceHint: 'Every league shows queued or processing status, the shared worker handles them one at a time, no date is skipped, and every control returns to ready without a deadline or locked-screen error.',
+    required: true,
+  },
+  {
     id: 'independent-window-rollover',
     groupId: 'scoring',
     title: 'Verify independent seventh-game rollover',

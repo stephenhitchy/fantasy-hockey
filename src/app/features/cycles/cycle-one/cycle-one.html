@@ -98,6 +98,8 @@
               Add/drop, scheduled activation, matchup completion, standings, and playoff progression use
               the same saved scoring records as live scoring. Use this only in a dedicated test
               league because advancing the replay intentionally writes real matchup and standings data.
+              You may queue several test leagues; RinkRat processes them one at a time so their replay
+              workers cannot compete for shared scoring and NHL-data resources.
             </small>
 
             @if (historicalReplayMessage() || historicalReplayControl()?.message) {

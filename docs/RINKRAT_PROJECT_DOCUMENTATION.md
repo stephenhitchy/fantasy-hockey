@@ -1,3 +1,113 @@
+## Batch R1E — Multi-League Historical Replay Queue
+
+### Purpose
+
+R1E makes the platform-administrator historical season controls safe when several completed test
+leagues are advanced near the same time. The earlier control executed the complete league scoring
+worker inside the browser callable. Three leagues could therefore launch three heavy replay jobs
+at once, sharing NHL-data requests, Firestore work, projection caches, and Function capacity. The
+league-specific leases protected each league from duplicate scoring, but they did not coordinate
+separate test leagues with one another.
+
+The new design treats replay advancement as a short queue-admission request followed by a
+server-owned Cloud Task. The browser no longer needs to hold a long HTTPS connection open while a
+league finishes scoring.
+
+### Serialized admin replay queue
+
+`advanceHistoricalReplayDay` now:
+
+1. Verifies the platform administrator, league, and completed draft.
+2. Creates an exact request identifier.
+3. Saves a server-only `historicalReplayRequests/{requestId}` record.
+4. Marks the league replay control as `queued`.
+5. Enqueues `processHistoricalReplayAdvance` and returns immediately.
+
+`processHistoricalReplayAdvance` is configured with:
+
+```text
+maxConcurrentDispatches: 1
+timeoutSeconds: 540
+memory: 1 GiB
+```
+
+That one-at-a-time limit applies only to the platform-administrator historical replay queue. It
+does not serialize live league scoring, Draft picks, roster changes, or ordinary manager traffic.
+You may press **Advance One NHL Day** in two or three test leagues without waiting between them;
+each league shows its own queued, processing, ready, or error state and begins automatically when
+the prior replay task finishes.
+
+### Exact and retry-safe requests
+
+Every queued request is tied to the exact league, administrator, and request ID. Deterministic
+Cloud Task IDs make a lost callable response safe to retry without scheduling the same request
+twice. A league cannot accept a second day while its first request is still queued or processing.
+
+If a replay day previously failed, the request stores the failed simulated date before the league
+control changes to `queued`. The task therefore retries that same date instead of incrementing and
+silently skipping it.
+
+Request records progress through:
+
+```text
+queued → processing → completed
+                    ↘ error
+```
+
+A bounded request lease and stale-request replacement path are retained so an interrupted worker
+cannot permanently reserve a league. A five-minute recovery sweep releases queued or processing
+requests that stop reporting progress after their bounded lease, marks the saved date retry-safe,
+and returns the league control to a visible error state rather than leaving the button locked. The
+saved league control remains the browser's authoritative completion signal.
+
+### Manager-interface behavior
+
+Game Center recognizes `queued` as a first-class replay status:
+
+- **Queued for Replay…** appears on the button.
+- **Waiting for shared replay worker** appears in the status badge.
+- The page remains readable and does not use a fuzzy blocking overlay.
+- The button stays protected until Firestore reports `ready` or `error`.
+- Add/drop timing is blocked while that league is queued or advancing so roster calculations
+  cannot use a half-updated simulated date.
+
+The Invite Beta Validation Board now includes a required test that queues two or three completed
+historical leagues and confirms that every date finishes without a skipped day, deadline error, or
+locked control.
+
+### Architecture preserved
+
+R1E does not change Production Scoring V3, Projection V11, roster-slot windows, seventh-game
+rollover, transaction activation, waivers, standings, playoffs, Firestore rules, or Firestore
+indexes. The same `runLeagueAutomation()` scoring authority is used after the queue dispatches the
+league.
+
+This queue is an administrator testing safeguard. It is separate from the future high-scale live
+league-scoring dispatcher described in `docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`.
+
+### Verification and deployment
+
+Run:
+
+```bash
+npm run verify:batchr1e
+```
+
+Deploy **Functions first** so the queue target exists before the browser begins submitting queued
+requests:
+
+```bash
+firebase deploy --only functions:advanceHistoricalReplayDay,functions:processHistoricalReplayAdvance,functions:recoverStaleHistoricalReplayQueue -m "Batch R1E multi-league replay queue"
+```
+
+Then deploy Hosting:
+
+```bash
+firebase deploy --only hosting:app -m "Batch R1E queued historical replay controls"
+```
+
+No Firestore rules, indexes, or data migration are required.
+
 ## Batch R1A.1 — Release Manifest Ignore Hotfix
 
 ### Purpose
