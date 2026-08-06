@@ -67,13 +67,31 @@ const HISTORICAL_REPLAY_TASK_DISPATCH_DEADLINE_SECONDS = 540;
 const HISTORICAL_REPLAY_REQUEST_LEASE_MILLISECONDS = 10 * 60 * 1000;
 const HISTORICAL_REPLAY_REQUEST_STALE_MILLISECONDS = 12 * 60 * 1000;
 const HISTORICAL_REPLAY_STALE_SWEEP_LIMIT = 100;
+const LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION = 1;
+const LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE = 'shadow' as const;
+const LEAGUE_AUTOMATION_QUEUE_SHARD_COUNT = 16;
+const LEAGUE_AUTOMATION_QUEUE_DEFAULT_MAX_ENQUEUE_PER_RUN = 100;
+const LEAGUE_AUTOMATION_QUEUE_MAX_SCAN_LIMIT = 300;
+const LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES = 4;
+const LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS = 24;
+const LEAGUE_AUTOMATION_TASK_DISPATCH_DEADLINE_SECONDS = 540;
+const LEAGUE_AUTOMATION_QUEUED_TASK_LEASE_MILLISECONDS = 75 * 60 * 1000;
+const LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS = 12 * 60 * 1000;
+const LEAGUE_AUTOMATION_RECOVERY_STALE_MILLISECONDS = 25 * 60 * 1000;
+const LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT = 100;
+const LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT = 500;
+const LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
+const LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT = 500;
 
 type LeagueAutomationTrigger =
   | 'scheduled'
+  | 'queue-task'
   | 'draft-complete'
   | 'season-start'
   | 'historical-replay'
   | 'manual';
+
+type LeagueAutomationQueueMode = 'shadow' | 'canary' | 'primary';
 
 const HISTORICAL_REPLAY_TARGET_SEASON = '20262027';
 const HISTORICAL_REPLAY_SOURCE_SEASON = '20252026';
@@ -103,16 +121,19 @@ interface PreviousScoringSnapshot {
 interface LeagueAutomationResult {
   leagueId: string;
   status: 'success' | 'skipped';
+  skipReason?: string;
   activeCycleNumbers: number[];
   publishedSnapshotCount: number;
   skippedSnapshotCount: number;
   cycleOneCreated: boolean;
   durationMilliseconds: number;
+  nextRefreshAtMilliseconds?: number;
 }
 
 interface LeaseClaimResult {
   claimed: boolean;
   reason: string;
+  nextRefreshAtMilliseconds?: number;
 }
 
 interface HistoricalReplayControl {
@@ -152,6 +173,28 @@ interface HistoricalReplayAdvanceResult {
   releasedGameCount: number;
   activeCycleNumbers: number[];
   message: string;
+}
+
+interface LeagueAutomationQueueConfig {
+  mode: LeagueAutomationQueueMode;
+  canaryLeagueIds: string[];
+  maxEnqueuePerRun: number;
+}
+
+interface LeagueAutomationTaskPayload {
+  taskSchemaVersion: 1;
+  leagueId: string;
+  expectedDueAtMilliseconds: number;
+  dueBucket: string;
+  reason: 'scheduled' | 'recovery';
+}
+
+interface DueLeagueAutomationSchedule {
+  leagueId: string;
+  expectedDueAtMilliseconds: number;
+  queueStatus: string;
+  activeTaskId: string;
+  activeTaskLeaseExpiresAtMilliseconds: number;
 }
 
 interface HistoricalReplayAssetMap {
@@ -210,6 +253,95 @@ function getHistoricalReplayTaskQueue() {
   return getFunctions().taskQueue<HistoricalReplayAdvanceTaskPayload>(
     'processHistoricalReplayAdvance',
   );
+}
+
+function getLeagueAutomationScheduleRef(leagueId: string) {
+  return db.doc(`leagueAutomationSchedules/${leagueId}`);
+}
+
+function getLeagueAutomationTaskRef(taskId: string) {
+  return db.doc(`leagueAutomationTasks/${taskId}`);
+}
+
+function getLeagueAutomationTaskQueue() {
+  return getFunctions().taskQueue<LeagueAutomationTaskPayload>(
+    'processLeagueAutomationTask',
+  );
+}
+
+function normalizeLeagueAutomationQueueMode(value: unknown): LeagueAutomationQueueMode {
+  return value === 'canary' || value === 'primary'
+    ? value
+    : LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE;
+}
+
+function normalizeLeagueAutomationCanaryIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(
+    value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 100),
+  )].sort();
+}
+
+function normalizeLeagueAutomationMaxEnqueuePerRun(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(
+        LEAGUE_AUTOMATION_QUEUE_MAX_SCAN_LIMIT,
+        Math.max(1, Math.trunc(value)),
+      )
+    : LEAGUE_AUTOMATION_QUEUE_DEFAULT_MAX_ENQUEUE_PER_RUN;
+}
+
+async function getLeagueAutomationQueueConfig(): Promise<LeagueAutomationQueueConfig> {
+  const snapshot = await db.doc('appData/leagueAutomationQueueConfig').get();
+  const data = snapshot.data() ?? {};
+
+  return {
+    mode: normalizeLeagueAutomationQueueMode(data['mode']),
+    canaryLeagueIds: normalizeLeagueAutomationCanaryIds(data['canaryLeagueIds']),
+    maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+      data['maxEnqueuePerRun'],
+    ),
+  };
+}
+
+function getLeagueAutomationShard(leagueId: string): number {
+  const digest = createHash('sha256').update(leagueId).digest();
+  return digest.readUInt32BE(0) % LEAGUE_AUTOMATION_QUEUE_SHARD_COUNT;
+}
+
+function getLeagueAutomationDueBucket(dueAtMilliseconds: number): string {
+  return new Date(Math.max(0, dueAtMilliseconds))
+    .toISOString()
+    .slice(0, 16)
+    .replace(/[^0-9]/g, '');
+}
+
+function buildLeagueAutomationTaskId(payload: LeagueAutomationTaskPayload): string {
+  return createHash('sha256')
+    .update(
+      `${payload.taskSchemaVersion}:${payload.leagueId}:${payload.expectedDueAtMilliseconds}:${payload.reason}`,
+    )
+    .digest('hex')
+    .slice(0, 40);
+}
+
+function isLeagueAutomationTaskAlreadyExistsError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown };
+  const code = typeof candidate.code === 'string' ? candidate.code : '';
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+
+  return code.includes('task-already-exists') || /already exists/i.test(message);
 }
 
 function normalizeHistoricalReplayRequestId(value: unknown): string {
@@ -804,6 +936,148 @@ function toMilliseconds(value: unknown): number {
   return 0;
 }
 
+function getSafeAutomationErrorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return 'unknown';
+  }
+
+  const candidate = error as { code?: unknown; name?: unknown };
+  const code = typeof candidate.code === 'string' ? candidate.code : '';
+  const name = typeof candidate.name === 'string' ? candidate.name : '';
+  const normalized = (code || name || 'unknown')
+    .trim()
+    .replace(/[^a-zA-Z0-9:_-]/g, '-')
+    .slice(0, 80);
+
+  return normalized || 'unknown';
+}
+
+async function recordLeagueAutomationPaused(
+  leagueId: string,
+  reason: string,
+): Promise<void> {
+  await getLeagueAutomationScheduleRef(leagueId).set(
+    {
+      schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      leagueId,
+      shard: getLeagueAutomationShard(leagueId),
+      scoringEnabled: false,
+      queueStatus: 'paused',
+      pausedReason: reason.slice(0, 120),
+      nextScoringAt: FieldValue.delete(),
+      activeTaskId: null,
+      activeTaskLeaseExpiresAt: FieldValue.delete(),
+      lastOutcome: 'paused',
+      lastTrigger: 'historical-replay',
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function recordLeagueAutomationSuccess(
+  leagueId: string,
+  trigger: LeagueAutomationTrigger,
+  nextRefreshAtMilliseconds: number,
+  durationMilliseconds: number,
+  publishedSnapshotCount: number,
+  skippedSnapshotCount: number,
+): Promise<void> {
+  const queueTaskOwnsSchedule = trigger === 'queue-task';
+  const data: Record<string, unknown> = {
+    schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+    leagueId,
+    shard: getLeagueAutomationShard(leagueId),
+    scoringEnabled: true,
+    pausedReason: '',
+    nextScoringAt: Timestamp.fromMillis(nextRefreshAtMilliseconds),
+    lastCompletedAt: FieldValue.serverTimestamp(),
+    lastDurationMilliseconds: Math.max(0, durationMilliseconds),
+    lastPublishedSnapshotCount: Math.max(0, publishedSnapshotCount),
+    lastSkippedSnapshotCount: Math.max(0, skippedSnapshotCount),
+    lastOutcome: 'success',
+    lastTrigger: trigger,
+    consecutiveFailureCount: 0,
+    lastErrorCode: '',
+    lastError: '',
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (!queueTaskOwnsSchedule) {
+    data['queueStatus'] = 'idle';
+    data['activeTaskId'] = null;
+    data['activeTaskLeaseExpiresAt'] = FieldValue.delete();
+  }
+
+  await getLeagueAutomationScheduleRef(leagueId).set(data, { merge: true });
+}
+
+async function recordLeagueAutomationFailure(
+  leagueId: string,
+  trigger: LeagueAutomationTrigger,
+  error: unknown,
+): Promise<void> {
+  const message = error instanceof Error
+    ? error.message
+    : 'Server league automation failed.';
+  const data: Record<string, unknown> = {
+    schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+    leagueId,
+    shard: getLeagueAutomationShard(leagueId),
+    scoringEnabled: true,
+    pausedReason: '',
+    nextScoringAt: Timestamp.fromMillis(
+      Date.now() + ERROR_RETRY_INTERVAL_MILLISECONDS,
+    ),
+    lastFailedAt: FieldValue.serverTimestamp(),
+    lastOutcome: 'error',
+    lastTrigger: trigger,
+    consecutiveFailureCount: FieldValue.increment(1),
+    lastErrorCode: getSafeAutomationErrorCode(error),
+    lastError: message.slice(0, 500),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (trigger !== 'queue-task') {
+    data['queueStatus'] = 'error';
+    data['activeTaskId'] = null;
+    data['activeTaskLeaseExpiresAt'] = FieldValue.delete();
+  }
+
+  await getLeagueAutomationScheduleRef(leagueId).set(data, { merge: true });
+}
+
+async function recordLeagueAutomationSkip(
+  leagueId: string,
+  trigger: LeagueAutomationTrigger,
+  reason: string,
+  nextRefreshAtMilliseconds?: number,
+): Promise<void> {
+  const data: Record<string, unknown> = {
+    schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+    leagueId,
+    shard: getLeagueAutomationShard(leagueId),
+    scoringEnabled: true,
+    lastSkippedAt: FieldValue.serverTimestamp(),
+    lastSkipReason: reason.slice(0, 120),
+    lastTrigger: trigger,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (
+    typeof nextRefreshAtMilliseconds === 'number' &&
+    Number.isFinite(nextRefreshAtMilliseconds) &&
+    nextRefreshAtMilliseconds > 0
+  ) {
+    data['nextScoringAt'] = Timestamp.fromMillis(nextRefreshAtMilliseconds);
+  }
+
+  await getLeagueAutomationScheduleRef(leagueId).set(
+    data,
+    { merge: true },
+  );
+}
+
 async function claimLeagueAutomationLease(
   leagueId: string,
   workerId: string,
@@ -843,6 +1117,7 @@ async function claimLeagueAutomationLease(
       return {
         claimed: false,
         reason: 'not-due',
+        nextRefreshAtMilliseconds: nextRefreshAt,
       };
     }
 
@@ -1185,10 +1460,22 @@ async function runLeagueAutomation(
   // Historical replay leagues advance only when a platform administrator
   // releases the next simulated NHL date. The scheduled live scorer must not
   // compete for the same league lease or process that replay date on its own.
-  if (trigger === 'scheduled' && await getHistoricalReplayControl(leagueId)) {
+  if (
+    (trigger === 'scheduled' || trigger === 'queue-task') &&
+    await getHistoricalReplayControl(leagueId)
+  ) {
+    await recordLeagueAutomationPaused(leagueId, 'historical-replay')
+      .catch((error) => {
+        console.warn('Unable to record the historical-replay queue pause.', {
+          leagueId,
+          error,
+        });
+      });
+
     return {
       leagueId,
       status: 'skipped',
+      skipReason: 'historical-replay',
       activeCycleNumbers: [],
       publishedSnapshotCount: 0,
       skippedSnapshotCount: 0,
@@ -1206,14 +1493,31 @@ async function runLeagueAutomation(
   );
 
   if (!lease.claimed) {
+    await recordLeagueAutomationSkip(
+      leagueId,
+      trigger,
+      lease.reason,
+      lease.nextRefreshAtMilliseconds,
+    )
+      .catch((error) => {
+        console.warn('Unable to record a skipped league-automation run.', {
+          leagueId,
+          trigger,
+          reason: lease.reason,
+          error,
+        });
+      });
+
     return {
       leagueId,
       status: 'skipped',
+      skipReason: lease.reason,
       activeCycleNumbers: [],
       publishedSnapshotCount: 0,
       skippedSnapshotCount: 0,
       cycleOneCreated: false,
       durationMilliseconds: Date.now() - startedAt,
+      nextRefreshAtMilliseconds: lease.nextRefreshAtMilliseconds,
     };
   }
 
@@ -1373,6 +1677,7 @@ async function runLeagueAutomation(
       allResults,
       transitionOccurred,
     );
+    const nextRefreshAtMilliseconds = Date.now() + refreshDelay;
 
     await getControlRef(leagueId).set(
       {
@@ -1386,9 +1691,7 @@ async function runLeagueAutomation(
         holderUserId: null,
         holderClientId: '',
         leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-        nextRefreshAt: Timestamp.fromMillis(
-          Date.now() + refreshDelay,
-        ),
+        nextRefreshAt: Timestamp.fromMillis(nextRefreshAtMilliseconds),
         lastRefreshCompletedAt: FieldValue.serverTimestamp(),
         lastRefreshReason: trigger,
         serverTrigger: trigger,
@@ -1409,6 +1712,21 @@ async function runLeagueAutomation(
       { merge: true },
     );
 
+    await recordLeagueAutomationSuccess(
+      leagueId,
+      trigger,
+      nextRefreshAtMilliseconds,
+      Date.now() - startedAt,
+      publishedSnapshotCount,
+      skippedSnapshotCount,
+    ).catch((error) => {
+      console.error('League scoring completed, but its queue schedule was not recorded.', {
+        leagueId,
+        trigger,
+        error,
+      });
+    });
+
     return {
       leagueId,
       status: 'success',
@@ -1417,6 +1735,7 @@ async function runLeagueAutomation(
       skippedSnapshotCount,
       cycleOneCreated,
       durationMilliseconds: Date.now() - startedAt,
+      nextRefreshAtMilliseconds,
     };
   } catch (error: unknown) {
     const message = error instanceof Error
@@ -1447,6 +1766,15 @@ async function runLeagueAutomation(
       },
       { merge: true },
     ).catch(() => undefined);
+
+    await recordLeagueAutomationFailure(leagueId, trigger, error)
+      .catch((scheduleError) => {
+        console.error('Unable to record the failed league-automation schedule.', {
+          leagueId,
+          trigger,
+          scheduleError,
+        });
+      });
 
     throw error;
   }
@@ -1490,6 +1818,7 @@ async function runHistoricalReplayAutomationWithRetry(
   return lastResult ?? {
     leagueId,
     status: 'skipped',
+    skipReason: 'unknown',
     activeCycleNumbers: [],
     publishedSnapshotCount: 0,
     skippedSnapshotCount: 0,
@@ -1511,11 +1840,12 @@ async function getCompletedDraftLeagueIds(): Promise<string[]> {
   )].sort();
 }
 
-async function mapWithConcurrency<T>(
-  values: string[],
-  worker: (value: string) => Promise<T>,
-): Promise<Array<PromiseSettledResult<T>>> {
-  const results: Array<PromiseSettledResult<T>> = [];
+async function mapWithConcurrency<TValue, TResult>(
+  values: TValue[],
+  worker: (value: TValue) => Promise<TResult>,
+  concurrency = MAX_PARALLEL_LEAGUES,
+): Promise<Array<PromiseSettledResult<TResult>>> {
+  const results: Array<PromiseSettledResult<TResult>> = [];
   let nextIndex = 0;
 
   async function consume(): Promise<void> {
@@ -1540,13 +1870,970 @@ async function mapWithConcurrency<T>(
 
   await Promise.all(
     Array.from(
-      { length: Math.min(MAX_PARALLEL_LEAGUES, values.length) },
+      { length: Math.min(Math.max(1, concurrency), values.length) },
       () => consume(),
     ),
   );
 
   return results;
 }
+
+function normalizeDueLeagueAutomationSchedule(
+  leagueId: string,
+  value: DocumentData | undefined,
+): DueLeagueAutomationSchedule | null {
+  const expectedDueAtMilliseconds = toMilliseconds(value?.['nextScoringAt']);
+
+  if (!leagueId || expectedDueAtMilliseconds <= 0 || value?.['scoringEnabled'] === false) {
+    return null;
+  }
+
+  return {
+    leagueId,
+    expectedDueAtMilliseconds,
+    queueStatus:
+      typeof value?.['queueStatus'] === 'string'
+        ? value['queueStatus']
+        : 'idle',
+    activeTaskId:
+      typeof value?.['activeTaskId'] === 'string'
+        ? value['activeTaskId']
+        : '',
+    activeTaskLeaseExpiresAtMilliseconds: toMilliseconds(
+      value?.['activeTaskLeaseExpiresAt'],
+    ),
+  };
+}
+
+async function getDueLeagueAutomationSchedules(
+  nowMilliseconds: number,
+  scanLimit: number,
+): Promise<DueLeagueAutomationSchedule[]> {
+  const snapshot = await db.collection('leagueAutomationSchedules')
+    .where('nextScoringAt', '<=', Timestamp.fromMillis(nowMilliseconds))
+    .orderBy('nextScoringAt', 'asc')
+    .limit(Math.min(LEAGUE_AUTOMATION_QUEUE_MAX_SCAN_LIMIT, Math.max(1, scanLimit)))
+    .get();
+
+  return snapshot.docs
+    .map((document) => normalizeDueLeagueAutomationSchedule(
+      document.id,
+      document.data(),
+    ))
+    .filter((entry): entry is DueLeagueAutomationSchedule => Boolean(entry));
+}
+
+function isLeagueAutomationScheduleActive(
+  schedule: DueLeagueAutomationSchedule,
+  nowMilliseconds: number,
+): boolean {
+  return (
+    (schedule.queueStatus === 'queued' || schedule.queueStatus === 'processing') &&
+    schedule.activeTaskLeaseExpiresAtMilliseconds > nowMilliseconds
+  );
+}
+
+async function countActiveLeagueAutomationTasks(
+  nowMilliseconds: number,
+): Promise<number> {
+  const snapshot = await db.collection('leagueAutomationSchedules')
+    .where(
+      'activeTaskLeaseExpiresAt',
+      '>',
+      Timestamp.fromMillis(nowMilliseconds),
+    )
+    .limit(LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS)
+    .get();
+
+  return snapshot.docs.filter((document) => {
+    const queueStatus = document.data()['queueStatus'];
+    return queueStatus === 'queued' || queueStatus === 'processing';
+  }).length;
+}
+
+async function getLeagueAutomationDispatchSchedules(
+  config: LeagueAutomationQueueConfig,
+  nowMilliseconds: number,
+  scanLimit: number,
+): Promise<{
+  dueSchedules: DueLeagueAutomationSchedule[];
+  eligibleSchedules: DueLeagueAutomationSchedule[];
+}> {
+  if (config.mode === 'canary') {
+    const refs = config.canaryLeagueIds.map((leagueId) =>
+      getLeagueAutomationScheduleRef(leagueId),
+    );
+    const snapshots = refs.length > 0 ? await db.getAll(...refs) : [];
+    const dueSchedules = snapshots
+      .map((snapshot) => normalizeDueLeagueAutomationSchedule(
+        snapshot.id,
+        snapshot.data(),
+      ))
+      .filter((entry): entry is DueLeagueAutomationSchedule =>
+        entry !== null && entry.expectedDueAtMilliseconds <= nowMilliseconds
+      )
+      .sort((left, right) =>
+        left.expectedDueAtMilliseconds - right.expectedDueAtMilliseconds
+      );
+
+    return {
+      dueSchedules,
+      eligibleSchedules: dueSchedules,
+    };
+  }
+
+  const dueSchedules = await getDueLeagueAutomationSchedules(
+    nowMilliseconds,
+    scanLimit,
+  );
+
+  return {
+    dueSchedules,
+    eligibleSchedules: dueSchedules.filter((schedule) =>
+      isLeagueEligibleForQueueMode(schedule, config)
+    ),
+  };
+}
+
+function isLeagueEligibleForQueueMode(
+  schedule: DueLeagueAutomationSchedule,
+  config: LeagueAutomationQueueConfig,
+): boolean {
+  if (config.mode === 'shadow') {
+    return false;
+  }
+
+  if (config.mode === 'canary') {
+    return config.canaryLeagueIds.includes(schedule.leagueId);
+  }
+
+  return true;
+}
+
+function buildLeagueAutomationTaskPayload(
+  schedule: DueLeagueAutomationSchedule,
+  reason: LeagueAutomationTaskPayload['reason'],
+): LeagueAutomationTaskPayload {
+  return {
+    taskSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+    leagueId: schedule.leagueId,
+    expectedDueAtMilliseconds: Math.trunc(schedule.expectedDueAtMilliseconds),
+    dueBucket: getLeagueAutomationDueBucket(schedule.expectedDueAtMilliseconds),
+    reason,
+  };
+}
+
+async function claimLeagueAutomationTask(
+  payload: LeagueAutomationTaskPayload,
+  taskId: string,
+): Promise<boolean> {
+  const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+  const taskRef = getLeagueAutomationTaskRef(taskId);
+  const now = Date.now();
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(scheduleRef);
+
+    if (!snapshot.exists) {
+      return false;
+    }
+
+    const data = snapshot.data() ?? {};
+    const nextScoringAt = toMilliseconds(data['nextScoringAt']);
+    const activeTaskLeaseExpiresAt = toMilliseconds(data['activeTaskLeaseExpiresAt']);
+    const activeTaskId =
+      typeof data['activeTaskId'] === 'string'
+        ? data['activeTaskId']
+        : '';
+    const queueStatus =
+      typeof data['queueStatus'] === 'string'
+        ? data['queueStatus']
+        : 'idle';
+    const alreadyActive =
+      (queueStatus === 'queued' || queueStatus === 'processing') &&
+      activeTaskLeaseExpiresAt > now;
+
+    if (
+      data['scoringEnabled'] === false ||
+      nextScoringAt <= 0 ||
+      nextScoringAt > now ||
+      nextScoringAt !== payload.expectedDueAtMilliseconds
+    ) {
+      return false;
+    }
+
+    if (alreadyActive && activeTaskId !== taskId) {
+      return false;
+    }
+
+    transaction.set(
+      scheduleRef,
+      {
+        queueStatus: 'queued',
+        activeTaskId: taskId,
+        activeTaskDueAt: Timestamp.fromMillis(payload.expectedDueAtMilliseconds),
+        activeTaskLeaseExpiresAt: Timestamp.fromMillis(
+          now + LEAGUE_AUTOMATION_QUEUED_TASK_LEASE_MILLISECONDS,
+        ),
+        lastEnqueuedAt: FieldValue.serverTimestamp(),
+        lastEnqueuedTaskId: taskId,
+        lastEnqueuedDueBucket: payload.dueBucket,
+        lastQueueReason: payload.reason,
+        lastQueueError: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    transaction.set(
+      taskRef,
+      {
+        schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        taskId,
+        leagueId: payload.leagueId,
+        expectedDueAt: Timestamp.fromMillis(payload.expectedDueAtMilliseconds),
+        dueBucket: payload.dueBucket,
+        reason: payload.reason,
+        status: 'queued',
+        attemptCount: 0,
+        queuedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return true;
+  });
+}
+
+async function releaseFailedLeagueAutomationEnqueue(
+  payload: LeagueAutomationTaskPayload,
+  taskId: string,
+  error: unknown,
+): Promise<void> {
+  const message = error instanceof Error
+    ? error.message
+    : 'Cloud Tasks rejected the league scoring task.';
+  const retryAt = Date.now() + 60_000;
+
+  await Promise.all([
+    getLeagueAutomationScheduleRef(payload.leagueId).set(
+      {
+        queueStatus: 'error',
+        activeTaskId: null,
+        activeTaskLeaseExpiresAt: FieldValue.delete(),
+        nextScoringAt: Timestamp.fromMillis(retryAt),
+        lastQueueError: message.slice(0, 500),
+        lastQueueErrorCode: getSafeAutomationErrorCode(error),
+        lastQueueErrorAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+    getLeagueAutomationTaskRef(taskId).set(
+      {
+        status: 'enqueue-error',
+        lastError: message.slice(0, 500),
+        lastErrorCode: getSafeAutomationErrorCode(error),
+        expiresAt: Timestamp.fromMillis(
+          Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+        ),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+  ]);
+}
+
+async function enqueueLeagueAutomationSchedule(
+  schedule: DueLeagueAutomationSchedule,
+  reason: LeagueAutomationTaskPayload['reason'],
+): Promise<'enqueued' | 'active' | 'stale'> {
+  const now = Date.now();
+
+  if (isLeagueAutomationScheduleActive(schedule, now)) {
+    return 'active';
+  }
+
+  const payload = buildLeagueAutomationTaskPayload(schedule, reason);
+  const taskId = buildLeagueAutomationTaskId(payload);
+  const claimed = await claimLeagueAutomationTask(payload, taskId);
+
+  if (!claimed) {
+    return 'stale';
+  }
+
+  try {
+    await getLeagueAutomationTaskQueue().enqueue(payload, {
+      id: taskId,
+      dispatchDeadlineSeconds: LEAGUE_AUTOMATION_TASK_DISPATCH_DEADLINE_SECONDS,
+    });
+
+    return 'enqueued';
+  } catch (error: unknown) {
+    if (isLeagueAutomationTaskAlreadyExistsError(error)) {
+      return 'enqueued';
+    }
+
+    await releaseFailedLeagueAutomationEnqueue(payload, taskId, error);
+    throw error;
+  }
+}
+
+async function markLeagueAutomationTaskCompleted(
+  payload: LeagueAutomationTaskPayload,
+  taskId: string,
+  result: LeagueAutomationResult,
+  startedAt: number,
+): Promise<void> {
+  const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+  const taskRef = getLeagueAutomationTaskRef(taskId);
+
+  await db.runTransaction(async (transaction) => {
+    const scheduleSnapshot = await transaction.get(scheduleRef);
+    const scheduleData = scheduleSnapshot.data() ?? {};
+    const activeTaskId =
+      typeof scheduleData['activeTaskId'] === 'string'
+        ? scheduleData['activeTaskId']
+        : '';
+
+    if (activeTaskId === taskId) {
+      const scheduleCompletionData: Record<string, unknown> = {
+        queueStatus: result.status === 'success' ? 'idle' : 'skipped',
+        activeTaskId: null,
+        activeTaskLeaseExpiresAt: FieldValue.delete(),
+        lastQueueCompletedAt: FieldValue.serverTimestamp(),
+        lastQueueTaskId: taskId,
+        lastQueueTaskDurationMilliseconds: Math.max(0, Date.now() - startedAt),
+        lastQueueTaskOutcome: result.status,
+        lastQueueTaskSkipReason: result.skipReason ?? '',
+        lastQueueError: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (
+        result.status === 'skipped' &&
+        result.skipReason === 'not-due' &&
+        typeof result.nextRefreshAtMilliseconds === 'number'
+      ) {
+        scheduleCompletionData['nextScoringAt'] = Timestamp.fromMillis(
+          result.nextRefreshAtMilliseconds,
+        );
+      }
+
+      transaction.set(
+        scheduleRef,
+        scheduleCompletionData,
+        { merge: true },
+      );
+    }
+
+    transaction.set(
+      taskRef,
+      {
+        status: result.status === 'success' ? 'completed' : 'skipped',
+        skipReason: result.skipReason ?? '',
+        durationMilliseconds: Math.max(0, Date.now() - startedAt),
+        publishedSnapshotCount: result.publishedSnapshotCount,
+        skippedSnapshotCount: result.skippedSnapshotCount,
+        activeCycleNumbers: result.activeCycleNumbers,
+        completedAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(
+          Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+        ),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+}
+
+async function markLeagueAutomationTaskRetrying(
+  payload: LeagueAutomationTaskPayload,
+  taskId: string,
+  error: unknown,
+): Promise<void> {
+  const message = error instanceof Error
+    ? error.message
+    : 'Queued league scoring failed.';
+  const leaseExpiresAt =
+    Date.now() + LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS;
+
+  await Promise.all([
+    getLeagueAutomationScheduleRef(payload.leagueId).set(
+      {
+        queueStatus: 'processing',
+        activeTaskId: taskId,
+        activeTaskLeaseExpiresAt: Timestamp.fromMillis(leaseExpiresAt),
+        lastQueueError: message.slice(0, 500),
+        lastQueueErrorCode: getSafeAutomationErrorCode(error),
+        lastQueueErrorAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+    getLeagueAutomationTaskRef(taskId).set(
+      {
+        status: 'retrying',
+        lastError: message.slice(0, 500),
+        lastErrorCode: getSafeAutomationErrorCode(error),
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+  ]);
+}
+
+async function getLegacySweepLeagueIds(
+  config: LeagueAutomationQueueConfig,
+  nowMilliseconds: number,
+): Promise<string[]> {
+  const recoveryCutoff =
+    nowMilliseconds - LEAGUE_AUTOMATION_RECOVERY_STALE_MILLISECONDS;
+  const needsLegacyRecovery = (data: DocumentData | undefined): boolean => {
+    const nextScoringAt = toMilliseconds(data?.['nextScoringAt']);
+    const queueStatus =
+      typeof data?.['queueStatus'] === 'string'
+        ? data['queueStatus']
+        : 'idle';
+    const activeLeaseExpiresAt = toMilliseconds(data?.['activeTaskLeaseExpiresAt']);
+    const activeTaskStillHealthy =
+      (queueStatus === 'queued' || queueStatus === 'processing') &&
+      activeLeaseExpiresAt > nowMilliseconds;
+
+    return data?.['scoringEnabled'] !== false &&
+      nextScoringAt > 0 &&
+      nextScoringAt <= recoveryCutoff &&
+      !activeTaskStillHealthy;
+  };
+
+  if (config.mode === 'primary') {
+    const staleSnapshot = await db.collection('leagueAutomationSchedules')
+      .where(
+        'nextScoringAt',
+        '<=',
+        Timestamp.fromMillis(recoveryCutoff),
+      )
+      .orderBy('nextScoringAt', 'asc')
+      .limit(LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT)
+      .get();
+
+    return staleSnapshot.docs
+      .filter((document) => needsLegacyRecovery(document.data()))
+      .map((document) => document.id);
+  }
+
+  const leagueIds = await getCompletedDraftLeagueIds();
+
+  if (config.mode !== 'canary' || config.canaryLeagueIds.length === 0) {
+    return leagueIds;
+  }
+
+  const canarySet = new Set(config.canaryLeagueIds);
+  const canaryRefs = config.canaryLeagueIds.map((leagueId) =>
+    getLeagueAutomationScheduleRef(leagueId),
+  );
+  const canarySchedules = canaryRefs.length > 0
+    ? await db.getAll(...canaryRefs)
+    : [];
+  const canarySchedulesById = new Map(
+    canarySchedules.map((snapshot) => [snapshot.id, snapshot]),
+  );
+
+  return leagueIds.filter((leagueId) => {
+    if (!canarySet.has(leagueId)) {
+      return true;
+    }
+
+    const schedule = canarySchedulesById.get(leagueId);
+    return !schedule?.exists || needsLegacyRecovery(schedule.data());
+  });
+}
+
+async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
+  completedDraftLeagueCount: number;
+  existingScheduleCount: number;
+  createdScheduleCount: number;
+  repairedScheduleCount: number;
+}> {
+  const leagueIds = await getCompletedDraftLeagueIds();
+  const now = Date.now();
+  let existingScheduleCount = 0;
+  let createdScheduleCount = 0;
+  let repairedScheduleCount = 0;
+
+  for (let offset = 0; offset < leagueIds.length; offset += LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT) {
+    const batchIds = leagueIds.slice(offset, offset + LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT);
+    const refs = batchIds.map((leagueId) => getLeagueAutomationScheduleRef(leagueId));
+    const snapshots = refs.length > 0 ? await db.getAll(...refs) : [];
+    const writeBatch = db.batch();
+    let batchWriteCount = 0;
+
+    snapshots.forEach((snapshot, index) => {
+      if (snapshot.exists) {
+        const data = snapshot.data() ?? {};
+        const queueStatus =
+          typeof data['queueStatus'] === 'string'
+            ? data['queueStatus']
+            : 'idle';
+        const activeTaskHealthy =
+          (queueStatus === 'queued' || queueStatus === 'processing') &&
+          toMilliseconds(data['activeTaskLeaseExpiresAt']) > now;
+        const scheduleComplete =
+          data['scoringEnabled'] === false ||
+          toMilliseconds(data['nextScoringAt']) > 0 ||
+          activeTaskHealthy;
+
+        if (scheduleComplete) {
+          existingScheduleCount += 1;
+          return;
+        }
+      }
+
+      const leagueId = batchIds[index];
+      const repairingExistingSchedule = snapshot.exists;
+      writeBatch.set(
+        refs[index],
+        {
+          schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+          leagueId,
+          shard: getLeagueAutomationShard(leagueId),
+          scoringEnabled: true,
+          queueStatus: 'idle',
+          activeTaskId: null,
+          activeTaskDueAt: FieldValue.delete(),
+          activeTaskLeaseExpiresAt: FieldValue.delete(),
+          nextScoringAt: Timestamp.fromMillis(now),
+          lastOutcome: repairingExistingSchedule
+            ? 'bootstrap-repair'
+            : 'bootstrap',
+          consecutiveFailureCount: 0,
+          ...(repairingExistingSchedule
+            ? { lastBootstrapRepairAt: FieldValue.serverTimestamp() }
+            : { createdAt: FieldValue.serverTimestamp() }),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      if (repairingExistingSchedule) {
+        repairedScheduleCount += 1;
+      } else {
+        createdScheduleCount += 1;
+      }
+      batchWriteCount += 1;
+    });
+
+    if (batchWriteCount > 0) {
+      await writeBatch.commit();
+    }
+  }
+
+  return {
+    completedDraftLeagueCount: leagueIds.length,
+    existingScheduleCount,
+    createdScheduleCount,
+    repairedScheduleCount,
+  };
+}
+
+export const bootstrapLeagueAutomationSchedules = onSchedule(
+  {
+    schedule: 'every 60 minutes',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '512MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const startedAt = Date.now();
+    const result = await bootstrapMissingLeagueAutomationSchedules();
+
+    await db.doc('appData/leagueAutomation').set(
+      {
+        queueFoundationSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        queueScheduleCoverageCompletedDraftCount: result.completedDraftLeagueCount,
+        queueScheduleCoverageExistingCount: result.existingScheduleCount,
+        queueScheduleCoverageCreatedCount: result.createdScheduleCount,
+        queueScheduleCoverageRepairedCount: result.repairedScheduleCount,
+        queueScheduleCoverageCount:
+          result.existingScheduleCount +
+          result.createdScheduleCount +
+          result.repairedScheduleCount,
+        queueLastBootstrapDurationMilliseconds: Date.now() - startedAt,
+        queueLastBootstrapAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  },
+);
+
+export const dispatchDueLeagueAutomation = onSchedule(
+  {
+    schedule: '* * * * *',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const startedAt = Date.now();
+    const now = Date.now();
+    const config = await getLeagueAutomationQueueConfig();
+    const scanLimit = Math.min(
+      LEAGUE_AUTOMATION_QUEUE_MAX_SCAN_LIMIT,
+      Math.max(
+        config.maxEnqueuePerRun * 2,
+        LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS * 2,
+      ),
+    );
+    const { dueSchedules, eligibleSchedules } =
+      await getLeagueAutomationDispatchSchedules(
+        config,
+        now,
+        scanLimit,
+      );
+    const sampleActivePendingCount = eligibleSchedules.filter((schedule) =>
+      isLeagueAutomationScheduleActive(schedule, now)
+    ).length;
+    const activePendingCount = await countActiveLeagueAutomationTasks(now);
+    const availablePendingSlots = Math.max(
+      0,
+      LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS - activePendingCount,
+    );
+    const schedulesToEnqueue = eligibleSchedules
+      .filter((schedule) => !isLeagueAutomationScheduleActive(schedule, now))
+      .slice(
+        0,
+        Math.min(config.maxEnqueuePerRun, availablePendingSlots),
+      );
+    const results = config.mode === 'shadow'
+      ? []
+      : await mapWithConcurrency(
+          schedulesToEnqueue,
+          (schedule) => enqueueLeagueAutomationSchedule(schedule, 'scheduled'),
+          10,
+        );
+    const enqueuedCount = results.filter(
+      (result) => result.status === 'fulfilled' && result.value === 'enqueued',
+    ).length;
+    const activeCount = results.filter(
+      (result) => result.status === 'fulfilled' && result.value === 'active',
+    ).length;
+    const staleCount = results.filter(
+      (result) => result.status === 'fulfilled' && result.value === 'stale',
+    ).length;
+    const failedCount = results.filter((result) => result.status === 'rejected').length;
+    const oldestDueAt = dueSchedules[0]?.expectedDueAtMilliseconds ?? null;
+
+    await db.doc('appData/leagueAutomation').set(
+      {
+        queueFoundationSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        queueMode: config.mode,
+        queueCanaryLeagueCount: config.canaryLeagueIds.length,
+        queueScanLimit: scanLimit,
+        queueDueScheduleSampleCount: dueSchedules.length,
+        queueEligibleDueCount: eligibleSchedules.length,
+        queueSelectedForEnqueueCount: schedulesToEnqueue.length,
+        queueActivePendingTaskCount: activePendingCount,
+        queueSampleActivePendingTaskCount: sampleActivePendingCount,
+        queueAvailablePendingTaskSlots: availablePendingSlots,
+        queueEnqueuedCount: enqueuedCount,
+        queueAlreadyActiveCount: activeCount,
+        queueStaleCandidateCount: staleCount,
+        queueFailedEnqueueCount: failedCount,
+        queueOldestDueAgeMilliseconds:
+          oldestDueAt === null ? null : Math.max(0, now - oldestDueAt),
+        queueTaskMaxConcurrentDispatches:
+          LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+        queueTaskMaxPendingTasks: LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS,
+        queueLastDispatchDurationMilliseconds: Date.now() - startedAt,
+        queueLastDispatchAt: FieldValue.serverTimestamp(),
+        queueLastDispatchStatus: failedCount > 0 ? 'partial-error' : 'success',
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Unable to enqueue a due league automation task.', result.reason);
+      }
+    }
+  },
+);
+
+export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTaskPayload>(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    retryConfig: {
+      maxAttempts: 5,
+      minBackoffSeconds: 30,
+    },
+    rateLimits: {
+      maxConcurrentDispatches: LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+    },
+  },
+  async (request) => {
+    const payload = request.data;
+
+    if (
+      !payload ||
+      payload.taskSchemaVersion !== LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION ||
+      typeof payload.leagueId !== 'string' ||
+      !payload.leagueId ||
+      !Number.isFinite(payload.expectedDueAtMilliseconds) ||
+      typeof payload.dueBucket !== 'string' ||
+      !payload.dueBucket ||
+      (payload.reason !== 'scheduled' && payload.reason !== 'recovery')
+    ) {
+      console.warn('Ignored malformed league automation task.', { payload });
+      return;
+    }
+
+    const taskId = buildLeagueAutomationTaskId(payload);
+    const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+    const taskRef = getLeagueAutomationTaskRef(taskId);
+    const scheduleSnapshot = await scheduleRef.get();
+
+    if (!scheduleSnapshot.exists) {
+      await taskRef.set(
+        {
+          status: 'skipped',
+          skipReason: 'schedule-missing',
+          completedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(
+            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+          ),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return;
+    }
+
+    const scheduleData = scheduleSnapshot.data() ?? {};
+    const activeTaskId =
+      typeof scheduleData['activeTaskId'] === 'string'
+        ? scheduleData['activeTaskId']
+        : '';
+    const expectedDueAt = toMilliseconds(scheduleData['activeTaskDueAt']);
+
+    if (
+      scheduleData['scoringEnabled'] === false ||
+      activeTaskId !== taskId ||
+      expectedDueAt !== Math.trunc(payload.expectedDueAtMilliseconds)
+    ) {
+      await taskRef.set(
+        {
+          status: 'skipped',
+          skipReason: scheduleData['scoringEnabled'] === false
+            ? 'scoring-disabled'
+            : 'stale-task',
+          completedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(
+            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+          ),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return;
+    }
+
+    const startedAt = Date.now();
+    await Promise.all([
+      scheduleRef.set(
+        {
+          queueStatus: 'processing',
+          activeTaskLeaseExpiresAt: Timestamp.fromMillis(
+            startedAt + LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS,
+          ),
+          lastQueueStartedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+      taskRef.set(
+        {
+          status: 'processing',
+          attemptCount: FieldValue.increment(1),
+          startedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    ]);
+
+    try {
+      const result = await runLeagueAutomation(
+        payload.leagueId,
+        false,
+        'queue-task',
+      );
+
+      if (result.status === 'skipped' && result.skipReason === 'another-server-worker') {
+        throw new Error('league-automation-lease-busy');
+      }
+
+      await markLeagueAutomationTaskCompleted(payload, taskId, result, startedAt);
+      await db.doc('appData/leagueAutomation').set(
+        {
+          queueTaskSuccessCount: FieldValue.increment(
+            result.status === 'success' ? 1 : 0,
+          ),
+          queueTaskSkippedCount: FieldValue.increment(
+            result.status === 'skipped' ? 1 : 0,
+          ),
+          queueLastTaskDurationMilliseconds: Date.now() - startedAt,
+          queueLastTaskCompletedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } catch (error: unknown) {
+      await markLeagueAutomationTaskRetrying(payload, taskId, error);
+      await db.doc('appData/leagueAutomation').set(
+        {
+          queueTaskRetryAttemptCount: FieldValue.increment(1),
+          queueLastTaskErrorCode: getSafeAutomationErrorCode(error),
+          queueLastTaskErrorAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      throw error;
+    }
+  },
+);
+
+export const recoverStaleLeagueAutomationQueue = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const now = Date.now();
+    const snapshot = await db.collection('leagueAutomationSchedules')
+      .where('activeTaskLeaseExpiresAt', '<=', Timestamp.fromMillis(now))
+      .orderBy('activeTaskLeaseExpiresAt', 'asc')
+      .limit(LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT)
+      .get();
+    let recoveredCount = 0;
+
+    for (const document of snapshot.docs) {
+      const recoveredTaskId = await db.runTransaction(async (transaction) => {
+        const current = await transaction.get(document.ref);
+        const data = current.data() ?? {};
+        const queueStatus =
+          typeof data['queueStatus'] === 'string'
+            ? data['queueStatus']
+            : '';
+        const leaseExpiresAt = toMilliseconds(data['activeTaskLeaseExpiresAt']);
+        const activeTaskId =
+          typeof data['activeTaskId'] === 'string'
+            ? data['activeTaskId']
+            : '';
+
+        if (
+          (queueStatus !== 'queued' && queueStatus !== 'processing') ||
+          leaseExpiresAt <= 0 ||
+          leaseExpiresAt > now
+        ) {
+          return '';
+        }
+
+        transaction.set(
+          document.ref,
+          {
+            queueStatus: 'error',
+            activeTaskId: null,
+            activeTaskLeaseExpiresAt: FieldValue.delete(),
+            nextScoringAt: Timestamp.fromMillis(now),
+            lastQueueError: 'A queued scoring worker stopped reporting progress. The league was released for a safe retry.',
+            lastQueueErrorCode: 'stale-task-recovered',
+            lastQueueErrorAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        return activeTaskId;
+      });
+
+      if (!recoveredTaskId) {
+        continue;
+      }
+
+      recoveredCount += 1;
+      await getLeagueAutomationTaskRef(recoveredTaskId).set(
+        {
+          status: 'stale-recovered',
+          lastErrorCode: 'stale-task-recovered',
+          completedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(
+            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+          ),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    await db.doc('appData/leagueAutomation').set(
+      {
+        queueRecoveredStaleTaskCount: FieldValue.increment(recoveredCount),
+        queueLastRecoveryCount: recoveredCount,
+        queueLastRecoveryAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  },
+);
+
+export const cleanupLeagueAutomationTaskHistory = onSchedule(
+  {
+    schedule: 'every 24 hours',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 120,
+    memory: '256MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const snapshot = await db.collection('leagueAutomationTasks')
+      .where('expiresAt', '<=', Timestamp.fromMillis(Date.now()))
+      .orderBy('expiresAt', 'asc')
+      .limit(LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT)
+      .get();
+
+    if (snapshot.empty) {
+      return;
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach((document) => batch.delete(document.ref));
+    await batch.commit();
+
+    await db.doc('appData/leagueAutomation').set(
+      {
+        queueLastTaskHistoryCleanupCount: snapshot.size,
+        queueLastTaskHistoryCleanupAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  },
+);
 
 export const runScheduledLeagueAutomation = onSchedule(
   {
@@ -1558,7 +2845,8 @@ export const runScheduledLeagueAutomation = onSchedule(
   },
   async () => {
     const startedAt = Date.now();
-    const leagueIds = await getCompletedDraftLeagueIds();
+    const config = await getLeagueAutomationQueueConfig();
+    const leagueIds = await getLegacySweepLeagueIds(config, startedAt);
     const results = await mapWithConcurrency(
       leagueIds,
       (leagueId) => runLeagueAutomation(
@@ -1585,6 +2873,15 @@ export const runScheduledLeagueAutomation = onSchedule(
       {
         schemaVersion: 1,
         status: failed > 0 ? 'partial-error' : 'success',
+        queueFoundationSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        queueMode: config.mode,
+        queueCanaryLeagueCount: config.canaryLeagueIds.length,
+        legacySweepRole:
+          config.mode === 'primary'
+            ? 'stale-league-recovery'
+            : config.mode === 'canary'
+              ? 'primary-except-canary'
+              : 'primary-shadow-baseline',
         completedDraftLeagueCount: leagueIds.length,
         successfulLeagueCount: successful,
         skippedLeagueCount: skipped,

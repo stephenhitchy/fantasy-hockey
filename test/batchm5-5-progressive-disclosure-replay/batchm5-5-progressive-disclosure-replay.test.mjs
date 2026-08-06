@@ -266,8 +266,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',
+        'package.json',
       ]),
     ),
-    '8abd041f045f31ea1a51a484f74ec7b7a2f5ca40364e33360a0455d2623d12c2',
+    'e843397bc405c4dc382c3cdce1d1580329b0cf662b25c0a9ab8d59dd0e100903',
   );
 });

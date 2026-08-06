@@ -4,15 +4,46 @@
 
 **Important boundary:** this document is not a blocker for a small controlled invite beta. It is the source-controlled handoff for a later scale phase. Do not point a large load test at the production Firebase project.
 
+## P1E foundation implemented
+
+Release Candidate 7 now contains the first production-safe implementation layer from this
+blueprint:
+
+- server-owned `leagueAutomationSchedules/{leagueId}` due-time documents;
+- hourly schedule-coverage bootstrap;
+- a one-minute due-league dispatcher;
+- deterministic `processLeagueAutomationTask` Cloud Tasks;
+- the existing per-league scoring lease and scoring ledger retained as idempotency authority;
+- bounded queue concurrency, a global active-lease pending-depth check, and retries;
+- direct canary schedule lookup so a small test group cannot be hidden behind a large due backlog;
+- exact-due task identifiers plus separate queued and processing leases;
+- stale-task recovery;
+- seven-day task-history retention and cleanup;
+- Release Readiness backlog, coverage, failure, recovery, and mode reporting;
+- explicit `shadow`, `canary`, and `primary` rollout modes.
+
+The default mode is **shadow**. The existing ten-minute scoring sweep remains the primary
+production path until staging canary results, schedule coverage, task duration, backlog age,
+failure rate, and cost justify an intentional cutover. Therefore, the queue foundation is
+implemented, but the large-scale scoring migration is not yet complete.
+
+The optional Admin-SDK configuration document is:
+
+```text
+appData/leagueAutomationQueueConfig
+```
+
+Do not set it to `canary` or `primary` in production merely because the code is deployed.
+
 ## Current conclusion
 
-RinkRat's browser application, Firebase Hosting delivery, per-league roster authority, and exact draft-deadline task path are a reasonable foundation for an invite beta. The largest high-scale gap is the scheduled league-scoring sweep in `functions/src/league-automation.ts`.
+RinkRat's browser application, Firebase Hosting delivery, per-league roster authority, exact draft-deadline task path, and P1E league-scoring queue foundation are a reasonable base for an invite beta and staged scale work. The largest remaining high-scale gap is proving the new scoring queue under staging load and intentionally moving production away from the centralized sweep.
 
 At the current source settings:
 
-- `runScheduledLeagueAutomation` runs every 10 minutes.
-- `MAX_PARALLEL_LEAGUES` is `2`.
-- The scheduled run loads all completed-draft leagues and processes them through one centralized invocation.
+- `runScheduledLeagueAutomation` still runs every 10 minutes and remains primary in the default shadow mode.
+- `MAX_PARALLEL_LEAGUES` is `2` for that legacy path.
+- P1E adds due-time schedule documents and deterministic per-league tasks, but it does not silently enable them for production scoring.
 - The 100,000-manager balanced model estimates about 8,500 active scoring leagues.
 - At an average of 5, 10, or 30 seconds per league, the system would need roughly 71, 142, or 425 concurrent league workers to finish within a ten-minute interval.
 
@@ -32,6 +63,15 @@ Relevant source areas:
 - `runScheduledLeagueAutomation`
 - `runLeagueAutomation()`
 - the existing per-league automation lease and shared NHL scoring ledger
+- `bootstrapLeagueAutomationSchedules`
+- `dispatchDueLeagueAutomation`
+- `processLeagueAutomationTask`
+- `recoverStaleLeagueAutomationQueue`
+- `cleanupLeagueAutomationTaskHistory`
+
+P1E status: the target task path now exists and defaults to shadow mode. The remaining work in
+this area is measured canary parity, throughput tuning, primary-mode cutover, and eventual removal
+of broad completed-draft discovery from the normal scoring path.
 
 ### Risk
 
@@ -343,13 +383,16 @@ Define exact numbers before each test. Recommended initial gates:
 
 ## Exact implementation order when scale work resumes
 
-1. Measure real listener and automation durations from the invite beta.
-2. Add per-league automation scheduling documents and indexes.
-3. Create `processLeagueAutomationTask` using the existing `runLeagueAutomation()` logic.
-4. Add deterministic task IDs, queue rate limits, retries, and terminal-failure records.
-5. Run shadow mode in staging.
-6. Canary one internal league, then 1%, 10%, and 100% of staging.
-7. Make queued scoring primary while retaining the sweep as recovery.
+1. Continue measuring real listener and automation durations from the invite beta.
+2. **Completed in P1E:** add per-league automation scheduling documents and due-time health.
+3. **Completed in P1E:** create `processLeagueAutomationTask` using the existing
+   `runLeagueAutomation()` logic.
+4. **Completed in P1E:** add deterministic task IDs, bounded queue rate limits, retries,
+   stale-task recovery, and retained task status.
+5. Run the deployed foundation in shadow mode and confirm 100% schedule coverage.
+6. In staging, canary one internal league, then 1%, 10%, and 100% of staging.
+7. Make queued scoring primary only after parity and throughput gates pass, retaining the sweep as
+   recovery.
 8. Paginate and shard the draft recovery sweep.
 9. Move competitive NHL ingestion behind a shared cache and ledger.
 10. Run staged load tests through 20,000 before considering 100,000.

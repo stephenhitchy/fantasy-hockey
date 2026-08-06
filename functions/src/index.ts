@@ -3311,10 +3311,15 @@ export const updateAdminErrorReview = onCall(
 
 export {
   advanceHistoricalReplayDay,
+  bootstrapLeagueAutomationSchedules,
+  cleanupLeagueAutomationTaskHistory,
   clearExpiredOrErroredLiveScoringLease,
+  dispatchDueLeagueAutomation,
   initializeSeasonAfterDraft,
   openNextCompetitionPeriod,
   processHistoricalReplayAdvance,
+  processLeagueAutomationTask,
+  recoverStaleLeagueAutomationQueue,
   recoverStaleHistoricalReplayQueue,
   releaseLeagueLiveScoringHandoff,
   requestLeagueLiveScoringRefresh,

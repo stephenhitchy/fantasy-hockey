@@ -153,7 +153,7 @@ test('historical replay is isolated from scheduled scoring, retries briefly, and
   );
   assert.match(functionSource, /runHistoricalReplayAutomationWithRetry/);
   assert.match(functionSource, /for \(const retryDelay of HISTORICAL_REPLAY_LEASE_RETRY_DELAYS_MILLISECONDS\)/);
-  assert.match(functionSource, /trigger === 'scheduled' && await getHistoricalReplayControl\(leagueId\)/);
+  assert.match(functionSource, /\(trigger === 'scheduled' \|\| trigger === 'queue-task'\)[\s\S]*await getHistoricalReplayControl\(leagueId\)/);
   assert.doesNotMatch(functionSource, /collectionGroup\('historicalReplay'\)/);
   assert.match(functionSource, /The simulated date was not skipped/);
   assert.match(clientSource, /historicalReplayControl\(\)\?\.status === 'advancing'/);

@@ -146,9 +146,38 @@ async function inspectArchitecture() {
     ),
     leagueAutomationIntervalMinutes: extractNumber(
       leagueAutomation,
-      /schedule:\s*'every\s+([\d_]+)\s+minutes'/,
+      /export const runScheduledLeagueAutomation[\s\S]*?schedule:\s*'every\s+([\d_]+)\s+minutes'/,
       10,
     ),
+    leagueAutomationTaskQueuePresent:
+      /export const processLeagueAutomationTask = onTaskDispatched/.test(leagueAutomation) &&
+      /getFunctions\(\)\.taskQueue<LeagueAutomationTaskPayload>\([\s\S]*?processLeagueAutomationTask/.test(
+        leagueAutomation,
+      ),
+    leagueAutomationDispatcherPresent:
+      /export const dispatchDueLeagueAutomation = onSchedule/.test(leagueAutomation) &&
+      /leagueAutomationSchedules/.test(leagueAutomation),
+    leagueAutomationTaskMaxConcurrentDispatches: extractNumber(
+      leagueAutomation,
+      /const LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES\s*=\s*([\d_]+)/,
+      null,
+    ),
+    leagueAutomationTaskMaxPendingTasks: extractNumber(
+      leagueAutomation,
+      /const LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS\s*=\s*([\d_]+)/,
+      null,
+    ),
+    leagueAutomationTaskDeterministicIds:
+      /function buildLeagueAutomationTaskId/.test(leagueAutomation) &&
+      /enqueue\(payload,\s*\{[\s\S]*?id:\s*taskId/.test(leagueAutomation),
+    leagueAutomationQueueDefaultMode:
+      /const LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE\s*=\s*['"]([^'"]+)['"]/.exec(
+        leagueAutomation,
+      )?.[1] ?? 'unknown',
+    leagueAutomationScheduleBootstrapPresent:
+      /export const bootstrapLeagueAutomationSchedules = onSchedule/.test(leagueAutomation),
+    leagueAutomationStaleRecoveryPresent:
+      /export const recoverStaleLeagueAutomationQueue = onSchedule/.test(leagueAutomation),
     draftAutomationScanLimit: extractNumber(
       draftAutomation,
       /const DRAFT_AUTOMATION_SCAN_LIMIT\s*=\s*([\d_]+)/,
@@ -247,16 +276,48 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
   }
 
   if (activeScoringLeagues > architecture.leagueAutomationParallelism * 100) {
-    warnings.push({
-      severity: 'red',
-      area: 'Scheduled League Scoring',
-      finding:
-        `${activeScoringLeagues.toLocaleString()} active scoring leagues share a worker that processes only ` +
-        `${architecture.leagueAutomationParallelism} leagues concurrently every ` +
-        `${architecture.leagueAutomationIntervalMinutes} minutes.`,
-      consequence:
-        'A large game-night backlog would develop unless scoring work is dispatched as idempotent per-league tasks with bounded queue throughput.',
-    });
+    const queueFoundationReady =
+      architecture.leagueAutomationTaskQueuePresent &&
+      architecture.leagueAutomationDispatcherPresent &&
+      architecture.leagueAutomationTaskDeterministicIds &&
+      architecture.leagueAutomationScheduleBootstrapPresent &&
+      architecture.leagueAutomationStaleRecoveryPresent;
+
+    if (queueFoundationReady) {
+      warnings.push({
+        severity: 'amber',
+        area: 'League Scoring Queue Foundation',
+        finding:
+          `The source now contains deterministic per-league scoring tasks, due-time schedule documents, ` +
+          `a one-minute dispatcher, stale-task recovery, and ` +
+          `${architecture.leagueAutomationTaskMaxConcurrentDispatches ?? 'an unknown number of'} concurrent task dispatches.`,
+        consequence:
+          'The foundation is suitable for staging shadow and canary validation, but throughput, queue age, retry behavior, and cost still require measured load tests.',
+      });
+
+      if (architecture.leagueAutomationQueueDefaultMode !== 'primary') {
+        warnings.push({
+          severity: 'red',
+          area: 'League Scoring Queue Cutover',
+          finding:
+            `The queue defaults to ${architecture.leagueAutomationQueueDefaultMode}; the existing ` +
+            `${architecture.leagueAutomationParallelism}-league scheduled sweep remains the production scoring path.`,
+          consequence:
+            'Large-scale capacity does not improve until schedule coverage reaches 100%, canary results match the legacy worker, and the queue is intentionally promoted to primary mode.',
+        });
+      }
+    } else {
+      warnings.push({
+        severity: 'red',
+        area: 'Scheduled League Scoring',
+        finding:
+          `${activeScoringLeagues.toLocaleString()} active scoring leagues share a worker that processes only ` +
+          `${architecture.leagueAutomationParallelism} leagues concurrently every ` +
+          `${architecture.leagueAutomationIntervalMinutes} minutes.`,
+        consequence:
+          'A large game-night backlog would develop unless scoring work is dispatched as idempotent per-league tasks with bounded queue throughput.',
+      });
+    }
   }
 
   if (architecture.nhlProxyMaxInstances <= 10) {
@@ -390,6 +451,14 @@ function printText(report) {
   console.log(
     `League scoring: ${architecture.leagueAutomationParallelism} concurrent leagues / ` +
       `${architecture.leagueAutomationIntervalMinutes}-minute sweep`,
+  );
+  console.log(
+    `League scoring queue: taskQueue=${architecture.leagueAutomationTaskQueuePresent}, ` +
+      `dispatcher=${architecture.leagueAutomationDispatcherPresent}, ` +
+      `maxConcurrentDispatches=${architecture.leagueAutomationTaskMaxConcurrentDispatches}, ` +
+      `maxPendingTasks=${architecture.leagueAutomationTaskMaxPendingTasks}, ` +
+      `deterministicIds=${architecture.leagueAutomationTaskDeterministicIds}, ` +
+      `defaultMode=${architecture.leagueAutomationQueueDefaultMode}`,
   );
   console.log(
     `Draft deadlines: taskQueue=${architecture.draftDeadlineTaskQueuePresent}, ` +

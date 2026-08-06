@@ -123,6 +123,22 @@ function formatAgeMinutes(ageMinutes: number | null): string {
   return `${Math.round(ageMinutes / 60)} hours ago`;
 }
 
+function formatDurationMilliseconds(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return 'not recorded';
+  }
+
+  if (value < 1_000) {
+    return `${Math.round(value)} ms`;
+  }
+
+  if (value < 60_000) {
+    return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} seconds`;
+  }
+
+  return `${(value / 60_000).toFixed(1)} minutes`;
+}
+
 export async function loadReleaseReadinessSnapshot(
   leagueId: string,
 ): Promise<ReleaseReadinessSnapshot> {
@@ -391,6 +407,89 @@ export async function loadReleaseReadinessSnapshot(
             ? 'pass'
             : 'warning',
       true,
+    ),
+  );
+
+  const leagueQueueMode =
+    leagueAutomation?.['queueMode'] === 'canary' ||
+    leagueAutomation?.['queueMode'] === 'primary'
+      ? leagueAutomation['queueMode']
+      : 'shadow';
+  const queueDispatchAge = timestampAgeMinutes(
+    leagueAutomation?.['queueLastDispatchAt'],
+  );
+  const queueBootstrapAge = timestampAgeMinutes(
+    leagueAutomation?.['queueLastBootstrapAt'],
+  );
+  const queueDueCount =
+    typeof leagueAutomation?.['queueDueScheduleSampleCount'] === 'number'
+      ? leagueAutomation['queueDueScheduleSampleCount']
+      : 0;
+  const queueEligibleCount =
+    typeof leagueAutomation?.['queueEligibleDueCount'] === 'number'
+      ? leagueAutomation['queueEligibleDueCount']
+      : 0;
+  const queueSelectedCount =
+    typeof leagueAutomation?.['queueSelectedForEnqueueCount'] === 'number'
+      ? leagueAutomation['queueSelectedForEnqueueCount']
+      : 0;
+  const queueActivePendingCount =
+    typeof leagueAutomation?.['queueActivePendingTaskCount'] === 'number'
+      ? leagueAutomation['queueActivePendingTaskCount']
+      : 0;
+  const queueMaxPendingCount =
+    typeof leagueAutomation?.['queueTaskMaxPendingTasks'] === 'number'
+      ? leagueAutomation['queueTaskMaxPendingTasks']
+      : 0;
+  const queueFailedEnqueueCount =
+    typeof leagueAutomation?.['queueFailedEnqueueCount'] === 'number'
+      ? leagueAutomation['queueFailedEnqueueCount']
+      : 0;
+  const queueRecoveredStaleCount =
+    typeof leagueAutomation?.['queueLastRecoveryCount'] === 'number'
+      ? leagueAutomation['queueLastRecoveryCount']
+      : 0;
+  const queueCoverageCount =
+    typeof leagueAutomation?.['queueScheduleCoverageCount'] === 'number'
+      ? leagueAutomation['queueScheduleCoverageCount']
+      : 0;
+  const queueCoverageTarget =
+    typeof leagueAutomation?.['queueScheduleCoverageCompletedDraftCount'] === 'number'
+      ? leagueAutomation['queueScheduleCoverageCompletedDraftCount']
+      : 0;
+  const queueOldestDueAge = leagueAutomation?.['queueOldestDueAgeMilliseconds'];
+  const queueHealthy =
+    queueFailedEnqueueCount === 0 &&
+    queueRecoveredStaleCount === 0 &&
+    queueDispatchAge !== null &&
+    queueDispatchAge <= 5;
+  const queueCoverageComplete =
+    queueCoverageTarget > 0 && queueCoverageCount >= queueCoverageTarget;
+
+  checks.push(
+    createCheck(
+      'league-scoring-queue-foundation',
+      'scoring',
+      leagueQueueMode === 'shadow'
+        ? 'Queued league scoring foundation is observing only'
+        : leagueQueueMode === 'canary'
+          ? 'Queued league scoring is serving selected canary leagues'
+          : 'Queued league scoring is the primary dispatcher',
+      `Mode ${leagueQueueMode}; dispatcher last ran ${formatAgeMinutes(queueDispatchAge)}; ` +
+        `${queueDueCount} due schedule(s) sampled, ${queueEligibleCount} eligible for enqueue; ` +
+        `${queueSelectedCount} selected this pass, ${queueActivePendingCount}/${queueMaxPendingCount || 'unknown'} pending; ` +
+        `oldest due age ${formatDurationMilliseconds(queueOldestDueAge)}; ` +
+        `schedule coverage ${queueCoverageCount}/${queueCoverageTarget || 'not measured'} ` +
+        `(bootstrap ${formatAgeMinutes(queueBootstrapAge)}); ` +
+        `${queueFailedEnqueueCount} enqueue failure(s), ${queueRecoveredStaleCount} stale task(s) recovered in the latest sweep.`,
+      leagueQueueMode === 'shadow'
+        ? 'warning'
+        : queueHealthy && queueCoverageComplete
+          ? 'pass'
+          : queueFailedEnqueueCount > 0 || queueRecoveredStaleCount > 0
+            ? 'fail'
+            : 'warning',
+      false,
     ),
   );
 

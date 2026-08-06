@@ -13,7 +13,7 @@
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "npm run build && firebase deploy --only functions",
-    "logs": "firebase functions:log --only runScheduledDraftAutomation,runSeasonStartAutomation,refreshGlobalPlayerAvailabilityScheduled,runScheduledLeagueAutomation,processQueuedInjuryEmails"
+    "logs": "firebase functions:log --only runScheduledDraftAutomation,runSeasonStartAutomation,refreshGlobalPlayerAvailabilityScheduled,runScheduledLeagueAutomation,processQueuedInjuryEmails,dispatchDueLeagueAutomation,processLeagueAutomationTask,recoverStaleLeagueAutomationQueue,bootstrapLeagueAutomationSchedules,cleanupLeagueAutomationTaskHistory"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0",

@@ -124,7 +124,9 @@
     "audit:async-operation-safety": "node scripts/audit-async-operation-safety.mjs",
     "verify:batchr1d": "npm run verify:batchr1c && npm run test:batchr1d:run && npm run audit:async-operation-safety",
     "test:batchr1e:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchr1e-multi-league-replay/*.test.mjs",
-    "verify:batchr1e": "npm run verify:batchr1d && npm run test:batchr1e:run"
+    "verify:batchr1e": "npm run verify:batchr1d && npm run test:batchr1e:run",
+    "test:batchp1e:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchp1e-league-automation-queue/*.test.mjs",
+    "verify:batchp1e": "npm run verify:batchr1e && npm run test:batchp1e:run && npm run capacity:100k"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

@@ -310,7 +310,10 @@ test('capacity model recognizes exact draft tasks and identifies league scoring 
     finding.severity === 'amber' && finding.area === 'Draft Recovery Sweeper'
   ));
   assert.ok(report.findings.some((finding) =>
-    finding.severity === 'red' && finding.area === 'Scheduled League Scoring'
+    finding.severity === 'amber' && finding.area === 'League Scoring Queue Foundation'
+  ));
+  assert.ok(report.findings.some((finding) =>
+    finding.severity === 'red' && finding.area === 'League Scoring Queue Cutover'
   ));
   assert.ok(!report.findings.some((finding) =>
     finding.severity === 'red' && finding.area.includes('Draft')
@@ -337,7 +340,7 @@ test('high-scale blueprint names the exact concern areas, target task design, st
   }
 });
 
-test('R1B-P1D verification, Release Candidate 6, and documentation links are wired', async () => {
+test('R1B-P1D verification, the current release candidate, and documentation links are wired', async () => {
   const [packageSource, developmentConfig, productionConfig, readme, projectDocs] = await Promise.all([
     read('package.json'),
     read('src/environments/app-runtime.config.ts'),
@@ -350,8 +353,8 @@ test('R1B-P1D verification, Release Candidate 6, and documentation links are wir
   assert.match(packageJson.scripts['test:batchr1b-p1d:run'], /batchr1b-p1d-launch-scale/);
   assert.match(packageJson.scripts['verify:batchr1b-p1d'], /verify:batchp1c/);
   assert.match(packageJson.scripts['verify:batchr1b-p1d'], /audit:invite-beta-release/);
-  assert.match(developmentConfig, /Release Candidate 6/);
-  assert.match(productionConfig, /Release Candidate 6/);
+  assert.match(developmentConfig, /Release Candidate 7/);
+  assert.match(productionConfig, /Release Candidate 7/);
   assert.match(readme, /RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT/);
   assert.match(projectDocs, /^## Batch R1B-P1D — Invite Beta Launch Gate and High-Scale Handoff/m);
 });
@@ -379,8 +382,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',
+        'package.json',
       ]),
     ),
-    '2979df5eaf4b83f22387b2cb14dc1c7b6ba1f4bd5db779f063728631e23d28e6',
+    'd8f1567a4eac6e77b53bdaab0b1b30de5359987edf086e09c359fe0b3a942a5e',
   );
 });

@@ -121,7 +121,10 @@ test('the 100K capacity model inspects real source limits and labels itself as a
     finding.severity === 'amber' && finding.area === 'Draft Recovery Sweeper'
   ));
   assert.ok(report.findings.some((finding) =>
-    finding.severity === 'red' && finding.area === 'Scheduled League Scoring'
+    finding.severity === 'amber' && finding.area === 'League Scoring Queue Foundation'
+  ));
+  assert.ok(report.findings.some((finding) =>
+    finding.severity === 'red' && finding.area === 'League Scoring Queue Cutover'
   ));
 });
 
@@ -183,11 +186,12 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/draft-authority.ts',
     'src/draft-automation.ts',
     'src/shared/core/draft/draft.models.ts',
+    'package.json',
   ]);
 
   assert.equal(
     await hashTree('functions', exclusions),
-    '8abd041f045f31ea1a51a484f74ec7b7a2f5ca40364e33360a0455d2623d12c2',
+    'e843397bc405c4dc382c3cdce1d1580329b0cf662b25c0a9ab8d59dd0e100903',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([

@@ -55,8 +55,10 @@ if (!developmentLabel || developmentLabel !== productionLabel) {
   errors.push('Development and production release labels must match.');
 }
 
-if (productionLabel !== 'Release Candidate 6') {
-  errors.push(`Expected Release Candidate 6, found ${productionLabel || 'missing label'}.`);
+if (!/^Release Candidate \d+$/.test(productionLabel)) {
+  errors.push(
+    `Expected a numbered Release Candidate label, found ${productionLabel || 'missing label'}.`,
+  );
 }
 
 if (extractString(productionRuntime, 'scoringMode') !== 'live') {

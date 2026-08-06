@@ -1,3 +1,182 @@
+## Batch P1E — Live League Scoring Queue Foundation
+
+### Purpose
+
+P1E begins the high-scale live-scoring migration without changing the production scoring path for
+Release Candidate 7. The current ten-minute `runScheduledLeagueAutomation` sweep remains the
+primary scorer by default. P1E adds the due-time schedule documents, deterministic Cloud Tasks
+worker, recovery controls, retention, and platform-admin health reporting needed to test queued
+per-league scoring safely before any production cutover.
+
+This is intentionally a **shadow-mode foundation**. Deploying P1E does not silently route live
+league scoring through the new queue.
+
+### Server-owned schedule documents
+
+Every completed-draft league receives a server-only document at:
+
+```text
+leagueAutomationSchedules/{leagueId}
+```
+
+The document records:
+
+- the exact next scoring time;
+- a stable discovery shard;
+- whether scoring is enabled or paused for historical replay;
+- the most recent duration, outcome, snapshot counts, and error;
+- consecutive failures;
+- the currently active queue task and bounded task lease;
+- the latest successful queue completion.
+
+`runLeagueAutomation()` updates this schedule after every success or error. Historical replay
+pauses the live schedule so the new dispatcher cannot compete with the administrator replay
+queue. `bootstrapLeagueAutomationSchedules` runs hourly and creates any missing schedule document
+without publishing fantasy points.
+
+### Queue modes
+
+The server reads the optional, Admin-SDK-only configuration document:
+
+```text
+appData/leagueAutomationQueueConfig
+```
+
+Supported values are:
+
+```ts
+{
+  mode: 'shadow' | 'canary' | 'primary',
+  canaryLeagueIds: string[],
+  maxEnqueuePerRun: number,
+}
+```
+
+A missing or invalid document always normalizes to:
+
+```ts
+{
+  mode: 'shadow',
+  canaryLeagueIds: [],
+  maxEnqueuePerRun: 100,
+}
+```
+
+Mode behavior:
+
+- **shadow:** the one-minute dispatcher measures due schedules and backlog age but enqueues no
+  scoring task. The existing ten-minute sweep remains primary for every league.
+- **canary:** only explicitly listed leagues use queued scoring after their schedule documents
+  exist. The dispatcher reads those canary schedule documents directly, so a small canary cannot be
+  hidden behind thousands of older non-canary due schedules. The legacy sweep remains primary for every other league and recovers a canary only when
+  it is more than 25 minutes overdue and has no healthy active task.
+- **primary:** all due schedule documents are eligible for queued scoring. The old sweep becomes a
+  bounded stale-league recovery worker rather than processing every league normally.
+
+Do not set `canary` or `primary` directly in production before staging comparison and schedule
+coverage are complete.
+
+### Deterministic per-league tasks
+
+`dispatchDueLeagueAutomation` runs every minute and queries only due schedule documents. In
+canary or primary mode it enqueues `processLeagueAutomationTask` with a deterministic task ID based
+on:
+
+```text
+schema version + league ID + exact due timestamp + task reason
+```
+
+The worker is configured with:
+
+```text
+maxConcurrentDispatches: 4
+maxPendingTasks: 24
+maxAttempts: 5
+minBackoffSeconds: 30
+```
+
+These are conservative starting values for staging, not a claim of final capacity. The dispatcher
+uses a separate global active-lease query—not only the first page of due schedules—to keep no more
+than 24 queued or processing tasks pending at once. That prevents an older backlog from hiding
+newer active work and creating an unbounded queue whose Firestore leases expire before Cloud Tasks
+begins it. Queued tasks receive a
+longer admission lease, while a running Function receives a shorter lease that safely exceeds the
+worker timeout. Cloud Tasks can deliver more than once, so the worker verifies the exact active task,
+exact due timestamp, existing per-league automation lease, and saved scoring ledger before publishing. A duplicate or stale task
+exits without duplicating scores, roster windows, transactions, standings, or playoff state.
+
+### Recovery and bounded history
+
+`recoverStaleLeagueAutomationQueue` runs every five minutes. A queued or processing task that
+stops reporting progress beyond its bounded lease is released, marked visibly, and returned to the
+due queue without changing fantasy data.
+
+Completed and terminal task records receive a seven-day expiry timestamp.
+`cleanupLeagueAutomationTaskHistory` removes expired records daily so the observability collection
+does not grow forever even before a Firestore TTL policy is enabled.
+
+### Release Readiness and capacity reporting
+
+The existing `appData/leagueAutomation` health document now includes:
+
+- effective queue mode;
+- schedule coverage;
+- sampled due and eligible schedule counts;
+- selected, active-pending, and maximum-pending task counts;
+- oldest due age;
+- enqueue failures;
+- stale-task recoveries;
+- worker throughput and duration signals;
+- legacy sweep role.
+
+Release Readiness shows those values as a non-blocking scale check. Shadow mode is expected to
+remain a warning during the invite beta. The 100K capacity model now recognizes that the queue
+foundation exists while correctly keeping large-scale cutover red until canary parity and measured
+throughput justify primary mode.
+
+### Safe staging rollout
+
+1. Deploy all P1E Functions while the configuration is absent or explicitly `shadow`.
+2. Confirm schedule coverage reaches the completed-draft league count.
+3. Compare `nextScoringAt`, duration, failures, and oldest-due age for several days.
+4. In a separate staging Firebase project, set one internal league to `canary`.
+5. Compare its queued result with a historical baseline and inspect task retries, lease contention,
+   score fingerprints, window transitions, transactions, standings, and playoff behavior.
+6. Expand staging canaries gradually.
+7. Move production to canary only after the invite beta is stable.
+8. Move to primary only after queue backlog, p95 task duration, failure rate, and cost are measured.
+
+### Verification and deployment
+
+Run:
+
+```bash
+npm run verify:batchp1e
+```
+
+Deploy **Functions first** while the queue remains in shadow mode:
+
+```bash
+firebase deploy --only functions:bootstrapLeagueAutomationSchedules,functions:dispatchDueLeagueAutomation,functions:processLeagueAutomationTask,functions:recoverStaleLeagueAutomationQueue,functions:cleanupLeagueAutomationTaskHistory,functions:runScheduledLeagueAutomation -m "Batch P1E live scoring queue foundation"
+```
+
+Then deploy Hosting for Release Candidate 7 queue health reporting:
+
+```bash
+firebase deploy --only hosting:app -m "Batch P1E scoring queue health"
+```
+
+No Firestore rules, indexes, or data migration are required. Do not create the queue configuration
+document in `canary` or `primary` mode during this deployment.
+
+### Architecture preserved
+
+P1E does not change Production Scoring V3, Projection V11, the shared NHL scoring ledger,
+independent six-game roster-slot windows, seventh-game rollover, scheduled transaction activation,
+waivers, standings, playoffs, historical replay, Draft authority, Firestore rules, or Firestore
+indexes. It changes how future live scoring work can be dispatched, while shadow mode preserves the
+approved invite-beta behavior.
+
 ## Batch R1E — Multi-League Historical Replay Queue
 
 ### Purpose
