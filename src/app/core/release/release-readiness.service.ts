@@ -30,9 +30,13 @@ import {
   ReleaseVersionSummary,
 } from './release-readiness.models';
 
+const CURRENT_LEAGUE_AUTHORITY_SCHEMA_VERSION = 2;
+const CURRENT_LEAGUE_DOCUMENT_SCHEMA_VERSION = 1;
+
 export const RELEASE_VERSION_SUMMARY: ReleaseVersionSummary = {
   releaseLabel: getScoringRuntimeState().releaseLabel,
   scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+  leagueAuthoritySchemaVersion: CURRENT_LEAGUE_AUTHORITY_SCHEMA_VERSION,
   projectionVersion: SHARED_PROJECTION_VERSION,
   liveScoringSchemaVersion: 1,
   playoffFormatVersion: 2,
@@ -264,6 +268,25 @@ export async function loadReleaseReadinessSnapshot(
       'Current scoring-rules version',
       `League version ${league.scoringRulesVersion ?? 'legacy'}; application version ${CURRENT_SCORING_RULES_VERSION}.`,
       league.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION ? 'pass' : 'warning',
+      true,
+    ),
+  );
+
+  const leagueAuthorityReady =
+    league.authoritySchemaVersion === CURRENT_LEAGUE_AUTHORITY_SCHEMA_VERSION &&
+    league.documentSchemaVersion === CURRENT_LEAGUE_DOCUMENT_SCHEMA_VERSION &&
+    league.competitionSettingsLocked === true;
+  checks.push(
+    createCheck(
+      'league-authority-schema',
+      'league',
+      leagueAuthorityReady
+        ? 'League authority schema is current'
+        : 'League authority migration is required',
+      leagueAuthorityReady
+        ? `Authority v${league.authoritySchemaVersion}; document schema v${league.documentSchemaVersion}; competitive settings are server locked.`
+        : `Authority v${league.authoritySchemaVersion ?? 'legacy'}; document schema v${league.documentSchemaVersion ?? 'legacy'}. Use the guarded migration control before broader beta use.`,
+      leagueAuthorityReady ? 'pass' : 'warning',
       true,
     ),
   );

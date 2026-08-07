@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -31,6 +33,10 @@ import {
   loadProjectionSnapshotForDraft,
   repairDraftTurnFromCommittedPicks,
 } from './draft-automation';
+import {
+  LEAGUE_AUDIT_SCHEMA_VERSION,
+  LEAGUE_AUTHORITY_SCHEMA_VERSION,
+} from './league-lifecycle-authority.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -427,13 +433,25 @@ async function saveDraftSettings(
   const leagueRef = db.doc(`leagues/${leagueId}`);
   const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
   const inviteLockAuditRef = db.doc(`leagues/${leagueId}/audit/invite-locked-draft-setup`);
+  const draftSettingsAuditId = `draft-settings-${createHash('sha256')
+    .update(submissionId ?? `${userId}:${Date.now()}:${roundOneOrder.join(',')}:${pickSeconds}`)
+    .digest('hex')
+    .slice(0, 24)}`;
+  const draftSettingsAuditRef = db.doc(`leagues/${leagueId}/audit/${draftSettingsAuditId}`);
 
   await db.runTransaction(async (transaction) => {
-    const [draftSnapshot, leagueSnapshot, teamSnapshot, inviteLockAuditSnapshot] = await Promise.all([
+    const [
+      draftSnapshot,
+      leagueSnapshot,
+      teamSnapshot,
+      inviteLockAuditSnapshot,
+      draftSettingsAuditSnapshot,
+    ] = await Promise.all([
       transaction.get(draftRef),
       transaction.get(leagueRef),
       transaction.get(teamsQuery),
       transaction.get(inviteLockAuditRef),
+      transaction.get(draftSettingsAuditRef),
     ]);
 
     if (!leagueSnapshot.exists) {
@@ -573,18 +591,51 @@ async function saveDraftSettings(
 
     if (!inviteLockAuditSnapshot.exists) {
       transaction.create(inviteLockAuditRef, {
+        schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
         id: 'invite-locked-draft-setup',
         leagueId,
         action: 'invite-locked',
         actorId: userId,
         actorRole: 'commissioner',
         authority: 'cloud-function',
+        authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
         reason: 'Draft order saved; league membership is now frozen.',
-        release: 'Security Batch S1B',
+        release: 'Security Batch S1C',
         values: {
           teamCount: teamSnapshot.size,
           draftStatus: status,
           inviteCode,
+        },
+        createdAt: timestamp,
+      });
+    }
+
+    if (!idempotentSettingsReplay && !draftSettingsAuditSnapshot.exists) {
+      transaction.create(draftSettingsAuditRef, {
+        schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
+        id: draftSettingsAuditId,
+        leagueId,
+        action: 'draft-settings-saved',
+        actorId: userId,
+        actorRole: 'commissioner',
+        authority: 'cloud-function',
+        authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
+        requestId: submissionId ?? null,
+        reason: 'Commissioner saved the exact Draft order, start time, and pick clock.',
+        release: 'Security Batch S1C',
+        previousValues: existingDraft
+          ? {
+              status: existingDraft.status,
+              roundOneOrder: existingDraft.roundOneOrder,
+              scheduledStartAt: existingDraft.scheduledStartAt ?? null,
+              pickSeconds: existingDraft.pickSeconds,
+            }
+          : null,
+        newValues: {
+          status,
+          roundOneOrder,
+          scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
+          pickSeconds,
         },
         createdAt: timestamp,
       });

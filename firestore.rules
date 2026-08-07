@@ -136,43 +136,127 @@ service cloud.firestore {
       ];
     }
 
-    function validLeagueCosmeticUpdate() {
-      let changedFields = request.resource.data
-        .diff(resource.data)
-        .affectedKeys();
+    function validMemberDocumentShape(leagueId, memberId) {
+      let data = request.resource.data;
 
-      return changedFields.hasOnly([
-          'name',
-          'leagueLogoId',
-          'leagueLogoPaletteId',
+      return data.keys().hasOnly([
+          'schemaVersion',
+          'uid',
+          'leagueId',
+          'username',
+          'profileIconId',
+          'role',
+          'inviteCodeUsed',
+          'joinedAt',
+          'authority',
+          'accountDeleted',
+          'accountDeletedAt',
           'updatedAt'
         ]) &&
-        validLeagueName(request.resource.data.name) &&
-        (!changedFields.hasAny(['leagueLogoId']) ||
+        data.keys().hasAll(['uid', 'leagueId', 'username', 'role']) &&
+        data.uid == memberId &&
+        data.leagueId == leagueId &&
+        validUsername(data.username) &&
+        data.role in ['commissioner', 'member'] &&
+        (!data.keys().hasAny(['schemaVersion']) || data.schemaVersion == 1) &&
+        (!data.keys().hasAny(['profileIconId']) || validProfileIconId(data.profileIconId)) &&
+        (
+          !data.keys().hasAny(['inviteCodeUsed']) ||
+          data.inviteCodeUsed == null ||
           (
-            request.resource.data.keys().hasAll(['leagueLogoId']) &&
-            validLeagueLogoId(request.resource.data.leagueLogoId)
-          )) &&
-        (!changedFields.hasAny(['leagueLogoPaletteId']) ||
+            data.inviteCodeUsed is string &&
+            data.inviteCodeUsed.size() <= 6
+          )
+        ) &&
+        (!data.keys().hasAny(['joinedAt']) || data.joinedAt is timestamp) &&
+        (
+          !data.keys().hasAny(['authority']) ||
           (
-            request.resource.data.keys().hasAll(['leagueLogoPaletteId']) &&
-            validLeagueLogoPaletteId(request.resource.data.leagueLogoPaletteId)
-          )) &&
-        (!changedFields.hasAny(['updatedAt']) ||
+            data.authority is string &&
+            data.authority.size() >= 1 &&
+            data.authority.size() <= 80
+          )
+        ) &&
+        (!data.keys().hasAny(['accountDeleted']) || data.accountDeleted is bool) &&
+        (!data.keys().hasAny(['accountDeletedAt']) || data.accountDeletedAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function validMemberSelfUpdate(leagueId, memberId) {
+      return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['username', 'profileIconId', 'updatedAt']) &&
+        validMemberDocumentShape(leagueId, memberId) &&
+        request.resource.data.username is string &&
+        (!request.resource.data.keys().hasAny(['updatedAt']) ||
           request.resource.data.updatedAt == request.time);
     }
 
-    function validOwnerTeamUpdate() {
+    function validTeamDocumentShape(teamId) {
+      let data = request.resource.data;
+
+      return data.keys().hasOnly([
+          'schemaVersion',
+          'id',
+          'ownerId',
+          'teamName',
+          'managerName',
+          'profileIconId',
+          'logo',
+          'wins',
+          'losses',
+          'ties',
+          'pointsFor',
+          'pointsAgainst',
+          'waiverPriority',
+          'draftPosition',
+          'createdAt',
+          'updatedAt',
+          'authority',
+          'accountDeleted',
+          'accountDeletedAt'
+        ]) &&
+        data.keys().hasAll(['id', 'ownerId', 'teamName', 'logo']) &&
+        data.id == teamId &&
+        data.ownerId == teamId &&
+        validTeamName(data.teamName) &&
+        data.logo is string &&
+        data.logo.size() <= 240 &&
+        (!data.keys().hasAny(['schemaVersion']) || data.schemaVersion == 1) &&
+        (!data.keys().hasAny(['managerName']) || validUsername(data.managerName)) &&
+        (!data.keys().hasAny(['profileIconId']) || validProfileIconId(data.profileIconId)) &&
+        (!data.keys().hasAny(['wins']) || (data.wins is int && data.wins >= 0)) &&
+        (!data.keys().hasAny(['losses']) || (data.losses is int && data.losses >= 0)) &&
+        (!data.keys().hasAny(['ties']) || (data.ties is int && data.ties >= 0)) &&
+        (!data.keys().hasAny(['pointsFor']) || (data.pointsFor is number && data.pointsFor >= 0)) &&
+        (!data.keys().hasAny(['pointsAgainst']) || (data.pointsAgainst is number && data.pointsAgainst >= 0)) &&
+        (!data.keys().hasAny(['waiverPriority']) ||
+          (data.waiverPriority is int && data.waiverPriority >= 1 && data.waiverPriority <= 32)) &&
+        (!data.keys().hasAny(['draftPosition']) || data.draftPosition == null ||
+          (data.draftPosition is int && data.draftPosition >= 1 && data.draftPosition <= 32)) &&
+        (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp) &&
+        (
+          !data.keys().hasAny(['authority']) ||
+          (
+            data.authority is string &&
+            data.authority.size() >= 1 &&
+            data.authority.size() <= 80
+          )
+        ) &&
+        (!data.keys().hasAny(['accountDeleted']) || data.accountDeleted is bool) &&
+        (!data.keys().hasAny(['accountDeletedAt']) || data.accountDeletedAt is timestamp);
+    }
+
+    function validOwnerTeamUpdate(teamId) {
       return request.resource.data
           .diff(resource.data)
           .affectedKeys()
           .hasOnly(['teamName', 'managerName', 'profileIconId', 'logo', 'updatedAt']) &&
-        validTeamName(request.resource.data.teamName) &&
-        (!request.resource.data.keys().hasAny(['managerName']) ||
-          validUsername(request.resource.data.managerName)) &&
-        (!request.resource.data.keys().hasAny(['profileIconId']) ||
-          validProfileIconId(request.resource.data.profileIconId)) &&
-        request.resource.data.logo is string;
+        validTeamDocumentShape(teamId) &&
+        (!request.resource.data.keys().hasAny(['updatedAt']) ||
+          request.resource.data.updatedAt == request.time);
     }
 
     function validRosterDocument(rosterId) {
@@ -621,8 +705,8 @@ service cloud.firestore {
       // Commissioners may change presentation only. Scoring, six-game windows,
       // ownership, capacity, invite identity, authority markers, and hidden
       // competition fields remain server-owned and immutable from browsers.
-      allow update: if isLeagueCommissioner(leagueId) &&
-        validLeagueCosmeticUpdate();
+      // Every league-document change now passes through audited Cloud Functions.
+      allow update: if false;
       // League deletion is handled by the authenticated deleteLeague Cloud
       // Function so every nested document and related invite is removed safely.
       allow delete: if false;
@@ -645,20 +729,13 @@ service cloud.firestore {
         // Membership is created atomically by createLeagueSecure or joinLeagueSecure.
         allow create: if false;
 
-        allow update: if isLeagueCommissioner(leagueId) ||
-          (
-            signedIn() &&
-            memberId == currentUserId() &&
-            request.resource.data
-              .diff(resource.data)
-              .affectedKeys()
-              .hasOnly(['username', 'profileIconId']) &&
-            validUsername(request.resource.data.username) &&
-            (!request.resource.data.keys().hasAny(['profileIconId']) ||
-              validProfileIconId(request.resource.data.profileIconId))
-          );
+        allow update: if signedIn() &&
+          memberId == currentUserId() &&
+          validMemberSelfUpdate(leagueId, memberId);
 
-        allow delete: if isLeagueCommissioner(leagueId);
+        // Removing or changing another manager requires a future audited
+        // server workflow. Commissioners have no browser bypass.
+        allow delete: if false;
       }
 
       match /teams/{teamId} {
@@ -671,16 +748,13 @@ service cloud.firestore {
         // draft position, and every other computed competition field are
         // server-authoritative. Commissioners receive no browser bypass for
         // score or record manipulation.
-        allow update: if validOwnerTeamUpdate() &&
-          (
-            isLeagueCommissioner(leagueId) ||
-            (
-              signedIn() &&
-              teamId == currentUserId()
-            )
-          );
+        allow update: if signedIn() &&
+          teamId == currentUserId() &&
+          validOwnerTeamUpdate(teamId);
 
-        allow delete: if isLeagueCommissioner(leagueId);
+        // Team removal is server-authoritative so it can update membership,
+        // capacity, Draft state, quotas, and the immutable audit trail.
+        allow delete: if false;
 
         match /roster/{rosterId} {
           allow read: if isLeagueMember(leagueId);

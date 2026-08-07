@@ -12,6 +12,7 @@ export interface ReleaseReadinessCheck {
 export interface ReleaseVersionSummary {
   releaseLabel: string;
   scoringRulesVersion: number;
+  leagueAuthoritySchemaVersion: number;
   projectionVersion: number;
   liveScoringSchemaVersion: number;
   playoffFormatVersion: number;

@@ -18,7 +18,11 @@ import {
   type CompetitiveActionOutcome,
 } from '../../../core/observability/competitive-action-health.util';
 import { auth } from '../../../core/firebase';
-import { getLeagueById, League } from '../../../core/league/league.service';
+import {
+  getLeagueById,
+  League,
+  migrateLeagueAuthoritySchema,
+} from '../../../core/league/league.service';
 import type { ReleaseUpdateSnapshot } from '../../../core/release/release-manifest.models';
 import {
   ReleaseReadinessCheck,
@@ -136,6 +140,17 @@ export class ReleaseReadiness implements OnDestroy {
       'The deterministic full-season simulation finished without NHL requests or Firestore writes.',
     );
     this.errorMessage.set('');
+  }
+
+  async migrateLeagueAuthority(): Promise<void> {
+    await this.runAction(async () => {
+      const result = await migrateLeagueAuthoritySchema(this.leagueId);
+      this.league.set(await getLeagueById(this.leagueId));
+
+      return result.idempotentReplay
+        ? 'League authority was already current. The canonical schema was verified again.'
+        : `League authority migrated safely. ${result.memberCount} manager record(s), ${result.teamCount} team record(s), and all roster documents were verified. ${result.repairedRosterCount} missing roster(s) were repaired.`;
+    });
   }
 
   async requestScoreRecovery(): Promise<void> {

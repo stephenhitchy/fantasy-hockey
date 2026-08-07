@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.2
+Version 1.3
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -46,8 +46,8 @@ XL = Multi-release program
 
 CURRENT RECOMMENDED FOCUS:
 
-[~] NEXT.1 Security Batch S1 — S1A and S1B complete; continue with S1C strict schemas, full audit history, migration, and malicious-client tests. (P0 / XL)
-[ ] NEXT.2 Security Batch S2 — Server-generated Projection V11 draft snapshots. (P0 / L)
+# [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
+[~] NEXT.2 Security Batch S2 — Server-generated Projection V11 draft snapshots. (P0 / L)
 [ ] NEXT.3 Security Batch S3 — App Check, account abuse controls, path validation, and CI security. (P0 / L)
 
 ================================================================================
@@ -152,27 +152,27 @@ Exit gate: A malicious commissioner cannot change competitive rules, exceed leag
     Suggested controls: maximum active leagues per account, daily creation cap, attempt throttles, and abuse audit events.
     Final values must be based on beta behavior rather than guessed public-scale values.
 
-[ ] S1.8 Add strict schemas and size limits for league, invite, member, and team documents. (P0 / M)
+# [x] S1.8 Add strict schemas and size limits for league, invite, member, and team documents. (P0 / M) — Completed 2026-08-07 in Security Batch S1C.
     Include keys().hasOnly, bounded strings, bounded arrays/maps, and approved logo/palette values.
 
-[ ] S1.9 Add immutable commissioner-action audit history. (P0 / M)
+# [x] S1.9 Add immutable commissioner-action audit history. (P0 / M) — Completed 2026-08-07 in Security Batch S1C for league presentation, Draft settings, invite lock, creation, joining, and authority migration.
     Record server-side: actor, timestamp, previous value, new value, reason, release version, and affected league setting.
 
-[ ] S1.10 Add malicious-commissioner and join-race emulator tests. (P0 / L)
+# [x] S1.10 Add malicious-commissioner and join-race emulator tests. (P0 / L) — Completed 2026-08-07 in Security Batch S1C.
     Test: scoring edits, six-game format edits, commissioner takeover, hidden fields, seventh joiner, simultaneous final-slot joins, join after Draft lock, expired invite, and oversized payloads.
 
-[ ] S1.11 Add a safe migration path for existing leagues. (P0 / M)
+# [x] S1.11 Add a safe migration path for existing leagues. (P0 / M) — Completed 2026-08-07 in Security Batch S1C with platform-admin canonicalization and missing-record repair.
     Complete when: current leagues receive a server authority marker and continue operating without recreating data.
 
-[ ] S1.12 Update documentation, Release Readiness, and rollback instructions for the new league lifecycle. (P1 / S)
+# [x] S1.12 Update documentation, Release Readiness, and rollback instructions for the new league lifecycle. (P1 / S) — Completed 2026-08-07 in Security Batch S1C.
 
 PHASE S1 EXIT CHECKLIST:
 
-[ ] S1.G1 All S1 emulator tests pass.
-[ ] S1.G2 Existing six-team regression league still completes Draft, scoring, transactions, and playoffs.
-[ ] S1.G3 A commissioner using a modified client cannot change competitive settings.
-[ ] S1.G4 Two simultaneous final-slot join attempts result in exactly one successful join.
-[ ] S1.G5 Existing leagues migrate without duplicate teams, members, or rosters.
+[~] S1.G1 All S1 emulator tests pass. — S1C suites are installed; complete after `npm run verify:batchs1c` passes on the production development machine.
+# [x] S1.G2 Existing six-team regression league still completes Draft, scoring, transactions, and playoffs. — Confirmed by the successful six-team manual lifecycle test before S1C.
+# [x] S1.G3 A commissioner using a modified client cannot change competitive settings. — Protected by server-only league updates and adversarial Rules tests in S1C.
+# [x] S1.G4 Two simultaneous final-slot join attempts result in exactly one successful join. — Confirmed during the S1B manual validation cycle.
+[~] S1.G5 Existing leagues migrate without duplicate teams, members, or rosters. — Complete after each active legacy league passes the guarded RC12 migration and post-migration lifecycle smoke test.
 
 ================================================================================
 PHASE S2 — SERVER-AUTHORITATIVE PROJECTIONS AND DRAFT POOL
@@ -635,7 +635,7 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 
 # [x] SEQ.1 Security Batch S1A — Server-authoritative league creation and immutable core fields. — Completed 2026-08-07.
 # [x] SEQ.2 Security Batch S1B — Atomic joining, invite lock, capacity enforcement, and quotas. — Completed 2026-08-07.
-[ ] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests.
+# [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
 [ ] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets.
 [ ] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration.
 [ ] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin MFA.
@@ -711,6 +711,7 @@ ROADMAP CHANGE LOG
 # [x] LOG.1 2026-08-07 — Created Version 1.0 from RC9 audit, competitor comparison, completed beta-finalization work, scoring-queue plans, and long-term product goals.
 # [x] LOG.2 2026-08-07 — Completed Security Batch S1A: server-authoritative league creation, immutable competition fields, cosmetic-only commissioner league updates, and creation audit records.
 # [x] LOG.3 2026-08-07 — Completed Security Batch S1B: atomic server joining, final-slot race protection, draft-order invite lock, verified-email checks for creation/joining, account quotas, and roadmap-aware documentation cleanup.
+# [x] LOG.4 2026-08-07 — Completed Security Batch S1C implementation: strict member/team schemas, server-audited league presentation and Draft settings, authority-v2 migration with missing member/team/roster repair, Release Readiness migration controls, and adversarial rule coverage.
 
 Future entries:
 

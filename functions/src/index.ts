@@ -3399,7 +3399,12 @@ export {
   repairDraftTurnHandoff,
 } from './draft-authority';
 
-export { createLeagueSecure, joinLeagueSecure } from './league-lifecycle-authority';
+export {
+  createLeagueSecure,
+  joinLeagueSecure,
+  migrateLeagueAuthoritySchema,
+  updateLeagueCosmeticsSecure,
+} from './league-lifecycle-authority';
 
 export { saveManagerProfile } from './manager-profile-authority';
 

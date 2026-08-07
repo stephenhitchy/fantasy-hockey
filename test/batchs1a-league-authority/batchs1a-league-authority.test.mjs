@@ -94,20 +94,19 @@ test('the browser uses the secure callable and keeps one request identity across
   assert.match(clientSource, /inMemoryPendingLeagueCreation/);
 });
 
-test('Firestore denies browser league creation and restricts commissioner updates to cosmetics', () => {
+test('Firestore denies browser league creation and routes presentation changes through audited authority', () => {
   assert.match(
     rulesSource,
     /match \/leagues\/\{leagueId\}[\s\S]*?allow create: if false;/,
   );
-  assert.match(rulesSource, /function validLeagueCosmeticUpdate\(\)/);
   assert.match(
     rulesSource,
-    /affectedKeys\(\)[\s\S]*?hasOnly\(\[[\s\S]*?'name'[\s\S]*?'leagueLogoId'[\s\S]*?'leagueLogoPaletteId'[\s\S]*?'updatedAt'/,
+    /match \/leagues\/\{leagueId\}[\s\S]*?allow update: if false;/,
   );
-  assert.doesNotMatch(
-    rulesSource.match(/function validLeagueCosmeticUpdate\(\)[\s\S]*?\n    \}/)?.[0] ?? '',
-    /commissionerId|scoringRules|maxTeams|inviteCode|matchupFormat/,
-  );
+  assert.match(authoritySource, /export const updateLeagueCosmeticsSecure = onCall/);
+  assert.match(authoritySource, /action: 'league-presentation-updated'/);
+  assert.match(authoritySource, /previousValues/);
+  assert.match(authoritySource, /newValues: nextValues/);
 });
 
 test('league lifecycle audit records are member-readable and browser-immutable', () => {
@@ -120,7 +119,7 @@ test('league lifecycle audit records are member-readable and browser-immutable',
 });
 
 test('the callable is exported and the S1A verification command is installed', () => {
-  assert.match(indexSource, /export \{ createLeagueSecure, joinLeagueSecure \} from '\.\/league-lifecycle-authority';/);
+  assert.match(indexSource, /export \{[\s\S]*?createLeagueSecure[\s\S]*?joinLeagueSecure[\s\S]*?\} from '\.\/league-lifecycle-authority';/);
   const packageJson = JSON.parse(packageSource);
   assert.equal(
     packageJson.scripts['test:batchs1a:run'],
@@ -157,8 +156,8 @@ test('server allowlists remain synchronized with the browser league and profile 
 });
 
 test('current documentation continues recording the secure S1A deployment and rollback order', () => {
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
   assert.match(documentationSource, /Batch S1A — Server-Authoritative League Creation/);
   assert.match(documentationSource, /Functions → Hosting → Firestore Rules/);
   assert.match(documentationSource, /Firestore Rules → Hosting/);

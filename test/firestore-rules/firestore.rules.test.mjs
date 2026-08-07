@@ -523,16 +523,59 @@ describe('league membership and reads', () => {
   });
 });
 
-describe('league competition settings authority', () => {
-  test('commissioners can update only approved league presentation fields', async () => {
+
+describe('member identity schema hardening', () => {
+  test('members can update only their own bounded display identity', async () => {
     await expectAllowed(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid), {
+        username: 'Manager Updated',
+        profileIconId: 'red-line-rat',
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner bounded member identity update',
+    );
+  });
+
+  test('members cannot escalate role, inject hidden fields, or edit another member', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid), {
+        role: 'commissioner',
+        hiddenAuthorityBypass: true,
+        updatedAt: serverTimestamp(),
+      }),
+      'Member role escalation and hidden field injection',
+    );
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'members', manager.uid), {
+        username: 'Changed by Commissioner',
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner another-member identity update',
+    );
+  });
+
+  test('member identity updates reject oversized names and unsupported icons', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid), {
+        username: 'x'.repeat(41),
+        profileIconId: 'not-a-rinkrat-icon',
+        updatedAt: serverTimestamp(),
+      }),
+      'Malformed member identity update',
+    );
+  });
+});
+
+describe('league competition settings authority', () => {
+  test('commissioners cannot update league presentation directly from the browser', async () => {
+    await expectDenied(
       updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID), {
         name: 'Renamed Rules Fixture League',
         leagueLogoId: 'rink-rat',
         leagueLogoPaletteId: 'ice-blue',
         updatedAt: serverTimestamp(),
       }),
-      'Commissioner cosmetic league update',
+      'Commissioner browser-direct league presentation update',
     );
   });
 
@@ -604,13 +647,39 @@ describe('league competition settings authority', () => {
 });
 
 describe('standings authority hardening', () => {
-  test('commissioners can edit safe team identity fields', async () => {
+  test('team owners can edit only their own bounded identity fields', async () => {
     await expectAllowed(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
+        teamName: 'Manager Team Renamed',
+        managerName: 'Manager',
+        profileIconId: 'red-line-rat',
+        logo: '/assets/test-logo-updated.png',
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner bounded team identity update',
+    );
+  });
+
+  test('commissioners cannot edit another manager team identity directly', async () => {
+    await expectDenied(
       updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
         teamName: 'Renamed by Commissioner',
         updatedAt: serverTimestamp(),
       }),
-      'Commissioner safe team identity update',
+      'Commissioner another-team identity update',
+    );
+  });
+
+  test('team identity updates reject hidden fields, oversized values, and owner changes', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'teams', manager.uid), {
+        teamName: 'x'.repeat(61),
+        logo: 'x'.repeat(241),
+        ownerId: opponent.uid,
+        hiddenCompetitionOverride: true,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner malformed team identity update',
     );
   });
 

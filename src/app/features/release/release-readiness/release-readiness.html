@@ -520,6 +520,25 @@
 
         <div class="recovery-grid">
           <article>
+            <span class="pixel-icon icon-shield icon-sm" aria-hidden="true"></span>
+            <div>
+              <strong>Migrate league authority</strong>
+              <p>
+                Canonicalizes this league, invite, member, and team records; removes unknown fields;
+                freezes Scoring V3 and the six-game contract; and writes an immutable migration audit.
+              </p>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="migrateLeagueAuthority()"
+              >
+                Verify &amp; Migrate Authority
+              </button>
+            </div>
+          </article>
+
+          <article>
             <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
             <div>
               <strong>Retry shared scoring</strong>
@@ -608,6 +627,10 @@
         <div class="version-grid">
           <article>
             <span>Scoring rules</span><strong>v{{ current.versions.scoringRulesVersion }}</strong>
+          </article>
+          <article>
+            <span>League authority</span
+            ><strong>v{{ current.versions.leagueAuthoritySchemaVersion }}</strong>
           </article>
           <article>
             <span>Projection model</span><strong>v{{ current.versions.projectionVersion }}</strong>

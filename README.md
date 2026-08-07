@@ -15,13 +15,13 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchs1b
+npm run verify:batchs1c
 ```
 
-The current S1B chain runs the complete S1A/R1F verification history, atomic server-joining and invite-lock tests, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
+The current S1C chain runs the complete S1A/S1B/R1F history, strict league-schema and authority-migration tests, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
 
 
-Current release: **Release Candidate 11** — atomic server-authoritative league joining, Draft-order invite locking, and account lifecycle quotas.
+Current release: **Release Candidate 12** — strict league authority schemas, audited commissioner settings, and guarded existing-league migration.
 
-Inherited release verification remains available through `verify:batchr1f` and `verify:batchs1a`; `verify:batchs1b` runs that complete chain before the S1B security suite.
+Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, and `verify:batchs1b`; `verify:batchs1c` runs that complete chain before the S1C security suite.
 Earlier queue-control checkpoints remain available through `verify:batchp1e`, `verify:batchp1f`, and `verify:batchp1f-1`.

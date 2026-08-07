@@ -245,17 +245,17 @@ test('roadmap files are permanent project artifacts and are excluded from docume
 });
 
 test('roadmap and release documentation record S1B without deleting completed work', () => {
-  assert.match(roadmapSource, /Version 1\.2/);
+  assert.match(roadmapSource, /Version 1\.[23]/);
   assert.match(roadmapSource, /# \[x\] S1\.4 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /# \[x\] S1\.5 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /\[~\] S1\.6 Add verified-email requirements/);
   assert.match(roadmapSource, /# \[x\] S1\.7 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /# \[x\] SEQ\.2 Security Batch S1B/);
-  assert.match(roadmapSource, /\[ \] SEQ\.3 Security Batch S1C/);
+  assert.match(roadmapSource, /(?:\[ \]|# \[x\]) SEQ\.3 Security Batch S1C/);
   assert.match(documentationSource, /Batch S1B — Atomic League Joining/);
   assert.match(documentationSource, /Functions → Hosting → Firestore Rules/);
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
 });
 
 test('create and join pages explain verification and the draft setup explains the entry lock', () => {
@@ -274,7 +274,7 @@ test('S1B verification scripts are installed and the secure callable is exported
   assert.match(packageJson.scripts['verify:batchs1b'], /verify:batchs1a/);
   assert.match(packageJson.scripts['verify:batchs1b'], /test:batchs1b:run/);
   assert.match(packageJson.scripts['verify:batchs1b'], /validate:release-manifest/);
-  assert.match(functionsIndexSource, /export \{ createLeagueSecure, joinLeagueSecure \} from '\.\/league-lifecycle-authority';/);
+  assert.match(functionsIndexSource, /export \{[\s\S]*?createLeagueSecure[\s\S]*?joinLeagueSecure[\s\S]*?\} from '\.\/league-lifecycle-authority';/);
 });
 
 test('Production Scoring V3 and Projection V11 remain byte-for-byte unchanged', () => {

@@ -1,3 +1,121 @@
+## Batch S1C — Strict League Schemas, Audit History, and Authority Migration
+
+### Purpose
+
+Security Batch S1C completes roadmap items **S1.8–S1.12**. The league lifecycle now has strict member/team browser schemas, server-audited league presentation and Draft-setting changes, a guarded authority-v2 migration for existing leagues, and adversarial Firestore Rules coverage.
+
+This release is labeled **Release Candidate 12**.
+
+The prior Release Readiness result of 16/17 was healthy: Firebase App Check was the only existing warning. RC12 adds one new required authority-schema check. After an active league completes the guarded migration, App Check remains the intended outstanding configuration gate until Security Batch S3A.
+
+### Authority schema v2
+
+New and migrated leagues now use:
+
+```text
+League authority schema: 2
+League document schema:  1
+Invite schema:           1
+Member schema:           1
+Team schema:             1
+Audit schema:            1
+```
+
+New league, invite, member, and team records are written with explicit server authority markers. The creation and joining callables reject unsupported request fields rather than silently accepting hidden input.
+
+### Strict browser permissions
+
+The browser can no longer update the league document directly. League name, emblem, and palette changes use the audited `updateLeagueCosmeticsSecure` callable. That Function verifies the commissioner and verified email, accepts only the exact presentation fields, writes previous/new values and a reason to the immutable league audit trail, and supports idempotent request replay.
+
+A manager may update only their own bounded identity fields:
+
+```text
+Member: username, profileIconId, updatedAt
+Team:   teamName, managerName, profileIconId, logo, updatedAt
+```
+
+Rules reject role escalation, owner changes, standings changes, waiver-priority changes, hidden fields, unsupported icons, oversized names, and oversized logo values. Commissioners have no browser bypass for another manager's identity or competition data.
+
+### Commissioner action audit history
+
+Server audit records now cover:
+
+- league creation;
+- atomic member joining;
+- Draft-order invite lock;
+- every non-idempotent Draft-settings save;
+- league presentation changes; and
+- authority migration.
+
+Presentation and Draft-setting records include the actor, timestamp, release, reason, request identity, previous values, and new values where applicable. Browser clients may read league audit history as members but cannot create, edit, or delete audit records.
+
+### Existing-league migration
+
+A platform administrator can use **Release Readiness → Verify & Migrate Authority** for an existing league. The `migrateLeagueAuthoritySchema` callable:
+
+- verifies platform-administrator access using the enabled admin record or custom claim;
+- canonicalizes the league to Scoring V3, six scheduled games, and `cycle_matchup`;
+- preserves the verified commissioner and current occupied team set;
+- canonicalizes the invite, members, and teams;
+- removes unknown top-level fields from those authority documents;
+- repairs a missing member or team counterpart;
+- creates an empty roster only when that owner's roster is missing;
+- preserves all existing Draft picks, rosters that already exist, scoring windows, transactions, waivers, matchups, standings, and playoffs; and
+- writes one immutable authority-migration audit record.
+
+The migration is safe to run again. It re-verifies the canonical documents and reports an idempotent replay when the migration audit already exists.
+
+### Release Readiness
+
+RC12 adds a required **League authority schema is current** check. A league passes when:
+
+```text
+authoritySchemaVersion == 2
+documentSchemaVersion  == 1
+competitionSettingsLocked == true
+```
+
+The guarded migration control is visible only on the platform-administrator Release Readiness route. After migration, refresh the checks. App Check remains the planned configuration warning until its monitor-mode client is added in S3A.
+
+### Verification
+
+```bash
+npm run verify:batchs1c
+```
+
+### Production deployment order
+
+Use **Functions → Hosting → Migrate active leagues → Firestore Rules**. This allows the new callable and client migration control to exist before the strictest browser schemas are enforced.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only functions:createLeagueSecure,functions:joinLeagueSecure,functions:updateLeagueCosmeticsSecure,functions:migrateLeagueAuthoritySchema,functions:executeDraftCommand -m "Security S1C strict league authority"
+firebase deploy --only hosting:app -m "Security S1C authority migration and readiness"
+```
+
+Before deploying Rules, open Release Readiness for each active legacy league and run **Verify & Migrate Authority**. Confirm its league-authority check passes and complete a short Draft/roster smoke test.
+
+Then deploy:
+
+```bash
+firebase deploy --only firestore:rules -m "Security S1C strict league schemas"
+```
+
+No Firestore index deployment is required.
+
+### Rollback order
+
+For a complete rollback to S1B, use **Firestore Rules → Hosting**:
+
+1. Deploy the approved S1B Firestore Rules so the older identity-update behavior is accepted.
+2. Deploy the approved S1B Hosting build.
+3. Redeploy the S1B `executeDraftCommand` only when the additional Draft-settings audit behavior must also be removed.
+
+The S1C lifecycle Functions may remain deployed during a Hosting rollback. Migrated leagues remain valid S1B leagues; no score, roster, Draft, or matchup data needs to be reversed.
+
+---
+
 ## Batch S1B — Atomic League Joining, Invite Lock, and Account Quotas
 
 ### Purpose

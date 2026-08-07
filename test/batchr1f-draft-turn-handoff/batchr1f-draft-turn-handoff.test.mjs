@@ -193,7 +193,7 @@ test('R1F scripts remain installed while the current release preserves competiti
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '3ad3e9c6601f8af35c4225eb2682a22d9fee6708317fb5dd68834a27bf1cd299',
+    '0933f3584a681e831c937a4a06ac92150f78c3835c8f6c4bbbdb61126480b40a',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),

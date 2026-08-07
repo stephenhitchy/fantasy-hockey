@@ -51,8 +51,10 @@ export interface League {
   scoringRules: ScoringRules;
   scoringRulesVersion?: number;
   authoritySchemaVersion?: number;
+  documentSchemaVersion?: number;
   createdByAuthority?: string;
   competitionSettingsLocked?: boolean;
+  migratedAt?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -124,6 +126,41 @@ interface JoinLeagueSecureResponse {
   teamCount: number;
   maxTeams: number;
   authoritySchemaVersion: number;
+}
+
+interface UpdateLeagueCosmeticsSecureRequest {
+  requestId: string;
+  leagueId: string;
+  name: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
+  reason: string;
+}
+
+interface UpdateLeagueCosmeticsSecureResponse {
+  updated: true;
+  leagueId: string;
+  changed: boolean;
+  idempotentReplay: boolean;
+  authoritySchemaVersion: number;
+}
+
+interface MigrateLeagueAuthoritySchemaRequest {
+  leagueId: string;
+  reason: string;
+}
+
+export interface MigrateLeagueAuthoritySchemaResponse {
+  migrated: true;
+  leagueId: string;
+  idempotentReplay: boolean;
+  authoritySchemaVersion: number;
+  teamCount: number;
+  memberCount: number;
+  repairedMemberCount: number;
+  repairedTeamCount: number;
+  repairedRosterCount: number;
+  removedUnexpectedFieldCount: number;
 }
 
 interface PendingLeagueCreationRequest {
@@ -283,11 +320,16 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
       typeof league.authoritySchemaVersion === 'number'
         ? league.authoritySchemaVersion
         : undefined,
+    documentSchemaVersion:
+      typeof league.documentSchemaVersion === 'number'
+        ? league.documentSchemaVersion
+        : undefined,
     createdByAuthority:
       typeof league.createdByAuthority === 'string'
         ? league.createdByAuthority
         : undefined,
     competitionSettingsLocked: league.competitionSettingsLocked === true,
+    migratedAt: league.migratedAt,
     createdAt: league.createdAt,
     updatedAt: league.updatedAt,
   };
@@ -866,6 +908,88 @@ export async function joinLeagueByInviteCode(
   }
 }
 
+
+export async function updateLeaguePresentation(input: {
+  leagueId: string;
+  name: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
+  reason?: string;
+}): Promise<UpdateLeagueCosmeticsSecureResponse> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('You must be logged in to update league presentation.');
+  }
+
+  await requireFreshVerifiedEmail('update league presentation');
+
+  const normalizedLeagueId = input.leagueId.trim();
+  const normalizedName = input.name.trim();
+
+  if (!normalizedLeagueId) {
+    throw new Error('This league is still loading.');
+  }
+
+  if (!normalizedName || normalizedName.length > 80) {
+    throw new Error('League name must be between 1 and 80 characters.');
+  }
+
+  const callable = httpsCallable<
+    UpdateLeagueCosmeticsSecureRequest,
+    UpdateLeagueCosmeticsSecureResponse
+  >(functions, 'updateLeagueCosmeticsSecure', { timeout: 50_000 });
+
+  try {
+    const response = await callable({
+      requestId: createLeagueRequestId(),
+      leagueId: normalizedLeagueId,
+      name: normalizedName,
+      leagueLogoId: normalizeLeagueLogoId(input.leagueLogoId),
+      leagueLogoPaletteId: normalizeLeagueLogoPaletteId(
+        input.leagueLogoPaletteId,
+      ),
+      reason: input.reason?.trim() || 'Commissioner updated league presentation.',
+    });
+
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(getCallableErrorMessage(error));
+  }
+}
+
+export async function migrateLeagueAuthoritySchema(
+  leagueId: string,
+  reason = 'Release Readiness migrated the league authority schema.',
+): Promise<MigrateLeagueAuthoritySchemaResponse> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('You must be logged in to migrate league authority.');
+  }
+
+  const normalizedLeagueId = leagueId.trim();
+
+  if (!normalizedLeagueId) {
+    throw new Error('This league is still loading.');
+  }
+
+  const callable = httpsCallable<
+    MigrateLeagueAuthoritySchemaRequest,
+    MigrateLeagueAuthoritySchemaResponse
+  >(functions, 'migrateLeagueAuthoritySchema', { timeout: 130_000 });
+
+  try {
+    const response = await callable({
+      leagueId: normalizedLeagueId,
+      reason: reason.trim(),
+    });
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(getCallableErrorMessage(error));
+  }
+}
+
 export async function ensureLeagueProfileIcon(
   leagueId: string,
 ): Promise<ProfileIconId> {
@@ -905,7 +1029,7 @@ export async function ensureLeagueProfileIcon(
 
   batch.set(
     memberRef,
-    { profileIconId: resolvedProfileIconId },
+    { profileIconId: resolvedProfileIconId, updatedAt: serverTimestamp() },
     { merge: true },
   );
   batch.set(
@@ -937,7 +1061,7 @@ export async function syncManagerNameForLeague(
 
   batch.set(
     getLeagueMemberRef(leagueId, user.uid),
-    { username: normalizedUsername },
+    { username: normalizedUsername, updatedAt: serverTimestamp() },
     { merge: true },
   );
 
@@ -970,7 +1094,7 @@ export async function syncManagerNameAcrossLeagues(username: string): Promise<vo
     for (const league of leagueChunk) {
       batch.set(
         getLeagueMemberRef(league.id, user.uid),
-        { username: normalizedUsername },
+        { username: normalizedUsername, updatedAt: serverTimestamp() },
         { merge: true },
       );
       batch.set(
@@ -1002,7 +1126,7 @@ export async function updateLeagueProfileIcon(
 
   batch.set(
     getLeagueMemberRef(leagueId, user.uid),
-    { profileIconId: normalizedProfileIconId },
+    { profileIconId: normalizedProfileIconId, updatedAt: serverTimestamp() },
     { merge: true },
   );
   batch.set(
