@@ -265,12 +265,16 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/league-automation.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',
+        'src/projection-authority.ts',
+        'src/shared/core/projection/projection-asset-catalog.service.ts',
+        'src/shared/core/projection/projection-asset-catalog.util.ts',
+        'src/shared/core/projection/projection-snapshot.service.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',
         'package.json',
       ]),
     ),
-    'e843397bc405c4dc382c3cdce1d1580329b0cf662b25c0a9ab8d59dd0e100903',
+    '3212052cca056d9bfd89bdcd9e11fb58969650a28767d000455199897ce9c1cb',
   );
 });

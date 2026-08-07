@@ -557,6 +557,35 @@ export class ProjectionLab {
     return cycleNumber ? `Matchup ${cycleNumber}` : 'Upcoming matchup';
   }
 
+  isSnapshotServerValidated(): boolean {
+    const metadata = this.snapshotMetadata();
+
+    return Boolean(
+      metadata?.generatedByAuthority === 'server' &&
+      metadata.catalogValidationStatus === 'validated' &&
+      metadata.catalogSnapshotId &&
+      metadata.catalogHash &&
+      metadata.canonicalAssetCount === metadata.assetCount,
+    );
+  }
+
+  getSnapshotAuthorityLabel(): string {
+    const metadata = this.snapshotMetadata();
+
+    if (!metadata) {
+      return 'No server authority record yet';
+    }
+
+    if (!this.isSnapshotServerValidated()) {
+      return 'Legacy snapshot · refresh to validate against the server NHL catalog';
+    }
+
+    const catalog = metadata.catalogSnapshotId ?? 'server catalog';
+    const hash = metadata.catalogHash?.slice(0, 12) ?? '';
+
+    return `${catalog} · ${metadata.canonicalAssetCount ?? metadata.assetCount} canonical assets · ${hash}`;
+  }
+
   getAvailabilityDescription(row: ProjectionRow): string {
     const games = `${row.expectedGamesAvailable.toFixed(1)} / ${row.scheduledGamesInProjectionCycle}`;
 

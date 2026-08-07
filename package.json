@@ -141,7 +141,13 @@
     "verify:batchs1b": "npm run verify:batchs1a && npm run test:batchs1b:run && npm run validate:release-manifest",
     "pretest:batchs1c:run": "npm run generate:release-manifest",
     "test:batchs1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs1c-league-schema-audit-migration/*.test.mjs",
-    "verify:batchs1c": "npm run verify:batchs1b && npm run test:batchs1c:run && npm run validate:release-manifest"
+    "verify:batchs1c": "npm run verify:batchs1b && npm run test:batchs1c:run && npm run validate:release-manifest",
+    "pretest:batchs2a:run": "npm run generate:release-manifest",
+    "test:batchs2a:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs2a-projection-authority/*.test.mjs",
+    "verify:batchs2a": "npm run verify:batchs1c && npm run test:batchs2a:run && npm run validate:release-manifest",
+    "pretest:batchs2a-1:run": "npm run generate:release-manifest",
+    "test:batchs2a-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs2a-1-angular-unsubscribe-hotfix/*.test.mjs",
+    "verify:batchs2a-1": "npm run verify:batchs2a && npm run test:batchs2a-1:run && npm run validate:release-manifest"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

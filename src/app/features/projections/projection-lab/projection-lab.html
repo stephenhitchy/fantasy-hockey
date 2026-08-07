@@ -56,6 +56,13 @@
       <div class="shared-snapshot-meta">
         <span>{{ snapshotMetadata()?.assetCount ?? 0 }} players and goalie units</span>
         <strong>{{ getSnapshotGeneratedLabel() }}</strong>
+        <span
+          class="snapshot-authority-badge"
+          [class.snapshot-authority-ready]="isSnapshotServerValidated()"
+        >
+          {{ isSnapshotServerValidated() ? 'Server catalog verified' : 'Refresh required' }}
+        </span>
+        <small>{{ getSnapshotAuthorityLabel() }}</small>
       </div>
     </section>
 

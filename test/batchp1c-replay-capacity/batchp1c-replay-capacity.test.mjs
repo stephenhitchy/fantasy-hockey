@@ -185,6 +185,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/league-automation.ts',
     'src/shared/core/cycle/cycle.service.ts',
     'src/shared/core/projection/window-projection.service.ts',
+    'src/projection-authority.ts',
+    'src/shared/core/projection/projection-asset-catalog.service.ts',
+    'src/shared/core/projection/projection-asset-catalog.util.ts',
+    'src/shared/core/projection/projection-snapshot.service.ts',
     'src/draft-authority.ts',
     'src/draft-automation.ts',
     'src/shared/core/draft/draft.models.ts',
@@ -193,7 +197,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
   assert.equal(
     await hashTree('functions', exclusions),
-    'e843397bc405c4dc382c3cdce1d1580329b0cf662b25c0a9ab8d59dd0e100903',
+    '3212052cca056d9bfd89bdcd9e11fb58969650a28767d000455199897ce9c1cb',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
@@ -207,7 +211,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
   assert.equal(createHash('sha256').update(rules).digest('hex'), 'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901');
   assert.equal(createHash('sha256').update(engine).digest('hex'), 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
-  assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), '0933f3584a681e831c937a4a06ac92150f78c3835c8f6c4bbbdb61126480b40a');
+  assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), '3a8caf23e3e7b4fe921f5e79d14d593cd1f2899400a720cdf4d4c4e341aa0287');
   assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0');
 });
 

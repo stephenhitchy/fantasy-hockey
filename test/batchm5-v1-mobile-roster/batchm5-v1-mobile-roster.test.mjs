@@ -393,7 +393,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '0933f3584a681e831c937a4a06ac92150f78c3835c8f6c4bbbdb61126480b40a',
+    '3a8caf23e3e7b4fe921f5e79d14d593cd1f2899400a720cdf4d4c4e341aa0287',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),

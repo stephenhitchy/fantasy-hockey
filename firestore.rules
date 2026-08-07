@@ -26,14 +26,6 @@ service cloud.firestore {
       return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
     }
 
-    function draftQueuePath(leagueId, ownerId) {
-      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current/queues/$(ownerId);
-    }
-
-    function sharedProjectionPointerPath(leagueId) {
-      return /databases/$(database)/documents/leagues/$(leagueId)/projectionSnapshots/current;
-    }
-
     function hasExistingOwnedTeam(leagueId) {
       /*
        * The team document ID is the authenticated owner's UID. Older test
@@ -98,42 +90,10 @@ service cloud.firestore {
       ];
     }
 
-    function validLeagueName(name) {
-      return name is string &&
-        name.size() >= 1 &&
-        name.size() <= 80;
-    }
-
     function validTeamName(name) {
       return name is string &&
         name.size() >= 1 &&
         name.size() <= 60;
-    }
-
-    function validLeagueLogoId(logoId) {
-      return logoId in [
-        'crossed-sticks',
-        'rink-rat',
-        'goalie-mask',
-        'crown-puck',
-        'arcade-net',
-        'lightning-skate',
-        'helmet-stars',
-        'rink-badge'
-      ];
-    }
-
-    function validLeagueLogoPaletteId(paletteId) {
-      return paletteId in [
-        'rink-gold',
-        'ice-blue',
-        'crimson',
-        'emerald',
-        'violet',
-        'retro-orange',
-        'neon-arcade',
-        'silver'
-      ];
     }
 
     function validMemberDocumentShape(leagueId, memberId) {
@@ -259,19 +219,6 @@ service cloud.firestore {
           request.resource.data.updatedAt == request.time);
     }
 
-    function validRosterDocument(rosterId) {
-      let data = request.resource.data;
-
-      return rosterId == 'current' &&
-        data.schemaVersion == 2 &&
-        data.activeSlots is list &&
-        data.activeSlots.size() == 14 &&
-        data.benchSlots is list &&
-        data.benchSlots.size() == 3 &&
-        data.irSlots is list &&
-        data.irSlots.size() == 3;
-    }
-
     function validDraftQueueWrite(leagueId, ownerId) {
       let data = request.resource.data;
       let timeoutStatePresent =
@@ -393,35 +340,6 @@ service cloud.firestore {
         'injured-reserve',
         'long-term-injured-reserve'
       ];
-    }
-
-    function validGlobalPlayerAvailabilityWrite() {
-      let data = request.resource.data;
-
-      return signedIn() &&
-        data.keys().hasAll([
-          'source',
-          'status',
-          'dailyKey',
-          'lastAttemptAt',
-          'updatedBy',
-          'refreshLeagueId',
-          'message'
-        ]) &&
-        data.source == 'ESPN' &&
-        data.refreshLeagueId is string &&
-        data.refreshLeagueId.size() >= 1 &&
-        data.refreshLeagueId.size() <= 100 &&
-        isLeagueCommissioner(data.refreshLeagueId) &&
-        data.status in ['running', 'success', 'error'] &&
-        data.dailyKey is string &&
-        data.dailyKey.size() == 10 &&
-        data.lastAttemptAt == request.time &&
-        data.updatedBy == currentUserId() &&
-        data.message is string &&
-        data.message.size() <= 500 &&
-        (!data.keys().hasAny(['records']) ||
-          (data.records is list && data.records.size() <= 250));
     }
 
     function validPlayerAvailabilityBase(leagueId) {
@@ -666,6 +584,16 @@ service cloud.firestore {
 
       // The Admin SDK is the sole authority for the shared ESPN report.
       // Commissioners request refreshes through an authenticated callable.
+      allow create, update, delete: if false;
+    }
+
+    match /projectionGenerationRequests/{requestId} {
+      // Server-owned progress records let league members follow a queued
+      // Projection V11 refresh without keeping a long callable connection open.
+      allow get: if signedIn() &&
+        resource.data.leagueId is string &&
+        isLeagueMember(resource.data.leagueId);
+      allow list: if false;
       allow create, update, delete: if false;
     }
 

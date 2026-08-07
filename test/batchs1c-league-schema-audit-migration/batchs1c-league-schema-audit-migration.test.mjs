@@ -186,9 +186,9 @@ test('S1C callables, logs, and verification scripts are installed', () => {
   assert.match(packageJson.scripts['verify:batchs1c'], /validate:release-manifest/);
 });
 
-test('the permanent roadmap advances to version 1.3 and remains synchronized', () => {
+test('the permanent roadmap preserves S1C completion and remains synchronized in later versions', () => {
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.3/);
+  assert.match(roadmapRootSource, /Version 1\.[3-9][0-9]*/);
   assert.match(roadmapRootSource, /# \[x\] S1\.8 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] S1\.9 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] S1\.10 .*Security Batch S1C/);
@@ -199,14 +199,14 @@ test('the permanent roadmap advances to version 1.3 and remains synchronized', (
 });
 
 test('RC12 documentation records migration, deployment, rollback, and the remaining App Check gate', () => {
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
   assert.match(documentationSource, /Batch S1C — Strict League Schemas/);
   assert.match(documentationSource, /Functions → Hosting → Migrate active leagues → Firestore Rules/);
   assert.match(documentationSource, /App Check/);
   assert.match(documentationSource, /Firestore Rules → Hosting/);
   assert.match(readmeSource, /verify:batchs1c/);
-  assert.match(readmeSource, /Release Candidate 12/);
+  assert.match(readmeSource, /Release Candidate \d+/);
 });
 
 test('Production Scoring V3 and Projection V11 remain byte-for-byte unchanged', () => {

@@ -18,6 +18,10 @@ import {
   assertSharedProjectionPoolHealthy,
   rankSharedProjectionAssets,
 } from './projection-ranking.util';
+import {
+  ensureCanonicalProjectionAssetCatalog,
+  validateProjectionAssetsAgainstCatalog,
+} from './projection-asset-catalog.service';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -52,6 +56,15 @@ export interface SharedProjectionSnapshotMetadata {
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
+  authoritySchemaVersion?: number;
+  generatedByAuthority?: 'server';
+  catalogSnapshotId?: string;
+  catalogHash?: string;
+  catalogSeason?: string;
+  canonicalAssetCount?: number;
+  catalogValidationStatus?: 'validated';
+  catalogCacheHit?: boolean;
+  generationRequestId?: string;
 }
 
 export interface SharedProjectionSnapshot {
@@ -65,6 +78,8 @@ export interface GenerateSharedProjectionSnapshotInput {
   requiredGamesPerCycle: number;
   generationReason?: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  requestedBy?: string;
+  generationRequestId?: string;
 }
 
 export interface WindowSnapshotFreshnessInput {
@@ -130,6 +145,32 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     projectionSeason:
       typeof value.projectionSeason === 'string'
         ? value.projectionSeason
+        : undefined,
+    authoritySchemaVersion:
+      typeof value.authoritySchemaVersion === 'number'
+        ? value.authoritySchemaVersion
+        : undefined,
+    generatedByAuthority:
+      value.generatedByAuthority === 'server' ? 'server' : undefined,
+    catalogSnapshotId:
+      typeof value.catalogSnapshotId === 'string'
+        ? value.catalogSnapshotId
+        : undefined,
+    catalogHash:
+      typeof value.catalogHash === 'string' ? value.catalogHash : undefined,
+    catalogSeason:
+      typeof value.catalogSeason === 'string' ? value.catalogSeason : undefined,
+    canonicalAssetCount:
+      typeof value.canonicalAssetCount === 'number'
+        ? value.canonicalAssetCount
+        : undefined,
+    catalogValidationStatus:
+      value.catalogValidationStatus === 'validated' ? 'validated' : undefined,
+    catalogCacheHit:
+      typeof value.catalogCacheHit === 'boolean' ? value.catalogCacheHit : undefined,
+    generationRequestId:
+      typeof value.generationRequestId === 'string'
+        ? value.generationRequestId
         : undefined,
   };
 }
@@ -540,7 +581,12 @@ async function generateSnapshotInternal(
     projectionVersion: SHARED_PROJECTION_VERSION,
     generatedAt,
     generatedAtServer: serverTimestamp(),
-    generatedBy: 'server:window-projection',
+    generatedBy: input.requestedBy
+      ? `server:projection-authority:${input.requestedBy}`
+      : 'server:window-projection',
+    authoritySchemaVersion: 1,
+    generatedByAuthority: 'server' as const,
+    generationRequestId: input.generationRequestId ?? '',
     assetCount: 0,
     teamCount,
     targetCycleNumber,
@@ -580,6 +626,11 @@ async function generateSnapshotInternal(
       sharedProjectionSnapshotId: snapshotId,
       projectionGeneratedAt: generatedAt,
     }));
+    const catalog = await ensureCanonicalProjectionAssetCatalog();
+    const catalogValidation = validateProjectionAssetsAgainstCatalog(
+      rankedAssets,
+      catalog,
+    );
     const assetChunks: DraftableAsset[][] = [];
 
     for (
@@ -636,7 +687,9 @@ async function generateSnapshotInternal(
       status: 'ready',
       projectionVersion: SHARED_PROJECTION_VERSION,
       generatedAt,
-      generatedBy: 'server:window-projection',
+      generatedBy: input.requestedBy
+        ? `server:projection-authority:${input.requestedBy}`
+        : 'server:window-projection',
       assetCount: rankedAssets.length,
       assetDocumentCount: assetChunks.length,
       assetStorageVersion: 2,
@@ -652,6 +705,17 @@ async function generateSnapshotInternal(
       projectionAsOfDate: context.projectionAsOfDate,
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
+      authoritySchemaVersion: 1,
+      generatedByAuthority: 'server',
+      catalogSnapshotId: catalogValidation.catalogId,
+      catalogHash: catalogValidation.catalogHash,
+      catalogSeason: catalogValidation.catalogSeason,
+      canonicalAssetCount: catalogValidation.validatedAssetCount,
+      catalogValidationStatus: 'validated',
+      catalogCacheHit: catalogValidation.catalogCacheHit,
+      ...(input.generationRequestId
+        ? { generationRequestId: input.generationRequestId }
+        : {}),
     };
     const pointerPayload = {
       ...metadata,
@@ -1070,6 +1134,11 @@ export async function createEmergencyDraftProjectionSnapshot(
   }
 
   const rankedAssets = applyEmergencyRanks(assets);
+  const catalog = await ensureCanonicalProjectionAssetCatalog();
+  const catalogValidation = validateProjectionAssetsAgainstCatalog(
+    rankedAssets,
+    catalog,
+  );
   const assetChunks: DraftableAsset[][] = [];
 
   for (let index = 0; index < rankedAssets.length; index += 25) {
@@ -1116,6 +1185,17 @@ export async function createEmergencyDraftProjectionSnapshot(
     draftReadyUntil,
     message:
       'Emergency conservative rankings were generated by the server because the normal current shared projection snapshot was unavailable.',
+    authoritySchemaVersion: 1,
+    generatedByAuthority: 'server',
+    catalogSnapshotId: catalogValidation.catalogId,
+    catalogHash: catalogValidation.catalogHash,
+    catalogSeason: catalogValidation.catalogSeason,
+    canonicalAssetCount: catalogValidation.validatedAssetCount,
+    catalogValidationStatus: 'validated',
+    catalogCacheHit: catalogValidation.catalogCacheHit,
+    ...(input.generationRequestId
+      ? { generationRequestId: input.generationRequestId }
+      : {}),
   };
   const finalBatch = writeBatch(db);
   const pointerPayload = {

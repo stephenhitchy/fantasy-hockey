@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.3
+Version 1.4.1
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -47,7 +47,7 @@ XL = Multi-release program
 CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
-[~] NEXT.2 Security Batch S2 — Server-generated Projection V11 draft snapshots. (P0 / L)
+[~] NEXT.2 Security Batch S2 — S2A server generation/catalog validation complete; finish S2B read-only snapshots, content hashes, and Draft enforcement. (P0 / L)
 [ ] NEXT.3 Security Batch S3 — App Check, account abuse controls, path validation, and CI security. (P0 / L)
 
 ================================================================================
@@ -180,15 +180,15 @@ Goal: Ensure a commissioner cannot manipulate the canonical Draft pool, position
 Exit gate: Every Draft uses a server-generated, validated, hashed, versioned Projection V11 snapshot.
 ================================================================================
 
-[ ] S2.1 Create a server callable/task to generate Projection V11 snapshots. (P0 / XL)
+# [x] S2.1 Create a server callable/task to generate Projection V11 snapshots. (P0 / XL) — Completed 2026-08-07 in Security Batch S2A.
     Preserve: current Projection V11 math and manager-facing explanations.
 
 [ ] S2.2 Make projectionSnapshots and projection chunks browser read-only. (P0 / M)
 
-[ ] S2.3 Build or formalize a canonical server-owned NHL asset catalog. (P0 / L)
+# [x] S2.3 Build or formalize a canonical server-owned NHL asset catalog. (P0 / L) — Completed 2026-08-07 in Security Batch S2A.
     Validate: player ID, team, eligible positions, active status, goalie-unit identity, and supported season.
 
-[ ] S2.4 Validate every projection asset against the canonical catalog. (P0 / L)
+# [x] S2.4 Validate every projection asset against the canonical catalog. (P0 / L) — Completed 2026-08-07 in Security Batch S2A.
     Reject fake IDs, malformed positions, duplicate assets, impossible goalie units, and oversized chunks.
 
 [ ] S2.5 Add deterministic snapshot content hashes. (P0 / M)
@@ -199,13 +199,16 @@ Exit gate: Every Draft uses a server-generated, validated, hashed, versioned Pro
 [ ] S2.7 Add snapshot refresh/retry/rollback controls for platform administrators. (P1 / M)
     Do not allow commissioners to edit snapshot contents.
 
-[ ] S2.8 Add projection generation cost, duration, cache-hit, and failure metrics. (P1 / M)
+[~] S2.8 Add projection generation cost, duration, cache-hit, and failure metrics. (P1 / M)
+    S2A records duration, cache hits, success, failure, and stale recovery. Cost reporting remains for S2B/S3.
 
-[ ] S2.9 Add emulator and Functions tests for fake asset injection and modified projections. (P0 / L)
+[~] S2.9 Add emulator and Functions tests for fake asset injection and modified projections. (P0 / L)
+    S2A adds focused catalog/source tests. Browser-write denial and Draft rejection tests complete in S2B.
 
 [ ] S2.10 Migrate existing pre-Draft leagues safely. (P0 / M)
 
-[ ] S2.11 Update Projection Lab to show the server snapshot hash and authority status. (P1 / S)
+[~] S2.11 Update Projection Lab to show the server snapshot hash and authority status. (P1 / S)
+    S2A shows server authority and canonical catalog hash. Final snapshot content/root hash arrives in S2B.
 
 PHASE S2 EXIT CHECKLIST:
 
@@ -636,7 +639,7 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.1 Security Batch S1A — Server-authoritative league creation and immutable core fields. — Completed 2026-08-07.
 # [x] SEQ.2 Security Batch S1B — Atomic joining, invite lock, capacity enforcement, and quotas. — Completed 2026-08-07.
 # [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
-[ ] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets.
+# [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 [ ] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration.
 [ ] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin MFA.
 [ ] SEQ.7 Security Batch S3B — Universal ID validation, NHL proxy hardening, and rate controls.
@@ -712,6 +715,8 @@ ROADMAP CHANGE LOG
 # [x] LOG.2 2026-08-07 — Completed Security Batch S1A: server-authoritative league creation, immutable competition fields, cosmetic-only commissioner league updates, and creation audit records.
 # [x] LOG.3 2026-08-07 — Completed Security Batch S1B: atomic server joining, final-slot race protection, draft-order invite lock, verified-email checks for creation/joining, account quotas, and roadmap-aware documentation cleanup.
 # [x] LOG.4 2026-08-07 — Completed Security Batch S1C implementation: strict member/team schemas, server-audited league presentation and Draft settings, authority-v2 migration with missing member/team/roster repair, Release Readiness migration controls, and adversarial rule coverage.
+# [x] LOG.5 2026-08-07 — Completed Security Batch S2A: asynchronous server Projection V11 generation, canonical NHL asset catalog validation, Projection Lab authority status, generation metrics, and Firestore Rules warning cleanup.
+# [x] LOG.6 2026-08-07 — Completed S2A.1 Angular Firestore Unsubscribe type hotfix so the projection progress listener compiles under Angular TypeScript 6 without changing Projection V11 behavior.
 
 Future entries:
 

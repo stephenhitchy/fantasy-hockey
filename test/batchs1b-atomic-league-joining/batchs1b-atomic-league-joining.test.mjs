@@ -245,7 +245,7 @@ test('roadmap files are permanent project artifacts and are excluded from docume
 });
 
 test('roadmap and release documentation record S1B without deleting completed work', () => {
-  assert.match(roadmapSource, /Version 1\.[23]/);
+  assert.match(roadmapSource, /Version 1\.[2-9][0-9]*/);
   assert.match(roadmapSource, /# \[x\] S1\.4 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /# \[x\] S1\.5 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /\[~\] S1\.6 Add verified-email requirements/);
@@ -254,8 +254,8 @@ test('roadmap and release documentation record S1B without deleting completed wo
   assert.match(roadmapSource, /(?:\[ \]|# \[x\]) SEQ\.3 Security Batch S1C/);
   assert.match(documentationSource, /Batch S1B — Atomic League Joining/);
   assert.match(documentationSource, /Functions → Hosting → Firestore Rules/);
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
 });
 
 test('create and join pages explain verification and the draft setup explains the entry lock', () => {

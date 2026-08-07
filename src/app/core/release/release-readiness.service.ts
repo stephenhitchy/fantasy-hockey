@@ -516,20 +516,33 @@ export async function loadReleaseReadinessSnapshot(
     ),
   );
 
+  const projectionServerValidated = Boolean(
+    projection?.generatedByAuthority === 'server' &&
+    projection?.catalogValidationStatus === 'validated' &&
+    projection?.catalogSnapshotId &&
+    projection?.catalogHash &&
+    projection?.canonicalAssetCount === projection?.assetCount,
+  );
+
   checks.push(
     createCheck(
       'projection-status',
       'projection',
-      'Shared projection snapshot is healthy',
+      'Shared projection snapshot is server validated',
       !projection
         ? 'No shared projection metadata is available.'
-        : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}.`,
+        : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}; ` +
+          (projectionServerValidated
+            ? `server catalog ${projection.catalogSnapshotId} validated ${projection.canonicalAssetCount} assets.`
+            : 'this snapshot predates the server NHL asset-catalog authority and should be refreshed.'),
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
         projection.assetCount > 0
-        ? projection.generationReason === 'server-emergency'
-          ? 'warning'
-          : 'pass'
+        ? projectionServerValidated
+          ? projection.generationReason === 'server-emergency'
+            ? 'warning'
+            : 'pass'
+          : 'warning'
         : projection?.status === 'error'
           ? 'fail'
           : 'warning',

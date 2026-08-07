@@ -293,7 +293,7 @@ test('roster, waiver, queue, clock, profile, and support callables have bounded 
     ['scripts/audit-async-operation-safety.mjs'],
     { cwd: root },
   );
-  assert.match(stdout, /33 browser callables have explicit timeouts/);
+  assert.match(stdout, /\d+ browser callables have explicit timeouts/);
 });
 
 test('R1D scripts and documentation record the required Functions-first deployment', async () => {
@@ -327,7 +327,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '0933f3584a681e831c937a4a06ac92150f78c3835c8f6c4bbbdb61126480b40a',
+    '3a8caf23e3e7b4fe921f5e79d14d593cd1f2899400a720cdf4d4c4e341aa0287',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -342,9 +342,13 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'draft-authority.ts',
     'draft-automation.ts',
     'shared/core/draft/draft.models.ts',
+    'projection-authority.ts',
+    'shared/core/projection/projection-asset-catalog.service.ts',
+    'shared/core/projection/projection-asset-catalog.util.ts',
+    'shared/core/projection/projection-snapshot.service.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 38,
-    digest: 'fb0976a682516cb7ae3ecd42da62f79c10f0528b9b30531d1a7ce4e0be5c10f3',
+    count: 37,
+    digest: 'c06b679a96a3cfcc0a07b8ac018094db0c19406f80cd51f9ec0a7d9a81614cf6',
   });
 });

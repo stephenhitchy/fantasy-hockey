@@ -3406,6 +3406,13 @@ export {
   updateLeagueCosmeticsSecure,
 } from './league-lifecycle-authority';
 
+
+export {
+  processProjectionGenerationTask,
+  recoverStaleProjectionGenerationRequests,
+  requestProjectionSnapshotGeneration,
+} from './projection-authority';
+
 export { saveManagerProfile } from './manager-profile-authority';
 
 export { applyImmediateRosterMove } from './roster-moves';

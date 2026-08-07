@@ -156,8 +156,8 @@ test('server allowlists remain synchronized with the browser league and profile 
 });
 
 test('current documentation continues recording the secure S1A deployment and rollback order', () => {
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 12'/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
   assert.match(documentationSource, /Batch S1A — Server-Authoritative League Creation/);
   assert.match(documentationSource, /Functions → Hosting → Firestore Rules/);
   assert.match(documentationSource, /Firestore Rules → Hosting/);

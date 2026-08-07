@@ -3,26 +3,14 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  writeBatch,
+  onSnapshot,
+  type Unsubscribe,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
-import { auth, db } from '../firebase';
-
+import { db } from '../firebase';
+import { functions } from '../firebase-functions';
 import { DraftableAsset } from '../draft/draft.models';
-
-import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
-
-import { getPlayerAvailabilityRecordsForLeague } from '../player/player-availability.service';
-
-import {
-  assertSharedProjectionPoolHealthy,
-  rankSharedProjectionAssets,
-} from './projection-ranking.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
@@ -31,8 +19,6 @@ export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
 
 const SNAPSHOT_POINTER_ID = 'current';
 const TARGET_CYCLE_POINTER_PREFIX = 'target-cycle-';
-const SNAPSHOT_ASSET_WRITE_BATCH_SIZE = 400;
-const SNAPSHOT_ASSET_CHUNK_SIZE = 25;
 const generationByLeague = new Map<string, Promise<SharedProjectionSnapshot>>();
 
 const SNAPSHOT_READ_CACHE_MILLISECONDS = 15_000;
@@ -81,6 +67,15 @@ export interface SharedProjectionSnapshotMetadata {
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
+  authoritySchemaVersion?: number;
+  generatedByAuthority?: 'server';
+  catalogSnapshotId?: string;
+  catalogHash?: string;
+  catalogSeason?: string;
+  canonicalAssetCount?: number;
+  catalogValidationStatus?: 'validated';
+  catalogCacheHit?: boolean;
+  generationRequestId?: string;
 }
 
 export interface SharedProjectionSnapshot {
@@ -116,10 +111,6 @@ function getProjectionSnapshotAssetsRef(leagueId: string, snapshotId: string) {
   return collection(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId, 'assets');
 }
 
-function getProjectionSnapshotAssetRef(leagueId: string, snapshotId: string, assetKey: string) {
-  return doc(getProjectionSnapshotAssetsRef(leagueId, snapshotId), assetKey);
-}
-
 function getSnapshotSortNumber(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
@@ -143,10 +134,6 @@ function compareSnapshotAssetOrder(
     firstName.localeCompare(secondName) ||
     first.assetKey.localeCompare(second.assetKey)
   );
-}
-
-function sanitizeForFirestore<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function normalizeMetadata(
@@ -202,6 +189,32 @@ function normalizeMetadata(
     projectionSeason:
       typeof data.projectionSeason === 'string'
         ? data.projectionSeason
+        : undefined,
+    authoritySchemaVersion:
+      typeof data.authoritySchemaVersion === 'number'
+        ? data.authoritySchemaVersion
+        : undefined,
+    generatedByAuthority:
+      data.generatedByAuthority === 'server' ? 'server' : undefined,
+    catalogSnapshotId:
+      typeof data.catalogSnapshotId === 'string'
+        ? data.catalogSnapshotId
+        : undefined,
+    catalogHash:
+      typeof data.catalogHash === 'string' ? data.catalogHash : undefined,
+    catalogSeason:
+      typeof data.catalogSeason === 'string' ? data.catalogSeason : undefined,
+    canonicalAssetCount:
+      typeof data.canonicalAssetCount === 'number'
+        ? data.canonicalAssetCount
+        : undefined,
+    catalogValidationStatus:
+      data.catalogValidationStatus === 'validated' ? 'validated' : undefined,
+    catalogCacheHit:
+      typeof data.catalogCacheHit === 'boolean' ? data.catalogCacheHit : undefined,
+    generationRequestId:
+      typeof data.generationRequestId === 'string'
+        ? data.generationRequestId
         : undefined,
   };
 }
@@ -438,232 +451,170 @@ export function loadSharedProjectionSnapshotForCycle(
   return loadProjectionSnapshotAtPointer(leagueId, getTargetCycleProjectionPointerId(cycleNumber));
 }
 
-async function getLatestCycleNumberForProjection(leagueId: string): Promise<number | null> {
-  const snapshot = await getDocs(
-    query(collection(db, 'leagues', leagueId, 'cycles'), orderBy('cycleNumber', 'desc'), limit(1)),
-  );
-  const cycleNumber = snapshot.docs[0]?.data()?.['cycleNumber'];
+interface ProjectionGenerationCallableRequest {
+  requestId: string;
+  leagueId: string;
+  generationReason: SharedProjectionGenerationReason;
+  targetCycleNumber?: number;
+}
 
-  return typeof cycleNumber === 'number' && Number.isFinite(cycleNumber)
-    ? Math.max(1, Math.floor(cycleNumber))
-    : null;
+interface ProjectionGenerationCallableResult {
+  requestId: string;
+  status: 'queued' | 'ready';
+  snapshotId: string | null;
+  targetCycleNumber: number;
+  message: string;
+  reusedFreshSnapshot: boolean;
+}
+
+interface ProjectionGenerationRequestState {
+  leagueId?: unknown;
+  status?: unknown;
+  snapshotId?: unknown;
+  message?: unknown;
+  lastError?: unknown;
+}
+
+const requestProjectionSnapshotGenerationCallable = httpsCallable<
+  ProjectionGenerationCallableRequest,
+  ProjectionGenerationCallableResult
+>(functions, 'requestProjectionSnapshotGeneration', {
+  timeout: 30_000,
+});
+
+function createProjectionRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `projection-${crypto.randomUUID()}`;
+  }
+
+  return `projection-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function waitForProjectionGeneration(
+  leagueId: string,
+  requestId: string,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsubscribe: Unsubscribe = () => {};
+    const requestRef = doc(db, 'projectionGenerationRequests', requestId);
+    const timeout = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      unsubscribe();
+      reject(
+        new Error(
+          'Projection generation is still running on the server. You can leave this page and try again shortly; the completed snapshot will be reused.',
+        ),
+      );
+    }, 9 * 60 * 1000);
+
+    unsubscribe = onSnapshot(
+      requestRef,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (settled || !snapshot.exists() || snapshot.metadata.fromCache) {
+          return;
+        }
+
+        const data = snapshot.data() as ProjectionGenerationRequestState;
+
+        if (data.leagueId !== leagueId) {
+          settled = true;
+          window.clearTimeout(timeout);
+          unsubscribe();
+          reject(new Error('Projection request identity did not match this league.'));
+          return;
+        }
+
+        if (data.status === 'ready' && typeof data.snapshotId === 'string' && data.snapshotId) {
+          settled = true;
+          window.clearTimeout(timeout);
+          unsubscribe();
+          resolve(data.snapshotId);
+          return;
+        }
+
+        if (data.status === 'error') {
+          settled = true;
+          window.clearTimeout(timeout);
+          unsubscribe();
+          const message =
+            typeof data.lastError === 'string' && data.lastError
+              ? data.lastError
+              : typeof data.message === 'string' && data.message
+                ? data.message
+                : 'Unable to generate the server projection snapshot.';
+          reject(new Error(message));
+        }
+      },
+      (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        window.clearTimeout(timeout);
+        unsubscribe();
+        reject(error);
+      },
+    );
+  });
+}
+
+async function loadServerGeneratedSnapshot(
+  leagueId: string,
+  snapshotId: string,
+): Promise<SharedProjectionSnapshot> {
+  invalidateSharedProjectionReadCache(leagueId);
+  const snapshot = await loadSharedProjectionSnapshotById(leagueId, snapshotId);
+
+  if (!snapshot || snapshot.assets.length === 0) {
+    throw new Error('The server finished projection generation, but the snapshot was incomplete.');
+  }
+
+  if (
+    snapshot.metadata.generatedByAuthority !== 'server' ||
+    snapshot.metadata.catalogValidationStatus !== 'validated' ||
+    !snapshot.metadata.catalogSnapshotId ||
+    !snapshot.metadata.catalogHash
+  ) {
+    throw new Error('The projection snapshot was not validated by the server NHL asset catalog.');
+  }
+
+  return snapshot;
 }
 
 async function generateSnapshotInternal(
   input: GenerateSharedProjectionSnapshotInput,
 ): Promise<SharedProjectionSnapshot> {
-  const user = auth.currentUser;
-
-  if (!user) {
-    throw new Error('You must be logged in to refresh shared projections.');
-  }
-
   const leagueId = input.leagueId.trim();
 
   if (!leagueId) {
     throw new Error('A league is required to refresh projections.');
   }
 
-  const teamCount = Math.max(2, Math.floor(input.teamCount));
-  const requiredGamesPerCycle = Math.max(1, Math.floor(input.requiredGamesPerCycle));
-
-  // Any new generation makes previously cached metadata/assets stale.
   invalidateSharedProjectionReadCache(leagueId);
+  const requestId = createProjectionRequestId();
+  const response = await requestProjectionSnapshotGenerationCallable({
+    requestId,
+    leagueId,
+    generationReason: input.generationReason ?? 'manual',
+    targetCycleNumber:
+      typeof input.targetCycleNumber === 'number'
+        ? Math.max(1, Math.floor(input.targetCycleNumber))
+        : undefined,
+  });
+  const result = response.data;
+  const snapshotId =
+    result.status === 'ready' && result.snapshotId
+      ? result.snapshotId
+      : await waitForProjectionGeneration(leagueId, result.requestId);
 
-  const requestedTargetCycleNumber =
-    typeof input.targetCycleNumber === 'number'
-      ? Math.max(1, Math.floor(input.targetCycleNumber))
-      : null;
-  const latestCycleNumber =
-    requestedTargetCycleNumber === null ? await getLatestCycleNumberForProjection(leagueId) : null;
-  const targetCycleNumber =
-    requestedTargetCycleNumber ?? (latestCycleNumber ? latestCycleNumber + 1 : 1);
-
-  const snapshotId = [Date.now(), user.uid.slice(0, 12)].join('-');
-
-  const generatedAt = new Date().toISOString();
-  const draftReadyUntil = new Date(
-    Date.now() + PRE_DRAFT_PROJECTION_FRESH_MINUTES * 60 * 1000,
-  ).toISOString();
-
-  const generationReason = input.generationReason ?? 'manual';
-
-  const snapshotRef = getProjectionSnapshotRef(leagueId, snapshotId);
-
-  const buildingMetadata = {
-    snapshotId,
-    activeSnapshotId: snapshotId,
-    status: 'building' as const,
-    projectionVersion: SHARED_PROJECTION_VERSION,
-    generatedAt,
-    generatedAtServer: serverTimestamp(),
-    generatedBy: user.uid,
-    assetCount: 0,
-    teamCount,
-    targetCycleNumber,
-    requiredGamesPerCycle,
-    generationReason,
-    draftReadyUntil,
-    message: 'Building shared projections.',
-    projectionAsOfDate: generatedAt.slice(0, 10),
-    projectionContext: 'live' as const,
-  };
-
-  await setDoc(snapshotRef, buildingMetadata);
-
-  try {
-    const availabilityByPlayerId = await getPlayerAvailabilityRecordsForLeague(leagueId);
-
-    const localAssets = await loadDraftPlayerPool({
-      forceRefresh: true,
-      targetCycleNumber,
-      requiredGamesPerCycle,
-      availabilityByPlayerId,
-    });
-
-    assertSharedProjectionPoolHealthy(localAssets);
-
-    const rankedAssets = rankSharedProjectionAssets(localAssets, teamCount).map((asset) => ({
-      ...asset,
-      sharedProjectionSnapshotId: snapshotId,
-      projectionGeneratedAt: generatedAt,
-    }));
-
-    const assetChunks: DraftableAsset[][] = [];
-
-    for (let index = 0; index < rankedAssets.length; index += SNAPSHOT_ASSET_CHUNK_SIZE) {
-      assetChunks.push(rankedAssets.slice(index, index + SNAPSHOT_ASSET_CHUNK_SIZE));
-    }
-
-    for (let index = 0; index < assetChunks.length; index += SNAPSHOT_ASSET_WRITE_BATCH_SIZE) {
-      const batch = writeBatch(db);
-      const chunkBatch = assetChunks.slice(index, index + SNAPSHOT_ASSET_WRITE_BATCH_SIZE);
-
-      chunkBatch.forEach((assets, offset) => {
-        const chunkIndex = index + offset;
-        const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
-
-        batch.set(
-          getProjectionSnapshotAssetRef(leagueId, snapshotId, chunkId),
-          sanitizeForFirestore({
-            schemaVersion: 2,
-            chunkIndex,
-            assetCount: assets.length,
-            sharedProjectionSnapshotId: snapshotId,
-            assets,
-          }),
-        );
-      });
-
-      await batch.commit();
-    }
-
-    const metadata: SharedProjectionSnapshotMetadata = {
-      snapshotId,
-      activeSnapshotId: snapshotId,
-      status: 'ready',
-      projectionVersion: SHARED_PROJECTION_VERSION,
-      generatedAt,
-      generatedBy: user.uid,
-      assetCount: rankedAssets.length,
-      assetDocumentCount: assetChunks.length,
-      assetStorageVersion: 2,
-      teamCount,
-      targetCycleNumber,
-      requiredGamesPerCycle,
-      generationReason,
-      draftReadyUntil,
-      message: `Shared draft rankings and Matchup ${targetCycleNumber} projections are ready.`,
-      projectionAsOfDate: generatedAt.slice(0, 10),
-      projectionContext: 'live',
-    };
-
-    const finalBatch = writeBatch(db);
-
-    finalBatch.set(snapshotRef, {
-      ...metadata,
-      generatedAtServer: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    const pointerPayload = {
-      ...metadata,
-      generatedAtServer: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    finalBatch.set(
-      getProjectionSnapshotRef(leagueId, getTargetCycleProjectionPointerId(targetCycleNumber)),
-      pointerPayload,
-    );
-
-    // Window-boundary snapshots are intentionally target-specific. A slower
-    // slot can still enter Cycle N after a faster slot has reached Cycle N+1;
-    // it must not move the league-wide draft/free-agent pointer backwards.
-    if (generationReason !== 'window-boundary') {
-      finalBatch.set(getProjectionSnapshotRef(leagueId, SNAPSHOT_POINTER_ID), pointerPayload);
-    }
-
-    await finalBatch.commit();
-
-    const completedSnapshot: SharedProjectionSnapshot = {
-      metadata,
-      assets: rankedAssets,
-    };
-
-    const loadedAt = Date.now();
-
-    const targetCacheKey = getProjectionReadCacheKey(
-      leagueId,
-      getTargetCycleProjectionPointerId(targetCycleNumber),
-    );
-
-    metadataReadCache.set(targetCacheKey, {
-      loadedAt,
-      value: metadata,
-    });
-
-    snapshotReadCache.set(targetCacheKey, {
-      loadedAt,
-      value: completedSnapshot,
-    });
-
-    if (generationReason !== 'window-boundary') {
-      const currentCacheKey = getProjectionReadCacheKey(leagueId, SNAPSHOT_POINTER_ID);
-
-      metadataReadCache.set(currentCacheKey, {
-        loadedAt,
-        value: metadata,
-      });
-
-      snapshotReadCache.set(currentCacheKey, {
-        loadedAt,
-        value: completedSnapshot,
-      });
-    }
-
-    return completedSnapshot;
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to generate shared projections.';
-
-    try {
-      await setDoc(
-        snapshotRef,
-        {
-          ...buildingMetadata,
-          status: 'error',
-          message,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    } catch {
-      // Preserve the original projection error.
-    }
-
-    throw error;
-  }
+  return loadServerGeneratedSnapshot(leagueId, snapshotId);
 }
 
 export async function generateSharedProjectionSnapshot(

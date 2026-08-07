@@ -15,13 +15,13 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchs1c
+npm run verify:batchs2a-1
 ```
 
-The current S1C chain runs the complete S1A/S1B/R1F history, strict league-schema and authority-migration tests, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
+The current S2A.1 chain runs the complete S1A/S1B/S1C/R1F history, server Projection V11 authority and canonical NHL asset-catalog tests, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
 
 
-Current release: **Release Candidate 12** — strict league authority schemas, audited commissioner settings, and guarded existing-league migration.
+Current release: **Release Candidate 13 / S2A.1 hotfix** — server-generated Projection V11 snapshots, canonical NHL asset validation, Firestore Rules warning cleanup, and the Angular Firebase `Unsubscribe` type correction.
 
-Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, and `verify:batchs1b`; `verify:batchs1c` runs that complete chain before the S1C security suite.
+Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, `verify:batchs1b`, and `verify:batchs1c`; `verify:batchs2a` runs that complete chain before the S2A projection-authority suite; `verify:batchs2a-1` adds the Angular listener type-regression check.
 Earlier queue-control checkpoints remain available through `verify:batchp1e`, `verify:batchp1f`, and `verify:batchp1f-1`.

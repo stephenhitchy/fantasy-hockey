@@ -1,12 +1,106 @@
+## Batch S2A.1 — Angular Firestore Unsubscribe Type Hotfix
+
+### Purpose
+
+The first S2A Angular production build exposed `TS2322` in the projection-generation progress listener. The placeholder cleanup callback was inferred as `() => undefined`, while Firebase `onSnapshot()` returns `Unsubscribe` (`() => void`). TypeScript correctly rejected assigning the Firebase callback to the narrower inferred type.
+
+S2A.1 imports Firebase's `Unsubscribe` type explicitly and initializes the cleanup callback as:
+
+```ts
+let unsubscribe: Unsubscribe = () => {};
+```
+
+The listener behavior, nine-minute progress window, server-owned projection request, Projection V11 calculations, canonical asset validation, and deployment order are unchanged.
+
+### Verification
+
+```bash
+npm run verify:batchs2a-1
+```
+
+The focused regression test prevents reintroducing an initializer such as `() => undefined`, while the inherited S2A verification chain runs the Angular build, Functions build, Firestore emulator tests, prior regression suites, and release-manifest validation on the developer machine.
+
+### Deployment
+
+This hotfix corrects the S2A client build before release. Use the same S2A deployment sequence:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only firestore:rules -m "Security S2A projection progress access and rules cleanup"
+firebase deploy --only functions -m "Security S2A server Projection V11 authority"
+firebase deploy --only hosting:app -m "Security S2A.1 projection listener type hotfix"
+```
+
+No Firestore index deployment or data migration is required.
+
+---
+
+## Batch S2A — Server Projection V11 Generation and Canonical NHL Asset Catalog
+
+### Purpose
+
+Security Batch S2A begins the projection-authority phase. Normal browser workflows no longer calculate and write the shared Draft pool themselves. They submit a short authenticated request, a bounded Cloud Task generates Projection V11 on the server, and the client follows a server-owned progress document until the validated snapshot is ready.
+
+This release is labeled **Release Candidate 13**.
+
+### Server projection authority
+
+The `requestProjectionSnapshotGeneration` callable derives the team count, six-game contract, league access, and legal target matchup from server documents. It does not trust the browser's projection values. A deterministic per-league/target control prevents overlapping rebuilds, and `processProjectionGenerationTask` performs the expensive NHL work with a two-worker concurrency ceiling.
+
+The browser can safely leave a page while generation continues. A fresh retry joins the existing request or reuses the newest healthy server snapshot instead of starting duplicate work. `recoverStaleProjectionGenerationRequests` releases a request whose worker stopped reporting progress.
+
+### Canonical NHL asset catalog
+
+Every new server snapshot is checked against a server-owned catalog built from current NHL rosters plus the 32 supported team-goalie units. The catalog stores a stable SHA-256 identity hash and validates:
+
+- asset key and type;
+- NHL player ID;
+- player name, team, and eligible position;
+- goalie-unit abbreviation and team name;
+- duplicate, unknown, and missing assets.
+
+A snapshot receives `generatedByAuthority: server`, `catalogValidationStatus: validated`, the exact catalog ID/hash, and the canonical asset count only after every identity passes. Projection V11 calculation values remain unchanged.
+
+### Projection Lab and Release Readiness
+
+Projection Lab shows whether the shared board is server-catalog verified. Release Readiness now treats a legacy browser-written snapshot as a refresh warning and passes after a current server-validated Projection V11 snapshot exists. Snapshot content hashing and Draft-side hash enforcement remain reserved for S2B.
+
+### Firestore Rules warning cleanup
+
+The unused helper functions reported by the Firebase Rules compiler were removed. They were dead compatibility validators and had no effect on deployed permissions. The server-owned `projectionGenerationRequests` progress documents are readable only by members of the associated league and remain browser read-only.
+
+### Verification
+
+```bash
+npm run verify:batchs2a
+```
+
+### Deployment order
+
+Use **Firestore Rules → all Functions → Hosting**. The Rules change is backward-compatible: it adds member-only access to server progress documents and removes dead helper functions without changing the legacy projection-write permissions that remain until S2B. Deploying it first ensures the new client can observe a queued projection immediately.
+
+The complete Functions deployment is intentional: Projection V11 generation is shared by Draft setup, live window rollover, scoring recovery, and the new task worker, so every deployed Function must receive the same server-catalog validation code.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only firestore:rules -m "Security S2A projection progress access and rules cleanup"
+firebase deploy --only functions -m "Security S2A server Projection V11 authority"
+firebase deploy --only hosting:app -m "Security S2A server projection generation"
+```
+
+No Firestore index deployment or data migration is required. Finish the S1C smoke tests before deploying S2A to production; the S2A source can be verified in parallel without changing the currently deployed league-authority behavior.
+
+---
+
 ## Batch S1C — Strict League Schemas, Audit History, and Authority Migration
 
 ### Purpose
 
 Security Batch S1C completes roadmap items **S1.8–S1.12**. The league lifecycle now has strict member/team browser schemas, server-audited league presentation and Draft-setting changes, a guarded authority-v2 migration for existing leagues, and adversarial Firestore Rules coverage.
 
-This release is labeled **Release Candidate 12**.
+This release was labeled **Release Candidate 12**.
 
-The prior Release Readiness result of 16/17 was healthy: Firebase App Check was the only existing warning. RC12 adds one new required authority-schema check. After an active league completes the guarded migration, App Check remains the intended outstanding configuration gate until Security Batch S3A.
+The prior Release Readiness result of 16/17 was healthy: Firebase App Check was the only existing warning. RC12 added one new required authority-schema check. After an active league completes the guarded migration, App Check remains the intended outstanding configuration gate until Security Batch S3A.
 
 ### Authority schema v2
 
@@ -67,7 +161,7 @@ The migration is safe to run again. It re-verifies the canonical documents and r
 
 ### Release Readiness
 
-RC12 adds a required **League authority schema is current** check. A league passes when:
+RC12 added a required **League authority schema is current** check. A league passes when:
 
 ```text
 authoritySchemaVersion == 2
