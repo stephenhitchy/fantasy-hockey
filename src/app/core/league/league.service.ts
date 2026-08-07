@@ -1,5 +1,4 @@
 import {
-  collection,
   collectionGroup,
   doc,
   getDoc,
@@ -49,7 +48,11 @@ export interface League {
   matchupFormat: string;
   scoringRules: ScoringRules;
   scoringRulesVersion?: number;
+  authoritySchemaVersion?: number;
+  createdByAuthority?: string;
+  competitionSettingsLocked?: boolean;
   createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 export interface LeagueMember {
@@ -79,6 +82,31 @@ interface DeleteLeagueRequest {
 interface DeleteLeagueResponse {
   deleted: boolean;
   leagueId: string;
+}
+
+interface CreateLeagueSecureRequest {
+  requestId: string;
+  name: string;
+  maxTeams: number;
+  username: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
+  profileIconId: ProfileIconId;
+}
+
+interface CreateLeagueSecureResponse {
+  created: true;
+  leagueId: string;
+  inviteCode: string;
+  idempotentReplay: boolean;
+  authoritySchemaVersion: number;
+}
+
+interface PendingLeagueCreationRequest {
+  fingerprint: string;
+  requestId: string;
+  profileIconId: ProfileIconId;
+  createdAt: number;
 }
 
 export interface LeagueSummary {
@@ -114,9 +142,6 @@ export interface LeagueSummary {
   };
 }
 
-const INVITE_CODE_LENGTH = 6;
-const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const MAX_INVITE_CODE_ATTEMPTS = 20;
 
 function normalizeLeagueScoringRules(league: Partial<League>): League {
   const storedRules = league.scoringRules;
@@ -211,7 +236,17 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
     matchupFormat: league.matchupFormat ?? 'cycle_matchup',
     scoringRules: normalizedRules,
     scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    authoritySchemaVersion:
+      typeof league.authoritySchemaVersion === 'number'
+        ? league.authoritySchemaVersion
+        : undefined,
+    createdByAuthority:
+      typeof league.createdByAuthority === 'string'
+        ? league.createdByAuthority
+        : undefined,
+    competitionSettingsLocked: league.competitionSettingsLocked === true,
     createdAt: league.createdAt,
+    updatedAt: league.updatedAt,
   };
 }
 
@@ -225,21 +260,145 @@ function normalizeUsername(username: string): string {
   return trimmedUsername || 'Unknown User';
 }
 
-function createInviteCodeCandidate(): string {
-  const values = new Uint32Array(INVITE_CODE_LENGTH);
+const PENDING_LEAGUE_CREATION_STORAGE_KEY = 'rinkrat:pending-league-creation:v1';
+const PENDING_LEAGUE_CREATION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+let inMemoryPendingLeagueCreation: PendingLeagueCreationRequest | null = null;
 
-  if (typeof globalThis.crypto?.getRandomValues === 'function') {
-    globalThis.crypto.getRandomValues(values);
-  } else {
-    for (let index = 0; index < values.length; index += 1) {
-      values[index] = Math.floor(Math.random() * 0xffffffff);
-    }
+function createLeagueRequestId(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+
+  if (randomUuid) {
+    return randomUuid;
   }
 
-  return Array.from(
-    values,
-    (value) => INVITE_CODE_ALPHABET[value % INVITE_CODE_ALPHABET.length],
-  ).join('');
+  return `league-${Date.now()}-${Math.random().toString(36).slice(2, 18)}`;
+}
+
+function getLeagueCreationFingerprint(input: {
+  name: string;
+  maxTeams: number;
+  username: string;
+  leagueLogoId: LeagueLogoId;
+  leagueLogoPaletteId: LeagueLogoPaletteId;
+}): string {
+  return JSON.stringify(input);
+}
+
+function isUsablePendingLeagueCreation(
+  candidate: Partial<PendingLeagueCreationRequest> | null,
+): candidate is PendingLeagueCreationRequest {
+  const createdAt = typeof candidate?.createdAt === 'number' ? candidate.createdAt : 0;
+
+  return Boolean(
+    candidate?.fingerprint &&
+    candidate.requestId &&
+    isProfileIconId(candidate.profileIconId) &&
+    Date.now() - createdAt <= PENDING_LEAGUE_CREATION_MAX_AGE_MS,
+  );
+}
+
+function readPendingLeagueCreation(): PendingLeagueCreationRequest | null {
+  try {
+    const rawValue = globalThis.sessionStorage?.getItem(
+      PENDING_LEAGUE_CREATION_STORAGE_KEY,
+    );
+
+    if (rawValue) {
+      const candidate = JSON.parse(rawValue) as Partial<PendingLeagueCreationRequest>;
+
+      if (isUsablePendingLeagueCreation(candidate)) {
+        inMemoryPendingLeagueCreation = candidate;
+        return candidate;
+      }
+
+      globalThis.sessionStorage?.removeItem(PENDING_LEAGUE_CREATION_STORAGE_KEY);
+    }
+  } catch {
+    // Continue with the in-memory request when storage is unavailable.
+  }
+
+  if (isUsablePendingLeagueCreation(inMemoryPendingLeagueCreation)) {
+    return inMemoryPendingLeagueCreation;
+  }
+
+  inMemoryPendingLeagueCreation = null;
+  return null;
+}
+
+function getOrCreatePendingLeagueCreation(
+  fingerprint: string,
+): PendingLeagueCreationRequest {
+  const existing = readPendingLeagueCreation();
+
+  if (existing?.fingerprint === fingerprint) {
+    return existing;
+  }
+
+  const pending: PendingLeagueCreationRequest = {
+    fingerprint,
+    requestId: createLeagueRequestId(),
+    profileIconId: getRandomProfileIconId(),
+    createdAt: Date.now(),
+  };
+
+  inMemoryPendingLeagueCreation = pending;
+
+  try {
+    globalThis.sessionStorage?.setItem(
+      PENDING_LEAGUE_CREATION_STORAGE_KEY,
+      JSON.stringify(pending),
+    );
+  } catch {
+    // The in-memory copy still preserves idempotency for this open tab.
+  }
+
+  return pending;
+}
+
+function clearPendingLeagueCreation(requestId: string): void {
+  const existing = readPendingLeagueCreation();
+
+  if (existing?.requestId !== requestId) {
+    return;
+  }
+
+  inMemoryPendingLeagueCreation = null;
+
+  try {
+    globalThis.sessionStorage?.removeItem(PENDING_LEAGUE_CREATION_STORAGE_KEY);
+  } catch {
+    // Storage cleanup is best-effort after the server confirms creation.
+  }
+}
+
+function getCallableErrorMessage(error: unknown): string {
+  const record = error && typeof error === 'object'
+    ? error as { code?: unknown; message?: unknown }
+    : {};
+  const code = typeof record.code === 'string' ? record.code : '';
+  const rawMessage = typeof record.message === 'string' ? record.message.trim() : '';
+  const message = rawMessage
+    .replace(/^FirebaseError:\s*/i, '')
+    .replace(/^\[functions\/[^\]]+\]\s*/i, '')
+    .trim();
+
+  if (message) {
+    return message;
+  }
+
+  if (code.includes('unauthenticated')) {
+    return 'You must be logged in to create a league.';
+  }
+
+  if (code.includes('resource-exhausted')) {
+    return 'RinkRat could not reserve a league invite code. Please try again.';
+  }
+
+  if (code.includes('failed-precondition') || code.includes('aborted')) {
+    return 'The previous league creation is still being reconciled. Wait a moment and try again.';
+  }
+
+  return 'Unable to create the league right now. Please try again.';
 }
 
 function getLeagueInviteRef(inviteCode: string) {
@@ -282,19 +441,6 @@ function getNewTeamDocument(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-}
-
-async function createUniqueInviteCode(): Promise<string> {
-  for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt += 1) {
-    const inviteCode = createInviteCodeCandidate();
-    const inviteSnapshot = await getDoc(getLeagueInviteRef(inviteCode));
-
-    if (!inviteSnapshot.exists()) {
-      return inviteCode;
-    }
-  }
-
-  throw new Error('Unable to generate a unique league invite code. Please try again.');
 }
 
 async function createLeagueInviteDocument(league: League): Promise<void> {
@@ -358,79 +504,57 @@ export async function createLeague(
   }
 
   const trimmedName = name.trim();
+  const normalizedUsername = normalizeUsername(username);
+  const normalizedLeagueLogoId = normalizeLeagueLogoId(leagueLogoId);
+  const normalizedLeagueLogoPaletteId = normalizeLeagueLogoPaletteId(
+    leagueLogoPaletteId,
+  );
 
   if (!trimmedName) {
     throw new Error('Please enter a league name.');
+  }
+
+  if (trimmedName.length > 80) {
+    throw new Error('League name must be 80 characters or fewer.');
   }
 
   if (!Number.isInteger(maxTeams) || maxTeams < 2 || maxTeams > 12) {
     throw new Error('League size must be between 2 and 12 teams.');
   }
 
-  const leagueRef = doc(collection(db, 'leagues'));
-  const inviteCode = await createUniqueInviteCode();
-  const inviteRef = getLeagueInviteRef(inviteCode);
-  const memberRef = getLeagueMemberRef(leagueRef.id, user.uid);
-  const teamRef = getLeagueTeamRef(leagueRef.id, user.uid);
-  const normalizedUsername = normalizeUsername(username);
-  const normalizedProfileIconId = getRandomProfileIconId();
-
-  const league: League = {
-    id: leagueRef.id,
+  const fingerprint = getLeagueCreationFingerprint({
     name: trimmedName,
-    leagueLogoId: normalizeLeagueLogoId(leagueLogoId),
-    leagueLogoPaletteId: normalizeLeagueLogoPaletteId(leagueLogoPaletteId),
-    commissionerId: user.uid,
-    inviteCode,
     maxTeams,
-    matchupFormat: 'cycle_matchup',
-    scoringRules: defaultScoringRules,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
-  };
-
-  const batch = writeBatch(db);
-
-  batch.set(leagueRef, {
-    ...league,
-    createdAt: serverTimestamp(),
-  });
-
-  batch.set(inviteRef, {
-    inviteCode,
-    leagueId: leagueRef.id,
-    createdBy: user.uid,
-    active: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  } satisfies LeagueInvite);
-
-  batch.set(memberRef, {
-    uid: user.uid,
-    leagueId: leagueRef.id,
     username: normalizedUsername,
-    profileIconId: normalizedProfileIconId,
-    role: 'commissioner',
-    inviteCodeUsed: null,
-    joinedAt: serverTimestamp(),
+    leagueLogoId: normalizedLeagueLogoId,
+    leagueLogoPaletteId: normalizedLeagueLogoPaletteId,
   });
+  const pending = getOrCreatePendingLeagueCreation(fingerprint);
+  const callable = httpsCallable<
+    CreateLeagueSecureRequest,
+    CreateLeagueSecureResponse
+  >(functions, 'createLeagueSecure', { timeout: 50_000 });
 
-  batch.set(
-    teamRef,
-    getNewTeamDocument(user.uid, normalizedUsername, normalizedProfileIconId),
-  );
-  await batch.commit();
-
-  // Firestore rules intentionally deny browser-created roster documents.
-  // Initialize the commissioner roster through the authenticated server
-  // authority after the league, member, and team records exist. If this
-  // transient follow-up fails, roster pages retry the same callable lazily.
   try {
-    await ensureFantasyRoster(leagueRef.id);
-  } catch (error) {
-    console.warn('League created; roster initialization will retry when needed.', error);
-  }
+    const response = await callable({
+      requestId: pending.requestId,
+      name: trimmedName,
+      maxTeams,
+      username: normalizedUsername,
+      leagueLogoId: normalizedLeagueLogoId,
+      leagueLogoPaletteId: normalizedLeagueLogoPaletteId,
+      profileIconId: pending.profileIconId,
+    });
 
-  return leagueRef.id;
+    if (!response.data.created || !response.data.leagueId) {
+      throw new Error('The server could not confirm the new league.');
+    }
+
+    clearPendingLeagueCreation(pending.requestId);
+    return response.data.leagueId;
+  } catch (error: unknown) {
+    throw new Error(getCallableErrorMessage(error));
+  }
 }
 
 export async function getMyLeagues(): Promise<League[]> {

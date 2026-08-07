@@ -3344,6 +3344,8 @@ export {
   repairDraftTurnHandoff,
 } from './draft-authority';
 
+export { createLeagueSecure } from './league-lifecycle-authority';
+
 export { saveManagerProfile } from './manager-profile-authority';
 
 export { applyImmediateRosterMove } from './roster-moves';

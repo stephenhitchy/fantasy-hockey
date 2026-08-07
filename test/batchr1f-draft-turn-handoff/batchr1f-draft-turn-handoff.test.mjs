@@ -162,7 +162,7 @@ test('Draft Room repairs a delayed handoff and does not let a private queue list
   assert.match(clientAuthority, /'repairDraftTurnHandoff'[\s\S]*timeout:\s*30_000/);
 });
 
-test('R1F scripts and Release Candidate 9 documentation preserve competitive scoring and projections', async () => {
+test('R1F scripts remain installed while the current release preserves competitive scoring and projections', async () => {
   const [packageSource, runtime, productionRuntime, documentation, readme] = await Promise.all([
     read('package.json'),
     read('src/environments/app-runtime.config.ts'),
@@ -174,8 +174,8 @@ test('R1F scripts and Release Candidate 9 documentation preserve competitive sco
 
   assert.match(packageJson.scripts['test:batchr1f:run'], /batchr1f-draft-turn-handoff/);
   assert.match(packageJson.scripts['verify:batchr1f'], /verify:batchp1f-1/);
-  assert.match(runtime, /Release Candidate 9/);
-  assert.match(productionRuntime, /Release Candidate 9/);
+  assert.match(runtime, /^.*Release Candidate \d+.*$/m);
+  assert.match(productionRuntime, /^.*Release Candidate \d+.*$/m);
   assert.match(documentation, /^## Batch R1F — Draft Queue Turn Handoff Recovery/m);
   assert.match(readme, /verify:batchr1f/);
 
@@ -193,7 +193,7 @@ test('R1F scripts and Release Candidate 9 documentation preserve competitive sco
   );
   assert.equal(
     await sha256('firestore.rules'),
-    'a37d7c47e9ffcb6a4549e5ad078a918b812619c014fcf01373025bacfa9c1a8c',
+    'c366bff7ffda152bf538b2bafd4b276fa15b12e5f1c4a05e1ae9a1cb47a8982c',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),

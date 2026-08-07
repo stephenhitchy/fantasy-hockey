@@ -3,6 +3,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -389,7 +390,7 @@ describe('account profile boundaries', () => {
 
 
 describe('league onboarding compatibility', () => {
-  test('a signed-in user can create the league, invite, membership, and team before server roster initialization', async () => {
+  test('browser clients cannot create a league or its commissioner records directly', async () => {
     const leagueId = 'new-rules-league';
     const inviteCode = 'NEW123';
     const batch = writeBatch(outsider.db);
@@ -439,7 +440,7 @@ describe('league onboarding compatibility', () => {
       updatedAt: serverTimestamp(),
     });
 
-    await expectAllowed(batch.commit(), 'League onboarding batch without roster');
+    await expectDenied(batch.commit(), 'Browser-direct league creation batch');
   });
 
   test('a signed-in invitee can create membership and team before server roster initialization', async () => {
@@ -504,6 +505,86 @@ describe('league membership and reads', () => {
         doc(outsider.db, 'leagues', LEAGUE_ID, 'teams', manager.uid, 'roster', 'current'),
       ),
       'Outsider roster read',
+    );
+  });
+});
+
+describe('league competition settings authority', () => {
+  test('commissioners can update only approved league presentation fields', async () => {
+    await expectAllowed(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID), {
+        name: 'Renamed Rules Fixture League',
+        leagueLogoId: 'rink-rat',
+        leagueLogoPaletteId: 'ice-blue',
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner cosmetic league update',
+    );
+  });
+
+  test('commissioners cannot delete an existing approved league emblem field', async () => {
+    await seedDocument(`leagues/${LEAGUE_ID}`, {
+      id: LEAGUE_ID,
+      commissionerId: commissioner.uid,
+      name: 'Rules Fixture League',
+      inviteCode: 'ABC123',
+      maxTeams: 4,
+      matchupFormat: 'cycle_matchup',
+      scoringRules: {},
+      leagueLogoId: 'rink-rat',
+      leagueLogoPaletteId: 'rink-gold',
+    });
+
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID), {
+        leagueLogoId: deleteField(),
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner league emblem deletion',
+    );
+  });
+
+  test('commissioners cannot change scoring or the six-game competition contract', async () => {
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID), {
+        scoringRules: { requiredGamesPerCycle: 3 },
+        scoringRulesVersion: 999,
+      }),
+      'Commissioner scoring contract tamper',
+    );
+  });
+
+  test('commissioners cannot change ownership, capacity, invite identity, or hidden fields', async () => {
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID), {
+        commissionerId: manager.uid,
+        maxTeams: 12,
+        inviteCode: 'HACKED',
+        hiddenAuthorityBypass: true,
+      }),
+      'Commissioner protected league field tamper',
+    );
+  });
+
+  test('league audit records are readable by members but browser-writable by nobody', async () => {
+    await seedDocument(`leagues/${LEAGUE_ID}/audit/league-created`, {
+      id: 'league-created',
+      leagueId: LEAGUE_ID,
+      action: 'league-created',
+      actorId: commissioner.uid,
+      authority: 'cloud-function',
+    });
+
+    await expectAllowed(
+      getDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'audit', 'league-created')),
+      'Member league audit read',
+    );
+    await expectDenied(
+      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'audit', 'forged'), {
+        action: 'scoring-rules-changed',
+        actorId: commissioner.uid,
+      }),
+      'Commissioner forged league audit write',
     );
   });
 });

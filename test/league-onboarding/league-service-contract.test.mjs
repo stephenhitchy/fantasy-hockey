@@ -17,18 +17,27 @@ function section(startMarker, endMarker) {
   return source.slice(start, end);
 }
 
-test('createLeague does not directly create a roster denied by Firestore rules', () => {
+test('createLeague delegates the complete workflow to createLeagueSecure', () => {
   const createLeagueSource = section(
     'export async function createLeague(',
-    'export async function getMyLeagues(',
+    'export async function getMyLeagues()',
   );
 
-  assert.doesNotMatch(createLeagueSource, /getFantasyRosterRef|getNewRosterDocument|batch\.set\(rosterRef/);
-  assert.match(createLeagueSource, /await batch\.commit\(\)/);
-  assert.match(createLeagueSource, /ensureFantasyRoster\(leagueRef\.id\)/);
+  assert.match(createLeagueSource, /httpsCallable<[\s\S]*?>\(functions, 'createLeagueSecure'/);
+  assert.match(createLeagueSource, /timeout: 50_000/);
+  assert.match(createLeagueSource, /requestId: pending\.requestId/);
+  assert.match(createLeagueSource, /profileIconId: pending\.profileIconId/);
+  assert.doesNotMatch(createLeagueSource, /writeBatch\(|batch\.set\(|ensureFantasyRoster\(/);
 });
 
-test('joinLeagueByInviteCode delegates roster creation and repair to server authority', () => {
+test('createLeague retries a lost response with the same exact request identity', () => {
+  assert.match(source, /PENDING_LEAGUE_CREATION_STORAGE_KEY/);
+  assert.match(source, /getOrCreatePendingLeagueCreation\(fingerprint\)/);
+  assert.match(source, /existing\?\.fingerprint === fingerprint/);
+  assert.match(source, /clearPendingLeagueCreation\(pending\.requestId\)/);
+});
+
+test('joinLeagueByInviteCode continues delegating roster creation and repair to server authority', () => {
   const joinLeagueSource = section(
     'export async function joinLeagueByInviteCode(',
     'export async function ensureLeagueProfileIcon(',

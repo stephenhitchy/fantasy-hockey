@@ -267,7 +267,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
   );
   assert.equal(
     await sha256('firestore.rules'),
-    'a37d7c47e9ffcb6a4549e5ad078a918b812619c014fcf01373025bacfa9c1a8c',
+    'c366bff7ffda152bf538b2bafd4b276fa15b12e5f1c4a05e1ae9a1cb47a8982c',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -278,6 +278,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
       'functions',
       new Set([
         'src/index.ts',
+        'src/league-lifecycle-authority.ts',
         'src/league-automation.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',

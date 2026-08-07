@@ -1,0 +1,716 @@
+RINKRAT COMPETITIVE ROADMAP
+Version 1.1
+Created: 2026-08-07
+Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
+
+================================================================================
+HOW TO USE THIS FILE
+================================================================================
+
+Never delete a roadmap item. Change only the status marker on the first line of the item.
+
+[ ]  NOT STARTED
+[~]  IN PROGRESS
+[!]  BLOCKED / NEEDS A DECISION
+# [x] COMPLETED (commented out, but kept permanently)
+# [-] DEFERRED OR INTENTIONALLY REJECTED
+
+Completion example:
+
+[ ] S1.1 Move league creation to a server-authoritative callable Function.
+
+becomes:
+
+# [x] S1.1 Move league creation to a server-authoritative callable Function. — Completed 2026-09-01 in Security Batch S1.
+
+Rules for maintaining this roadmap:
+
+1. Keep every stable task ID (S1.1, B2.3, etc.) unchanged.
+2. Add the completion date and release/batch name when an item is completed.
+3. Add new discoveries beneath the most relevant phase; do not renumber old tasks.
+4. Do not start a lower-priority feature if a P0 integrity or security item is unresolved.
+5. After every major phase, run the full regression suite, release simulator, six-team lifecycle, mobile checks, and rollback rehearsal.
+6. Avoid changing Production Scoring or Projection V11 in the middle of a live season unless a calculation is objectively wrong.
+7. Preserve RinkRat's identity. The goal is not to become a generic Yahoo or Fantrax clone.
+
+Suggested task labels:
+
+P0 = blocks safe public growth or competition integrity
+P1 = needed to compete strongly in private/public beta
+P2 = major retention, breadth, or growth improvement
+P3 = optional, experimental, or long-term
+S  = Small estimated engineering effort
+M  = Medium
+L  = Large
+XL = Multi-release program
+
+CURRENT RECOMMENDED FOCUS:
+
+[~] NEXT.1 Security Batch S1 — S1A complete; continue with S1B atomic joining, invite lock, capacity enforcement, and quotas. (P0 / XL)
+[ ] NEXT.2 Security Batch S2 — Server-generated Projection V11 draft snapshots. (P0 / L)
+[ ] NEXT.3 Security Batch S3 — App Check, account abuse controls, path validation, and CI security. (P0 / L)
+
+================================================================================
+NORTH STAR
+================================================================================
+
+RinkRat should become the best fantasy-hockey experience for private and community leagues by combining:
+
+- Fair opportunity: every active roster slot receives six scheduled NHL team games.
+- Transparency: every point, game, projection, and transaction start date can be explained.
+- Mobile-first usability: managers can draft, watch, compare, and manage a roster comfortably on a phone.
+- Hockey personality: RinkRat should feel like a game and a hockey community, not a spreadsheet.
+- Competitive integrity: no manager or commissioner can rewrite competitive truth from the browser.
+- Low maintenance: managers make meaningful decisions without daily-lineup micromanagement.
+- Progressive depth: beginners see the answer first; advanced users can open the full detail.
+
+PRIMARY POSITIONING STATEMENT:
+
+"Every starter gets six games. No schedule luck. Every point and roster move can be explained."
+
+================================================================================
+NON-NEGOTIABLE PRODUCT PRINCIPLES
+================================================================================
+
+# [x] PRINCIPLE.1 Keep the asynchronous six-game roster-slot format as RinkRat's defining feature.
+# [x] PRINCIPLE.2 Keep Production Scoring versioned and server-authoritative.
+# [x] PRINCIPLE.3 Keep started roster-slot windows immutable.
+# [x] PRINCIPLE.4 Keep competitive actions idempotent and recoverable after slow or lost browser responses.
+# [x] PRINCIPLE.5 Keep mobile as the primary live-game and Draft use case.
+# [x] PRINCIPLE.6 Keep Game Film and transaction timing understandable to beginners.
+[ ] PRINCIPLE.7 Prefer strong defaults and league templates over hundreds of confusing settings. (P1)
+[ ] PRINCIPLE.8 Keep advanced details available without placing them in every default view. (P1)
+[ ] PRINCIPLE.9 Never add a social, commissioner, or monetization feature without abuse controls and an audit trail. (P0)
+[ ] PRINCIPLE.10 Treat live data, projections, and competitive rules as server-owned inputs. (P0)
+
+================================================================================
+CURRENT BASELINE — ALREADY COMPLETED
+================================================================================
+
+# [x] F0.1 Built the core asynchronous six-game roster-slot architecture.
+# [x] F0.2 Built seventh-game rollover into each slot's next matchup.
+# [x] F0.3 Built immutable window IDs, shared scoring ledgers, and idempotent snapshots.
+# [x] F0.4 Built server-authoritative Draft picks, timers, queues, Auto-Draft, and handoff recovery.
+# [x] F0.5 Built server-authoritative roster moves, scheduled transactions, waivers, bench, and Injured Reserve.
+# [x] F0.6 Built standings, banked playoffs, backfill, championship, placement, and consolation flows.
+# [x] F0.7 Built Production Scoring V3 and Projection V11 with injury-safe healthy production, breakout recognition, role/form context, and uncertainty.
+# [x] F0.8 Built Game Center, Game Film, exact matchup end dates, and six-game explanations.
+# [x] F0.9 Built a mobile-first Draft Room with connection recovery, bounded waits, and queue transparency.
+# [x] F0.10 Built the Transaction Workbench with timing explanations and progressive disclosure.
+# [x] F0.11 Built neutral RinkRat identity, NHL themes, beginner onboarding, glossary, and Coach's Clipboard.
+# [x] F0.12 Built stale-build detection, release manifests, rollback fingerprints, and protected competitive actions.
+# [x] F0.13 Built client health, listener monitoring, action diagnostics, and Release Readiness.
+# [x] F0.14 Built historical replay serialization and safe multi-league testing controls.
+# [x] F0.15 Built live-scoring queue Shadow/Canary/Primary foundation and admin rollout controls.
+# [x] F0.16 Completed a successful six-team end-to-end test.
+# [x] F0.17 Completed a deep RC9 product, architecture, and security audit.
+
+CURRENT AUDIT BASELINE:
+
+- Controlled invite-beta score: 8.8 / 10
+- Broader public-launch score: 7.2 / 10
+- Overall product/engineering score: 8.4 / 10
+- Product differentiation: 9.4 / 10
+- Competitive engine: 9.0 / 10
+- Security against ordinary members: 8.8 / 10
+- Security against a malicious commissioner: 6.2 / 10
+- Broad public scalability: 6.0 / 10
+
+The immediate gap is not core game design. It is public trust, commissioner authority, abuse resistance, live-season proof, social retention, and proven scale.
+
+================================================================================
+PHASE S1 — SERVER-AUTHORITATIVE LEAGUE LIFECYCLE
+Goal: Close the largest confirmed competition-integrity vulnerabilities before friend-created leagues expand.
+Exit gate: A malicious commissioner cannot change competitive rules, exceed league capacity, join after Draft lock, or create unlimited leagues from the browser.
+================================================================================
+
+# [x] S1.1 Move league creation into an authenticated callable Function. (P0 / L) — Completed 2026-08-07 in Security Batch S1A.
+    Include: league, invite, commissioner membership, team, roster, default scoring contract, and audit record in one server-owned workflow.
+    Complete when: the browser cannot directly create the league's competitive documents and emulator tests prove it.
+
+# [x] S1.2 Make critical competition fields server-owned and immutable. (P0 / M) — Completed 2026-08-07 in Security Batch S1A.
+    Protect: commissionerId, scoringRules, scoringRulesVersion, requiredGamesPerCycle, matchupFormat, maxTeams after lock, season identity, and hidden authority fields.
+    Complete when: commissioner browser writes to any protected field are denied.
+
+# [x] S1.3 Restrict commissioner updates to a strict cosmetic allowlist. (P0 / M) — Completed 2026-08-07 in Security Batch S1A.
+    Allow only intended fields such as league name, approved logo choice, palette, and carefully defined display settings.
+    Complete when: Firestore rules use affectedKeys/hasOnly and reject arbitrary extra fields.
+
+[ ] S1.4 Move league joining into one server transaction. (P0 / L)
+    Validate: invite active, invite expiry, user not already joined, draft/season still open, team count below capacity, and no concurrent final-slot race.
+    Create: membership, team, roster, and activity record atomically.
+
+[ ] S1.5 Lock or rotate league invites when Draft setup reaches the lock point. (P0 / M)
+    Complete when: a late join cannot invalidate saved Draft order or stop a live Draft.
+
+[ ] S1.6 Add verified-email requirements for league creation, joining, and commissioner actions. (P0 / M)
+    Preserve: account browsing and onboarding before verification if desired.
+
+[ ] S1.7 Add league-creation and join-attempt quotas. (P0 / M)
+    Suggested controls: maximum active leagues per account, daily creation cap, attempt throttles, and abuse audit events.
+    Final values must be based on beta behavior rather than guessed public-scale values.
+
+[ ] S1.8 Add strict schemas and size limits for league, invite, member, and team documents. (P0 / M)
+    Include keys().hasOnly, bounded strings, bounded arrays/maps, and approved logo/palette values.
+
+[ ] S1.9 Add immutable commissioner-action audit history. (P0 / M)
+    Record server-side: actor, timestamp, previous value, new value, reason, release version, and affected league setting.
+
+[ ] S1.10 Add malicious-commissioner and join-race emulator tests. (P0 / L)
+    Test: scoring edits, six-game format edits, commissioner takeover, hidden fields, seventh joiner, simultaneous final-slot joins, join after Draft lock, expired invite, and oversized payloads.
+
+[ ] S1.11 Add a safe migration path for existing leagues. (P0 / M)
+    Complete when: current leagues receive a server authority marker and continue operating without recreating data.
+
+[ ] S1.12 Update documentation, Release Readiness, and rollback instructions for the new league lifecycle. (P1 / S)
+
+PHASE S1 EXIT CHECKLIST:
+
+[ ] S1.G1 All S1 emulator tests pass.
+[ ] S1.G2 Existing six-team regression league still completes Draft, scoring, transactions, and playoffs.
+[ ] S1.G3 A commissioner using a modified client cannot change competitive settings.
+[ ] S1.G4 Two simultaneous final-slot join attempts result in exactly one successful join.
+[ ] S1.G5 Existing leagues migrate without duplicate teams, members, or rosters.
+
+================================================================================
+PHASE S2 — SERVER-AUTHORITATIVE PROJECTIONS AND DRAFT POOL
+Goal: Ensure a commissioner cannot manipulate the canonical Draft pool, positions, rankings, or projections.
+Exit gate: Every Draft uses a server-generated, validated, hashed, versioned Projection V11 snapshot.
+================================================================================
+
+[ ] S2.1 Create a server callable/task to generate Projection V11 snapshots. (P0 / XL)
+    Preserve: current Projection V11 math and manager-facing explanations.
+
+[ ] S2.2 Make projectionSnapshots and projection chunks browser read-only. (P0 / M)
+
+[ ] S2.3 Build or formalize a canonical server-owned NHL asset catalog. (P0 / L)
+    Validate: player ID, team, eligible positions, active status, goalie-unit identity, and supported season.
+
+[ ] S2.4 Validate every projection asset against the canonical catalog. (P0 / L)
+    Reject fake IDs, malformed positions, duplicate assets, impossible goalie units, and oversized chunks.
+
+[ ] S2.5 Add deterministic snapshot content hashes. (P0 / M)
+    Store: projection version, data as-of date, season, target matchup, asset count, chunk hashes, final root hash, and server authority marker.
+
+[ ] S2.6 Require the Draft authority to accept only a healthy server-generated snapshot with the expected hash/version. (P0 / M)
+
+[ ] S2.7 Add snapshot refresh/retry/rollback controls for platform administrators. (P1 / M)
+    Do not allow commissioners to edit snapshot contents.
+
+[ ] S2.8 Add projection generation cost, duration, cache-hit, and failure metrics. (P1 / M)
+
+[ ] S2.9 Add emulator and Functions tests for fake asset injection and modified projections. (P0 / L)
+
+[ ] S2.10 Migrate existing pre-Draft leagues safely. (P0 / M)
+
+[ ] S2.11 Update Projection Lab to show the server snapshot hash and authority status. (P1 / S)
+
+PHASE S2 EXIT CHECKLIST:
+
+[ ] S2.G1 A commissioner cannot write or alter a projection asset.
+[ ] S2.G2 Draft rejects a snapshot without the expected server marker and hash.
+[ ] S2.G3 Server and browser Projection V11 results remain within the intended deterministic tolerance.
+[ ] S2.G4 Draft performance remains acceptable on mobile and low-bandwidth connections.
+
+================================================================================
+PHASE S3 — APP CHECK, ACCOUNT SECURITY, ABUSE CONTROLS, AND CI
+Goal: Make public registration and expensive operations harder to automate or abuse.
+Exit gate: Legitimate traffic is verified, high-value Functions enforce App Check, authentication policy is stronger, and every change is checked in CI.
+================================================================================
+
+[ ] S3.1 Register the production web app in Firebase App Check. (P0 / S)
+[ ] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S)
+[ ] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S)
+[ ] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M)
+[ ] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M)
+[ ] S3.6 Enforce App Check for Firestore only after legitimate browser traffic is consistently verified. (P0 / M)
+
+[ ] S3.7 Raise the Firebase password minimum and UI requirement to at least 10-12 characters. (P1 / S)
+[ ] S3.8 Verify Firebase Email Enumeration Protection. (P1 / S)
+[ ] S3.9 Add MFA or recent-login step-up for the platform-admin account. (P0 / M)
+[ ] S3.10 Require recent authentication before account deletion, critical admin changes, and future billing changes. (P1 / M)
+
+[ ] S3.11 Create one shared requireFirestoreDocumentId() validator. (P0 / M)
+[ ] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L)
+
+[ ] S3.13 Harden the public NHL proxy query allowlists and numeric bounds. (P0 / M)
+[ ] S3.14 Add shared caching or route competitive NHL requests through server-owned ingestion. (P0 / XL)
+[ ] S3.15 Add proxy rate monitoring, abuse limits, and alerts. (P0 / M)
+
+[ ] S3.16 Add GitHub Actions for clean installs, Angular build, Functions build, emulator rules tests, regression tests, release manifest checks, and security audits. (P0 / L)
+[ ] S3.17 Add Dependabot or Renovate with controlled update policies. (P1 / M)
+[ ] S3.18 Add secret scanning and block accidental service-account/private-key commits. (P0 / S)
+[ ] S3.19 Add npm production dependency audits for root and Functions. (P0 / S)
+[ ] S3.20 Add a dependency update and emergency-patch runbook. (P1 / S)
+
+PHASE S3 EXIT CHECKLIST:
+
+[ ] S3.G1 Legitimate production traffic shows a healthy App Check verification rate.
+[ ] S3.G2 Expensive callables reject missing/invalid App Check tokens after enforcement.
+[ ] S3.G3 No supported browser workflow is broken by enforcement.
+[ ] S3.G4 Every pull request/build runs security and emulator checks automatically.
+[ ] S3.G5 Platform-admin access has stronger authentication than an ordinary manager account.
+
+================================================================================
+PHASE S4 — BROWSER, DATA-RETENTION, AND OPERATIONAL SECURITY
+Goal: Reach a public-facing browser and data-protection standard comparable to established services.
+================================================================================
+
+[ ] S4.1 Self-host critical fonts/assets needed for a strict Content Security Policy. (P1 / M)
+[ ] S4.2 Deploy CSP in report-only mode. (P1 / M)
+[ ] S4.3 Review and fix all valid CSP violations. (P1 / M)
+[ ] S4.4 Enforce CSP and Angular-compatible Trusted Types. (P1 / L)
+[ ] S4.5 Verify HSTS on the live domain and add it explicitly when appropriate. (P1 / S)
+[ ] S4.6 Fix, redirect, or remove www.rinkratfantasy.com. (P1 / S)
+[ ] S4.7 Verify TTL policies or scheduled cleanup for feedback, error reports, queue/task audit records, and temporary diagnostics. (P1 / M)
+[ ] S4.8 Add privacy documentation for stored diagnostics, retention, deletion, and exported reports. (P1 / M)
+[ ] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L)
+[ ] S4.10 Add incident severity levels, owner, response checklist, and post-incident review template. (P1 / M)
+
+================================================================================
+PHASE B1 — INVITE BETA LAUNCH AND FIRST-SEASON PROOF
+Goal: Prove the product with real managers and real NHL game flow before adding broad features.
+Exit gate: Multiple leagues complete several live weeks without integrity failures, and the team has usable product/technical evidence.
+================================================================================
+
+[ ] B1.1 Freeze a known-good beta release and Git tag. (P0 / S)
+[ ] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M)
+[ ] B1.3 Rehearse Hosting, Functions, rules, and queue-mode rollback. (P0 / M)
+[ ] B1.4 Begin with 2-4 leagues and approximately 10-30 observed managers. (P0 / M)
+[ ] B1.5 Include hockey experts, casual fans, beginners, iPhone users, Android users, and at least one commissioner other than the creator. (P1 / M)
+[ ] B1.6 Create a structured issue-triage process: integrity, blocker, serious UX, cosmetic, idea. (P0 / S)
+[ ] B1.7 Do not change Scoring V3 or Projection V11 midseason except for objective bugs. (P0 / Policy)
+
+[ ] B1.8 Run one ordinary live-canary league through the queued scoring worker. (P0 / M)
+[ ] B1.9 Require at least three clean canary scoring tasks before adding another internal league. (P0 / M)
+[ ] B1.10 Expand canary gradually across the creator's internal leagues while friend leagues remain on legacy scoring. (P0 / M)
+[ ] B1.11 Keep production Primary locked until staging and canary gates pass. (P0 / Policy)
+
+[ ] B1.12 Measure actual scoring-worker mean, p95, and maximum duration. (P0 / M)
+[ ] B1.13 Measure scoring freshness from NHL final/update to visible RinkRat result. (P0 / M)
+[ ] B1.14 Measure Draft pick confirmation and next-turn handoff latency. (P0 / M)
+[ ] B1.15 Measure add/drop, waiver, IR, and roster-operation latency and uncertain outcomes. (P0 / M)
+[ ] B1.16 Measure Firestore listeners by route and confirm cleanup after navigation. (P0 / M)
+[ ] B1.17 Measure reads, writes, Function duration, queue age, retries, and cost per active league/week. (P0 / M)
+
+[ ] B1.18 Conduct at least five observed beginner sessions without coaching the user. (P1 / M)
+[ ] B1.19 Conduct at least five experienced-manager sessions. (P1 / M)
+[ ] B1.20 Record where users misunderstand matchup number, six-game progress, transaction timing, projections, waivers, or IR. (P1 / M)
+[ ] B1.21 Add only evidence-backed clarity fixes during the first season. (P1 / Policy)
+
+BETA INTEGRITY PASS CONDITIONS:
+
+[ ] B1.G1 No duplicate or missing Draft picks.
+[ ] B1.G2 No duplicate fantasy scoring or duplicate transaction activation.
+[ ] B1.G3 No roster slot counts more than six scheduled games in one window.
+[ ] B1.G4 A seventh game consistently enters the next slot window.
+[ ] B1.G5 No manager remains permanently locked after a completed server action.
+[ ] B1.G6 Scoring remains within the stated freshness target.
+[ ] B1.G7 Queue backlog returns to zero after normal game-night bursts.
+[ ] B1.G8 No unresolved permission issue affects a normal manager.
+
+================================================================================
+PHASE D1 — DATA QUALITY, PROJECTION PROOF, AND LIVE SCORING QUALITY
+Goal: Turn RinkRat's transparent models into a proven competitive advantage.
+================================================================================
+
+[ ] D1.1 Build a Projection Accuracy dashboard by model version. (P1 / L)
+[ ] D1.2 Track projected vs actual six-game score, absolute error, bias, confidence, range coverage, and player archetype. (P1 / L)
+[ ] D1.3 Segment accuracy by LW, C, RW, D, goalie unit, healthy, injured, breakout, veteran, declining, high-volume, and low-volume. (P1 / L)
+[ ] D1.4 Track projected favorite win rate and actual margin calibration. (P1 / M)
+[ ] D1.5 Establish a minimum sample gate before Projection V12 changes are considered. (P1 / Policy)
+[ ] D1.6 Version every future model change and preserve historical frozen projections. (P0 / Policy)
+[ ] D1.7 Add model-change notes explaining why a projection changed. (P1 / M)
+
+[ ] D1.8 Centralize official NHL schedule, roster, injury, game, and stat ingestion. (P0 / XL)
+[ ] D1.9 Fetch each competitive NHL result once and reuse it across every league. (P0 / XL)
+[ ] D1.10 Add upstream freshness, stat-correction, missing-game, and roster-match alerts. (P0 / L)
+[ ] D1.11 Resolve or categorize unmatched injury names. (P1 / M)
+[ ] D1.12 Add a safe stat-correction replay that does not duplicate transactions or windows. (P0 / L)
+[ ] D1.13 Evaluate a commercial/licensed sports data provider when usage and revenue justify it. (P2 / Research)
+
+[ ] D1.14 Evaluate whether the ten-minute score interval meets user expectations. (P1 / M)
+[ ] D1.15 Improve update frequency only after measuring queue capacity and NHL-data cost. (P1 / Policy)
+[ ] D1.16 Add a visible score-freshness indicator and plain-language expected refresh interval everywhere it matters. (P1 / S)
+
+================================================================================
+PHASE C1 — SOCIAL RETENTION AND LEAGUE COMMUNITY
+Goal: Match the engagement strengths of Sleeper, Yahoo, and ESPN without overwhelming the core fantasy experience.
+Exit gate: Managers have a reason to open RinkRat between roster decisions and can communicate without leaving the league.
+================================================================================
+
+[ ] C1.1 Build a league activity feed before full chat. (P1 / L)
+    Include: joins, Draft picks, add/drops, waivers, trades later, commissioner actions, scoring milestones, matchup results, and playoff advancement.
+
+[ ] C1.2 Automatically publish commissioner setting changes and overrides to the activity feed. (P0 / M)
+    Goal: commissioner transparency similar to modern social fantasy platforms.
+
+[ ] C1.3 Add commissioner announcements with optional pinning. (P1 / M)
+[ ] C1.4 Add matchup reactions and lightweight trash-talk reactions. (P2 / M)
+[ ] C1.5 Add weekly automated recaps with biggest win, closest matchup, top scorer, best pickup, and upset. (P1 / L)
+[ ] C1.6 Add shareable matchup, Draft result, standings, and championship cards. (P1 / L)
+[ ] C1.7 Add polls for commissioner decisions and league votes. (P2 / L)
+
+[ ] C1.8 Design full league chat only after activity-feed usage is measured. (P1 / XL)
+[ ] C1.9 Add text, images/GIFs only with moderation, file limits, retention, blocking, and reporting. (P0 dependency / XL)
+[ ] C1.10 Add channel/topic controls only if one general league channel becomes insufficient. (P2 / L)
+[ ] C1.11 Add mute controls by league, event type, and conversation. (P1 / M)
+[ ] C1.12 Add report, block, commissioner moderation, platform moderation, and immutable moderation audit history. (P0 / XL)
+
+SOCIAL EXIT CHECKLIST:
+
+[ ] C1.G1 Every commissioner action that affects competition is visible to league members.
+[ ] C1.G2 Managers can control notification volume.
+[ ] C1.G3 Abuse can be reported, reviewed, and actioned.
+[ ] C1.G4 Social features do not slow competitive pages or increase Firestore listeners without limits.
+
+================================================================================
+PHASE N1 — NOTIFICATIONS, PWA, AND MOBILE PLATFORM
+Goal: Match the everyday convenience of native fantasy apps before committing to a full native rewrite.
+================================================================================
+
+[ ] N1.1 Make RinkRat an installable Progressive Web App. (P1 / L)
+[ ] N1.2 Cache the app shell and stable assets safely. (P1 / M)
+[ ] N1.3 Add clearly labeled stale read-only matchup access when offline. (P1 / L)
+[ ] N1.4 Never queue a competitive action silently while offline. (P0 / Policy)
+
+[ ] N1.5 Add web push notification infrastructure. (P1 / XL)
+[ ] N1.6 Add granular notification settings: Draft turn, Draft time, player injury, waiver result, roster move, trade, matchup result, close matchup, commissioner announcement, and weekly recap. (P1 / L)
+[ ] N1.7 Add quiet hours and per-league muting. (P1 / M)
+[ ] N1.8 Add deep links from notifications to the exact league, matchup, player, or action. (P1 / M)
+[ ] N1.9 Add notification delivery diagnostics and retry visibility. (P1 / M)
+
+[ ] N1.10 Evaluate a native wrapper after PWA/push adoption is proven. (P2 / Research)
+[ ] N1.11 Build true native iOS/Android apps only when web limitations materially hurt retention or notifications. (P2 / XL)
+[ ] N1.12 Evaluate iOS Live Activities / lock-screen score updates after live scoring frequency and native strategy are proven. (P2 / XL)
+
+================================================================================
+PHASE T1 — TRADES AND TRANSACTION PARITY
+Goal: Add the largest conventional fantasy feature missing from RinkRat while preserving six-game fairness.
+================================================================================
+
+[ ] T1.1 Define RinkRat trade timing rules for asynchronous roster-slot windows. (P1 / L)
+    Decide: ownership transfer timing, current-window ownership, future-window assignment, no-backfill behavior, and projection display.
+
+[ ] T1.2 Build trade offers, counters, cancellation, expiration, and acceptance. (P1 / XL)
+[ ] T1.3 Support multi-player and goalie-unit trades. (P1 / L)
+[ ] T1.4 Add roster legality and position-capacity checks before acceptance. (P0 / M)
+[ ] T1.5 Make trade acceptance server-authoritative and idempotent. (P0 / L)
+[ ] T1.6 Add a clear side-by-side Trade Workbench with exact first legal scoring matchups. (P1 / L)
+[ ] T1.7 Add trade deadline settings and server enforcement. (P1 / M)
+[ ] T1.8 Add commissioner review, league vote, or immediate-processing templates. (P1 / L)
+[ ] T1.9 Publish every offer outcome and commissioner override to the activity feed. (P0 / M)
+[ ] T1.10 Add trade notifications and reminders. (P1 / M)
+[ ] T1.11 Add anti-collusion audit signals and report workflow before public leagues. (P0 / L)
+[ ] T1.12 Add traded Draft picks only when keeper/dynasty is designed. (P2 dependency)
+
+================================================================================
+PHASE L1 — LEAGUE DEPTH WITHOUT LOSING THE RINKRAT FORMAT
+Goal: Compete with commissioner platforms while keeping RinkRat simple by default.
+================================================================================
+
+[ ] L1.1 Create clear league templates instead of exposing every setting at once. (P1 / L)
+    Suggested templates: RinkRat Classic, Beginner, Competitive, Keeper, Dynasty (later), and Commissioner Pro (later).
+
+[ ] L1.2 Add FAAB waiver option alongside existing priority waivers. (P1 / L)
+[ ] L1.3 Add waiver processing schedule options within safe server-defined boundaries. (P1 / M)
+[ ] L1.4 Add configurable trade review templates. (P1 / M)
+[ ] L1.5 Add team-count options only after lifecycle capacity and schedule generation are fully tested. (P1 / L)
+[ ] L1.6 Add playoff-size and qualification templates while preserving banked asynchronous playoff behavior. (P1 / L)
+[ ] L1.7 Add league history, season archive, records, champions, and manager career pages. (P1 / XL)
+[ ] L1.8 Add head-to-head history and rivalry summaries. (P2 / L)
+[ ] L1.9 Add commissioner replacement/transfer workflow with member approval and audit trail. (P1 / L)
+[ ] L1.10 Add co-commissioners with granular permissions rather than full shared ownership. (P1 / XL)
+
+[ ] L1.11 Design keeper support after one complete redraft season. (P2 / XL)
+[ ] L1.12 Add keeper declaration, deadline, eligibility, and Draft integration. (P2 / XL)
+[ ] L1.13 Design dynasty player rights, rookie/prospect pools, future Draft picks, taxi squads, and season rollover only after keeper is stable. (P2 / Multi-season)
+[ ] L1.14 Add salary/contracts only if a meaningful commissioner segment requests it; do not make it part of RinkRat Classic. (P3 / XL)
+
+================================================================================
+PHASE A1 — ANALYTICS, NEWS, AND MANAGER DECISION TOOLS
+Goal: Compete with the expert-content and data advantages of large incumbents without burying users in raw information.
+================================================================================
+
+[ ] A1.1 Add a personalized manager home feed: injuries, roster risks, upcoming boundaries, waiver outcomes, and close-matchup alerts. (P1 / L)
+[ ] A1.2 Add player-news ingestion with source attribution and timestamps. (P1 / XL)
+[ ] A1.3 Add role/line/power-play unit context when reliable data is available. (P1 / L)
+[ ] A1.4 Add schedule-strength and opportunity summaries that explain the next six games. (P1 / M)
+[ ] A1.5 Add watchlists independent of Draft queues. (P1 / M)
+[ ] A1.6 Add custom player notes. (P2 / M)
+[ ] A1.7 Add comparison history so managers can revisit prior add/drop decisions. (P2 / L)
+[ ] A1.8 Add waiver recommendations with an explicit explanation and uncertainty, never an unexplained black-box instruction. (P1 / L)
+[ ] A1.9 Add Draft grades only after ranking accuracy is measured and the grading method is transparent. (P2 / L)
+[ ] A1.10 Add weekly power rankings as entertainment, clearly separated from official standings. (P2 / M)
+
+================================================================================
+PHASE SC1 — SCALABILITY AND LARGE-PUBLIC-LOAD READINESS
+Goal: Prove, rather than assume, that RinkRat can support increasing public traffic.
+================================================================================
+
+[ ] SC1.1 Keep production scoring in Shadow until live-canary validation begins. (P0 / Policy)
+[ ] SC1.2 Validate one exact live Canary league through multiple NHL nights. (P0 / M)
+[ ] SC1.3 Expand Canary to several internal leagues, then all internal leagues. (P0 / M)
+[ ] SC1.4 Test Primary only in a separate staging Firebase project first. (P0 / L)
+[ ] SC1.5 Define scoring freshness, queue age, retry, error, and backlog-recovery SLOs. (P0 / M)
+[ ] SC1.6 Tune scoring task concurrency from measured mean/p95 duration and Firestore contention. (P0 / L)
+[ ] SC1.7 Promote production to Primary only after canary, staging, rollback, and backlog gates pass. (P0 / Policy)
+
+[ ] SC1.8 Paginate and shard the Draft recovery sweeper beyond the current limited scan. (P0 / L)
+[ ] SC1.9 Add Draft task queue age, retry count, duration, and deadline-drift monitoring. (P0 / M)
+[ ] SC1.10 Tune Draft deadline concurrency only from staging measurements. (P0 / M)
+
+[ ] SC1.11 Replace process-local NHL proxy cache with shared ingestion/cache for competitive data. (P0 / XL)
+[ ] SC1.12 Index affected leagues from shared NHL game/team changes to avoid scanning unrelated leagues. (P0 / XL)
+[ ] SC1.13 Add bounded fanout and backpressure when many games finish together. (P0 / L)
+
+[ ] SC1.14 Reduce route listener counts based on measured P1A client-health data. (P1 / L)
+[ ] SC1.15 Add reconnect-storm protections and staggered resubscription where needed. (P0 / L)
+[ ] SC1.16 Add read-model/aggregation documents for high-fanout pages. (P1 / L)
+[ ] SC1.17 Add per-feature cost dashboards and budget alerts. (P0 / M)
+
+[ ] SC1.18 Create a separate billed staging Firebase project for load testing. (P0 / M)
+[ ] SC1.19 Test 100 concurrent synthetic clients. (P0 / M)
+[ ] SC1.20 Test 500 concurrent synthetic clients. (P0 / M)
+[ ] SC1.21 Test 2,000 concurrent synthetic clients. (P0 / L)
+[ ] SC1.22 Test 5,000 concurrent synthetic clients. (P0 / L)
+[ ] SC1.23 Complete shared NHL ingestion and queue tuning before 20,000-client testing. (P0 dependency)
+[ ] SC1.24 Test 20,000 concurrent synthetic clients. (P1 / XL)
+[ ] SC1.25 Consider a 100,000-client distributed exercise only after every earlier stage passes. (P2 / XL)
+
+LOAD-TEST PASS CONDITIONS:
+
+[ ] SC1.G1 No duplicate picks, scores, transactions, or windows.
+[ ] SC1.G2 No skipped Draft turns or roster-slot boundaries.
+[ ] SC1.G3 Queue backlog returns to zero after the spike.
+[ ] SC1.G4 p95 scoring freshness stays within the published target.
+[ ] SC1.G5 p95 Draft deadline drift stays within the accepted tolerance.
+[ ] SC1.G6 Firestore listeners return to route baseline after navigation/reconnect.
+[ ] SC1.G7 Costs are predictable and within the stage budget.
+[ ] SC1.G8 Rollback from Primary to Shadow is rehearsed without manual score edits.
+
+================================================================================
+PHASE G1 — PUBLIC GROWTH, DISCOVERY, AND SUPPORT
+Goal: Build an acquisition and support engine after the product is safe and proven.
+================================================================================
+
+[ ] G1.1 Build a focused public landing page around the six-game fairness message. (P1 / L)
+[ ] G1.2 Add a public interactive sample matchup that uses non-private demo data. (P1 / L)
+[ ] G1.3 Add product screenshots, a short explainer video, and a clear "How six games work" section. (P1 / M)
+[ ] G1.4 Add SEO pages for fantasy hockey schedule fairness, scoring, Draft strategy, and RinkRat rules. (P2 / L)
+[ ] G1.5 Add Open Graph/social preview cards. (P1 / S)
+
+[ ] G1.6 Build invite links that are safe, expiring, and shareable after S1 is complete. (P1 / M)
+[ ] G1.7 Add referral attribution without rewarding spam. (P2 / M)
+[ ] G1.8 Add a waitlist and controlled public-beta access. (P1 / M)
+[ ] G1.9 Add public league discovery only after moderation, commissioner trust, reporting, and abuse controls exist. (P0 dependency / XL)
+[ ] G1.10 Add commissioner reputation/history only with a fair appeal and privacy model. (P2 / XL)
+
+[ ] G1.11 Create a searchable help center and rulebook. (P1 / L)
+[ ] G1.12 Add structured support tickets with diagnostics attached by consent. (P1 / L)
+[ ] G1.13 Define support response targets and incident communication templates. (P1 / M)
+[ ] G1.14 Add in-product status/incident notices. (P1 / M)
+[ ] G1.15 Add a public status page after usage justifies it. (P2 / M)
+
+[ ] G1.16 Track activation funnel: account created -> league joined -> Draft completed -> first matchup viewed -> first roster action. (P1 / L)
+[ ] G1.17 Track league retention by week and season. (P1 / M)
+[ ] G1.18 Track commissioner success and abandonment points. (P1 / M)
+[ ] G1.19 Track support burden per active league. (P1 / M)
+[ ] G1.20 Use interviews and behavior to prioritize features, not competitor checklists alone. (P0 / Policy)
+
+================================================================================
+PHASE M1 — MONETIZATION, LEGAL, AND BUSINESS READINESS
+Goal: Build a sustainable service without turning RinkRat into a gambling or ad-heavy product.
+================================================================================
+
+[ ] M1.1 Decide the long-term business model only after retention and cost are measured. (P1 / Research)
+[ ] M1.2 Evaluate a free core plus commissioner premium model. (P2 / Research)
+[ ] M1.3 Identify premium features that do not undermine competitive fairness. (P2 / Research)
+    Examples: advanced history, commissioner analytics, additional cosmetics, expanded archives, export tools, and premium league templates.
+
+[ ] M1.4 Avoid real-money paid-entry contests until specialized legal advice and compliance exist. (P0 / Policy)
+[ ] M1.5 Publish Terms of Service, Privacy Policy, acceptable-use rules, and community guidelines before unrestricted public access. (P0 / L)
+[ ] M1.6 Define age requirements and obtain legal review for applicable child/privacy obligations. (P0 / Legal)
+[ ] M1.7 Implement account data export and deletion verification. (P1 / L)
+[ ] M1.8 Implement consent and privacy controls appropriate to the regions served. (P1 / Legal/Engineering)
+[ ] M1.9 Review NHL marks, team logos, player data, and sports-data licensing as usage grows. (P0 / Legal)
+[ ] M1.10 Protect the RinkRat name, brand assets, and original product materials where appropriate. (P2 / Legal)
+[ ] M1.11 Build revenue, infrastructure cost, support cost, and retention reporting before pricing. (P1 / M)
+
+================================================================================
+PHASE X1 — LONG-TERM DIFFERENTIATORS
+Goal: Lead the hockey category rather than merely matching incumbents.
+================================================================================
+
+[ ] X1.1 Build a RinkRat "Fairness Report" showing schedule opportunity normalized by the six-game system. (P2 / L)
+[ ] X1.2 Add a post-matchup coaching review explaining the biggest roster decisions and outlier performances. (P2 / L)
+[ ] X1.3 Add transparent projection confidence history so users see when the model learned or changed. (P2 / L)
+[ ] X1.4 Add league-specific rivalry stories, records, trophies, and seasonal narratives. (P2 / L)
+[ ] X1.5 Add optional challenge/achievement systems that reward engagement without affecting competition. (P3 / L)
+[ ] X1.6 Add Draft-room spectator mode and shareable Draft boards. (P2 / L)
+[ ] X1.7 Add commissioner simulation tools for testing settings before a season starts. (P2 / XL)
+[ ] X1.8 Explore alternate RinkRat formats only after Classic is proven. (P3 / Research)
+[ ] X1.9 Consider other sports only after hockey operations, security, retention, and scale are mature. (P3 / Multi-year)
+
+================================================================================
+COMPETITIVE GRADUATION GATES
+These are internal planning gates, not marketing claims or guarantees.
+================================================================================
+
+GATE A — SAFE INVITE BETA
+
+[ ] GA.1 S1 critical league-lifecycle security is complete or access remains limited to trusted commissioners.
+[ ] GA.2 App Check monitor mode is active.
+[ ] GA.3 One exact release passes the simulator, manual board, six-team lifecycle, and rollback rehearsal.
+[ ] GA.4 2-4 observed leagues operate without integrity bugs.
+
+GATE B — STRONG PRIVATE-LEAGUE COMPETITOR
+
+[ ] GB.1 At least several real leagues complete multiple live NHL weeks.
+[ ] GB.2 Projection and scoring accuracy are measured, not assumed.
+[ ] GB.3 Activity feed, notifications, and trade design are underway or validated as the highest retention needs.
+[ ] GB.4 Security Batches S1-S3 are complete.
+[ ] GB.5 Live Canary scoring is proven across internal leagues.
+
+GATE C — PUBLIC BETA COMPETITOR
+
+[ ] GC.1 Server-authoritative league lifecycle and Draft pool are complete.
+[ ] GC.2 App Check enforcement, quotas, moderation, support, and legal documents are active.
+[ ] GC.3 PWA/push or equivalent dependable notification system is live.
+[ ] GC.4 Social/activity features and trades meet public-manager expectations.
+[ ] GC.5 Staged 5,000-client load tests pass.
+[ ] GC.6 Production cost and support burden are understood.
+
+GATE D — CATEGORY CHALLENGER
+
+[ ] GD.1 RinkRat has a complete live season of reliability and projection evidence.
+[ ] GD.2 League history, mature commissioner tools, notifications, trades, and social engagement are established.
+[ ] GD.3 Queued scoring Primary is proven and shared NHL ingestion is live.
+[ ] GD.4 20,000-client staged tests pass with documented SLOs and rollback.
+[ ] GD.5 Public acquisition, support, moderation, and retention systems operate predictably.
+
+GATE E — BROAD PLATFORM COMPETITOR
+
+[ ] GE.1 Native or equivalent mobile experience supports high-quality push/deep-link/live usage.
+[ ] GE.2 Keeper/dynasty or another major league-depth expansion is stable without weakening RinkRat Classic.
+[ ] GE.3 100,000-client capacity exercise is justified, funded, staged, and passed.
+[ ] GE.4 Data licensing, legal, privacy, support, and incident operations match the platform's reach.
+[ ] GE.5 RinkRat retains a clear reason to choose it over incumbents beyond feature count.
+
+================================================================================
+SUGGESTED PRODUCT AND TECHNICAL TARGETS
+These are editable internal goals, not externally promised service levels.
+================================================================================
+
+[ ] TARGET.1 Zero duplicate or missing competitive actions in validated releases.
+[ ] TARGET.2 Draft pick and next-turn confirmation p95 target defined and measured.
+[ ] TARGET.3 Add/drop and waiver confirmation p95 target defined and measured.
+[ ] TARGET.4 Live score freshness target published and met for at least 99% of ordinary intervals.
+[ ] TARGET.5 Crash-free / blocker-free session target defined by device and browser.
+[ ] TARGET.6 Queue backlog returns to zero after expected game-night bursts.
+[ ] TARGET.7 App Check legitimate-request verification target defined before enforcement.
+[ ] TARGET.8 Projection error baselines established by position and player archetype.
+[ ] TARGET.9 Weekly active league retention and manager activation targets defined from beta data.
+[ ] TARGET.10 Infrastructure cost per active manager-week and league-season is measured.
+
+================================================================================
+WHAT NOT TO BUILD YET
+================================================================================
+
+# [-] HOLD.1 Do not add hundreds of custom scoring settings before S1/S2 and live-season proof.
+# [-] HOLD.2 Do not switch production scoring to Primary merely to test one league; use Canary.
+# [-] HOLD.3 Do not build real-money contests or prize handling without legal/compliance work.
+# [-] HOLD.4 Do not build a full native app before PWA, push, and web retention show the need.
+# [-] HOLD.5 Do not build public league discovery before moderation, commissioner trust, quotas, and reporting.
+# [-] HOLD.6 Do not add keeper/dynasty before one complete redraft season and a stable season rollover model.
+# [-] HOLD.7 Do not change Scoring V3 or Projection V11 repeatedly from small samples.
+# [-] HOLD.8 Do not expand to another sport until hockey security, operations, retention, and scale are mature.
+# [-] HOLD.9 Do not copy every incumbent feature when it conflicts with the six-game fairness identity.
+
+================================================================================
+RECOMMENDED RELEASE SEQUENCE FROM RC9
+================================================================================
+
+# [x] SEQ.1 Security Batch S1A — Server-authoritative league creation and immutable core fields. — Completed 2026-08-07.
+[ ] SEQ.2 Security Batch S1B — Atomic joining, invite lock, capacity enforcement, and quotas.
+[ ] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests.
+[ ] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets.
+[ ] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration.
+[ ] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin MFA.
+[ ] SEQ.7 Security Batch S3B — Universal ID validation, NHL proxy hardening, and rate controls.
+[ ] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL verification.
+[ ] SEQ.9 Freeze and run the first live-season beta.
+[ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
+[ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
+
+================================================================================
+COMPETITOR BENCHMARKS TO REVISIT ANNUALLY
+================================================================================
+
+YAHOO BENCHMARKS
+- Familiar private/public league onboarding
+- Trades and roster management
+- Mobile app and chat
+- Keeper tools
+- Live scoring and mobile live-update conveniences
+Official references:
+https://help.yahoo.com/kb/default-league-settings-fantasy-hockey-sln6815.html
+https://help.yahoo.com/kb/SLN22574.html
+https://help.yahoo.com/kb/SLN26586.html
+
+ESPN BENCHMARKS
+- Public/private leagues
+- Mock Drafts
+- Keeper support
+- Large editorial/rankings ecosystem
+Official references:
+https://www.espn.com/fantasy/
+https://support.espn.com/hc/en-us/articles/360000092552-Keeper-Leagues
+
+FANTRAX BENCHMARKS
+- Commissioner customization
+- Redraft, keeper, dynasty, and deep formats
+- Power-user depth
+Reference:
+https://fantraxhq.com/fantasy-hockey-for-beginners-get-on-the-ice/
+
+CBS BENCHMARKS
+- Keeper/dynasty
+- Salary and contracts
+- Multiple Draft types
+- Deep commissioner controls
+- Fast live scoring and mobile management
+Official reference:
+https://www.cbssports.com/fantasy/hockey/games/commissioner/faq
+
+SLEEPER BENCHMARKS
+- League chat at the center of the experience
+- Push notifications
+- Commissioner-action transparency
+- Modern Draft and game-day interaction
+- Redraft/keeper/dynasty breadth in supported sports
+Official references:
+https://sleeper.com/fantasy-football
+https://support.sleeper.com/en/articles/1951583-what-are-sleeper-s-unique-features
+https://support.sleeper.com/en/articles/4251896-which-commish-actions-trigger-a-league-message
+
+RINKRAT MUST NOT LOSE
+- Six-game schedule fairness
+- Exact asynchronous transaction timing
+- Game Film scoring transparency
+- Beginner-friendly explanations
+- Distinctive hockey identity
+- Server-authoritative competitive integrity
+
+================================================================================
+ROADMAP CHANGE LOG
+================================================================================
+
+# [x] LOG.1 2026-08-07 — Created Version 1.0 from RC9 audit, competitor comparison, completed beta-finalization work, scoring-queue plans, and long-term product goals.
+# [x] LOG.2 2026-08-07 — Completed Security Batch S1A: server-authoritative league creation, immutable competition fields, cosmetic-only commissioner league updates, and creation audit records.
+
+Future entries:
+
+[ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
+
+END OF ROADMAP

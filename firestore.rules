@@ -128,17 +128,56 @@ service cloud.firestore {
         name.size() <= 60;
     }
 
-    function validLeagueCreate(leagueId) {
-      return request.resource.data.id == leagueId &&
-        request.resource.data.commissionerId == currentUserId() &&
+    function validLeagueLogoId(logoId) {
+      return logoId in [
+        'crossed-sticks',
+        'rink-rat',
+        'goalie-mask',
+        'crown-puck',
+        'arcade-net',
+        'lightning-skate',
+        'helmet-stars',
+        'rink-badge'
+      ];
+    }
+
+    function validLeagueLogoPaletteId(paletteId) {
+      return paletteId in [
+        'rink-gold',
+        'ice-blue',
+        'crimson',
+        'emerald',
+        'violet',
+        'retro-orange',
+        'neon-arcade',
+        'silver'
+      ];
+    }
+
+    function validLeagueCosmeticUpdate() {
+      let changedFields = request.resource.data
+        .diff(resource.data)
+        .affectedKeys();
+
+      return changedFields.hasOnly([
+          'name',
+          'leagueLogoId',
+          'leagueLogoPaletteId',
+          'updatedAt'
+        ]) &&
         validLeagueName(request.resource.data.name) &&
-        request.resource.data.inviteCode is string &&
-        request.resource.data.inviteCode.size() == 6 &&
-        request.resource.data.maxTeams is int &&
-        request.resource.data.maxTeams >= 2 &&
-        request.resource.data.maxTeams <= 12 &&
-        request.resource.data.matchupFormat == 'cycle_matchup' &&
-        request.resource.data.scoringRules is map;
+        (!changedFields.hasAny(['leagueLogoId']) ||
+          (
+            request.resource.data.keys().hasAll(['leagueLogoId']) &&
+            validLeagueLogoId(request.resource.data.leagueLogoId)
+          )) &&
+        (!changedFields.hasAny(['leagueLogoPaletteId']) ||
+          (
+            request.resource.data.keys().hasAll(['leagueLogoPaletteId']) &&
+            validLeagueLogoPaletteId(request.resource.data.leagueLogoPaletteId)
+          )) &&
+        (!changedFields.hasAny(['updatedAt']) ||
+          request.resource.data.updatedAt == request.time);
     }
 
     function validInviteCreate(inviteCode) {
@@ -656,16 +695,26 @@ service cloud.firestore {
     }
 
     match /leagues/{leagueId} {
-      allow create: if signedIn() &&
-        validLeagueCreate(leagueId);
+      // New leagues are created only by createLeagueSecure through the Admin SDK.
+      allow create: if false;
 
       allow get: if isLeagueMember(leagueId);
       allow list: if false;
 
-      allow update: if isLeagueCommissioner(leagueId);
+      // Commissioners may change presentation only. Scoring, six-game windows,
+      // ownership, capacity, invite identity, authority markers, and hidden
+      // competition fields remain server-owned and immutable from browsers.
+      allow update: if isLeagueCommissioner(leagueId) &&
+        validLeagueCosmeticUpdate();
       // League deletion is handled by the authenticated deleteLeague Cloud
       // Function so every nested document and related invite is removed safely.
       allow delete: if false;
+
+      match /audit/{auditId} {
+        // Immutable server-owned league lifecycle and commissioner-action history.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
 
       match /members/{memberId} {
         allow get: if signedIn() &&

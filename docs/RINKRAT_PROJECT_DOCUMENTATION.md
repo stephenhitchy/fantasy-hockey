@@ -1,3 +1,78 @@
+## Batch S1A — Server-Authoritative League Creation and Immutable Competition Settings
+
+### Purpose
+
+Security Batch S1A completes roadmap items **S1.1–S1.3**. New leagues are no longer assembled by a browser batch. An authenticated Cloud Function now owns the complete creation transaction, while Firestore Rules prevent a commissioner or modified client from rewriting the competition contract.
+
+This release is labeled **Release Candidate 10**.
+
+### Server-authoritative creation
+
+`createLeagueSecure` validates the request and atomically creates:
+
+- the league document;
+- its unique invite document;
+- commissioner membership;
+- commissioner team identity;
+- the empty active, bench, and Injured Reserve roster;
+- an immutable league-creation audit record; and
+- an idempotency record for lost or delayed callable responses.
+
+The server freezes Production Scoring V3, the six-game roster-slot format, `cycle_matchup`, the commissioner identity, team capacity, invite identity, and authority markers. The browser supplies only validated presentation choices and the manager's selected profile icon.
+
+### Lost-response and duplicate protection
+
+Each creation receives a stable request ID. The client keeps that identity in session storage and in memory for the open tab. If the callable commits but its response is lost, retrying the same submission returns the original league rather than creating another one. A reused request ID with different settings is rejected.
+
+Invite codes are generated and reserved inside the same Firestore transaction. A collision is retried without exposing an incomplete league.
+
+### Browser permissions
+
+Firestore Rules now deny direct browser creation of `leagues/{leagueId}`. Commissioners may update only this cosmetic allowlist:
+
+- `name`
+- `leagueLogoId`
+- `leagueLogoPaletteId`
+- `updatedAt`
+
+They cannot change scoring values, scoring version, six-game requirements, commissioner ownership, team capacity, invite identity, matchup format, authority markers, or arbitrary hidden fields.
+
+`leagues/{leagueId}/audit/*` is readable by league members and writable only by server authority.
+
+### Compatibility boundary
+
+League joining remains on the prior compatible path for this release. Atomic server joining, invite locking, final-slot race protection, verified email, and quotas are the next roadmap batch: **S1B**.
+
+Existing leagues remain readable and playable. No score, roster, Draft, projection, transaction, waiver, matchup, or playoff migration is required.
+
+### Verification
+
+```bash
+npm run verify:batchs1a
+```
+
+### Production deployment order
+
+Use **Functions → Hosting → Firestore Rules** so the secure callable and new client are available before browser-direct creation is denied:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only functions:createLeagueSecure -m "Security S1A league creation authority"
+firebase deploy --only hosting:app -m "Security S1A secure league onboarding"
+firebase deploy --only firestore:rules -m "Security S1A immutable league settings"
+```
+
+Do not deploy indexes for S1A.
+
+### Rollback order
+
+To return fully to R1F, use **Firestore Rules → Hosting**. Restore the R1F rules first so the older browser creation path is permitted before the older client is served, then redeploy R1F Hosting. `createLeagueSecure` may remain deployed because older clients do not call it.
+
+A Hosting-only rollback is safe only when the restored Hosting build still calls `createLeagueSecure`.
+
+---
+
 ## Batch R1F — Draft Queue Turn Handoff Recovery
 
 ### Purpose

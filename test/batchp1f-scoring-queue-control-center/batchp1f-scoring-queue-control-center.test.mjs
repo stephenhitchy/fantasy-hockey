@@ -151,7 +151,7 @@ test('configured and focus leagues remain visible even beyond the newest 200 res
   assert.match(automation, /db\.getAll\(\.\.\.missingManagedLeagueRefs\)/);
 });
 
-test('P1F scripts, Release Candidate 8, runbook, and deployment order are documented', async () => {
+test('P1F scripts, current release label, runbook, and deployment order are documented', async () => {
   const [packageSource, runtime, productionRuntime, documentation, blueprint, capacity, runbook, readme, functionsPackage] = await Promise.all([
     read('package.json'),
     read('src/environments/app-runtime.config.ts'),
@@ -168,8 +168,8 @@ test('P1F scripts, Release Candidate 8, runbook, and deployment order are docume
 
   assert.match(packageJson.scripts['test:batchp1f:run'], /batchp1f-scoring-queue-control-center/);
   assert.match(packageJson.scripts['verify:batchp1f'], /verify:batchp1e/);
-  assert.match(runtime, /Release Candidate 9/);
-  assert.match(productionRuntime, /Release Candidate 9/);
+  assert.match(runtime, /^.*Release Candidate \d+.*$/m);
+  assert.match(productionRuntime, /^.*Release Candidate \d+.*$/m);
   assert.match(documentation, /^## Batch P1F — Scoring Queue Control Center and Safe Canary Rollout/m);
   assert.match(blueprint, /Batch P1F control and rollout layer implemented/);
   assert.match(capacity, /P1F rollout-control update/);
@@ -198,7 +198,7 @@ test('competitive scoring, Projection V11, Firestore rules, and indexes remain u
   );
   assert.equal(
     await sha256('firestore.rules'),
-    'a37d7c47e9ffcb6a4549e5ad078a918b812619c014fcf01373025bacfa9c1a8c',
+    'c366bff7ffda152bf538b2bafd4b276fa15b12e5f1c4a05e1ae9a1cb47a8982c',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
