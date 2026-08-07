@@ -20,8 +20,17 @@ import {
 } from './projection-ranking.util';
 import {
   ensureCanonicalProjectionAssetCatalog,
+  loadCanonicalProjectionAssetCatalog,
   validateProjectionAssetsAgainstCatalog,
 } from './projection-asset-catalog.service';
+import {
+  createProjectionSnapshotHashBundle,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  verifyProjectionSnapshotHashChain,
+  type StoredProjectionSnapshotChunk,
+} from './projection-snapshot-hash.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -65,6 +74,11 @@ export interface SharedProjectionSnapshotMetadata {
   catalogValidationStatus?: 'validated';
   catalogCacheHit?: boolean;
   generationRequestId?: string;
+  snapshotHashSchemaVersion?: number;
+  snapshotHashAlgorithm?: typeof PROJECTION_SNAPSHOT_HASH_ALGORITHM;
+  snapshotContentHash?: string;
+  snapshotChunkHashes?: string[];
+  snapshotIntegrityStatus?: 'verified';
 }
 
 export interface SharedProjectionSnapshot {
@@ -172,7 +186,137 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
       typeof value.generationRequestId === 'string'
         ? value.generationRequestId
         : undefined,
+    snapshotHashSchemaVersion:
+      typeof value.snapshotHashSchemaVersion === 'number'
+        ? value.snapshotHashSchemaVersion
+        : undefined,
+    snapshotHashAlgorithm:
+      value.snapshotHashAlgorithm === PROJECTION_SNAPSHOT_HASH_ALGORITHM
+        ? PROJECTION_SNAPSHOT_HASH_ALGORITHM
+        : undefined,
+    snapshotContentHash:
+      typeof value.snapshotContentHash === 'string'
+        ? value.snapshotContentHash
+        : undefined,
+    snapshotChunkHashes:
+      Array.isArray(value.snapshotChunkHashes)
+        ? value.snapshotChunkHashes.filter((entry): entry is string => typeof entry === 'string')
+        : undefined,
+    snapshotIntegrityStatus:
+      value.snapshotIntegrityStatus === 'verified' ? 'verified' : undefined,
   };
+}
+
+interface ProjectionAssetDocumentLike {
+  id: string;
+  data(): unknown;
+}
+
+function normalizeStoredProjectionChunks(
+  documents: ProjectionAssetDocumentLike[],
+): StoredProjectionSnapshotChunk[] {
+  const preliminarilySorted = documents
+    .map((document) => {
+      const data = document.data() as Record<string, unknown>;
+      const assets = Array.isArray(data['assets'])
+        ? data['assets'] as DraftableAsset[]
+        : typeof data['assetKey'] === 'string'
+          ? [data as unknown as DraftableAsset]
+          : [];
+
+      return {
+        document,
+        data,
+        assets,
+        preferredIndex:
+          typeof data['chunkIndex'] === 'number' && Number.isFinite(data['chunkIndex'])
+            ? Math.max(0, Math.floor(data['chunkIndex']))
+            : null,
+      };
+    })
+    .sort((first, second) => {
+      if (first.preferredIndex !== null && second.preferredIndex !== null) {
+        return first.preferredIndex - second.preferredIndex ||
+          first.document.id.localeCompare(second.document.id);
+      }
+
+      if (first.preferredIndex !== null) {
+        return -1;
+      }
+
+      if (second.preferredIndex !== null) {
+        return 1;
+      }
+
+      return first.document.id.localeCompare(second.document.id);
+    });
+
+  return preliminarilySorted.map(({ document, data, assets, preferredIndex }, index) => ({
+    chunkId: document.id,
+    chunkIndex: preferredIndex ?? index,
+    assets,
+    assetCount:
+      typeof data['assetCount'] === 'number' && Number.isFinite(data['assetCount'])
+        ? Math.max(0, Math.floor(data['assetCount']))
+        : assets.length,
+    chunkHash: typeof data['chunkHash'] === 'string' ? data['chunkHash'] : undefined,
+    snapshotContentHash:
+      typeof data['snapshotContentHash'] === 'string'
+        ? data['snapshotContentHash']
+        : undefined,
+    snapshotHashSchemaVersion:
+      typeof data['snapshotHashSchemaVersion'] === 'number'
+        ? data['snapshotHashSchemaVersion']
+        : undefined,
+    snapshotHashAlgorithm:
+      data['snapshotHashAlgorithm'] === PROJECTION_SNAPSHOT_HASH_ALGORITHM
+        ? PROJECTION_SNAPSHOT_HASH_ALGORITHM
+        : undefined,
+    sharedProjectionSnapshotId:
+      typeof data['sharedProjectionSnapshotId'] === 'string'
+        ? data['sharedProjectionSnapshotId']
+        : undefined,
+  }));
+}
+
+function shouldVerifyProjectionSnapshotIntegrity(
+  metadata: SharedProjectionSnapshotMetadata,
+): boolean {
+  return (
+    metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+    metadata.snapshotIntegrityStatus === 'verified' ||
+    metadata.snapshotHashSchemaVersion !== undefined ||
+    metadata.snapshotContentHash !== undefined
+  );
+}
+
+async function loadSnapshotFromMetadata(
+  leagueId: string,
+  metadata: SharedProjectionSnapshotMetadata,
+): Promise<SharedProjectionSnapshot> {
+  const assetSnapshot = await getDocs(
+    getAssetsRef(leagueId, metadata.activeSnapshotId),
+  );
+  const chunks = normalizeStoredProjectionChunks(assetSnapshot.docs);
+  const assets = shouldVerifyProjectionSnapshotIntegrity(metadata)
+    ? verifyProjectionSnapshotHashChain(
+        {
+          ...metadata,
+          assetDocumentCount: metadata.assetDocumentCount ?? chunks.length,
+          catalogSnapshotId: metadata.catalogSnapshotId ?? '',
+          catalogHash: metadata.catalogHash ?? '',
+        },
+        chunks,
+      ).assets
+    : chunks.flatMap((chunk) => chunk.assets);
+
+  if (metadata.assetCount > 0 && assets.length !== metadata.assetCount) {
+    throw new Error(
+      `The shared projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`,
+    );
+  }
+
+  return { metadata, assets };
 }
 
 async function loadSnapshotFromPointer(
@@ -188,38 +332,34 @@ async function loadSnapshotFromPointer(
   const pointer = pointerSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>;
   const metadata = normalizeMetadata(pointer);
 
-  if (!metadata) {
+  return metadata ? loadSnapshotFromMetadata(leagueId, metadata) : null;
+}
+
+export async function loadSharedProjectionSnapshotById(
+  leagueId: string,
+  snapshotId: string,
+): Promise<SharedProjectionSnapshot | null> {
+  const normalizedSnapshotId = snapshotId.trim();
+
+  if (!normalizedSnapshotId) {
     return null;
   }
 
-  const assetSnapshot = await getDocs(
-    getAssetsRef(leagueId, metadata.activeSnapshotId),
-  );
-  const assets = assetSnapshot.docs.flatMap((document) => {
-    const data = document.data() as {
-      assets?: unknown;
-      assetKey?: unknown;
-    };
+  const snapshotDocument = await getDoc(getPointerRef(leagueId, normalizedSnapshotId));
 
-    if (Array.isArray(data.assets)) {
-      return data.assets as DraftableAsset[];
-    }
-
-    return typeof data.assetKey === 'string'
-      ? [data as DraftableAsset]
-      : [];
-  });
-
-  if (metadata.assetCount > 0 && assets.length !== metadata.assetCount) {
-    throw new Error(
-      `The shared projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`,
-    );
+  if (!snapshotDocument.exists()) {
+    return null;
   }
 
-  return {
-    metadata,
-    assets,
-  };
+  const metadata = normalizeMetadata(
+    snapshotDocument.data() as Partial<SharedProjectionSnapshotMetadata>,
+  );
+
+  if (!metadata || metadata.activeSnapshotId !== normalizedSnapshotId) {
+    return null;
+  }
+
+  return loadSnapshotFromMetadata(leagueId, metadata);
 }
 
 export function isSharedProjectionSnapshotFreshForWindow(
@@ -260,9 +400,288 @@ export function loadSharedProjectionSnapshotForCycle(
   return loadSnapshotFromPointer(leagueId, `target-cycle-${Math.max(1, Math.floor(cycleNumber))}`);
 }
 
+export interface SealSharedProjectionSnapshotIntegrityResult {
+  snapshot: SharedProjectionSnapshot;
+  alreadySealed: boolean;
+}
+
+/**
+ * Adds the S2B hash chain to a server-generated S2A snapshot without changing
+ * any Projection V11 values. This compatibility path is used only for
+ * snapshots that were already catalog validated by the server. Browser-created
+ * or catalog-unverified pools must be regenerated instead of being trusted.
+ */
+export async function sealSharedProjectionSnapshotIntegrity(
+  leagueId: string,
+  snapshotId: string,
+): Promise<SealSharedProjectionSnapshotIntegrityResult> {
+  const normalizedLeagueId = leagueId.trim();
+  const normalizedSnapshotId = snapshotId.trim();
+
+  if (!normalizedLeagueId || !normalizedSnapshotId) {
+    throw new Error('A league and projection snapshot are required for integrity migration.');
+  }
+
+  const snapshotRef = getPointerRef(normalizedLeagueId, normalizedSnapshotId);
+  const metadataSnapshot = await getDoc(snapshotRef);
+
+  if (!metadataSnapshot.exists()) {
+    throw new Error('The projection snapshot selected for integrity migration no longer exists.');
+  }
+
+  const metadata = normalizeMetadata(
+    metadataSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>,
+  );
+
+  if (!metadata || metadata.activeSnapshotId !== normalizedSnapshotId) {
+    throw new Error('Only a ready Projection V11 snapshot can be integrity sealed.');
+  }
+
+  if (shouldVerifyProjectionSnapshotIntegrity(metadata)) {
+    const existing = await loadSharedProjectionSnapshotById(
+      normalizedLeagueId,
+      normalizedSnapshotId,
+    );
+
+    if (!existing) {
+      throw new Error('The projection snapshot integrity metadata could not be verified.');
+    }
+
+    return { snapshot: existing, alreadySealed: true };
+  }
+
+  if (
+    metadata.generatedByAuthority !== 'server' ||
+    metadata.catalogValidationStatus !== 'validated' ||
+    !metadata.catalogSnapshotId ||
+    !metadata.catalogHash
+  ) {
+    throw new Error(
+      'This legacy projection pool was not created and catalog validated by the server. Generate a fresh snapshot instead.',
+    );
+  }
+
+  const [assetSnapshot, catalog] = await Promise.all([
+    getDocs(getAssetsRef(normalizedLeagueId, normalizedSnapshotId)),
+    loadCanonicalProjectionAssetCatalog(metadata.catalogSnapshotId),
+  ]);
+
+  if (!catalog || catalog.contentHash !== metadata.catalogHash) {
+    throw new Error('The original canonical NHL asset catalog is unavailable or failed verification.');
+  }
+
+  const chunks = normalizeStoredProjectionChunks(assetSnapshot.docs).sort(
+    (first, second) => first.chunkIndex - second.chunkIndex,
+  );
+
+  if (chunks.length === 0) {
+    throw new Error('The legacy projection snapshot does not contain any asset chunks.');
+  }
+
+  chunks.forEach((chunk, index) => {
+    const expectedChunkId = `chunk-${String(index + 1).padStart(4, '0')}`;
+
+    if (chunk.chunkIndex !== index || chunk.chunkId !== expectedChunkId) {
+      throw new Error(
+        'The legacy projection snapshot does not use the canonical server chunk layout and must be regenerated.',
+      );
+    }
+  });
+
+  const assets = chunks.flatMap((chunk) => chunk.assets);
+  validateProjectionAssetsAgainstCatalog(assets, catalog);
+
+  if (metadata.assetCount > 0 && assets.length !== metadata.assetCount) {
+    throw new Error(
+      `The legacy projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`,
+    );
+  }
+
+  const hashBundle = createProjectionSnapshotHashBundle(
+    {
+      snapshotId: normalizedSnapshotId,
+      projectionVersion: metadata.projectionVersion,
+      projectionAsOfDate: metadata.projectionAsOfDate,
+      projectionContext: metadata.projectionContext,
+      projectionSeason: metadata.projectionSeason,
+      teamCount: metadata.teamCount,
+      targetCycleNumber: metadata.targetCycleNumber,
+      requiredGamesPerCycle: metadata.requiredGamesPerCycle,
+      assetCount: assets.length,
+      assetDocumentCount: chunks.length,
+      catalogSnapshotId: metadata.catalogSnapshotId,
+      catalogHash: metadata.catalogHash,
+    },
+    chunks.map((chunk) => ({
+      chunkId: chunk.chunkId,
+      chunkIndex: chunk.chunkIndex,
+      assets: chunk.assets,
+    })),
+  );
+  const sealedMetadata: SharedProjectionSnapshotMetadata = {
+    ...metadata,
+    assetCount: assets.length,
+    assetDocumentCount: chunks.length,
+    assetStorageVersion: 3,
+    authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+    snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+    snapshotContentHash: hashBundle.snapshotContentHash,
+    snapshotChunkHashes: hashBundle.chunkHashes,
+    snapshotIntegrityStatus: 'verified',
+  };
+
+  for (let index = 0; index < chunks.length; index += SNAPSHOT_ASSET_WRITE_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const batchChunks = chunks.slice(index, index + SNAPSHOT_ASSET_WRITE_BATCH_SIZE);
+
+    batchChunks.forEach((chunk, offset) => {
+      const manifestIndex = index + offset;
+
+      batch.set(
+        doc(
+          db,
+          'leagues',
+          normalizedLeagueId,
+          'projectionSnapshots',
+          normalizedSnapshotId,
+          'assets',
+          chunk.chunkId,
+        ),
+        sanitizeForFirestore({
+          schemaVersion: 3,
+          chunkId: chunk.chunkId,
+          chunkIndex: chunk.chunkIndex,
+          assetCount: chunk.assets.length,
+          sharedProjectionSnapshotId: normalizedSnapshotId,
+          snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+          snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+          chunkHash: hashBundle.chunkHashes[manifestIndex],
+          snapshotContentHash: hashBundle.snapshotContentHash,
+          assets: chunk.assets,
+        }),
+      );
+    });
+
+    await batch.commit();
+  }
+
+  const [currentPointerSnapshot, targetPointerSnapshot] = await Promise.all([
+    getDoc(getPointerRef(normalizedLeagueId, 'current')),
+    getDoc(
+      getPointerRef(
+        normalizedLeagueId,
+        `target-cycle-${Math.max(1, metadata.targetCycleNumber)}`,
+      ),
+    ),
+  ]);
+  const pointerPayload = {
+    ...sealedMetadata,
+    updatedAt: serverTimestamp(),
+    integrityMigratedAt: serverTimestamp(),
+  };
+  const finalBatch = writeBatch(db);
+
+  finalBatch.set(snapshotRef, pointerPayload, { merge: true });
+
+  if (currentPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
+    finalBatch.set(
+      getPointerRef(normalizedLeagueId, 'current'),
+      pointerPayload,
+      { merge: true },
+    );
+  }
+
+  if (targetPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
+    finalBatch.set(
+      getPointerRef(
+        normalizedLeagueId,
+        `target-cycle-${Math.max(1, metadata.targetCycleNumber)}`,
+      ),
+      pointerPayload,
+      { merge: true },
+    );
+  }
+
+  await finalBatch.commit();
+
+  const verified = await loadSharedProjectionSnapshotById(
+    normalizedLeagueId,
+    normalizedSnapshotId,
+  );
+
+  if (!verified) {
+    throw new Error('The projection snapshot was sealed but failed final integrity verification.');
+  }
+
+  return { snapshot: verified, alreadySealed: false };
+}
+
 const SNAPSHOT_ASSET_WRITE_BATCH_SIZE = 400;
 const SNAPSHOT_ASSET_CHUNK_SIZE = 25;
 const generationByLeagueAndCycle = new Map<string, Promise<SharedProjectionSnapshot>>();
+
+interface PreparedProjectionSnapshotChunk {
+  chunkId: string;
+  chunkIndex: number;
+  assets: DraftableAsset[];
+  chunkHash: string;
+}
+
+interface PreparedProjectionSnapshotIntegrity {
+  chunks: PreparedProjectionSnapshotChunk[];
+  snapshotContentHash: string;
+  snapshotChunkHashes: string[];
+}
+
+function prepareProjectionSnapshotIntegrity(input: {
+  snapshotId: string;
+  assets: DraftableAsset[];
+  projectionVersion: number;
+  projectionAsOfDate?: string;
+  projectionContext?: 'live' | 'historical-replay';
+  projectionSeason?: string;
+  teamCount: number;
+  targetCycleNumber: number;
+  requiredGamesPerCycle: number;
+  catalogSnapshotId: string;
+  catalogHash: string;
+}): PreparedProjectionSnapshotIntegrity {
+  const chunks = Array.from(
+    { length: Math.ceil(input.assets.length / SNAPSHOT_ASSET_CHUNK_SIZE) },
+    (_, chunkIndex) => ({
+      chunkId: `chunk-${String(chunkIndex + 1).padStart(4, '0')}`,
+      chunkIndex,
+      assets: input.assets.slice(
+        chunkIndex * SNAPSHOT_ASSET_CHUNK_SIZE,
+        (chunkIndex + 1) * SNAPSHOT_ASSET_CHUNK_SIZE,
+      ),
+    }),
+  );
+  const hashBundle = createProjectionSnapshotHashBundle({
+    snapshotId: input.snapshotId,
+    projectionVersion: input.projectionVersion,
+    projectionAsOfDate: input.projectionAsOfDate,
+    projectionContext: input.projectionContext,
+    projectionSeason: input.projectionSeason,
+    teamCount: input.teamCount,
+    targetCycleNumber: input.targetCycleNumber,
+    requiredGamesPerCycle: input.requiredGamesPerCycle,
+    assetCount: input.assets.length,
+    assetDocumentCount: chunks.length,
+    catalogSnapshotId: input.catalogSnapshotId,
+    catalogHash: input.catalogHash,
+  }, chunks);
+
+  return {
+    chunks: chunks.map((chunk, index) => ({
+      ...chunk,
+      chunkHash: hashBundle.chunkHashes[index],
+    })),
+    snapshotContentHash: hashBundle.snapshotContentHash,
+    snapshotChunkHashes: hashBundle.chunkHashes,
+  };
+}
 
 interface HistoricalReplayProjectionContext {
   enabled: true;
@@ -631,33 +1050,32 @@ async function generateSnapshotInternal(
       rankedAssets,
       catalog,
     );
-    const assetChunks: DraftableAsset[][] = [];
+    const integrity = prepareProjectionSnapshotIntegrity({
+      snapshotId,
+      assets: rankedAssets,
+      projectionVersion: SHARED_PROJECTION_VERSION,
+      projectionAsOfDate: context.projectionAsOfDate,
+      projectionContext: context.projectionContext,
+      projectionSeason: context.projectionSeason,
+      teamCount,
+      targetCycleNumber,
+      requiredGamesPerCycle,
+      catalogSnapshotId: catalogValidation.catalogId,
+      catalogHash: catalogValidation.catalogHash,
+    });
 
     for (
       let index = 0;
-      index < rankedAssets.length;
-      index += SNAPSHOT_ASSET_CHUNK_SIZE
-    ) {
-      assetChunks.push(
-        rankedAssets.slice(index, index + SNAPSHOT_ASSET_CHUNK_SIZE),
-      );
-    }
-
-    for (
-      let index = 0;
-      index < assetChunks.length;
+      index < integrity.chunks.length;
       index += SNAPSHOT_ASSET_WRITE_BATCH_SIZE
     ) {
       const batch = writeBatch(db);
-      const chunkBatch = assetChunks.slice(
+      const chunkBatch = integrity.chunks.slice(
         index,
         index + SNAPSHOT_ASSET_WRITE_BATCH_SIZE,
       );
 
-      chunkBatch.forEach((chunkAssets, offset) => {
-        const chunkIndex = index + offset;
-        const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
-
+      chunkBatch.forEach((chunk) => {
         batch.set(
           doc(
             db,
@@ -666,14 +1084,19 @@ async function generateSnapshotInternal(
             'projectionSnapshots',
             snapshotId,
             'assets',
-            chunkId,
+            chunk.chunkId,
           ),
           sanitizeForFirestore({
-            schemaVersion: 2,
-            chunkIndex,
-            assetCount: chunkAssets.length,
+            schemaVersion: 3,
+            chunkId: chunk.chunkId,
+            chunkIndex: chunk.chunkIndex,
+            assetCount: chunk.assets.length,
             sharedProjectionSnapshotId: snapshotId,
-            assets: chunkAssets,
+            snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+            snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+            chunkHash: chunk.chunkHash,
+            snapshotContentHash: integrity.snapshotContentHash,
+            assets: chunk.assets,
           }),
         );
       });
@@ -691,8 +1114,8 @@ async function generateSnapshotInternal(
         ? `server:projection-authority:${input.requestedBy}`
         : 'server:window-projection',
       assetCount: rankedAssets.length,
-      assetDocumentCount: assetChunks.length,
-      assetStorageVersion: 2,
+      assetDocumentCount: integrity.chunks.length,
+      assetStorageVersion: 3,
       teamCount,
       targetCycleNumber,
       requiredGamesPerCycle,
@@ -705,7 +1128,7 @@ async function generateSnapshotInternal(
       projectionAsOfDate: context.projectionAsOfDate,
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
-      authoritySchemaVersion: 1,
+      authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
       generatedByAuthority: 'server',
       catalogSnapshotId: catalogValidation.catalogId,
       catalogHash: catalogValidation.catalogHash,
@@ -713,6 +1136,11 @@ async function generateSnapshotInternal(
       canonicalAssetCount: catalogValidation.validatedAssetCount,
       catalogValidationStatus: 'validated',
       catalogCacheHit: catalogValidation.catalogCacheHit,
+      snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+      snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+      snapshotContentHash: integrity.snapshotContentHash,
+      snapshotChunkHashes: integrity.snapshotChunkHashes,
+      snapshotIntegrityStatus: 'verified',
       ...(input.generationRequestId
         ? { generationRequestId: input.generationRequestId }
         : {}),
@@ -1139,28 +1567,35 @@ export async function createEmergencyDraftProjectionSnapshot(
     rankedAssets,
     catalog,
   );
-  const assetChunks: DraftableAsset[][] = [];
+  const integrity = prepareProjectionSnapshotIntegrity({
+    snapshotId,
+    assets: rankedAssets,
+    projectionVersion: SHARED_PROJECTION_VERSION,
+    teamCount,
+    targetCycleNumber,
+    requiredGamesPerCycle,
+    catalogSnapshotId: catalogValidation.catalogId,
+    catalogHash: catalogValidation.catalogHash,
+  });
 
-  for (let index = 0; index < rankedAssets.length; index += 25) {
-    assetChunks.push(rankedAssets.slice(index, index + 25));
-  }
-
-  for (let index = 0; index < assetChunks.length; index += 400) {
+  for (let index = 0; index < integrity.chunks.length; index += 400) {
     const batch = writeBatch(db);
-    const chunkBatch = assetChunks.slice(index, index + 400);
+    const chunkBatch = integrity.chunks.slice(index, index + 400);
 
-    chunkBatch.forEach((chunkAssets, offset) => {
-      const chunkIndex = index + offset;
-      const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
-
+    chunkBatch.forEach((chunk) => {
       batch.set(
-        doc(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId, 'assets', chunkId),
+        doc(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId, 'assets', chunk.chunkId),
         JSON.parse(JSON.stringify({
-          schemaVersion: 2,
-          chunkIndex,
-          assetCount: chunkAssets.length,
+          schemaVersion: 3,
+          chunkId: chunk.chunkId,
+          chunkIndex: chunk.chunkIndex,
+          assetCount: chunk.assets.length,
           sharedProjectionSnapshotId: snapshotId,
-          assets: chunkAssets,
+          snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+          snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+          chunkHash: chunk.chunkHash,
+          snapshotContentHash: integrity.snapshotContentHash,
+          assets: chunk.assets,
         })),
       );
     });
@@ -1176,8 +1611,8 @@ export async function createEmergencyDraftProjectionSnapshot(
     generatedAt,
     generatedBy: 'server:draft-automation',
     assetCount: rankedAssets.length,
-    assetDocumentCount: assetChunks.length,
-    assetStorageVersion: 2,
+    assetDocumentCount: integrity.chunks.length,
+    assetStorageVersion: 3,
     teamCount,
     targetCycleNumber,
     requiredGamesPerCycle,
@@ -1185,7 +1620,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     draftReadyUntil,
     message:
       'Emergency conservative rankings were generated by the server because the normal current shared projection snapshot was unavailable.',
-    authoritySchemaVersion: 1,
+    authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
     generatedByAuthority: 'server',
     catalogSnapshotId: catalogValidation.catalogId,
     catalogHash: catalogValidation.catalogHash,
@@ -1193,6 +1628,11 @@ export async function createEmergencyDraftProjectionSnapshot(
     canonicalAssetCount: catalogValidation.validatedAssetCount,
     catalogValidationStatus: 'validated',
     catalogCacheHit: catalogValidation.catalogCacheHit,
+    snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+    snapshotContentHash: integrity.snapshotContentHash,
+    snapshotChunkHashes: integrity.snapshotChunkHashes,
+    snapshotIntegrityStatus: 'verified',
     ...(input.generationRequestId
       ? { generationRequestId: input.generationRequestId }
       : {}),

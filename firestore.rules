@@ -261,66 +261,6 @@ service cloud.firestore {
         data.updatedAt == request.time;
     }
 
-    function sharedProjectionWriteAllowed(leagueId) {
-      // Projection generation remains available before and after a draft, but
-      // the frozen pool is immutable for the entire live draft, including the
-      // first-pick clock.
-      return isLeagueCommissioner(leagueId) &&
-        (
-          !exists(draftPath(leagueId)) ||
-          get(draftPath(leagueId)).data.status != 'live'
-        );
-    }
-
-    function validSharedProjectionAsset(assetKey) {
-      let data = request.resource.data;
-
-      let validLegacyAsset =
-        data.keys().hasAll([
-          'assetKey',
-          'assetType',
-          'position',
-          'projectedCyclePoints',
-          'floorAdjustedCyclePoints',
-          'balancedRank',
-          'sharedProjectionSnapshotId'
-        ]) &&
-        data.assetKey == assetKey &&
-        data.assetType in ['skater', 'team-goalie-unit'] &&
-        data.position in ['LW', 'C', 'RW', 'D', 'G'] &&
-        (
-          data.projectedCyclePoints is int ||
-          data.projectedCyclePoints is float
-        ) &&
-        (
-          data.floorAdjustedCyclePoints is int ||
-          data.floorAdjustedCyclePoints is float
-        ) &&
-        data.balancedRank is int &&
-        data.balancedRank >= 1 &&
-        data.sharedProjectionSnapshotId is string;
-
-      let validChunk =
-        data.keys().hasAll([
-          'schemaVersion',
-          'chunkIndex',
-          'assetCount',
-          'assets',
-          'sharedProjectionSnapshotId'
-        ]) &&
-        data.schemaVersion == 2 &&
-        data.chunkIndex is int &&
-        data.chunkIndex >= 0 &&
-        data.assetCount is int &&
-        data.assetCount >= 1 &&
-        data.assetCount <= 25 &&
-        data.assets is list &&
-        data.assets.size() == data.assetCount &&
-        data.sharedProjectionSnapshotId is string;
-
-      return validLegacyAsset || validChunk;
-    }
-
     function validPlayerAvailabilityStatus(status) {
       return status in [
         'active',
@@ -743,25 +683,15 @@ service cloud.firestore {
 
 
       match /projectionSnapshots/{snapshotId} {
-        allow get, list: if
-          canReadSharedLeagueProjection(leagueId);
-
-        allow create, update: if
-          sharedProjectionWriteAllowed(leagueId);
-
-        allow delete: if
-          sharedProjectionWriteAllowed(leagueId);
+        // Projection V11 snapshots, pointers, and chunks are generated, sealed,
+        // restored, and migrated only by Cloud Functions. Commissioners and
+        // modified browser clients receive read access but no write path.
+        allow get, list: if canReadSharedLeagueProjection(leagueId);
+        allow create, update, delete: if false;
 
         match /assets/{assetKey} {
-          allow get, list: if
-            canReadSharedLeagueProjection(leagueId);
-
-          allow create, update: if
-            sharedProjectionWriteAllowed(leagueId) &&
-            validSharedProjectionAsset(assetKey);
-
-          allow delete: if
-            sharedProjectionWriteAllowed(leagueId);
+          allow get, list: if canReadSharedLeagueProjection(leagueId);
+          allow create, update, delete: if false;
         }
       }
 

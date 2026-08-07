@@ -19,6 +19,9 @@ import { getFantasyPlayoffs } from '../playoffs/playoff.service';
 import {
   generateSharedProjectionSnapshot,
   loadSharedProjectionSnapshotMetadata,
+  manageProjectionSnapshotIntegrity,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   SHARED_PROJECTION_VERSION,
 } from '../projection/projection-snapshot.service';
 import { CURRENT_SCORING_RULES_VERSION, defaultScoringRules } from '../scoring/scoring-rules';
@@ -518,23 +521,29 @@ export async function loadReleaseReadinessSnapshot(
 
   const projectionServerValidated = Boolean(
     projection?.generatedByAuthority === 'server' &&
+    projection?.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
     projection?.catalogValidationStatus === 'validated' &&
     projection?.catalogSnapshotId &&
-    projection?.catalogHash &&
-    projection?.canonicalAssetCount === projection?.assetCount,
+    /^[a-f0-9]{64}$/.test(projection?.catalogHash ?? '') &&
+    projection?.canonicalAssetCount === projection?.assetCount &&
+    projection?.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+    projection?.snapshotHashAlgorithm === 'sha256' &&
+    projection?.snapshotIntegrityStatus === 'verified' &&
+    /^[a-f0-9]{64}$/.test(projection?.snapshotContentHash ?? '') &&
+    projection?.snapshotChunkHashes?.length === projection?.assetDocumentCount,
   );
 
   checks.push(
     createCheck(
       'projection-status',
       'projection',
-      'Shared projection snapshot is server validated',
+      'Shared projection snapshot is server hashed and Draft ready',
       !projection
         ? 'No shared projection metadata is available.'
         : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}; ` +
           (projectionServerValidated
-            ? `server catalog ${projection.catalogSnapshotId} validated ${projection.canonicalAssetCount} assets.`
-            : 'this snapshot predates the server NHL asset-catalog authority and should be refreshed.'),
+            ? `server catalog ${projection.catalogSnapshotId} validated ${projection.canonicalAssetCount} assets; root hash ${(projection.snapshotContentHash ?? '').slice(0, 12)}… is verified.`
+            : 'this snapshot is missing the current server authority marker, canonical catalog validation, or deterministic root hash and must be verified or regenerated before Draft use.'),
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
         projection.assetCount > 0
@@ -709,3 +718,28 @@ export async function regenerateReleaseReadinessProjection(
 
   return `Projection ${snapshot.metadata.snapshotId} is ready for Cycle ${snapshot.metadata.targetCycleNumber}.`;
 }
+
+export async function verifyReleaseReadinessProjectionIntegrity(
+  leagueId: string,
+): Promise<string> {
+  const { result } = await manageProjectionSnapshotIntegrity({
+    leagueId,
+    action: 'verify-current',
+    reason: 'Release Readiness verified the current Projection V11 snapshot before Draft use.',
+  });
+
+  return `${result.message} Root hash ${result.snapshotContentHash.slice(0, 12)}….`;
+}
+
+export async function restorePreviousReleaseReadinessProjection(
+  leagueId: string,
+): Promise<string> {
+  const { result } = await manageProjectionSnapshotIntegrity({
+    leagueId,
+    action: 'restore-previous',
+    reason: 'Release Readiness restored the newest prior verified Projection V11 snapshot.',
+  });
+
+  return `${result.message} Save Draft settings again before starting the Draft.`;
+}
+

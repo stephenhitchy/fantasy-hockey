@@ -60,7 +60,7 @@
           class="snapshot-authority-badge"
           [class.snapshot-authority-ready]="isSnapshotServerValidated()"
         >
-          {{ isSnapshotServerValidated() ? 'Server catalog verified' : 'Refresh required' }}
+          {{ isSnapshotServerValidated() ? 'Server hash verified' : 'Integrity check required' }}
         </span>
         <small>{{ getSnapshotAuthorityLabel() }}</small>
       </div>

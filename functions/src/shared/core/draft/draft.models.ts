@@ -327,6 +327,12 @@ export interface FantasyDraft {
 
   /** Verified shared projection snapshot frozen for the entire draft. */
   serverDraftProjectionSnapshotId?: string | null;
+  /** Deterministic SHA-256 root hash of the frozen Draft pool. */
+  serverDraftProjectionSnapshotHash?: string | null;
+  /** Server projection-authority schema frozen with the Draft. */
+  serverDraftProjectionAuthorityVersion?: number | null;
+  /** Canonical NHL asset-catalog hash used by the frozen Draft pool. */
+  serverDraftProjectionCatalogHash?: string | null;
 
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -365,6 +371,11 @@ export interface DraftPick extends DraftPickPreview {
    * creating or attempting a second selection.
    */
   submissionId?: string | null;
+
+  /** Exact server-verified projection pool used for this selection. */
+  projectionSnapshotId?: string | null;
+  projectionSnapshotHash?: string | null;
+  projectionAuthorityVersion?: number | null;
 
   madeAt?: unknown;
 }

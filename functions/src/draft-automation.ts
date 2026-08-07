@@ -18,7 +18,15 @@ import {
   SHARED_PROJECTION_VERSION,
   SharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotById,
+  sealSharedProjectionSnapshotIntegrity,
 } from './shared/core/projection/projection-snapshot.service';
+import {
+  isProjectionSha256,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+} from './shared/core/projection/projection-snapshot-hash.util';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
@@ -52,6 +60,7 @@ interface CachedDraftProjection {
 }
 
 const draftProjectionCache = new Map<string, CachedDraftProjection>();
+const projectionSealInFlight = new Map<string, Promise<SharedProjectionSnapshot | null>>();
 
 function getDraftProjectionCacheKey(leagueId: string, snapshotId: string): string {
   return `${leagueId}:${snapshotId}`;
@@ -289,44 +298,85 @@ function asTimestampDate(value: unknown): Date | null {
 }
 
 
+type VerifiedDraftProjectionMetadata = SharedProjectionSnapshot['metadata'] & {
+  assetDocumentCount: number;
+  generatedByAuthority: 'server';
+  authoritySchemaVersion: typeof PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION;
+  catalogValidationStatus: 'validated';
+  catalogSnapshotId: string;
+  catalogHash: string;
+  snapshotHashSchemaVersion: typeof PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION;
+  snapshotHashAlgorithm: typeof PROJECTION_SNAPSHOT_HASH_ALGORITHM;
+  snapshotIntegrityStatus: 'verified';
+  snapshotContentHash: string;
+  snapshotChunkHashes: string[];
+};
+
+interface VerifiedDraftProjectionSnapshot extends SharedProjectionSnapshot {
+  metadata: VerifiedDraftProjectionMetadata;
+}
+
 function isVerifiedDraftProjection(
   snapshot: SharedProjectionSnapshot | null,
-): snapshot is SharedProjectionSnapshot {
+): snapshot is VerifiedDraftProjectionSnapshot {
+  const metadata = snapshot?.metadata;
+
   return Boolean(
     snapshot &&
     snapshot.assets.length > 0 &&
-    snapshot.metadata.status === 'ready' &&
-    snapshot.metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
-    snapshot.metadata.generationReason !== 'server-emergency',
+    metadata?.status === 'ready' &&
+    metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.generationReason !== 'server-emergency' &&
+    metadata.generatedByAuthority === 'server' &&
+    metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
+    metadata.catalogValidationStatus === 'validated' &&
+    typeof metadata.catalogSnapshotId === 'string' &&
+    metadata.catalogSnapshotId.length > 0 &&
+    isProjectionSha256(metadata.catalogHash) &&
+    metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+    metadata.snapshotHashAlgorithm === PROJECTION_SNAPSHOT_HASH_ALGORITHM &&
+    metadata.snapshotIntegrityStatus === 'verified' &&
+    isProjectionSha256(metadata.snapshotContentHash) &&
+    Array.isArray(metadata.snapshotChunkHashes) &&
+    metadata.snapshotChunkHashes.length === metadata.assetDocumentCount,
   );
 }
 
-function asFiniteNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+function hasPositiveProjectionAssetCount(
+  value: Partial<SharedProjectionSnapshot['metadata']>,
+): boolean {
+  return typeof value.assetCount === 'number' &&
+    Number.isFinite(value.assetCount) &&
+    value.assetCount > 0;
 }
 
-async function loadProjectionAssets(
+async function sealProjectionSnapshotForDraft(
   leagueId: string,
   snapshotId: string,
-): Promise<DraftableAsset[]> {
-  const assetsSnapshot = await db
-    .collection(`leagues/${leagueId}/projectionSnapshots/${snapshotId}/assets`)
-    .get();
+): Promise<SharedProjectionSnapshot | null> {
+  const key = `${leagueId}:${snapshotId}`;
+  const existing = projectionSealInFlight.get(key);
 
-  return assetsSnapshot.docs.flatMap((document) => {
-    const data = document.data() as {
-      assets?: unknown;
-      assetKey?: unknown;
-    };
+  if (existing) {
+    return existing;
+  }
 
-    if (Array.isArray(data.assets)) {
-      return data.assets as DraftableAsset[];
-    }
+  const request = sealSharedProjectionSnapshotIntegrity(leagueId, snapshotId)
+    .then(({ snapshot }) => isVerifiedDraftProjection(snapshot) ? snapshot : null)
+    .catch((error: unknown) => {
+      console.warn('Unable to seal a legacy Projection V11 snapshot for Draft compatibility.', {
+        leagueId,
+        snapshotId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    })
+    .finally(() => {
+      projectionSealInFlight.delete(key);
+    });
 
-    return typeof data.assetKey === 'string'
-      ? [data as DraftableAsset]
-      : [];
-  });
+  projectionSealInFlight.set(key, request);
+  return request;
 }
 
 async function restoreProjectionPointers(
@@ -366,69 +416,67 @@ async function loadVerifiedProjectionSnapshotById(
   leagueId: string,
   snapshotId: string,
 ): Promise<SharedProjectionSnapshot | null> {
-  const metadataDocument = await db.doc(
-    `leagues/${leagueId}/projectionSnapshots/${snapshotId}`,
-  ).get();
+  let snapshot: SharedProjectionSnapshot | null = null;
 
-  if (!metadataDocument.exists) {
+  try {
+    snapshot = await loadSharedProjectionSnapshotById(leagueId, snapshotId);
+  } catch (error: unknown) {
+    // A snapshot that already claims an integrity hash but fails verification
+    // must never be silently resealed or trusted by the Draft authority.
+    console.error('Rejected a Draft projection snapshot that failed hash verification.', {
+      leagueId,
+      snapshotId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 
-  const data = metadataDocument.data() as Partial<SharedProjectionSnapshot['metadata']>;
+  if (!snapshot || snapshot.metadata.generationReason === 'server-emergency') {
+    return null;
+  }
+
+  if (isVerifiedDraftProjection(snapshot)) {
+    return snapshot;
+  }
 
   if (
-    data.status !== 'ready' ||
-    data.projectionVersion !== SHARED_PROJECTION_VERSION ||
-    data.generationReason === 'server-emergency' ||
-    data.activeSnapshotId !== snapshotId
+    snapshot.metadata.generatedByAuthority !== 'server' ||
+    snapshot.metadata.catalogValidationStatus !== 'validated' ||
+    !snapshot.metadata.catalogSnapshotId ||
+    !isProjectionSha256(snapshot.metadata.catalogHash)
   ) {
     return null;
   }
 
-  const assets = await loadProjectionAssets(leagueId, snapshotId);
-  const expectedAssetCount = asFiniteNumber(data.assetCount);
-
-  if (assets.length === 0 || (expectedAssetCount > 0 && assets.length !== expectedAssetCount)) {
-    return null;
-  }
-
-  const metadata = {
-    ...data,
-    snapshotId,
-    activeSnapshotId: snapshotId,
-    status: 'ready',
-    projectionVersion: SHARED_PROJECTION_VERSION,
-    generatedAt: typeof data.generatedAt === 'string' ? data.generatedAt : '',
-    generatedBy: typeof data.generatedBy === 'string' ? data.generatedBy : 'unknown',
-    assetCount: assets.length,
-    teamCount: Math.max(2, asFiniteNumber(data.teamCount, 2)),
-    targetCycleNumber: Math.max(1, asFiniteNumber(data.targetCycleNumber, 1)),
-    requiredGamesPerCycle: Math.max(
-      1,
-      asFiniteNumber(data.requiredGamesPerCycle, 6),
-    ),
-    generationReason: data.generationReason ?? 'draft-setup',
-    draftReadyUntil:
-      typeof data.draftReadyUntil === 'string' ? data.draftReadyUntil : '',
-    message:
-      typeof data.message === 'string'
-        ? data.message
-        : 'Verified draft rankings are ready.',
-  } as SharedProjectionSnapshot['metadata'];
-  const snapshot: SharedProjectionSnapshot = { metadata, assets };
-
-  return isVerifiedDraftProjection(snapshot) ? snapshot : null;
+  return sealProjectionSnapshotForDraft(leagueId, snapshotId);
 }
 
 async function loadVerifiedDraftProjectionSnapshot(
   leagueId: string,
 ): Promise<SharedProjectionSnapshot | null> {
-  const current = await loadSharedProjectionSnapshot(leagueId).catch(() => null);
-  const previousGenerationReason =
-    current?.metadata.generationReason ?? 'missing';
+  const current = await loadSharedProjectionSnapshot(leagueId).catch((error: unknown) => {
+    console.warn('The current projection pointer could not be verified for Draft use.', {
+      leagueId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  });
+  const previousGenerationReason = current?.metadata.generationReason ?? 'missing';
 
   if (isVerifiedDraftProjection(current)) {
     return current;
+  }
+
+  if (current?.metadata.activeSnapshotId) {
+    const sealedCurrent = await loadVerifiedProjectionSnapshotById(
+      leagueId,
+      current.metadata.activeSnapshotId,
+    );
+
+    if (sealedCurrent) {
+      await restoreProjectionPointers(leagueId, sealedCurrent);
+      return sealedCurrent;
+    }
   }
 
   const metadataSnapshot = await db
@@ -445,7 +493,7 @@ async function loadVerifiedDraftProjectionSnapshot(
       data.generationReason !== 'server-emergency' &&
       typeof data.activeSnapshotId === 'string' &&
       data.activeSnapshotId === document.id &&
-      asFiniteNumber(data.assetCount) > 0,
+      hasPositiveProjectionAssetCount(data),
     )
     .sort((first, second) => {
       const firstGeneratedAt = Date.parse(
@@ -461,50 +509,9 @@ async function loadVerifiedDraftProjectionSnapshot(
 
   for (const candidate of candidates) {
     const snapshotId = candidate.document.id;
-    const assets = await loadProjectionAssets(leagueId, snapshotId);
-    const expectedAssetCount = asFiniteNumber(candidate.data.assetCount);
+    const verified = await loadVerifiedProjectionSnapshotById(leagueId, snapshotId);
 
-    if (assets.length === 0 || (expectedAssetCount > 0 && assets.length !== expectedAssetCount)) {
-      continue;
-    }
-
-    const metadata = {
-      ...candidate.data,
-      snapshotId,
-      activeSnapshotId: snapshotId,
-      status: 'ready',
-      projectionVersion: SHARED_PROJECTION_VERSION,
-      generatedAt:
-        typeof candidate.data.generatedAt === 'string'
-          ? candidate.data.generatedAt
-          : '',
-      generatedBy:
-        typeof candidate.data.generatedBy === 'string'
-          ? candidate.data.generatedBy
-          : 'unknown',
-      assetCount: assets.length,
-      teamCount: Math.max(2, asFiniteNumber(candidate.data.teamCount, 2)),
-      targetCycleNumber: Math.max(
-        1,
-        asFiniteNumber(candidate.data.targetCycleNumber, 1),
-      ),
-      requiredGamesPerCycle: Math.max(
-        1,
-        asFiniteNumber(candidate.data.requiredGamesPerCycle, 6),
-      ),
-      generationReason: candidate.data.generationReason ?? 'draft-setup',
-      draftReadyUntil:
-        typeof candidate.data.draftReadyUntil === 'string'
-          ? candidate.data.draftReadyUntil
-          : '',
-      message:
-        typeof candidate.data.message === 'string'
-          ? candidate.data.message
-          : 'Verified draft rankings are ready.',
-    } as SharedProjectionSnapshot['metadata'];
-    const verified: SharedProjectionSnapshot = { metadata, assets };
-
-    if (!isVerifiedDraftProjection(verified)) {
+    if (!verified) {
       continue;
     }
 
@@ -514,6 +521,7 @@ async function loadVerifiedDraftProjectionSnapshot(
       leagueId,
       snapshotId,
       previousGenerationReason,
+      snapshotContentHash: verified.metadata.snapshotContentHash,
     });
 
     return verified;
@@ -527,16 +535,48 @@ export async function loadProjectionSnapshotForDraft(
   draft: FantasyDraft,
 ): Promise<SharedProjectionSnapshot | null> {
   const pinnedSnapshotId = draft.serverDraftProjectionSnapshotId;
+  const pinnedSnapshotHash = draft.serverDraftProjectionSnapshotHash;
 
   if (typeof pinnedSnapshotId === 'string' && pinnedSnapshotId) {
     const cached = getCachedDraftProjection(leagueId, pinnedSnapshotId);
 
-    if (cached) {
+    if (
+      isVerifiedDraftProjection(cached) &&
+      (!pinnedSnapshotHash || cached.metadata.snapshotContentHash === pinnedSnapshotHash)
+    ) {
       return cached;
     }
 
     const loaded = await loadVerifiedProjectionSnapshotById(leagueId, pinnedSnapshotId);
-    return loaded ? cacheDraftProjection(leagueId, loaded) : null;
+
+    if (
+      !loaded ||
+      (pinnedSnapshotHash && loaded.metadata.snapshotContentHash !== pinnedSnapshotHash)
+    ) {
+      return null;
+    }
+
+    if (
+      !pinnedSnapshotHash ||
+      draft.serverDraftProjectionAuthorityVersion !==
+        PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+      draft.serverDraftProjectionCatalogHash !== loaded.metadata.catalogHash
+    ) {
+      await db.doc(`leagues/${leagueId}/draft/current`).set(
+        {
+          serverDraftProjectionSnapshotHash: loaded.metadata.snapshotContentHash,
+          serverDraftProjectionAuthorityVersion:
+            PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+          serverDraftProjectionCatalogHash: loaded.metadata.catalogHash ?? null,
+          serverAutomationMessage:
+            'The frozen Draft pool was sealed with the current server integrity hash.',
+          serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    return cacheDraftProjection(leagueId, loaded);
   }
 
   const projection = await loadVerifiedDraftProjectionSnapshot(leagueId);
@@ -545,6 +585,10 @@ export async function loadProjectionSnapshotForDraft(
     await db.doc(`leagues/${leagueId}/draft/current`).set(
       {
         serverDraftProjectionSnapshotId: projection.metadata.activeSnapshotId,
+        serverDraftProjectionSnapshotHash: projection.metadata.snapshotContentHash,
+        serverDraftProjectionAuthorityVersion:
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+        serverDraftProjectionCatalogHash: projection.metadata.catalogHash ?? null,
         serverProjectionFallbackUsed: false,
         serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
       },
@@ -740,6 +784,18 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
+        : null,
+    serverDraftProjectionSnapshotHash:
+      typeof value.serverDraftProjectionSnapshotHash === 'string'
+        ? value.serverDraftProjectionSnapshotHash
+        : null,
+    serverDraftProjectionAuthorityVersion:
+      typeof value.serverDraftProjectionAuthorityVersion === 'number'
+        ? value.serverDraftProjectionAuthorityVersion
+        : null,
+    serverDraftProjectionCatalogHash:
+      typeof value.serverDraftProjectionCatalogHash === 'string'
+        ? value.serverDraftProjectionCatalogHash
         : null,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
@@ -1013,6 +1069,10 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
         clockUpdatedAt: FieldValue.serverTimestamp(),
         serverAutomationStatus: 'healthy',
         serverDraftProjectionSnapshotId: projection.metadata.activeSnapshotId,
+        serverDraftProjectionSnapshotHash: projection.metadata.snapshotContentHash,
+        serverDraftProjectionAuthorityVersion:
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+        serverDraftProjectionCatalogHash: projection.metadata.catalogHash ?? null,
         serverProjectionFallbackUsed: false,
         serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -1057,6 +1117,8 @@ async function makeOneServerAutomaticPick(
   leagueId: string,
   projectionAssets: DraftableAsset[],
   projectionSnapshotId: string,
+  projectionSnapshotHash: string,
+  projectionAuthorityVersion: number,
   reasonOverride?: DraftAutoPickReason,
 ): Promise<boolean> {
   if (projectionAssets.length === 0) {
@@ -1078,8 +1140,14 @@ async function makeOneServerAutomaticPick(
       return false;
     }
 
-    if (draft.serverDraftProjectionSnapshotId !== projectionSnapshotId) {
-      throw new Error('The draft projection snapshot changed before the automatic pick was committed.');
+    if (
+      draft.serverDraftProjectionSnapshotId !== projectionSnapshotId ||
+      draft.serverDraftProjectionSnapshotHash !== projectionSnapshotHash ||
+      draft.serverDraftProjectionAuthorityVersion !== projectionAuthorityVersion ||
+      projectionAuthorityVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+      !isProjectionSha256(projectionSnapshotHash)
+    ) {
+      throw new Error('The verified Draft projection hash changed before the automatic pick was committed.');
     }
 
     const currentTeamsSnapshot = await transaction.get(
@@ -1185,6 +1253,9 @@ async function makeOneServerAutomaticPick(
       selectionType: selected.selectionType,
       selectedByUserId: SERVER_DRAFT_ACTOR,
       autoPickReason: autoReason,
+      projectionSnapshotId,
+      projectionSnapshotHash,
+      projectionAuthorityVersion,
     };
     const nextOverallPick = currentPick.overallPick + 1;
     const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);
@@ -1195,7 +1266,6 @@ async function makeOneServerAutomaticPick(
     transaction.set(pickRef, {
       ...pick,
       authority: 'cloud-function',
-      projectionSnapshotId,
       madeAt: FieldValue.serverTimestamp(),
     });
     transaction.set(
@@ -1361,6 +1431,8 @@ async function processLeagueDraftAutomation(
         leagueId,
         projection.assets,
         projection.metadata.activeSnapshotId,
+        projection.metadata.snapshotContentHash ?? '',
+        projection.metadata.authoritySchemaVersion ?? 0,
       ),
       `automatic pick for ${leagueId}`,
     );

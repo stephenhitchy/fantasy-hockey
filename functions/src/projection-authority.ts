@@ -10,10 +10,19 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import {
   generateSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotById,
+  sealSharedProjectionSnapshotIntegrity,
   SHARED_PROJECTION_VERSION,
   SharedProjectionGenerationReason,
+  SharedProjectionSnapshot,
   SharedProjectionSnapshotMetadata,
 } from './shared/core/projection/projection-snapshot.service';
+import {
+  isProjectionSha256,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+} from './shared/core/projection/projection-snapshot-hash.util';
 
 const FUNCTION_REGION = 'us-central1';
 const PROJECTION_REQUEST_SCHEMA_VERSION = 1;
@@ -27,6 +36,8 @@ const PROJECTION_REQUEST_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const PROJECTION_STALE_SWEEP_LIMIT = 100;
 const DRAFT_PROJECTION_FRESH_MILLISECONDS = 45 * 60 * 1000;
 const WINDOW_PROJECTION_FRESH_MILLISECONDS = 6 * 60 * 60 * 1000;
+const PROJECTION_INTEGRITY_REASON_MIN_LENGTH = 8;
+const PROJECTION_INTEGRITY_REASON_MAX_LENGTH = 500;
 
 const CLIENT_GENERATION_REASONS = new Set<SharedProjectionGenerationReason>([
   'manual',
@@ -58,6 +69,26 @@ interface ProjectionGenerationRequestResult {
   targetCycleNumber: number;
   message: string;
   reusedFreshSnapshot: boolean;
+}
+
+type ProjectionIntegrityCommandAction = 'verify-current' | 'restore-previous';
+
+interface ProjectionIntegrityCommandRequest {
+  requestId?: unknown;
+  leagueId?: unknown;
+  action?: unknown;
+  reason?: unknown;
+}
+
+interface ProjectionIntegrityCommandResult {
+  requestId: string;
+  action: ProjectionIntegrityCommandAction;
+  snapshotId: string;
+  snapshotContentHash: string;
+  targetCycleNumber: number;
+  alreadySealed: boolean;
+  restoredPointer: boolean;
+  message: string;
 }
 
 interface ProjectionRequestDocument {
@@ -114,6 +145,53 @@ function requireGenerationReason(value: unknown): SharedProjectionGenerationReas
   }
 
   return reason;
+}
+
+function requireProjectionIntegrityAction(value: unknown): ProjectionIntegrityCommandAction {
+  const action = asString(value);
+
+  if (action !== 'verify-current' && action !== 'restore-previous') {
+    throw new HttpsError('invalid-argument', 'Choose a supported projection integrity action.');
+  }
+
+  return action;
+}
+
+function requireProjectionIntegrityReason(value: unknown): string {
+  const reason = asString(value);
+
+  if (
+    reason.length < PROJECTION_INTEGRITY_REASON_MIN_LENGTH ||
+    reason.length > PROJECTION_INTEGRITY_REASON_MAX_LENGTH
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      `The audit reason must be between ${PROJECTION_INTEGRITY_REASON_MIN_LENGTH} and ${PROJECTION_INTEGRITY_REASON_MAX_LENGTH} characters.`,
+    );
+  }
+
+  return reason;
+}
+
+function isIntegrityVerifiedSnapshot(
+  snapshot: SharedProjectionSnapshot | null,
+): snapshot is SharedProjectionSnapshot {
+  const metadata = snapshot?.metadata;
+
+  return Boolean(
+    snapshot &&
+    snapshot.assets.length > 0 &&
+    metadata?.status === 'ready' &&
+    metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.generatedByAuthority === 'server' &&
+    metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
+    metadata.catalogValidationStatus === 'validated' &&
+    metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+    metadata.snapshotHashAlgorithm === PROJECTION_SNAPSHOT_HASH_ALGORITHM &&
+    metadata.snapshotIntegrityStatus === 'verified' &&
+    isProjectionSha256(metadata.catalogHash) &&
+    isProjectionSha256(metadata.snapshotContentHash),
+  );
 }
 
 function normalizePositiveInteger(value: unknown): number | null {
@@ -338,7 +416,12 @@ function isReusableProjectionPointer(
     data['status'] !== 'ready' ||
     data['projectionVersion'] !== SHARED_PROJECTION_VERSION ||
     data['generatedByAuthority'] !== 'server' ||
+    data['authoritySchemaVersion'] !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     data['catalogValidationStatus'] !== 'validated' ||
+    data['snapshotHashSchemaVersion'] !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    data['snapshotHashAlgorithm'] !== PROJECTION_SNAPSHOT_HASH_ALGORITHM ||
+    data['snapshotIntegrityStatus'] !== 'verified' ||
+    !isProjectionSha256(data['snapshotContentHash']) ||
     data['teamCount'] !== input.teamCount ||
     data['requiredGamesPerCycle'] !== input.requiredGamesPerCycle ||
     data['targetCycleNumber'] !== input.targetCycleNumber
@@ -394,6 +477,303 @@ async function findReusableProjection(
 
   return normalizePointerMetadata(data) as SharedProjectionSnapshotMetadata;
 }
+
+
+export const manageProjectionSnapshotIntegrity = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    maxInstances: 5,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<ProjectionIntegrityCommandResult> => {
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError('unauthenticated', 'Sign in before managing projection integrity.');
+    }
+
+    if (!await isPlatformAdministrator(userId, request.auth?.token ?? {})) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only a platform administrator can verify or restore projection snapshots.',
+      );
+    }
+
+    const input = asRecord(request.data) as ProjectionIntegrityCommandRequest;
+    const requestId = requireRequestId(input.requestId);
+    const leagueId = requireLeagueId(input.leagueId);
+    const action = requireProjectionIntegrityAction(input.action);
+    const reason = requireProjectionIntegrityReason(input.reason);
+    const auditId = `projection-integrity-${createHash('sha256')
+      .update(requestId)
+      .digest('hex')
+      .slice(0, 24)}`;
+    const auditRef = db.doc(`leagues/${leagueId}/audit/${auditId}`);
+    const existingAudit = await auditRef.get();
+
+    if (existingAudit.exists) {
+      const audit = existingAudit.data() ?? {};
+
+      if (
+        audit['actorId'] !== userId ||
+        audit['action'] !== `projection-${action}`
+      ) {
+        throw new HttpsError(
+          'already-exists',
+          'That projection integrity request ID was already used for another action.',
+        );
+      }
+
+      const snapshotId = asString(audit['snapshotId']);
+      const snapshotContentHash = asString(audit['snapshotContentHash']);
+      const targetCycleNumber = normalizePositiveInteger(audit['targetCycleNumber']) ?? 1;
+
+      if (!snapshotId || !isProjectionSha256(snapshotContentHash)) {
+        throw new HttpsError(
+          'data-loss',
+          'The prior projection integrity audit record is incomplete.',
+        );
+      }
+
+      return {
+        requestId,
+        action,
+        snapshotId,
+        snapshotContentHash,
+        targetCycleNumber,
+        alreadySealed: audit['alreadySealed'] === true,
+        restoredPointer: audit['restoredPointer'] === true,
+        message: asString(audit['message']) || 'Projection integrity action was already completed.',
+      };
+    }
+
+    const leagueRef = db.doc(`leagues/${leagueId}`);
+    const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+    const currentPointerRef = db.doc(`leagues/${leagueId}/projectionSnapshots/current`);
+    const [leagueSnapshot, draftSnapshot, currentPointerSnapshot, pickSnapshot] = await Promise.all([
+      leagueRef.get(),
+      draftRef.get(),
+      currentPointerRef.get(),
+      db.collection(`leagues/${leagueId}/draft/current/picks`).limit(1).get(),
+    ]);
+
+    if (!leagueSnapshot.exists) {
+      throw new HttpsError('not-found', 'That league no longer exists.');
+    }
+
+    const currentPointer = currentPointerSnapshot.data() ?? {};
+    const currentSnapshotId = asString(currentPointer['activeSnapshotId']);
+    let selectedSnapshotId = currentSnapshotId;
+
+    if (action === 'restore-previous') {
+      const draft = draftSnapshot.data() ?? {};
+      const draftStatus = asString(draft['status']) || 'setup';
+
+      if (
+        !pickSnapshot.empty ||
+        draftStatus === 'live' ||
+        draftStatus === 'complete'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A previous projection snapshot cannot be restored after the Draft has started or a pick exists.',
+        );
+      }
+
+      const candidatesSnapshot = await db
+        .collection(`leagues/${leagueId}/projectionSnapshots`)
+        .get();
+      const candidates = candidatesSnapshot.docs
+        .map((document) => ({
+          id: document.id,
+          data: document.data() as Record<string, unknown>,
+        }))
+        .filter(({ id, data }) =>
+          id !== 'current' &&
+          !id.startsWith('target-cycle-') &&
+          id !== currentSnapshotId &&
+          data['status'] === 'ready' &&
+          data['projectionVersion'] === SHARED_PROJECTION_VERSION &&
+          data['generationReason'] !== 'server-emergency' &&
+          data['generatedByAuthority'] === 'server' &&
+          data['catalogValidationStatus'] === 'validated' &&
+          data['activeSnapshotId'] === id,
+        )
+        .sort((first, second) =>
+          toMilliseconds(second.data['generatedAt']) - toMilliseconds(first.data['generatedAt']),
+        );
+
+      selectedSnapshotId = candidates[0]?.id ?? '';
+
+      if (!selectedSnapshotId) {
+        throw new HttpsError(
+          'failed-precondition',
+          'No earlier server-generated Projection V11 snapshot is available to restore.',
+        );
+      }
+    }
+
+    if (!selectedSnapshotId) {
+      throw new HttpsError(
+        'failed-precondition',
+        'No current server projection snapshot is available. Generate a fresh Projection V11 snapshot first.',
+      );
+    }
+
+    let snapshot: SharedProjectionSnapshot | null;
+    let alreadySealed = false;
+
+    try {
+      snapshot = await loadSharedProjectionSnapshotById(leagueId, selectedSnapshotId);
+    } catch (error: unknown) {
+      throw new HttpsError(
+        'data-loss',
+        error instanceof Error
+          ? `Projection integrity verification failed: ${error.message}`
+          : 'Projection integrity verification failed.',
+      );
+    }
+
+    if (!isIntegrityVerifiedSnapshot(snapshot)) {
+      try {
+        const sealed = await sealSharedProjectionSnapshotIntegrity(leagueId, selectedSnapshotId);
+        snapshot = sealed.snapshot;
+        alreadySealed = sealed.alreadySealed;
+      } catch (error: unknown) {
+        throw new HttpsError(
+          'failed-precondition',
+          error instanceof Error
+            ? error.message
+            : 'This projection snapshot cannot be trusted and must be regenerated.',
+        );
+      }
+    } else {
+      alreadySealed = true;
+    }
+
+    if (!isIntegrityVerifiedSnapshot(snapshot)) {
+      throw new HttpsError(
+        'data-loss',
+        'The projection snapshot did not pass its final server hash verification.',
+      );
+    }
+
+    const verifiedSnapshot = snapshot;
+    const snapshotContentHash = verifiedSnapshot.metadata.snapshotContentHash!;
+    const targetCycleNumber = Math.max(1, verifiedSnapshot.metadata.targetCycleNumber);
+    const restoredPointer = action === 'restore-previous';
+    const message = restoredPointer
+      ? `Restored verified Projection V${SHARED_PROJECTION_VERSION} snapshot ${verifiedSnapshot.metadata.activeSnapshotId}.`
+      : alreadySealed
+        ? `Projection snapshot ${verifiedSnapshot.metadata.activeSnapshotId} already has a verified server hash.`
+        : `Projection snapshot ${verifiedSnapshot.metadata.activeSnapshotId} was sealed with a verified server hash.`;
+    const pointerPayload = {
+      ...verifiedSnapshot.metadata,
+      snapshotId: verifiedSnapshot.metadata.activeSnapshotId,
+      activeSnapshotId: verifiedSnapshot.metadata.activeSnapshotId,
+      restoredBy: restoredPointer ? userId : null,
+      restoredAt: restoredPointer ? FieldValue.serverTimestamp() : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    await db.runTransaction(async (transaction) => {
+      const [auditSnapshot, latestDraftSnapshot, latestPickSnapshot, latestPointerSnapshot] =
+        await Promise.all([
+          transaction.get(auditRef),
+          transaction.get(draftRef),
+          transaction.get(db.collection(`leagues/${leagueId}/draft/current/picks`).limit(1)),
+          transaction.get(currentPointerRef),
+        ]);
+
+      if (auditSnapshot.exists) {
+        return;
+      }
+
+      if (restoredPointer) {
+        const latestDraft = latestDraftSnapshot.data() ?? {};
+        const latestDraftStatus = asString(latestDraft['status']) || 'setup';
+
+        if (
+          !latestPickSnapshot.empty ||
+          latestDraftStatus === 'live' ||
+          latestDraftStatus === 'complete'
+        ) {
+          throw new HttpsError(
+            'aborted',
+            'The Draft started while the projection restore was being prepared. No pointer was changed.',
+          );
+        }
+
+        const expectedCurrentSnapshotId = currentSnapshotId;
+        const latestCurrentSnapshotId = asString(
+          (latestPointerSnapshot.data() ?? {})['activeSnapshotId'],
+        );
+
+        if (latestCurrentSnapshotId !== expectedCurrentSnapshotId) {
+          throw new HttpsError(
+            'aborted',
+            'The current projection changed while the restore was being prepared. Refresh and review it again.',
+          );
+        }
+
+        transaction.set(currentPointerRef, pointerPayload, { merge: true });
+        transaction.set(
+          db.doc(`leagues/${leagueId}/projectionSnapshots/target-cycle-${targetCycleNumber}`),
+          pointerPayload,
+          { merge: true },
+        );
+        transaction.set(
+          draftRef,
+          {
+            serverDraftProjectionSnapshotId: null,
+            serverDraftProjectionSnapshotHash: null,
+            serverDraftProjectionAuthorityVersion: null,
+            serverDraftProjectionCatalogHash: null,
+            serverAutomationMessage:
+              'A platform administrator restored a prior verified projection. Save Draft settings again before starting.',
+            serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      transaction.create(auditRef, {
+        schemaVersion: 1,
+        id: auditId,
+        leagueId,
+        action: `projection-${action}`,
+        actorId: userId,
+        actorRole: 'platform-admin',
+        authority: 'cloud-function',
+        requestId,
+        reason,
+        snapshotId: verifiedSnapshot.metadata.activeSnapshotId,
+        snapshotContentHash,
+        targetCycleNumber,
+        alreadySealed,
+        restoredPointer,
+        message,
+        release: 'Security Batch S2B',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    return {
+      requestId,
+      action,
+      snapshotId: verifiedSnapshot.metadata.activeSnapshotId,
+      snapshotContentHash,
+      targetCycleNumber,
+      alreadySealed,
+      restoredPointer,
+      message,
+    };
+  },
+);
 
 export const requestProjectionSnapshotGeneration = onCall(
   {
@@ -700,6 +1080,9 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           catalogHash: snapshot.metadata.catalogHash ?? null,
           canonicalAssetCount: snapshot.metadata.canonicalAssetCount ?? null,
           catalogCacheHit: snapshot.metadata.catalogCacheHit ?? null,
+          snapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
+          snapshotHashSchemaVersion: snapshot.metadata.snapshotHashSchemaVersion ?? null,
+          snapshotChunkCount: snapshot.metadata.snapshotChunkHashes?.length ?? null,
           leaseExpiresAt: Timestamp.fromMillis(Date.now()),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true }),
@@ -707,6 +1090,7 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           status: 'ready',
           activeRequestId: payload.requestId,
           lastSnapshotId: snapshot.metadata.activeSnapshotId,
+          lastSnapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
           lastCompletedAt: FieldValue.serverTimestamp(),
           lastDurationMilliseconds: durationMilliseconds,
           lastError: '',
@@ -721,6 +1105,8 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           lastSnapshotId: snapshot.metadata.activeSnapshotId,
           lastCatalogSnapshotId: snapshot.metadata.catalogSnapshotId ?? null,
           lastCatalogCacheHit: snapshot.metadata.catalogCacheHit ?? null,
+          lastSnapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
+          lastSnapshotChunkCount: snapshot.metadata.snapshotChunkHashes?.length ?? null,
           lastDurationMilliseconds: durationMilliseconds,
           successfulGenerationCount: FieldValue.increment(1),
           lastCompletedAt: FieldValue.serverTimestamp(),

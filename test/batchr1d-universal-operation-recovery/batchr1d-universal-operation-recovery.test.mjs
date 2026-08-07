@@ -197,7 +197,7 @@ test('server draft picks safely retry one browser selection and cache immutable 
   assert.match(automation, /draftProjectionCache = new Map/);
   assert.match(automation, /getCachedDraftProjection/);
   assert.match(automation, /cacheDraftProjection/);
-  assert.match(automation, /return loaded \? cacheDraftProjection\(leagueId, loaded\) : null/);
+  assert.match(automation, /return projection \? cacheDraftProjection\(leagueId, projection\) : null/);
 });
 
 test('Draft Setup uses an exact submission identifier and authoritative bounded confirmation without a blocking screen', async () => {
@@ -327,7 +327,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '3a8caf23e3e7b4fe921f5e79d14d593cd1f2899400a720cdf4d4c4e341aa0287',
+    '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -346,6 +346,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-asset-catalog.service.ts',
     'shared/core/projection/projection-asset-catalog.util.ts',
     'shared/core/projection/projection-snapshot.service.ts',
+    'shared/core/projection/projection-snapshot-hash.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 37,

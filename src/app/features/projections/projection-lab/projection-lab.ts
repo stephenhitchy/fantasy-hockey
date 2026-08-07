@@ -11,6 +11,8 @@ import { DraftableAsset, DraftPosition } from '../../../core/draft/draft.models'
 import {
   generateSharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   SharedProjectionSnapshotMetadata,
 } from '../../../core/projection/projection-snapshot.service';
 
@@ -562,10 +564,16 @@ export class ProjectionLab {
 
     return Boolean(
       metadata?.generatedByAuthority === 'server' &&
+      metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
       metadata.catalogValidationStatus === 'validated' &&
       metadata.catalogSnapshotId &&
-      metadata.catalogHash &&
-      metadata.canonicalAssetCount === metadata.assetCount,
+      /^[a-f0-9]{64}$/.test(metadata.catalogHash ?? '') &&
+      metadata.canonicalAssetCount === metadata.assetCount &&
+      metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+      metadata.snapshotHashAlgorithm === 'sha256' &&
+      metadata.snapshotIntegrityStatus === 'verified' &&
+      /^[a-f0-9]{64}$/.test(metadata.snapshotContentHash ?? '') &&
+      metadata.snapshotChunkHashes?.length === metadata.assetDocumentCount,
     );
   }
 
@@ -577,13 +585,14 @@ export class ProjectionLab {
     }
 
     if (!this.isSnapshotServerValidated()) {
-      return 'Legacy snapshot · refresh to validate against the server NHL catalog';
+      return 'Integrity check required · refresh or verify before Draft use';
     }
 
     const catalog = metadata.catalogSnapshotId ?? 'server catalog';
-    const hash = metadata.catalogHash?.slice(0, 12) ?? '';
+    const catalogHash = metadata.catalogHash?.slice(0, 10) ?? '';
+    const rootHash = metadata.snapshotContentHash?.slice(0, 12) ?? '';
 
-    return `${catalog} · ${metadata.canonicalAssetCount ?? metadata.assetCount} canonical assets · ${hash}`;
+    return `${catalog} · ${metadata.canonicalAssetCount ?? metadata.assetCount} canonical assets · catalog ${catalogHash}… · root ${rootHash}…`;
   }
 
   getAvailabilityDescription(row: ProjectionRow): string {

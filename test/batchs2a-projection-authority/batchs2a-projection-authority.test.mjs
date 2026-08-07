@@ -195,9 +195,9 @@ test('normal and emergency Projection V11 snapshots must pass the server NHL ide
   assert.match(catalogUtilSource, /Projection output contains unknown asset/);
   assert.match(catalogUtilSource, /Projection output contains duplicate asset/);
   assert.match(catalogUtilSource, /Projection output is missing/);
-  assert.equal(
-    (serverSnapshotSource.match(/validateProjectionAssetsAgainstCatalog\(/g) ?? []).length,
-    2,
+  assert.ok(
+    (serverSnapshotSource.match(/validateProjectionAssetsAgainstCatalog\(/g) ?? []).length >= 2,
+    'normal and emergency generation must remain catalog validated; later integrity migration may add another validation pass',
   );
   assert.match(serverSnapshotSource, /generatedByAuthority: 'server'/);
   assert.match(serverSnapshotSource, /catalogValidationStatus: 'validated'/);
@@ -216,14 +216,14 @@ test('the browser requests generation and follows server progress without writin
   assert.doesNotMatch(clientSnapshotSource, /loadDraftPlayerPool/);
 });
 
-test('Release Readiness and Projection Lab surface catalog authority without claiming final S2 hash enforcement', () => {
+test('Release Readiness and Projection Lab continue to surface server projection authority', () => {
   assert.match(readinessSource, /projectionServerValidated/);
   assert.match(readinessSource, /server catalog/);
-  assert.match(readinessSource, /predates the server NHL asset-catalog authority/);
+  assert.match(readinessSource, /server (?:catalog|hashed)/);
   assert.match(projectionLabSource, /isSnapshotServerValidated/);
   assert.match(projectionLabSource, /getSnapshotAuthorityLabel/);
-  assert.match(projectionLabTemplate, /Server catalog verified/);
-  assert.match(projectionLabTemplate, /Refresh required/);
+  assert.match(projectionLabTemplate, /Server (?:catalog|hash) verified/);
+  assert.match(projectionLabTemplate, /(?:Refresh required|Integrity check required)/);
 });
 
 test('Firestore progress access is member-only and the reported compiler warnings are removed', () => {
@@ -259,17 +259,17 @@ test('S2A verification, documentation, RC13, and the permanent roadmap are synch
   assert.match(packageJson.scripts['verify:batchs2a'], /validate:release-manifest/);
   assert.match(functionsPackage.scripts.logs, /processProjectionGenerationTask/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.4/);
+  assert.match(roadmapRootSource, /Version 1\.(?:4(?:\.1)?|5)/);
   assert.match(roadmapRootSource, /# \[x\] S2\.1 .*Security Batch S2A/);
   assert.match(roadmapRootSource, /# \[x\] S2\.3 .*Security Batch S2A/);
   assert.match(roadmapRootSource, /# \[x\] S2\.4 .*Security Batch S2A/);
   assert.match(roadmapRootSource, /# \[x\] SEQ\.4 Security Batch S2A/);
-  assert.match(roadmapRootSource, /\[ \] S2\.2 Make projectionSnapshots/);
+  assert.match(roadmapRootSource, /S2\.2 Make projectionSnapshots/);
   assert.match(documentationSource, /Batch S2A — Server Projection V11 Generation/);
   assert.match(documentationSource, /Firestore Rules warning cleanup/);
-  assert.match(readmeSource, /Release Candidate 13/);
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 13'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 13'/);
+  assert.match(readmeSource, /Release Candidate (?:13|14)/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate (?:13|14)'/);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate (?:13|14)'/);
 });
 
 test('Production Scoring V3 and Projection V11 math remain byte-for-byte unchanged', () => {

@@ -267,7 +267,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '3a8caf23e3e7b4fe921f5e79d14d593cd1f2899400a720cdf4d4c4e341aa0287',
+    '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -287,6 +287,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/projection-asset-catalog.service.ts',
         'src/shared/core/projection/projection-asset-catalog.util.ts',
         'src/shared/core/projection/projection-snapshot.service.ts',
+        'src/shared/core/projection/projection-snapshot-hash.util.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',

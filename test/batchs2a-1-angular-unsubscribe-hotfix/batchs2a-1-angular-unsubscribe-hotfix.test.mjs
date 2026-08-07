@@ -46,6 +46,6 @@ test('S2A.1 verification and permanent roadmap documentation are synchronized', 
   assert.match(packageJson.scripts['verify:batchs2a-1'], /validate:release-manifest/);
   assert.match(documentationSource, /Batch S2A\.1 — Angular Firestore Unsubscribe Type Hotfix/);
   assert.equal(roadmapRoot, roadmapDocs);
-  assert.match(roadmapRoot, /Version 1\.4\.1/);
+  assert.match(roadmapRoot, /Version 1\.(?:4\.1|5)/);
   assert.match(roadmapRoot, /LOG\.6 .*S2A\.1.*Unsubscribe type hotfix/);
 });

@@ -511,6 +511,9 @@ export class DraftSetup implements OnDestroy {
         lastPickId: existingDraft?.lastPickId ?? null,
         lastSettingsSubmissionId: submissionId,
         serverDraftProjectionSnapshotId: null,
+        serverDraftProjectionSnapshotHash: null,
+        serverDraftProjectionAuthorityVersion: null,
+        serverDraftProjectionCatalogHash: null,
       };
       const expectation: DraftSettingsExpectation = {
         submissionId,

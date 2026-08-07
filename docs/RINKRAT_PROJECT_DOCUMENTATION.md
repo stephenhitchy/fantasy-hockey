@@ -1,3 +1,215 @@
+## Batch S2B.1 — TypeScript Projection Integrity Build Hotfix
+
+### Purpose
+
+The first S2B Functions production build exposed two strict TypeScript control-flow issues without changing the underlying projection-integrity design:
+
+1. `isVerifiedDraftProjection()` used `snapshot is SharedProjectionSnapshot` even though that was already its non-null input type. After the caller had eliminated `null`, TypeScript treated the guard's false branch as `never`, so compatibility checks on an unsealed S2A snapshot could not access `snapshot.metadata`.
+2. `metadata.snapshotChunkHashes` was checked before an array `map()` callback, but the optional property narrowing was not retained inside the callback under the project's TypeScript configuration.
+
+S2B.1 introduces a proper verified subtype with required authority and hash fields, then narrows the guard to that subtype. It also captures the checked chunk-hash manifest in a stable local constant before entering the callback.
+
+This release remains labeled **Release Candidate 14** because it is a compile-only hotfix to S2B. Projection V11 mathematics, the deterministic hash format, Draft pinning, browser-write denial, scoring, roster behavior, and deployment architecture are unchanged.
+
+### Corrected type model
+
+The Draft verifier now narrows to:
+
+```ts
+interface VerifiedDraftProjectionSnapshot extends SharedProjectionSnapshot {
+  metadata: VerifiedDraftProjectionMetadata;
+}
+```
+
+This allows TypeScript to distinguish a fully sealed Draft snapshot from an ordinary server-generated snapshot that may still need compatibility sealing. The false branch remains a valid `SharedProjectionSnapshot` instead of becoming `never`.
+
+The hash-chain verifier now uses:
+
+```ts
+const expectedChunkHashes = metadata.snapshotChunkHashes;
+```
+
+After the array and length checks, the callback compares each calculated hash against `expectedChunkHashes[index]` without re-reading an optional property.
+
+### Verification
+
+```bash
+npm run verify:batchs2b-1
+```
+
+The verification chain includes the complete S2B suite, Angular and Functions builds, Firestore emulator checks, Draft-authority tests, deterministic tamper tests, release-manifest validation, and the focused TypeScript regression checks.
+
+### Deployment
+
+If the original S2B deployment did not begin because the Functions build failed, use the complete S2B sequence:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S2B.1 projection integrity type hotfix"
+firebase deploy --only hosting:app -m "Security S2B.1 verified Draft projection pools"
+firebase deploy --only firestore:rules -m "Security S2B browser read-only projection snapshots"
+```
+
+If S2B Hosting or Rules were already deployed while the Functions build failed, deploy the corrected Functions first, then redeploy Hosting so the exact release fingerprint is synchronized. No Firestore index deployment or data migration is required.
+
+---
+
+## Batch S2B — Projection Content Hash and Draft Integrity
+
+### Purpose
+
+Security Batch S2B completes the trust-boundary work started in S2A. Projection V11 is still generated on the server and checked against the canonical NHL asset catalog, but each published Draft pool is now also sealed with deterministic per-chunk SHA-256 hashes and one final root hash. Draft authority accepts only the exact server-generated snapshot and hash that were frozen for that Draft.
+
+This release is labeled **Release Candidate 14**.
+
+### Browser read-only projection documents
+
+Firestore Rules now make shared projection metadata and asset chunks browser read-only. Managers and commissioners can read the current server snapshot for Draft, Projection Lab, Game Center, and roster decisions, but no browser can create, update, delete, or replace the canonical Draft pool.
+
+Normal refreshes continue through the S2A server-generation queue. This closes the remaining compatibility path that previously allowed an older commissioner browser to write projection documents before a Draft.
+
+### Deterministic snapshot integrity
+
+Every completed server snapshot stores:
+
+```text
+Hash algorithm:              SHA-256
+Snapshot hash schema:        1
+Projection authority schema: 2
+Per-chunk hash:              one for every ordered asset chunk
+Final root hash:             one deterministic hash over metadata + ordered chunk hashes
+```
+
+The final hash covers the exact:
+
+- projection version;
+- as-of date and projection context;
+- NHL season;
+- league team count;
+- target matchup;
+- six-game contract;
+- asset and chunk counts;
+- canonical asset-catalog ID and hash;
+- ordered chunk identifiers, positions, contents, and hashes.
+
+A change to any player, goalie unit, position, projection value, catalog identity, matchup number, season, asset count, or chunk order invalidates the chain.
+
+### Draft pinning and enforcement
+
+When Draft settings are activated, the server freezes these values into the Draft document:
+
+```text
+serverDraftProjectionSnapshotId
+serverDraftProjectionSnapshotHash
+serverDraftProjectionAuthorityVersion
+serverDraftProjectionCatalogHash
+```
+
+Every manual pick, queued Auto-Draft pick, clock-expiry pick, and recovery action reloads or verifies the exact pinned snapshot. The server rejects the action when:
+
+- the pointer changes to another snapshot;
+- the root hash differs;
+- a chunk fails verification;
+- the authority version is missing or unsupported;
+- the catalog hash differs;
+- the projection is not healthy Projection V11;
+- the selected asset is not present in the verified pool.
+
+Each committed pick also records the projection snapshot ID, root hash, and authority version that authorized the selection. This makes the Draft history auditable without trusting the browser.
+
+### Existing-league compatibility
+
+A pre-Draft league with a valid S2A server-generated, catalog-validated snapshot can be sealed in place. The server:
+
+1. Reloads the exact original canonical catalog.
+2. Revalidates every asset.
+3. Rewrites the assets into the canonical chunk layout.
+4. Stores per-chunk hashes and the final root hash.
+5. Advances the snapshot to authority schema 2.
+6. Preserves the original Projection V11 values.
+
+A legacy browser-written or otherwise unverified snapshot is never promoted. It must be regenerated through the server queue.
+
+Completed Drafts and existing scoring windows remain unchanged. A pre-Draft league should be verified or regenerated before the Draft begins.
+
+### Platform-admin recovery controls
+
+Release Readiness now provides guarded controls to:
+
+- **Verify Projection Integrity** — re-read and validate the current server snapshot and hash chain;
+- **Restore Previous Verified Snapshot** — before any Draft pick exists, restore the newest earlier server-verified snapshot.
+
+Restore is unavailable after the Draft is live or after a pick has been committed. Every integrity command is idempotent and writes an immutable platform audit record containing the action, actor, reason, request identity, prior pointer, new pointer, and release version.
+
+Projection Lab shows the authority state, catalog identifier, and abbreviated final root hash. Release Readiness requires a server-hashed Projection V11 pool before considering the Draft projection healthy.
+
+### Metrics
+
+Projection-generation records now include the final root hash and chunk count in addition to the S2A duration, cache, catalog, and failure information. Provider-level billing attribution remains tracked for the later operations/security phase.
+
+### Competitive behavior preserved
+
+S2B does not change:
+
+- Production Scoring V3;
+- Projection V11 mathematics;
+- ranking formulas;
+- roster construction;
+- Draft order or clock rules;
+- Auto-Draft selection policy;
+- six-game roster-slot windows;
+- seventh-game rollover;
+- add/drop, waiver, or Injured Reserve behavior;
+- standings, playoffs, or historical replay.
+
+### Verification
+
+```bash
+npm run verify:batchs2b
+```
+
+The verification chain includes S2A.1 and every inherited release test, the Angular and Functions builds, Firestore emulator Rules tests, Draft-authority tests, deterministic hash/tamper tests, browser-write denial, legacy sealing, guarded restore, release-manifest validation, and roadmap synchronization.
+
+### Deployment order
+
+Use **Functions → Hosting → Firestore Rules**.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S2B projection content hash and Draft integrity"
+firebase deploy --only hosting:app -m "Security S2B verified Draft projection pools"
+firebase deploy --only firestore:rules -m "Security S2B browser read-only projection snapshots"
+```
+
+Deploying Functions first gives every projection consumer the new hash-aware reader before the client and Rules begin requiring the stronger contract. Hosting follows so Release Readiness and Projection Lab can verify or regenerate old pre-Draft pools. Firestore Rules deploy last to remove the legacy commissioner-write compatibility path.
+
+No Firestore index deployment is required.
+
+### Post-deployment checks
+
+1. Open Projection Lab and regenerate or reuse a server Projection V11 snapshot.
+2. Confirm **Server hash verified** appears with a catalog ID and root hash.
+3. Run **Verify Projection Integrity** from Release Readiness.
+4. For each pre-Draft league you plan to keep, confirm the snapshot is authority schema 2 or regenerate it.
+5. Save Draft settings and confirm the Draft document pins the exact snapshot ID and root hash.
+6. Make a manual pick, queued Auto-Draft pick, and clock-expiry pick.
+7. Confirm each pick records the same pinned projection hash.
+8. Confirm changing the current projection pointer after Draft activation does not change the Draft pool.
+9. Confirm a commissioner browser cannot write projection metadata or asset chunks.
+10. Confirm existing completed Drafts, scores, rosters, transactions, and matchups remain unchanged.
+
+### Rollback
+
+Keep S2A.1 available. For a complete rollback:
+
+1. Deploy the approved S2A.1 Firestore Rules first, restoring the temporary commissioner projection-write compatibility path.
+2. Deploy the approved S2A.1 Functions.
+3. Deploy the approved S2A.1 Hosting build.
+
+S2B-hashed snapshots remain readable by S2A.1. No fantasy scores, Draft picks, rosters, or transactions need to be reversed.
+
+---
+
 ## Batch S2A.1 — Angular Firestore Unsubscribe Type Hotfix
 
 ### Purpose

@@ -975,7 +975,7 @@ describe('draft authority hardening', () => {
   });
 
 
-  test('the frozen projection pool cannot be changed during a live draft', async () => {
+  test('projection pointers and asset chunks are browser read-only in every draft phase', async () => {
     await expectDenied(
       setDoc(
         doc(
@@ -991,7 +991,29 @@ describe('draft authority hardening', () => {
           assetCount: 1,
         },
       ),
-      'Commissioner live-draft projection pointer write',
+      'Commissioner projection pointer write',
+    );
+
+    await expectDenied(
+      setDoc(
+        doc(
+          commissioner.db,
+          'leagues',
+          LEAGUE_ID,
+          'projectionSnapshots',
+          'tampered-snapshot',
+          'assets',
+          'chunk-0001',
+        ),
+        {
+          schemaVersion: 3,
+          chunkIndex: 0,
+          assetCount: 1,
+          assets: [{ assetKey: 'fake-player' }],
+          sharedProjectionSnapshotId: 'tampered-snapshot',
+        },
+      ),
+      'Commissioner projection asset chunk write',
     );
   });
 

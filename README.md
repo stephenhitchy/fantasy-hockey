@@ -15,13 +15,13 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchs2a-1
+npm run verify:batchs2b-1
 ```
 
-The current S2A.1 chain runs the complete S1A/S1B/S1C/R1F history, server Projection V11 authority and canonical NHL asset-catalog tests, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
+The current S2B.1 chain runs the complete S1A/S1B/S1C/R1F history, server Projection V11 generation, canonical NHL asset validation, deterministic projection chunk/root hash verification, Draft snapshot pinning, browser-write denial, guarded integrity recovery, the TypeScript control-flow hotfix, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
 
 
-Current release: **Release Candidate 13 / S2A.1 hotfix** — server-generated Projection V11 snapshots, canonical NHL asset validation, Firestore Rules warning cleanup, and the Angular Firebase `Unsubscribe` type correction.
+Current release: **Release Candidate 14 / S2B.1 hotfix** — browser read-only projection snapshots, deterministic per-chunk and root hashes, exact Draft snapshot pinning, guarded integrity recovery, safe sealing of valid S2A server snapshots, and strict TypeScript build compatibility.
 
-Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, `verify:batchs1b`, and `verify:batchs1c`; `verify:batchs2a` runs that complete chain before the S2A projection-authority suite; `verify:batchs2a-1` adds the Angular listener type-regression check.
+Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, `verify:batchs1b`, and `verify:batchs1c`; `verify:batchs2a` runs that complete chain before the S2A projection-authority suite; `verify:batchs2a-1` adds the Angular listener type-regression check; `verify:batchs2b` adds the deterministic projection-integrity and Draft hash-enforcement suite; `verify:batchs2b-1` adds the strict TypeScript control-flow regression checks.
 Earlier queue-control checkpoints remain available through `verify:batchp1e`, `verify:batchp1f`, and `verify:batchp1f-1`.

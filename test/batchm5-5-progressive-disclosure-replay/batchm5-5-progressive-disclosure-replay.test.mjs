@@ -269,6 +269,7 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/projection/projection-asset-catalog.service.ts',
         'src/shared/core/projection/projection-asset-catalog.util.ts',
         'src/shared/core/projection/projection-snapshot.service.ts',
+        'src/shared/core/projection/projection-snapshot-hash.util.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',

@@ -29,6 +29,7 @@ export { validateProjectionAssetsAgainstCatalog } from './projection-asset-catal
 
 let cachedCatalog: CanonicalProjectionAssetCatalog | null = null;
 let catalogRequestInFlight: Promise<CanonicalProjectionAssetCatalog> | null = null;
+const catalogByIdCache = new Map<string, CanonicalProjectionAssetCatalog>();
 
 function currentRosterSeason(now: Date = new Date()): string {
   const year = now.getUTCFullYear();
@@ -172,6 +173,86 @@ async function persistCatalog(catalog: CanonicalProjectionAssetCatalog): Promise
   );
 }
 
+
+
+/**
+ * Loads the exact immutable server catalog used by an existing projection
+ * snapshot. The content hash is recalculated before the catalog is trusted,
+ * so a legacy S2A snapshot can be sealed without silently switching to a
+ * newer NHL roster catalog.
+ */
+export async function loadCanonicalProjectionAssetCatalog(
+  catalogId: string,
+): Promise<CanonicalProjectionAssetCatalog | null> {
+  const normalizedCatalogId = catalogId.trim();
+
+  if (!normalizedCatalogId) {
+    return null;
+  }
+
+  const cached = catalogByIdCache.get(normalizedCatalogId);
+
+  if (cached) {
+    return { ...cached, cacheHit: true };
+  }
+
+  const catalogRef = db.doc(`${CATALOG_COLLECTION}/${normalizedCatalogId}`);
+  const [metadataSnapshot, assetSnapshot] = await Promise.all([
+    catalogRef.get(),
+    catalogRef.collection('assets').orderBy('chunkIndex', 'asc').get(),
+  ]);
+
+  if (!metadataSnapshot.exists) {
+    return null;
+  }
+
+  const metadata = metadataSnapshot.data() ?? {};
+  const assets = assetSnapshot.docs.flatMap((document) => {
+    const data = document.data() as { assets?: unknown };
+    return Array.isArray(data.assets)
+      ? data.assets as CanonicalProjectionAsset[]
+      : [];
+  });
+  const contentHash = createProjectionCatalogHash(assets);
+  const expectedCount = typeof metadata['assetCount'] === 'number'
+    ? metadata['assetCount']
+    : 0;
+  const expectedHash = typeof metadata['contentHash'] === 'string'
+    ? metadata['contentHash']
+    : '';
+
+  if (
+    metadata['status'] !== 'ready' ||
+    metadata['catalogId'] !== normalizedCatalogId ||
+    metadata['schemaVersion'] !== PROJECTION_ASSET_CATALOG_SCHEMA_VERSION ||
+    expectedCount <= 0 ||
+    assets.length !== expectedCount ||
+    contentHash !== expectedHash
+  ) {
+    throw new Error(`Canonical projection asset catalog ${normalizedCatalogId} failed integrity verification.`);
+  }
+
+  const skaterCount = assets.filter((asset) => asset.assetType === 'skater').length;
+  const catalog: CanonicalProjectionAssetCatalog = {
+    catalogId: normalizedCatalogId,
+    schemaVersion: PROJECTION_ASSET_CATALOG_SCHEMA_VERSION,
+    season: typeof metadata['season'] === 'string' ? metadata['season'] : '',
+    contentHash,
+    generatedAt: typeof metadata['generatedAt'] === 'string'
+      ? metadata['generatedAt']
+      : new Date(0).toISOString(),
+    assetCount: assets.length,
+    skaterCount,
+    goalieUnitCount: assets.length - skaterCount,
+    assets,
+    assetsByKey: new Map(assets.map((asset) => [asset.assetKey, asset] as const)),
+    cacheHit: false,
+  };
+
+  catalogByIdCache.set(normalizedCatalogId, catalog);
+  return catalog;
+}
+
 /**
  * Creates or reuses the server-owned NHL identity catalog used to validate
  * every Projection V11 asset before it can become a shared league snapshot.
@@ -196,6 +277,7 @@ export async function ensureCanonicalProjectionAssetCatalog(): Promise<Canonical
       const next = createCatalog(buildCanonicalAssets(skaters), false);
       await persistCatalog(next);
       cachedCatalog = next;
+      catalogByIdCache.set(next.catalogId, next);
       return next;
     })
     .finally(() => {

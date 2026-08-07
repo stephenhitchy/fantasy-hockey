@@ -14,6 +14,10 @@ import {
   SHARED_PROJECTION_VERSION,
   loadSharedProjectionSnapshot,
 } from './shared/core/projection/projection-snapshot.service';
+import {
+  isProjectionSha256,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+} from './shared/core/projection/projection-snapshot-hash.util';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
@@ -264,6 +268,18 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
+        : null,
+    serverDraftProjectionSnapshotHash:
+      typeof value.serverDraftProjectionSnapshotHash === 'string'
+        ? value.serverDraftProjectionSnapshotHash
+        : null,
+    serverDraftProjectionAuthorityVersion:
+      typeof value.serverDraftProjectionAuthorityVersion === 'number'
+        ? value.serverDraftProjectionAuthorityVersion
+        : null,
+    serverDraftProjectionCatalogHash:
+      typeof value.serverDraftProjectionCatalogHash === 'string'
+        ? value.serverDraftProjectionCatalogHash
         : null,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
@@ -550,6 +566,9 @@ async function saveDraftSettings(
           lastPickId: null,
           lastSettingsSubmissionId: submissionId ?? null,
           serverDraftProjectionSnapshotId: null,
+          serverDraftProjectionSnapshotHash: null,
+          serverDraftProjectionAuthorityVersion: null,
+          serverDraftProjectionCatalogHash: null,
           serverAutomationStatus: status === 'scheduled' ? 'scheduled' : 'waiting',
           serverAutomationMessage: status === 'scheduled'
             ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
@@ -711,6 +730,10 @@ async function activateScheduledDraft(
         clockUpdatedBy: userId,
         clockUpdatedAt: timestamp,
         serverDraftProjectionSnapshotId: projection.metadata.activeSnapshotId,
+        serverDraftProjectionSnapshotHash: projection.metadata.snapshotContentHash,
+        serverDraftProjectionAuthorityVersion:
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+        serverDraftProjectionCatalogHash: projection.metadata.catalogHash ?? null,
         serverProjectionFallbackUsed: false,
         serverAutomationStatus: 'healthy',
         serverAutomationMessage:
@@ -815,6 +838,10 @@ async function startDraftClock(
         clockUpdatedBy: userId,
         clockUpdatedAt: timestamp,
         serverDraftProjectionSnapshotId: projection.metadata.activeSnapshotId,
+        serverDraftProjectionSnapshotHash: projection.metadata.snapshotContentHash,
+        serverDraftProjectionAuthorityVersion:
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+        serverDraftProjectionCatalogHash: projection.metadata.catalogHash ?? null,
         serverAutomationStatus: 'healthy',
         serverAutomationMessage: 'The first manager started the draft clock.',
         serverAutomationUpdatedAt: timestamp,
@@ -1103,7 +1130,12 @@ export const makeSecureDraftPick = onCall(
     }
 
     if (
-      !preflightDraft.serverDraftProjectionSnapshotId &&
+      (
+        !preflightDraft.serverDraftProjectionSnapshotId ||
+        !preflightDraft.serverDraftProjectionSnapshotHash ||
+        preflightDraft.serverDraftProjectionAuthorityVersion !==
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION
+      ) &&
       (preflightDraft.nextOverallPick !== 1 || preflightDraft.draftedAssetKeys.length > 0)
     ) {
       throw new HttpsError(
@@ -1118,6 +1150,20 @@ export const makeSecureDraftPick = onCall(
       throw new HttpsError(
         'failed-precondition',
         `Verified Projection V${SHARED_PROJECTION_VERSION} draft rankings are unavailable.`,
+      );
+    }
+
+    const projectionSnapshotHash = projection.metadata.snapshotContentHash;
+
+    if (
+      !isProjectionSha256(projectionSnapshotHash) ||
+      projection.metadata.authoritySchemaVersion !==
+        PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+      projection.metadata.snapshotIntegrityStatus !== 'verified'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The frozen Draft pool is missing its verified server content hash.',
       );
     }
 
@@ -1208,10 +1254,16 @@ export const makeSecureDraftPick = onCall(
         throw new HttpsError('permission-denied', 'You are no longer on the clock.');
       }
 
-      if (draft.serverDraftProjectionSnapshotId !== projection.metadata.activeSnapshotId) {
+      if (
+        draft.serverDraftProjectionSnapshotId !== projection.metadata.activeSnapshotId ||
+        draft.serverDraftProjectionSnapshotHash !== projectionSnapshotHash ||
+        draft.serverDraftProjectionAuthorityVersion !==
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+        draft.serverDraftProjectionCatalogHash !== projection.metadata.catalogHash
+      ) {
         throw new HttpsError(
           'aborted',
-          'The frozen draft pool changed while the pick was being submitted. Refresh and try again.',
+          'The verified Draft pool or its server hash changed while the pick was being submitted. Refresh and try again.',
         );
       }
 
@@ -1291,6 +1343,9 @@ export const makeSecureDraftPick = onCall(
         selectedByUserId: userId,
         autoPickReason: null,
         submissionId: submissionId ?? null,
+        projectionSnapshotId: projection.metadata.activeSnapshotId,
+        projectionSnapshotHash,
+        projectionAuthorityVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
       };
       const nextOverallPick = currentPick.overallPick + 1;
       const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);
@@ -1302,7 +1357,6 @@ export const makeSecureDraftPick = onCall(
       transaction.set(pickRef, {
         ...pick,
         authority: 'cloud-function',
-        projectionSnapshotId: projection.metadata.activeSnapshotId,
         madeAt: timestamp,
       });
       transaction.set(

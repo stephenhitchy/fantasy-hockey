@@ -3408,6 +3408,7 @@ export {
 
 
 export {
+  manageProjectionSnapshotIntegrity,
   processProjectionGenerationTask,
   recoverStaleProjectionGenerationRequests,
   requestProjectionSnapshotGeneration,

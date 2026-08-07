@@ -195,7 +195,8 @@ test('the permanent roadmap preserves S1C completion and remains synchronized in
   assert.match(roadmapRootSource, /# \[x\] S1\.11 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] S1\.12 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] SEQ\.3 Security Batch S1C/);
-  assert.match(roadmapRootSource, /\[~\] NEXT\.2 Security Batch S2/);
+  assert.match(roadmapRootSource, /# \[x\] NEXT\.2 Security Batch S2/);
+  assert.match(roadmapRootSource, /\[~\] NEXT\.3 Security Batch S3/);
 });
 
 test('RC12 documentation records migration, deployment, rollback, and the remaining App Check gate', () => {

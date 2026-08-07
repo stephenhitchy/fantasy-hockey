@@ -60,6 +60,8 @@ import {
   loadSharedProjectionSnapshotById,
   loadSharedProjectionSnapshotMetadata,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
+  PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   SHARED_PROJECTION_VERSION,
   SharedProjectionGenerationReason,
 } from '../../../core/projection/projection-snapshot.service';
@@ -2083,6 +2085,29 @@ export class DraftRoom implements OnDestroy {
         this.playerPool.set([]);
         throw new Error(
           `The saved player pool contains temporary emergency rankings and cannot be used for this draft. The commissioner must return to Draft Setup and save the schedule again to build verified Projection V${SHARED_PROJECTION_VERSION} rankings.`,
+        );
+      }
+
+      const draft = this.draft();
+      const expectedSnapshotHash = draft?.serverDraftProjectionSnapshotHash;
+      const verifiedAuthority =
+        snapshot.metadata.generatedByAuthority === 'server' &&
+        snapshot.metadata.authoritySchemaVersion ===
+          PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
+        snapshot.metadata.snapshotHashSchemaVersion ===
+          PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+        snapshot.metadata.snapshotHashAlgorithm === 'sha256' &&
+        snapshot.metadata.snapshotIntegrityStatus === 'verified' &&
+        /^[a-f0-9]{64}$/.test(snapshot.metadata.snapshotContentHash ?? '');
+
+      if (
+        !verifiedAuthority ||
+        (pinnedSnapshotId && snapshot.metadata.activeSnapshotId !== pinnedSnapshotId) ||
+        (expectedSnapshotHash && snapshot.metadata.snapshotContentHash !== expectedSnapshotHash)
+      ) {
+        this.playerPool.set([]);
+        throw new Error(
+          'The Draft pool did not match its verified server content hash. Refresh the Draft Room or ask the commissioner to verify the projection snapshot.',
         );
       }
 

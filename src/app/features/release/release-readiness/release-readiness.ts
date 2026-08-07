@@ -33,8 +33,10 @@ import {
   clearReleaseReadinessScoringLease,
   loadReleaseReadinessSnapshot,
   regenerateReleaseReadinessProjection,
+  restorePreviousReleaseReadinessProjection,
   retryReleaseReadinessInjurySync,
   retryReleaseReadinessScoring,
+  verifyReleaseReadinessProjectionIntegrity,
 } from '../../../core/release/release-readiness.service';
 import { runFullSeasonLifecycleSimulator } from '../../../core/release/season-lifecycle-simulator';
 import { ReleaseUpdateService } from '../../../core/release/release-update.service';
@@ -176,6 +178,27 @@ export class ReleaseReadiness implements OnDestroy {
     this.targetProjectionCycle.set(target);
 
     await this.runAction(async () => regenerateReleaseReadinessProjection(this.leagueId, target));
+  }
+
+  async verifyProjectionIntegrity(): Promise<void> {
+    await this.runAction(async () =>
+      verifyReleaseReadinessProjectionIntegrity(this.leagueId),
+    );
+  }
+
+  async restorePreviousProjection(): Promise<void> {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        'Restore the newest previous verified Projection V11 snapshot? This is allowed only before the Draft starts and requires Draft settings to be saved again.',
+      )
+    ) {
+      return;
+    }
+
+    await this.runAction(async () =>
+      restorePreviousReleaseReadinessProjection(this.leagueId),
+    );
   }
 
   setTargetProjectionCycle(value: string): void {

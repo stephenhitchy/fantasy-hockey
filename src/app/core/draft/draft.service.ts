@@ -615,6 +615,18 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
       typeof data.serverDraftProjectionSnapshotId === 'string'
         ? data.serverDraftProjectionSnapshotId
         : null,
+    serverDraftProjectionSnapshotHash:
+      typeof data.serverDraftProjectionSnapshotHash === 'string'
+        ? data.serverDraftProjectionSnapshotHash
+        : null,
+    serverDraftProjectionAuthorityVersion:
+      typeof data.serverDraftProjectionAuthorityVersion === 'number'
+        ? data.serverDraftProjectionAuthorityVersion
+        : null,
+    serverDraftProjectionCatalogHash:
+      typeof data.serverDraftProjectionCatalogHash === 'string'
+        ? data.serverDraftProjectionCatalogHash
+        : null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
     startedAt: data.startedAt,
@@ -644,6 +656,9 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     lastPickId: null,
     lastSettingsSubmissionId: null,
     serverDraftProjectionSnapshotId: null,
+    serverDraftProjectionSnapshotHash: null,
+    serverDraftProjectionAuthorityVersion: null,
+    serverDraftProjectionCatalogHash: null,
   };
 }
 

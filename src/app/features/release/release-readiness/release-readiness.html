@@ -610,6 +610,26 @@
               >
                 Regenerate Projection
               </button>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="verifyProjectionIntegrity()"
+              >
+                Verify Projection Integrity
+              </button>
+              <button
+                type="button"
+                class="secondary-button"
+                [disabled]="actionInProgress()"
+                (click)="restorePreviousProjection()"
+              >
+                Restore Previous Verified Snapshot
+              </button>
+              <small>
+                Verification seals an older server-generated S2A snapshot without changing its
+                Projection V11 values. Restore is available only before the Draft starts.
+              </small>
             </div>
           </article>
         </div>

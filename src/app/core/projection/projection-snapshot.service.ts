@@ -13,6 +13,8 @@ import { functions } from '../firebase-functions';
 import { DraftableAsset } from '../draft/draft.models';
 
 export const SHARED_PROJECTION_VERSION = 11;
+export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
+export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 1;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -76,6 +78,11 @@ export interface SharedProjectionSnapshotMetadata {
   catalogValidationStatus?: 'validated';
   catalogCacheHit?: boolean;
   generationRequestId?: string;
+  snapshotHashSchemaVersion?: number;
+  snapshotHashAlgorithm?: 'sha256';
+  snapshotContentHash?: string;
+  snapshotChunkHashes?: string[];
+  snapshotIntegrityStatus?: 'verified';
 }
 
 export interface SharedProjectionSnapshot {
@@ -216,6 +223,22 @@ function normalizeMetadata(
       typeof data.generationRequestId === 'string'
         ? data.generationRequestId
         : undefined,
+    snapshotHashSchemaVersion:
+      typeof data.snapshotHashSchemaVersion === 'number'
+        ? data.snapshotHashSchemaVersion
+        : undefined,
+    snapshotHashAlgorithm:
+      data.snapshotHashAlgorithm === 'sha256' ? 'sha256' : undefined,
+    snapshotContentHash:
+      typeof data.snapshotContentHash === 'string'
+        ? data.snapshotContentHash
+        : undefined,
+    snapshotChunkHashes:
+      Array.isArray(data.snapshotChunkHashes)
+        ? data.snapshotChunkHashes.filter((entry): entry is string => typeof entry === 'string')
+        : undefined,
+    snapshotIntegrityStatus:
+      data.snapshotIntegrityStatus === 'verified' ? 'verified' : undefined,
   };
 }
 
@@ -380,7 +403,14 @@ export function isSharedProjectionSnapshotFreshForDraft(
     metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
     metadata.assetCount <= 0 ||
     metadata.teamCount !== Math.max(2, Math.floor(input.teamCount)) ||
-    metadata.requiredGamesPerCycle !== Math.max(1, Math.floor(input.requiredGamesPerCycle))
+    metadata.requiredGamesPerCycle !== Math.max(1, Math.floor(input.requiredGamesPerCycle)) ||
+    metadata.generatedByAuthority !== 'server' ||
+    metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
+    metadata.catalogValidationStatus !== 'validated' ||
+    metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    metadata.snapshotHashAlgorithm !== 'sha256' ||
+    metadata.snapshotIntegrityStatus !== 'verified' ||
+    !/^[a-f0-9]{64}$/.test(metadata.snapshotContentHash ?? '')
   ) {
     return false;
   }
@@ -467,6 +497,26 @@ interface ProjectionGenerationCallableResult {
   reusedFreshSnapshot: boolean;
 }
 
+export type ProjectionIntegrityCommandAction = 'verify-current' | 'restore-previous';
+
+export interface ProjectionIntegrityCommandResult {
+  requestId: string;
+  action: ProjectionIntegrityCommandAction;
+  snapshotId: string;
+  snapshotContentHash: string;
+  targetCycleNumber: number;
+  alreadySealed: boolean;
+  restoredPointer: boolean;
+  message: string;
+}
+
+interface ProjectionIntegrityCommandRequest {
+  requestId: string;
+  leagueId: string;
+  action: ProjectionIntegrityCommandAction;
+  reason: string;
+}
+
 interface ProjectionGenerationRequestState {
   leagueId?: unknown;
   status?: unknown;
@@ -480,6 +530,13 @@ const requestProjectionSnapshotGenerationCallable = httpsCallable<
   ProjectionGenerationCallableResult
 >(functions, 'requestProjectionSnapshotGeneration', {
   timeout: 30_000,
+});
+
+const manageProjectionSnapshotIntegrityCallable = httpsCallable<
+  ProjectionIntegrityCommandRequest,
+  ProjectionIntegrityCommandResult
+>(functions, 'manageProjectionSnapshotIntegrity', {
+  timeout: 135_000,
 });
 
 function createProjectionRequestId(): string {
@@ -578,14 +635,59 @@ async function loadServerGeneratedSnapshot(
 
   if (
     snapshot.metadata.generatedByAuthority !== 'server' ||
+    snapshot.metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     snapshot.metadata.catalogValidationStatus !== 'validated' ||
     !snapshot.metadata.catalogSnapshotId ||
-    !snapshot.metadata.catalogHash
+    !snapshot.metadata.catalogHash ||
+    snapshot.metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    snapshot.metadata.snapshotHashAlgorithm !== 'sha256' ||
+    snapshot.metadata.snapshotIntegrityStatus !== 'verified' ||
+    !/^[a-f0-9]{64}$/.test(snapshot.metadata.snapshotContentHash ?? '')
   ) {
-    throw new Error('The projection snapshot was not validated by the server NHL asset catalog.');
+    throw new Error(
+      'The projection snapshot was not sealed by the current server catalog and content-hash authority.',
+    );
   }
 
   return snapshot;
+}
+
+export async function manageProjectionSnapshotIntegrity(input: {
+  leagueId: string;
+  action: ProjectionIntegrityCommandAction;
+  reason?: string;
+}): Promise<{
+  result: ProjectionIntegrityCommandResult;
+  snapshot: SharedProjectionSnapshot;
+}> {
+  const leagueId = input.leagueId.trim();
+
+  if (!leagueId) {
+    throw new Error('A league is required to manage projection integrity.');
+  }
+
+  const response = await manageProjectionSnapshotIntegrityCallable({
+    requestId: createProjectionRequestId().replace(/^projection-/, 'projection-integrity-'),
+    leagueId,
+    action: input.action,
+    reason: (input.reason ?? '').trim().slice(0, 300),
+  });
+  const result = response.data;
+
+  invalidateSharedProjectionReadCache(leagueId);
+  const snapshot = await loadSharedProjectionSnapshotById(leagueId, result.snapshotId);
+
+  if (
+    !snapshot ||
+    snapshot.metadata.snapshotContentHash !== result.snapshotContentHash ||
+    snapshot.metadata.snapshotIntegrityStatus !== 'verified'
+  ) {
+    throw new Error(
+      'The server completed the projection integrity action, but the verified snapshot could not be reloaded.',
+    );
+  }
+
+  return { result, snapshot };
 }
 
 async function generateSnapshotInternal(
