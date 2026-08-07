@@ -371,7 +371,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
   assert.equal(createHash('sha256').update(rules).digest('hex'), 'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901');
   assert.equal(createHash('sha256').update(engine).digest('hex'), 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
-  assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), 'c366bff7ffda152bf538b2bafd4b276fa15b12e5f1c4a05e1ae9a1cb47a8982c');
+  assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), '3ad3e9c6601f8af35c4225eb2682a22d9fee6708317fb5dd68834a27bf1cd299');
   assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0');
   assert.equal(
     await hashTree(
@@ -379,6 +379,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
       new Set([
         'src/index.ts',
         'src/league-lifecycle-authority.ts',
+    'src/league-lifecycle-authority.util.ts',
         'src/league-automation.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',

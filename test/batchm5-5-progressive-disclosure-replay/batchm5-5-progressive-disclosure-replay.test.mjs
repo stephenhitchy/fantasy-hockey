@@ -261,6 +261,7 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
       new Set([
         'src/index.ts',
         'src/league-lifecycle-authority.ts',
+    'src/league-lifecycle-authority.util.ts',
         'src/league-automation.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',

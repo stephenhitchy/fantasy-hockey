@@ -2081,6 +2081,33 @@ interface DeleteLeagueResult {
   deletedRelatedDocumentCount: number;
 }
 
+async function releaseLeagueLifecycleCounts(userIds: readonly string[]): Promise<void> {
+  const uniqueUserIds = [...new Set(userIds.map((userId) => asString(userId)).filter(Boolean))];
+
+  await Promise.all(uniqueUserIds.map(async (userId) => {
+    const stateRef = db.doc(`leagueLifecycleState/${userId}`);
+
+    await db.runTransaction(async (transaction) => {
+      const stateSnapshot = await transaction.get(stateRef);
+
+      if (!stateSnapshot.exists) {
+        return;
+      }
+
+      const state = stateSnapshot.data() ?? {};
+      const currentCount = typeof state['activeLeagueCount'] === 'number'
+        ? Math.max(0, Math.trunc(state['activeLeagueCount']))
+        : 0;
+
+      transaction.set(stateRef, {
+        activeLeagueCount: Math.max(0, currentCount - 1),
+        lastMembershipReleasedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+  }));
+}
+
 export const deleteLeague = onCall(
   {
     region: FUNCTION_REGION,
@@ -2149,6 +2176,16 @@ export const deleteLeague = onCall(
       );
     }
 
+    const [memberSnapshot, teamSnapshot] = await Promise.all([
+      db.collection(`leagues/${leagueId}/members`).get(),
+      db.collection(`leagues/${leagueId}/teams`).get(),
+    ]);
+    const leagueOwnerIds = [...new Set([
+      commissionerId,
+      ...memberSnapshot.docs.map((document) => document.id),
+      ...teamSnapshot.docs.map((document) => document.id),
+    ].filter(Boolean))];
+
     await leagueRef.set(
       {
         deletionStatus: 'deleting',
@@ -2178,6 +2215,7 @@ export const deleteLeague = onCall(
     );
 
     await db.recursiveDelete(leagueRef);
+    await releaseLeagueLifecycleCounts(leagueOwnerIds);
 
     console.info('League permanently deleted.', {
       leagueId,
@@ -2555,10 +2593,22 @@ export const deleteMyAccount = onCall(
       'ownerId',
       userId,
     );
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'leagueCreationRequests',
+      'ownerId',
+      userId,
+    );
+    deletedDocumentCount += await deleteTopLevelDocumentsByField(
+      'leagueJoinRequests',
+      'ownerId',
+      userId,
+    );
 
-    const [rateLimitSnapshot, platformAdminSnapshot] = await Promise.all([
+    const lifecycleStateRef = db.doc(`leagueLifecycleState/${userId}`);
+    const [rateLimitSnapshot, platformAdminSnapshot, lifecycleStateSnapshot] = await Promise.all([
       db.doc(`observabilityRateLimits/${userId}`).get(),
       db.doc(`platformAdmins/${userId}`).get(),
+      lifecycleStateRef.get(),
     ]);
 
     if (rateLimitSnapshot.exists) {
@@ -2568,6 +2618,11 @@ export const deleteMyAccount = onCall(
 
     if (platformAdminSnapshot.exists) {
       await platformAdminSnapshot.ref.delete();
+      deletedDocumentCount += 1;
+    }
+
+    if (lifecycleStateSnapshot.exists) {
+      await lifecycleStateRef.delete();
       deletedDocumentCount += 1;
     }
 
@@ -3344,7 +3399,7 @@ export {
   repairDraftTurnHandoff,
 } from './draft-authority';
 
-export { createLeagueSecure } from './league-lifecycle-authority';
+export { createLeagueSecure, joinLeagueSecure } from './league-lifecycle-authority';
 
 export { saveManagerProfile } from './manager-profile-authority';
 

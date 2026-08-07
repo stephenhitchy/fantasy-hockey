@@ -423,27 +423,46 @@ async function saveDraftSettings(
     }
   }
 
-  const teamSnapshot = await db.collection(`leagues/${leagueId}/teams`).get();
-  const teamOwnerIds = teamSnapshot.docs.map((document) => document.id).sort();
-  const requestedOwnerIds = [...roundOneOrder].sort();
-
-  if (
-    teamOwnerIds.length !== requestedOwnerIds.length ||
-    teamOwnerIds.some((ownerId, index) => ownerId !== requestedOwnerIds[index])
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'The draft order must contain every current league team exactly once. Refresh and try again.',
-    );
-  }
-
   const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
+  const leagueRef = db.doc(`leagues/${leagueId}`);
+  const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
+  const inviteLockAuditRef = db.doc(`leagues/${leagueId}/audit/invite-locked-draft-setup`);
 
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(draftRef);
-    const existingDraft = snapshot.exists
-      ? normalizeDraft(snapshot.data() as Partial<FantasyDraft>)
+    const [draftSnapshot, leagueSnapshot, teamSnapshot, inviteLockAuditSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(leagueRef),
+      transaction.get(teamsQuery),
+      transaction.get(inviteLockAuditRef),
+    ]);
+
+    if (!leagueSnapshot.exists) {
+      throw new HttpsError('not-found', 'This league no longer exists.');
+    }
+
+    const leagueData = leagueSnapshot.data() ?? {};
+    const inviteCode = asString(leagueData['inviteCode']);
+    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
+    const inviteSnapshot = inviteRef
+      ? await transaction.get(inviteRef)
       : null;
+    const existingDraft = draftSnapshot.exists
+      ? normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>)
+      : null;
+    const teamOwnerIds = teamSnapshot.docs.map((document) => document.id).sort();
+    const requestedOwnerIds = [...roundOneOrder].sort();
+
+    if (
+      teamOwnerIds.length !== requestedOwnerIds.length ||
+      teamOwnerIds.some((ownerId, index) => ownerId !== requestedOwnerIds[index])
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The draft order must contain every current league team exactly once. Refresh and try again.',
+      );
+    }
+
+    let idempotentSettingsReplay = false;
 
     if (submissionId && existingDraft?.lastSettingsSubmissionId === submissionId) {
       const existingStartAt = asTimestampDate(existingDraft.scheduledStartAt);
@@ -468,7 +487,7 @@ async function saveDraftSettings(
         );
       }
 
-      return;
+      idempotentSettingsReplay = true;
     }
 
     if (
@@ -489,47 +508,95 @@ async function saveDraftSettings(
     const timestamp = FieldValue.serverTimestamp();
     const status = scheduledStartAt ? 'scheduled' : 'setup';
 
-    transaction.set(
-      draftRef,
-      {
-        schemaVersion: 3,
-        status,
-        format: 'snake',
-        totalRounds: DEFAULT_TOTAL_ROUNDS,
-        rosterRequirements: DEFAULT_ROSTER_REQUIREMENTS,
-        benchSlots: DEFAULT_BENCH_SLOTS,
-        roundOneOrder,
-        nextOverallPick: 1,
-        draftedAssetKeys: [],
-        scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
-        pickSeconds,
-        clockStatus: 'stopped',
-        pickStartedAt: null,
-        currentPickSeconds: pickSeconds,
-        pausedRemainingSeconds: null,
-        clockUpdatedBy: null,
-        clockUpdatedAt: timestamp,
-        lastPickId: null,
-        lastSettingsSubmissionId: submissionId ?? null,
-        serverDraftProjectionSnapshotId: null,
-        serverAutomationStatus: status === 'scheduled' ? 'scheduled' : 'waiting',
-        serverAutomationMessage: status === 'scheduled'
-          ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
-          : 'Draft order saved without a scheduled start time.',
-        serverAutomationUpdatedAt: timestamp,
-        updatedAt: timestamp,
-        ...(snapshot.exists ? {} : { createdAt: timestamp }),
-      },
-      { merge: true },
-    );
+    if (!idempotentSettingsReplay) {
+      transaction.set(
+        draftRef,
+        {
+          schemaVersion: 3,
+          status,
+          format: 'snake',
+          totalRounds: DEFAULT_TOTAL_ROUNDS,
+          rosterRequirements: DEFAULT_ROSTER_REQUIREMENTS,
+          benchSlots: DEFAULT_BENCH_SLOTS,
+          roundOneOrder,
+          nextOverallPick: 1,
+          draftedAssetKeys: [],
+          scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
+          pickSeconds,
+          clockStatus: 'stopped',
+          pickStartedAt: null,
+          currentPickSeconds: pickSeconds,
+          pausedRemainingSeconds: null,
+          clockUpdatedBy: null,
+          clockUpdatedAt: timestamp,
+          lastPickId: null,
+          lastSettingsSubmissionId: submissionId ?? null,
+          serverDraftProjectionSnapshotId: null,
+          serverAutomationStatus: status === 'scheduled' ? 'scheduled' : 'waiting',
+          serverAutomationMessage: status === 'scheduled'
+            ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
+            : 'Draft order saved without a scheduled start time.',
+          serverAutomationUpdatedAt: timestamp,
+          updatedAt: timestamp,
+          ...(draftSnapshot.exists ? {} : { createdAt: timestamp }),
+        },
+        { merge: true },
+      );
+    }
+
+    if (asString(leagueData['joinStatus']) !== 'locked') {
+      transaction.set(
+        leagueRef,
+        {
+          teamCount: teamSnapshot.size,
+          joinStatus: 'locked',
+          joinLockedAt: timestamp,
+          joinLockedReason: 'draft-order-saved',
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      );
+    }
+
+    if (inviteRef && inviteSnapshot?.exists && inviteSnapshot.data()?.['active'] !== false) {
+      transaction.set(
+        inviteRef,
+        {
+          active: false,
+          lockedAt: timestamp,
+          lockedReason: 'draft-order-saved',
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      );
+    }
+
+    if (!inviteLockAuditSnapshot.exists) {
+      transaction.create(inviteLockAuditRef, {
+        id: 'invite-locked-draft-setup',
+        leagueId,
+        action: 'invite-locked',
+        actorId: userId,
+        actorRole: 'commissioner',
+        authority: 'cloud-function',
+        reason: 'Draft order saved; league membership is now frozen.',
+        release: 'Security Batch S1B',
+        values: {
+          teamCount: teamSnapshot.size,
+          draftStatus: status,
+          inviteCode,
+        },
+        createdAt: timestamp,
+      });
+    }
   });
 
   return {
     applied: true,
     action: 'save-settings',
     message: scheduledStartAt
-      ? 'Draft settings and scheduled start were saved.'
-      : 'Draft order was saved.',
+      ? 'Draft settings and scheduled start were saved. League entry is now closed.'
+      : 'Draft order was saved. League entry is now closed.',
     submissionId,
   };
 }

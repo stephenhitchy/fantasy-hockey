@@ -267,6 +267,12 @@
         </div>
       }
 
+      @if (!isDraftLocked()) {
+        <p class="rr-notice rr-notice--warning">
+          Saving the draft order closes league entry. Confirm every intended manager has joined before continuing; the server will reject any later invite-code join.
+        </p>
+      }
+
       <button
         type="button"
         class="save-button rr-button rr-button--primary"

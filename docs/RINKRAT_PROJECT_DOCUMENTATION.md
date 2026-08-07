@@ -1,10 +1,109 @@
+## Batch S1B — Atomic League Joining, Invite Lock, and Account Quotas
+
+### Purpose
+
+Security Batch S1B completes roadmap items **S1.4, S1.5, and S1.7** and the creation/joining portion of **S1.6**. League joining is no longer a browser batch. A verified manager now submits one idempotent request to `joinLeagueSecure`, and the server validates the invite, capacity, draft lock, and account limits before atomically creating the membership, team, roster, audit, and final team count.
+
+This release is labeled **Release Candidate 11**.
+
+### Atomic server joining
+
+`joinLeagueSecure` verifies the authenticated user's fresh email-verification claim, normalizes the six-character invite code, reserves an exact request identity, and performs the competitive join inside one Firestore transaction. The transaction reads the invite, league, draft, existing member/team/roster, server lifecycle quota, and current member/team set before writing anything.
+
+A new manager is accepted only when:
+
+- the invite exists, matches the league, is active, and has not expired;
+- the league is still open for entry;
+- no draft order, scheduled draft, live draft, completed draft, or prior pick has locked membership;
+- the exact current team count is below `maxTeams`;
+- the account is below the active-league limit; and
+- the same request has not already completed with different input.
+
+Membership, team ownership, the empty roster, league `teamCount`, invite state, lifecycle quota, immutable join audit, and request result are committed together. Two managers racing for one final slot therefore conflict on the same league and invite documents; only one transaction can complete after the capacity recheck.
+
+### Idempotency and repair
+
+The client keeps a stable join request ID and profile icon in session storage and memory. A lost callable response can be retried without creating a second team. A fully confirmed replay does not consume another join attempt, while unresolved retries still pass through the rolling attempt limit so one reused request ID cannot bypass abuse controls. Existing members can use the same secure path to repair a missing member, team, or roster record without incrementing capacity or active-league quota again. Existing league-specific profile icons are preserved during repair.
+
+### Draft-order invite lock
+
+Saving Draft settings is now the explicit league-entry lock point. The draft-setting transaction validates that the round-one order contains every current team, then atomically:
+
+- saves the Draft order and schedule;
+- records the exact `teamCount`;
+- changes the league to `joinStatus: locked`;
+- deactivates the invite; and
+- creates an immutable `invite-locked-draft-setup` audit record.
+
+A concurrent final-slot join either commits before the Draft transaction, causing the saved order to be rejected until refreshed, or observes the locked league and is rejected. A late join cannot silently invalidate a healthy Draft.
+
+### Verified email and quotas
+
+League creation and joining require a freshly reloaded verified Firebase email claim. Account browsing, onboarding, and Account Settings remain available before verification so the manager can resend the message.
+
+Initial beta safeguards are intentionally conservative and server-owned:
+
+- maximum 20 active league memberships per account;
+- maximum 8 league creations in a rolling 24 hours;
+- maximum 20 new join attempts in a rolling 10 minutes; and
+- maximum 100 new join attempts in a rolling 24 hours.
+
+The server reconciles the stored active count against real memberships. League deletion decrements affected lifecycle counts, and account deletion removes lifecycle and idempotency records. Broader per-IP/App Check controls remain scheduled for Security Batch S3.
+
+### Browser permissions
+
+After the S1B Rules deployment:
+
+- invite documents are completely browser read-only and write-protected;
+- browser creation of member documents is denied;
+- browser creation of team documents is denied; and
+- normal creation/joining must use `createLeagueSecure` or `joinLeagueSecure`.
+
+Existing member/team identity updates remain compatible. Full strict schemas, commissioner-action audit expansion, existing-league authority migration, and adversarial concurrency emulator coverage are the next **S1C** package.
+
+### Roadmap and documentation cleanup
+
+The canonical permanent tracker remains inside every project package at:
+
+```text
+docs/RINKRAT_COMPETITIVE_ROADMAP.txt
+```
+
+Every package now includes a synchronized stable root copy at `RINKRAT_COMPETITIVE_ROADMAP.txt` as well as the canonical `docs/RINKRAT_COMPETITIVE_ROADMAP.txt`. Root copies named `RINKRAT_COMPETITIVE_ROADMAP*.txt` are excluded from the documentation-cleanup audit and consolidation command, so the tracker is never appended into the large project blueprint or deleted as a loose update note.
+
+### Verification
+
+```bash
+npm run verify:batchs1b
+```
+
+### Production deployment order
+
+Use **Functions → Hosting → Firestore Rules**. The callable and browser must be available before Rules disable browser-direct joining:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only functions:createLeagueSecure,functions:joinLeagueSecure,functions:executeDraftCommand,functions:deleteLeague,functions:deleteMyAccount -m "Security S1B atomic league joining"
+firebase deploy --only hosting:app -m "Security S1B secure league entry"
+firebase deploy --only firestore:rules -m "Security S1B server-only membership creation"
+```
+
+No Firestore index deployment or data migration is required.
+
+### Rollback order
+
+For a complete rollback to S1A, use **Firestore Rules → Hosting** so the legacy browser join path is restored before an older client is served. The S1B Functions may remain deployed because older clients do not call `joinLeagueSecure`; however, restoring the S1A `executeDraftCommand` removes the Draft-order invite lock behavior as well.
+
+---
+
 ## Batch S1A — Server-Authoritative League Creation and Immutable Competition Settings
 
 ### Purpose
 
 Security Batch S1A completes roadmap items **S1.1–S1.3**. New leagues are no longer assembled by a browser batch. An authenticated Cloud Function now owns the complete creation transaction, while Firestore Rules prevent a commissioner or modified client from rewriting the competition contract.
 
-This release is labeled **Release Candidate 10**.
+This historical S1A release was labeled **Release Candidate 10**.
 
 ### Server-authoritative creation
 
@@ -41,7 +140,7 @@ They cannot change scoring values, scoring version, six-game requirements, commi
 
 ### Compatibility boundary
 
-League joining remains on the prior compatible path for this release. Atomic server joining, invite locking, final-slot race protection, verified email, and quotas are the next roadmap batch: **S1B**.
+S1B subsequently replaced the compatible browser join path with atomic server joining, invite locking, final-slot race protection, verified email, and quotas.
 
 Existing leagues remain readable and playable. No score, roster, Draft, projection, transaction, waiver, matchup, or playoff migration is required.
 

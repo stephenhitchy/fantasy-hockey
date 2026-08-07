@@ -443,7 +443,7 @@ describe('league onboarding compatibility', () => {
     await expectDenied(batch.commit(), 'Browser-direct league creation batch');
   });
 
-  test('a signed-in invitee can create membership and team before server roster initialization', async () => {
+  test('a signed-in invitee cannot create membership or team documents directly', async () => {
     const batch = writeBatch(outsider.db);
 
     batch.set(doc(outsider.db, 'leagues', LEAGUE_ID, 'members', outsider.uid), {
@@ -473,7 +473,21 @@ describe('league onboarding compatibility', () => {
       updatedAt: serverTimestamp(),
     });
 
-    await expectAllowed(batch.commit(), 'Join-league onboarding batch without roster');
+    await expectDenied(batch.commit(), 'Browser-direct league join batch');
+  });
+
+  test('invite documents are server-only and cannot be read or changed from the browser', async () => {
+    await expectDenied(
+      getDoc(doc(outsider.db, 'leagueInvites', 'ABC123')),
+      'Invite-code browser read',
+    );
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagueInvites', 'ABC123'), {
+        active: false,
+        updatedAt: serverTimestamp(),
+      }),
+      'Commissioner invite-code browser update',
+    );
   });
 });
 

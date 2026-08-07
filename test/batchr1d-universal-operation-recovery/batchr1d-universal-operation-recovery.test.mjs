@@ -293,7 +293,7 @@ test('roster, waiver, queue, clock, profile, and support callables have bounded 
     ['scripts/audit-async-operation-safety.mjs'],
     { cwd: root },
   );
-  assert.match(stdout, /30 browser callables have explicit timeouts/);
+  assert.match(stdout, /31 browser callables have explicit timeouts/);
 });
 
 test('R1D scripts and documentation record the required Functions-first deployment', async () => {
@@ -327,7 +327,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
   assert.equal(
     await sha256('firestore.rules'),
-    'c366bff7ffda152bf538b2bafd4b276fa15b12e5f1c4a05e1ae9a1cb47a8982c',
+    '3ad3e9c6601f8af35c4225eb2682a22d9fee6708317fb5dd68834a27bf1cd299',
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -337,6 +337,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   const unchangedFunctions = await hashFunctionTreeExcept(new Set([
     'index.ts',
     'league-lifecycle-authority.ts',
+    'league-lifecycle-authority.util.ts',
     'league-automation.ts',
     'draft-authority.ts',
     'draft-automation.ts',

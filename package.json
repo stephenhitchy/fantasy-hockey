@@ -135,7 +135,10 @@
     "verify:batchr1f": "npm run verify:batchp1f-1 && npm run test:batchr1f:run",
     "pretest:batchs1a:run": "npm run generate:release-manifest",
     "test:batchs1a:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs1a-league-authority/*.test.mjs",
-    "verify:batchs1a": "npm run verify:batchr1f && npm run test:batchs1a:run && npm run validate:release-manifest"
+    "verify:batchs1a": "npm run verify:batchr1f && npm run test:batchs1a:run && npm run validate:release-manifest",
+    "pretest:batchs1b:run": "npm run generate:release-manifest",
+    "test:batchs1b:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs1b-atomic-league-joining/*.test.mjs",
+    "verify:batchs1b": "npm run verify:batchs1a && npm run test:batchs1b:run && npm run validate:release-manifest"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

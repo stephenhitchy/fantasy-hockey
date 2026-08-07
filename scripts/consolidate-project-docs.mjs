@@ -4,10 +4,18 @@ import { resolve } from 'node:path';
 const root = process.cwd();
 const destination = resolve(root, 'docs/RINKRAT_PROJECT_DOCUMENTATION.md');
 const entries = await readdir(root, { withFileTypes: true });
+const competitiveRoadmapPattern = /^RINKRAT_COMPETITIVE_ROADMAP(?:_.*)?\.txt$/i;
 const candidates = entries
   .filter((entry) => entry.isFile())
   .map((entry) => entry.name)
-  .filter((name) => name.endsWith('.txt') || /^BATCH_.*_MANUAL_TEST_CHECKLIST\.md$/i.test(name))
+  .filter(
+    (name) =>
+      (
+        name.endsWith('.txt') ||
+        /^BATCH_.*_MANUAL_TEST_CHECKLIST\.md$/i.test(name)
+      ) &&
+      !competitiveRoadmapPattern.test(name),
+  )
   .sort((first, second) => first.localeCompare(second));
 
 if (candidates.length === 0) {

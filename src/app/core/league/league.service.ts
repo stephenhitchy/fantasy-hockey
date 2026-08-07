@@ -5,7 +5,6 @@ import {
   getDocs,
   query,
   serverTimestamp,
-  setDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -19,7 +18,6 @@ import {
   ScoringRules,
 } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
-import { ensureFantasyRoster } from '../transactions/roster-authority.service';
 import type { DashboardLeagueActivity } from './dashboard-league-activity.models';
 import {
   DEFAULT_LEAGUE_LOGO_ID,
@@ -45,6 +43,10 @@ export interface League {
   commissionerId: string;
   inviteCode: string;
   maxTeams: number;
+  teamCount?: number;
+  joinStatus?: 'open' | 'locked' | 'full';
+  joinLockedAt?: unknown;
+  joinLockedReason?: string | null;
   matchupFormat: string;
   scoringRules: ScoringRules;
   scoringRulesVersion?: number;
@@ -70,6 +72,10 @@ export interface LeagueInvite {
   leagueId: string;
   createdBy: string;
   active: boolean;
+  joinCount?: number;
+  expiresAt?: unknown;
+  lockedAt?: unknown;
+  lockedReason?: string | null;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -102,7 +108,32 @@ interface CreateLeagueSecureResponse {
   authoritySchemaVersion: number;
 }
 
+interface JoinLeagueSecureRequest {
+  requestId: string;
+  inviteCode: string;
+  username: string;
+  profileIconId: ProfileIconId;
+}
+
+interface JoinLeagueSecureResponse {
+  joined: true;
+  leagueId: string;
+  inviteCode: string;
+  alreadyMember: boolean;
+  idempotentReplay: boolean;
+  teamCount: number;
+  maxTeams: number;
+  authoritySchemaVersion: number;
+}
+
 interface PendingLeagueCreationRequest {
+  fingerprint: string;
+  requestId: string;
+  profileIconId: ProfileIconId;
+  createdAt: number;
+}
+
+interface PendingLeagueJoinRequest {
   fingerprint: string;
   requestId: string;
   profileIconId: ProfileIconId;
@@ -233,6 +264,18 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
     commissionerId: league.commissionerId ?? '',
     inviteCode: league.inviteCode ?? '',
     maxTeams: typeof league.maxTeams === 'number' ? league.maxTeams : 2,
+    teamCount: typeof league.teamCount === 'number' ? league.teamCount : undefined,
+    joinStatus:
+      league.joinStatus === 'open' ||
+      league.joinStatus === 'locked' ||
+      league.joinStatus === 'full'
+        ? league.joinStatus
+        : undefined,
+    joinLockedAt: league.joinLockedAt,
+    joinLockedReason:
+      typeof league.joinLockedReason === 'string' || league.joinLockedReason === null
+        ? league.joinLockedReason
+        : undefined,
     matchupFormat: league.matchupFormat ?? 'cycle_matchup',
     scoringRules: normalizedRules,
     scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
@@ -261,8 +304,10 @@ function normalizeUsername(username: string): string {
 }
 
 const PENDING_LEAGUE_CREATION_STORAGE_KEY = 'rinkrat:pending-league-creation:v1';
-const PENDING_LEAGUE_CREATION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const PENDING_LEAGUE_JOIN_STORAGE_KEY = 'rinkrat:pending-league-join:v1';
+const PENDING_LEAGUE_REQUEST_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 let inMemoryPendingLeagueCreation: PendingLeagueCreationRequest | null = null;
+let inMemoryPendingLeagueJoin: PendingLeagueJoinRequest | null = null;
 
 function createLeagueRequestId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
@@ -284,6 +329,13 @@ function getLeagueCreationFingerprint(input: {
   return JSON.stringify(input);
 }
 
+function getLeagueJoinFingerprint(input: {
+  inviteCode: string;
+  username: string;
+}): string {
+  return JSON.stringify(input);
+}
+
 function isUsablePendingLeagueCreation(
   candidate: Partial<PendingLeagueCreationRequest> | null,
 ): candidate is PendingLeagueCreationRequest {
@@ -293,36 +345,71 @@ function isUsablePendingLeagueCreation(
     candidate?.fingerprint &&
     candidate.requestId &&
     isProfileIconId(candidate.profileIconId) &&
-    Date.now() - createdAt <= PENDING_LEAGUE_CREATION_MAX_AGE_MS,
+    Date.now() - createdAt <= PENDING_LEAGUE_REQUEST_MAX_AGE_MS,
   );
 }
 
-function readPendingLeagueCreation(): PendingLeagueCreationRequest | null {
+function isUsablePendingLeagueJoin(
+  candidate: Partial<PendingLeagueJoinRequest> | null,
+): candidate is PendingLeagueJoinRequest {
+  const createdAt = typeof candidate?.createdAt === 'number' ? candidate.createdAt : 0;
+
+  return Boolean(
+    candidate?.fingerprint &&
+    candidate.requestId &&
+    isProfileIconId(candidate.profileIconId) &&
+    Date.now() - createdAt <= PENDING_LEAGUE_REQUEST_MAX_AGE_MS,
+  );
+}
+
+function readPendingRequest<T extends { requestId: string }>(
+  storageKey: string,
+  inMemoryValue: T | null,
+  validator: (candidate: Partial<T> | null) => candidate is T,
+): T | null {
   try {
-    const rawValue = globalThis.sessionStorage?.getItem(
-      PENDING_LEAGUE_CREATION_STORAGE_KEY,
-    );
+    const rawValue = globalThis.sessionStorage?.getItem(storageKey);
 
     if (rawValue) {
-      const candidate = JSON.parse(rawValue) as Partial<PendingLeagueCreationRequest>;
+      const candidate = JSON.parse(rawValue) as Partial<T>;
 
-      if (isUsablePendingLeagueCreation(candidate)) {
-        inMemoryPendingLeagueCreation = candidate;
+      if (validator(candidate)) {
         return candidate;
       }
 
-      globalThis.sessionStorage?.removeItem(PENDING_LEAGUE_CREATION_STORAGE_KEY);
+      globalThis.sessionStorage?.removeItem(storageKey);
     }
   } catch {
     // Continue with the in-memory request when storage is unavailable.
   }
 
-  if (isUsablePendingLeagueCreation(inMemoryPendingLeagueCreation)) {
-    return inMemoryPendingLeagueCreation;
-  }
+  return validator(inMemoryValue) ? inMemoryValue : null;
+}
 
-  inMemoryPendingLeagueCreation = null;
-  return null;
+function writePendingRequest<T>(storageKey: string, pending: T): void {
+  try {
+    globalThis.sessionStorage?.setItem(storageKey, JSON.stringify(pending));
+  } catch {
+    // The in-memory copy still preserves idempotency for this open tab.
+  }
+}
+
+function clearPendingRequest(storageKey: string): void {
+  try {
+    globalThis.sessionStorage?.removeItem(storageKey);
+  } catch {
+    // Storage cleanup is best-effort after authoritative confirmation.
+  }
+}
+
+function readPendingLeagueCreation(): PendingLeagueCreationRequest | null {
+  const pending = readPendingRequest(
+    PENDING_LEAGUE_CREATION_STORAGE_KEY,
+    inMemoryPendingLeagueCreation,
+    isUsablePendingLeagueCreation,
+  );
+  inMemoryPendingLeagueCreation = pending;
+  return pending;
 }
 
 function getOrCreatePendingLeagueCreation(
@@ -342,16 +429,7 @@ function getOrCreatePendingLeagueCreation(
   };
 
   inMemoryPendingLeagueCreation = pending;
-
-  try {
-    globalThis.sessionStorage?.setItem(
-      PENDING_LEAGUE_CREATION_STORAGE_KEY,
-      JSON.stringify(pending),
-    );
-  } catch {
-    // The in-memory copy still preserves idempotency for this open tab.
-  }
-
+  writePendingRequest(PENDING_LEAGUE_CREATION_STORAGE_KEY, pending);
   return pending;
 }
 
@@ -363,15 +441,76 @@ function clearPendingLeagueCreation(requestId: string): void {
   }
 
   inMemoryPendingLeagueCreation = null;
+  clearPendingRequest(PENDING_LEAGUE_CREATION_STORAGE_KEY);
+}
+
+function readPendingLeagueJoin(): PendingLeagueJoinRequest | null {
+  const pending = readPendingRequest(
+    PENDING_LEAGUE_JOIN_STORAGE_KEY,
+    inMemoryPendingLeagueJoin,
+    isUsablePendingLeagueJoin,
+  );
+  inMemoryPendingLeagueJoin = pending;
+  return pending;
+}
+
+function getOrCreatePendingLeagueJoin(
+  fingerprint: string,
+): PendingLeagueJoinRequest {
+  const existing = readPendingLeagueJoin();
+
+  if (existing?.fingerprint === fingerprint) {
+    return existing;
+  }
+
+  const pending: PendingLeagueJoinRequest = {
+    fingerprint,
+    requestId: createLeagueRequestId(),
+    profileIconId: getRandomProfileIconId(),
+    createdAt: Date.now(),
+  };
+
+  inMemoryPendingLeagueJoin = pending;
+  writePendingRequest(PENDING_LEAGUE_JOIN_STORAGE_KEY, pending);
+  return pending;
+}
+
+function clearPendingLeagueJoin(requestId: string): void {
+  const existing = readPendingLeagueJoin();
+
+  if (existing?.requestId !== requestId) {
+    return;
+  }
+
+  inMemoryPendingLeagueJoin = null;
+  clearPendingRequest(PENDING_LEAGUE_JOIN_STORAGE_KEY);
+}
+
+async function requireFreshVerifiedEmail(actionLabel: string): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error(`You must be logged in to ${actionLabel}.`);
+  }
 
   try {
-    globalThis.sessionStorage?.removeItem(PENDING_LEAGUE_CREATION_STORAGE_KEY);
+    await user.reload();
+    await user.getIdToken(true);
   } catch {
-    // Storage cleanup is best-effort after the server confirms creation.
+    throw new Error('RinkRat could not verify your email status. Check your connection and try again.');
+  }
+
+  if (!user.emailVerified) {
+    throw new Error(
+      `Verify your email address before you ${actionLabel}. Open Account Settings to resend the verification email.`,
+    );
   }
 }
 
-function getCallableErrorMessage(error: unknown): string {
+function getCallableErrorMessage(
+  error: unknown,
+  operation: 'create' | 'join' = 'create',
+): string {
   const record = error && typeof error === 'object'
     ? error as { code?: unknown; message?: unknown }
     : {};
@@ -387,22 +526,30 @@ function getCallableErrorMessage(error: unknown): string {
   }
 
   if (code.includes('unauthenticated')) {
-    return 'You must be logged in to create a league.';
+    return operation === 'join'
+      ? 'You must be logged in to join a league.'
+      : 'You must be logged in to create a league.';
+  }
+
+  if (code.includes('not-found') && operation === 'join') {
+    return 'No league was found with that invite code.';
   }
 
   if (code.includes('resource-exhausted')) {
-    return 'RinkRat could not reserve a league invite code. Please try again.';
+    return operation === 'join'
+      ? 'This league is full or this account reached a temporary join limit.'
+      : 'This account reached a temporary league-creation limit.';
   }
 
   if (code.includes('failed-precondition') || code.includes('aborted')) {
-    return 'The previous league creation is still being reconciled. Wait a moment and try again.';
+    return operation === 'join'
+      ? 'The league join could not be completed. Refresh the league code and try again.'
+      : 'The previous league creation is still being reconciled. Wait a moment and try again.';
   }
 
-  return 'Unable to create the league right now. Please try again.';
-}
-
-function getLeagueInviteRef(inviteCode: string) {
-  return doc(db, 'leagueInvites', normalizeInviteCode(inviteCode));
+  return operation === 'join'
+    ? 'Unable to join the league right now. Please try again.'
+    : 'Unable to create the league right now. Please try again.';
 }
 
 function getLeagueRef(leagueId: string) {
@@ -415,68 +562,6 @@ function getLeagueMemberRef(leagueId: string, userId: string) {
 
 function getLeagueTeamRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'teams', ownerId);
-}
-
-function getNewTeamDocument(
-  ownerId: string,
-  defaultTeamName: string,
-  profileIconId: ProfileIconId,
-) {
-  const managerName = normalizeUsername(defaultTeamName);
-
-  return {
-    id: ownerId,
-    ownerId,
-    teamName: managerName,
-    managerName,
-    profileIconId: getProfileIcon(profileIconId).id,
-    logo: '',
-    wins: 0,
-    losses: 0,
-    ties: 0,
-    pointsFor: 0,
-    pointsAgainst: 0,
-    waiverPriority: 1,
-    draftPosition: null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-}
-
-async function createLeagueInviteDocument(league: League): Promise<void> {
-  const inviteCode = normalizeInviteCode(league.inviteCode);
-
-  if (!inviteCode) {
-    throw new Error('This league does not have a valid invite code.');
-  }
-
-  const inviteRef = getLeagueInviteRef(inviteCode);
-  const inviteSnapshot = await getDoc(inviteRef);
-
-  if (inviteSnapshot.exists()) {
-    const existingInvite = inviteSnapshot.data() as Partial<LeagueInvite>;
-
-    if (existingInvite.leagueId && existingInvite.leagueId !== league.id) {
-      throw new Error('This invite code is already assigned to another league.');
-    }
-
-    return;
-  }
-
-  await setDoc(inviteRef, {
-    inviteCode,
-    leagueId: league.id,
-    createdBy: league.commissionerId,
-    active: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  } satisfies LeagueInvite);
-}
-
-async function ensureCommissionerInviteDocuments(leagues: League[], userId: string): Promise<void> {
-  const commissionerLeagues = leagues.filter((league) => league.commissionerId === userId);
-
-  await Promise.all(commissionerLeagues.map((league) => createLeagueInviteDocument(league)));
 }
 
 function getLeagueIdFromMembershipPath(membershipPath: string): string | null {
@@ -502,6 +587,8 @@ export async function createLeague(
   if (!user) {
     throw new Error('You must be logged in to create a league.');
   }
+
+  await requireFreshVerifiedEmail('create a league');
 
   const trimmedName = name.trim();
   const normalizedUsername = normalizeUsername(username);
@@ -661,14 +748,7 @@ export async function getLeagueById(leagueId: string): Promise<League | null> {
     return null;
   }
 
-  const league = normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>);
-  const user = auth.currentUser;
-
-  if (user?.uid === league.commissionerId) {
-    await createLeagueInviteDocument(league);
-  }
-
-  return league;
+  return normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>);
 }
 
 export async function getMyLeagueSummaries(
@@ -748,145 +828,42 @@ export async function joinLeagueByInviteCode(
     throw new Error('You must be logged in to join a league.');
   }
 
+  await requireFreshVerifiedEmail('join a league');
+
   const normalizedInviteCode = normalizeInviteCode(inviteCode);
-
-  if (!normalizedInviteCode) {
-    throw new Error('Please enter a league invite code.');
-  }
-
-  const inviteRef = getLeagueInviteRef(normalizedInviteCode);
-  const inviteSnapshot = await getDoc(inviteRef);
-
-  if (!inviteSnapshot.exists()) {
-    throw new Error('No league found with that invite code.');
-  }
-
-  const invite = inviteSnapshot.data() as LeagueInvite;
-
-  if (!invite.active || !invite.leagueId || invite.inviteCode !== normalizedInviteCode) {
-    throw new Error('This league invite is no longer active.');
-  }
-
-  const leagueId = invite.leagueId;
-  const leagueRef = getLeagueRef(leagueId);
-  const memberRef = getLeagueMemberRef(leagueId, user.uid);
-  const teamRef = getLeagueTeamRef(leagueId, user.uid);
   const normalizedUsername = normalizeUsername(username);
-  const existingMemberSnapshot = await getDoc(memberRef);
 
-  if (existingMemberSnapshot.exists()) {
-    const [leagueSnapshot, existingTeamSnapshot] = await Promise.all([
-      getDoc(leagueRef),
-      getDoc(teamRef),
-    ]);
-
-    if (!leagueSnapshot.exists()) {
-      throw new Error('This league no longer exists.');
-    }
-
-    const league = normalizeLeagueScoringRules(leagueSnapshot.data() as Partial<League>);
-
-    if (league.inviteCode !== normalizedInviteCode) {
-      throw new Error('This invite code does not match the league.');
-    }
-
-    const existingMember = existingMemberSnapshot.data() as Partial<LeagueMember>;
-    const existingTeam = existingTeamSnapshot.exists()
-      ? (existingTeamSnapshot.data() as Partial<{
-          managerName: string;
-          profileIconId: ProfileIconId;
-        }>)
-      : null;
-    const resolvedProfileIconId = isProfileIconId(existingTeam?.profileIconId)
-      ? existingTeam.profileIconId
-      : isProfileIconId(existingMember.profileIconId)
-        ? existingMember.profileIconId
-        : getRandomProfileIconId();
-
-    const repairBatch = writeBatch(db);
-    let repairNeeded = false;
-
-    if (!existingTeamSnapshot.exists()) {
-      repairBatch.set(
-        teamRef,
-        getNewTeamDocument(user.uid, normalizedUsername, resolvedProfileIconId),
-      );
-      repairNeeded = true;
-    } else {
-      const teamPatch: Record<string, unknown> = {};
-
-      if (existingTeam?.managerName !== normalizedUsername) {
-        teamPatch['managerName'] = normalizedUsername;
-      }
-
-      if (existingTeam?.profileIconId !== resolvedProfileIconId) {
-        teamPatch['profileIconId'] = resolvedProfileIconId;
-      }
-
-      if (Object.keys(teamPatch).length > 0) {
-        repairBatch.set(
-          teamRef,
-          {
-            ...teamPatch,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        repairNeeded = true;
-      }
-    }
-
-    if (
-      existingMember.username !== normalizedUsername ||
-      existingMember.profileIconId !== resolvedProfileIconId
-    ) {
-      repairBatch.set(
-        memberRef,
-        {
-          username: normalizedUsername,
-          profileIconId: resolvedProfileIconId,
-        },
-        { merge: true },
-      );
-      repairNeeded = true;
-    }
-
-    if (repairNeeded) {
-      await repairBatch.commit();
-    }
-
-    // Existing or repaired memberships use the same server-owned roster
-    // initializer. This also repairs legacy accounts that predate schema v2.
-    await ensureFantasyRoster(leagueId);
-
-    return leagueId;
+  if (normalizedInviteCode.length !== 6 || !/^[A-Z0-9]+$/.test(normalizedInviteCode)) {
+    throw new Error('Enter the six-character league invite code exactly as it appears.');
   }
 
-  // A new league membership gets its own random identity. The icon is stored
-  // on the league member/team documents and is independent from every other
-  // league this account belongs to.
-  const profileIconId = getRandomProfileIconId();
-  const joinBatch = writeBatch(db);
-
-  joinBatch.set(memberRef, {
-    uid: user.uid,
-    leagueId,
+  const fingerprint = getLeagueJoinFingerprint({
+    inviteCode: normalizedInviteCode,
     username: normalizedUsername,
-    profileIconId,
-    role: 'member',
-    inviteCodeUsed: normalizedInviteCode,
-    joinedAt: serverTimestamp(),
   });
+  const pending = getOrCreatePendingLeagueJoin(fingerprint);
+  const callable = httpsCallable<
+    JoinLeagueSecureRequest,
+    JoinLeagueSecureResponse
+  >(functions, 'joinLeagueSecure', { timeout: 60_000 });
 
-  joinBatch.set(
-    teamRef,
-    getNewTeamDocument(user.uid, normalizedUsername, profileIconId),
-  );
+  try {
+    const response = await callable({
+      requestId: pending.requestId,
+      inviteCode: normalizedInviteCode,
+      username: normalizedUsername,
+      profileIconId: pending.profileIconId,
+    });
 
-  await joinBatch.commit();
-  await ensureFantasyRoster(leagueId);
+    if (!response.data.joined || !response.data.leagueId) {
+      throw new Error('The server could not confirm the league membership.');
+    }
 
-  return leagueId;
+    clearPendingLeagueJoin(pending.requestId);
+    return response.data.leagueId;
+  } catch (error: unknown) {
+    throw new Error(getCallableErrorMessage(error, 'join'));
+  }
 }
 
 export async function ensureLeagueProfileIcon(

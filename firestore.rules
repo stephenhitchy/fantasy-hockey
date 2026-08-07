@@ -22,10 +22,6 @@ service cloud.firestore {
       return /databases/$(database)/documents/leagues/$(leagueId)/teams/$(ownerId);
     }
 
-    function invitePath(inviteCode) {
-      return /databases/$(database)/documents/leagueInvites/$(inviteCode);
-    }
-
     function draftPath(leagueId) {
       return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
     }
@@ -78,24 +74,10 @@ service cloud.firestore {
         );
     }
 
-    function isLeagueMemberAfter(leagueId) {
-      return signedIn() &&
-        (
-          existsAfter(memberPath(leagueId, currentUserId())) ||
-          hasExistingOwnedTeam(leagueId)
-        );
-    }
-
     function isLeagueCommissioner(leagueId) {
       return signedIn() &&
         exists(leaguePath(leagueId)) &&
         get(leaguePath(leagueId)).data.commissionerId == currentUserId();
-    }
-
-    function isLeagueCommissionerAfter(leagueId) {
-      return signedIn() &&
-        existsAfter(leaguePath(leagueId)) &&
-        getAfter(leaguePath(leagueId)).data.commissionerId == currentUserId();
     }
 
     function validUsername(username) {
@@ -178,62 +160,6 @@ service cloud.firestore {
           )) &&
         (!changedFields.hasAny(['updatedAt']) ||
           request.resource.data.updatedAt == request.time);
-    }
-
-    function validInviteCreate(inviteCode) {
-      return request.resource.data.inviteCode == inviteCode &&
-        request.resource.data.leagueId is string &&
-        request.resource.data.createdBy == currentUserId() &&
-        request.resource.data.active == true &&
-        isLeagueCommissionerAfter(request.resource.data.leagueId);
-    }
-
-    function validMemberCreate(leagueId, memberId) {
-      let data = request.resource.data;
-
-      return signedIn() &&
-        memberId == currentUserId() &&
-        data.uid == currentUserId() &&
-        data.leagueId == leagueId &&
-        validUsername(data.username) &&
-        validProfileIconId(data.profileIconId) &&
-        (
-          (
-            data.role == 'commissioner' &&
-            data.inviteCodeUsed == null &&
-            isLeagueCommissionerAfter(leagueId)
-          ) ||
-          (
-            data.role == 'member' &&
-            data.inviteCodeUsed is string &&
-            data.inviteCodeUsed.size() == 6 &&
-            exists(leaguePath(leagueId)) &&
-            exists(invitePath(data.inviteCodeUsed)) &&
-            get(invitePath(data.inviteCodeUsed)).data.active == true &&
-            get(invitePath(data.inviteCodeUsed)).data.inviteCode ==
-              data.inviteCodeUsed &&
-            get(invitePath(data.inviteCodeUsed)).data.leagueId == leagueId
-          )
-        );
-    }
-
-    function validTeamCreate(teamId) {
-      let data = request.resource.data;
-
-      return teamId == currentUserId() &&
-        data.id == currentUserId() &&
-        data.ownerId == currentUserId() &&
-        validTeamName(data.teamName) &&
-        validUsername(data.managerName) &&
-        validProfileIconId(data.profileIconId) &&
-        data.logo is string &&
-        data.wins == 0 &&
-        data.losses == 0 &&
-        data.ties == 0 &&
-        data.pointsFor == 0 &&
-        data.pointsAgainst == 0 &&
-        data.waiverPriority == 1 &&
-        data.draftPosition == null;
     }
 
     function validOwnerTeamUpdate() {
@@ -646,18 +572,9 @@ service cloud.firestore {
     }
 
     match /leagueInvites/{inviteCode} {
-      allow get: if signedIn();
-      allow list: if false;
-
-      allow create: if signedIn() &&
-        validInviteCreate(inviteCode);
-
-      allow update: if isLeagueCommissioner(resource.data.leagueId) &&
-        request.resource.data.leagueId == resource.data.leagueId &&
-        request.resource.data.inviteCode == resource.data.inviteCode &&
-        request.resource.data.createdBy == resource.data.createdBy;
-
-      allow delete: if isLeagueCommissioner(resource.data.leagueId);
+      // Invite codes are accepted only by joinLeagueSecure. The callable can
+      // validate expiry, capacity, draft lock, and account quotas atomically.
+      allow read, create, update, delete: if false;
     }
 
     match /appData/playerAvailability {
@@ -725,7 +642,8 @@ service cloud.firestore {
 
         allow list: if false;
 
-        allow create: if validMemberCreate(leagueId, memberId);
+        // Membership is created atomically by createLeagueSecure or joinLeagueSecure.
+        allow create: if false;
 
         allow update: if isLeagueCommissioner(leagueId) ||
           (
@@ -746,8 +664,8 @@ service cloud.firestore {
       match /teams/{teamId} {
         allow read: if isLeagueMember(leagueId);
 
-        allow create: if isLeagueMemberAfter(leagueId) &&
-          validTeamCreate(teamId);
+        // Team ownership is created atomically by createLeagueSecure or joinLeagueSecure.
+        allow create: if false;
 
         // Identity fields remain editable, but standings, waiver priority,
         // draft position, and every other computed competition field are

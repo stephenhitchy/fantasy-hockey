@@ -7,8 +7,8 @@
 
       <ul>
         <li>Use the invite code exactly as it appears.</li>
-        <li>Your team will be created automatically after you join.</li>
-        <li>From there you can draft, track six-game matchups, and make moves.</li>
+        <li>Your team and roster will be created atomically by the server.</li>
+        <li>League entry closes as soon as the commissioner saves the draft order.</li>
       </ul>
 
       <a routerLink="/dashboard" class="back-link rr-pixel-shell-back-link">← Back to Dashboard</a>
@@ -19,6 +19,11 @@
         <span class="card-label rr-pixel-shell-kicker">Invite Code</span>
         <strong>League Entry</strong>
       </div>
+
+      <p class="rr-notice rr-notice--info">
+        A verified email is required. RinkRat checks the invite, open team capacity, and draft status together before creating your membership.
+        <a routerLink="/account/settings">Review email verification</a>
+      </p>
 
       <label class="form-field rr-pixel-shell-field">
         <span>Invite Code</span>

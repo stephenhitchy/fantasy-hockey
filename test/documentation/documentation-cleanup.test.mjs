@@ -17,16 +17,34 @@ async function exists(relativePath) {
 
 test('project root contains no loose update text files or batch checklist files', async () => {
   const entries = await readdir(root, { withFileTypes: true });
+  const competitiveRoadmapPattern = /^RINKRAT_COMPETITIVE_ROADMAP(?:_.*)?\.txt$/i;
   const looseFiles = entries
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
     .filter(
       (name) =>
-        name.endsWith('.txt') ||
-        /^BATCH_.*_MANUAL_TEST_CHECKLIST\.md$/i.test(name),
+        (
+          name.endsWith('.txt') ||
+          /^BATCH_.*_MANUAL_TEST_CHECKLIST\.md$/i.test(name)
+        ) &&
+        !competitiveRoadmapPattern.test(name),
     );
 
   assert.deepEqual(looseFiles, []);
+  assert.equal(await exists('docs/RINKRAT_COMPETITIVE_ROADMAP.txt'), true);
+});
+
+
+test('root and canonical competitive roadmaps stay synchronized', async () => {
+  assert.equal(await exists('RINKRAT_COMPETITIVE_ROADMAP.txt'), true);
+  assert.equal(await exists('docs/RINKRAT_COMPETITIVE_ROADMAP.txt'), true);
+
+  const [rootRoadmap, canonicalRoadmap] = await Promise.all([
+    readFile(path.join(root, 'RINKRAT_COMPETITIVE_ROADMAP.txt'), 'utf8'),
+    readFile(path.join(root, 'docs/RINKRAT_COMPETITIVE_ROADMAP.txt'), 'utf8'),
+  ]);
+
+  assert.equal(rootRoadmap, canonicalRoadmap);
 });
 
 test('combined documentation and root README are present', async () => {

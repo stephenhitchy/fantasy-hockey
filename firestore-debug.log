@@ -1,4 +1,4 @@
-Aug 07, 2026 10:15:46 AM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+Aug 07, 2026 11:47:02 AM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
 INFO: Started WebSocket server on ws://127.0.0.1:9150
 
 API endpoint: http://127.0.0.1:8080
@@ -16,75 +16,75 @@ If you are running a Firestore in Datastore Mode project, run:
 Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
 Dev App Server is now running.
 
-Aug 07, 2026 10:15:53 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:07 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:53 AM io.grpc.netty.TcpMetrics loadEpollInfo
+Aug 07, 2026 11:47:07 AM io.grpc.netty.TcpMetrics loadEpollInfo
 INFO: Epoll available during static init of TcpMetrics:false
-Aug 07, 2026 10:15:53 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:07 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:54 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Aug 07, 2026 10:15:55 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Aug 07, 2026 11:47:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
-Aug 07, 2026 10:15:56 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, false for 'update' @ L560, false for 'update' @ L1004
+evaluation error at L486:24 for 'update' @ L486, false for 'update' @ L922, false for 'update' @ L486, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, false for 'update' @ L560, false for 'update' @ L1004
+evaluation error at L486:24 for 'update' @ L486, false for 'update' @ L922, false for 'update' @ L486, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -111,11 +111,11 @@ evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:56 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L641, false for 'update' @ L1004
+false for 'update' @ L567, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L641, false for 'update' @ L1004
+false for 'update' @ L567, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -142,11 +142,11 @@ false for 'update' @ L641, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:56 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L641:32 for 'create' @ L641, false for 'create' @ L1004, evaluation error at L641:32 for 'update' @ L641, false for 'update' @ L1004, false for 'create' @ L641, false for 'create' @ L1004
+evaluation error at L567:32 for 'create' @ L567, false for 'create' @ L922, evaluation error at L567:32 for 'update' @ L567, false for 'update' @ L922, false for 'create' @ L567, false for 'create' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L641:32 for 'create' @ L641, false for 'create' @ L1004, evaluation error at L641:32 for 'update' @ L641, false for 'update' @ L1004, false for 'create' @ L641, false for 'create' @ L1004
+evaluation error at L567:32 for 'create' @ L567, false for 'create' @ L922, evaluation error at L567:32 for 'update' @ L567, false for 'update' @ L922, false for 'create' @ L567, false for 'create' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -173,11 +173,11 @@ evaluation error at L641:32 for 'create' @ L641, false for 'create' @ L1004, eva
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, false for 'update' @ L560, false for 'update' @ L1004
+evaluation error at L486:24 for 'update' @ L486, false for 'update' @ L922, false for 'update' @ L486, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, false for 'update' @ L560, false for 'update' @ L1004
+evaluation error at L486:24 for 'update' @ L486, false for 'update' @ L922, false for 'update' @ L486, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -204,11 +204,11 @@ evaluation error at L560:24 for 'update' @ L560, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L699, false for 'create' @ L1004, evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, evaluation error at L652:24 for 'create' @ L652, false for 'create' @ L1004, evaluation error at L655:24 for 'update' @ L655, false for 'update' @ L1004, evaluation error at L728:26 for 'create' @ L728, false for 'create' @ L1004, evaluation error at L730:26 for 'update' @ L730, false for 'update' @ L1004, evaluation error at L749:26 for 'create' @ L749, false for 'create' @ L1004, evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'create' @ L699, false for 'create' @ L1004
+false for 'create' @ L616, false for 'create' @ L922, evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'create' @ L577, false for 'create' @ L922, false for 'update' @ L577, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L699, false for 'create' @ L1004, evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, evaluation error at L652:24 for 'create' @ L652, false for 'create' @ L1004, evaluation error at L655:24 for 'update' @ L655, false for 'update' @ L1004, evaluation error at L728:26 for 'create' @ L728, false for 'create' @ L1004, evaluation error at L730:26 for 'update' @ L730, false for 'update' @ L1004, evaluation error at L749:26 for 'create' @ L749, false for 'create' @ L1004, evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'create' @ L699, false for 'create' @ L1004
+false for 'create' @ L616, false for 'create' @ L922, evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'create' @ L577, false for 'create' @ L922, false for 'update' @ L577, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -235,11 +235,11 @@ false for 'create' @ L699, false for 'create' @ L1004, evaluation error at L707:
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+false for 'create' @ L646, false for 'create' @ L922, evaluation error at L648:26 for 'update' @ L648, false for 'update' @ L922, false for 'create' @ L668, false for 'create' @ L922, evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'create' @ L646, false for 'create' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+false for 'create' @ L646, false for 'create' @ L922, evaluation error at L648:26 for 'update' @ L648, false for 'update' @ L922, false for 'create' @ L668, false for 'create' @ L922, evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'create' @ L646, false for 'create' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -266,11 +266,11 @@ evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:09 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+false for 'update' @ L577, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+false for 'update' @ L577, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -297,11 +297,11 @@ evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, false for 'update' @ L707, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -328,11 +328,11 @@ evaluation error at L707:24 for 'update' @ L707, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L716, false for 'create' @ L1004, false for 'update' @ L716, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L716, false for 'create' @ L1004, false for 'update' @ L716, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -359,11 +359,11 @@ false for 'create' @ L716, false for 'create' @ L1004, false for 'update' @ L716
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:57 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'update' @ L756, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'update' @ L756, false for 'update' @ L1004
+evaluation error at L624:24 for 'update' @ L624, false for 'update' @ L922, false for 'update' @ L624, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -390,11 +390,11 @@ evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'update' @ L756, false for 'update' @ L1004
+false for 'create' @ L633, false for 'create' @ L922, false for 'update' @ L633, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, false for 'update' @ L756, false for 'update' @ L1004
+false for 'create' @ L633, false for 'create' @ L922, false for 'update' @ L633, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -421,11 +421,11 @@ evaluation error at L756:26 for 'update' @ L756, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'update' @ L674, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'update' @ L674, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -452,11 +452,11 @@ false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'update' @ L674, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+evaluation error at L674:26 for 'update' @ L674, false for 'update' @ L922, false for 'update' @ L674, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -483,11 +483,11 @@ false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -514,11 +514,11 @@ false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -545,11 +545,11 @@ false for 'create' @ L773, false for 'create' @ L1004, false for 'update' @ L773
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -576,11 +576,11 @@ false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L691, false for 'create' @ L922, false for 'update' @ L691, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -607,11 +607,11 @@ false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -638,11 +638,11 @@ false for 'create' @ L787, false for 'create' @ L1004, false for 'update' @ L787
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L783, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L783, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -669,11 +669,11 @@ false for 'update' @ L783, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L787, false for 'update' @ L1004
+false for 'create' @ L705, false for 'create' @ L922, false for 'update' @ L705, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -700,11 +700,11 @@ false for 'update' @ L787, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L783, false for 'create' @ L1004, false for 'update' @ L783, false for 'update' @ L1004
+false for 'update' @ L701, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L783, false for 'create' @ L1004, false for 'update' @ L783, false for 'update' @ L1004
+false for 'update' @ L701, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -731,11 +731,11 @@ false for 'create' @ L783, false for 'create' @ L1004, false for 'update' @ L783
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L783, false for 'update' @ L1004
+false for 'update' @ L705, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L783, false for 'update' @ L1004
+false for 'update' @ L705, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -762,11 +762,11 @@ false for 'update' @ L783, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L830:11 for 'create' @ L830, false for 'create' @ L1004, evaluation error at L830:11 for 'update' @ L830, false for 'update' @ L1004, false for 'create' @ L830, false for 'create' @ L1004
+false for 'create' @ L701, false for 'create' @ L922, false for 'update' @ L701, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L830:11 for 'create' @ L830, false for 'create' @ L1004, evaluation error at L830:11 for 'update' @ L830, false for 'update' @ L1004, false for 'create' @ L830, false for 'create' @ L1004
+false for 'create' @ L701, false for 'create' @ L922, false for 'update' @ L701, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -793,11 +793,11 @@ evaluation error at L830:11 for 'create' @ L830, false for 'create' @ L1004, eva
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:58 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L798, false for 'update' @ L1004
+false for 'update' @ L701, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L798, false for 'update' @ L1004
+false for 'update' @ L701, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -824,11 +824,11 @@ false for 'update' @ L798, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813, false for 'update' @ L1004
+evaluation error at L748:11 for 'create' @ L748, false for 'create' @ L922, evaluation error at L748:11 for 'update' @ L748, false for 'update' @ L922, false for 'create' @ L748, false for 'create' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813, false for 'update' @ L1004
+evaluation error at L748:11 for 'create' @ L748, false for 'create' @ L922, evaluation error at L748:11 for 'update' @ L748, false for 'update' @ L922, false for 'create' @ L748, false for 'create' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -855,11 +855,11 @@ false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L821, false for 'create' @ L1004, false for 'update' @ L821, false for 'update' @ L1004
+false for 'update' @ L716, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L821, false for 'create' @ L1004, false for 'update' @ L821, false for 'update' @ L1004
+false for 'update' @ L716, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -886,11 +886,11 @@ false for 'create' @ L821, false for 'create' @ L1004, false for 'update' @ L821
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L821, false for 'update' @ L1004
+false for 'create' @ L731, false for 'create' @ L922, false for 'update' @ L731, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L821, false for 'update' @ L1004
+false for 'create' @ L731, false for 'create' @ L922, false for 'update' @ L731, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -917,11 +917,11 @@ false for 'update' @ L821, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L821, false for 'update' @ L1004
+false for 'create' @ L739, false for 'create' @ L922, false for 'update' @ L739, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L821, false for 'update' @ L1004
+false for 'create' @ L739, false for 'create' @ L922, false for 'update' @ L739, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -948,11 +948,11 @@ false for 'update' @ L821, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813, false for 'update' @ L1004
+false for 'update' @ L739, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813, false for 'update' @ L1004
+false for 'update' @ L739, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -979,11 +979,11 @@ false for 'create' @ L813, false for 'create' @ L1004, false for 'update' @ L813
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'update' @ L938, false for 'update' @ L1004
+false for 'update' @ L739, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'update' @ L938, false for 'update' @ L1004
+false for 'update' @ L739, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1010,11 +1010,11 @@ evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:10 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L952, false for 'update' @ L1004
+false for 'create' @ L731, false for 'create' @ L922, false for 'update' @ L731, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L952, false for 'update' @ L1004
+false for 'create' @ L731, false for 'create' @ L922, false for 'update' @ L731, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1041,11 +1041,11 @@ false for 'update' @ L952, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L957, false for 'update' @ L1004
+evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'update' @ L856, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L957, false for 'update' @ L1004
+evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'update' @ L856, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1072,11 +1072,11 @@ false for 'update' @ L957, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L962, false for 'update' @ L1004
+false for 'update' @ L870, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L962, false for 'update' @ L1004
+false for 'update' @ L870, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1103,11 +1103,11 @@ false for 'update' @ L962, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L927, false for 'update' @ L1004
+false for 'update' @ L875, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L927, false for 'update' @ L1004
+false for 'update' @ L875, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1134,11 +1134,11 @@ false for 'update' @ L927, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L916, false for 'update' @ L1004
+false for 'update' @ L880, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L916, false for 'update' @ L1004
+false for 'update' @ L880, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1165,11 +1165,11 @@ false for 'update' @ L916, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L920, false for 'update' @ L1004
+false for 'update' @ L845, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L920, false for 'update' @ L1004
+false for 'update' @ L845, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1196,11 +1196,11 @@ false for 'update' @ L920, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L937, false for 'create' @ L1004, evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'create' @ L937, false for 'create' @ L1004
+false for 'update' @ L834, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L937, false for 'create' @ L1004, evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'create' @ L937, false for 'create' @ L1004
+false for 'update' @ L834, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1227,11 +1227,11 @@ false for 'create' @ L937, false for 'create' @ L1004, evaluation error at L938:
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:15:59 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L927, false for 'create' @ L1004, false for 'update' @ L927, false for 'update' @ L1004
+false for 'update' @ L838, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L927, false for 'create' @ L1004, false for 'update' @ L927, false for 'update' @ L1004
+false for 'update' @ L838, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1258,11 +1258,11 @@ false for 'create' @ L927, false for 'create' @ L1004, false for 'update' @ L927
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'update' @ L938, false for 'update' @ L1004
+false for 'create' @ L855, false for 'create' @ L922, evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'create' @ L855, false for 'create' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, false for 'update' @ L938, false for 'update' @ L1004
+false for 'create' @ L855, false for 'create' @ L922, evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'create' @ L855, false for 'create' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1289,11 +1289,11 @@ evaluation error at L938:26 for 'update' @ L938, false for 'update' @ L1004, fal
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L927, false for 'update' @ L1004
+false for 'create' @ L845, false for 'create' @ L922, false for 'update' @ L845, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L927, false for 'update' @ L1004
+false for 'create' @ L845, false for 'create' @ L922, false for 'update' @ L845, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1320,11 +1320,11 @@ false for 'update' @ L927, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L894, false for 'update' @ L1004
+evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'update' @ L856, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L894, false for 'update' @ L1004
+evaluation error at L856:26 for 'update' @ L856, false for 'update' @ L922, false for 'update' @ L856, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1351,11 +1351,11 @@ false for 'update' @ L894, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'update' @ L894, false for 'update' @ L1004
+false for 'update' @ L845, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'update' @ L894, false for 'update' @ L1004
+false for 'update' @ L845, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1382,11 +1382,11 @@ false for 'update' @ L894, false for 'update' @ L1004
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668, false for 'update' @ L1004
+false for 'update' @ L812, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668, false for 'update' @ L1004
+false for 'update' @ L812, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1413,11 +1413,11 @@ false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668, false for 'update' @ L1004
+false for 'update' @ L812, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668, false for 'update' @ L1004
+false for 'update' @ L812, false for 'update' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1444,11 +1444,73 @@ false for 'create' @ L668, false for 'create' @ L1004, false for 'update' @ L668
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-Aug 07, 2026 10:16:00 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
-evaluation error at L875:34 for 'create' @ L875, false for 'create' @ L1004, evaluation error at L875:34 for 'update' @ L875, false for 'update' @ L1004, false for 'create' @ L875, false for 'create' @ L1004
+false for 'create' @ L585, false for 'create' @ L922, false for 'update' @ L585, false for 'update' @ L922
 com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L875:34 for 'create' @ L875, false for 'create' @ L1004, evaluation error at L875:34 for 'update' @ L875, false for 'update' @ L1004, false for 'create' @ L875, false for 'create' @ L1004
+false for 'create' @ L585, false for 'create' @ L922, false for 'update' @ L585, false for 'update' @ L922
+	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:386)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:336)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1245)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1232)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:222)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:144)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:99)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
+	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
+	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
+	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
+	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+WARNING: Operation failed: 
+false for 'create' @ L585, false for 'create' @ L922, false for 'update' @ L585, false for 'update' @ L922
+com.google.cloud.datastore.core.exception.DatastoreException: 
+false for 'create' @ L585, false for 'create' @ L922, false for 'update' @ L585, false for 'update' @ L922
+	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:386)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:336)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1245)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1232)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:222)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:144)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:99)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
+	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
+	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
+	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
+	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+Aug 07, 2026 11:47:11 AM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+WARNING: Operation failed: 
+evaluation error at L793:34 for 'create' @ L793, false for 'create' @ L922, evaluation error at L793:34 for 'update' @ L793, false for 'update' @ L922, false for 'create' @ L793, false for 'create' @ L922
+com.google.cloud.datastore.core.exception.DatastoreException: 
+evaluation error at L793:34 for 'create' @ L793, false for 'create' @ L922, evaluation error at L793:34 for 'update' @ L793, false for 'update' @ L922, false for 'create' @ L793, false for 'create' @ L922
 	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:152)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:349)
 	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:326)
@@ -1477,3 +1539,4 @@ evaluation error at L875:34 for 'create' @ L875, false for 'create' @ L1004, eva
 
 *** shutting down gRPC server since JVM is shutting down
 *** server shut down
+260807 11:47:11.869:I 1 [main] [com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer.stop:79] Stopping WebSocket server...

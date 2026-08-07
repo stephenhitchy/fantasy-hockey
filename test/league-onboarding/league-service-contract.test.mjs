@@ -37,16 +37,25 @@ test('createLeague retries a lost response with the same exact request identity'
   assert.match(source, /clearPendingLeagueCreation\(pending\.requestId\)/);
 });
 
-test('joinLeagueByInviteCode continues delegating roster creation and repair to server authority', () => {
+test('joinLeagueByInviteCode delegates the complete membership workflow to joinLeagueSecure', () => {
   const joinLeagueSource = section(
     'export async function joinLeagueByInviteCode(',
     'export async function ensureLeagueProfileIcon(',
   );
 
-  assert.doesNotMatch(joinLeagueSource, /getNewRosterDocument|joinBatch\.set\(rosterRef|repairBatch\.set\(rosterRef/);
-  assert.match(joinLeagueSource, /await joinBatch\.commit\(\)/);
-  assert.ok(
-    (joinLeagueSource.match(/ensureFantasyRoster\(leagueId\)/g) ?? []).length >= 2,
-    'Both new and existing membership paths should initialize the roster through the callable.',
+  assert.match(joinLeagueSource, /httpsCallable<[\s\S]*?>\(functions, 'joinLeagueSecure'/);
+  assert.match(joinLeagueSource, /timeout: 60_000/);
+  assert.match(joinLeagueSource, /requestId: pending\.requestId/);
+  assert.match(joinLeagueSource, /profileIconId: pending\.profileIconId/);
+  assert.doesNotMatch(
+    joinLeagueSource,
+    /writeBatch\(|setDoc\(|getDoc\(|ensureFantasyRoster\(|getLeagueInviteRef/,
   );
+});
+
+test('join retries a lost response with the same exact request identity', () => {
+  assert.match(source, /PENDING_LEAGUE_JOIN_STORAGE_KEY/);
+  assert.match(source, /getOrCreatePendingLeagueJoin\(fingerprint\)/);
+  assert.match(source, /existing\?\.fingerprint === fingerprint/);
+  assert.match(source, /clearPendingLeagueJoin\(pending\.requestId\)/);
 });

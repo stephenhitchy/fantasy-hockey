@@ -43,7 +43,7 @@ function sha256(value) {
 
 test('league creation is one authenticated server-owned transaction', () => {
   assert.match(authoritySource, /export const createLeagueSecure = onCall/);
-  assert.match(authoritySource, /requireAuthenticatedUserId\(request\.auth\)/);
+  assert.match(authoritySource, /requireAuthenticatedUserId\(request\.auth(?:,\s*'create a league')?\)/);
   assert.match(authoritySource, /db\.runTransaction/);
 
   for (const requiredWrite of [
@@ -120,7 +120,7 @@ test('league lifecycle audit records are member-readable and browser-immutable',
 });
 
 test('the callable is exported and the S1A verification command is installed', () => {
-  assert.match(indexSource, /export \{ createLeagueSecure \} from '\.\/league-lifecycle-authority';/);
+  assert.match(indexSource, /export \{ createLeagueSecure, joinLeagueSecure \} from '\.\/league-lifecycle-authority';/);
   const packageJson = JSON.parse(packageSource);
   assert.equal(
     packageJson.scripts['test:batchs1a:run'],
@@ -135,7 +135,7 @@ test('the permanent roadmap records S1A without deleting completed work', () => 
   assert.match(roadmapSource, /# \[x\] S1\.2 .*Completed 2026-08-07 in Security Batch S1A/);
   assert.match(roadmapSource, /# \[x\] S1\.3 .*Completed 2026-08-07 in Security Batch S1A/);
   assert.match(roadmapSource, /# \[x\] SEQ\.1 Security Batch S1A/);
-  assert.match(roadmapSource, /\[ \] SEQ\.2 Security Batch S1B/);
+  assert.match(roadmapSource, /(?:\[ \]|# \[x\]) SEQ\.2 Security Batch S1B/);
 });
 
 
@@ -156,9 +156,9 @@ test('server allowlists remain synchronized with the browser league and profile 
   }
 });
 
-test('Release Candidate 10 documentation records the secure deployment and rollback order', () => {
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 10'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 10'/);
+test('current documentation continues recording the secure S1A deployment and rollback order', () => {
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 11'/);
   assert.match(documentationSource, /Batch S1A — Server-Authoritative League Creation/);
   assert.match(documentationSource, /Functions → Hosting → Firestore Rules/);
   assert.match(documentationSource, /Firestore Rules → Hosting/);
