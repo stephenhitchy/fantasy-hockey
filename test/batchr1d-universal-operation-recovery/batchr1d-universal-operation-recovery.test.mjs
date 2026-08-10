@@ -347,6 +347,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-asset-catalog.util.ts',
     'shared/core/projection/projection-snapshot.service.ts',
     'shared/core/projection/projection-snapshot-hash.util.ts',
+    'security-authority.ts',
+    'shared/security/auth-security.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 37,

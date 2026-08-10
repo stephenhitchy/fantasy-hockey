@@ -22,6 +22,8 @@
     <p class="admin-message success" role="status">{{ successMessage() }}</p>
   }
 
+  <app-admin-session-step-up></app-admin-session-step-up>
+
   @if (loading()) {
     <section class="admin-loading" aria-live="polite">
       <span class="loading-puck" aria-hidden="true"></span>

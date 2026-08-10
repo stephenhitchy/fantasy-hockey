@@ -21,6 +21,23 @@ export interface ReleaseVersionSummary {
   appCheckClientEnabled: boolean;
 }
 
+
+export interface ReleaseSecuritySummary {
+  available: boolean;
+  appCheckClientStatus: string;
+  appCheckServerStatus: 'valid' | 'missing' | 'unavailable';
+  appCheckAppId: string | null;
+  passwordPolicyEnforcement: string;
+  passwordMinimumLength: number | null;
+  passwordMaximumLength: number | null;
+  emailEnumerationProtectionEnabled: boolean;
+  emailVerified: boolean;
+  recentAuthenticationReady: boolean;
+  recentAuthenticationWindowSeconds: number;
+  multiFactorState: string;
+  configurationError: string;
+}
+
 export interface ReleaseReadinessSnapshot {
   leagueId: string;
   generatedAt: string;
@@ -30,6 +47,7 @@ export interface ReleaseReadinessSnapshot {
   warningCount: number;
   checks: ReleaseReadinessCheck[];
   versions: ReleaseVersionSummary;
+  security: ReleaseSecuritySummary;
   scoringMode: 'historical' | 'live';
   historicalDateIso: string | null;
   developerToolsEnabled: boolean;

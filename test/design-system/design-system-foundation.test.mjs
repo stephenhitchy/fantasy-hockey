@@ -158,6 +158,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/release/invite-beta-validation/invite-beta-validation.html',
     'src/app/features/support/feedback/feedback.html',
     'src/app/features/support/support-home/support-home.html',
+    'src/app/shared/admin-session-step-up/admin-session-step-up.html',
   ]);
   const appFiles = (await walk(path.join(sourceRoot, 'app'))).filter((filePath) => filePath.endsWith('.html'));
 

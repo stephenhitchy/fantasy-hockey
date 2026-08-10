@@ -4,6 +4,7 @@ import { DocumentData, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
+import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   CURRENT_SCORING_RULES_VERSION,
   defaultScoringRules,
@@ -1893,6 +1894,10 @@ export const migrateLeagueAuthoritySchema = onCall(
   },
   async (request): Promise<MigrateLeagueAuthoritySchemaResult> => {
     const platformAdminId = await requirePlatformAdministrator(request.auth);
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'migrate this league to the current authority schema',
+    );
     const input = normalizeMigrationRequest(request.data);
     const leagueRef = db.doc(`leagues/${input.leagueId}`);
     const preliminaryLeagueSnapshot = await leagueRef.get();

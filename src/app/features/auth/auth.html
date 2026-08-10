@@ -189,11 +189,27 @@
                 type="password"
                 [attr.autocomplete]="passwordAutocomplete()"
                 required
-                [attr.minlength]="isRegistering() ? 6 : null"
+                [attr.minlength]="isRegistering() ? 12 : null"
+                [attr.maxlength]="isRegistering() ? 128 : null"
                 [attr.aria-invalid]="invalidField() === 'password' ? 'true' : null"
                 [attr.aria-describedby]="invalidField() === 'password' ? 'auth-error-message' : null"
                 [disabled]="loading()"
               />
+              @if (isRegistering()) {
+                <small
+                  class="password-policy-hint"
+                  [class.ready]="passwordRegistrationReady()"
+                  [attr.aria-live]="invalidField() === 'password' ? 'polite' : null"
+                >
+                  @if (passwordRegistrationReady()) {
+                    Password length is ready. {{ passwordRequirementText }}
+                  } @else if (password.length > 0) {
+                    {{ passwordCharactersRemaining() }} more character{{ passwordCharactersRemaining() === 1 ? '' : 's' }} needed. {{ passwordRequirementText }}
+                  } @else {
+                    {{ passwordRequirementText }}
+                  }
+                </small>
+              }
             </label>
           }
 

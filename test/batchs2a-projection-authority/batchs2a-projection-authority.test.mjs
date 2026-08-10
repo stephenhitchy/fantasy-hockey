@@ -259,7 +259,7 @@ test('S2A verification, documentation, RC13, and the permanent roadmap are synch
   assert.match(packageJson.scripts['verify:batchs2a'], /validate:release-manifest/);
   assert.match(functionsPackage.scripts.logs, /processProjectionGenerationTask/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.(?:4(?:\.1)?|5)/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /# \[x\] S2\.1 .*Security Batch S2A/);
   assert.match(roadmapRootSource, /# \[x\] S2\.3 .*Security Batch S2A/);
   assert.match(roadmapRootSource, /# \[x\] S2\.4 .*Security Batch S2A/);
@@ -267,9 +267,9 @@ test('S2A verification, documentation, RC13, and the permanent roadmap are synch
   assert.match(roadmapRootSource, /S2\.2 Make projectionSnapshots/);
   assert.match(documentationSource, /Batch S2A — Server Projection V11 Generation/);
   assert.match(documentationSource, /Firestore Rules warning cleanup/);
-  assert.match(readmeSource, /Release Candidate (?:13|14)/);
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate (?:13|14)'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate (?:13|14)'/);
+  assert.match(readmeSource, /Release Candidate \d+/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
 });
 
 test('Production Scoring V3 and Projection V11 math remain byte-for-byte unchanged', () => {

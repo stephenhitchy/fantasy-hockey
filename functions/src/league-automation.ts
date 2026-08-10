@@ -14,6 +14,7 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
+import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   advanceCompletedRegularSeasonAssetWindows,
   completeCycle,
@@ -3331,6 +3332,10 @@ export const updateLeagueAutomationQueueConfig = onCall(
     message: string;
   }> => {
     const adminId = await requireLeagueAutomationPlatformAdmin(request);
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'change the live scoring queue rollout',
+    );
     const data = request.data && typeof request.data === 'object'
       ? request.data as Record<string, unknown>
       : {};
@@ -3635,6 +3640,10 @@ export const queueLeagueAutomationCanaryCheck = onCall(
     message: string;
   }> => {
     const adminId = await requireLeagueAutomationPlatformAdmin(request);
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'run a live scoring canary check',
+    );
     const data = request.data && typeof request.data === 'object'
       ? request.data as Record<string, unknown>
       : {};
@@ -4945,6 +4954,10 @@ export const advanceHistoricalReplayDay = onCall(
   },
   async (request): Promise<HistoricalReplayQueuedResult> => {
     const userId = await requireHistoricalReplayPlatformAdmin(request);
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'advance a historical replay league',
+    );
     const leagueId =
       request.data && typeof request.data.leagueId === 'string'
         ? request.data.leagueId.trim()

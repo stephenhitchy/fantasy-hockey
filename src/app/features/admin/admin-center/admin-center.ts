@@ -11,11 +11,12 @@ import {
   PlatformAdminService,
 } from '../../../core/admin/platform-admin.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
+import { AdminSessionStepUp } from '../../../shared/admin-session-step-up/admin-session-step-up';
 
 @Component({
   selector: 'app-admin-center',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, AdminSessionStepUp],
   templateUrl: './admin-center.html',
   styleUrl: './admin-center.css',
 })
@@ -263,6 +264,10 @@ export class AdminCenter {
 
     if (code.includes('unauthenticated')) {
       return 'Your login session expired. Sign in again before opening the Admin Center.';
+    }
+
+    if (code.includes('failed-precondition') && String(candidate.message ?? '').includes('current password')) {
+      return 'Unlock protected administrator actions with your current password, then try again.';
     }
 
     return typeof candidate.message === 'string' && candidate.message.trim()

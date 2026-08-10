@@ -1,3 +1,80 @@
+## Security Batch S3A.1 — Configured App Check Verification Hotfix
+
+**Release:** Release Candidate 15  
+**Scope:** Allow the S3A verification suite to validate both the original disabled App Check template and the correctly configured monitor client after a public reCAPTCHA Enterprise site key is applied.
+
+The original focused test asserted that `app-check.config.ts` must always contain `enabled: false` and an empty site key. That was valid only before the operator completed the documented configuration step. After `security:configure-app-check` correctly enabled the client, the test rejected the intended production state.
+
+S3A.1 now parses the configuration semantically:
+
+- disabled state requires an empty site key;
+- enabled state requires a valid public Enterprise site key;
+- local debug-token discovery remains explicitly declared and is gated to localhost by the runtime bootstrap;
+- App Check enforcement remains disabled until monitor traffic is verified.
+
+The production project configuration in this package has App Check enabled with the registered public site key and `localDebugTokenEnabled: false`.
+
+### Verification
+
+```bash
+npm run verify:batchs3a-1
+```
+
+No Functions, Firestore Rules, or index behavior changes are included.
+
+---
+
+## Security Batch S3A — App Check Monitor Mode and Authentication Hardening
+
+**Release:** Release Candidate 15
+**Scope:** App Check monitor-client foundation, Firebase Authentication baseline tooling, stronger registration passwords, privacy-preserving email account errors, and recent-login protection for high-impact operations.
+
+S3A adds end-to-end App Check readiness reporting without enabling enforcement. The browser can initialize reCAPTCHA Enterprise App Check, verify that it received a token, and confirm through an authenticated callable that Firebase received the App Check context. Release Readiness separately reports client status, server request status, password-policy enforcement, email-enumeration protection, secure-session age, and MFA project status.
+
+The production public site key remains a console-owned value. Configure it with:
+
+```bash
+npm run security:configure-app-check -- --site-key="YOUR_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY"
+```
+
+Inspect and optionally apply the Authentication baseline with:
+
+```bash
+gcloud auth application-default login
+npm run security:inspect-auth -- --project=nhl-fantasy-app-ab673
+RINKRAT_APPLY_AUTH_SECURITY=APPLY npm run security:apply-auth-baseline -- --project=nhl-fantasy-app-ab673
+```
+
+The baseline enforces a 12–128 character password policy for new/changed passwords and enables improved email privacy. The account registration interface uses the same limits.
+
+A shared 15-minute recent-authentication guard now protects scoring-queue routing changes, canary execution, historical replay advancement, authority migration, projection integrity recovery, Admin Center mutations, forced commissioner injury refresh, permanent league deletion, and permanent account deletion. Admin Center and Release Readiness provide an inline password step-up rather than a blocking modal. Firebase Authentication project-policy inspection is platform-admin-only and briefly cached server-side.
+
+S3A intentionally leaves App Check enforcement disabled. Monitor legitimate mobile and desktop traffic first; later S3 enforcement should begin with selected expensive callables and leave Firestore enforcement until last.
+
+Complete setup and validation instructions are in:
+
+```text
+docs/RINKRAT_SECURITY_S3A_SETUP.md
+```
+
+### Verification
+
+```bash
+npm run verify:batchs3a
+```
+
+### Deployment
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3A authentication and admin step-up"
+firebase deploy --only hosting:app -m "Security S3A App Check monitor client"
+```
+
+No Firestore Rules or index deployment is required.
+
+---
+
 ## Batch S2B.1 — TypeScript Projection Integrity Build Hotfix
 
 ### Purpose

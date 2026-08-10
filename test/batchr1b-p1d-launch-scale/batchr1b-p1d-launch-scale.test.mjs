@@ -279,7 +279,7 @@ test('Release Readiness mounts the build-specific launch board and exposes App C
   assert.match(source, /validationReleaseKey/);
   assert.match(template, /<app-invite-beta-validation/);
   assert.match(template, /releaseUpdateAvailable/);
-  assert.match(template, /App Check client/);
+  assert.match(template, /current\.security\.appCheckClientStatus|App Check client/);
   assert.match(readinessService, /app-check-client/);
   assert.match(models, /appCheckClientEnabled: boolean/);
   assert.match(styles, /invite-beta-gate--ready/);
@@ -390,6 +390,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-snapshot.service.ts',
         'src/shared/core/projection/projection-snapshot-hash.util.ts',
         'package.json',
+        'scripts/auth-security-baseline.cjs',
+        'src/security-authority.ts',
+        'src/shared/security/auth-security.util.ts',
       ]),
     ),
     'f151f280bf414e6d3135fa6f47ee5fd95110cf0841d82594ce33cd0e9e2eee55',

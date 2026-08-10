@@ -152,7 +152,16 @@
     "test:batchs2b:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs2b-projection-hash-draft-integrity/*.test.mjs",
     "verify:batchs2b": "npm run verify:batchs2a-1 && npm run test:batchs2b:run && npm run validate:release-manifest",
     "test:batchs2b-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs2b-1-typescript-build-hotfix/*.test.mjs",
-    "verify:batchs2b-1": "npm run verify:batchs2b && npm run test:batchs2b-1:run && npm run validate:release-manifest"
+    "verify:batchs2b-1": "npm run verify:batchs2b && npm run test:batchs2b-1:run && npm run validate:release-manifest",
+    "pretest:batchs3a:run": "npm run generate:release-manifest",
+    "test:batchs3a:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3a-app-check-auth-hardening/*.test.mjs",
+    "verify:batchs3a": "npm run verify:batchs2b-1 && npm run test:batchs3a:run && npm run validate:release-manifest",
+    "security:configure-app-check": "node scripts/configure-app-check.mjs",
+    "security:disable-app-check": "node scripts/configure-app-check.mjs --disable",
+    "security:inspect-auth": "node functions/scripts/auth-security-baseline.cjs",
+    "security:apply-auth-baseline": "node functions/scripts/auth-security-baseline.cjs --apply",
+    "test:batchs3a-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3a-1-configured-app-check/*.test.mjs",
+    "verify:batchs3a-1": "npm run verify:batchs3a && npm run test:batchs3a-1:run && npm run validate:release-manifest"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

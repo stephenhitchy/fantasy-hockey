@@ -26,6 +26,7 @@ import {
 } from '../projection/projection-snapshot.service';
 import { CURRENT_SCORING_RULES_VERSION, defaultScoringRules } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
+import { loadSecurityReadinessSnapshot } from '../security/security-readiness.service';
 import {
   ReleaseReadinessCheck,
   ReleaseReadinessLevel,
@@ -165,6 +166,7 @@ export async function loadReleaseReadinessSnapshot(
     injuryAutomation,
     injuryEmailAutomation,
     seasonAutomation,
+    securityReadiness,
   ] = await Promise.all([
     getLeagueById(leagueId),
     getLeagueTeams(leagueId),
@@ -180,6 +182,7 @@ export async function loadReleaseReadinessSnapshot(
     loadAutomationDocument('injuryAutomation'),
     loadAutomationDocument('injuryEmailAutomation'),
     loadAutomationDocument('seasonAutomation'),
+    loadSecurityReadinessSnapshot(),
   ]);
 
   if (!league) {
@@ -235,21 +238,88 @@ export async function loadReleaseReadinessSnapshot(
     ),
   );
 
+  const clientAppCheck = securityReadiness.clientAppCheck;
+  const serverSecurity = securityReadiness.server;
   const appCheckClientReady =
-    FIREBASE_APP_CHECK_CONFIG.enabled &&
-    FIREBASE_APP_CHECK_CONFIG.recaptchaEnterpriseSiteKey.trim().length > 0;
+    clientAppCheck.configured &&
+    clientAppCheck.initialized &&
+    clientAppCheck.status === 'valid';
+  const appCheckServerReady = serverSecurity?.appCheckRequestStatus === 'valid';
+  const appCheckReady = appCheckClientReady && appCheckServerReady;
   checks.push(
     createCheck(
       'app-check-client',
       'configuration',
-      appCheckClientReady
-        ? 'Firebase App Check client tokens are enabled'
-        : 'Firebase App Check monitor client is not configured',
-      appCheckClientReady
-        ? 'The production browser can send reCAPTCHA Enterprise App Check tokens. Review verified request metrics before enabling enforcement in Firebase Console.'
-        : 'Register the production web app in Firebase App Check, add the public reCAPTCHA Enterprise site key, deploy the client, and monitor legitimate traffic before enforcement.',
-      appCheckClientReady ? 'pass' : 'warning',
+      appCheckReady
+        ? 'Firebase App Check monitor client is verified end to end'
+        : 'Firebase App Check monitor client still needs setup or verification',
+      appCheckReady
+        ? `This browser received a valid reCAPTCHA Enterprise App Check token and the callable verified app ${serverSecurity?.appCheckAppId ?? 'the registered web app'}. Keep enforcement disabled until legitimate traffic metrics are clean.`
+        : !clientAppCheck.configured
+          ? 'Register the production web app in Firebase App Check, add the public reCAPTCHA Enterprise site key, configure the client, deploy, and monitor legitimate traffic before enforcement.'
+          : clientAppCheck.status === 'error'
+            ? `The App Check client is configured, but token verification failed: ${clientAppCheck.errorMessage || 'unknown client error'}`
+            : `Client status ${clientAppCheck.status}; server request status ${serverSecurity?.appCheckRequestStatus ?? 'unavailable'}. Refresh after the client receives a token.`,
+      appCheckReady ? 'pass' : 'warning',
       true,
+    ),
+  );
+
+  const passwordPolicyReady = Boolean(
+    serverSecurity?.passwordPolicy.available &&
+    serverSecurity.passwordPolicy.enforcementState === 'ENFORCE' &&
+    (serverSecurity.passwordPolicy.minimumLength ?? 0) >= 12 &&
+    (serverSecurity.passwordPolicy.maximumLength ?? 128) <= 128,
+  );
+  checks.push(
+    createCheck(
+      'authentication-password-policy',
+      'configuration',
+      passwordPolicyReady
+        ? 'Firebase Authentication password policy is enforced'
+        : 'Firebase Authentication password policy needs the RinkRat baseline',
+      serverSecurity
+        ? `Enforcement ${serverSecurity.passwordPolicy.enforcementState}; minimum ${serverSecurity.passwordPolicy.minimumLength ?? 'not set'}; maximum ${serverSecurity.passwordPolicy.maximumLength ?? 'not set'}; force-upgrade ${serverSecurity.passwordPolicy.forceUpgradeOnSignin ? 'on' : 'off'}.`
+        : securityReadiness.errorMessage || 'The Firebase Authentication project policy could not be inspected.',
+      passwordPolicyReady ? 'pass' : 'warning',
+      true,
+    ),
+  );
+
+  const emailEnumerationReady =
+    serverSecurity?.emailEnumerationProtection.available === true &&
+    serverSecurity.emailEnumerationProtection.enabled === true;
+  checks.push(
+    createCheck(
+      'authentication-email-enumeration',
+      'configuration',
+      emailEnumerationReady
+        ? 'Email-enumeration protection is enabled'
+        : 'Email-enumeration protection is not confirmed',
+      serverSecurity
+        ? emailEnumerationReady
+          ? 'Firebase Authentication returns privacy-preserving account errors for supported sign-in and recovery flows.'
+          : 'Apply the Authentication security baseline before broader public registration.'
+        : securityReadiness.errorMessage || 'The Firebase Authentication email-privacy setting could not be inspected.',
+      emailEnumerationReady ? 'pass' : 'warning',
+      true,
+    ),
+  );
+
+  checks.push(
+    createCheck(
+      'platform-admin-step-up',
+      'configuration',
+      serverSecurity?.recentAuthenticationReady
+        ? 'Protected administrator session is unlocked'
+        : 'Protected administrator actions require a password step-up',
+      serverSecurity
+        ? serverSecurity.recentAuthenticationReady
+          ? `This administrator proved identity within the ${Math.round(serverSecurity.recentAuthenticationWindowSeconds / 60)}-minute security window.`
+          : 'Read-only diagnostics remain available. Enter the current account password before queue changes, projection restore, authority migration, or review mutations.'
+        : securityReadiness.errorMessage || 'The secure-session age could not be inspected.',
+      serverSecurity?.recentAuthenticationReady ? 'pass' : 'warning',
+      false,
     ),
   );
 
@@ -660,6 +730,24 @@ export async function loadReleaseReadinessSnapshot(
     warningCount: checks.filter((check) => check.level === 'warning').length,
     checks,
     versions: RELEASE_VERSION_SUMMARY,
+    security: {
+      available: securityReadiness.available,
+      appCheckClientStatus: clientAppCheck.status,
+      appCheckServerStatus: serverSecurity?.appCheckRequestStatus ?? 'unavailable',
+      appCheckAppId: serverSecurity?.appCheckAppId ?? null,
+      passwordPolicyEnforcement: serverSecurity?.passwordPolicy.enforcementState ?? 'unavailable',
+      passwordMinimumLength: serverSecurity?.passwordPolicy.minimumLength ?? null,
+      passwordMaximumLength: serverSecurity?.passwordPolicy.maximumLength ?? null,
+      emailEnumerationProtectionEnabled:
+        serverSecurity?.emailEnumerationProtection.enabled === true,
+      emailVerified: serverSecurity?.emailVerified === true,
+      recentAuthenticationReady: serverSecurity?.recentAuthenticationReady === true,
+      recentAuthenticationWindowSeconds:
+        serverSecurity?.recentAuthenticationWindowSeconds ?? 15 * 60,
+      multiFactorState: serverSecurity?.multiFactor.state ?? 'unavailable',
+      configurationError:
+        serverSecurity?.configurationError ?? securityReadiness.errorMessage,
+    },
     scoringMode: runtime.effectiveMode,
     historicalDateIso: runtime.historicalDateIso,
     developerToolsEnabled: runtime.developerToolsEnabled,

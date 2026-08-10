@@ -42,10 +42,11 @@ import { runFullSeasonLifecycleSimulator } from '../../../core/release/season-li
 import { ReleaseUpdateService } from '../../../core/release/release-update.service';
 import { InviteBetaValidation } from '../invite-beta-validation/invite-beta-validation';
 import { ScoringQueueControlCenter } from '../scoring-queue-control-center/scoring-queue-control-center';
+import { AdminSessionStepUp } from '../../../shared/admin-session-step-up/admin-session-step-up';
 
 @Component({
   selector: 'app-release-readiness',
-  imports: [KeyValuePipe, RouterLink, InviteBetaValidation, ScoringQueueControlCenter],
+  imports: [KeyValuePipe, RouterLink, InviteBetaValidation, ScoringQueueControlCenter, AdminSessionStepUp],
   templateUrl: './release-readiness.html',
   styleUrl: './release-readiness.css',
 })

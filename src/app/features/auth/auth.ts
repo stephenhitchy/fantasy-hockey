@@ -3,6 +3,12 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
 import { AuthSessionTimeoutError, withTimeout } from '../../core/auth/auth-session.service';
+import {
+  MAXIMUM_PASSWORD_LENGTH,
+  MINIMUM_PASSWORD_LENGTH,
+  passwordMeetsRegistrationPolicy,
+  passwordRequirementSummary,
+} from '../../core/auth/auth-security.config';
 import { TelemetryService } from '../../core/observability/telemetry.service';
 import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
 import {
@@ -116,6 +122,8 @@ export class Auth {
   readonly passwordAutocomplete = computed(() =>
     this.isRegistering() ? 'new-password' : 'current-password',
   );
+
+  readonly passwordRequirementText = passwordRequirementSummary();
 
   constructor(
     private router: Router,
@@ -251,6 +259,14 @@ export class Auth {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  passwordCharactersRemaining(): number {
+    return Math.max(0, MINIMUM_PASSWORD_LENGTH - this.password.length);
+  }
+
+  passwordRegistrationReady(): boolean {
+    return passwordMeetsRegistrationPolicy(this.password);
   }
 
   selectRegistrationTeam(team: PixelTeamTheme): void {
@@ -405,14 +421,24 @@ export class Auth {
       return true;
     }
 
-    const minimumPasswordLength = this.isRegistering() ? 6 : 1;
+    const minimumPasswordLength = this.isRegistering() ? MINIMUM_PASSWORD_LENGTH : 1;
 
     if (this.password.length < minimumPasswordLength) {
       this.setValidationError(
         'password',
         this.isRegistering()
-          ? 'Choose a password with at least six characters.'
+          ? `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`
           : 'Enter your password.',
+        this.passwordInput?.nativeElement,
+      );
+      return false;
+    }
+
+
+    if (this.isRegistering() && this.password.length > MAXIMUM_PASSWORD_LENGTH) {
+      this.setValidationError(
+        'password',
+        `Keep your password at ${MAXIMUM_PASSWORD_LENGTH} characters or fewer.`,
         this.passwordInput?.nativeElement,
       );
       return false;
@@ -457,11 +483,11 @@ export class Auth {
     }
 
     if (message.includes('auth/email-already-in-use')) {
-      return 'An account already exists for that email.';
+      return 'Unable to create an account with that email. Try signing in or use password reset.';
     }
 
     if (message.includes('auth/weak-password')) {
-      return 'Choose a stronger password with at least six characters.';
+      return `Choose a stronger password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`;
     }
 
     if (message.includes('auth/invalid-email')) {

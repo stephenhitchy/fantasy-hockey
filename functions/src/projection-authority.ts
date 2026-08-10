@@ -8,6 +8,7 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
+import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   generateSharedProjectionSnapshot,
   loadSharedProjectionSnapshotById,
@@ -501,6 +502,11 @@ export const manageProjectionSnapshotIntegrity = onCall(
         'Only a platform administrator can verify or restore projection snapshots.',
       );
     }
+
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'verify or restore a Draft projection snapshot',
+    );
 
     const input = asRecord(request.data) as ProjectionIntegrityCommandRequest;
     const requestId = requireRequestId(input.requestId);

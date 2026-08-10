@@ -771,6 +771,21 @@
               [placeholder]="league()?.name ?? 'League name'"
             />
 
+            <label for="delete-league-password-confirmation">
+              Confirm your current RinkRat password:
+            </label>
+
+            <input
+              id="delete-league-password-confirmation"
+              class="rr-field"
+              type="password"
+              maxlength="128"
+              autocomplete="current-password"
+              [(ngModel)]="deleteLeaguePasswordDraft"
+              [disabled]="deleteLeagueInProgress()"
+              placeholder="Current password"
+            />
+
             <div class="delete-league-actions">
               <button
                 type="button"

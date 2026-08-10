@@ -77,8 +77,8 @@ test('S2B.1 verification, documentation, and permanent roadmap remain synchroniz
   assert.match(packageJson.scripts['verify:batchs2b-1'], /test:batchs2b-1:run/);
   assert.match(packageJson.scripts['verify:batchs2b-1'], /validate:release-manifest/);
   assert.match(documentationSource, /Batch S2B\.1 — TypeScript Projection Integrity Build Hotfix/);
-  assert.match(readmeSource, /Release Candidate 14 \/ S2B\.1 hotfix/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:S2B\.1 hotfix|Security S3A)/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.5\.1/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /LOG\.8 .*S2B\.1.*TypeScript/);
 });

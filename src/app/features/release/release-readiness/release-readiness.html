@@ -63,6 +63,8 @@
       <p class="message error-message" role="alert">{{ errorMessage() }}</p>
     }
 
+    <app-admin-session-step-up (verified)="refreshReadiness()"></app-admin-session-step-up>
+
     @if (snapshot(); as current) {
       <section
         class="mode-banner"
@@ -671,8 +673,26 @@
             ><strong>v{{ current.versions.matchupCompletionSchemaVersion }}</strong>
           </article>
           <article>
-            <span>App Check client</span
-            ><strong>{{ current.versions.appCheckClientEnabled ? 'Monitor ready' : 'Not configured' }}</strong>
+            <span>App Check</span>
+            <strong>{{ current.security.appCheckClientStatus }}</strong>
+            <small>Server: {{ current.security.appCheckServerStatus }}</small>
+          </article>
+          <article>
+            <span>Password policy</span>
+            <strong>{{ current.security.passwordPolicyEnforcement }}</strong>
+            <small>
+              {{ current.security.passwordMinimumLength ?? '—' }}–{{ current.security.passwordMaximumLength ?? '—' }} characters
+            </small>
+          </article>
+          <article>
+            <span>Email privacy</span>
+            <strong>{{ current.security.emailEnumerationProtectionEnabled ? 'Protected' : 'Needs setup' }}</strong>
+            <small>Enumeration-resistant account errors</small>
+          </article>
+          <article>
+            <span>Admin step-up</span>
+            <strong>{{ current.security.recentAuthenticationReady ? 'Unlocked' : 'Password required' }}</strong>
+            <small>MFA: {{ current.security.multiFactorState }}</small>
           </article>
         </div>
       </section>

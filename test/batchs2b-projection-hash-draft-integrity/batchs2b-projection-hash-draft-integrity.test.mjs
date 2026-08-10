@@ -313,7 +313,7 @@ test('S2B verification, RC14, documentation, and permanent roadmap stay synchron
   assert.match(packageJson.scripts['verify:batchs2b'], /test:batchs2b:run/);
   assert.match(packageJson.scripts['verify:batchs2b'], /validate:release-manifest/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.5/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /# \[x\] S2\.2 .*Security Batch S2B/);
   assert.match(roadmapRootSource, /# \[x\] S2\.5 .*Security Batch S2B/);
   assert.match(roadmapRootSource, /# \[x\] S2\.6 .*Security Batch S2B/);
@@ -321,9 +321,9 @@ test('S2B verification, RC14, documentation, and permanent roadmap stay synchron
   assert.match(roadmapRootSource, /# \[x\] S2\.10 .*Security Batch S2B/);
   assert.match(roadmapRootSource, /# \[x\] SEQ\.5 Security Batch S2B/);
   assert.match(documentationSource, /Batch S2B — Projection Content Hash and Draft Integrity/);
-  assert.match(readmeSource, /Release Candidate 14/);
-  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate 14'/);
-  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate 14'/);
+  assert.match(readmeSource, /Release Candidate \d+/);
+  assert.match(runtimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
+  assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
   assert.match(functionsPackage.scripts.logs, /manageProjectionSnapshotIntegrity/);
 });
 

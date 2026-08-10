@@ -1,0 +1,65 @@
+@if (!checkingAccess() && platformAdmin.isAdmin()) {
+  <section
+    class="admin-step-up"
+    [class.admin-step-up--ready]="recentAuth.isRecent()"
+    aria-labelledby="admin-step-up-title"
+  >
+    <div class="admin-step-up__heading">
+      <div>
+        <span class="eyebrow">Protected administration</span>
+        <h2 id="admin-step-up-title">Secure session</h2>
+      </div>
+      <span class="admin-step-up__status" [class.is-ready]="recentAuth.isRecent()">
+        {{ recentAuth.isRecent() ? 'Unlocked' : 'Password required' }}
+      </span>
+    </div>
+
+    <p>
+      Viewing diagnostics does not require another password. Changes to queue routing, projection
+      integrity, authority migration, and review records require a recently verified session.
+    </p>
+
+    @if (recentAuth.isRecent()) {
+      <div class="admin-step-up__ready" role="status">
+        <span aria-hidden="true">✓</span>
+        <div>
+          <strong>Protected actions are available.</strong>
+          <small>{{ remainingLabel() }}</small>
+        </div>
+        <button type="button" class="rr-button rr-button--quiet" (click)="refreshStatus()">
+          Refresh Status
+        </button>
+      </div>
+    } @else {
+      <form class="admin-step-up__form" (ngSubmit)="unlock()">
+        <label for="admin-step-up-password">Current RinkRat password</label>
+        <div class="admin-step-up__controls">
+          <input
+            id="admin-step-up-password"
+            class="rr-field"
+            type="password"
+            name="adminStepUpPassword"
+            autocomplete="current-password"
+            maxlength="128"
+            [(ngModel)]="password"
+            [disabled]="busy()"
+          />
+          <button
+            type="submit"
+            class="rr-button rr-button--primary"
+            [disabled]="busy() || !password"
+          >
+            {{ busy() ? 'Verifying…' : 'Unlock Protected Actions' }}
+          </button>
+        </div>
+      </form>
+    }
+
+    @if (successMessage()) {
+      <p class="admin-step-up__message is-success" role="status">{{ successMessage() }}</p>
+    }
+    @if (errorMessage()) {
+      <p class="admin-step-up__message is-error" role="alert">{{ errorMessage() }}</p>
+    }
+  </section>
+}

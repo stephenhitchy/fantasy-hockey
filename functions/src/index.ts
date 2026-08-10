@@ -19,6 +19,11 @@ import {
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import {
+  requireRecentAuthentication as requireRecentAuthenticationShared,
+  requireVerifiedEmail as requireVerifiedEmailShared,
+  requireVerifiedRecentAuthentication,
+} from './shared/security/auth-security.util';
 
 initializeApp();
 
@@ -1913,6 +1918,10 @@ export const refreshDailyPlayerAvailability = onCall(
     await verifyLeagueMembership(leagueId, userId);
 
     if (force || trigger === 'commissioner-browser') {
+      requireVerifiedRecentAuthentication(
+        request.auth,
+        'force a shared injury refresh',
+      );
       const leagueSnapshot = await db.doc(`leagues/${leagueId}`).get();
       const commissionerId = asString(leagueSnapshot.data()?.['commissionerId']);
 
@@ -2126,6 +2135,11 @@ export const deleteLeague = onCall(
       );
     }
 
+    requireVerifiedRecentAuthentication(
+      request.auth,
+      'permanently delete this league',
+    );
+
     const data = asRecord(request.data);
     const leagueId = asString(data['leagueId']);
     const confirmationName = asString(data['confirmationName']);
@@ -2251,7 +2265,6 @@ interface DeleteMyAccountResult {
   deletedDocumentCount: number;
 }
 
-const ACCOUNT_DELETION_RECENT_AUTH_SECONDS = 10 * 60;
 const DELETED_MANAGER_NAME = 'Deleted Manager';
 const DELETED_TEAM_NAME = 'Vacant Team';
 const DELETED_PROFILE_ICON_ID = 'hockey-bench-gear';
@@ -2309,25 +2322,6 @@ async function getAccountDeletionReadinessForUser(
     memberLeagueCount: memberLeagueIds.size,
     anonymizedLeagueCount,
   };
-}
-
-function requireRecentAuthentication(authToken: Record<string, unknown>): void {
-  const authTime = authToken['auth_time'];
-  const authTimeSeconds = typeof authTime === 'number'
-    ? authTime
-    : Number(authTime);
-  const nowSeconds = Math.floor(Date.now() / 1000);
-
-  if (
-    !Number.isFinite(authTimeSeconds) ||
-    nowSeconds - authTimeSeconds > ACCOUNT_DELETION_RECENT_AUTH_SECONDS
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'For your security, enter your password again before deleting your account.',
-      { reason: 'recent-authentication-required' },
-    );
-  }
 }
 
 async function deleteTopLevelDocumentsByField(
@@ -2487,7 +2481,10 @@ export const deleteMyAccount = onCall(
       );
     }
 
-    requireRecentAuthentication(request.auth.token as Record<string, unknown>);
+    requireRecentAuthenticationShared(
+      request.auth,
+      'permanently delete your account',
+    );
 
     const data = asRecord(request.data);
     const confirmationUsername = asString(data['confirmationUsername']);
@@ -2988,30 +2985,44 @@ async function platformAdminRecord(uid: string): Promise<{
   };
 }
 
-async function requirePlatformAdmin(request: {
-  auth?: {
-    uid: string;
-    token: Record<string, unknown>;
-  } | null;
-}): Promise<{ uid: string; role: string }> {
+async function requirePlatformAdmin(
+  request: {
+    auth?: {
+      uid: string;
+      token: Record<string, unknown>;
+    } | null;
+  },
+  options: {
+    requireRecentAuthentication?: boolean;
+    actionLabel?: string;
+  } = {},
+): Promise<{ uid: string; role: string }> {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Sign in before opening the Admin Center.');
   }
 
-  if (request.auth.token['platformAdmin'] === true) {
-    return { uid: request.auth.uid, role: 'platform-admin' };
+  let role = 'platform-admin';
+
+  if (request.auth.token['platformAdmin'] !== true) {
+    const record = await platformAdminRecord(request.auth.uid);
+
+    if (!record.allowed) {
+      throw new HttpsError(
+        'permission-denied',
+        'This account does not have RinkRat platform-administrator access.'
+      );
+    }
+
+    role = record.role;
   }
 
-  const record = await platformAdminRecord(request.auth.uid);
-
-  if (!record.allowed) {
-    throw new HttpsError(
-      'permission-denied',
-      'This account does not have RinkRat platform-administrator access.'
-    );
+  if (options.requireRecentAuthentication) {
+    const actionLabel = options.actionLabel ?? 'change platform administration data';
+    requireVerifiedEmailShared(request.auth, actionLabel);
+    requireRecentAuthenticationShared(request.auth, actionLabel);
   }
 
-  return { uid: request.auth.uid, role: record.role };
+  return { uid: request.auth.uid, role };
 }
 
 function browserFamily(userAgent: string): string {
@@ -3278,7 +3289,10 @@ export const updateAdminFeedback = onCall(
     invoker: 'public'
   },
   async (request): Promise<{ updated: boolean }> => {
-    const admin = await requirePlatformAdmin(request);
+    const admin = await requirePlatformAdmin(request, {
+      requireRecentAuthentication: true,
+      actionLabel: 'change a feedback review',
+    });
     const data = asRecord(request.data);
     const feedbackId = asString(data['feedbackId']);
     const status = asString(data['status']);
@@ -3329,7 +3343,10 @@ export const updateAdminErrorReview = onCall(
     invoker: 'public'
   },
   async (request): Promise<{ updated: boolean }> => {
-    const admin = await requirePlatformAdmin(request);
+    const admin = await requirePlatformAdmin(request, {
+      requireRecentAuthentication: true,
+      actionLabel: 'change an error review',
+    });
     const data = asRecord(request.data);
     const fingerprint = asString(data['fingerprint']);
     const status = asString(data['status']);
@@ -3413,6 +3430,8 @@ export {
   recoverStaleProjectionGenerationRequests,
   requestProjectionSnapshotGeneration,
 } from './projection-authority';
+
+export { getSecurityControlReadiness } from './security-authority';
 
 export { saveManagerProfile } from './manager-profile-authority';
 

@@ -194,6 +194,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/draft-automation.ts',
     'src/shared/core/draft/draft.models.ts',
     'package.json',
+    'scripts/auth-security-baseline.cjs',
+    'src/security-authority.ts',
+    'src/shared/security/auth-security.util.ts',
   ]);
 
   assert.equal(

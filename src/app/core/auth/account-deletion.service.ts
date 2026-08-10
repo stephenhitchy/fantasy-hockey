@@ -1,10 +1,5 @@
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-} from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-import { auth } from '../firebase-auth';
 import { functions } from '../firebase-functions';
 
 export interface AccountDeletionLeagueSummary {
@@ -40,17 +35,7 @@ export async function getAccountDeletionReadiness(): Promise<AccountDeletionRead
   return response.data;
 }
 
-export async function reauthenticateCurrentUserWithPassword(password: string): Promise<void> {
-  const user = auth.currentUser;
-
-  if (!user || !user.email) {
-    throw new Error('Your account is not signed in with an email address.');
-  }
-
-  const credential = EmailAuthProvider.credential(user.email, password);
-  await reauthenticateWithCredential(user, credential);
-  await user.getIdToken(true);
-}
+export { reauthenticateCurrentUserWithPassword } from './recent-auth.service';
 
 export async function deleteCurrentUserAccount(
   confirmationUsername: string,

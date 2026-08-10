@@ -7,6 +7,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
+import { reauthenticateCurrentUserWithPassword } from '../../../core/auth/account-deletion.service';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
@@ -91,6 +92,7 @@ export class LeagueDetail implements OnDestroy {
   userId = '';
   teamNameDraft = '';
   deleteLeagueNameDraft = '';
+  deleteLeaguePasswordDraft = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -447,6 +449,7 @@ export class LeagueDetail implements OnDestroy {
 
     if (!nextOpen) {
       this.deleteLeagueNameDraft = '';
+      this.deleteLeaguePasswordDraft = '';
     }
   }
 
@@ -457,6 +460,7 @@ export class LeagueDetail implements OnDestroy {
       this.isCommissioner() &&
       currentLeagueName &&
       this.deleteLeagueNameDraft.trim() === currentLeagueName &&
+      this.deleteLeaguePasswordDraft.length > 0 &&
       !this.deleteLeagueInProgress()
     );
   }
@@ -478,10 +482,17 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
+    if (!this.deleteLeaguePasswordDraft) {
+      this.deleteLeagueError.set('Enter your current password before deleting the league.');
+      return;
+    }
+
     this.deleteLeagueError.set('');
     this.deleteLeagueInProgress.set(true);
 
     try {
+      await reauthenticateCurrentUserWithPassword(this.deleteLeaguePasswordDraft);
+      this.deleteLeaguePasswordDraft = '';
       await deleteLeaguePermanently(this.leagueId, this.deleteLeagueNameDraft);
 
       this.stopDraftListener?.();
