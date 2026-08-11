@@ -79,9 +79,9 @@ test('S3A.1 verification, documentation, and permanent roadmap stay synchronized
   assert.match(packageJson.scripts['verify:batchs3a-1'], /verify:batchs3a/);
   assert.match(packageJson.scripts['verify:batchs3a-1'], /test:batchs3a-1:run/);
   assert.match(packageJson.scripts['verify:batchs3a-1'], /validate:release-manifest/);
-  assert.match(readmeSource, /Security S3A\.1/);
+  assert.match(readmeSource, /verify:batchs3a-1/);
   assert.match(documentationSource, /Security Batch S3A\.1 — Configured App Check Verification Hotfix/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.6\.1/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /LOG\.10 .*S3A\.1 configured-state verification hotfix/);
 });

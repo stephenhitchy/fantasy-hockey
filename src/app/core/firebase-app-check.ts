@@ -74,6 +74,24 @@ export function getRinkRatAppCheckState(): RinkRatAppCheckState {
   return { ...appCheckState };
 }
 
+export async function getRinkRatAppCheckToken(): Promise<string | null> {
+  if (!initializedAppCheck) {
+    return null;
+  }
+
+  try {
+    const result = await withAppCheckTimeout(
+      getToken(initializedAppCheck, false),
+      5_000,
+    );
+    return result.token || null;
+  } catch {
+    // The NHL proxy remains in App Check monitor mode. A missing token must not
+    // break hockey data while we verify supported browsers and devices.
+    return null;
+  }
+}
+
 export function listenToRinkRatAppCheckState(
   listener: (state: RinkRatAppCheckState) => void,
 ): () => void {

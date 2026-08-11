@@ -41,6 +41,7 @@ import {
   LEAGUE_AUDIT_SCHEMA_VERSION,
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
+import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -112,27 +113,19 @@ function asString(value: unknown): string {
 }
 
 function requireLeagueId(value: unknown): string {
-  const leagueId = asString(value);
-
-  if (!/^[A-Za-z0-9_-]{3,120}$/.test(leagueId)) {
-    throw new HttpsError('invalid-argument', 'A valid league is required.');
-  }
-
-  return leagueId;
+  return requireFirestoreDocumentId(value, 'league ID', {
+    minimumLength: 3,
+    maxBytes: 120,
+    pattern: /^[A-Za-z0-9_-]+$/,
+  });
 }
 
 function requireAssetKey(value: unknown): string {
-  const assetKey = asString(value);
-
-  if (
-    assetKey.length < 2 ||
-    assetKey.length > MAX_ASSET_KEY_LENGTH ||
-    !/^[A-Za-z0-9:._-]+$/.test(assetKey)
-  ) {
-    throw new HttpsError('invalid-argument', 'Choose a valid draft asset.');
-  }
-
-  return assetKey;
+  return requireFirestoreDocumentId(value, 'draft asset', {
+    minimumLength: 2,
+    maxBytes: MAX_ASSET_KEY_LENGTH,
+    pattern: /^[A-Za-z0-9:._-]+$/,
+  });
 }
 
 function getOptionalDraftSubmissionId(value: unknown): string | null {
@@ -145,18 +138,11 @@ function getOptionalDraftSubmissionId(value: unknown): string | null {
     return null;
   }
 
-  if (
-    submissionId.length < 8 ||
-    submissionId.length > MAX_DRAFT_SUBMISSION_ID_LENGTH ||
-    !/^[A-Za-z0-9_-]+$/.test(submissionId)
-  ) {
-    throw new HttpsError(
-      'invalid-argument',
-      'The draft submission identifier is invalid. Refresh the draft page and try again.',
-    );
-  }
-
-  return submissionId;
+  return requireFirestoreDocumentId(submissionId, 'draft submission identifier', {
+    minimumLength: 8,
+    maxBytes: MAX_DRAFT_SUBMISSION_ID_LENGTH,
+    pattern: /^[A-Za-z0-9_-]+$/,
+  });
 }
 
 function getOptionalExpectedOverallPick(value: unknown): number | null {
@@ -202,7 +188,7 @@ function requireAuthenticatedUserId(auth: { uid?: string } | undefined): string 
     throw new HttpsError('unauthenticated', 'Sign in before changing the draft.');
   }
 
-  return userId;
+  return requireFirestoreDocumentId(userId, 'manager ID', { maxBytes: 128 });
 }
 
 function normalizePickSeconds(value: unknown): number {

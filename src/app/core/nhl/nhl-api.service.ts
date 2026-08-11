@@ -1,3 +1,5 @@
+import { getRinkRatAppCheckToken } from '../firebase-app-check';
+
 const NHL_API_BASE_URL = '/v1';
 
 interface CachedApiResponse {
@@ -58,6 +60,10 @@ async function requestApiJsonWithRetry<T>(
   maxAttempts: number = 3
 ): Promise<T> {
   let lastError: unknown = null;
+  const appCheckToken = await getRinkRatAppCheckToken();
+  const headers = appCheckToken
+    ? { 'X-Firebase-AppCheck': appCheckToken }
+    : undefined;
 
   for (
     let attemptNumber = 1;
@@ -67,7 +73,7 @@ async function requestApiJsonWithRetry<T>(
     let response: Response | null = null;
 
     try {
-      response = await fetch(url);
+      response = await fetch(url, { headers });
     } catch (error: unknown) {
       lastError = error;
 

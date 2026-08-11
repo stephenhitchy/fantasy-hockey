@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.6.1
+Version 1.7
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,7 +48,7 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — S3A monitor/authentication code is implemented; complete the console-owned App Check and Authentication baseline, then continue with S3B path validation and NHL proxy hardening. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, the enforced password policy, shared path validation, and first NHL proxy abuse controls are implemented; finish supported-browser monitoring, complete distributed NHL ingestion/rate protection, then continue with S3C CI and browser security. (P0 / L)
 
 ================================================================================
 NORTH STAR
@@ -223,29 +223,26 @@ Goal: Make public registration and expensive operations harder to automate or ab
 Exit gate: Legitimate traffic is verified, high-value Functions enforce App Check, authentication policy is stronger, and every change is checked in CI.
 ================================================================================
 
-[~] S3.1 Register the production web app in Firebase App Check. (P0 / S)
-    S3A code and runbook are ready; Firebase Console registration and the production public site key remain manual.
-[~] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S)
-    Complete with: npm run security:configure-app-check -- --site-key="PUBLIC_KEY".
-[~] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S)
-    RC15 client token health and server receipt checks are implemented; deployment follows site-key configuration.
+# [x] S3.1 Register the production web app in Firebase App Check. (P0 / S) — Completed 2026-08-10 after RC15 reported a valid browser token and valid server-received App Check context.
+# [x] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S) — Completed 2026-08-10 with the registered public score-based reCAPTCHA Enterprise key and production debug mode disabled.
+# [x] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S) — Completed 2026-08-10; Release Readiness verified the client token and callable App Check context end to end while enforcement remains off.
 [ ] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M)
 [ ] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M)
 [ ] S3.6 Enforce App Check for Firestore only after legitimate browser traffic is consistently verified. (P0 / M)
 
-[~] S3.7 Raise the Firebase password minimum and UI requirement to at least 10-12 characters. (P1 / S)
-    RC15 UI enforces 12-128 characters and includes an explicit Admin SDK apply/inspect script; production policy application remains to be confirmed.
-[~] S3.8 Verify Firebase Email Enumeration Protection. (P1 / S)
-    RC15 includes privacy-preserving UI messages, project-config inspection, and an explicit baseline apply command; production status remains to be confirmed.
+# [x] S3.7 Raise the Firebase password minimum and UI requirement to at least 10-12 characters. (P1 / S) — Completed 2026-08-10 in Security Batch S3B with the enforced 12-128 character policy, capital/number/special requirements, live Firebase validation, and an explicit missing-requirement checklist.
+# [x] S3.8 Verify Firebase Email Enumeration Protection. (P1 / S) — Completed 2026-08-10; production Release Readiness reports enumeration-resistant account errors enabled.
 # [x] S3.9 Add MFA or recent-login step-up for the platform-admin account. (P0 / M) — Completed 2026-08-10 in Security Batch S3A with a server-enforced 15-minute password step-up and inline Admin Center / Release Readiness unlock controls.
 # [x] S3.10 Require recent authentication before account deletion, critical admin changes, and future billing changes. (P1 / M) — Completed 2026-08-10 in Security Batch S3A for account/league deletion and current high-impact platform operations; future billing actions must reuse the same guard.
 
-[ ] S3.11 Create one shared requireFirestoreDocumentId() validator. (P0 / M)
-[ ] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L)
+# [x] S3.11 Create one shared requireFirestoreDocumentId() validator. (P0 / M) — Completed 2026-08-10 in Security Batch S3B with pure and callable-safe validators for path length, slash/control characters, reserved IDs, and route-specific formats.
+[~] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L)
+    Public Draft, league lifecycle, projection, roster, replay, profile, email, feedback, deletion, and platform-admin request boundaries are covered in S3B. Continue the internal persisted-ID audit before App Check enforcement and unrestricted public registration.
 
-[ ] S3.13 Harden the public NHL proxy query allowlists and numeric bounds. (P0 / M)
+# [x] S3.13 Harden the public NHL proxy query allowlists and numeric bounds. (P0 / M) — Completed 2026-08-10 in Security Batch S3B with exact route/query contracts, duplicate-parameter rejection, bounded offsets/results, route-specific sorts, and response-size ceilings.
 [ ] S3.14 Add shared caching or route competitive NHL requests through server-owned ingestion. (P0 / XL)
-[ ] S3.15 Add proxy rate monitoring, abuse limits, and alerts. (P0 / M)
+[~] S3.15 Add proxy rate monitoring, abuse limits, and alerts. (P0 / M)
+    S3B adds App Check-aware per-instance requester/global limits, HTTP 429 recovery guidance, structured logs, and privacy-limited Firestore health counters. Distributed cross-instance limiting and operational alert thresholds remain with S3.14/S3C scale operations.
 
 [ ] S3.16 Add GitHub Actions for clean installs, Angular build, Functions build, emulator rules tests, regression tests, release manifest checks, and security audits. (P0 / L)
 [ ] S3.17 Add Dependabot or Renovate with controlled update policies. (P1 / M)
@@ -646,8 +643,8 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
-[~] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin step-up. RC15 implementation complete; Firebase Console registration, public site key, Authentication baseline application, and monitor validation remain.
-[ ] SEQ.7 Security Batch S3B — Universal ID validation, NHL proxy hardening, and rate controls.
+[~] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin step-up. App Check and email privacy are verified; the production password-policy baseline and supported-browser monitoring remain.
+[~] SEQ.7 Security Batch S3B — Shared ID validation and NHL proxy query/rate hardening implemented; complete the remaining internal-ID audit and distributed cache/rate controls before marking the sequence fully complete.
 [ ] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL verification.
 [ ] SEQ.9 Freeze and run the first live-season beta.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
@@ -726,8 +723,11 @@ ROADMAP CHANGE LOG
 # [x] LOG.8 2026-08-07 — Completed S2B.1 TypeScript projection-integrity build hotfix: corrected the Draft verification type predicate and stabilized optional chunk-hash narrowing without changing S2B behavior.
 # [x] LOG.9 2026-08-10 — Implemented Security Batch S3A / Release Candidate 15: App Check monitor-client and token-health reporting, Firebase Authentication policy inspection/apply tooling, 12-128 character registration passwords, email-enumeration readiness, and recent-login protection for high-impact administrator/destructive actions. Console-owned activation and monitor validation remain tracked in progress.
 # [x] LOG.10 2026-08-10 — Completed Security Batch S3A.1 configured-state verification hotfix: App Check tests now accept the documented enabled monitor configuration, require a valid public site key when enabled, and keep production local debug-token discovery disabled.
+# [x] LOG.11 2026-08-10 — Completed Security Batch S3A.2 / Release Candidate 16: permanently remove destroyed viewport overlays, prevent duplicate bench-to-active lineup-swap dialogs, preserve compact Firestore reconciliation, default projection recovery to the current target, and clarify password/projection/Shadow readiness remediation.
 
 Future entries:
+
+# [x] LOG.12 2026-08-10 — Implemented Security Batch S3B / Release Candidate 17: synchronized the registration UI with the live Firebase password policy, preserved capital/number/special requirements in the apply script, introduced shared Firestore document-ID validation, and added strict App Check-aware NHL proxy query, response-size, rate, and health controls.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

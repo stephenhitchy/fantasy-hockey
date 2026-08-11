@@ -177,7 +177,8 @@ test('viewport overlays are portaled to document.body and restore the exact scro
   assert.match(source, /document\.body\.appendChild\(this\.host\)/);
   assert.match(source, /body\.style\.position = 'fixed'/);
   assert.match(source, /body\.style\.top = `\$\{-lockedScrollY\}px`/);
-  assert.match(source, /this\.originalParent\.insertBefore/);
+  assert.match(source, /this\.host\.remove\(\)/);
+  assert.doesNotMatch(source, /originalParent|originalNextSibling|insertBefore\(this\.host/);
   assert.match(source, /window\.scrollTo\(scrollX, scrollY\)/);
   assert.match(source, /activeViewportOverlays = new Set<HTMLElement>/);
   assert.match(source, /repairViewportOverlayLock/);

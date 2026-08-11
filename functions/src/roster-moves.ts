@@ -3,6 +3,10 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import {
+  optionalFirestoreDocumentId,
+  requireFirestoreDocumentId,
+} from './shared/security/firestore-document-id.util';
 import { DraftableAsset } from './shared/core/draft/draft.models';
 import {
   FantasyRoster,
@@ -70,6 +74,13 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function requireRosterMoveAssetKey(value: unknown, label = 'asset key'): string {
+  return requireFirestoreDocumentId(value, label, {
+    maxBytes: 160,
+    pattern: /^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+  });
 }
 
 function getAssetKey(asset: unknown): string {
@@ -507,27 +518,50 @@ export const applyImmediateRosterMove = onCall(
     cors: TRUSTED_WEB_ORIGINS,
   },
   async (request) => {
-    const ownerId = request.auth?.uid;
-    if (!ownerId) {
+    const authenticatedOwnerId = request.auth?.uid;
+    if (!authenticatedOwnerId) {
       throw new HttpsError('unauthenticated', 'You must be signed in to change your roster.');
     }
 
+    const ownerId = requireFirestoreDocumentId(
+      authenticatedOwnerId,
+      'manager ID',
+      { maxBytes: 128 },
+    );
     const input = asRecord(request.data) as unknown as ImmediateRosterMoveRequest;
-    const leagueId = asString(input.leagueId);
+    const leagueId = requireFirestoreDocumentId(input.leagueId, 'league ID', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    });
     const moveType = asString(input.moveType) as ImmediateRosterMoveType;
-    const activeSlotId = asString(input.activeSlotId);
-    const benchSlotId = asString(input.benchSlotId);
-    const irSlotId = asString(input.irSlotId);
-
-    if (!leagueId || !activeSlotId) {
-      throw new HttpsError('invalid-argument', 'League and active roster slot are required.');
-    }
+    const activeSlotId = requireFirestoreDocumentId(
+      input.activeSlotId,
+      'active roster slot ID',
+      { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
+    );
+    const benchSlotId = optionalFirestoreDocumentId(
+      input.benchSlotId,
+      'bench roster slot ID',
+      { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
+    ) ?? '';
+    const irSlotId = optionalFirestoreDocumentId(
+      input.irSlotId,
+      'injured reserve slot ID',
+      { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
+    ) ?? '';
 
     if (!['add-drop-active', 'add-open-active', 'active-bench-swap', 'activate-ir-active', 'move-active-to-ir', 'drop-active'].includes(moveType)) {
       throw new HttpsError('invalid-argument', 'That immediate roster move type is not supported.');
     }
 
-    const requestedAssetKey = asString(input.addAssetKey) || getAssetKey(input.addAsset);
+    const rawRequestedAssetKey = asString(input.addAssetKey) || getAssetKey(input.addAsset);
+    const requestedAssetKey = rawRequestedAssetKey
+      ? requireFirestoreDocumentId(rawRequestedAssetKey, 'asset key', {
+          maxBytes: 160,
+          pattern: /^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+        })
+      : '';
     const addAsset = requestedAssetKey
       ? await loadCanonicalDraftableAsset(leagueId, requestedAssetKey)
       : null;
@@ -989,7 +1023,10 @@ export const applyImmediateRosterMove = onCall(
           droppedAsset = null;
         }
 
-        const incomingKey = incomingAsset.assetKey;
+        const incomingKey = requireRosterMoveAssetKey(
+          incomingAsset.assetKey,
+          'incoming asset key',
+        );
         for (const snapshot of allRosterSnapshots as Array<{
           exists: boolean;
           data(): unknown;
@@ -1143,7 +1180,10 @@ export const applyImmediateRosterMove = onCall(
           moveType === 'drop-active') &&
         droppedAsset
       ) {
-        waiverId = getAssetKey(droppedAsset);
+        waiverId = requireRosterMoveAssetKey(
+          getAssetKey(droppedAsset),
+          'dropped asset key',
+        );
         transaction.set(
           db.doc(`leagues/${leagueId}/waivers/${waiverId}`),
           buildWaiverPayload(droppedAsset, ownerId, context.cycleNumber),

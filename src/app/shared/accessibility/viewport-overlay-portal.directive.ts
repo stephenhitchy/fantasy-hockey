@@ -102,6 +102,19 @@ export function repairViewportOverlayLock(): void {
   }
 }
 
+
+/**
+ * Reports whether another live viewport overlay still owns modal focus.
+ *
+ * Focus-restoration directives use this after a frame so closing one dialog
+ * cannot move focus behind a second dialog that opened during the same Angular
+ * change-detection turn.
+ */
+export function hasActiveViewportOverlay(): boolean {
+  repairViewportOverlayLock();
+  return activeViewportOverlays.size > 0;
+}
+
 function installOverlayRecoveryWatchers(): void {
   if (
     globalRecoveryListenersInstalled ||
@@ -192,8 +205,6 @@ function releaseViewportLock(host: HTMLElement): void {
 })
 export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy {
   private readonly host: HTMLElement;
-  private originalParent: Node | null = null;
-  private originalNextSibling: Node | null = null;
   private resetFrame: number | null = null;
   private portaled = false;
 
@@ -205,9 +216,6 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
     if (typeof document === 'undefined' || typeof window === 'undefined') {
       return;
     }
-
-    this.originalParent = this.host.parentNode;
-    this.originalNextSibling = this.host.nextSibling;
 
     document.body.appendChild(this.host);
     this.host.setAttribute('data-viewport-overlay-portaled', 'true');
@@ -241,16 +249,15 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
 
     this.host.removeAttribute('data-viewport-overlay-portaled');
 
-    if (this.originalParent?.isConnected) {
-      const nextSibling = this.originalNextSibling?.parentNode === this.originalParent
-        ? this.originalNextSibling
-        : null;
-
-      this.originalParent.insertBefore(this.host, nextSibling);
-    } else {
-      this.host.remove();
-    }
-
+    /*
+     * The Angular view owning this node is already being destroyed. Re-inserting
+     * a portaled node into its former parent during ngOnDestroy can leave behind
+     * a connected but unbound copy after Angular has completed view cleanup.
+     * Mobile Safari then shows that stale dialog a second time with no working
+     * controls. Removing the node in place is idempotent and guarantees that a
+     * dismissed overlay cannot survive as a frozen DOM remnant.
+     */
+    this.host.remove();
     this.portaled = false;
     releaseViewportLock(this.host);
   }

@@ -1,3 +1,99 @@
+# Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening
+
+## Purpose
+
+Security S3B aligns the account-creation experience with the production Firebase Authentication policy and begins the next public-growth hardening phase. New passwords require 12–128 characters, a capital letter, a number, and a special character; lowercase remains optional. The registration page displays every active requirement, validates against Firebase's live policy, and keeps the account button unavailable until all required criteria pass.
+
+## Password-policy synchronization
+
+- `src/app/core/auth/password-policy.service.ts` calls Firebase `validatePassword()` with an eight-second bound.
+- The account-creation card shows a visible requirement checklist, completion count, exact missing criteria, and a high-contrast ready state.
+- The production fallback and `functions/scripts/auth-security-baseline.cjs` use the same 12–128 / capital / number / special-character contract.
+- Release Readiness reports each composition rule separately so an accidental console change is visible.
+- Existing passwords are not silently changed because force-upgrade remains disabled.
+
+## Shared Firestore document-ID validation
+
+- `functions/src/shared/security/firestore-document-id-core.util.ts` rejects slashes, control characters, reserved `__...__` identifiers, dot paths, oversized IDs, and route-specific pattern violations.
+- Callable wrappers return privacy-safe `invalid-argument` errors.
+- Draft, league lifecycle, projection, roster, replay, platform-admin, profile, email, feedback, and deletion paths now apply the shared validator at their public request boundaries.
+- The remaining audit of internal persisted identifiers stays tracked in the competitive roadmap before unrestricted public registration.
+
+## NHL proxy security
+
+- Only explicitly supported NHL and ESPN routes are accepted.
+- Non-stat routes reject all query parameters.
+- Stats routes require a fixed parameter set, supported sort values, bounded offsets and result limits, and an exact regular-season filter.
+- The browser forwards its App Check token when available; the proxy verifies it in monitor mode and applies lower limits to missing or invalid tokens without enforcing App Check yet.
+- Per-instance requester and global minute limits return HTTP 429 with `Retry-After`.
+- Upstream response-size caps prevent unexpectedly large payloads from consuming unbounded memory.
+- Privacy-limited counters are accumulated in `appData/nhlProxySecurity`.
+- Shared distributed cache and central competitive NHL ingestion remain separate roadmap work; the existing warm-instance cache is not presented as public-scale protection.
+
+## Verification
+
+```bash
+npm run verify:batchs3b
+```
+
+## Deployment
+
+Deploy Functions first because the hardened proxy and shared ID guards are server code, then Hosting for the dynamic password checklist and App Check proxy header. No Firestore Rules or indexes change in this batch.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3B ID validation and NHL proxy hardening"
+firebase deploy --only hosting:app -m "Security S3B dynamic password policy"
+```
+
+## Rollback
+
+Deploy the approved S3A.2 Functions and Hosting builds. No league, Draft, scoring, roster, or projection data migration is required.
+
+---
+
+## Security Batch S3A.2 — Roster Overlay Teardown and Readiness Recovery
+
+**Release:** Release Candidate 16
+**Scope:** Prevent destroyed viewport dialogs from reappearing as frozen overlays after bench-to-active roster moves, and make the two remaining Release Readiness actions easier to complete.
+
+The viewport overlay portal now removes its host node permanently when Angular destroys the owning view. It no longer reinserts a destroyed dialog into its former page parent. That reinsertion could leave a stale, disconnected Angular view visible after a roster listener update: the lineup move had succeeded, but the old confirmation dialog appeared again with no live bindings or working close control.
+
+Bench-to-active lineup swaps now disable the underlying roster controls before dismissing the confirmation dialog, suppress delayed touch/click reopen attempts, wait for two viewport-cleanup frames before starting the secure request, and clear their dialog state again during final cleanup. Focus restoration also refuses to jump behind a replacement overlay. The compact roster-operation status remains visible while Firestore confirms the authoritative result.
+
+Release Readiness now:
+
+- defaults projection recovery to the snapshot's current target instead of automatically choosing the next matchup;
+- explains that a completed pre-S2B Draft is not rewritten when its shared projection is regenerated;
+- identifies the documented Authentication baseline command when the project password policy is still off;
+- labels the large due-age value in Shadow mode as observation-only while the legacy scorer remains authoritative.
+
+To clear the remaining required checks:
+
+```bash
+gcloud auth application-default login
+RINKRAT_APPLY_AUTH_SECURITY=APPLY npm run security:apply-auth-baseline -- --project=nhl-fantasy-app-ab673
+```
+
+Then regenerate the exact projection target shown by Release Readiness and refresh the checks. A newly generated S2B snapshot is server-authoritative, canonical-catalog validated, and root-hash verified.
+
+### Verification
+
+```bash
+npm run verify:batchs3a-2
+```
+
+### Deployment
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Security S3A.2 roster overlay recovery"
+```
+
+No Functions, Firestore Rules, indexes, scoring calculations, Projection V11 mathematics, or roster authority behavior changes are included.
+
+---
+
 ## Security Batch S3A.1 — Configured App Check Verification Hotfix
 
 **Release:** Release Candidate 15  

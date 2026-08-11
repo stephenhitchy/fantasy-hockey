@@ -16,6 +16,12 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
+  isSafeFirestoreDocumentId,
+  optionalFirestoreDocumentId,
+  requireFirestoreDocumentId,
+  requireFirestoreDocumentIds,
+} from './shared/security/firestore-document-id.util';
+import {
   advanceCompletedRegularSeasonAssetWindows,
   completeCycle,
   getActiveLeagueCycles,
@@ -438,14 +444,20 @@ async function requireLeagueAutomationPlatformAdmin(request: {
     token: Record<string, unknown>;
   } | null;
 }): Promise<string> {
-  const userId = request.auth?.uid;
+  const authenticatedUserId = request.auth?.uid;
 
-  if (!userId) {
+  if (!authenticatedUserId) {
     throw new HttpsError(
       'unauthenticated',
       'Sign in before opening the scoring queue controls.',
     );
   }
+
+  const userId = requireFirestoreDocumentId(
+    authenticatedUserId,
+    'platform administrator ID',
+    { maxBytes: 128 },
+  );
 
   if (request.auth?.token?.['platformAdmin'] === true) {
     return userId;
@@ -513,11 +525,12 @@ function getLeagueAutomationAuditRef(auditId: string) {
 }
 
 function normalizeLeagueAutomationAdminRequestId(value: unknown): string {
-  const cleaned = typeof value === 'string'
-    ? value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96)
-    : '';
-
-  return cleaned || randomUUID().replaceAll('-', '');
+  return typeof value === 'string' && value.trim()
+    ? requireFirestoreDocumentId(value, 'queue configuration request ID', {
+        maxBytes: 96,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      })
+    : randomUUID().replaceAll('-', '');
 }
 
 function normalizeLeagueAutomationChangeReason(value: unknown): string {
@@ -1197,11 +1210,12 @@ function isLeagueAutomationTaskAlreadyExistsError(error: unknown): boolean {
 }
 
 function normalizeHistoricalReplayRequestId(value: unknown): string {
-  const cleaned = typeof value === 'string'
-    ? value.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 96)
-    : '';
-
-  return cleaned || randomUUID().replaceAll('-', '');
+  return typeof value === 'string' && value.trim()
+    ? requireFirestoreDocumentId(value, 'historical replay request ID', {
+        maxBytes: 96,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      })
+    : randomUUID().replaceAll('-', '');
 }
 
 function buildHistoricalReplayTaskId(payload: HistoricalReplayAdvanceTaskPayload): string {
@@ -3303,14 +3317,15 @@ export const getLeagueAutomationQueueControlCenter = onCall(
     const data = request.data && typeof request.data === 'object'
       ? request.data as Record<string, unknown>
       : {};
-    const focusLeagueId = getLeagueAutomationString(data['focusLeagueId']);
-
-    if (
-      focusLeagueId &&
-      !/^[A-Za-z0-9_-]{6,128}$/.test(focusLeagueId)
-    ) {
-      throw new HttpsError('invalid-argument', 'The focus league id is invalid.');
-    }
+    const focusLeagueId = optionalFirestoreDocumentId(
+      data['focusLeagueId'],
+      'focus league ID',
+      {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    ) ?? '';
 
     return buildLeagueAutomationQueueAdminSnapshot(focusLeagueId);
   },
@@ -3347,12 +3362,26 @@ export const updateLeagueAutomationQueueConfig = onCall(
       requestedMode === 'primary'
         ? requestedMode
         : 'shadow';
-    const canaryLeagueIds = normalizeLeagueAutomationCanaryIds(
+    const canaryLeagueIds = [...new Set(requireFirestoreDocumentIds(
       data['canaryLeagueIds'],
-    );
-    const internalTestLeagueIds = normalizeLeagueAutomationInternalTestIds(
+      'canary league ID',
+      {
+        maximumCount: 100,
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    ))].sort();
+    const internalTestLeagueIds = [...new Set(requireFirestoreDocumentIds(
       data['internalTestLeagueIds'],
-    );
+      'internal test league ID',
+      {
+        maximumCount: 100,
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    ))].sort();
     const maxEnqueuePerRun = normalizeLeagueAutomationMaxEnqueuePerRun(
       data['maxEnqueuePerRun'],
     );
@@ -3648,12 +3677,12 @@ export const queueLeagueAutomationCanaryCheck = onCall(
       ? request.data as Record<string, unknown>
       : {};
     const requestId = normalizeLeagueAutomationAdminRequestId(data['requestId']);
-    const leagueId = getLeagueAutomationString(data['leagueId']);
+    const leagueId = requireFirestoreDocumentId(data['leagueId'], 'canary league ID', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    });
     const confirmationText = getLeagueAutomationString(data['confirmationText']);
-
-    if (!/^[A-Za-z0-9_-]{6,128}$/.test(leagueId)) {
-      throw new HttpsError('invalid-argument', 'Choose a valid canary league.');
-    }
 
     if (confirmationText !== 'RUN CANARY') {
       throw new HttpsError(
@@ -3970,8 +3999,11 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
     if (
       !payload ||
       payload.taskSchemaVersion !== LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION ||
-      typeof payload.leagueId !== 'string' ||
-      !payload.leagueId ||
+      !isSafeFirestoreDocumentId(payload.leagueId, {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      }) ||
       !Number.isFinite(payload.expectedDueAtMilliseconds) ||
       typeof payload.dueBucket !== 'string' ||
       !payload.dueBucket ||
@@ -4418,12 +4450,15 @@ interface OpenNextCompetitionPeriodResult {
 }
 
 function requestedLeagueId(data: unknown): string {
-  if (!data || typeof data !== 'object') {
-    return '';
-  }
+  const leagueId = data && typeof data === 'object'
+    ? (data as Record<string, unknown>)['leagueId']
+    : null;
 
-  const leagueId = (data as Record<string, unknown>)['leagueId'];
-  return typeof leagueId === 'string' ? leagueId.trim() : '';
+  return requireFirestoreDocumentId(leagueId, 'league ID', {
+    minimumLength: 6,
+    maxBytes: 128,
+    pattern: /^[A-Za-z0-9_-]+$/,
+  });
 }
 
 async function requireLeagueCommissioner(
@@ -4958,19 +4993,22 @@ export const advanceHistoricalReplayDay = onCall(
       request.auth,
       'advance a historical replay league',
     );
-    const leagueId =
-      request.data && typeof request.data.leagueId === 'string'
-        ? request.data.leagueId.trim()
-        : '';
+    const leagueId = requireFirestoreDocumentId(
+      request.data && typeof request.data === 'object'
+        ? (request.data as Record<string, unknown>)['leagueId']
+        : null,
+      'league ID',
+      {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    );
     const requestId = normalizeHistoricalReplayRequestId(
       request.data && typeof request.data === 'object'
         ? (request.data as Record<string, unknown>)['requestId']
         : null,
     );
-
-    if (!leagueId) {
-      throw new HttpsError('invalid-argument', 'A league id is required.');
-    }
 
     await requireHistoricalReplayReadyLeague(leagueId);
 
@@ -5157,12 +5195,16 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
 
     if (
       !payload ||
-      typeof payload.requestId !== 'string' ||
-      !payload.requestId ||
-      typeof payload.leagueId !== 'string' ||
-      !payload.leagueId ||
-      typeof payload.requestedBy !== 'string' ||
-      !payload.requestedBy
+      !isSafeFirestoreDocumentId(payload.requestId, {
+        maxBytes: 96,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      }) ||
+      !isSafeFirestoreDocumentId(payload.leagueId, {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      }) ||
+      !isSafeFirestoreDocumentId(payload.requestedBy, { maxBytes: 128 })
     ) {
       console.warn('Ignored malformed historical replay task.', { payload });
       return;

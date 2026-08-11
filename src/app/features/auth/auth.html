@@ -177,43 +177,91 @@
           </label>
 
           @if (!isResettingPassword()) {
-            <label class="form-field" for="auth-password">
-              <span>Password</span>
+            <div class="form-field">
+              <label for="auth-password">Password</label>
               <input
                 #passwordInput
                 id="auth-password"
                 name="password"
                 [(ngModel)]="password"
-                (ngModelChange)="clearInvalidField('password')"
+                (ngModelChange)="handlePasswordChange($event)"
                 placeholder="Enter your password"
                 type="password"
                 [attr.autocomplete]="passwordAutocomplete()"
                 required
                 [attr.minlength]="isRegistering() ? 12 : null"
                 [attr.maxlength]="isRegistering() ? 128 : null"
-                [attr.aria-invalid]="invalidField() === 'password' ? 'true' : null"
-                [attr.aria-describedby]="invalidField() === 'password' ? 'auth-error-message' : null"
+                [attr.aria-invalid]="invalidField() === 'password' || (isRegistering() && password.length > 0 && !passwordRegistrationReady()) ? 'true' : null"
+                [attr.aria-describedby]="isRegistering() ? 'auth-password-policy' : (invalidField() === 'password' ? 'auth-error-message' : null)"
                 [disabled]="loading()"
               />
               @if (isRegistering()) {
-                <small
-                  class="password-policy-hint"
+                <section
+                  id="auth-password-policy"
+                  class="password-policy-card"
                   [class.ready]="passwordRegistrationReady()"
-                  [attr.aria-live]="invalidField() === 'password' ? 'polite' : null"
+                  [class.needs-attention]="password.length > 0 && !passwordRegistrationReady()"
+                  aria-labelledby="auth-password-policy-title"
+                  aria-live="polite"
                 >
-                  @if (passwordRegistrationReady()) {
-                    Password length is ready. {{ passwordRequirementText }}
-                  } @else if (password.length > 0) {
-                    {{ passwordCharactersRemaining() }} more character{{ passwordCharactersRemaining() === 1 ? '' : 's' }} needed. {{ passwordRequirementText }}
-                  } @else {
+                  <header class="password-policy-header">
+                    <div>
+                      <span class="password-policy-kicker">Account Security</span>
+                      <strong id="auth-password-policy-title">Password requirements</strong>
+                    </div>
+                    <span class="password-policy-progress" [class.ready]="passwordRegistrationReady()">
+                      {{ passwordRequirementsMetCount() }}/{{ passwordRequirementsTotalCount() }} complete
+                    </span>
+                  </header>
+
+                  <p class="password-policy-hint" [class.ready]="passwordRegistrationReady()">
                     {{ passwordRequirementText }}
+                  </p>
+
+                  <ul class="password-requirement-list" aria-label="Password requirement checklist">
+                    @for (requirement of passwordRequirements(); track requirement.id) {
+                      <li
+                        class="password-requirement"
+                        [class.met]="requirement.met"
+                        [class.missing]="password.length > 0 && !requirement.met"
+                      >
+                        <span class="password-requirement-icon" aria-hidden="true">
+                          {{ requirement.met ? '✓' : '!' }}
+                        </span>
+                        <span>{{ requirement.label }}</span>
+                      </li>
+                    }
+                  </ul>
+
+                  <p class="password-policy-summary" [class.ready]="passwordRegistrationReady()">
+                    @if (passwordPolicyChecking()) {
+                      Checking the live Firebase policy…
+                    } @else {
+                      {{ passwordPolicySummary() }}
+                    }
+                  </p>
+
+                  @if (!passwordRegistrationReady()) {
+                    <p class="password-policy-action">
+                      The Create Profile button unlocks after every required item is green.
+                    </p>
                   }
-                </small>
+
+                  @if (passwordPolicyEvaluation().warning) {
+                    <p class="password-policy-warning">
+                      {{ passwordPolicyEvaluation().warning }}
+                    </p>
+                  }
+                </section>
               }
-            </label>
+            </div>
           }
 
-          <button type="submit" class="primary-submit" [disabled]="loading()">
+          <button
+            type="submit"
+            class="primary-submit"
+            [disabled]="loading() || passwordPolicyChecking() || (isRegistering() && !passwordRegistrationReady())"
+          >
             {{ submitLabel() }}
           </button>
 

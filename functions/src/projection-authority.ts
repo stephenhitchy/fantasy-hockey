@@ -6,6 +6,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
+import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
@@ -119,23 +120,19 @@ function asString(value: unknown): string {
 }
 
 function requireLeagueId(value: unknown): string {
-  const leagueId = asString(value);
-
-  if (!LEAGUE_ID_PATTERN.test(leagueId)) {
-    throw new HttpsError('invalid-argument', 'A valid league ID is required.');
-  }
-
-  return leagueId;
+  return requireFirestoreDocumentId(value, 'league ID', {
+    minimumLength: 3,
+    maxBytes: 120,
+    pattern: LEAGUE_ID_PATTERN,
+  });
 }
 
 function requireRequestId(value: unknown): string {
-  const requestId = asString(value);
-
-  if (!PROJECTION_REQUEST_ID_PATTERN.test(requestId)) {
-    throw new HttpsError('invalid-argument', 'A valid projection request ID is required.');
-  }
-
-  return requestId;
+  return requireFirestoreDocumentId(value, 'projection request ID', {
+    minimumLength: 8,
+    maxBytes: 120,
+    pattern: PROJECTION_REQUEST_ID_PATTERN,
+  });
 }
 
 function requireGenerationReason(value: unknown): SharedProjectionGenerationReason {
@@ -490,11 +487,17 @@ export const manageProjectionSnapshotIntegrity = onCall(
     invoker: 'public',
   },
   async (request): Promise<ProjectionIntegrityCommandResult> => {
-    const userId = request.auth?.uid;
+    const authenticatedUserId = request.auth?.uid;
 
-    if (!userId) {
+    if (!authenticatedUserId) {
       throw new HttpsError('unauthenticated', 'Sign in before managing projection integrity.');
     }
+
+    const userId = requireFirestoreDocumentId(
+      authenticatedUserId,
+      'platform administrator ID',
+      { maxBytes: 128 },
+    );
 
     if (!await isPlatformAdministrator(userId, request.auth?.token ?? {})) {
       throw new HttpsError(
@@ -791,11 +794,17 @@ export const requestProjectionSnapshotGeneration = onCall(
     invoker: 'public',
   },
   async (request): Promise<ProjectionGenerationRequestResult> => {
-    const userId = request.auth?.uid;
+    const authenticatedUserId = request.auth?.uid;
 
-    if (!userId) {
+    if (!authenticatedUserId) {
       throw new HttpsError('unauthenticated', 'Sign in before refreshing projections.');
     }
+
+    const userId = requireFirestoreDocumentId(
+      authenticatedUserId,
+      'manager ID',
+      { maxBytes: 128 },
+    );
 
     const data = asRecord(request.data);
     const leagueId = requireLeagueId(data['leagueId']);

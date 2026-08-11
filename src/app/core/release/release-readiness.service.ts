@@ -269,8 +269,21 @@ export async function loadReleaseReadinessSnapshot(
     serverSecurity?.passwordPolicy.available &&
     serverSecurity.passwordPolicy.enforcementState === 'ENFORCE' &&
     (serverSecurity.passwordPolicy.minimumLength ?? 0) >= 12 &&
-    (serverSecurity.passwordPolicy.maximumLength ?? 128) <= 128,
+    (serverSecurity.passwordPolicy.maximumLength ?? 128) <= 128 &&
+    serverSecurity.passwordPolicy.requireUppercase &&
+    serverSecurity.passwordPolicy.requireNumeric &&
+    serverSecurity.passwordPolicy.requireNonAlphanumeric,
   );
+  const passwordCompositionSummary = serverSecurity
+    ? [
+        serverSecurity.passwordPolicy.requireUppercase ? 'capital required' : 'capital optional',
+        serverSecurity.passwordPolicy.requireNumeric ? 'number required' : 'number optional',
+        serverSecurity.passwordPolicy.requireNonAlphanumeric
+          ? 'special character required'
+          : 'special character optional',
+        serverSecurity.passwordPolicy.requireLowercase ? 'lowercase required' : 'lowercase optional',
+      ].join('; ')
+    : '';
   checks.push(
     createCheck(
       'authentication-password-policy',
@@ -279,7 +292,7 @@ export async function loadReleaseReadinessSnapshot(
         ? 'Firebase Authentication password policy is enforced'
         : 'Firebase Authentication password policy needs the RinkRat baseline',
       serverSecurity
-        ? `Enforcement ${serverSecurity.passwordPolicy.enforcementState}; minimum ${serverSecurity.passwordPolicy.minimumLength ?? 'not set'}; maximum ${serverSecurity.passwordPolicy.maximumLength ?? 'not set'}; force-upgrade ${serverSecurity.passwordPolicy.forceUpgradeOnSignin ? 'on' : 'off'}.`
+        ? `Enforcement ${serverSecurity.passwordPolicy.enforcementState}; minimum ${serverSecurity.passwordPolicy.minimumLength ?? 'not set'}; maximum ${serverSecurity.passwordPolicy.maximumLength ?? 'not set'}; ${passwordCompositionSummary}; force-upgrade ${serverSecurity.passwordPolicy.forceUpgradeOnSignin ? 'on' : 'off'}. ${passwordPolicyReady ? 'The registration checklist is synchronized with the live Firebase policy.' : 'Apply the RinkRat baseline from Terminal with the documented security:apply-auth-baseline command, then refresh this check.'}`.trim()
         : securityReadiness.errorMessage || 'The Firebase Authentication project policy could not be inspected.',
       passwordPolicyReady ? 'pass' : 'warning',
       true,
@@ -574,7 +587,7 @@ export async function loadReleaseReadinessSnapshot(
       `Mode ${leagueQueueMode}; dispatcher last ran ${formatAgeMinutes(queueDispatchAge)}; ` +
         `${queueDueCount} due schedule(s) sampled, ${queueEligibleCount} eligible for enqueue; ` +
         `${queueSelectedCount} selected this pass, ${queueActivePendingCount}/${queueMaxPendingCount || 'unknown'} pending; ` +
-        `oldest due age ${formatDurationMilliseconds(queueOldestDueAge)}; ` +
+        `oldest due age ${formatDurationMilliseconds(queueOldestDueAge)}${leagueQueueMode === 'shadow' ? ' (observation only; the legacy scorer remains authoritative)' : ''}; ` +
         `schedule coverage ${queueCoverageCount}/${queueCoverageTarget || 'not measured'} ` +
         `(bootstrap ${formatAgeMinutes(queueBootstrapAge)}); ` +
         `${queueFailedEnqueueCount} enqueue failure(s), ${queueRecoveredStaleCount} stale task(s) recovered in the latest sweep.`,
@@ -613,7 +626,9 @@ export async function loadReleaseReadinessSnapshot(
         : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}; ` +
           (projectionServerValidated
             ? `server catalog ${projection.catalogSnapshotId} validated ${projection.canonicalAssetCount} assets; root hash ${(projection.snapshotContentHash ?? '').slice(0, 12)}… is verified.`
-            : 'this snapshot is missing the current server authority marker, canonical catalog validation, or deterministic root hash and must be verified or regenerated before Draft use.'),
+            : draft?.status === 'complete'
+              ? 'this completed league still points at a pre-S2B projection. Regenerate the displayed target to create a server-hashed snapshot for future roster windows; completed Draft picks are not rewritten.'
+              : 'this snapshot is missing the current server authority marker, canonical catalog validation, or deterministic root hash. Verify the current server snapshot or regenerate this target before the Draft begins.'),
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
         projection.assetCount > 0
@@ -738,6 +753,11 @@ export async function loadReleaseReadinessSnapshot(
       passwordPolicyEnforcement: serverSecurity?.passwordPolicy.enforcementState ?? 'unavailable',
       passwordMinimumLength: serverSecurity?.passwordPolicy.minimumLength ?? null,
       passwordMaximumLength: serverSecurity?.passwordPolicy.maximumLength ?? null,
+      passwordRequiresLowercase: serverSecurity?.passwordPolicy.requireLowercase === true,
+      passwordRequiresUppercase: serverSecurity?.passwordPolicy.requireUppercase === true,
+      passwordRequiresNumeric: serverSecurity?.passwordPolicy.requireNumeric === true,
+      passwordRequiresNonAlphanumeric:
+        serverSecurity?.passwordPolicy.requireNonAlphanumeric === true,
       emailEnumerationProtectionEnabled:
         serverSecurity?.emailEnumerationProtection.enabled === true,
       emailVerified: serverSecurity?.emailVerified === true,

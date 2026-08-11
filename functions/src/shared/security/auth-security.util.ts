@@ -1,5 +1,7 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 
+import { isSafeFirestoreDocumentId } from './firestore-document-id-core.util';
+
 export const RECENT_AUTHENTICATION_WINDOW_SECONDS = 15 * 60;
 
 export interface AuthDataLike {
@@ -22,7 +24,7 @@ export function requireAuthenticatedUserId(
 ): string {
   const userId = asString(auth?.uid);
 
-  if (!userId) {
+  if (!userId || !isSafeFirestoreDocumentId(userId, { maxBytes: 128 })) {
     throw new HttpsError(
       'unauthenticated',
       `Sign in before you ${actionLabel}.`,

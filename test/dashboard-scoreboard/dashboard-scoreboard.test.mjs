@@ -151,6 +151,7 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     dashboardStyles,
     nhlService,
     functions,
+    nhlProxySecurity,
   ] = await Promise.all([
     readFile(componentPath, 'utf8'),
     readFile(templatePath, 'utf8'),
@@ -158,6 +159,7 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     readFile(dashboardStylesPath, 'utf8'),
     readFile(nhlServicePath, 'utf8'),
     readFile(functionsPath, 'utf8'),
+    readFile(new URL('../../functions/src/shared/security/nhl-proxy-security.util.ts', import.meta.url), 'utf8'),
   ]);
 
   await suite.test('loads the NHL feed independently from fantasy league data', () => {
@@ -168,7 +170,7 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
 
   await suite.test('uses the existing protected NHL proxy with a short live-score cache', () => {
     assert.match(nhlService, /`\$\{NHL_API_BASE_URL\}\/score\/now`/);
-    assert.match(functions, /\/\^\\\/v1\\\/score\\\/now\$\//);
+    assert.match(nhlProxySecurity, /path === '\/v1\/score\/now'/);
     assert.match(functions, /max-age=15, s-maxage=20/);
   });
 

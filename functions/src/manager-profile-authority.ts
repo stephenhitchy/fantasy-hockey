@@ -3,6 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 
 const FUNCTION_REGION = 'us-central1';
 
@@ -82,7 +83,10 @@ function requireAuthenticatedUser(
     );
   }
 
-  return { userId, email };
+  return {
+    userId: requireFirestoreDocumentId(userId, 'manager ID', { maxBytes: 128 }),
+    email,
+  };
 }
 
 function requireAction(value: unknown): ManagerProfileAction {

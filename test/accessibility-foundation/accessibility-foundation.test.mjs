@@ -27,7 +27,7 @@ test('ships one reusable dialog focus trap with focus restoration and Escape han
   assert.match(source, /event\.key !== 'Tab'/);
   assert.match(source, /event\.key === 'Escape'/);
   assert.match(source, /dialogEscape\.emit\(\)/);
-  assert.match(source, /restoreTarget\.isConnected/);
+  assert.match(source, /restoreTarget\??\.isConnected/);
   assert.match(source, /requestAnimationFrame/);
 });
 

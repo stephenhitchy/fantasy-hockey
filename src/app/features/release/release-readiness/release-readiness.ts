@@ -132,7 +132,12 @@ export class ReleaseReadiness implements OnDestroy {
     await this.runAction(async () => {
       const snapshot = await loadReleaseReadinessSnapshot(this.leagueId);
       this.snapshot.set(snapshot);
-      this.targetProjectionCycle.set(Math.max(1, (snapshot.latestCycleNumber ?? 0) + 1));
+      this.targetProjectionCycle.set(
+        Math.max(
+          1,
+          snapshot.projectionTargetCycleNumber ?? (snapshot.latestCycleNumber ?? 0) + 1,
+        ),
+      );
       return 'Release-readiness checks refreshed.';
     }, false);
   }
@@ -415,7 +420,12 @@ export class ReleaseReadiness implements OnDestroy {
       try {
         const snapshot = await loadReleaseReadinessSnapshot(this.leagueId);
         this.snapshot.set(snapshot);
-        this.targetProjectionCycle.set(Math.max(1, (snapshot.latestCycleNumber ?? 0) + 1));
+        this.targetProjectionCycle.set(
+          Math.max(
+            1,
+            snapshot.projectionTargetCycleNumber ?? (snapshot.latestCycleNumber ?? 0) + 1,
+          ),
+        );
       } catch (error: unknown) {
         this.errorMessage.set(this.getErrorMessage(error));
       }

@@ -295,8 +295,24 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'scripts/auth-security-baseline.cjs',
         'src/security-authority.ts',
         'src/shared/security/auth-security.util.ts',
+
+        // S3B intentionally hardens these public security boundaries.
+
+        'src/email-notifications.ts',
+
+        'src/manager-profile-authority.ts',
+
+        'src/roster-authority.ts',
+
+        'src/roster-moves.ts',
+
+        'src/shared/security/firestore-document-id-core.util.ts',
+
+        'src/shared/security/firestore-document-id.util.ts',
+
+        'src/shared/security/nhl-proxy-security.util.ts',
       ]),
     ),
-    '3212052cca056d9bfd89bdcd9e11fb58969650a28767d000455199897ce9c1cb',
+    '2a1fb1e2cb40222f626de6b2abb39a0e58a9e4d6d7c2cb3897bd36313fcbbff8',
   );
 });

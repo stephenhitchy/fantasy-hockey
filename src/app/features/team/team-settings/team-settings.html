@@ -1363,7 +1363,7 @@
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
               <button type="button" class="ir-activation-cancel rr-button rr-button--secondary" (click)="cancelBenchSwap()" [disabled]="rosterMoveLoading()">Cancel</button>
-              <button type="button" class="ir-activation-confirm rr-button rr-button--commit" (click)="confirmBenchSwap()" [disabled]="!canConfirmBenchSwap()">
+              <button type="button" class="ir-activation-confirm rr-button rr-button--commit" (click)="confirmBenchSwap($event)" [disabled]="!canConfirmBenchSwap()">
                 <span class="rr-commit-mark" aria-hidden="true">✓</span>
                 <span class="rr-commit-copy">
                   <small>Final lineup action</small>

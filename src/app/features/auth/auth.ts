@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, signal, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, OnDestroy, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
@@ -6,9 +6,13 @@ import { AuthSessionTimeoutError, withTimeout } from '../../core/auth/auth-sessi
 import {
   MAXIMUM_PASSWORD_LENGTH,
   MINIMUM_PASSWORD_LENGTH,
+  PasswordPolicyEvaluation,
+  evaluatePasswordAgainstFallbackPolicy,
+  formatMissingPasswordRequirements,
   passwordMeetsRegistrationPolicy,
   passwordRequirementSummary,
 } from '../../core/auth/auth-security.config';
+import { validateRegistrationPassword } from '../../core/auth/password-policy.service';
 import { TelemetryService } from '../../core/observability/telemetry.service';
 import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
 import {
@@ -38,7 +42,7 @@ import {
   templateUrl: './auth.html',
   styleUrl: './auth.css',
 })
-export class Auth {
+export class Auth implements OnDestroy {
   @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('favoriteTeamGrid') private favoriteTeamGrid?: ElementRef<HTMLElement>;
   @ViewChild('emailInput') private emailInput?: ElementRef<HTMLInputElement>;
@@ -58,6 +62,12 @@ export class Auth {
   readonly loading = signal(false);
   readonly invalidField = signal<'username' | 'team' | 'email' | 'password' | ''>('');
   readonly mascotCelebrating = signal(false);
+  readonly passwordPolicyChecking = signal(false);
+  readonly passwordPolicyEvaluation = signal<PasswordPolicyEvaluation>(
+    evaluatePasswordAgainstFallbackPolicy(''),
+  );
+  private passwordPolicyTimer: ReturnType<typeof setTimeout> | null = null;
+  private passwordPolicySequence = 0;
 
   readonly teams: PixelTeamTheme[] = NHL_PIXEL_TEAMS;
   readonly neutralTheme = RINKRAT_NEUTRAL_THEME;
@@ -116,6 +126,10 @@ export class Auth {
       return 'Send Reset Link';
     }
 
+    if (this.isRegistering() && this.password && !this.passwordRegistrationReady()) {
+      return 'Complete Password Requirements';
+    }
+
     return this.isRegistering() ? 'Create Profile' : 'Login';
   });
 
@@ -124,6 +138,30 @@ export class Auth {
   );
 
   readonly passwordRequirementText = passwordRequirementSummary();
+  readonly passwordRequirements = computed(() =>
+    this.passwordPolicyEvaluation().requirements,
+  );
+  readonly passwordRequirementsMetCount = computed(() =>
+    this.passwordRequirements().filter((requirement) => requirement.met).length,
+  );
+  readonly passwordRequirementsTotalCount = computed(() =>
+    this.passwordRequirements().filter((requirement) => requirement.required).length,
+  );
+  readonly passwordPolicySummary = computed(() => {
+    const evaluation = this.passwordPolicyEvaluation();
+
+    if (!this.password) {
+      return 'Complete each requirement below before creating your account.';
+    }
+
+    if (evaluation.isValid) {
+      return evaluation.source === 'firebase'
+        ? 'Your password meets the live Firebase requirements.'
+        : 'Your password meets the RinkRat production requirements.';
+    }
+
+    return `Still needed: ${formatMissingPasswordRequirements(evaluation)}.`;
+  });
 
   constructor(
     private router: Router,
@@ -143,12 +181,25 @@ export class Auth {
     }
   }
 
+  ngOnDestroy(): void {
+    if (this.passwordPolicyTimer !== null) {
+      clearTimeout(this.passwordPolicyTimer);
+      this.passwordPolicyTimer = null;
+    }
+
+    this.passwordPolicySequence += 1;
+  }
+
   async submit(): Promise<void> {
     if (this.loading()) {
       return;
     }
 
     if (!this.validateCurrentForm()) {
+      return;
+    }
+
+    if (this.isRegistering() && !(await this.confirmRegistrationPasswordPolicy())) {
       return;
     }
 
@@ -261,12 +312,72 @@ export class Auth {
     }
   }
 
-  passwordCharactersRemaining(): number {
-    return Math.max(0, MINIMUM_PASSWORD_LENGTH - this.password.length);
+  passwordRegistrationReady(): boolean {
+    return this.passwordPolicyEvaluation().isValid;
   }
 
-  passwordRegistrationReady(): boolean {
-    return passwordMeetsRegistrationPolicy(this.password);
+  handlePasswordChange(value: string): void {
+    this.password = value;
+    this.clearInvalidField('password');
+    this.passwordPolicyEvaluation.set(evaluatePasswordAgainstFallbackPolicy(value));
+    this.passwordPolicyChecking.set(false);
+
+    if (this.passwordPolicyTimer !== null) {
+      clearTimeout(this.passwordPolicyTimer);
+      this.passwordPolicyTimer = null;
+    }
+
+    const sequence = ++this.passwordPolicySequence;
+
+    if (!this.isRegistering() || value.length === 0) {
+      return;
+    }
+
+    this.passwordPolicyTimer = setTimeout(() => {
+      this.passwordPolicyTimer = null;
+      void this.refreshPasswordPolicy(value, sequence);
+    }, 300);
+  }
+
+  private async refreshPasswordPolicy(
+    password: string,
+    sequence: number,
+  ): Promise<PasswordPolicyEvaluation> {
+    this.passwordPolicyChecking.set(true);
+    const evaluation = await validateRegistrationPassword(password);
+
+    if (sequence === this.passwordPolicySequence && password === this.password) {
+      this.passwordPolicyEvaluation.set(evaluation);
+      this.passwordPolicyChecking.set(false);
+    }
+
+    return evaluation;
+  }
+
+  private async confirmRegistrationPasswordPolicy(): Promise<boolean> {
+    const sequence = ++this.passwordPolicySequence;
+
+    if (this.passwordPolicyTimer !== null) {
+      clearTimeout(this.passwordPolicyTimer);
+      this.passwordPolicyTimer = null;
+    }
+
+    const evaluation = await this.refreshPasswordPolicy(this.password, sequence);
+
+    if (sequence !== this.passwordPolicySequence) {
+      return false;
+    }
+
+    if (evaluation.isValid) {
+      return true;
+    }
+
+    this.setValidationError(
+      'password',
+      `Update your password before continuing. It still needs ${formatMissingPasswordRequirements(evaluation)}.`,
+      this.passwordInput?.nativeElement,
+    );
+    return false;
   }
 
   selectRegistrationTeam(team: PixelTeamTheme): void {
@@ -343,6 +454,8 @@ export class Auth {
     this.favoriteTeamAbbreviation.set(RINKRAT_NEUTRAL_ABBREVIATION);
     this.hockeyExperience.set(DEFAULT_HOCKEY_EXPERIENCE_LEVEL);
     this.password = '';
+    this.passwordPolicyEvaluation.set(evaluatePasswordAgainstFallbackPolicy(''));
+    this.passwordPolicyChecking.set(false);
     this.errorMessage.set('');
     this.successMessage.set('');
     this.invalidField.set('');
@@ -367,6 +480,8 @@ export class Auth {
     this.isRegistering.set(false);
     this.isResettingPassword.set(true);
     this.password = '';
+    this.passwordPolicyEvaluation.set(evaluatePasswordAgainstFallbackPolicy(''));
+    this.passwordPolicyChecking.set(false);
     this.errorMessage.set('');
     this.successMessage.set('');
     this.invalidField.set('');
@@ -381,6 +496,8 @@ export class Auth {
     this.isRegistering.set(false);
     this.isResettingPassword.set(false);
     this.password = '';
+    this.passwordPolicyEvaluation.set(evaluatePasswordAgainstFallbackPolicy(''));
+    this.passwordPolicyChecking.set(false);
     this.errorMessage.set('');
     this.successMessage.set('');
     this.invalidField.set('');
@@ -421,24 +538,23 @@ export class Auth {
       return true;
     }
 
-    const minimumPasswordLength = this.isRegistering() ? MINIMUM_PASSWORD_LENGTH : 1;
-
-    if (this.password.length < minimumPasswordLength) {
+    if (!this.password) {
       this.setValidationError(
         'password',
         this.isRegistering()
-          ? `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`
+          ? 'Create a password and complete every highlighted requirement.'
           : 'Enter your password.',
         this.passwordInput?.nativeElement,
       );
       return false;
     }
 
-
-    if (this.isRegistering() && this.password.length > MAXIMUM_PASSWORD_LENGTH) {
+    if (this.isRegistering() && !passwordMeetsRegistrationPolicy(this.password)) {
+      const evaluation = evaluatePasswordAgainstFallbackPolicy(this.password);
+      this.passwordPolicyEvaluation.set(evaluation);
       this.setValidationError(
         'password',
-        `Keep your password at ${MAXIMUM_PASSWORD_LENGTH} characters or fewer.`,
+        `Update your password before continuing. It still needs ${formatMissingPasswordRequirements(evaluation)}.`,
         this.passwordInput?.nativeElement,
       );
       return false;
@@ -487,7 +603,11 @@ export class Auth {
     }
 
     if (message.includes('auth/weak-password')) {
-      return `Choose a stronger password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`;
+      const evaluation = this.passwordPolicyEvaluation();
+      const missing = formatMissingPasswordRequirements(evaluation);
+      return missing
+        ? `That password does not meet the account requirements. Add ${missing}.`
+        : `That password does not meet the ${MINIMUM_PASSWORD_LENGTH}–${MAXIMUM_PASSWORD_LENGTH} character policy.`;
     }
 
     if (message.includes('auth/invalid-email')) {

@@ -94,15 +94,20 @@ test('registration password policy is 12 through 128 characters without breaking
   assert.equal(MAXIMUM_PASSWORD_LENGTH, 128);
   assert.equal(RECENT_AUTHENTICATION_WINDOW_SECONDS, 15 * 60);
   assert.equal(passwordMeetsRegistrationPolicy('x'.repeat(11)), false);
-  assert.equal(passwordMeetsRegistrationPolicy('x'.repeat(12)), true);
-  assert.equal(passwordMeetsRegistrationPolicy('x'.repeat(128)), true);
-  assert.equal(passwordMeetsRegistrationPolicy('x'.repeat(129)), false);
+  assert.equal(passwordMeetsRegistrationPolicy('x'.repeat(12)), false);
+  assert.equal(passwordMeetsRegistrationPolicy('RinkRat2026!'), true);
+  assert.equal(passwordMeetsRegistrationPolicy(`R${'x'.repeat(125)}1!`), true);
+  assert.equal(passwordMeetsRegistrationPolicy(`R${'x'.repeat(126)}1!`), false);
   assert.match(passwordRequirementSummary(), /12–128 characters/);
+  assert.match(passwordRequirementSummary(), /capital letter, number, and special character/);
   assert.match(authComponentSource, /passwordMeetsRegistrationPolicy/);
   assert.match(authTemplateSource, /\[attr\.minlength\]="isRegistering\(\) \? 12 : null"/);
   assert.match(authTemplateSource, /\[attr\.maxlength\]="isRegistering\(\) \? 128 : null"/);
   assert.match(authTemplateSource, /passwordRequirementText/);
   assert.match(authStylesSource, /password-policy-hint/);
+  assert.match(authTemplateSource, /Password requirements/);
+  assert.match(authTemplateSource, /every required item is green/);
+  assert.match(authComponentSource, /validateRegistrationPassword/);
   assert.doesNotMatch(authTemplateSource, /minlength="12"[\s\S]*?autocomplete="current-password"/);
 });
 
@@ -225,8 +230,10 @@ test('Firebase Authentication baseline is inspectable and mutations require expl
   assert.match(authBaselineSource, /projectConfigManager\(\)/);
   assert.match(authBaselineSource, /RINKRAT_APPLY_AUTH_SECURITY !== 'APPLY'/);
   assert.match(authBaselineSource, /enforcementState: 'ENFORCE'/);
-  assert.match(authBaselineSource, /minLength: 12/);
-  assert.match(authBaselineSource, /maxLength: 128/);
+  assert.match(authBaselineSource, /minimumLength: 12/);
+  assert.match(authBaselineSource, /minLength: RINKRAT_AUTH_POLICY\.minimumLength/);
+  assert.match(authBaselineSource, /maximumLength: 128/);
+  assert.match(authBaselineSource, /maxLength: RINKRAT_AUTH_POLICY\.maximumLength/);
   assert.match(authBaselineSource, /forceUpgradeOnSignin: false/);
   assert.match(authBaselineSource, /enableImprovedEmailPrivacy: true/);
   assert.match(authBaselineSource, /Inspection only\. No Firebase Authentication settings were changed/);
@@ -308,7 +315,7 @@ test('S3A remains monitor-only and documents the deliberate activation and enfor
   assert.match(setupGuideSource, /security:apply-auth-baseline/);
   assert.match(setupGuideSource, /S3A does not set `enforceAppCheck: true`/);
   assert.match(documentationSource, /Security Batch S3A — App Check Monitor Mode and Authentication Hardening/);
-  assert.match(readmeSource, /Release Candidate 15 \/ Security S3A/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ Security S3[AB]/);
 });
 
 test('S3A verification, release manifest, permanent roadmap, and package commands stay synchronized', () => {
@@ -326,8 +333,8 @@ test('S3A verification, release manifest, permanent roadmap, and package command
   assert.match(packageJson.scripts['security:inspect-auth'], /auth-security-baseline/);
   assert.match(functionsPackageJson.scripts.logs, /getSecurityControlReadiness/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.6\.1/);
+  assert.match(roadmapRootSource, /Version 1\.(?:6(?:\.\d+)?|7)/);
   assert.match(roadmapRootSource, /LOG\.9 .*Security Batch S3A/);
-  assert.match(runtimeConfigSource, /Release Candidate 15/);
-  assert.match(productionRuntimeConfigSource, /Release Candidate 15/);
+  assert.match(runtimeConfigSource, /Release Candidate \d+/);
+  assert.match(productionRuntimeConfigSource, /Release Candidate \d+/);
 });

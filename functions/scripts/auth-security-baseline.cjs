@@ -4,6 +4,18 @@ const process = require('node:process');
 const { applicationDefault, getApps, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 
+
+const RINKRAT_AUTH_POLICY = Object.freeze({
+  enforcementState: 'ENFORCE',
+  forceUpgradeOnSignin: false,
+  minimumLength: 12,
+  maximumLength: 128,
+  requireLowercase: false,
+  requireUppercase: true,
+  requireNumeric: true,
+  requireNonAlphanumeric: true,
+});
+
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const projectArgument = args.find((value) => value.startsWith('--project='));
@@ -81,11 +93,15 @@ async function main() {
 
   await manager.updateProjectConfig({
     passwordPolicyConfig: {
-      enforcementState: 'ENFORCE',
-      forceUpgradeOnSignin: false,
+      enforcementState: RINKRAT_AUTH_POLICY.enforcementState,
+      forceUpgradeOnSignin: RINKRAT_AUTH_POLICY.forceUpgradeOnSignin,
       constraints: {
-        minLength: 12,
-        maxLength: 128,
+        minLength: RINKRAT_AUTH_POLICY.minimumLength,
+        maxLength: RINKRAT_AUTH_POLICY.maximumLength,
+        requireLowercase: RINKRAT_AUTH_POLICY.requireLowercase,
+        requireUppercase: RINKRAT_AUTH_POLICY.requireUppercase,
+        requireNumeric: RINKRAT_AUTH_POLICY.requireNumeric,
+        requireNonAlphanumeric: RINKRAT_AUTH_POLICY.requireNonAlphanumeric,
       },
     },
     emailPrivacyConfig: {
@@ -97,7 +113,7 @@ async function main() {
   console.log('\nUpdated Firebase Authentication security baseline:');
   console.log(JSON.stringify(summarize(after), null, 2));
   console.log(
-    '\nExisting passwords are not silently replaced. Managers encounter the stronger policy when creating or changing a password.',
+    '\nExisting passwords are not silently replaced. Managers encounter the stronger policy when creating or changing a password. The enforced RinkRat policy requires a capital letter, number, and special character; lowercase remains optional.',
   );
 }
 

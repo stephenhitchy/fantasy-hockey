@@ -7,6 +7,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { db } from './shared/core/firebase';
+import { isSafeFirestoreDocumentId } from './shared/security/firestore-document-id-core.util';
 import {
   DraftAutoPickReason,
   DraftQueue,
@@ -1562,8 +1563,11 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
 
     if (
       !payload ||
-      typeof payload.leagueId !== 'string' ||
-      !payload.leagueId ||
+      !isSafeFirestoreDocumentId(payload.leagueId, {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      }) ||
       !Number.isFinite(payload.expectedOverallPick) ||
       !Number.isFinite(payload.expectedPickStartedAtMilliseconds) ||
       !Number.isFinite(payload.expectedDueAtMilliseconds)

@@ -83,7 +83,10 @@ import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/t
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
 import { getPixelTeamTheme } from '../../../shared/pixel-theme/pixel-theme.data';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
-import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
+import {
+  repairViewportOverlayLock,
+  ViewportOverlayPortalDirective,
+} from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
 import { ClientHealthService } from '../../../core/observability/client-health.service';
 import { CompetitiveActionMonitorService } from '../../../core/observability/competitive-action-monitor.service';
@@ -193,6 +196,7 @@ export class TeamSettings implements OnDestroy {
   private stopCurrentNavigationMatchupListener: (() => void) | null = null;
   private stopSharedScoringListener: (() => void) | null = null;
   private rosterOperationGeneration = 0;
+  private benchSwapReopenBlockedUntil = 0;
 
   readonly currentMatchup = computed(() => {
     const userId = this.userId;
@@ -1408,6 +1412,13 @@ export class TeamSettings implements OnDestroy {
   }
 
   beginBenchSwap(benchSlotId: string): void {
+    if (
+      this.isRosterOperationPending() ||
+      Date.now() < this.benchSwapReopenBlockedUntil
+    ) {
+      return;
+    }
+
     const benchSlot = this.roster()?.benchSlots.find((slot) => slot.slotId === benchSlotId);
     if (!benchSlot?.asset) {
       this.rosterMoveError.set('That bench slot is empty.');
@@ -1430,8 +1441,39 @@ export class TeamSettings implements OnDestroy {
     if (this.rosterMoveLoading()) {
       return;
     }
+
+    this.clearBenchSwapDialogState();
+  }
+
+  private clearBenchSwapDialogState(): void {
     this.benchSwapSlotId.set('');
     this.benchSwapTargetSlotId.set('');
+    this.scheduleViewportOverlayRepair();
+  }
+
+  private scheduleViewportOverlayRepair(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => repairViewportOverlayLock());
+  }
+
+  private waitForRosterOverlayDismissal(): Promise<void> {
+    if (typeof window === 'undefined') {
+      repairViewportOverlayLock();
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        repairViewportOverlayLock();
+        window.requestAnimationFrame(() => {
+          repairViewportOverlayLock();
+          resolve();
+        });
+      });
+    });
   }
 
   getPendingBenchSwapSlot(): BenchRosterSlot | null {
@@ -1463,7 +1505,10 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
-  async confirmBenchSwap(): Promise<void> {
+  async confirmBenchSwap(event?: Event): Promise<void> {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     if (!this.ensureCompetitiveActionReady()) {
       return;
     }
@@ -1484,12 +1529,14 @@ export class TeamSettings implements OnDestroy {
     const operationGeneration = ++this.rosterOperationGeneration;
     const previousRosterFingerprint = this.getRosterOperationFingerprint();
 
-    // Close the portaled confirmation dialog before any network wait. The
-    // compact roster status dock remains visible while Firestore reconciles.
-    this.benchSwapSlotId.set('');
-    this.benchSwapTargetSlotId.set('');
+    // Disable the underlying roster controls before dismissing the portaled
+    // confirmation view. This prevents a delayed touch/click from reopening the
+    // same action while the secure move is reconciling.
     this.rosterMoveLoading.set(true);
     this.rosterMoveError.set('');
+    this.benchSwapReopenBlockedUntil = Date.now() + 1_500;
+    this.clearBenchSwapDialogState();
+    await this.waitForRosterOverlayDismissal();
 
     try {
       const request = queueActiveBenchSwap({
@@ -1524,6 +1571,7 @@ export class TeamSettings implements OnDestroy {
       if (this.rosterOperationGeneration === operationGeneration) {
         this.rosterOperationGeneration += 1;
       }
+      this.clearBenchSwapDialogState();
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }

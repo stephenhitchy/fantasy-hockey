@@ -161,7 +161,11 @@
     "security:inspect-auth": "node functions/scripts/auth-security-baseline.cjs",
     "security:apply-auth-baseline": "node functions/scripts/auth-security-baseline.cjs --apply",
     "test:batchs3a-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3a-1-configured-app-check/*.test.mjs",
-    "verify:batchs3a-1": "npm run verify:batchs3a && npm run test:batchs3a-1:run && npm run validate:release-manifest"
+    "verify:batchs3a-1": "npm run verify:batchs3a && npm run test:batchs3a-1:run && npm run validate:release-manifest",
+    "test:batchs3a-2:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3a-2-roster-overlay-readiness/*.test.mjs",
+    "verify:batchs3a-2": "npm run verify:batchs3a-1 && npm run test:batchs3a-2:run && npm run validate:release-manifest",
+    "test:batchs3b:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3b-password-id-proxy-security/*.test.mjs",
+    "verify:batchs3b": "npm run verify:batchs3a-2 && npm run test:batchs3b:run && npm run validate:release-manifest"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

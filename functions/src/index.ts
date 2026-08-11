@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { initializeApp } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import {
   DocumentData,
@@ -24,6 +25,18 @@ import {
   requireVerifiedEmail as requireVerifiedEmailShared,
   requireVerifiedRecentAuthentication,
 } from './shared/security/auth-security.util';
+import {
+  optionalFirestoreDocumentId,
+  requireFirestoreDocumentId,
+  requireFirestoreDocumentIds,
+} from './shared/security/firestore-document-id.util';
+import {
+  getNhlProxyRateLimitPolicy,
+  isNhlProxyResolutionFailure,
+  resolveNhlProxyRequest,
+  type NhlProxyAppCheckStatus,
+  type NhlProxyRouteClass,
+} from './shared/security/nhl-proxy-security.util';
 
 initializeApp();
 
@@ -33,13 +46,14 @@ const ESPN_NHL_INJURIES_URL =
   'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries';
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
-const NHL_WEB_API_ORIGIN = 'https://api-web.nhle.com';
-const NHL_STATS_API_ORIGIN = 'https://api.nhle.com';
-const ESPN_API_ORIGIN = 'https://site.api.espn.com';
 const NHL_PROXY_TIMEOUT_MS = 18_000;
 const NHL_PROXY_MAX_ATTEMPTS = 2;
 const NHL_PROXY_MAX_CACHE_ENTRIES = 40;
 const NHL_PROXY_MAX_CACHE_BYTES = 32 * 1024 * 1024;
+const NHL_PROXY_GLOBAL_REQUESTS_PER_MINUTE = 1_200;
+const NHL_PROXY_RATE_WINDOW_MILLISECONDS = 60_000;
+const NHL_PROXY_APP_CHECK_CACHE_MILLISECONDS = 2 * 60 * 1000;
+const NHL_PROXY_HEALTH_FLUSH_MILLISECONDS = 60_000;
 
 interface CachedNhlProxyResponse {
   loadedAt: number;
@@ -48,42 +62,248 @@ interface CachedNhlProxyResponse {
   body: Buffer;
 }
 
+interface CachedNhlProxyAppCheckResult {
+  status: NhlProxyAppCheckStatus;
+  appId: string | null;
+  expiresAt: number;
+}
+
+interface NhlProxyRateWindow {
+  startedAt: number;
+  count: number;
+  lastSeenAt: number;
+}
+
+interface NhlProxySecurityCounters {
+  requestCount: number;
+  verifiedRequestCount: number;
+  missingTokenRequestCount: number;
+  invalidTokenRequestCount: number;
+  rateLimitedRequestCount: number;
+  rejectedQueryRequestCount: number;
+  oversizedResponseCount: number;
+}
+
 const nhlProxyResponseCache = new Map<string, CachedNhlProxyResponse>();
+const nhlProxyAppCheckCache = new Map<string, CachedNhlProxyAppCheckResult>();
+const nhlProxyRateWindows = new Map<string, NhlProxyRateWindow>();
+let nhlProxyLastHealthFlushAt = 0;
+let nhlProxyLastRouteClass: NhlProxyRouteClass | null = null;
+let nhlProxyLastSecurityEvent = 'startup';
+let nhlProxySecurityCounters: NhlProxySecurityCounters = {
+  requestCount: 0,
+  verifiedRequestCount: 0,
+  missingTokenRequestCount: 0,
+  invalidTokenRequestCount: 0,
+  rateLimitedRequestCount: 0,
+  rejectedQueryRequestCount: 0,
+  oversizedResponseCount: 0,
+};
 
-const NHL_PROXY_PATH_PATTERNS = [
-  /^\/v1\/player\/\d+\/game-log\/\d{8}\/2$/,
-  /^\/v1\/club-schedule-season\/[a-z]{3}\/\d{8}$/,
-  /^\/v1\/gamecenter\/\d+\/(boxscore|play-by-play)$/,
-  /^\/v1\/score\/now$/,
-  /^\/v1\/roster\/[a-z]{3}\/(current|\d{8})$/,
-  /^\/stats\/rest\/en\/skater\/(summary|realtime)$/,
-  /^\/stats\/rest\/en\/goalie\/summary$/,
-  /^\/espn\/injuries$/
-] as const;
+class NhlProxyResponseTooLargeError extends Error {
+  constructor(readonly maximumBytes: number) {
+    super('The upstream NHL response exceeded the RinkRat proxy safety limit.');
+    this.name = 'NhlProxyResponseTooLargeError';
+  }
+}
 
-function getNhlProxyTarget(originalUrl: string): URL | null {
-  const requestUrl = new URL(
-    originalUrl,
-    'https://rinkrat-fantasy-proxy.local'
-  );
-  const path = requestUrl.pathname;
-
-  if (!NHL_PROXY_PATH_PATTERNS.some((pattern) => pattern.test(path))) {
-    return null;
+function getNhlProxyHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() ?? '';
   }
 
-  if (path === '/espn/injuries') {
-    return new URL(
-      '/apis/site/v2/sports/hockey/nhl/injuries',
-      ESPN_API_ORIGIN
-    );
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getNhlProxyRequesterIdentity(request: {
+  ip?: string;
+  headers: Record<string, string | string[] | undefined>;
+}): string {
+  const directIp = typeof request.ip === 'string' ? request.ip.trim() : '';
+  const forwarded = getNhlProxyHeaderValue(request.headers['x-forwarded-for'])
+    .split(',')[0]
+    ?.trim() ?? '';
+  const rawIdentity = directIp || forwarded || 'unknown-requester';
+
+  return createHash('sha256')
+    .update(`rinkrat-nhl-proxy:${rawIdentity}`)
+    .digest('hex')
+    .slice(0, 24);
+}
+
+async function inspectNhlProxyAppCheck(request: {
+  headers: Record<string, string | string[] | undefined>;
+}): Promise<{ status: NhlProxyAppCheckStatus; appId: string | null }> {
+  const token = getNhlProxyHeaderValue(request.headers['x-firebase-appcheck']);
+
+  if (!token) {
+    return { status: 'missing', appId: null };
   }
 
-  const origin = path.startsWith('/v1/')
-    ? NHL_WEB_API_ORIGIN
-    : NHL_STATS_API_ORIGIN;
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const cached = nhlProxyAppCheckCache.get(tokenHash);
+  const now = Date.now();
 
-  return new URL(`${path}${requestUrl.search}`, origin);
+  if (cached && cached.expiresAt > now) {
+    return { status: cached.status, appId: cached.appId };
+  }
+
+  try {
+    const decoded = await getAppCheck().verifyToken(token);
+    const result: CachedNhlProxyAppCheckResult = {
+      status: 'valid',
+      appId: decoded.appId,
+      expiresAt: now + NHL_PROXY_APP_CHECK_CACHE_MILLISECONDS,
+    };
+    nhlProxyAppCheckCache.set(tokenHash, result);
+    return { status: result.status, appId: result.appId };
+  } catch {
+    const result: CachedNhlProxyAppCheckResult = {
+      status: 'invalid',
+      appId: null,
+      expiresAt: now + 30_000,
+    };
+    nhlProxyAppCheckCache.set(tokenHash, result);
+    return { status: result.status, appId: result.appId };
+  }
+}
+
+function pruneNhlProxySecurityCaches(now: number): void {
+  if (nhlProxyRateWindows.size > 5_000) {
+    for (const [key, value] of nhlProxyRateWindows) {
+      if (now - value.lastSeenAt > 2 * NHL_PROXY_RATE_WINDOW_MILLISECONDS) {
+        nhlProxyRateWindows.delete(key);
+      }
+    }
+  }
+
+  if (nhlProxyAppCheckCache.size > 1_000) {
+    for (const [key, value] of nhlProxyAppCheckCache) {
+      if (value.expiresAt <= now) {
+        nhlProxyAppCheckCache.delete(key);
+      }
+    }
+  }
+}
+
+function consumeNhlProxyRateLimit(
+  requesterId: string,
+  routeClass: NhlProxyRouteClass,
+  appCheckStatus: NhlProxyAppCheckStatus,
+): { allowed: boolean; retryAfterSeconds: number; limit: number } {
+  const now = Date.now();
+  const policy = getNhlProxyRateLimitPolicy(routeClass, appCheckStatus);
+  const minuteBucket = Math.floor(now / NHL_PROXY_RATE_WINDOW_MILLISECONDS);
+  const requesterKey = `${minuteBucket}:${requesterId}:${routeClass}`;
+  const globalKey = `${minuteBucket}:global`;
+
+  const consume = (key: string, maximum: number): { allowed: boolean; retryAfterSeconds: number } => {
+    const existing = nhlProxyRateWindows.get(key);
+    const windowStartedAt = minuteBucket * NHL_PROXY_RATE_WINDOW_MILLISECONDS;
+    const next: NhlProxyRateWindow = existing && existing.startedAt === windowStartedAt
+      ? { ...existing, count: existing.count + 1, lastSeenAt: now }
+      : { startedAt: windowStartedAt, count: 1, lastSeenAt: now };
+    nhlProxyRateWindows.set(key, next);
+
+    return {
+      allowed: next.count <= maximum,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((windowStartedAt + NHL_PROXY_RATE_WINDOW_MILLISECONDS - now) / 1_000),
+      ),
+    };
+  };
+
+  const globalResult = consume(globalKey, NHL_PROXY_GLOBAL_REQUESTS_PER_MINUTE);
+  const requesterResult = consume(requesterKey, policy.maximumRequestsPerMinute);
+  pruneNhlProxySecurityCaches(now);
+
+  return {
+    allowed: globalResult.allowed && requesterResult.allowed,
+    retryAfterSeconds: Math.max(
+      globalResult.retryAfterSeconds,
+      requesterResult.retryAfterSeconds,
+    ),
+    limit: policy.maximumRequestsPerMinute,
+  };
+}
+
+function recordNhlProxySecurityObservation(
+  event: string,
+  routeClass: NhlProxyRouteClass | null,
+  appCheckStatus: NhlProxyAppCheckStatus | null,
+): void {
+  nhlProxySecurityCounters.requestCount += event === 'request' ? 1 : 0;
+  nhlProxySecurityCounters.verifiedRequestCount +=
+    event === 'request' && appCheckStatus === 'valid' ? 1 : 0;
+  nhlProxySecurityCounters.missingTokenRequestCount +=
+    event === 'request' && appCheckStatus === 'missing' ? 1 : 0;
+  nhlProxySecurityCounters.invalidTokenRequestCount +=
+    event === 'request' && appCheckStatus === 'invalid' ? 1 : 0;
+  nhlProxySecurityCounters.rateLimitedRequestCount += event === 'rate-limited' ? 1 : 0;
+  nhlProxySecurityCounters.rejectedQueryRequestCount += event === 'rejected-query' ? 1 : 0;
+  nhlProxySecurityCounters.oversizedResponseCount += event === 'oversized-response' ? 1 : 0;
+  nhlProxyLastRouteClass = routeClass ?? nhlProxyLastRouteClass;
+  nhlProxyLastSecurityEvent = event;
+
+  if (Date.now() - nhlProxyLastHealthFlushAt < NHL_PROXY_HEALTH_FLUSH_MILLISECONDS) {
+    return;
+  }
+
+  nhlProxyLastHealthFlushAt = Date.now();
+  const counters = nhlProxySecurityCounters;
+  nhlProxySecurityCounters = {
+    requestCount: 0,
+    verifiedRequestCount: 0,
+    missingTokenRequestCount: 0,
+    invalidTokenRequestCount: 0,
+    rateLimitedRequestCount: 0,
+    rejectedQueryRequestCount: 0,
+    oversizedResponseCount: 0,
+  };
+
+  void db.doc('appData/nhlProxySecurity').set(
+    {
+      schemaVersion: 1,
+      mode: 'app-check-monitor',
+      routeAllowlistEnabled: true,
+      queryAllowlistEnabled: true,
+      perInstanceRateLimitEnabled: true,
+      requestCount: FieldValue.increment(counters.requestCount),
+      verifiedRequestCount: FieldValue.increment(counters.verifiedRequestCount),
+      missingTokenRequestCount: FieldValue.increment(counters.missingTokenRequestCount),
+      invalidTokenRequestCount: FieldValue.increment(counters.invalidTokenRequestCount),
+      rateLimitedRequestCount: FieldValue.increment(counters.rateLimitedRequestCount),
+      rejectedQueryRequestCount: FieldValue.increment(counters.rejectedQueryRequestCount),
+      oversizedResponseCount: FieldValue.increment(counters.oversizedResponseCount),
+      lastRouteClass: nhlProxyLastRouteClass,
+      lastSecurityEvent: nhlProxyLastSecurityEvent,
+      lastObservedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  ).catch((error: unknown) => {
+    console.warn('Unable to persist NHL proxy security health.', { error });
+  });
+}
+
+async function readNhlProxyResponseBody(
+  upstreamResponse: Response,
+  maximumBytes: number,
+): Promise<Buffer> {
+  const contentLength = Number(upstreamResponse.headers.get('content-length') ?? '');
+
+  if (Number.isFinite(contentLength) && contentLength > maximumBytes) {
+    throw new NhlProxyResponseTooLargeError(maximumBytes);
+  }
+
+  const body = Buffer.from(await upstreamResponse.arrayBuffer());
+
+  if (body.byteLength > maximumBytes) {
+    throw new NhlProxyResponseTooLargeError(maximumBytes);
+  }
+
+  return body;
 }
 
 function getNhlProxyCacheControl(path: string): string {
@@ -1369,30 +1589,83 @@ export const nhlApiProxy = onRequest(
       response
         .status(405)
         .set('Allow', 'GET')
+        .set('X-Content-Type-Options', 'nosniff')
         .json({ message: 'Only GET requests are supported.' });
       return;
     }
 
-    const target = getNhlProxyTarget(request.originalUrl);
+    const resolution = resolveNhlProxyRequest(request.originalUrl);
 
-    if (!target) {
-      response.status(404).json({
-        message: 'This NHL API route is not available through the app proxy.'
+    if (isNhlProxyResolutionFailure(resolution)) {
+      recordNhlProxySecurityObservation(
+        resolution.status === 400 ? 'rejected-query' : 'rejected-route',
+        null,
+        null,
+      );
+      response
+        .status(resolution.status)
+        .set('Cache-Control', 'no-store')
+        .set('X-Content-Type-Options', 'nosniff')
+        .json({ message: resolution.message });
+      return;
+    }
+
+    const target = new URL(resolution.targetUrl);
+    const appCheck = await inspectNhlProxyAppCheck({
+      headers: request.headers as Record<string, string | string[] | undefined>,
+    });
+    const requesterId = getNhlProxyRequesterIdentity({
+      ip: request.ip,
+      headers: request.headers as Record<string, string | string[] | undefined>,
+    });
+    const rateLimit = consumeNhlProxyRateLimit(
+      requesterId,
+      resolution.routeClass,
+      appCheck.status,
+    );
+
+    recordNhlProxySecurityObservation('request', resolution.routeClass, appCheck.status);
+
+    if (!rateLimit.allowed) {
+      recordNhlProxySecurityObservation(
+        'rate-limited',
+        resolution.routeClass,
+        appCheck.status,
+      );
+      console.warn('NHL API proxy request was rate limited.', {
+        requesterId,
+        routeClass: resolution.routeClass,
+        appCheckStatus: appCheck.status,
+        appCheckAppId: appCheck.appId,
+        configuredLimit: rateLimit.limit,
       });
+      response
+        .status(429)
+        .set('Retry-After', String(rateLimit.retryAfterSeconds))
+        .set('Cache-Control', 'no-store')
+        .set('X-RinkRat-App-Check', appCheck.status)
+        .set('X-RinkRat-Rate-Limit', String(rateLimit.limit))
+        .set('X-Content-Type-Options', 'nosniff')
+        .json({
+          message: 'Too many NHL data requests were sent from this connection. Wait a moment and try again.',
+        });
       return;
     }
 
     const cacheKey = target.toString();
     const cached = nhlProxyResponseCache.get(cacheKey);
     const cachedAge = cached ? Date.now() - cached.loadedAt : Number.POSITIVE_INFINITY;
+    const applySecurityHeaders = () => response
+      .set('X-RinkRat-App-Check', appCheck.status)
+      .set('X-RinkRat-Proxy-Route', resolution.routeClass)
+      .set('X-Content-Type-Options', 'nosniff');
 
     if (cached && cachedAge <= getNhlProxyFreshCacheMilliseconds(target.pathname)) {
-      response
+      applySecurityHeaders()
         .status(cached.status)
         .set('Content-Type', cached.contentType)
         .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
         .set('X-RinkRat-Proxy-Cache', 'fresh')
-        .set('X-Content-Type-Options', 'nosniff')
         .send(cached.body);
       return;
     }
@@ -1406,18 +1679,20 @@ export const nhlApiProxy = onRequest(
         cachedAge <= getNhlProxyStaleCacheMilliseconds(target.pathname) &&
         [408, 425, 429, 500, 502, 503, 504].includes(upstreamResponse.status)
       ) {
-        response
+        applySecurityHeaders()
           .status(cached.status)
           .set('Content-Type', cached.contentType)
           .set('Cache-Control', 'private, no-cache')
           .set('Warning', '110 - Response is stale because the NHL service was unavailable')
           .set('X-RinkRat-Proxy-Cache', 'stale')
-          .set('X-Content-Type-Options', 'nosniff')
           .send(cached.body);
         return;
       }
 
-      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      const upstreamBody = await readNhlProxyResponseBody(
+        upstreamResponse,
+        resolution.maximumResponseBytes,
+      );
       const responseBody =
         upstreamResponse.ok && target.pathname === '/v1/score/now'
           ? compactNhlScoreNowBody(upstreamBody)
@@ -1436,25 +1711,43 @@ export const nhlApiProxy = onRequest(
         trimNhlProxyResponseCache();
       }
 
-      response
+      applySecurityHeaders()
         .status(upstreamResponse.status)
         .set('Content-Type', contentType)
         .set('Cache-Control', getNhlProxyCacheControl(target.pathname))
         .set('X-RinkRat-Proxy-Cache', 'miss')
-        .set('X-Content-Type-Options', 'nosniff')
         .send(responseBody);
     } catch (error: unknown) {
+      if (error instanceof NhlProxyResponseTooLargeError) {
+        recordNhlProxySecurityObservation(
+          'oversized-response',
+          resolution.routeClass,
+          appCheck.status,
+        );
+        console.warn('NHL API proxy rejected an oversized upstream response.', {
+          routeClass: resolution.routeClass,
+          maximumBytes: error.maximumBytes,
+          appCheckStatus: appCheck.status,
+        });
+        applySecurityHeaders()
+          .status(502)
+          .set('Cache-Control', 'no-store')
+          .json({
+            message: 'The NHL data response was larger than RinkRat can process safely.',
+          });
+        return;
+      }
+
       if (
         cached &&
         cachedAge <= getNhlProxyStaleCacheMilliseconds(target.pathname)
       ) {
-        response
+        applySecurityHeaders()
           .status(cached.status)
           .set('Content-Type', cached.contentType)
           .set('Cache-Control', 'private, no-cache')
           .set('Warning', '110 - Response is stale because the NHL service was unavailable')
           .set('X-RinkRat-Proxy-Cache', 'stale')
-          .set('X-Content-Type-Options', 'nosniff')
           .send(cached.body);
         return;
       }
@@ -1465,12 +1758,17 @@ export const nhlApiProxy = onRequest(
 
       console.error('NHL API proxy request failed.', {
         target: target.toString(),
+        routeClass: resolution.routeClass,
+        appCheckStatus: appCheck.status,
         message
       });
 
-      response.status(502).json({
-        message: 'The NHL data service could not be reached. Please try again shortly.'
-      });
+      applySecurityHeaders()
+        .status(502)
+        .set('Cache-Control', 'no-store')
+        .json({
+          message: 'The NHL data service could not be reached. Please try again shortly.'
+        });
     }
   }
 );
@@ -1892,7 +2190,11 @@ export const refreshDailyPlayerAvailability = onCall(
     }
 
     const data = asRecord(request.data);
-    const leagueId = asString(data['leagueId']);
+    const leagueId = requireFirestoreDocumentId(data['leagueId'], 'league ID', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    });
     const requestedTrigger = asString(data['trigger']);
     const trigger: PlayerAvailabilityRefreshTrigger =
       requestedTrigger === 'draft-start' ||
@@ -1901,17 +2203,6 @@ export const refreshDailyPlayerAvailability = onCall(
         ? requestedTrigger
         : 'daily-visit';
     const force = data['force'] === true;
-
-    if (
-      !leagueId ||
-      leagueId.length > 128 ||
-      !/^[A-Za-z0-9_-]+$/.test(leagueId)
-    ) {
-      throw new HttpsError(
-        'invalid-argument',
-        'A valid league ID is required.'
-      );
-    }
 
     const userId = request.auth.uid;
 
@@ -1991,23 +2282,20 @@ export const getPublicManagerProfiles = onCall(
     }
 
     const data = asRecord(request.data);
-    const leagueId = asString(data['leagueId']);
-    const rawUserIds = Array.isArray(data['userIds'])
-      ? data['userIds'] as unknown[]
-      : [];
-    const userIds = [...new Set(
-      rawUserIds
-        .map((value) => asString(value))
-        .filter((value) => value.length >= 1 && value.length <= 128)
-    )];
-
-    if (
-      !leagueId ||
-      leagueId.length > 128 ||
-      !/^[A-Za-z0-9_-]+$/.test(leagueId)
-    ) {
-      throw new HttpsError('invalid-argument', 'A valid league ID is required.');
-    }
+    const leagueId = requireFirestoreDocumentId(data['leagueId'], 'league ID', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    });
+    const userIds = [...new Set(requireFirestoreDocumentIds(
+      data['userIds'],
+      'manager ID',
+      {
+        maximumCount: 20,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    ))];
 
     if (userIds.length === 0 || userIds.length > 20) {
       throw new HttpsError(
@@ -2141,19 +2429,12 @@ export const deleteLeague = onCall(
     );
 
     const data = asRecord(request.data);
-    const leagueId = asString(data['leagueId']);
+    const leagueId = requireFirestoreDocumentId(data['leagueId'], 'league ID', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    });
     const confirmationName = asString(data['confirmationName']);
-
-    if (
-      !leagueId ||
-      leagueId.length > 128 ||
-      !/^[A-Za-z0-9_-]+$/.test(leagueId)
-    ) {
-      throw new HttpsError(
-        'invalid-argument',
-        'A valid league ID is required.'
-      );
-    }
 
     if (!confirmationName || confirmationName.length > 80) {
       throw new HttpsError(
@@ -2662,7 +2943,10 @@ async function enforceUserSubmissionLimit(
   maximumCount: number,
   windowMilliseconds: number
 ): Promise<void> {
-  const rateLimitRef = db.doc(`observabilityRateLimits/${userId}`);
+  const safeUserId = requireFirestoreDocumentId(userId, 'manager ID', {
+    maxBytes: 128,
+  });
+  const rateLimitRef = db.doc(`observabilityRateLimits/${safeUserId}`);
   const startedAtField = `${bucket}WindowStartedAt`;
   const countField = `${bucket}WindowCount`;
 
@@ -2874,7 +3158,11 @@ export const submitFeedback = onCall(
     const category = asString(data['category']);
     const message = asString(data['message']).trim();
     const route = asString(data['route']).slice(0, 300);
-    const leagueId = asString(data['leagueId']).slice(0, 128);
+    const leagueId = optionalFirestoreDocumentId(data['leagueId'], 'league context', {
+      minimumLength: 6,
+      maxBytes: 128,
+      pattern: /^[A-Za-z0-9_-]+$/,
+    }) ?? '';
     const allowFollowUp = data['allowFollowUp'] === true;
 
     if (!FEEDBACK_CATEGORIES.has(category)) {
@@ -2892,10 +3180,6 @@ export const submitFeedback = onCall(
     }
 
     if (leagueId) {
-      if (!/^[A-Za-z0-9_-]+$/.test(leagueId)) {
-        throw new HttpsError('invalid-argument', 'Invalid league context.');
-      }
-
       const [leagueSnapshot, memberSnapshot, teamSnapshot] = await Promise.all([
         db.doc(`leagues/${leagueId}`).get(),
         db.doc(`leagues/${leagueId}/members/${request.auth.uid}`).get(),
@@ -2976,7 +3260,10 @@ async function platformAdminRecord(uid: string): Promise<{
   allowed: boolean;
   role: string;
 }> {
-  const snapshot = await db.doc(`platformAdmins/${uid}`).get();
+  const safeUid = requireFirestoreDocumentId(uid, 'platform administrator ID', {
+    maxBytes: 128,
+  });
+  const snapshot = await db.doc(`platformAdmins/${safeUid}`).get();
   const data = snapshot.data() ?? {};
 
   return {
@@ -3001,10 +3288,15 @@ async function requirePlatformAdmin(
     throw new HttpsError('unauthenticated', 'Sign in before opening the Admin Center.');
   }
 
+  const uid = requireFirestoreDocumentId(
+    request.auth.uid,
+    'platform administrator ID',
+    { maxBytes: 128 },
+  );
   let role = 'platform-admin';
 
   if (request.auth.token['platformAdmin'] !== true) {
-    const record = await platformAdminRecord(request.auth.uid);
+    const record = await platformAdminRecord(uid);
 
     if (!record.allowed) {
       throw new HttpsError(
@@ -3022,7 +3314,7 @@ async function requirePlatformAdmin(
     requireRecentAuthenticationShared(request.auth, actionLabel);
   }
 
-  return { uid: request.auth.uid, role };
+  return { uid, role };
 }
 
 function browserFamily(userAgent: string): string {
@@ -3294,13 +3586,17 @@ export const updateAdminFeedback = onCall(
       actionLabel: 'change a feedback review',
     });
     const data = asRecord(request.data);
-    const feedbackId = asString(data['feedbackId']);
+    const feedbackId = requireFirestoreDocumentId(
+      data['feedbackId'],
+      'feedback reference',
+      {
+        minimumLength: 10,
+        maxBytes: 80,
+        pattern: /^[A-Za-z0-9-]+$/,
+      },
+    );
     const status = asString(data['status']);
     const adminNotes = asString(data['adminNotes']).trim().slice(0, 2_000);
-
-    if (!/^[A-Za-z0-9-]{10,80}$/.test(feedbackId)) {
-      throw new HttpsError('invalid-argument', 'Invalid feedback reference.');
-    }
 
     if (!ADMIN_FEEDBACK_STATUSES.has(status)) {
       throw new HttpsError('invalid-argument', 'Choose a valid feedback status.');
@@ -3348,13 +3644,17 @@ export const updateAdminErrorReview = onCall(
       actionLabel: 'change an error review',
     });
     const data = asRecord(request.data);
-    const fingerprint = asString(data['fingerprint']);
+    const fingerprint = requireFirestoreDocumentId(
+      data['fingerprint'],
+      'error-group reference',
+      {
+        minimumLength: 32,
+        maxBytes: 32,
+        pattern: /^[a-f0-9]{32}$/,
+      },
+    );
     const status = asString(data['status']);
     const adminNotes = asString(data['adminNotes']).trim().slice(0, 2_000);
-
-    if (!/^[a-f0-9]{32}$/.test(fingerprint)) {
-      throw new HttpsError('invalid-argument', 'Invalid error-group reference.');
-    }
 
     if (!ADMIN_ERROR_STATUSES.has(status)) {
       throw new HttpsError('invalid-argument', 'Choose a valid error status.');

@@ -10,6 +10,8 @@ import {
   Renderer2,
 } from '@angular/core';
 
+import { hasActiveViewportOverlay } from './viewport-overlay-portal.directive';
+
 const FOCUSABLE_SELECTOR = [
   'a[href]',
   'area[href]',
@@ -61,15 +63,28 @@ export class DialogFocusTrapDirective implements AfterViewInit, OnDestroy {
       window.cancelAnimationFrame(this.focusFrame);
     }
 
-    if (
-      this.restoreTarget &&
-      this.restoreTarget.isConnected &&
-      !this.restoreTarget.hasAttribute('disabled')
-    ) {
-      window.requestAnimationFrame(() => {
-        this.restoreTarget?.focus({ preventScroll: true });
-      });
+    const restoreTarget = this.restoreTarget;
+
+    if (!restoreTarget || typeof window === 'undefined') {
+      return;
     }
+
+    window.requestAnimationFrame(() => {
+      // A roster action can close one portaled sheet and open another in the
+      // same render turn. Restoring focus while the replacement overlay is
+      // active can place focus on a button behind the dialog and, on Mobile
+      // Safari, contribute to a duplicate or ghost activation. Only restore
+      // focus after the final overlay has closed.
+      if (
+        hasActiveViewportOverlay() ||
+        !restoreTarget.isConnected ||
+        restoreTarget.hasAttribute('disabled')
+      ) {
+        return;
+      }
+
+      restoreTarget.focus({ preventScroll: true });
+    });
   }
 
   @HostListener('keydown', ['$event'])

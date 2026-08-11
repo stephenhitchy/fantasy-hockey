@@ -683,6 +683,11 @@
             <small>
               {{ current.security.passwordMinimumLength ?? '—' }}–{{ current.security.passwordMaximumLength ?? '—' }} characters
             </small>
+            <small>
+              {{ current.security.passwordRequiresUppercase ? 'Capital ✓' : 'Capital —' }} ·
+              {{ current.security.passwordRequiresNumeric ? 'Number ✓' : 'Number —' }} ·
+              {{ current.security.passwordRequiresNonAlphanumeric ? 'Special ✓' : 'Special —' }}
+            </small>
           </article>
           <article>
             <span>Email privacy</span>

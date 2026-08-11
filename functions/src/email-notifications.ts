@@ -9,6 +9,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 
 const FUNCTION_REGION = 'us-central1';
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -1473,17 +1474,26 @@ export const sendTestInjuryEmail = onCall(
     secrets: [RESEND_API_KEY],
   },
   async (request) => {
-    const userId = request.auth?.uid;
+    const authenticatedUserId = request.auth?.uid;
 
-    if (!userId) {
+    if (!authenticatedUserId) {
       throw new HttpsError('unauthenticated', 'Sign in before sending a test injury email.');
     }
 
-    const leagueId = asString(asRecord(request.data)['leagueId']);
-
-    if (!leagueId || leagueId.length > 160) {
-      throw new HttpsError('invalid-argument', 'A valid league is required.');
-    }
+    const userId = requireFirestoreDocumentId(
+      authenticatedUserId,
+      'manager ID',
+      { maxBytes: 128 },
+    );
+    const leagueId = requireFirestoreDocumentId(
+      asRecord(request.data)['leagueId'],
+      'league ID',
+      {
+        minimumLength: 6,
+        maxBytes: 128,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    );
 
     const rateLimitKey = `test-injury-email-${userId}`;
     let rateLimitClaimed = false;

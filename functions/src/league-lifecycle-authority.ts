@@ -36,6 +36,7 @@ import {
   MAX_LEAGUE_CREATIONS_PER_24_HOURS,
   normalizeRollingWindow,
 } from './league-lifecycle-authority.util';
+import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -246,7 +247,7 @@ function requireAuthenticatedUserId(
     );
   }
 
-  return userId;
+  return requireFirestoreDocumentId(userId, 'manager ID', { maxBytes: 128 });
 }
 
 function requireVerifiedEmail(
@@ -267,29 +268,26 @@ function requireVerifiedEmail(
 }
 
 function requireRequestId(value: unknown, operationLabel = 'league creation'): string {
-  const requestId = asString(value);
-
-  if (!REQUEST_ID_PATTERN.test(requestId)) {
+  try {
+    return requireFirestoreDocumentId(value, `${operationLabel} request ID`, {
+      minimumLength: 8,
+      maxBytes: 120,
+      pattern: REQUEST_ID_PATTERN,
+    });
+  } catch {
     throw new HttpsError(
       'invalid-argument',
       `The ${operationLabel} request could not be verified. Refresh the page and try again.`,
     );
   }
-
-  return requestId;
 }
 
 function requireLeagueId(value: unknown): string {
-  const leagueId = asString(value);
-
-  if (!LEAGUE_ID_PATTERN.test(leagueId)) {
-    throw new HttpsError(
-      'invalid-argument',
-      'A valid league ID is required.',
-    );
-  }
-
-  return leagueId;
+  return requireFirestoreDocumentId(value, 'league ID', {
+    minimumLength: 3,
+    maxBytes: 120,
+    pattern: LEAGUE_ID_PATTERN,
+  });
 }
 
 function requireCommissionerReason(value: unknown, fallback: string): string {

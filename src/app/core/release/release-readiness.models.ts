@@ -30,6 +30,10 @@ export interface ReleaseSecuritySummary {
   passwordPolicyEnforcement: string;
   passwordMinimumLength: number | null;
   passwordMaximumLength: number | null;
+  passwordRequiresLowercase: boolean;
+  passwordRequiresUppercase: boolean;
+  passwordRequiresNumeric: boolean;
+  passwordRequiresNonAlphanumeric: boolean;
   emailEnumerationProtectionEnabled: boolean;
   emailVerified: boolean;
   recentAuthenticationReady: boolean;

@@ -3,6 +3,10 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import {
+  optionalFirestoreDocumentId,
+  requireFirestoreDocumentId,
+} from './shared/security/firestore-document-id.util';
 import { DraftableAsset } from './shared/core/draft/draft.models';
 import {
   FantasyRoster,
@@ -106,6 +110,54 @@ function asPositiveIntegerOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : null;
+}
+
+const LEAGUE_ID_OPTIONS = {
+  minimumLength: 6,
+  maxBytes: 128,
+  pattern: /^[A-Za-z0-9_-]+$/,
+} as const;
+
+const ROSTER_SLOT_ID_OPTIONS = {
+  maxBytes: 64,
+  pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
+} as const;
+
+const ROSTER_ASSET_ID_OPTIONS = {
+  maxBytes: 160,
+  pattern: /^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+} as const;
+
+function requireRosterAssetKey(value: unknown, label = 'asset key'): string {
+  return requireFirestoreDocumentId(value, label, ROSTER_ASSET_ID_OPTIONS);
+}
+
+function normalizedSecureRosterActionRequest(value: unknown): SecureRosterActionRequest {
+  const input = asRecord(value);
+  const normalizeOptionalSlot = (field: keyof SecureRosterActionRequest): string | null =>
+    optionalFirestoreDocumentId(input[field as string], String(field), ROSTER_SLOT_ID_OPTIONS);
+
+  return {
+    ...input,
+    leagueId: requireFirestoreDocumentId(input['leagueId'], 'league ID', LEAGUE_ID_OPTIONS),
+    assetKey: optionalFirestoreDocumentId(
+      input['assetKey'],
+      'asset key',
+      ROSTER_ASSET_ID_OPTIONS,
+    ),
+    activeSlotId: normalizeOptionalSlot('activeSlotId'),
+    benchSlotId: normalizeOptionalSlot('benchSlotId'),
+    irSlotId: normalizeOptionalSlot('irSlotId'),
+    rosterSlotId: normalizeOptionalSlot('rosterSlotId'),
+    slotId: normalizeOptionalSlot('slotId'),
+    dropSlotId: normalizeOptionalSlot('dropSlotId'),
+    targetSlotId: normalizeOptionalSlot('targetSlotId'),
+    waiverId: optionalFirestoreDocumentId(
+      input['waiverId'],
+      'waiver ID',
+      ROSTER_ASSET_ID_OPTIONS,
+    ),
+  };
 }
 
 function getAssetKey(asset: unknown): string {
@@ -406,7 +458,7 @@ async function executeAddAction(options: {
 
       if (droppedAsset) {
         transaction.set(
-          db.doc(`leagues/${leagueId}/waivers/${getAssetKey(droppedAsset)}`),
+          db.doc(`leagues/${leagueId}/waivers/${requireRosterAssetKey(getAssetKey(droppedAsset), 'dropped asset key')}`),
           buildWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
         );
       }
@@ -490,7 +542,7 @@ async function executeAddAction(options: {
     transaction.set(rosterRef, rosterWrite(roster), { merge: true });
     if (droppedAsset) {
       transaction.set(
-        db.doc(`leagues/${leagueId}/waivers/${getAssetKey(droppedAsset)}`),
+        db.doc(`leagues/${leagueId}/waivers/${requireRosterAssetKey(getAssetKey(droppedAsset), 'dropped asset key')}`),
         buildWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
       );
     }
@@ -706,7 +758,7 @@ async function executeSimpleOwnerAction(options: {
       transaction.set(rosterRef, rosterWrite(roster), { merge: true });
       if (droppedAsset) {
         transaction.set(
-          db.doc(`leagues/${leagueId}/waivers/${getAssetKey(droppedAsset)}`),
+          db.doc(`leagues/${leagueId}/waivers/${requireRosterAssetKey(getAssetKey(droppedAsset), 'dropped asset key')}`),
           buildWaiverPayload(droppedAsset, ownerId, fairCycle, label),
         );
       }
@@ -891,7 +943,7 @@ async function executeSimpleOwnerAction(options: {
       transaction.set(rosterRef, rosterWrite(roster), { merge: true });
       if (droppedAsset) {
         transaction.set(
-          db.doc(`leagues/${leagueId}/waivers/${getAssetKey(droppedAsset)}`),
+          db.doc(`leagues/${leagueId}/waivers/${requireRosterAssetKey(getAssetKey(droppedAsset), 'dropped asset key')}`),
           buildWaiverPayload(droppedAsset, ownerId, requestedCycle, requestedLabel),
         );
       }
@@ -1197,7 +1249,7 @@ async function processWaiver(options: {
     );
     if ((isBench || !queueAtSlotBoundary) && droppedAsset) {
       transaction.set(
-        db.doc(`leagues/${leagueId}/waivers/${getAssetKey(droppedAsset)}`),
+        db.doc(`leagues/${leagueId}/waivers/${requireRosterAssetKey(getAssetKey(droppedAsset), 'dropped asset key')}`),
         buildWaiverPayload(droppedAsset, winner.ownerId, effectiveCycleNumber, effectiveLabel),
       );
     }
@@ -1251,14 +1303,20 @@ export const ensureFantasyRoster = onCall(
     cors: TRUSTED_WEB_ORIGINS,
   },
   async (request: any): Promise<{ ensured: true; created: boolean; migrated: boolean }> => {
-    const ownerId = request.auth?.uid;
-    const leagueId = asString(asRecord(request.data)['leagueId']);
-    if (!ownerId) {
+    const authenticatedOwnerId = request.auth?.uid;
+    if (!authenticatedOwnerId) {
       throw new HttpsError('unauthenticated', 'You must be signed in.');
     }
-    if (!leagueId) {
-      throw new HttpsError('invalid-argument', 'League ID is required.');
-    }
+    const ownerId = requireFirestoreDocumentId(
+      authenticatedOwnerId,
+      'manager ID',
+      { maxBytes: 128 },
+    );
+    const leagueId = requireFirestoreDocumentId(
+      asRecord(request.data)['leagueId'],
+      'league ID',
+      LEAGUE_ID_OPTIONS,
+    );
 
     const [memberSnapshot, teamSnapshot] = await Promise.all([
       db.doc(`leagues/${leagueId}/members/${ownerId}`).get(),
@@ -1303,14 +1361,19 @@ export const executeSecureRosterAction = onCall(
     cors: TRUSTED_WEB_ORIGINS,
   },
   async (request: any): Promise<SecureRosterActionResult> => {
-    const ownerId = request.auth?.uid;
-    if (!ownerId) {
+    const authenticatedOwnerId = request.auth?.uid;
+    if (!authenticatedOwnerId) {
       throw new HttpsError('unauthenticated', 'You must be signed in to change a roster.');
     }
-    const input = asRecord(request.data) as unknown as SecureRosterActionRequest;
+    const ownerId = requireFirestoreDocumentId(
+      authenticatedOwnerId,
+      'manager ID',
+      { maxBytes: 128 },
+    );
+    const input = normalizedSecureRosterActionRequest(request.data);
     const leagueId = asString(input.leagueId);
     const action = asString(input.action) as SecureRosterAction;
-    if (!leagueId || !action) {
+    if (!action) {
       throw new HttpsError('invalid-argument', 'League and roster action are required.');
     }
 
@@ -1326,7 +1389,7 @@ export const executeSecureRosterAction = onCall(
     const { gamesPerCycle } = await requireOwnerContext(leagueId, ownerId);
 
     if (action === 'add-drop' || action === 'add-open-slot') {
-      const assetKey = asString(input.assetKey);
+      const assetKey = requireRosterAssetKey(input.assetKey);
       const slotId = action === 'add-drop'
         ? asString(input.dropSlotId)
         : asString(input.targetSlotId);

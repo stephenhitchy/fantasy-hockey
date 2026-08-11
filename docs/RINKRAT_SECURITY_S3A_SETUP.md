@@ -133,7 +133,7 @@ Run the complete verification chain:
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3a
+npm run verify:batchs3a-2
 ```
 
 Commit before the final build so the release manifest contains the clean Git revision:
@@ -179,13 +179,53 @@ Release Readiness should eventually report:
 ```text
 App Check client status: valid
 Server request status: valid
-Password policy: ENFORCE, 12–128
+Password policy: ENFORCE, 12–128, capital required, number required, special character required
 Email privacy: protected
 ```
 
 Keep enforcement disabled while valid managers still appear as unverified or invalid.
 
-## 7. Enforcement is a later release
+
+## 7. Close the current 18/20 Release Readiness result
+
+After App Check is valid end to end and email privacy is protected, the two remaining required
+warnings are operational rather than new application defects.
+
+### Apply the production password-policy baseline
+
+```bash
+gcloud auth application-default login
+RINKRAT_APPLY_AUTH_SECURITY=APPLY \
+npm run security:apply-auth-baseline -- --project=nhl-fantasy-app-ab673
+```
+
+Then confirm the result:
+
+```bash
+npm run security:inspect-auth -- --project=nhl-fantasy-app-ab673
+```
+
+Release Readiness should report `ENFORCE`, minimum `12`, maximum `128`, capital required, number required, special character required, lowercase optional, and force-upgrade off.
+Existing managers may continue signing in with an older password; the stronger policy applies when a
+password is created or changed.
+
+### Replace a pre-S2B shared projection pointer
+
+For a completed league that still displays a pre-S2B projection warning:
+
+1. Use **Verify Projection Integrity** first.
+2. If the existing snapshot cannot be sealed, leave the target set to the exact matchup shown by
+   Release Readiness and use **Regenerate Projection**.
+3. Wait for server generation to finish, then refresh the checks.
+
+Regeneration creates a current server-authoritative, canonical-catalog-validated, root-hash-verified
+Projection V11 snapshot for future roster windows. It does not rewrite completed Draft picks or
+previous fantasy scoring.
+
+The Shadow-mode queue notice is advisory. In Shadow, the legacy ten-minute scorer remains
+production authority, so a large observation-only due age is not one of the required launch failures.
+
+## 8. Enforcement is a later release
 
 S3A does not set `enforceAppCheck: true` on Cloud Functions and does not enforce App Check for
 Firestore. That is deliberate.
@@ -212,3 +252,8 @@ Release Readiness and Admin Center include an inline password step-up card. Read
 remain available without repeatedly entering a password. Firebase Authentication project-policy
 inspection is restricted to platform administrators and caches the server result briefly to avoid
 repeated Admin SDK configuration reads.
+
+
+## Security S3B password-policy synchronization
+
+The production baseline now intentionally requires 12–128 characters, one capital letter, one number, and one special character. Lowercase remains optional and force-upgrade remains disabled. The registration page calls Firebase `validatePassword()` so its checklist follows the live project policy rather than relying only on a duplicated regular expression. The local apply script preserves the same composition requirements.

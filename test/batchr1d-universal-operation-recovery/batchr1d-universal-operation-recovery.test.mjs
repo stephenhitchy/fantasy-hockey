@@ -349,9 +349,25 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-snapshot-hash.util.ts',
     'security-authority.ts',
     'shared/security/auth-security.util.ts',
+
+    // S3B intentionally hardens these public security boundaries.
+
+    'email-notifications.ts',
+
+    'manager-profile-authority.ts',
+
+    'roster-authority.ts',
+
+    'roster-moves.ts',
+
+    'shared/security/firestore-document-id-core.util.ts',
+
+    'shared/security/firestore-document-id.util.ts',
+
+    'shared/security/nhl-proxy-security.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 37,
-    digest: 'c06b679a96a3cfcc0a07b8ac018094db0c19406f80cd51f9ec0a7d9a81614cf6',
+    count: 33,
+    digest: '8e98afbd4cb413b93abf7a385cb295b0490e5a28fa71fdcf23243138a42de618',
   });
 });

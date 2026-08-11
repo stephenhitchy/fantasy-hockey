@@ -393,8 +393,24 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'scripts/auth-security-baseline.cjs',
         'src/security-authority.ts',
         'src/shared/security/auth-security.util.ts',
+
+        // S3B intentionally hardens these public security boundaries.
+
+        'src/email-notifications.ts',
+
+        'src/manager-profile-authority.ts',
+
+        'src/roster-authority.ts',
+
+        'src/roster-moves.ts',
+
+        'src/shared/security/firestore-document-id-core.util.ts',
+
+        'src/shared/security/firestore-document-id.util.ts',
+
+        'src/shared/security/nhl-proxy-security.util.ts',
       ]),
     ),
-    'f151f280bf414e6d3135fa6f47ee5fd95110cf0841d82594ce33cd0e9e2eee55',
+    '7f29102fee1e3c712a78891b4692de1779bcfd7145e5a9f4500b1f5a5ca1765c',
   );
 });
