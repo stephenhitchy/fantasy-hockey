@@ -360,6 +360,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
 
     'roster-moves.ts',
 
+    'shared/core/replay/roster-move-replay-context.util.ts',
+
     'shared/security/firestore-document-id-core.util.ts',
 
     'shared/security/firestore-document-id.util.ts',

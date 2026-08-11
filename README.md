@@ -16,13 +16,13 @@ cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3b
+npm run verify:batchs3b-1
 ```
 
-The current S3B chain runs the complete S1/S2/R1 history, the App Check monitor-client and token-health checks, dynamic Firebase password-policy guidance, shared Firestore document-ID validation, App Check-aware NHL proxy abuse protection, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
+The current S3B.1 chain runs the complete S1/S2/R1 history, the App Check monitor-client and token-health checks, dynamic Firebase password-policy guidance, shared Firestore document-ID validation, App Check-aware NHL proxy abuse protection, Firestore emulator checks, release-manifest validation, and the Angular and Functions builds through the inherited verification chain.
 
 
-Current release: **Release Candidate 17 / Security S3B** — live Firebase password-policy guidance, capital/number/special-character enforcement, shared Firestore document-ID validation, and App Check-aware NHL proxy abuse protection.
+Current release: **Release Candidate 18 / Security S3B.1** — safe pregame add/drop and IR replacement timing when historical replay is paused before its first released NHL game, while preserving the S3B password, document-ID, and NHL proxy security work.
 
-Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, `verify:batchs1b`, and `verify:batchs1c`; `verify:batchs2a` and `verify:batchs2b` cover server-authoritative Projection V11 generation and Draft-pool integrity; `verify:batchs2b-1` covers the strict TypeScript hotfix; `verify:batchs3a` adds the App Check and Authentication hardening suite; `verify:batchs3a-1` verifies the configured App Check client state after the public site key is applied; `verify:batchs3a-2` adds the roster-overlay teardown and readiness-guidance hotfix. `verify:batchs3b` adds the dynamic password-policy, document-ID validation, and NHL proxy security suite.
+Inherited release verification remains available through `verify:batchr1f`, `verify:batchs1a`, `verify:batchs1b`, and `verify:batchs1c`; `verify:batchs2a` and `verify:batchs2b` cover server-authoritative Projection V11 generation and Draft-pool integrity; `verify:batchs2b-1` covers the strict TypeScript hotfix; `verify:batchs3a` adds the App Check and Authentication hardening suite; `verify:batchs3a-1` verifies the configured App Check client state after the public site key is applied; `verify:batchs3a-2` adds the roster-overlay teardown and readiness-guidance hotfix. `verify:batchs3b` adds the dynamic password-policy, document-ID validation, and NHL proxy security suite; `verify:batchs3b-1` adds pregame historical-replay roster-timing recovery.
 Earlier queue-control checkpoints remain available through `verify:batchp1e`, `verify:batchp1f`, and `verify:batchp1f-1`.

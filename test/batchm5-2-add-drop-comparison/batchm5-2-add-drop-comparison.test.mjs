@@ -349,18 +349,21 @@ test('the transaction workbench keeps confirmation at the top, introduces the in
 });
 
 test('the add/drop page refreshes exact eligibility from the historical replay control', async () => {
-  const [source, template] = await Promise.all([
+  const [source, template, replayContext] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
+    read('src/app/core/transactions/roster-move-replay-context.util.ts'),
   ]);
 
   assert.match(source, /listenToHistoricalReplayControl/);
   assert.match(source, /historicalReplayControl = signal<HistoricalReplayControl \| null>/);
   assert.match(source, /historicalReplayControlLoaded = signal\(false\)/);
   assert.match(source, /checking whether historical replay is active/i);
-  assert.match(source, /seasonOverride:\s*replay\.targetSeason/);
-  assert.match(source, /completedThroughDate:\s*replay\.simulatedDate/);
-  assert.match(source, /Historical replay is advancing to the next day/);
+  assert.match(source, /resolveRosterMoveReplayContext/);
+  assert.match(source, /seasonOverride:\s*replayContext\.seasonOverride/);
+  assert.match(source, /completedThroughDate:\s*replayContext\.completedThroughDate/);
+  assert.match(replayContext, /Historical replay is advancing to the next day/);
+  assert.match(replayContext, /safePregameRecovery/);
   assert.match(source, /evaluationMode === 'historical-replay'/);
   assert.match(template, /getEligibilityEvaluationLabel\(\)/);
   assert.match(template, /transaction-replay-evaluation-note/);

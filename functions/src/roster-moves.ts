@@ -19,6 +19,10 @@ import {
   loadSharedProjectionSnapshotForCycle,
   SHARED_PROJECTION_VERSION,
 } from './shared/core/projection/projection-snapshot.service';
+import {
+  resolveServerRosterMoveReplayContext,
+  type ServerRosterMoveReplayContext,
+} from './shared/core/replay/roster-move-replay-context.util';
 
 const FUNCTION_REGION = 'us-central1';
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
@@ -282,7 +286,16 @@ function getNhlSeasonForDate(date: Date): string {
   return `${startYear}${startYear + 1}`;
 }
 
-function getScheduleGameState(game: NhlScheduleGame): 'scheduled' | 'live' | 'final' {
+function getScheduleGameState(
+  game: NhlScheduleGame,
+  completedThroughDate: string | null = null,
+): 'scheduled' | 'live' | 'final' {
+  if (completedThroughDate) {
+    return asString(game.gameDate) <= completedThroughDate
+      ? 'final'
+      : 'scheduled';
+  }
+
   const state = asString(game.gameState).toUpperCase();
 
   if (state === 'OFF' || state === 'FINAL') {
@@ -304,12 +317,43 @@ function getScheduleGameState(game: NhlScheduleGame): 'scheduled' | 'live' | 'fi
   return 'scheduled';
 }
 
+async function loadRosterMoveReplayContext(
+  leagueId: string | null,
+): Promise<ServerRosterMoveReplayContext> {
+  if (!leagueId) {
+    return {
+      mode: 'live',
+      safePregameRecovery: false,
+    };
+  }
+
+  const snapshot = await db.doc(
+    `leagues/${leagueId}/historicalReplay/control`,
+  ).get();
+
+  return resolveServerRosterMoveReplayContext(
+    snapshot.exists ? snapshot.data() : null,
+  );
+}
+
 export async function getEarliestEligibleCycleNumber(
   asset: DraftableAsset | RosterAsset,
   gamesPerCycle: number,
+  leagueId: string | null = null,
 ): Promise<number> {
+  const replayContext = await loadRosterMoveReplayContext(leagueId);
+
+  if (replayContext.mode === 'blocked') {
+    throw new HttpsError('failed-precondition', replayContext.message);
+  }
+
   const team = getAssetTeamAbbreviation(asset).toLowerCase();
-  const season = getNhlSeasonForDate(new Date());
+  const season = replayContext.mode === 'historical-replay'
+    ? replayContext.seasonOverride
+    : getNhlSeasonForDate(new Date());
+  const completedThroughDate = replayContext.mode === 'historical-replay'
+    ? replayContext.completedThroughDate
+    : null;
   const response = await fetch(`${NHL_API_BASE_URL}/club-schedule-season/${team}/${season}`);
 
   if (!response.ok) {
@@ -340,7 +384,9 @@ export async function getEarliestEligibleCycleNumber(
       index * normalizedGamesPerCycle,
       (index + 1) * normalizedGamesPerCycle,
     );
-    const states = cycleGames.map(getScheduleGameState);
+    const states = cycleGames.map((game) =>
+      getScheduleGameState(game, completedThroughDate),
+    );
     const complete = cycleGames.length > 0 && states.every((state) => state === 'final');
 
     if (complete) {
@@ -616,7 +662,7 @@ export const applyImmediateRosterMove = onCall(
       if (!asString(addAsset.assetKey) || !asString(addAsset.position)) {
         throw new HttpsError('invalid-argument', 'The incoming asset is invalid.');
       }
-      incomingEligibilityCycle = await getEarliestEligibleCycleNumber(addAsset, gamesPerCycle);
+      incomingEligibilityCycle = await getEarliestEligibleCycleNumber(addAsset, gamesPerCycle, leagueId);
     }
 
     const rosterRef = db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`);
@@ -682,7 +728,7 @@ export const applyImmediateRosterMove = onCall(
     if (preflightActiveAsset) {
       const outgoingEligibilityCycle = Math.max(
         preflightActiveAsset.eligibleFromCycleNumber ?? 1,
-        await getEarliestEligibleCycleNumber(preflightActiveAsset, gamesPerCycle),
+        await getEarliestEligibleCycleNumber(preflightActiveAsset, gamesPerCycle, leagueId),
       );
 
       if (outgoingEligibilityCycle > context.cycleNumber) {
@@ -732,7 +778,7 @@ export const applyImmediateRosterMove = onCall(
         preflightBenchAssetKey = getAssetKey(preflightBenchAsset);
         preflightBenchEligibilityCycle = Math.max(
           preflightBenchAsset.eligibleFromCycleNumber ?? 1,
-          await getEarliestEligibleCycleNumber(preflightBenchAsset, gamesPerCycle),
+          await getEarliestEligibleCycleNumber(preflightBenchAsset, gamesPerCycle, leagueId),
         );
       } else {
         const preflightIrSlot = preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId);
@@ -745,7 +791,7 @@ export const applyImmediateRosterMove = onCall(
         preflightIrAssetKey = getAssetKey(preflightIrAsset);
         preflightIrEligibilityCycle = Math.max(
           preflightIrAsset.eligibleFromCycleNumber ?? 1,
-          await getEarliestEligibleCycleNumber(preflightIrAsset, gamesPerCycle),
+          await getEarliestEligibleCycleNumber(preflightIrAsset, gamesPerCycle, leagueId),
         );
       }
     }

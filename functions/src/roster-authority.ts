@@ -349,7 +349,7 @@ async function getFairEffectiveCycleNumber(
 ): Promise<number> {
   const earliest = Math.max(
     asset.eligibleFromCycleNumber ?? 1,
-    await getEarliestEligibleCycleNumber(asset, gamesPerCycle),
+    await getEarliestEligibleCycleNumber(asset, gamesPerCycle, leagueId),
   );
   return Math.max(requestedCycle ?? earliest, earliest);
 }

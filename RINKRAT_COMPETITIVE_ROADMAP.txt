@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.7
+Version 1.7.1
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -728,6 +728,7 @@ ROADMAP CHANGE LOG
 Future entries:
 
 # [x] LOG.12 2026-08-10 — Implemented Security Batch S3B / Release Candidate 17: synchronized the registration UI with the live Firebase password policy, preserved capital/number/special requirements in the apply script, introduced shared Firestore document-ID validation, and added strict App Check-aware NHL proxy query, response-size, rate, and health controls.
+# [x] LOG.13 2026-08-10 — Completed Security Batch S3B.1 / Release Candidate 18: allow deterministic pregame add/drop and IR replacement timing when historical replay is paused before any NHL game has been released, while continuing to block roster changes after a failed date could affect competitive game history; align client and server replay-date evaluation.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

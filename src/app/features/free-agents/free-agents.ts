@@ -62,6 +62,7 @@ import {
   type RosterMoveAssetCycleEligibility,
   type RosterMoveEligibilityOptions,
 } from '../../core/transactions/roster-move-eligibility.service';
+import { resolveRosterMoveReplayContext } from '../../core/transactions/roster-move-replay-context.util';
 
 import {
   listenToHistoricalReplayControl,
@@ -2298,6 +2299,17 @@ export class FreeAgents implements OnDestroy {
       return '';
     }
 
+    const replayContext = resolveRosterMoveReplayContext(
+      this.historicalReplayControl(),
+    );
+
+    if (
+      replayContext.mode === 'historical-replay' &&
+      replayContext.safePregameRecovery
+    ) {
+      return `Historical replay is paused after an error, but no NHL game has been released into this league. RinkRat can safely complete pregame roster moves using the last verified pregame date (${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}). Retry replay before making moves after games begin.`;
+    }
+
     return `Historical replay timing uses the simulated NHL schedule through ${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}, not today’s live NHL date.`;
   }
 
@@ -2936,33 +2948,21 @@ export class FreeAgents implements OnDestroy {
       throw new Error(this.historicalReplayControlError());
     }
 
-    const replay = this.historicalReplayControl();
+    const replayContext = resolveRosterMoveReplayContext(
+      this.historicalReplayControl(),
+    );
 
-    if (!replay?.enabled) {
+    if (replayContext.mode === 'live') {
       return { forceRefresh };
     }
 
-    if (replay.status === 'queued' || replay.status === 'advancing') {
-      throw new Error(
-        replay.status === 'queued'
-          ? 'Historical replay is queued for this league. Wait for the queued replay day to finish before checking or submitting this roster move.'
-          : 'Historical replay is advancing to the next day. Wait for the replay to finish before checking or submitting this roster move.',
-      );
+    if (replayContext.mode === 'blocked') {
+      throw new Error(replayContext.message);
     }
 
-    if (replay.status === 'error') {
-      throw new Error(
-        'Historical replay must recover from its last error before RinkRat can determine the correct add/drop matchup.',
-      );
-    }
-
-    if (!replay.simulatedDate) {
-      throw new Error(
-        'The historical replay date is not ready yet. Wait a moment and retry the add/drop timing check.',
-      );
-    }
-
-    const referenceDate = new Date(`${replay.simulatedDate}T12:00:00Z`);
+    const referenceDate = new Date(
+      `${replayContext.completedThroughDate}T12:00:00Z`,
+    );
 
     if (Number.isNaN(referenceDate.getTime())) {
       throw new Error(
@@ -2973,8 +2973,8 @@ export class FreeAgents implements OnDestroy {
     return {
       forceRefresh,
       referenceDate,
-      seasonOverride: replay.targetSeason,
-      completedThroughDate: replay.simulatedDate,
+      seasonOverride: replayContext.seasonOverride,
+      completedThroughDate: replayContext.completedThroughDate,
     };
   }
 
@@ -2990,6 +2990,8 @@ export class FreeAgents implements OnDestroy {
       control.status,
       control.simulatedDate ?? 'no-date',
       control.targetSeason,
+      control.lastReleasedGameCount,
+      control.totalReleasedGameCount,
     ].join('::');
   }
 

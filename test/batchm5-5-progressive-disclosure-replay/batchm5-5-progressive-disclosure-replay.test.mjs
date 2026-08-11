@@ -282,6 +282,8 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/manager-profile-authority.ts',
         'src/roster-authority.ts',
         'src/roster-moves.ts',
+
+        'src/shared/core/replay/roster-move-replay-context.util.ts',
         'src/shared/security/firestore-document-id-core.util.ts',
         'src/shared/security/firestore-document-id.util.ts',
         'src/shared/security/nhl-proxy-security.util.ts',

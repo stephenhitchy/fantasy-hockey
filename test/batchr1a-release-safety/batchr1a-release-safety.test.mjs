@@ -351,6 +351,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
 
         'src/roster-moves.ts',
 
+        'src/shared/core/replay/roster-move-replay-context.util.ts',
+
         'src/shared/security/firestore-document-id-core.util.ts',
 
         'src/shared/security/firestore-document-id.util.ts',

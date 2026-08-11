@@ -126,10 +126,14 @@ test('Game Center clearly explains queued multi-league replay behavior', async (
 });
 
 test('roster decisions remain blocked while the league replay is queued', async () => {
-  const freeAgents = await read('src/app/features/free-agents/free-agents.ts');
+  const [freeAgents, replayContext] = await Promise.all([
+    read('src/app/features/free-agents/free-agents.ts'),
+    read('src/app/core/transactions/roster-move-replay-context.util.ts'),
+  ]);
 
-  assert.match(freeAgents, /replay\.status === 'queued' \|\| replay\.status === 'advancing'/);
-  assert.match(freeAgents, /Historical replay is queued for this league/);
+  assert.match(freeAgents, /resolveRosterMoveReplayContext/);
+  assert.match(replayContext, /control\.status === 'queued' \|\| control\.status === 'advancing'/);
+  assert.match(replayContext, /Historical replay is queued for this league/);
 });
 
 test('invite beta validation includes simultaneous test-league queue coverage', async () => {

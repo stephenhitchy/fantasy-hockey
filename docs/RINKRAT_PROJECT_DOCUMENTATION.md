@@ -1,3 +1,50 @@
+# Security Batch S3B.1 — Pregame Historical-Replay Roster Timing Recovery
+
+**Release:** Release Candidate 18  
+**Scope:** Keep pregame add/drop, open-bench replacement, and IR-created roster openings usable when a historical test league is paused by an error before any NHL game has been released, while preserving the no-backfill safety block after competitive game history exists.
+
+## Root cause
+
+The Transaction Workbench treated every historical replay `error` state as competitively unsafe. That is correct after one or more NHL games have been released, because the failed replay date may be partially applied and the first legal add/drop matchup cannot be trusted until that exact date is retried. It was unnecessarily strict before the first released NHL game: every incoming and outgoing roster assignment is still untouched at 0/6, so Matchup 1 timing remains deterministic.
+
+Moving an injured skater to IR did not create the replay error. It exposed an open active or bench destination, and the later Free Agent timing check surfaced the already-saved replay error.
+
+## Safe pregame recovery
+
+Client and server now use matching replay-context decisions:
+
+- Live leagues continue using the real NHL date.
+- Ready historical replay uses the exact simulated date and target season.
+- Queued or advancing replay continues to block concurrent roster timing.
+- An errored/inactive replay may continue only when both the latest and total released-game counts are zero and a valid saved pregame date can be established.
+- Once any NHL game has been released, an errored replay still blocks add/drop, bench activation, IR activation, and related timing until the failed date is retried.
+
+When the safe pregame path is used, the workbench explains that replay is paused but no NHL game has entered the league, so pregame roster ownership and untouched Matchup 1 changes remain safe. The server independently reads the same replay control and evaluates NHL schedules through the same target-season date; it no longer relies on today's real NHL date for historical roster actions.
+
+## Verification
+
+```bash
+npm run verify:batchs3b-1
+```
+
+## Deployment
+
+Deploy Functions first so secure roster authority uses the historical replay date, then Hosting for the workbench recovery and explanation.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions:applyImmediateRosterMove,functions:executeSecureRosterAction -m "Security S3B.1 pregame replay roster timing"
+firebase deploy --only hosting:app -m "Security S3B.1 pregame add drop recovery"
+```
+
+No Firestore Rules, indexes, scoring rules, Projection V11 mathematics, or data migration change in this hotfix.
+
+## Rollback
+
+Deploy the approved S3B Functions and Hosting builds. No roster, score, Draft, transaction, or replay document needs to be rewritten.
+
+---
+
 # Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening
 
 ## Purpose
