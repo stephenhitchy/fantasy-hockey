@@ -743,6 +743,281 @@
   text-align: center;
 }
 
+/* Fantasy-football translation */
+.football-comparison-guide {
+  overflow: hidden;
+  border: 3px solid color-mix(in srgb, var(--rr-success) 58%, var(--border-strong));
+  background: var(--surface-1);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--page-bg) 72%, black 28%);
+}
+
+.football-comparison-guide > summary {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 28px;
+  min-height: 76px;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 15px;
+  border-bottom: 3px solid transparent;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-success) 28%, var(--rr-scoreboard)), color-mix(in srgb, var(--rr-success) 10%, var(--rr-scoreboard-raised))),
+    var(--rr-scoreboard);
+  color: var(--rr-ice-white);
+  cursor: pointer;
+  list-style: none;
+}
+
+.football-comparison-guide[open] > summary {
+  border-bottom-color: var(--border-strong);
+}
+
+.football-comparison-guide > summary:hover {
+  filter: brightness(1.06);
+}
+
+.football-comparison-guide > summary:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: -5px;
+}
+
+.football-comparison-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.football-guide-summary-copy small,
+.football-guide-summary-copy strong {
+  display: block;
+}
+
+.football-guide-summary-copy small {
+  color: color-mix(in srgb, var(--rr-success) 55%, var(--rr-ice-white));
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .56rem;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+}
+
+.football-guide-summary-copy strong {
+  margin-top: 4px;
+  color: var(--rr-ice-white);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.football-guide-ball {
+  position: relative;
+  display: block;
+  width: 50px;
+  height: 32px;
+  rotate: -12deg;
+  border: 3px solid var(--rr-ice-white);
+  border-radius: 52% 48% 52% 48%;
+  background: color-mix(in srgb, var(--rr-warning) 48%, var(--rr-scoreboard-raised));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rr-warning) 24%, var(--rr-scoreboard));
+}
+
+.football-guide-ball::before,
+.football-guide-ball::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  background: var(--rr-ice-white);
+}
+
+.football-guide-ball::before {
+  width: 24px;
+  height: 3px;
+}
+
+.football-guide-ball::after {
+  width: 3px;
+  height: 17px;
+  box-shadow: -7px 0 0 var(--rr-ice-white), 7px 0 0 var(--rr-ice-white);
+}
+
+.football-guide-toggle {
+  color: var(--rr-ice-white);
+  font-family: var(--rr-font-display, inherit);
+  font-size: 1.5rem;
+  text-align: center;
+  transition: rotate .16s steps(2, end);
+}
+
+.football-comparison-guide:not([open]) .football-guide-toggle {
+  rotate: -90deg;
+}
+
+.football-guide-content {
+  display: grid;
+  gap: 13px;
+  padding: 15px;
+  background:
+    linear-gradient(var(--pixel-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pixel-grid-line) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface-2) 92%, var(--surface-1));
+  background-size: 18px 18px;
+}
+
+.football-guide-intro,
+.football-guide-precision {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.48;
+}
+
+.football-guide-intro {
+  padding: 11px 12px;
+  border-left: 4px solid var(--rr-success);
+  background: color-mix(in srgb, var(--rr-success) 12%, var(--surface-1));
+}
+
+.football-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.football-comparison-card {
+  --football-accent: var(--user-team-accent);
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  border: 2px solid var(--border-strong);
+  border-top: 5px solid var(--football-accent);
+  background: color-mix(in srgb, var(--football-accent) 7%, var(--surface-1));
+}
+
+.football-comparison-card.wings {
+  --football-accent: var(--rr-forward-position-accent);
+}
+
+.football-comparison-card.centers {
+  --football-accent: var(--rr-warning);
+}
+
+.football-comparison-card.defense {
+  --football-accent: var(--rr-defense-position-accent);
+}
+
+.football-comparison-card.goalies {
+  --football-accent: var(--rr-goalie-position-accent);
+}
+
+.football-comparison-card > header {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.football-role-badge {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 2px solid var(--football-accent);
+  background: color-mix(in srgb, var(--football-accent) 16%, var(--rr-scoreboard));
+  color: var(--football-accent);
+  font-family: var(--rr-font-display, inherit);
+  font-size: 1.02rem;
+  font-weight: 950;
+}
+
+.football-comparison-card header small,
+.football-comparison-card header strong {
+  display: block;
+}
+
+.football-comparison-card header small {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .54rem;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.football-comparison-card header strong {
+  margin-top: 3px;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.football-comparison-card h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: .98rem;
+  line-height: 1.28;
+}
+
+.football-comparison-card > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .85rem;
+  line-height: 1.45;
+}
+
+.football-comparison-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.football-comparison-card dl > div {
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--football-accent) 42%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--football-accent) 12%);
+}
+
+.football-comparison-card dt {
+  color: var(--text-muted);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .5rem;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.football-comparison-card dd {
+  margin: 3px 0 0;
+  color: var(--text-primary);
+  font-size: .77rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.football-value-note {
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 2px solid var(--rr-success);
+  background: color-mix(in srgb, var(--rr-success) 18%, var(--surface-1));
+}
+
+.football-value-label {
+  color: var(--rr-success);
+  font-family: var(--rr-font-micro, inherit);
+  font-size: .56rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.football-value-note p {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 750;
+  line-height: 1.42;
+}
+
+.football-guide-precision {
+  padding-top: 2px;
+  font-size: .77rem;
+  text-align: center;
+}
+
 /* Step 3 */
 .move-demo {
   display: grid;
@@ -1186,6 +1461,29 @@
     grid-template-columns: 1fr;
   }
 
+  .football-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .football-comparison-guide > summary {
+    grid-template-columns: 48px minmax(0, 1fr) 24px;
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .football-guide-ball {
+    width: 42px;
+    height: 28px;
+  }
+
+  .football-guide-summary-copy strong {
+    font-size: .96rem;
+  }
+
+  .football-guide-content {
+    padding: 12px;
+  }
+
   .player-metrics {
     grid-template-columns: 1fr 1fr;
   }
@@ -1285,7 +1583,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .camp-progress-track span {
+  .camp-progress-track span,
+  .football-guide-toggle {
     transition: none;
   }
 }

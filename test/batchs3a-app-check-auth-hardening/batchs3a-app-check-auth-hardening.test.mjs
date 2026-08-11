@@ -315,7 +315,7 @@ test('S3A remains monitor-only and documents the deliberate activation and enfor
   assert.match(setupGuideSource, /security:apply-auth-baseline/);
   assert.match(setupGuideSource, /S3A does not set `enforceAppCheck: true`/);
   assert.match(documentationSource, /Security Batch S3A — App Check Monitor Mode and Authentication Hardening/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ Security S3[AB]/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3[AB](?:\.\d+)?|Onboarding Batch B1A)/);
 });
 
 test('S3A verification, release manifest, permanent roadmap, and package commands stay synchronized', () => {

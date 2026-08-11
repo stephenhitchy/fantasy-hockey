@@ -245,7 +245,7 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(packageJson.scripts['verify:batchs3b'], /verify:batchs3a-2/);
   assert.match(packageJson.scripts['verify:batchs3b'], /test:batchs3b:run/);
   assert.match(packageJson.scripts['verify:batchs3b'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate 18 \/ Security S3B\.1/);
+  assert.match(readmeSource, /Release Candidate 19 \/ Onboarding Batch B1A/);
   assert.match(readmeSource, /verify:batchs3b/);
   assert.match(documentationSource, /Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
@@ -253,6 +253,6 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(roadmapRootSource, /# \[x\] S3\.11/);
   assert.match(roadmapRootSource, /# \[x\] S3\.13/);
   assert.match(roadmapRootSource, /\[~\] SEQ\.7/);
-  assert.match(runtimeConfigSource, /Release Candidate 18/);
-  assert.match(productionRuntimeConfigSource, /Release Candidate 18/);
+  assert.match(runtimeConfigSource, /Release Candidate 19/);
+  assert.match(productionRuntimeConfigSource, /Release Candidate 19/);
 });

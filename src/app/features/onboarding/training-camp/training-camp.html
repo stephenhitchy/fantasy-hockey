@@ -224,6 +224,68 @@
                 <p class="position-comparison-tip">Compare players mostly with others at the same position. A goalie having more points than a skater is expected.</p>
                 <a class="training-scoring-link" routerLink="/scoring">View the complete scoring breakdown <span aria-hidden="true">→</span></a>
               </section>
+
+              <details class="football-comparison-guide" open>
+                <summary>
+                  <span class="football-guide-ball" aria-hidden="true"></span>
+                  <span class="football-guide-summary-copy">
+                    <small>Know fantasy football?</small>
+                    <strong id="football-comparison-title">Translate RinkRat positions into familiar roles</strong>
+                  </span>
+                  <span class="football-guide-toggle" aria-hidden="true">⌄</span>
+                </summary>
+
+                <div class="football-guide-content" aria-labelledby="football-comparison-title">
+                  <p class="football-guide-intro">
+                    This is a rough mental model for workload and scoring personality—not an exact point-for-point comparison. Individual player role still matters more than the position label.
+                  </p>
+
+                  <div class="football-comparison-grid">
+                    @for (comparison of footballPositionComparisons; track comparison.hockeyRole) {
+                      <article
+                        class="football-comparison-card"
+                        [class.wings]="comparison.cssClass === 'wings'"
+                        [class.centers]="comparison.cssClass === 'centers'"
+                        [class.defense]="comparison.cssClass === 'defense'"
+                        [class.goalies]="comparison.cssClass === 'goalies'"
+                      >
+                        <header>
+                          <span class="football-role-badge" aria-hidden="true">{{ comparison.footballBadge }}</span>
+                          <div>
+                            <small>{{ comparison.hockeyRole }} · {{ comparison.hockeyPositions.join(' / ') }}</small>
+                            <strong>{{ comparison.footballRole }}</strong>
+                          </div>
+                        </header>
+
+                        <h3>{{ comparison.headline }}</h3>
+                        <p>{{ comparison.summary }}</p>
+
+                        <dl>
+                          <div>
+                            <dt>Points come from</dt>
+                            <dd>{{ comparison.scoringDrivers }}</dd>
+                          </div>
+                          <div>
+                            <dt>Draft lens</dt>
+                            <dd>{{ comparison.draftLesson }}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    }
+                  </div>
+
+                  <aside class="football-value-note">
+                    <span class="football-value-label">Positional value reminder</span>
+                    <p>
+                      A goalie unit may score more raw points than a forward, just as quarterbacks often outscore running backs and wide receivers. The real advantage is how much better an option is than the alternatives at the same position.
+                    </p>
+                  </aside>
+
+                  <p class="football-guide-precision">
+                    RinkRat treats left and right wings the same way. Centers use the same forward scoring rules, but Projection V11 gives the position a slightly more playmaking-oriented baseline on average.
+                  </p>
+                </div>
+              </details>
             </section>
           }
 

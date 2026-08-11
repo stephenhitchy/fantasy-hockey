@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.7.1
+Version 1.7.2
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -304,6 +304,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [ ] B1.19 Conduct at least five experienced-manager sessions. (P1 / M)
 [ ] B1.20 Record where users misunderstand matchup number, six-game progress, transaction timing, projections, waivers, or IR. (P1 / M)
 [ ] B1.21 Add only evidence-backed clarity fixes during the first season. (P1 / Policy)
+# [x] B1.22 Add a fantasy-football position translation to Training Camp so wings, centers, defensemen, and the team goalie unit have an immediately familiar workload/scoring analogy. (P1 / S) — Completed 2026-08-11 in Onboarding Batch B1A / Release Candidate 19.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -729,6 +730,7 @@ Future entries:
 
 # [x] LOG.12 2026-08-10 — Implemented Security Batch S3B / Release Candidate 17: synchronized the registration UI with the live Firebase password policy, preserved capital/number/special requirements in the apply script, introduced shared Firestore document-ID validation, and added strict App Check-aware NHL proxy query, response-size, rate, and health controls.
 # [x] LOG.13 2026-08-10 — Completed Security Batch S3B.1 / Release Candidate 18: allow deterministic pregame add/drop and IR replacement timing when historical replay is paused before any NHL game has been released, while continuing to block roster changes after a failed date could affect competitive game history; align client and server replay-date evaluation.
+# [x] LOG.14 2026-08-11 — Completed Onboarding Batch B1A / Release Candidate 19: add an expanded-by-default fantasy-football position guide to Training Camp, group LW/RW honestly as outside receivers, distinguish centers through Projection V11's slightly more playmaking-oriented baseline, and explain defensemen, goalie units, and positional replacement value without changing scoring or projections.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

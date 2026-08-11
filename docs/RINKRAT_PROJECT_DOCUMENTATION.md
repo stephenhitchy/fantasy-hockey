@@ -1,3 +1,48 @@
+# Onboarding Batch B1A — Fantasy-Football Position Translation
+
+**Release:** Release Candidate 19  
+**Scope:** Add a beginner-friendly fantasy-football comparison at the bottom of Training Camp's Build Your Club lesson without changing Production Scoring V3, Projection V11, roster construction, or positional eligibility.
+
+## Position translation
+
+The Training Camp roster lesson now provides an expanded-by-default, collapsible guide for managers who already understand fantasy football:
+
+- **Wings (LW/RW) → outside wide receivers:** higher big-play ceiling through goals, shots, assists, and physical play; LW and RW remain grouped because RinkRat scores them identically and Projection V11 uses the same position priors.
+- **Centers → target-heavy slot receivers:** the same forward scoring rules, with a slightly more playmaking-oriented Projection V11 baseline through assists, special-teams involvement, and ice time.
+- **Defensemen → workhorse running backs:** dependable workload value through ice time, blocks, hits, and shots.
+- **Team Goalie Unit → quarterbacks:** one premium, high-raw-point roster spot whose value should be judged against other goalie units rather than skaters.
+
+The section explicitly labels the analogy as a rough mental model rather than an exact point comparison. It also explains replacement-level value: a goalie unit may score more raw points than a forward in the same way a quarterback often outscores an RB or WR, but the competitive edge comes from how much an option exceeds alternatives at the same position.
+
+## Presentation and accessibility
+
+- The guide sits after the existing RinkRat position-scoring overview at the bottom of Build Your Club.
+- It is open by default during Training Camp but uses a native `<details>` control so managers can collapse it.
+- Four cards use the established forward, defense, and goalie accents and stack to one column on phones.
+- The football graphic is drawn in CSS, requires no new external asset, and respects reduced-motion settings.
+- The guide introduces no overlay, sticky region, horizontal comparison rail, or additional Firestore listener.
+
+## Verification
+
+```bash
+npm run verify:batchb1a
+```
+
+## Deployment
+
+This is a Hosting-only update.
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Onboarding B1A fantasy football position guide"
+```
+
+## Rollback
+
+Redeploy the approved S3B.1 Hosting build. No Functions, Firestore Rules, indexes, scoring documents, projection snapshots, rosters, or transactions require rollback.
+
+---
+
 # Security Batch S3B.1 — Pregame Historical-Replay Roster Timing Recovery
 
 **Release:** Release Candidate 18  

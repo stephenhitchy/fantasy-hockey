@@ -12,6 +12,7 @@ import {
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import { HockeyTermChip } from '../../../shared/hockey-terms/hockey-term-chip';
+import { TRAINING_CAMP_FOOTBALL_COMPARISONS } from './training-camp-football-comparison.data';
 
 interface TrainingCampStep {
   id: string;
@@ -43,6 +44,8 @@ function waitForAuthUser(): Promise<User | null> {
   styleUrl: './training-camp.css',
 })
 export class TrainingCamp {
+  readonly footballPositionComparisons = TRAINING_CAMP_FOOTBALL_COMPARISONS;
+
   readonly steps: TrainingCampStep[] = [
     {
       id: 'cycles',
