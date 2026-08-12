@@ -22,8 +22,12 @@ test('the football guide uses four honest position archetypes without inventing 
   const [wings, centers, defense, goalies] = TRAINING_CAMP_FOOTBALL_COMPARISONS;
 
   assert.deepEqual(wings.hockeyPositions, ['LW', 'RW']);
-  assert.equal(wings.footballRole, 'Outside wide receivers');
+  assert.equal(wings.footballRole, 'Big-play wide receivers');
   assert.equal(wings.footballBadge, 'WR');
+  assert.match(wings.headline, /fewer chances, bigger scoring swings/i);
+  assert.match(wings.summary, /fewer passes/i);
+  assert.match(wings.summary, /long catch or touchdown/i);
+  assert.match(wings.draftLesson, /next can be much quieter/i);
 
   assert.deepEqual(centers.hockeyPositions, ['C']);
   assert.match(centers.footballRole, /slot receivers/i);

@@ -14,8 +14,8 @@ Core project references:
 
 ## Current release and toolchain
 
-The deployed competitive runtime remains **Release Candidate 21 / Beta Operations B1B.1**. B1C and S4A are repository/operations tooling only; neither changes or redeploys the Angular client, Cloud Functions runtime, Firestore Rules, Scoring V3, or Projection V11.
-The inherited runtime family remains **Release Candidate 21 / Beta Operations Batch B1B**, with the B1B.1 TypeScript hotfix preserved by `npm run verify:batchb1b-1`.
+The runtime family remains **Release Candidate 21**. Onboarding Batch B1D is a Hosting-only Training Camp wording refinement that describes LW/RW as **big-play wide receivers** with **fewer chances and bigger scoring swings**. B1C and S4A remain repository/operations tooling, and B1D does not change Cloud Functions, Firestore Rules, Scoring V3, Projection V11, Draft behavior, or roster timing.
+The inherited competitive runtime remains **Release Candidate 21 / Beta Operations Batch B1B**, with the B1B.1 TypeScript safeguard and B1D wording refinement layered on top.
 The inherited security baseline remains available through `npm run verify:batchs3c`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
@@ -42,6 +42,7 @@ verify:batchb1b
 verify:batchb1b-1
 verify:batchb1c
 verify:batchs4a
+verify:batchb1d
 ```
 
 RinkRat pins:
@@ -61,7 +62,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchs4a
+npm run verify:batchb1d
 ```
 
 After verification and a clean commit:
@@ -70,6 +71,23 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+## Onboarding Batch B1D — Big-Play Winger Comparison Clarity
+
+B1D replaces the football-specific label **outside wide receivers** with the more beginner-friendly **big-play wide receivers** and leads with the plain-language idea **fewer chances, bigger scoring swings**. The card explains that one limited opportunity can create a strong fantasy week, while missed chances can produce a much quieter matchup.
+
+Verification:
+
+```bash
+npm run verify:batchb1d
+```
+
+Deployment is Hosting-only:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Onboarding B1D big-play winger comparison"
+```
 
 ## Security Operations Batch S4A — Firestore Backup and Restore Rehearsal
 

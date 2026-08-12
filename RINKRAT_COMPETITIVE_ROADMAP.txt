@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.11
+Version 1.11.1
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -309,7 +309,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [ ] B1.19 Conduct at least five experienced-manager sessions. (P1 / M)
 [ ] B1.20 Record where users misunderstand matchup number, six-game progress, transaction timing, projections, waivers, or IR. (P1 / M)
 [ ] B1.21 Add only evidence-backed clarity fixes during the first season. (P1 / Policy)
-# [x] B1.22 Add a fantasy-football position translation to Training Camp so wings, centers, defensemen, and the team goalie unit have an immediately familiar workload/scoring analogy. (P1 / S) — Completed 2026-08-11 in Onboarding Batch B1A / Release Candidate 19.
+# [x] B1.22 Add a fantasy-football position translation to Training Camp so wings, centers, defensemen, and the team goalie unit have an immediately familiar workload/scoring analogy. (P1 / S) — Completed 2026-08-11 in Onboarding Batch B1A / Release Candidate 19; beginner wording refined 2026-08-12 in B1D so LW/RW are described as big-play wide receivers with fewer chances and bigger scoring swings.
 # [x] B1.23 Build a Beta Operations Center with structured feedback triage, sanitized public known issues, privacy-limited action/route evidence, and server scoring-duration aggregates. (P0 / L) — Completed 2026-08-11 in Beta Operations Batch B1B / Release Candidate 21.
 # [x] B1.24 Add exact-build invite-beta freeze, pinned Node/npm preflight, live manifest/header/TTL verification, annotated tag checks, and generated rollback records without changing the RC21 runtime. (P0 / M) — Completed 2026-08-11 in Beta Operations Batch B1C.
 
@@ -737,13 +737,15 @@ Future entries:
 
 # [x] LOG.12 2026-08-10 — Implemented Security Batch S3B / Release Candidate 17: synchronized the registration UI with the live Firebase password policy, preserved capital/number/special requirements in the apply script, introduced shared Firestore document-ID validation, and added strict App Check-aware NHL proxy query, response-size, rate, and health controls.
 # [x] LOG.13 2026-08-10 — Completed Security Batch S3B.1 / Release Candidate 18: allow deterministic pregame add/drop and IR replacement timing when historical replay is paused before any NHL game has been released, while continuing to block roster changes after a failed date could affect competitive game history; align client and server replay-date evaluation.
-# [x] LOG.14 2026-08-11 — Completed Onboarding Batch B1A / Release Candidate 19: add an expanded-by-default fantasy-football position guide to Training Camp, group LW/RW honestly as outside receivers, distinguish centers through Projection V11's slightly more playmaking-oriented baseline, and explain defensemen, goalie units, and positional replacement value without changing scoring or projections.
+# [x] LOG.14 2026-08-11 — Completed Onboarding Batch B1A / Release Candidate 19: add an expanded-by-default fantasy-football position guide to Training Camp, group LW/RW honestly as big-play wide receivers, distinguish centers through Projection V11's slightly more playmaking-oriented baseline, and explain defensemen, goalie units, and positional replacement value without changing scoring or projections.
 # [x] LOG.15 2026-08-11 — Completed Security Batch S3C / Release Candidate 20: add GitHub security/release CI, controlled Dependabot updates, production dependency and secret audits, CSP and Trusted Types report-only telemetry, HSTS/header validation, privacy-limited CSP collection, and scheduled temporary-data retention with Release Readiness health reporting, with visible repository-automation recovery for dot-prefixed macOS project files.
 # [x] LOG.16 2026-08-11 — Completed Beta Operations Batch B1B / Release Candidate 21: add structured manager issue classification, private administrator triage, sanitized public known issues, privacy-limited competitive-action and route evidence, daily server scoring-duration aggregation, expanded retention, and the first-season operations runbook.
 
 # [x] LOG.17 2026-08-11 — Completed Beta Operations Batch B1B.1 TypeScript build hotfix: give scoring-duration summaries concrete overview types so trigger totals remain visible to strict TypeScript sorting without changing runtime evidence or competitive behavior.
 # [x] LOG.18 2026-08-11 — Completed Beta Operations Batch B1C: pin Node 22.23.1 and npm 11.17.0 for release work, verify the live RC21 manifest/headers/TTL baseline, validate copied exact-build launch evidence, generate ignored freeze and rollback records, and verify the annotated tag without redeploying or changing the runtime.
 # [x] LOG.19 2026-08-12 — Completed Security Operations Batch S4A repository implementation: source-control all nine TTL field overrides, add daily/weekly Firestore backup and delete-protection baselines, optional PITR activation, guarded named-database restore rehearsal, privacy-limited integrity verification, drill cleanup, CI checks, and the permanent recovery runbook without changing RC21 runtime code.
+
+# [x] LOG.20 2026-08-12 — Completed Onboarding Batch B1D: replace the football-specific LW/RW label outside wide receivers with the clearer big-play wide receivers, lead with fewer chances and bigger scoring swings, and preserve the existing four-position guide, Scoring V3, and Projection V11.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

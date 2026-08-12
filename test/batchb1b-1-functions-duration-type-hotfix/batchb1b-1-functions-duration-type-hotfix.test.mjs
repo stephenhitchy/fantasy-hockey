@@ -62,6 +62,6 @@ test('B1B.1 verification, CI, documentation, and permanent roadmap remain synchr
   assert.match(documentationSource, /Beta Operations Batch B1B\.1 — Server Scoring Trigger Type Hotfix/);
   assert.match(readmeSource, /verify:batchb1b-1/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.11/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /LOG\.17 .*B1B\.1.*TypeScript/i);
 });

@@ -16,7 +16,7 @@ export interface TrainingCampFootballComparison {
  * Projection V11 intentionally gives LW and RW the same position priors. Center
  * uses the same forward scoring rules, but its prior leans slightly more toward
  * assists, power-play involvement, short-handed involvement, and ice time. That
- * supports one honest split: wings resemble outside receivers while centers
+ * supports one honest split: wings resemble big-play wide receivers while centers
  * resemble target-heavy possession/slot receivers. Individual player role still
  * matters more than the label.
  */
@@ -24,13 +24,13 @@ export const TRAINING_CAMP_FOOTBALL_COMPARISONS: readonly TrainingCampFootballCo
   {
     hockeyRole: 'Wings',
     hockeyPositions: ['LW', 'RW'],
-    footballRole: 'Outside wide receivers',
+    footballRole: 'Big-play wide receivers',
     footballBadge: 'WR',
-    headline: 'Explosive finishers with big-play upside',
+    headline: 'Fewer chances, bigger scoring swings',
     summary:
-      'Goals, shots, and scoring chances can create a huge six-game burst. When chances do not turn into points, the same winger can have a quieter matchup.',
+      'Think of a wide receiver who gets fewer passes—only a few chances—but can turn one long catch or touchdown into a strong fantasy week. Wings can feel similar: a goal or assist can create a huge six-game burst, while missed chances can make the next matchup much quieter.',
     scoringDrivers: 'Goals · shots · assists · hits',
-    draftLesson: 'Chase ceiling, but expect more matchup-to-matchup variance.',
+    draftLesson: 'Draft for upside: one matchup can be huge and the next can be much quieter.',
     cssClass: 'wings',
   },
   {

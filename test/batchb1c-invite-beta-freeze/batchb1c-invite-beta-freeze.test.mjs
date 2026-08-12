@@ -194,7 +194,7 @@ test('B1C scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.match(documentation, /Beta Operations Batch B1C/);
   assert.match(runbook, /pbpaste > .*rinkrat-rc21-validation\.json/);
   assert.equal(roadmapRoot, roadmapDocs);
-  assert.match(roadmapRoot, /Version 1\.11/);
+  assert.match(roadmapRoot, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRoot, /B1\.24 .*invite-beta freeze/i);
   assert.match(roadmapRoot, /LOG\.18 .*B1C/i);
 });

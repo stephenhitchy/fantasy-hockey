@@ -1,3 +1,37 @@
+# Onboarding Batch B1D — Big-Play Winger Comparison Clarity
+
+**Runtime release family:** Release Candidate 21  
+**Scope:** Hosting-only Training Camp copy refinement. The LW/RW football analogy now uses plain language for beginners without changing Production Scoring V3, Projection V11, roster construction, Draft strategy logic, or positional eligibility.
+
+## Clearer wing comparison
+
+The Build Your Club football guide now labels wings as **Big-play wide receivers** instead of **Outside wide receivers**. The card immediately explains the intended pattern as **Fewer chances, bigger scoring swings**: a receiver can turn one limited opportunity into a strong fantasy week, and a winger can similarly create a large six-game burst when goals and assists convert while producing a quieter matchup when they do not.
+
+The explanation deliberately avoids football-specific alignment jargon and does not use football point totals as if they were RinkRat point equivalents. LW and RW remain grouped because RinkRat scores them identically and Projection V11 uses the same position priors.
+
+## Verification
+
+```bash
+npm run verify:batchb1d
+```
+
+## Deployment
+
+This is a Hosting-only update:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Onboarding B1D big-play winger comparison"
+```
+
+No Functions, Firestore Rules, indexes, scoring documents, projection snapshots, or roster data require deployment or migration.
+
+## Rollback
+
+Redeploy the previously approved RC21 Hosting release. No server or fantasy-data rollback is required.
+
+---
+
 # Beta Operations Batch B1C — Invite-Beta Release Freeze and Rollback Tooling
 
 **Runtime release:** Release Candidate 21 (unchanged)  
@@ -181,7 +215,7 @@ Redeploy the approved B1A Hosting build to remove the new report-only headers an
 
 The Training Camp roster lesson now provides an expanded-by-default, collapsible guide for managers who already understand fantasy football:
 
-- **Wings (LW/RW) → outside wide receivers:** higher big-play ceiling through goals, shots, assists, and physical play; LW and RW remain grouped because RinkRat scores them identically and Projection V11 uses the same position priors.
+- **Wings (LW/RW) → big-play wide receivers:** higher big-play ceiling through goals, shots, assists, and physical play; LW and RW remain grouped because RinkRat scores them identically and Projection V11 uses the same position priors.
 - **Centers → target-heavy slot receivers:** the same forward scoring rules, with a slightly more playmaking-oriented Projection V11 baseline through assists, special-teams involvement, and ice time.
 - **Defensemen → workhorse running backs:** dependable workload value through ice time, blocks, hits, and shots.
 - **Team Goalie Unit → quarterbacks:** one premium, high-raw-point roster spot whose value should be judged against other goalie units rather than skaters.
