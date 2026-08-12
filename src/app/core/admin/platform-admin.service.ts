@@ -104,6 +104,83 @@ export interface AdminInboxData {
   summary: AdminInboxSummary;
 }
 
+
+export type AppCheckCallableCanaryMode = 'monitor' | 'canary';
+
+export interface AppCheckCallableCanaryOption {
+  name:
+    | 'requestProjectionSnapshotGeneration'
+    | 'advanceHistoricalReplayDay'
+    | 'makeSecureDraftPick'
+    | 'applyImmediateRosterMove'
+    | 'executeSecureRosterAction';
+  label: string;
+  description: string;
+  recommendedOrder: number;
+}
+
+export interface AppCheckCallableCanaryLeague {
+  leagueId: string;
+  name: string;
+  draftStatus: string;
+  selected: boolean;
+  isInternalTest: boolean;
+}
+
+export interface AppCheckCallableCanaryControl {
+  schemaVersion: number;
+  mode: AppCheckCallableCanaryMode;
+  revision: number;
+  approvedBuildId: string | null;
+  approvedAppId: string | null;
+  selectedCallables: AppCheckCallableCanaryOption['name'][];
+  canaryLeagueIds: string[];
+  reason: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
+  canaryStartedAt: string | null;
+  canaryStoppedAt: string | null;
+  automaticPromotion: false;
+}
+
+export interface AppCheckCallableCanaryHealthItem {
+  allowedCount: number;
+  blockedCount: number;
+  lastStatus: string;
+  lastEventAt: string | null;
+}
+
+export interface AppCheckCallableCanaryHealth {
+  schemaVersion: number;
+  controlRevision: number;
+  mode: AppCheckCallableCanaryMode;
+  approvedBuildId: string | null;
+  allowedCount: number;
+  blockedCount: number;
+  byCallable: Record<string, AppCheckCallableCanaryHealthItem>;
+  startedAt: string | null;
+  lastAllowedAt: string | null;
+  lastBlockedAt: string | null;
+  lastLeagueReference: string;
+}
+
+export interface AppCheckCallableCanarySnapshot {
+  control: AppCheckCallableCanaryControl;
+  health: AppCheckCallableCanaryHealth;
+  callableOptions: AppCheckCallableCanaryOption[];
+  leagues: AppCheckCallableCanaryLeague[];
+  maximumCanaryLeagues: number;
+  minimumReasonLength: number;
+  automaticPromotion: false;
+}
+
+export interface AppCheckCallableCanaryUpdate {
+  mode: AppCheckCallableCanaryMode;
+  selectedCallables: AppCheckCallableCanaryOption['name'][];
+  canaryLeagueIds: string[];
+  reason: string;
+}
+
 interface UpdateErrorRequest {
   fingerprint: string;
   status: ErrorAdminStatus;
@@ -148,6 +225,38 @@ export class PlatformAdminService {
       { timeout: 65_000 },
     );
     const response = await callable({});
+    return response.data;
+  }
+
+
+  async loadAppCheckCanaryControl(): Promise<AppCheckCallableCanarySnapshot> {
+    const callable = httpsCallable<
+      Record<string, never>,
+      AppCheckCallableCanarySnapshot
+    >(
+      functions,
+      'getAppCheckCallableCanaryControl',
+      { timeout: 50_000 },
+    );
+    const response = await callable({});
+    return response.data;
+  }
+
+  async updateAppCheckCanaryControl(
+    update: AppCheckCallableCanaryUpdate,
+  ): Promise<AppCheckCallableCanarySnapshot> {
+    const callable = httpsCallable<
+      AppCheckCallableCanaryUpdate & { buildId: string },
+      AppCheckCallableCanarySnapshot
+    >(
+      functions,
+      'updateAppCheckCallableCanaryControl',
+      { timeout: 65_000 },
+    );
+    const response = await callable({
+      ...update,
+      buildId: BUNDLED_RELEASE_MANIFEST.buildId,
+    });
     return response.data;
   }
 

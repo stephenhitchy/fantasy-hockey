@@ -40,7 +40,7 @@ test('the type hotfix keeps all four server preparation states and the safe null
   assert.match(source, /serverAutomationStatus: preparationFailed \? 'error' : 'waiting-projection'/);
 });
 
-test('S3E.1.1 verification inherits S3E.1 and preserves RC23, Scoring V3, Projection V11, and monitor mode', async () => {
+test('S3E.1.1 verification inherits S3E.1 and preserves the current release, Scoring V3, Projection V11, and monitor mode', async () => {
   const [packageSource, readme, runtime, productionRuntime, configSource] = await Promise.all([
     read('package.json'),
     read('README.md'),
@@ -52,12 +52,12 @@ test('S3E.1.1 verification inherits S3E.1 and preserves RC23, Scoring V3, Projec
   const config = JSON.parse(configSource);
 
   assert.match(packageJson.scripts['verify:batchs3e-1-1:core'], /verify:batchs3e-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchs3e-1-1:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f):core/);
   assert.match(readme, /Security Batch S3E\.1\.1/);
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
-  assert.match(runtime, /Release Candidate 23/);
-  assert.match(productionRuntime, /Release Candidate 23/);
+  assert.match(runtime, /Release Candidate 24/);
+  assert.match(productionRuntime, /Release Candidate 24/);
   assert.equal(config.mode, 'monitor');
   assert.equal(config.automaticEnforcement, false);
 });
@@ -70,7 +70,7 @@ test('S3E.1.1 documentation and permanent roadmap remain synchronized', async ()
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.13\.2/);
+  assert.match(roadmap, /Version 1\.(?:13\.2|14(?:\.\d+)?)/);
   assert.match(roadmap, /# \[x\] LOG\.24/);
   assert.match(runbook, /undefined/i);
   assert.match(runbook, /type guard/i);

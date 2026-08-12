@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
@@ -1477,6 +1478,11 @@ export const executeSecureRosterAction = onCall(
     );
     const input = normalizedSecureRosterActionRequest(request.data);
     const leagueId = asString(input.leagueId);
+    await enforceAppCheckCallableCanaryForLeague(
+      request,
+      'executeSecureRosterAction',
+      leagueId,
+    );
     const action = asString(input.action) as SecureRosterAction;
     if (!action) {
       throw new HttpsError('invalid-argument', 'League and roster action are required.');

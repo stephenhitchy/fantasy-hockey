@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import {
   DraftQueue,
@@ -1192,6 +1193,11 @@ export const makeSecureDraftPick = onCall(
       ? request.data as SecureDraftPickRequest
       : {};
     const leagueId = requireLeagueId(input.leagueId);
+    await enforceAppCheckCallableCanaryForLeague(
+      request,
+      'makeSecureDraftPick',
+      leagueId,
+    );
     const assetKey = requireAssetKey(input.assetKey);
     const submissionId = getOptionalDraftSubmissionId(input.submissionId);
     const requestedOverallPick = getOptionalExpectedOverallPick(input.expectedOverallPick);

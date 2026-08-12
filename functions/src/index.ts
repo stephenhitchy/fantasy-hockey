@@ -3997,6 +3997,11 @@ export {
 
 export { getSecurityControlReadiness } from './security-authority';
 
+export {
+  getAppCheckCallableCanaryControl,
+  updateAppCheckCallableCanaryControl,
+} from './app-check-canary-authority';
+
 export { saveManagerProfile } from './manager-profile-authority';
 
 export { applyImmediateRosterMove } from './roster-moves';

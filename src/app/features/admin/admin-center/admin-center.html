@@ -590,10 +590,162 @@
             <strong>Monitor-only safety</strong>
             <span>
               This release never turns on App Check enforcement automatically. Passing the gate
-              only means a later release may deliberately test the named expensive callables first;
-              Firestore enforcement remains separate.
+              only means a platform administrator may deliberately test exact callables in exact
+              leagues; Firestore enforcement remains separate.
             </span>
           </aside>
+
+          @if (appCheckCanary(); as canary) {
+            <section
+              class="app-check-canary-control"
+              [attr.data-tone]="appCheckCanaryTone()"
+              [attr.data-mode]="canary.control.mode"
+              aria-labelledby="app-check-canary-heading"
+            >
+              <header>
+                <div>
+                  <span class="eyebrow">Exact-league App Check canary</span>
+                  <h4 id="app-check-canary-heading">
+                    {{ canary.control.mode === 'canary' ? 'Canary enforcement is active' : 'Canary routing is standing by' }}
+                  </h4>
+                  <p>
+                    Only the selected callables inside the selected leagues can reject a missing
+                    App Check token. Every other league remains in monitor mode.
+                  </p>
+                </div>
+                <span class="app-check-readiness-pill">
+                  {{ statusLabel(canary.control.mode) }} · revision {{ canary.control.revision }}
+                </span>
+              </header>
+
+              <div class="app-check-canary-summary">
+                <article>
+                  <span>Allowed canary calls</span>
+                  <strong>{{ canary.health.allowedCount }}</strong>
+                  <small>Valid verified requests</small>
+                </article>
+                <article>
+                  <span>Blocked canary calls</span>
+                  <strong>{{ canary.health.blockedCount }}</strong>
+                  <small>Missing or mismatched App Check</small>
+                </article>
+                <article>
+                  <span>Approved build</span>
+                  <strong>{{ canary.control.approvedBuildId ? 'Exact build' : 'Not approved' }}</strong>
+                  <small>{{ canary.control.approvedBuildId || 'Monitoring only' }}</small>
+                </article>
+                <article>
+                  <span>Started</span>
+                  <strong>{{ canary.control.mode === 'canary' ? 'Active' : 'Monitor' }}</strong>
+                  <small>{{ formatDate(canary.control.canaryStartedAt || canary.control.updatedAt) }}</small>
+                </article>
+              </div>
+
+              <div class="app-check-canary-columns">
+                <section>
+                  <h5>1. Choose exact callables</h5>
+                  <p>Begin with recoverable server work before live Draft and roster actions.</p>
+                  <div class="app-check-canary-options">
+                    @for (option of canary.callableOptions; track option.name) {
+                      <label class="app-check-canary-option">
+                        <input
+                          type="checkbox"
+                          [(ngModel)]="appCheckCanaryCallableDraft[option.name]"
+                        />
+                        <span>
+                          <strong>{{ option.label }}</strong>
+                          <small>{{ option.description }}</small>
+                          @if (appCheckCanaryHealth(option.name); as health) {
+                            <small>
+                              Proof: {{ health.allowedCount }} allowed · {{ health.blockedCount }} blocked
+                            </small>
+                          }
+                        </span>
+                      </label>
+                    }
+                  </div>
+                </section>
+
+                <section>
+                  <h5>2. Choose exact leagues</h5>
+                  <p>
+                    Maximum {{ canary.maximumCanaryLeagues }}. Only leagues already marked Internal
+                    Test may be selected; friend leagues remain completely unaffected.
+                  </p>
+                  <div class="app-check-canary-leagues">
+                    @for (league of canary.leagues; track league.leagueId) {
+                      <label class="app-check-canary-option">
+                        <input
+                          type="checkbox"
+                          [(ngModel)]="appCheckCanaryLeagueDraft[league.leagueId]"
+                          [disabled]="!canSelectAppCheckCanaryLeague(league.leagueId)"
+                        />
+                        <span>
+                          <strong>{{ league.name }}</strong>
+                          <small>
+                            {{ statusLabel(league.draftStatus) }} ·
+                            {{ league.isInternalTest ? 'Internal Test' : 'Not eligible' }} ·
+                            {{ league.leagueId }}
+                          </small>
+                        </span>
+                      </label>
+                    }
+                  </div>
+                </section>
+              </div>
+
+              <label class="app-check-canary-reason">
+                <span>3. Record the reason for this change</span>
+                <textarea
+                  rows="3"
+                  maxlength="500"
+                  [(ngModel)]="appCheckCanaryReason"
+                  placeholder="Example: Start one disposable Internal Test league after the exact-build browser and action gates passed."
+                ></textarea>
+                <small>
+                  Minimum {{ canary.minimumReasonLength }} characters. The reason is saved in the
+                  immutable administrator audit trail.
+                </small>
+              </label>
+
+              <div class="app-check-canary-actions">
+                <button
+                  type="button"
+                  class="rr-action rr-action--primary"
+                  [disabled]="!canStartAppCheckCanary()"
+                  (click)="startAppCheckCanary()"
+                >
+                  {{ savingAppCheckCanary() ? 'Saving…' : canary.control.mode === 'canary' ? 'Restart Canary With This Scope' : 'Start Selected Canary' }}
+                </button>
+                <button
+                  type="button"
+                  class="rr-action rr-action--secondary"
+                  [disabled]="!canReturnAppCheckCanaryToMonitor()"
+                  (click)="returnAppCheckCanaryToMonitor()"
+                >
+                  Return Everything to Monitor
+                </button>
+              </div>
+
+              @if (!evidence.appCheckReadiness.canaryEligible) {
+                <aside class="rr-notice rr-notice--warning">
+                  <strong>Activation remains locked</strong>
+                  <span>
+                    Finish every exact-build evidence blocker above first. Installing this control
+                    does not weaken the evidence gate.
+                  </span>
+                </aside>
+              }
+
+              <aside class="rr-notice rr-notice--info">
+                <strong>Emergency rollback does not depend on App Check</strong>
+                <span>
+                  A recently authenticated platform administrator can return the control to monitor
+                  mode even when App Check itself is the suspected problem. Promotion is never automatic.
+                </span>
+              </aside>
+            </section>
+          }
         </section>
 
         <section class="evidence-panel">

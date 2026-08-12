@@ -12,17 +12,18 @@ Core project references:
 - [`docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md`](docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md) — exact-build App Check evidence gates, supported-browser matrix, selected-callable canary handoff, compact mobile injury status, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md) — non-blocking Draft scheduling, verified Projection V11 background preparation, displaced-starter bench preservation during IR activation, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md) — strict TypeScript narrowing for persisted Draft preparation states without changing the S3E.1 runtime contract.
+- [`docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`](docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md) — exact-build evidence revalidation, exact-league and exact-callable App Check canary routing, health proof, audit history, and emergency monitor rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 23 / Security Batch S3E.1.1**. S3E keeps App Check in exact-build monitor mode, S3E.1 corrects the Draft-scheduling and IR roster-preservation blockers found by that evidence, and S3E.1.1 fixes the strict Functions TypeScript narrowing of persisted projection-preparation status without changing runtime behavior.
+The current runtime family is **Release Candidate 24 / Security Batch S3F**. S3F keeps App Check monitor-first while installing a guarded runtime canary that can reject missing App Check only for exact selected callables in exact selected Internal Test leagues after the RC24 evidence gate passes. Draft scheduling, IR roster preservation, Scoring V3, and Projection V11 remain unchanged.
 
-The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. App Check enforcement remains off, and production scoring remains in Shadow.
+The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. Global callable and Firestore App Check enforcement remain off. The exact Internal Test league canary also remains disabled until a platform administrator deliberately starts it after the evidence gate passes. Production scoring remains in Shadow.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3e-1-1` as the current verification command.
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3f` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -73,7 +74,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3e-1-1
+npm run verify:batchs3f
 ```
 
 After verification and a clean commit:
@@ -81,6 +82,23 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+
+## Security Batch S3F — Exact Internal Test League App Check Canary
+
+S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC24 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
+
+Only a request matching both an approved callable and an approved Internal Test league may be rejected for missing or mismatched App Check context. Every other callable and league remains monitor-only. The server rechecks readiness, validates the Internal Test allowlist, stores an immutable administrator audit entry, records privacy-limited allowed/blocked proof, and preserves a recently authenticated emergency route back to Monitor that does not depend on App Check.
+
+Commands:
+
+```bash
+npm run security:audit-app-check-canary
+npm run test:batchs3f:run
+npm run verify:batchs3f
+```
+
+Deploy Functions first, then Hosting. No Firestore Rules, indexes, TTL, or backup configuration changes are part of S3F. Full operator guidance is maintained in `docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`.
 
 
 ## Security Batch S3E.1.1 — Draft Preparation Status Type Hotfix
@@ -100,7 +118,7 @@ Because the original Functions deployment stopped at compilation, deploy the com
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E.1.1 Draft preparation type hotfix"
-firebase deploy --only hosting:app -m "Security S3E.1 RC23 Draft and IR hotfix"
+firebase deploy --only hosting:app -m "Security S3E.1 RC24 Draft and IR hotfix"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -129,7 +147,7 @@ Deployment requires all Functions first, then Hosting:
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E.1 Draft schedule and IR roster preservation"
-firebase deploy --only hosting:app -m "Security S3E.1 RC23 Draft and IR hotfix"
+firebase deploy --only hosting:app -m "Security S3E.1 RC24 Draft and IR hotfix"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -160,7 +178,7 @@ Deployment requires Functions first, then Hosting:
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E App Check readiness evidence"
-firebase deploy --only hosting:app -m "Security S3E RC23 readiness and mobile injury clarity"
+firebase deploy --only hosting:app -m "Security S3E RC24 readiness and mobile injury clarity"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -238,13 +256,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC23 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC24 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC23 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC24 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md

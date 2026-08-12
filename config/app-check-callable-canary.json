@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "release": "Security Batch S3F",
+  "defaultMode": "monitor",
+  "controlDocument": "appData/appCheckCallableCanaryControl",
+  "healthDocument": "appData/appCheckCallableCanaryHealth",
+  "controlCacheMilliseconds": 5000,
+  "maximumCanaryLeagues": 5,
+  "minimumReasonLength": 8,
+  "requireExactBuildReadiness": true,
+  "requireValidAppCheckToStart": true,
+  "emergencyMonitorRollbackRequiresAppCheck": false,
+  "automaticPromotion": false,
+  "candidateCallables": [
+    {
+      "name": "requestProjectionSnapshotGeneration",
+      "label": "Projection generation",
+      "recommendedOrder": 1
+    },
+    {
+      "name": "advanceHistoricalReplayDay",
+      "label": "Historical replay",
+      "recommendedOrder": 2
+    },
+    {
+      "name": "makeSecureDraftPick",
+      "label": "Draft pick",
+      "recommendedOrder": 3
+    },
+    {
+      "name": "applyImmediateRosterMove",
+      "label": "Immediate roster move",
+      "recommendedOrder": 4
+    },
+    {
+      "name": "executeSecureRosterAction",
+      "label": "Roster, waiver, and IR action",
+      "recommendedOrder": 5
+    }
+  ],
+  "notes": [
+    "The default and rollback state is monitor. No callable rejects traffic until a platform administrator deliberately starts a canary.",
+    "Canary enforcement is restricted to exact selected leagues and exact selected callables, so friend leagues remain in monitor mode.",
+    "Starting a canary requires the exact build readiness gate, a valid administrator App Check token, verified recent authentication, a reason, and an immutable audit entry.",
+    "Returning to monitor mode does not require a valid App Check token, preserving an emergency rollback path when App Check itself is the suspected problem.",
+    "This batch never enables Firestore App Check enforcement and never promotes automatically.",
+    "Every selected league must already be marked Internal Test in appData/leagueAutomationQueueConfig."
+  ],
+  "leagueEligibility": "internal-test-only"
+}

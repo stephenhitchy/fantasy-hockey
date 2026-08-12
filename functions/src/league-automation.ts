@@ -13,6 +13,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
@@ -5154,6 +5155,11 @@ export const advanceHistoricalReplayDay = onCall(
         maxBytes: 128,
         pattern: /^[A-Za-z0-9_-]+$/,
       },
+    );
+    await enforceAppCheckCallableCanaryForLeague(
+      request,
+      'advanceHistoricalReplayDay',
+      leagueId,
     );
     const requestId = normalizeHistoricalReplayRequestId(
       request.data && typeof request.data === 'object'

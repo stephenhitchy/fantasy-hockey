@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
@@ -590,6 +591,11 @@ export const applyImmediateRosterMove = onCall(
       maxBytes: 128,
       pattern: /^[A-Za-z0-9_-]+$/,
     });
+    await enforceAppCheckCallableCanaryForLeague(
+      request,
+      'applyImmediateRosterMove',
+      leagueId,
+    );
     const moveType = asString(input.moveType) as ImmediateRosterMoveType;
     const activeSlotId = requireFirestoreDocumentId(
       input.activeSlotId,

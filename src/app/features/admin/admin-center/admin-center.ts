@@ -6,6 +6,8 @@ import {
   AdminErrorGroup,
   AdminFeedbackItem,
   AdminInboxData,
+  AppCheckCallableCanaryOption,
+  AppCheckCallableCanarySnapshot,
   ErrorAdminStatus,
   PlatformAdminService,
 } from '../../../core/admin/platform-admin.service';
@@ -35,6 +37,8 @@ export class AdminCenter {
   readonly successMessage = signal('');
   readonly inbox = signal<AdminInboxData | null>(null);
   readonly operations = signal<BetaOperationsOverview | null>(null);
+  readonly appCheckCanary = signal<AppCheckCallableCanarySnapshot | null>(null);
+  readonly savingAppCheckCanary = signal(false);
   readonly activeTab = signal<'feedback' | 'errors' | 'evidence'>('feedback');
   readonly expandedError = signal('');
   readonly expandedFeedback = signal('');
@@ -46,6 +50,7 @@ export class AdminCenter {
   errorStatusFilter = 'open';
   errorSearch = '';
   evidenceWindowDays = 14;
+  appCheckCanaryReason = '';
 
   readonly feedbackStatusOptions: Array<{ value: BetaFeedbackStatus; label: string }> = [
     { value: 'new', label: 'New' },
@@ -101,6 +106,8 @@ export class AdminCenter {
   readonly feedbackPublicSummaryDraft: Record<string, string> = {};
   readonly errorStatusDraft: Record<string, ErrorAdminStatus> = {};
   readonly errorNotesDraft: Record<string, string> = {};
+  readonly appCheckCanaryCallableDraft: Record<string, boolean> = {};
+  readonly appCheckCanaryLeagueDraft: Record<string, boolean> = {};
 
   constructor(
     private readonly platformAdmin: PlatformAdminService,
@@ -170,13 +177,16 @@ export class AdminCenter {
     this.successMessage.set('');
 
     try {
-      const [inbox, operations] = await Promise.all([
+      const [inbox, operations, appCheckCanary] = await Promise.all([
         this.platformAdmin.loadInbox(),
         this.platformAdmin.loadBetaOperations(this.evidenceWindowDays),
+        this.platformAdmin.loadAppCheckCanaryControl(),
       ]);
       this.inbox.set(inbox);
       this.operations.set(operations);
+      this.appCheckCanary.set(appCheckCanary);
       this.initializeDrafts(inbox);
+      this.initializeAppCheckCanaryDrafts(appCheckCanary);
       this.telemetry.track('admin_beta_operations_opened', {
         feedback_count: inbox.summary.totalFeedbackCount,
         error_group_count: inbox.summary.totalErrorGroupCount,
@@ -197,7 +207,13 @@ export class AdminCenter {
 
     try {
       this.refreshing.set(true);
-      this.operations.set(await this.platformAdmin.loadBetaOperations(this.evidenceWindowDays));
+      const [operations, appCheckCanary] = await Promise.all([
+        this.platformAdmin.loadBetaOperations(this.evidenceWindowDays),
+        this.platformAdmin.loadAppCheckCanaryControl(),
+      ]);
+      this.operations.set(operations);
+      this.appCheckCanary.set(appCheckCanary);
+      this.initializeAppCheckCanaryDrafts(appCheckCanary);
       this.successMessage.set(`Live evidence refreshed for the last ${this.evidenceWindowDays} days.`);
     } catch (error: unknown) {
       this.errorMessage.set(this.friendlyError(error, 'Unable to refresh live-season evidence.'));
@@ -364,6 +380,123 @@ export class AdminCenter {
     return item.verificationGatePassed
       ? `${item.validPercent}% verified`
       : `${item.validPercent}% · needs attention`;
+  }
+
+
+  selectedAppCheckCanaryCallables(): AppCheckCallableCanaryOption['name'][] {
+    const snapshot = this.appCheckCanary();
+    if (!snapshot) return [];
+    return snapshot.callableOptions
+      .filter((option) => this.appCheckCanaryCallableDraft[option.name] === true)
+      .map((option) => option.name);
+  }
+
+  selectedAppCheckCanaryLeagueIds(): string[] {
+    return (this.appCheckCanary()?.leagues ?? [])
+      .filter((league) => this.appCheckCanaryLeagueDraft[league.leagueId] === true)
+      .map((league) => league.leagueId);
+  }
+
+  canSelectAppCheckCanaryLeague(leagueId: string): boolean {
+    const snapshot = this.appCheckCanary();
+    const league = snapshot?.leagues.find((candidate) => candidate.leagueId === leagueId);
+    if (!snapshot || !league?.isInternalTest) return false;
+    if (this.appCheckCanaryLeagueDraft[leagueId]) return true;
+    return this.selectedAppCheckCanaryLeagueIds().length < snapshot.maximumCanaryLeagues;
+  }
+
+  canStartAppCheckCanary(): boolean {
+    const snapshot = this.appCheckCanary();
+    const readiness = this.operations()?.appCheckReadiness;
+    if (!snapshot || !readiness?.canaryEligible || this.savingAppCheckCanary()) {
+      return false;
+    }
+    return (
+      this.selectedAppCheckCanaryCallables().length > 0 &&
+      this.selectedAppCheckCanaryLeagueIds().length > 0 &&
+      this.appCheckCanaryReason.trim().length >= snapshot.minimumReasonLength
+    );
+  }
+
+  canReturnAppCheckCanaryToMonitor(): boolean {
+    const snapshot = this.appCheckCanary();
+    return Boolean(
+      snapshot?.control.mode === 'canary' &&
+      !this.savingAppCheckCanary() &&
+      this.appCheckCanaryReason.trim().length >= snapshot.minimumReasonLength,
+    );
+  }
+
+  appCheckCanaryTone(): 'success' | 'warning' | 'danger' {
+    const snapshot = this.appCheckCanary();
+    if (!snapshot || snapshot.control.mode === 'monitor') return 'success';
+    return snapshot.health.blockedCount > 0 ? 'danger' : 'warning';
+  }
+
+  appCheckCanaryHealth(optionName: string) {
+    return this.appCheckCanary()?.health.byCallable[optionName] ?? {
+      allowedCount: 0,
+      blockedCount: 0,
+      lastStatus: '',
+      lastEventAt: null,
+    };
+  }
+
+  async startAppCheckCanary(): Promise<void> {
+    if (!this.canStartAppCheckCanary()) return;
+    await this.saveAppCheckCanaryControl('canary');
+  }
+
+  async returnAppCheckCanaryToMonitor(): Promise<void> {
+    if (!this.canReturnAppCheckCanaryToMonitor()) return;
+    await this.saveAppCheckCanaryControl('monitor');
+  }
+
+  private async saveAppCheckCanaryControl(
+    mode: 'monitor' | 'canary',
+  ): Promise<void> {
+    this.savingAppCheckCanary.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      const snapshot = await this.platformAdmin.updateAppCheckCanaryControl({
+        mode,
+        selectedCallables: this.selectedAppCheckCanaryCallables(),
+        canaryLeagueIds: this.selectedAppCheckCanaryLeagueIds(),
+        reason: this.appCheckCanaryReason.trim(),
+      });
+      this.appCheckCanary.set(snapshot);
+      this.initializeAppCheckCanaryDrafts(snapshot);
+      this.appCheckCanaryReason = '';
+      this.successMessage.set(
+        mode === 'canary'
+          ? 'The exact-league App Check canary is active for only the selected callables and leagues.'
+          : 'App Check callable enforcement returned to monitor mode. No selected league is being rejected.',
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(this.friendlyError(
+        error,
+        mode === 'canary'
+          ? 'Unable to start the selected App Check canary.'
+          : 'Unable to return App Check to monitor mode.',
+      ));
+    } finally {
+      this.savingAppCheckCanary.set(false);
+    }
+  }
+
+  private initializeAppCheckCanaryDrafts(
+    snapshot: AppCheckCallableCanarySnapshot,
+  ): void {
+    for (const option of snapshot.callableOptions) {
+      this.appCheckCanaryCallableDraft[option.name] =
+        snapshot.control.selectedCallables.includes(option.name);
+    }
+    for (const league of snapshot.leagues) {
+      this.appCheckCanaryLeagueDraft[league.leagueId] =
+        snapshot.control.canaryLeagueIds.includes(league.leagueId);
+    }
   }
 
   private initializeDrafts(inbox: AdminInboxData): void {

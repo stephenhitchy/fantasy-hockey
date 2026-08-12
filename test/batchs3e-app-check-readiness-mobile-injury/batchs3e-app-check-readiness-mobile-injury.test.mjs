@@ -181,8 +181,8 @@ test('S3E remains monitor-only and preserves Scoring V3 and Projection V11', asy
   assert.doesNotMatch(functionsSource, /enforceAppCheck\s*:\s*true/);
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
-  assert.match(runtime, /Release Candidate 23/);
-  assert.match(productionRuntime, /Release Candidate 23/);
+  assert.match(runtime, /Release Candidate 24/);
+  assert.match(productionRuntime, /Release Candidate 24/);
 });
 
 test('S3E verification, documentation, roadmap, and audit commands stay synchronized', async () => {
@@ -197,7 +197,7 @@ test('S3E verification, documentation, roadmap, and audit commands stay synchron
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.13/);
+  assert.match(roadmap, /Version 1\.(?:13(?:\.\d+)?|14(?:\.\d+)?)/);
   assert.match(roadmap, /# \[x\] S3\.22/);
   assert.match(roadmap, /# \[x\] B1\.25/);
   assert.match(packageJson.scripts['security:audit-app-check-readiness'], /app-check-readiness-audit/);

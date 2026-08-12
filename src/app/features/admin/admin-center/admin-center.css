@@ -1050,3 +1050,215 @@
     display: grid;
   }
 }
+
+.app-check-canary-control {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--rr-info) 42%, var(--border-soft));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--rr-info) 5%, var(--surface-1));
+}
+
+.app-check-canary-control[data-mode='canary'] {
+  border-color: color-mix(in srgb, var(--rr-warning) 64%, var(--border-soft));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rr-warning) 16%, transparent);
+}
+
+.app-check-canary-control[data-tone='danger'] {
+  border-color: color-mix(in srgb, var(--rr-danger) 72%, var(--border-soft));
+}
+
+.app-check-canary-control > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.app-check-canary-control h4,
+.app-check-canary-control h5 {
+  margin: 0;
+}
+
+.app-check-canary-control header p,
+.app-check-canary-columns section > p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+}
+
+.app-check-canary-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-check-canary-summary article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: var(--surface-1);
+}
+
+.app-check-canary-summary span,
+.app-check-canary-summary small,
+.app-check-canary-summary strong {
+  display: block;
+}
+
+.app-check-canary-summary span,
+.app-check-canary-summary small {
+  color: var(--text-secondary);
+}
+
+.app-check-canary-summary span {
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.app-check-canary-summary strong {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 1.15rem;
+}
+
+.app-check-canary-summary small {
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: .75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-check-canary-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-check-canary-columns > section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-1);
+}
+
+.app-check-canary-options,
+.app-check-canary-leagues {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.app-check-canary-leagues {
+  max-height: 330px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.app-check-canary-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  cursor: pointer;
+}
+
+.app-check-canary-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--rr-info) 68%, var(--border-soft));
+  background: color-mix(in srgb, var(--rr-info) 9%, var(--surface-1));
+}
+
+.app-check-canary-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+.app-check-canary-option input {
+  margin-top: 3px;
+}
+
+.app-check-canary-option span,
+.app-check-canary-option strong,
+.app-check-canary-option small {
+  min-width: 0;
+}
+
+.app-check-canary-option strong,
+.app-check-canary-option small {
+  display: block;
+}
+
+.app-check-canary-option small {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.app-check-canary-reason {
+  display: grid;
+  gap: 7px;
+}
+
+.app-check-canary-reason > span {
+  font-weight: 800;
+}
+
+.app-check-canary-reason textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.app-check-canary-reason small {
+  color: var(--text-secondary);
+}
+
+.app-check-canary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .app-check-canary-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-check-canary-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .app-check-canary-control {
+    padding: 14px;
+  }
+
+  .app-check-canary-control > header,
+  .app-check-canary-actions {
+    display: grid;
+  }
+
+  .app-check-canary-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-check-canary-actions .rr-action {
+    width: 100%;
+  }
+
+  .app-check-canary-leagues {
+    max-height: 280px;
+  }
+}

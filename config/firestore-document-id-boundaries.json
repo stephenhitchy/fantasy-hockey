@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "release": "Security Batch S3D",
+  "release": "Security Batch S3F",
   "purpose": "Inventory every external or persisted identifier boundary that can become a Firestore path segment.",
   "policies": {
     "authUserId": "FIRESTORE_AUTH_USER_ID_OPTIONS",
@@ -128,6 +128,15 @@
       "kind": "Feedback, evidence, known-issue, and rate-limit identifiers",
       "requiredTokens": [
         "requireFirestoreDocumentId"
+      ]
+    },
+    {
+      "file": "functions/src/app-check-canary-authority.ts",
+      "kind": "App Check canary control, administrator, and exact league identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "FIRESTORE_LEAGUE_ID_OPTIONS",
+        "normalizeAppCheckCallableCanaryLeagueIds"
       ]
     }
   ],

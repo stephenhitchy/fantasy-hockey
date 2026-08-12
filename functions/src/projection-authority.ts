@@ -17,6 +17,7 @@ import {
   FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
@@ -828,6 +829,11 @@ export const requestProjectionSnapshotGeneration = onCall(
 
     const data = asRecord(request.data);
     const leagueId = requireLeagueId(data['leagueId']);
+    await enforceAppCheckCallableCanaryForLeague(
+      request,
+      'requestProjectionSnapshotGeneration',
+      leagueId,
+    );
     const requestId = requireRequestId(data['requestId']);
     const generationReason = requireGenerationReason(data['generationReason']);
     const requestedTargetCycleNumber = normalizePositiveInteger(data['targetCycleNumber']);

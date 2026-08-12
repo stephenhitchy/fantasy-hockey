@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "release": "Security Batch S3E",
+  "release": "Security Batch S3F",
   "mode": "monitor",
   "windowDays": 14,
   "minimumTotalSamples": 50,
@@ -32,16 +32,16 @@
     "waiver-claim"
   ],
   "firstEnforcementScope": [
-    "secureDraftPick",
-    "executeSecureRosterAction",
-    "applyImmediateRosterMove",
+    "requestProjectionSnapshotGeneration",
     "advanceHistoricalReplayDay",
-    "requestProjectionSnapshotGeneration"
+    "makeSecureDraftPick",
+    "applyImmediateRosterMove",
+    "executeSecureRosterAction"
   ],
   "automaticEnforcement": false,
   "notes": [
     "Readiness is evaluated only against the exact deployed build ID supplied by the platform-admin client.",
-    "Passing this gate means the build has enough evidence for a deliberately selected callable canary; it does not enable enforcement automatically.",
-    "Firestore enforcement remains a later gate after selected callable enforcement is proven across supported browsers."
+    "Passing this gate allows the guarded S3F exact-league and exact-callable canary control to be started manually; it never promotes automatically.",
+    "The emergency rollback always returns to monitor mode, and Firestore enforcement remains a later gate after selected callable enforcement is proven across supported browsers."
   ]
 }

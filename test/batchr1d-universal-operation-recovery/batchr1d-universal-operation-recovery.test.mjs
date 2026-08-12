@@ -374,6 +374,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/security/nhl-proxy-security.util.ts',
     // S3E adds isolated monitor-only App Check readiness aggregation.
     'shared/security/app-check-enforcement-readiness.util.ts',
+    // S3F adds guarded exact-league selected-callable App Check canary controls.
+    'app-check-canary-authority.ts',
+    'shared/security/app-check-callable-canary.util.ts',
     // B1B adds isolated beta evidence and aggregate operations helpers.
     'beta-operations.ts',
     'shared/core/observability/beta-operations.util.ts',

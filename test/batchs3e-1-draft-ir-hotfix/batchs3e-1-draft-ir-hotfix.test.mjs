@@ -90,7 +90,7 @@ test('Started-window IR activation uses the same bench-preservation contract on 
   assert.match(source, /nobody was dropped/i);
 });
 
-test('S3E.1 stays monitor-only and preserves Scoring V3, Projection V11, Shadow, and RC23', async () => {
+test('S3E.1 stays monitor-only and preserves Scoring V3, Projection V11, Shadow, and RC24', async () => {
   const [configSource, functionsSource, readme, runtime, productionRuntime] = await Promise.all([
     read('config/app-check-enforcement-readiness.json'),
     read('functions/src/beta-operations.ts'),
@@ -106,8 +106,8 @@ test('S3E.1 stays monitor-only and preserves Scoring V3, Projection V11, Shadow,
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
   assert.match(readme, /Shadow/);
-  assert.match(runtime, /Release Candidate 23/);
-  assert.match(productionRuntime, /Release Candidate 23/);
+  assert.match(runtime, /Release Candidate 24/);
+  assert.match(productionRuntime, /Release Candidate 24/);
 });
 
 test('S3E.1 verification, runbook, and permanent roadmap stay synchronized', async () => {
@@ -121,13 +121,13 @@ test('S3E.1 verification, runbook, and permanent roadmap stay synchronized', asy
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.13\.2/);
+  assert.match(roadmap, /Version 1\.(?:13\.2|14(?:\.\d+)?)/);
   assert.match(roadmap, /# \[x\] B1\.26/);
   assert.match(roadmap, /# \[x\] B1\.27/);
   assert.match(roadmap, /# \[x\] LOG\.23/);
   assert.match(packageJson.scripts['test:batchs3e-1:run'], /batchs3e-1-draft-ir-hotfix/);
   assert.match(packageJson.scripts['verify:batchs3e-1:core'], /verify:batchs3e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchs3e-1-1:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f):core/);
   assert.match(readme, /Security Batch S3E\.1/);
   assert.match(runbook, /Draft scheduling/i);
   assert.match(runbook, /displaced starter/i);

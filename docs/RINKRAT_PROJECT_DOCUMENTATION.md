@@ -11351,3 +11351,50 @@ firebase deploy --only hosting:app -m "Security S3E RC23 readiness and mobile in
 ```
 
 No Firestore Rules or index deployment is part of S3E. Full operator guidance is maintained in `docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md`.
+
+---
+
+# Security Batch S3E.1 — Draft Scheduling and Injured Reserve Roster Preservation
+
+**Runtime release:** Release Candidate 23  
+**Competitive models:** Scoring V3 and Projection V11
+
+Draft scheduling now saves after a bounded server acknowledgement that verified Projection V11 preparation is queued or already ready. The browser no longer waits for the complete ranking job. Scheduled Draft automation uses a `waiting-projection` state and opens only after the server-generated, catalog-validated, deterministically hashed snapshot is ready.
+
+Injured Reserve activation now preserves a displaced starter. An open bench slot receives the starter automatically. When the bench is full, the manager must choose the exact bench player or goalie unit to waive; only that selected asset leaves the roster. The immediate and started-window authorities enforce the same contract.
+
+Verification: `npm run verify:batchs3e-1`. Operator details remain in `docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md`.
+
+---
+
+# Security Batch S3E.1.1 — Draft Preparation Type Narrowing
+
+The strict Functions build exposed that the optional shared Draft preparation property also admitted `undefined`. S3E.1.1 replaces the indexed-property cast with a concrete four-state type and explicit guard before persisted data reaches Draft automation. Runtime behavior is unchanged.
+
+Verification: `npm run verify:batchs3e-1-1`. Details remain in `docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md`.
+
+---
+
+# Security Batch S3F — Exact Internal Test League App Check Callable Canary
+
+**Runtime release:** Release Candidate 24  
+**Competitive models:** Scoring V3 and Projection V11  
+**Default mode:** Monitor  
+**Firestore enforcement:** Off
+
+S3F installs the runtime control needed to test App Check enforcement without deploying a different build after the exact-build evidence gate passes. A request may be rejected only when both its callable name and league ID match the administrator-approved scope. The first canary is additionally restricted to leagues already marked **Internal Test** in the Scoring Queue Control Center, with a maximum of five. Friend leagues cannot be selected accidentally.
+
+Starting or changing a canary requires platform-administrator access, verified email, recent authentication, a valid administrator App Check context, a recorded reason, and a fresh server recalculation showing that the exact RC24 build passed every S3E evidence threshold. Promotion is never automatic. Returning to Monitor requires recent administrator authentication but deliberately does not require App Check, preserving recovery when App Check itself is suspected.
+
+The initial candidate callables are projection generation, historical replay, secure Draft picks, immediate roster moves, and secure roster/waiver/IR actions. Privacy-limited health records count verified requests allowed through the token gate and requests blocked for missing or mismatched context; separate Beta Operations outcomes continue to determine whether the underlying action succeeded.
+
+Commands:
+
+```bash
+npm run security:audit-app-check-canary
+npm run test:batchs3f:run
+npm run verify:batchs3f
+```
+
+Deploy all Functions first, then Hosting. Firestore Rules, indexes, TTL policies, backup schedules, Scoring V3, Projection V11, and the scoring queue mode are unchanged. Full operator guidance remains in `docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`.
+
