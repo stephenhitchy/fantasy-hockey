@@ -10,6 +10,7 @@ import {
   PlatformAdminService,
 } from '../../../core/admin/platform-admin.service';
 import type {
+  AppCheckCoverageBucket,
   BetaFeedbackCategory,
   BetaFeedbackStatus,
   BetaKnownIssueStatus,
@@ -347,6 +348,22 @@ export class AdminCenter {
     if (!data) return 0;
     const total = data.appCheckValidCount + data.appCheckMissingCount;
     return total > 0 ? Math.round((data.appCheckValidCount / total) * 100) : 0;
+  }
+
+
+  appCheckGateTone(): 'success' | 'warning' | 'danger' {
+    const status = this.operations()?.appCheckReadiness.status;
+    if (status === 'ready') return 'success';
+    if (status === 'needs-attention') return 'danger';
+    return 'warning';
+  }
+
+  appCheckCoverageState(item: AppCheckCoverageBucket): string {
+    if (!item.required) return `${item.total} observed`;
+    if (!item.sampleGatePassed) return `${item.total}/${item.minimumSamples} samples`;
+    return item.verificationGatePassed
+      ? `${item.validPercent}% verified`
+      : `${item.validPercent}% · needs attention`;
   }
 
   private initializeDrafts(inbox: AdminInboxData): void {

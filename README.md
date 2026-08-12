@@ -9,15 +9,18 @@ Core project references:
 - [`docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md`](docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md) — beta issue severity, triage, public known issues, live evidence, privacy, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3C_RUNBOOK.md`](docs/RINKRAT_SECURITY_S3C_RUNBOOK.md) — CI, dependency/secret auditing, CSP report-only, HSTS, TTL, cleanup, and emergency patch procedure.
 - [`docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md`](docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md) — Firestore identifier policies, task/trigger boundary rules, static audit, deployment, and rollback.
+- [`docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md`](docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md) — exact-build App Check evidence gates, supported-browser matrix, selected-callable canary handoff, compact mobile injury status, deployment, and rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 22 / Security Batch S3D**. S3D closes the remaining Firestore identifier-boundary gap by normalizing Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, persisted Draft-owner references, projection snapshot/catalog identities, and replay cross-references before they become path segments.
-The competitive models remain **Scoring V3** and **Projection V11**. App Check remains in monitor mode; S3D does not enable enforcement, change Draft rankings, alter six-game windows, or modify transaction timing.
-The inherited security and beta-operations baselines remain available through `npm run verify:batchs3c`, `npm run verify:batchb1b-1`, and the current `npm run verify:batchs3d` chain.
+The current runtime family is **Release Candidate 23 / Security Batch S3E**. S3E converts App Check monitor traffic into an exact-build readiness matrix across supported browsers, device classes, generalized platforms, manager-days, and high-value competitive actions. It never enables enforcement automatically; a later release must deliberately begin a selected-callable canary after the documented evidence gates pass.
+
+The same release fixes the mobile Matchup injury presentation: an injured player now shows a compact icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page.
+
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3e` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -38,6 +41,7 @@ verify:batchs3a-1
 verify:batchs3a-2
 verify:batchs3b
 verify:batchs3b-1
+verify:batchs3c
 verify:batchb1a
 verify:batchb1b
 verify:batchb1b-1
@@ -45,6 +49,7 @@ verify:batchb1c
 verify:batchs4a
 verify:batchb1d
 verify:batchs3d
+verify:batchs3e
 ```
 
 RinkRat pins:
@@ -64,7 +69,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3d
+npm run verify:batchs3e
 ```
 
 After verification and a clean commit:
@@ -73,6 +78,37 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+## Security Batch S3E — Exact-Build App Check Readiness and Mobile Injury Clarity
+
+S3E adds a monitor-only readiness gate to Admin Center → Live Evidence. The server evaluates only evidence produced by the exact deployed build and reports whether the documented sample, browser, device, manager-day, competitive-action, and 99% verification thresholds have been met.
+
+A passing gate means only **ready to plan a selected-callable canary**. It does not turn enforcement on. Firestore App Check enforcement remains a separate later step.
+
+On mobile Matchup rows, injury status is now bounded to a compact presentation such as:
+
+```text
+✚ IR · Return Sep 15
+✚ Out · Return TBD
+```
+
+The full article remains on the player detail page instead of occupying the matchup lineup.
+
+Verification:
+
+```bash
+npm run verify:batchs3e
+```
+
+Deployment requires Functions first, then Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3E App Check readiness evidence"
+firebase deploy --only hosting:app -m "Security S3E RC23 readiness and mobile injury clarity"
+```
+
+No Firestore Rules or index deployment is required.
 
 ## Security Batch S3D — Universal Firestore Identifier Boundary Closure
 
@@ -147,13 +183,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC22 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC23 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC22 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC23 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md

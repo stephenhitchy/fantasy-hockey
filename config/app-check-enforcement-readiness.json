@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "release": "Security Batch S3E",
+  "mode": "monitor",
+  "windowDays": 14,
+  "minimumTotalSamples": 50,
+  "minimumObservedDays": 3,
+  "minimumManagerDays": 5,
+  "minimumValidPercent": 99,
+  "minimumSamplesPerRequiredBrowser": 3,
+  "minimumSamplesPerRequiredDevice": 3,
+  "minimumSamplesPerRequiredPlatform": 3,
+  "minimumSamplesPerRequiredAction": 3,
+  "requiredBrowsers": [
+    "Chrome",
+    "Safari",
+    "Mobile Safari"
+  ],
+  "requiredDevices": [
+    "phone",
+    "desktop"
+  ],
+  "requiredPlatforms": [
+    "iOS",
+    "Android"
+  ],
+  "requiredActions": [
+    "draft-pick",
+    "add-drop",
+    "lineup-swap",
+    "injured-reserve",
+    "waiver-claim"
+  ],
+  "firstEnforcementScope": [
+    "secureDraftPick",
+    "executeSecureRosterAction",
+    "applyImmediateRosterMove",
+    "advanceHistoricalReplayDay",
+    "requestProjectionSnapshotGeneration"
+  ],
+  "automaticEnforcement": false,
+  "notes": [
+    "Readiness is evaluated only against the exact deployed build ID supplied by the platform-admin client.",
+    "Passing this gate means the build has enough evidence for a deliberately selected callable canary; it does not enable enforcement automatically.",
+    "Firestore enforcement remains a later gate after selected callable enforcement is proven across supported browsers."
+  ]
+}

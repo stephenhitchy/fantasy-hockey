@@ -21,6 +21,7 @@ import {
 } from './shared/core/observability/beta-operations.util';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
+import { buildAppCheckEnforcementReadiness } from './shared/security/app-check-enforcement-readiness.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -141,6 +142,18 @@ function browserFamily(userAgent: string): string {
   if (value.includes('firefox/')) return 'Firefox';
   if (value.includes('safari/') && value.includes('mobile/')) return 'Mobile Safari';
   if (value.includes('safari/')) return 'Safari';
+  return 'Other';
+}
+
+function platformFamily(userAgent: string): string {
+  const value = userAgent.toLowerCase();
+
+  if (/iphone|ipad|ipod/.test(value)) return 'iOS';
+  if (value.includes('android')) return 'Android';
+  if (value.includes('macintosh') || value.includes('mac os x')) return 'macOS';
+  if (value.includes('windows')) return 'Windows';
+  if (value.includes('cros')) return 'ChromeOS';
+  if (value.includes('linux')) return 'Linux';
   return 'Other';
 }
 
@@ -375,6 +388,7 @@ export const recordBetaOperationMetric = onCall(
       clientAppCheckStatus,
       serverAppCheckStatus: request.app ? 'valid' : 'missing',
       browser: browserFamily(userAgent),
+      platform: platformFamily(userAgent),
       dailyUserHash: dailyUserHash(request.auth.uid, dateKey),
       dateKey,
       durationMilliseconds,
@@ -592,6 +606,7 @@ export const getBetaOperationsSnapshot = onCall(
       1,
       BETA_OPERATION_WINDOW_DAYS_MAXIMUM,
     ) ?? BETA_OPERATION_WINDOW_DAYS_DEFAULT;
+    const exactBuildId = asString(data['buildId'], 180);
     const dateKeys = betaOperationsDateKeys(requestedDays);
     const startDate = dateKeys[0] ?? new Date().toISOString().slice(0, 10);
     const endDate = dateKeys.at(-1) ?? startDate;
@@ -759,6 +774,12 @@ export const getBetaOperationsSnapshot = onCall(
     const queueConfig = queueConfigSnapshot.data() ?? {};
     const queueHealth = queueHealthSnapshot.data() ?? {};
     const draftAutomation = draftAutomationSnapshot.data() ?? {};
+    const appCheckReadiness = buildAppCheckEnforcementReadiness(
+      evidence,
+      exactBuildId,
+      undefined,
+      { sampleLimitReached: clientSampleLimitReached },
+    );
 
     return {
       generatedAt: new Date().toISOString(),
@@ -772,6 +793,7 @@ export const getBetaOperationsSnapshot = onCall(
       uniqueDailyUserCount: uniqueDailyUsers.size,
       appCheckValidCount: evidence.filter((item) => item['serverAppCheckStatus'] === 'valid').length,
       appCheckMissingCount: evidence.filter((item) => item['serverAppCheckStatus'] !== 'valid').length,
+      appCheckReadiness,
       actions,
       routes,
       browsers: countEntries(browserCounts),

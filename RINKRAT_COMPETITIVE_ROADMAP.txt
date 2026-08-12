@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.12
+Version 1.13
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,8 +48,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, universal identifier-boundary validation, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; finish supported-browser monitoring, measured App Check enforcement, and distributed NHL ingestion/rate protection. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC22 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, universal identifier-boundary validation, exact-build enforcement-readiness gates, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; collect the required supported-browser/action evidence, deliberately canary selected callables, and complete distributed NHL ingestion/rate protection. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC23 validation report, rollback rehearsal, annotated beta tag, first restore drill, and observed first-season cohort before adding broad social or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Repository tooling completed 2026-08-12; the first operator-run restore drill remains an exit gate.
 
 ================================================================================
@@ -228,7 +228,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.1 Register the production web app in Firebase App Check. (P0 / S) — Completed 2026-08-10 after RC15 reported a valid browser token and valid server-received App Check context.
 # [x] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S) — Completed 2026-08-10 with the registered public score-based reCAPTCHA Enterprise key and production debug mode disabled.
 # [x] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S) — Completed 2026-08-10; Release Readiness verified the client token and callable App Check context end to end while enforcement remains off.
-[ ] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M)
+[~] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M) — S3E adds exact-build browser, device, platform, manager-day, and competitive-action coverage gates in Beta Operations. Complete after RC23 reaches the documented sample and 99% verification thresholds across the required matrix.
 [ ] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M)
 [ ] S3.6 Enforce App Check for Firestore only after legitimate browser traffic is consistently verified. (P0 / M)
 
@@ -251,6 +251,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.19 Add npm production dependency audits for root and Functions. (P0 / S) — Completed 2026-08-11 in Security Batch S3C with local advisory mode, strict CI mode, high/critical production thresholds, and downloadable JSON reports.
 # [x] S3.20 Add a dependency update and emergency-patch runbook. (P1 / S) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
 # [x] S3.21 Add a source-controlled identifier-boundary inventory and static audit that rejects direct external-ID interpolation into Firestore paths. (P0 / M) — Completed 2026-08-12 in Security Batch S3D with 13 boundary modules, semantic identifier policies, Cloud Tasks/trigger guards, and CI verification across the Functions tree.
+# [x] S3.22 Add an exact-build App Check enforcement-readiness matrix with documented sample, browser, device, action, and verification gates; keep automatic enforcement disabled. (P0 / M) — Completed 2026-08-12 in Security Batch S3E / Release Candidate 23 with Beta Operations coverage, normalized platform evidence, a static monitor-mode audit, and a deliberate selected-callable canary handoff.
 
 PHASE S3 EXIT CHECKLIST:
 
@@ -312,6 +313,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 # [x] B1.22 Add a fantasy-football position translation to Training Camp so wings, centers, defensemen, and the team goalie unit have an immediately familiar workload/scoring analogy. (P1 / S) — Completed 2026-08-11 in Onboarding Batch B1A / Release Candidate 19; beginner wording refined 2026-08-12 in B1D so LW/RW are described as big-play wide receivers with fewer chances and bigger scoring swings.
 # [x] B1.23 Build a Beta Operations Center with structured feedback triage, sanitized public known issues, privacy-limited action/route evidence, and server scoring-duration aggregates. (P0 / L) — Completed 2026-08-11 in Beta Operations Batch B1B / Release Candidate 21.
 # [x] B1.24 Add exact-build invite-beta freeze, pinned Node/npm preflight, live manifest/header/TTL verification, annotated tag checks, and generated rollback records without changing the RC21 runtime. (P0 / M) — Completed 2026-08-11 in Beta Operations Batch B1C.
+# [x] B1.25 Replace long injury-report articles in mobile matchup rows with one compact status icon, short designation, and expected return date while preserving full detail on the player page. (P1 / S) — Completed 2026-08-12 in Security Batch S3E / Release Candidate 23.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -651,10 +653,10 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
-[~] SEQ.6 Security Batch S3A — App Check monitor mode, enforced password policy, verified email, and administrator step-up are implemented; complete supported-browser traffic monitoring and the measured App Check enforcement gates before closing the sequence.
+[~] SEQ.6 Security Batches S3A/S3E — App Check monitor mode, enforced password policy, verified email, administrator step-up, and exact-build enforcement-readiness gates are implemented; collect enough supported-browser evidence and canary selected expensive callables before closing the sequence.
 [~] SEQ.7 Security Batches S3B/S3D — Shared ID validation, universal boundary closure, and NHL proxy query/rate hardening are implemented; complete distributed shared ingestion/rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
-[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore backup/restore controls, and the RC22 S3D identifier-boundary release are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls, and the RC23 S3E readiness/mobile release are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
@@ -748,6 +750,8 @@ Future entries:
 # [x] LOG.20 2026-08-12 — Completed Onboarding Batch B1D: replace the football-specific LW/RW label outside wide receivers with the clearer big-play wide receivers, lead with fewer chances and bigger scoring swings, and preserve the existing four-position guide, Scoring V3, and Projection V11.
 
 # [x] LOG.21 2026-08-12 — Completed Security Batch S3D / Release Candidate 22: add semantic Firestore identifier policies, normalize Cloud Tasks and Firestore trigger parameters before path use, validate persisted Draft/projection/replay cross-references, protect authenticated feedback membership paths, and add a source-controlled 13-module boundary inventory plus static CI audit without changing Scoring V3 or Projection V11.
+
+# [x] LOG.22 2026-08-12 — Completed Security Batch S3E / Release Candidate 23: add exact-build App Check readiness gates by browser, device, platform, manager-day, and competitive action; keep enforcement monitor-only and manual; and replace mobile matchup injury articles with a compact icon, designation, and return date without changing Scoring V3 or Projection V11.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

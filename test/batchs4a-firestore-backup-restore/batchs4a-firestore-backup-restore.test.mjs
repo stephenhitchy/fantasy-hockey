@@ -186,7 +186,7 @@ test('S4A scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.equal(packageJson.scripts['security:backup:inspect'], 'node scripts/security/firestore-backup-restore.mjs inspect');
   assert.match(packageJson.scripts['verify:batchs4a:core'], /verify:batchb1c:core/);
   assert.match(packageJson.scripts['verify:batchs4a:core'], /sync-ttl-index-config/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s4a|b1d|s3d):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s4a|b1d|s3d|s3e):core/);
   assert.match(readme, /verify:batchs4a/);
   assert.match(documentation, /Security Operations Batch S4A/);
   assert.match(runbook, /Never restore a backup directly over the live `\(default\)` database/);

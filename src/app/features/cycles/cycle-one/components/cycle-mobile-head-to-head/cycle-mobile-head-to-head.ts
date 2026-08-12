@@ -4,6 +4,7 @@ import { Component, Input } from '@angular/core';
 import type { FantasyMatchup } from '../../../../../core/cycle/cycle.models';
 import type { DraftPick } from '../../../../../core/draft/draft.models';
 import type { RosterAsset } from '../../../../../core/team/roster.models';
+import type { MobilePlayerAvailabilityStatus } from '../../mobile-player-status.util';
 import type { CycleOne } from '../../cycle-one';
 import type {
   CycleWindowGameMarker,
@@ -92,11 +93,15 @@ export class CycleMobileHeadToHead {
     return `${this.presenter.getTeamRosterGamesPlayed(ownerId)} played · ${this.presenter.getTeamRosterGamesLeft(ownerId)} left`;
   }
 
-  getActiveStatusLine(pick: DraftPick): string {
-    if (this.presenter.hasAssetStatusFlag(pick.asset)) {
-      return this.presenter.getAssetStatusTooltip(pick.asset);
-    }
+  getActiveCompactStatus(pick: DraftPick): MobilePlayerAvailabilityStatus | null {
+    return this.presenter.getAssetMobileStatus(pick.asset);
+  }
 
+  getBenchCompactStatus(asset: RosterAsset): MobilePlayerAvailabilityStatus | null {
+    return this.presenter.getBenchAssetMobileStatus(asset);
+  }
+
+  getActiveStatusLine(pick: DraftPick): string {
     if (this.presenter.isFutureWindowPending(pick)) {
       return this.presenter.getPendingWindowCallout(pick);
     }

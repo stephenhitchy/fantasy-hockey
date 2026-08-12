@@ -490,6 +490,112 @@
           </article>
         </section>
 
+        <section
+          class="app-check-readiness-panel"
+          [attr.data-tone]="appCheckGateTone()"
+          [attr.data-status]="evidence.appCheckReadiness.status"
+          aria-labelledby="app-check-readiness-heading"
+        >
+          <header>
+            <div>
+              <span class="eyebrow">Selected-callable enforcement gate</span>
+              <h3 id="app-check-readiness-heading">{{ evidence.appCheckReadiness.headline }}</h3>
+              <p>{{ evidence.appCheckReadiness.detail }}</p>
+            </div>
+            <span class="app-check-readiness-pill">
+              {{ statusLabel(evidence.appCheckReadiness.status) }}
+            </span>
+          </header>
+
+          <div class="app-check-readiness-metrics">
+            <article>
+              <span>Exact-build samples</span>
+              <strong>{{ evidence.appCheckReadiness.totalSamples }}/{{ evidence.appCheckReadiness.minimumTotalSamples }}</strong>
+              <small>{{ evidence.appCheckReadiness.exactBuildId }}</small>
+            </article>
+            <article>
+              <span>Verified requests</span>
+              <strong>{{ evidence.appCheckReadiness.validPercent }}%</strong>
+              <small>{{ evidence.appCheckReadiness.validSamples }} valid · {{ evidence.appCheckReadiness.missingSamples }} missing</small>
+            </article>
+            <article>
+              <span>Observation span</span>
+              <strong>{{ evidence.appCheckReadiness.observedDayCount }}/{{ evidence.appCheckReadiness.minimumObservedDays }}</strong>
+              <small>UTC days</small>
+            </article>
+            <article>
+              <span>Manager evidence</span>
+              <strong>{{ evidence.appCheckReadiness.managerDayCount }}/{{ evidence.appCheckReadiness.minimumManagerDays }}</strong>
+              <small>privacy-limited manager-days</small>
+            </article>
+          </div>
+
+          @if (evidence.appCheckReadiness.blockers.length) {
+            <section class="app-check-readiness-blockers" aria-label="Remaining App Check gates">
+              <strong>Before a selected-callable canary</strong>
+              <ul>
+                @for (blocker of evidence.appCheckReadiness.blockers; track blocker) {
+                  <li>{{ blocker }}</li>
+                }
+              </ul>
+            </section>
+          }
+
+          <div class="app-check-coverage-grid">
+            <section>
+              <h4>Required browsers</h4>
+              @for (item of evidence.appCheckReadiness.browserCoverage; track item.name) {
+                @if (item.required) {
+                  <div [class.coverage-ready]="item.verificationGatePassed">
+                    <span>{{ item.name }}</span>
+                    <strong>{{ appCheckCoverageState(item) }}</strong>
+                  </div>
+                }
+              }
+            </section>
+            <section>
+              <h4>Required device classes</h4>
+              @for (item of evidence.appCheckReadiness.deviceCoverage; track item.name) {
+                @if (item.required) {
+                  <div [class.coverage-ready]="item.verificationGatePassed">
+                    <span>{{ statusLabel(item.name) }}</span>
+                    <strong>{{ appCheckCoverageState(item) }}</strong>
+                  </div>
+                }
+              }
+            </section>
+            <section>
+              <h4>Required competitive actions</h4>
+              @for (item of evidence.appCheckReadiness.actionCoverage; track item.name) {
+                @if (item.required) {
+                  <div [class.coverage-ready]="item.verificationGatePassed">
+                    <span>{{ statusLabel(item.name) }}</span>
+                    <strong>{{ appCheckCoverageState(item) }}</strong>
+                  </div>
+                }
+              }
+            </section>
+            <section>
+              <h4>Required platforms and observed others</h4>
+              @for (item of evidence.appCheckReadiness.platformCoverage; track item.name) {
+                <div [class.coverage-ready]="item.verificationGatePassed">
+                  <span>{{ item.name }}{{ item.required ? ' · required' : '' }}</span>
+                  <strong>{{ appCheckCoverageState(item) }}</strong>
+                </div>
+              }
+            </section>
+          </div>
+
+          <aside class="app-check-readiness-note rr-notice rr-notice--info">
+            <strong>Monitor-only safety</strong>
+            <span>
+              This release never turns on App Check enforcement automatically. Passing the gate
+              only means a later release may deliberately test the named expensive callables first;
+              Firestore enforcement remains separate.
+            </span>
+          </aside>
+        </section>
+
         <section class="evidence-panel">
           <header>
             <div>

@@ -166,7 +166,7 @@ test('S3D remains an App Check monitor release and preserves competitive models'
   assert.match(readmeSource, /Projection V11/);
 });
 
-test('S3D scripts, roadmap copies, and RC22 runtime labels stay synchronized', () => {
+test('S3D scripts and roadmap history remain synchronized in RC22-or-newer releases', () => {
   const packageJson = JSON.parse(packageSource);
   assert.equal(
     packageJson.scripts['security:audit-firestore-ids'],
@@ -176,10 +176,10 @@ test('S3D scripts, roadmap copies, and RC22 runtime labels stay synchronized', (
   assert.match(packageJson.scripts['verify:batchs3d:core'], /verify:batchb1d:core/);
   assert.match(packageJson.scripts['verify:batchs3d:core'], /security:audit-firestore-ids/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.12/);
+  assert.match(roadmapRootSource, /Version 1\.(?:1[2-9]|[2-9]\d)(?:\.\d+)?/);
   assert.match(roadmapRootSource, /# \[x\] S3\.12/);
   assert.match(roadmapRootSource, /# \[x\] S3\.21/);
   assert.match(readmeSource, /Security Batch S3D/);
-  assert.match(runtimeSource, /Release Candidate 22/);
-  assert.match(productionRuntimeSource, /Release Candidate 22/);
+  assert.ok(Number(runtimeSource.match(/Release Candidate (\d+)/)?.[1] ?? 0) >= 22);
+  assert.ok(Number(productionRuntimeSource.match(/Release Candidate (\d+)/)?.[1] ?? 0) >= 22);
 });

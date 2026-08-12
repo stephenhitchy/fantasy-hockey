@@ -162,6 +162,45 @@ export interface BetaKnownIssueSummary {
   resolved: number;
 }
 
+export type AppCheckReadinessStatus = 'collecting' | 'needs-attention' | 'ready';
+
+export interface AppCheckCoverageBucket {
+  name: string;
+  required: boolean;
+  total: number;
+  valid: number;
+  missing: number;
+  validPercent: number;
+  minimumSamples: number;
+  sampleGatePassed: boolean;
+  verificationGatePassed: boolean;
+}
+
+export interface AppCheckEnforcementReadiness {
+  status: AppCheckReadinessStatus;
+  headline: string;
+  detail: string;
+  exactBuildId: string;
+  totalSamples: number;
+  validSamples: number;
+  missingSamples: number;
+  validPercent: number;
+  observedDayCount: number;
+  managerDayCount: number;
+  minimumTotalSamples: number;
+  minimumObservedDays: number;
+  minimumManagerDays: number;
+  minimumValidPercent: number;
+  browserCoverage: AppCheckCoverageBucket[];
+  deviceCoverage: AppCheckCoverageBucket[];
+  platformCoverage: AppCheckCoverageBucket[];
+  actionCoverage: AppCheckCoverageBucket[];
+  blockers: string[];
+  advisories: string[];
+  canaryEligible: boolean;
+  automaticEnforcement: false;
+}
+
 export interface BetaOperationsOverview {
   generatedAt: string;
   windowDays: number;
@@ -174,6 +213,7 @@ export interface BetaOperationsOverview {
   uniqueDailyUserCount: number;
   appCheckValidCount: number;
   appCheckMissingCount: number;
+  appCheckReadiness: AppCheckEnforcementReadiness;
   actions: BetaActionOverview[];
   routes: BetaRouteOverview[];
   browsers: Array<{ name: string; count: number }>;

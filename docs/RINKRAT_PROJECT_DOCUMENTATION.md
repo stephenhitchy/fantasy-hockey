@@ -11319,3 +11319,35 @@ S4A has no Firebase application deployment. Commit and push the repository chang
 Release Candidate 22 completes the remaining identifier-boundary audit. One normalized resolver and semantic policy catalog now guard Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, saved Draft owners, replay request/task identities, projection snapshot/catalog references, and feedback membership paths before Admin SDK path construction.
 
 The source-controlled inventory is `config/firestore-document-id-boundaries.json`; the static audit is `npm run security:audit-firestore-ids`; the full release verification is `npm run verify:batchs3d`. App Check remains monitor-only, while Scoring V3 and Projection V11 are unchanged. Deployment order is Functions, then Hosting; no Rules or indexes are part of S3D.
+
+---
+
+# Security Batch S3E — Exact-Build App Check Readiness and Compact Mobile Injury Status
+
+**Runtime release:** Release Candidate 23  
+**Competitive models:** Scoring V3 and Projection V11  
+**App Check mode:** Monitor only
+
+S3E adds an exact-build enforcement-readiness calculation to Beta Operations. The administrator dashboard now reports the sample count, verification percentage, observation days, privacy-limited manager-days, required browsers, device classes, competitive actions, and generalized platform families for the exact deployed build. Evidence from an older release does not count toward a newer release's gate.
+
+The gate is advisory and deliberate. A passing result means only that a later release may begin a selected-callable App Check canary. S3E does not set `enforceAppCheck: true` and does not enable Firestore enforcement.
+
+The same batch fixes mobile Matchup injury overflow. Phone-width lineup rows now render only a compact status icon, the short designation, and an expected return date or `Return TBD`. The longer injury note remains available in player detail surfaces.
+
+## Commands
+
+```bash
+npm run security:audit-app-check-readiness
+npm run test:batchs3e:run
+npm run verify:batchs3e
+```
+
+## Deployment
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3E App Check readiness evidence"
+firebase deploy --only hosting:app -m "Security S3E RC23 readiness and mobile injury clarity"
+```
+
+No Firestore Rules or index deployment is part of S3E. Full operator guidance is maintained in `docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md`.

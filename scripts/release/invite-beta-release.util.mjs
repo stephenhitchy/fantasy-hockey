@@ -95,10 +95,10 @@ export function validateInviteBetaValidationReport(report, liveManifest) {
 }
 
 export function formatRollbackPlan(record) {
-  const tag = record?.git?.tag ?? 'rinkrat-rc22-invite-beta';
+  const tag = record?.git?.tag ?? 'rinkrat-rc23-invite-beta';
   const projectId = record?.firebase?.projectId ?? 'nhl-fantasy-app-ab673';
   const hostingTarget = record?.firebase?.hostingTarget ?? 'app';
-  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 22';
+  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 23';
 
   return `# RinkRat Invite-Beta Rollback Plan\n\n` +
     `**Frozen release:** ${releaseLabel}\n\n` +
@@ -120,7 +120,7 @@ export function formatRollbackPlan(record) {
     `npm install -g npm@${record?.toolchain?.npm ?? '11.17.0'}\n` +
     `npm ci\n` +
     `npm --prefix functions ci\n` +
-    `npm run verify:batchb1b-1\n` +
+    `npm run verify:batchs3e\n` +
     `npm run build:all\n` +
     `firebase use ${projectId}\n` +
     `firebase deploy --only functions -m "Rollback to ${releaseLabel}"\n` +

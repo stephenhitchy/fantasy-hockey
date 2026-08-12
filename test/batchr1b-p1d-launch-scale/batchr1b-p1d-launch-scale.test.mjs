@@ -413,6 +413,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/security/firestore-document-id-policies.ts',
 
         'src/shared/security/nhl-proxy-security.util.ts',
+        // S3E adds isolated monitor-only App Check readiness aggregation.
+        'src/shared/security/app-check-enforcement-readiness.util.ts',
         // B1B adds isolated beta evidence and aggregate operations helpers.
         'src/beta-operations.ts',
         'src/shared/core/observability/beta-operations.util.ts',

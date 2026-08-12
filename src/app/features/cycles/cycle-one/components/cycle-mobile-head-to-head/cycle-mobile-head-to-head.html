@@ -237,7 +237,20 @@
                       }
                     </span>
 
-                    <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                    @if (getActiveCompactStatus(pick); as status) {
+                      <span
+                        class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                        [attr.aria-label]="status.ariaLabel"
+                      >
+                        <i aria-hidden="true">{{ status.icon }}</i>
+                        <strong>{{ status.shortLabel }}</strong>
+                        @if (status.returnDateLabel) {
+                          <span>{{ status.returnDateLabel }}</span>
+                        }
+                      </span>
+                    } @else {
+                      <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                    }
                   </button>
                 } @else {
                   <div class="mobile-live-player mobile-live-player-empty">Open slot</div>
@@ -296,7 +309,20 @@
                       }
                     </span>
 
-                    <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                    @if (getActiveCompactStatus(pick); as status) {
+                      <span
+                        class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                        [attr.aria-label]="status.ariaLabel"
+                      >
+                        <i aria-hidden="true">{{ status.icon }}</i>
+                        <strong>{{ status.shortLabel }}</strong>
+                        @if (status.returnDateLabel) {
+                          <span>{{ status.returnDateLabel }}</span>
+                        }
+                      </span>
+                    } @else {
+                      <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                    }
                   </button>
                 } @else {
                   <div class="mobile-live-player mobile-live-player-empty">Open slot</div>
@@ -356,7 +382,20 @@
                     }
                   </span>
 
-                  <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                  @if (getActiveCompactStatus(pick); as status) {
+                      <span
+                        class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                        [attr.aria-label]="status.ariaLabel"
+                      >
+                        <i aria-hidden="true">{{ status.icon }}</i>
+                        <strong>{{ status.shortLabel }}</strong>
+                        @if (status.returnDateLabel) {
+                          <span>{{ status.returnDateLabel }}</span>
+                        }
+                      </span>
+                    } @else {
+                      <span class="mobile-live-player-statusline">{{ getActiveStatusLine(pick) }}</span>
+                    }
                 </button>
               } @else {
                 <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">
@@ -401,7 +440,20 @@
                     <span>Bench <strong>—</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
                   </span>
-                  <span class="mobile-live-player-statusline">Bench {{ row.teamASlot.slotNumber }} · does not score</span>
+                  @if (getBenchCompactStatus(asset); as status) {
+                    <span
+                      class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                      [attr.aria-label]="status.ariaLabel"
+                    >
+                      <i aria-hidden="true">{{ status.icon }}</i>
+                      <strong>{{ status.shortLabel }}</strong>
+                      @if (status.returnDateLabel) {
+                        <span>{{ status.returnDateLabel }}</span>
+                      }
+                    </span>
+                  } @else {
+                    <span class="mobile-live-player-statusline">Bench {{ row.teamASlot.slotNumber }} · does not score</span>
+                  }
                 </button>
               } @else {
                 <div class="mobile-live-player mobile-live-player-empty">Open bench</div>
@@ -433,7 +485,20 @@
                     <span>Bench <strong>—</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
                   </span>
-                  <span class="mobile-live-player-statusline">Bench {{ row.teamBSlot.slotNumber }} · does not score</span>
+                  @if (getBenchCompactStatus(asset); as status) {
+                    <span
+                      class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                      [attr.aria-label]="status.ariaLabel"
+                    >
+                      <i aria-hidden="true">{{ status.icon }}</i>
+                      <strong>{{ status.shortLabel }}</strong>
+                      @if (status.returnDateLabel) {
+                        <span>{{ status.returnDateLabel }}</span>
+                      }
+                    </span>
+                  } @else {
+                    <span class="mobile-live-player-statusline">Bench {{ row.teamBSlot.slotNumber }} · does not score</span>
+                  }
                 </button>
               } @else {
                 <div class="mobile-live-player mobile-live-player-empty">Open bench</div>
@@ -461,7 +526,20 @@
                     <span>Scoring <strong>Off</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
                   </span>
-                  <span class="mobile-live-player-statusline">{{ presenter.getBenchAssetStatusTooltip(asset) || 'Bench player · does not score' }}</span>
+                  @if (getBenchCompactStatus(asset); as status) {
+                    <span
+                      class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                      [attr.aria-label]="status.ariaLabel"
+                    >
+                      <i aria-hidden="true">{{ status.icon }}</i>
+                      <strong>{{ status.shortLabel }}</strong>
+                      @if (status.returnDateLabel) {
+                        <span>{{ status.returnDateLabel }}</span>
+                      }
+                    </span>
+                  } @else {
+                    <span class="mobile-live-player-statusline">Bench player · does not score</span>
+                  }
                 </button>
               } @else {
                 <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">Open bench {{ row.teamASlot.slotNumber }}</div>
@@ -487,7 +565,20 @@
                     <span>Scoring <strong>Off</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
                   </span>
-                  <span class="mobile-live-player-statusline">{{ presenter.getBenchAssetStatusTooltip(asset) || 'Bench player · does not score' }}</span>
+                  @if (getBenchCompactStatus(asset); as status) {
+                    <span
+                      class="mobile-live-player-statusline mobile-live-player-statusline-compact"
+                      [attr.aria-label]="status.ariaLabel"
+                    >
+                      <i aria-hidden="true">{{ status.icon }}</i>
+                      <strong>{{ status.shortLabel }}</strong>
+                      @if (status.returnDateLabel) {
+                        <span>{{ status.returnDateLabel }}</span>
+                      }
+                    </span>
+                  } @else {
+                    <span class="mobile-live-player-statusline">Bench player · does not score</span>
+                  }
                 </button>
               } @else {
                 <div class="mobile-live-player mobile-live-player-single mobile-live-player-empty">Open bench {{ row.teamBSlot.slotNumber }}</div>

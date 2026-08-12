@@ -1,6 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 import { httpsCallable } from 'firebase/functions';
 
+import { BUNDLED_RELEASE_MANIFEST } from '../../../environments/generated-release-manifest';
+
 import type {
   BetaFeedbackCategory,
   BetaFeedbackStatus,
@@ -150,12 +152,18 @@ export class PlatformAdminService {
   }
 
   async loadBetaOperations(windowDays = 14): Promise<BetaOperationsOverview> {
-    const callable = httpsCallable<{ windowDays: number }, BetaOperationsOverview>(
+    const callable = httpsCallable<
+      { windowDays: number; buildId: string },
+      BetaOperationsOverview
+    >(
       functions,
       'getBetaOperationsSnapshot',
       { timeout: 65_000 },
     );
-    const response = await callable({ windowDays });
+    const response = await callable({
+      windowDays,
+      buildId: BUNDLED_RELEASE_MANIFEST.buildId,
+    });
     return response.data;
   }
 

@@ -148,6 +148,10 @@ import {
   evaluateHistoricalReplayAdvance,
   type HistoricalReplayAdvanceBaseline,
 } from './historical-replay-ui-state.util';
+import {
+  getMobilePlayerAvailabilityStatus,
+  type MobilePlayerAvailabilityStatus,
+} from './mobile-player-status.util';
 
 @Component({
   selector: 'app-cycle-one',
@@ -2636,6 +2640,13 @@ export class CycleOne implements OnDestroy {
     return detail ? `${availability.label}: ${detail}` : availability.label;
   }
 
+
+  getBenchAssetMobileStatus(asset: RosterAsset): MobilePlayerAvailabilityStatus | null {
+    return asset.assetType === 'skater'
+      ? getMobilePlayerAvailabilityStatus(getPlayerAvailabilityForPlayer(asset.player))
+      : null;
+  }
+
   private getBenchAssetKey(asset: RosterAsset): string | null {
     if (asset.assetKey) {
       return asset.assetKey;
@@ -2715,6 +2726,13 @@ export class CycleOne implements OnDestroy {
     return detail
       ? `${availability.label}: ${detail}`
       : availability.label;
+  }
+
+
+  getAssetMobileStatus(asset: DraftableAsset): MobilePlayerAvailabilityStatus | null {
+    return asset.assetType === 'skater'
+      ? getMobilePlayerAvailabilityStatus(getPlayerAvailabilityForPlayer(asset.player))
+      : null;
   }
 
   private getActiveRosterSlotForPick(pick: DraftPick) {

@@ -466,6 +466,59 @@
     text-align: right;
   }
 
+
+  .mobile-live-player-statusline-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: max-content;
+    max-width: 100%;
+    min-height: 24px;
+    padding: 3px 7px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--rr-warning) 44%, var(--border-soft));
+    border-radius: 999px;
+    color: var(--rr-ice-white);
+    background: color-mix(in srgb, var(--rr-danger) 16%, var(--owner-theme-surface-2, var(--surface-2)));
+    white-space: nowrap;
+  }
+
+  .mobile-live-player-statusline-compact i {
+    display: grid;
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    place-items: center;
+    border-radius: 5px;
+    color: var(--rr-ice-white);
+    background: var(--rr-danger);
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 1000;
+    line-height: 1;
+  }
+
+  .mobile-live-player-statusline-compact strong,
+  .mobile-live-player-statusline-compact span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-live-player-statusline-compact strong {
+    flex: 0 0 auto;
+    font-size: var(--rr-mobile-text-micro);
+    font-weight: 900;
+  }
+
+  .mobile-live-player-statusline-compact span {
+    color: color-mix(in srgb, var(--rr-ice-white) 78%, transparent);
+  }
+
+  .mobile-live-player-team-b .mobile-live-player-statusline-compact {
+    margin-left: auto;
+  }
+
   .mobile-live-slot-badge {
     display: flex;
     align-items: center;
