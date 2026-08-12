@@ -211,7 +211,10 @@ test('Draft Setup uses an exact submission identifier and authoritative bounded 
 
   assert.match(setup, /createDraftSettingsSubmissionId/);
   assert.match(setup, /loadSharedProjectionSnapshotMetadata/);
-  assert.match(setup, /75_000/);
+  assert.match(setup, /queueSharedProjectionSnapshotGeneration/);
+  assert.match(setup, /7_000/);
+  assert.match(setup, /12_000/);
+  assert.doesNotMatch(setup, /75_000/);
   assert.match(setup, /awaitDraftSettingsConfirmation/);
   assert.match(setup, /Date\.now\(\) \+ 35_000/);
   assert.match(setup, /getFantasyDraftFromServer/);

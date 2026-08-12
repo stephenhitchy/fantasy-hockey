@@ -1530,6 +1530,7 @@
 }
 
 .ir-waiver-warning,
+.ir-bench-move-label,
 .ir-open-slot-label {
   padding: 5px 8px;
   border-radius: 999px;
@@ -1545,9 +1546,46 @@
   color: var(--rr-team-migration-color-05);
 }
 
+.ir-bench-move-label {
+  background: var(--rr-team-migration-color-04);
+  color: var(--rr-team-migration-color-01);
+}
+
 .ir-open-slot-label {
   background: rgba(152, 245, 189, 0.16);
   color: var(--rr-team-migration-color-06);
+}
+
+.ir-activation-bench-step {
+  margin-top: 18px;
+  padding-top: 17px;
+  border-top: 1px solid var(--rr-team-migration-color-08);
+}
+
+.ir-activation-step-heading h3 {
+  margin: 3px 0 0;
+  color: white;
+  font-size: 16px;
+}
+
+.ir-activation-step-heading p {
+  max-width: 610px;
+  margin: 6px 0 0;
+  color: var(--rr-team-migration-color-03);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.ir-activation-bench-target-list {
+  margin-top: 12px;
+}
+
+.ir-activation-no-bench {
+  margin-top: 12px;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .ir-activation-cycle-note {
@@ -2510,7 +2548,9 @@
   .ir-activation-player-summary span,
   .ir-activation-target-copy small,
   .ir-waiver-warning,
+  .ir-bench-move-label,
   .ir-open-slot-label,
+  .ir-activation-step-heading p,
   .ir-activation-cycle-note,
   .pending-slot-move-pill,
   .team-stat-bar span,

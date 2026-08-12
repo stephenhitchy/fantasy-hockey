@@ -12,7 +12,6 @@ import {
 } from './shared/core/draft/draft.models';
 import {
   SHARED_PROJECTION_VERSION,
-  loadSharedProjectionSnapshot,
 } from './shared/core/projection/projection-snapshot.service';
 import {
   isProjectionSha256,
@@ -42,12 +41,14 @@ import {
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
 import {
+  optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
   resolveSafeFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
 import {
   FIRESTORE_AUTH_USER_ID_OPTIONS,
   FIRESTORE_INVITE_CODE_OPTIONS,
+  FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
@@ -79,6 +80,7 @@ interface DraftCommandRequest {
   leagueId?: unknown;
   action?: unknown;
   submissionId?: unknown;
+  projectionPreparationRequestId?: unknown;
   roundOneOrder?: unknown;
   scheduledStartAt?: unknown;
   pickSeconds?: unknown;
@@ -150,6 +152,107 @@ function getOptionalDraftSubmissionId(value: unknown): string | null {
     maxBytes: MAX_DRAFT_SUBMISSION_ID_LENGTH,
     pattern: /^[A-Za-z0-9_-]+$/,
   });
+}
+
+type DraftProjectionPreparationStatus = 'ready' | 'queued' | 'processing' | 'error';
+
+interface DraftProjectionPreparationState {
+  requestId: string | null;
+  status: DraftProjectionPreparationStatus;
+}
+
+function getOptionalProjectionPreparationRequestId(value: unknown): string | null {
+  return optionalFirestoreDocumentId(
+    value,
+    'projection preparation request ID',
+    FIRESTORE_REQUEST_ID_OPTIONS,
+  );
+}
+
+function isDraftReadyProjectionPointer(data: Record<string, unknown>): boolean {
+  return data['status'] === 'ready' &&
+    data['projectionVersion'] === SHARED_PROJECTION_VERSION &&
+    data['generationReason'] !== 'server-emergency' &&
+    typeof data['activeSnapshotId'] === 'string' &&
+    Boolean(data['activeSnapshotId']) &&
+    typeof data['assetCount'] === 'number' &&
+    Number(data['assetCount']) > 0 &&
+    data['generatedByAuthority'] === 'server' &&
+    data['catalogValidationStatus'] === 'validated' &&
+    typeof data['catalogSnapshotId'] === 'string' &&
+    Boolean(data['catalogSnapshotId']) &&
+    isProjectionSha256(data['catalogHash']) &&
+    data['snapshotIntegrityStatus'] === 'verified' &&
+    isProjectionSha256(data['snapshotContentHash']);
+}
+
+async function waitForProjectionPreparationRequest(
+  leagueId: string,
+  requestId: string,
+): Promise<DraftProjectionPreparationStatus | null> {
+  const requestRef = db.doc(`projectionGenerationRequests/${requestId}`);
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const snapshot = await requestRef.get();
+
+    if (snapshot.exists) {
+      const data = snapshot.data() ?? {};
+      const status = asString(data['status']) as DraftProjectionPreparationStatus;
+      const targetCycleNumber = Number(data['targetCycleNumber']);
+
+      if (
+        data['leagueId'] !== leagueId ||
+        targetCycleNumber !== 1 ||
+        !['queued', 'processing', 'ready'].includes(status) ||
+        data['generationReason'] === 'server-emergency'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The Projection V11 preparation request does not match this Draft schedule.',
+        );
+      }
+
+      return status;
+    }
+
+    if (attempt < 7) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  return null;
+}
+
+async function resolveDraftProjectionPreparation(
+  leagueId: string,
+  requestId: string | null,
+): Promise<DraftProjectionPreparationState> {
+  const pointerSnapshot = await db
+    .doc(`leagues/${leagueId}/projectionSnapshots/current`)
+    .get();
+  const pointerData = pointerSnapshot.exists ? pointerSnapshot.data() ?? {} : {};
+
+  if (isDraftReadyProjectionPointer(pointerData)) {
+    return { requestId, status: 'ready' };
+  }
+
+  if (!requestId) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Verified Projection V${SHARED_PROJECTION_VERSION} rankings must be ready or building before scheduling the draft.`,
+    );
+  }
+
+  const status = await waitForProjectionPreparationRequest(leagueId, requestId);
+
+  if (!status) {
+    throw new HttpsError(
+      'failed-precondition',
+      `RinkRat could not confirm the Projection V${SHARED_PROJECTION_VERSION} preparation request. Try saving the draft time again.`,
+    );
+  }
+
+  return { requestId, status };
 }
 
 function getOptionalExpectedOverallPick(value: unknown): number | null {
@@ -259,6 +362,17 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     lastSettingsSubmissionId:
       typeof value.lastSettingsSubmissionId === 'string'
         ? value.lastSettingsSubmissionId
+        : null,
+    projectionPreparationRequestId:
+      typeof value.projectionPreparationRequestId === 'string'
+        ? value.projectionPreparationRequestId
+        : null,
+    projectionPreparationStatus:
+      value.projectionPreparationStatus === 'ready' ||
+      value.projectionPreparationStatus === 'queued' ||
+      value.projectionPreparationStatus === 'processing' ||
+      value.projectionPreparationStatus === 'error'
+        ? value.projectionPreparationStatus
         : null,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
@@ -429,22 +543,12 @@ async function saveDraftSettings(
     throw new HttpsError('invalid-argument', 'Choose a supported draft clock duration.');
   }
 
-  if (scheduledStartAt) {
-    const projection = await loadSharedProjectionSnapshot(leagueId);
-
-    if (
-      !projection ||
-      projection.metadata.status !== 'ready' ||
-      projection.metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
-      projection.metadata.generationReason === 'server-emergency' ||
-      projection.assets.length === 0
-    ) {
-      throw new HttpsError(
-        'failed-precondition',
-        `Verified Projection V${SHARED_PROJECTION_VERSION} rankings must be ready before scheduling the draft.`,
-      );
-    }
-  }
+  const projectionPreparationRequestId = scheduledStartAt
+    ? getOptionalProjectionPreparationRequestId(request.projectionPreparationRequestId)
+    : null;
+  const projectionPreparation = scheduledStartAt
+    ? await resolveDraftProjectionPreparation(leagueId, projectionPreparationRequestId)
+    : { requestId: null, status: null };
 
   const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
   const leagueRef = db.doc(`leagues/${leagueId}`);
@@ -512,11 +616,15 @@ async function saveDraftSettings(
         existingDraft.roundOneOrder.every(
           (ownerId, index) => ownerId === roundOneOrder[index],
         );
+      const sameProjectionPreparation =
+        (existingDraft.projectionPreparationRequestId ?? null) ===
+        (projectionPreparation.requestId ?? null);
 
       if (
         existingDraft.status !== expectedStatus ||
         !sameOrder ||
         !sameStart ||
+        !sameProjectionPreparation ||
         existingDraft.pickSeconds !== pickSeconds
       ) {
         throw new HttpsError(
@@ -569,13 +677,21 @@ async function saveDraftSettings(
           clockUpdatedAt: timestamp,
           lastPickId: null,
           lastSettingsSubmissionId: submissionId ?? null,
+          projectionPreparationRequestId: projectionPreparation.requestId,
+          projectionPreparationStatus: projectionPreparation.status,
           serverDraftProjectionSnapshotId: null,
           serverDraftProjectionSnapshotHash: null,
           serverDraftProjectionAuthorityVersion: null,
           serverDraftProjectionCatalogHash: null,
-          serverAutomationStatus: status === 'scheduled' ? 'scheduled' : 'waiting',
+          serverAutomationStatus: status === 'scheduled'
+            ? projectionPreparation.status === 'ready'
+              ? 'scheduled'
+              : 'waiting-projection'
+            : 'waiting',
           serverAutomationMessage: status === 'scheduled'
-            ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
+            ? projectionPreparation.status === 'ready'
+              ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
+              : `Draft settings are saved. Projection V${SHARED_PROJECTION_VERSION} is building in the background, and the server will open the draft only after it is verified.`
             : 'Draft order saved without a scheduled start time.',
           serverAutomationUpdatedAt: timestamp,
           updatedAt: timestamp,
@@ -659,6 +775,8 @@ async function saveDraftSettings(
           roundOneOrder,
           scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
           pickSeconds,
+          projectionPreparationRequestId: projectionPreparation.requestId,
+          projectionPreparationStatus: projectionPreparation.status,
         },
         createdAt: timestamp,
       });
@@ -669,7 +787,9 @@ async function saveDraftSettings(
     applied: true,
     action: 'save-settings',
     message: scheduledStartAt
-      ? 'Draft settings and scheduled start were saved. League entry is now closed.'
+      ? projectionPreparation.status === 'ready'
+        ? 'Draft settings and scheduled start were saved. League entry is now closed.'
+        : `Draft settings and scheduled start were saved while Projection V${SHARED_PROJECTION_VERSION} finishes in the background. League entry is now closed.`
       : 'Draft order was saved. League entry is now closed.',
     submissionId,
   };

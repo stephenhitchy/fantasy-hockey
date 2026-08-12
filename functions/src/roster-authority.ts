@@ -579,6 +579,9 @@ async function executeSimpleOwnerAction(options: {
   let preflightFairCycle = requestedCycle;
   let preflightAssetKey = '';
   let preflightAvailabilityStatus = '';
+  let preflightIrActiveAssetKey = '';
+  let preflightIrBenchSlotId = '';
+  let preflightIrBenchAssetKey = '';
   const requiresRosterPreflight = [
     'queue-active-bench-swap',
     'activate-ir-active',
@@ -620,6 +623,51 @@ async function executeSimpleOwnerAction(options: {
       gamesPerCycle,
       requestedCycle,
     );
+
+    const requestedActiveSlotId = asString(input.activeSlotId);
+    const activeSlot = preflightRoster?.activeSlots.find((slot) =>
+      requestedActiveSlotId
+        ? slot.slotId === requestedActiveSlotId
+        : slot.position === irAsset.position && slot.asset === null,
+    ) ?? null;
+
+    if (!activeSlot || activeSlot.pendingMove || activeSlot.position !== irAsset.position) {
+      throw new HttpsError('failed-precondition', `Choose an available ${irAsset.position} active slot.`);
+    }
+
+    preflightIrActiveAssetKey = getAssetKey(activeSlot.asset);
+
+    if (activeSlot.asset) {
+      const requestedBenchSlotId = asString(input.benchSlotId);
+      const requestedBenchSlot = requestedBenchSlotId
+        ? preflightRoster?.benchSlots.find((slot) => slot.slotId === requestedBenchSlotId) ?? null
+        : null;
+      const fallbackOpenBenchSlot = !requestedBenchSlotId
+        ? preflightRoster?.benchSlots.find(
+            (slot) => slot.asset === null && !isBenchSlotReserved(preflightRoster!, slot.slotId),
+          ) ?? null
+        : null;
+      const selectedBenchSlot = requestedBenchSlot ?? fallbackOpenBenchSlot;
+
+      if (!selectedBenchSlot) {
+        throw new HttpsError(
+          'failed-precondition',
+          requestedBenchSlotId
+            ? 'The selected bench destination is unavailable.'
+            : 'Every usable bench spot is full. Choose the bench player or goalie unit to place on waivers.',
+        );
+      }
+
+      if (isBenchSlotReserved(preflightRoster!, selectedBenchSlot.slotId)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'That bench spot is reserved for another scheduled lineup move.',
+        );
+      }
+
+      preflightIrBenchSlotId = selectedBenchSlot.slotId;
+      preflightIrBenchAssetKey = getAssetKey(selectedBenchSlot.asset);
+    }
   }
   if (action === 'move-active-to-ir') {
     const activeAsset = preflightRoster?.activeSlots.find(
@@ -746,7 +794,55 @@ async function executeSimpleOwnerAction(options: {
       if (activeSlot.pendingMove || activeSlot.position !== irAsset.position) {
         throw new HttpsError('failed-precondition', 'The selected active slot is unavailable.');
       }
-      const droppedAsset = activeSlot.asset;
+      if (getAssetKey(activeSlot.asset) !== preflightIrActiveAssetKey) {
+        throw new HttpsError(
+          'aborted',
+          'The selected active slot changed while the move was being checked. Please try again.',
+        );
+      }
+
+      const displacedActiveAsset = activeSlot.asset;
+      let droppedAsset: RosterAsset | null = null;
+      let benchSlotIdForTransaction: string | null = null;
+
+      if (displacedActiveAsset) {
+        if (!preflightIrBenchSlotId) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Choose the bench spot that should receive the displaced starter.',
+          );
+        }
+
+        const benchIndex = roster.benchSlots.findIndex(
+          (slot) => slot.slotId === preflightIrBenchSlotId,
+        );
+        if (benchIndex < 0) {
+          throw new HttpsError('failed-precondition', 'The selected bench destination was not found.');
+        }
+
+        const benchSlot = roster.benchSlots[benchIndex];
+        if (isBenchSlotReserved(roster, benchSlot.slotId)) {
+          throw new HttpsError(
+            'failed-precondition',
+            'That bench spot is reserved for another scheduled lineup move.',
+          );
+        }
+
+        if (getAssetKey(benchSlot.asset) !== preflightIrBenchAssetKey) {
+          throw new HttpsError(
+            'aborted',
+            'The selected bench destination changed while the move was being checked. Please try again.',
+          );
+        }
+
+        droppedAsset = benchSlot.asset;
+        roster.benchSlots[benchIndex] = {
+          ...benchSlot,
+          asset: { ...displacedActiveAsset, rosterStatus: 'benched' },
+        };
+        benchSlotIdForTransaction = benchSlot.slotId;
+      }
+
       const fairCycle = preflightFairCycle ?? 1;
       const label = requestedLabel || `Cycle ${fairCycle}`;
       roster.activeSlots[activeIndex] = {
@@ -764,13 +860,22 @@ async function executeSimpleOwnerAction(options: {
       }
       transaction.set(transactionRef, {
         type: 'activate-from-ir', ownerId, activatedAsset: irAsset,
+        movedAsset: displacedActiveAsset ?? null,
         droppedAsset: droppedAsset ?? null,
         waiverId: droppedAsset ? getAssetKey(droppedAsset) : null,
-        activeSlotId: activeSlot.slotId, irSlotId,
+        activeSlotId: activeSlot.slotId, benchSlotId: benchSlotIdForTransaction, irSlotId,
         effectiveCycleNumber: fairCycle, effectiveLabel: label,
         authority: 'cloud-function', createdAt: FieldValue.serverTimestamp(),
       });
-      return actionResult('ownership-only', fairCycle, 'IR player activated.');
+      return actionResult(
+        'ownership-only',
+        fairCycle,
+        displacedActiveAsset
+          ? droppedAsset
+            ? 'IR player activated; the displaced starter moved to the selected bench spot and its previous occupant went to waivers.'
+            : 'IR player activated; the displaced starter moved into an open bench spot and nobody was dropped.'
+          : 'IR player activated into an open active slot.',
+      );
     }
 
     if (action === 'drop-to-waivers') {

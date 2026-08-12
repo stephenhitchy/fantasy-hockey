@@ -10,17 +10,19 @@ Core project references:
 - [`docs/RINKRAT_SECURITY_S3C_RUNBOOK.md`](docs/RINKRAT_SECURITY_S3C_RUNBOOK.md) — CI, dependency/secret auditing, CSP report-only, HSTS, TTL, cleanup, and emergency patch procedure.
 - [`docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md`](docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md) — Firestore identifier policies, task/trigger boundary rules, static audit, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md`](docs/RINKRAT_SECURITY_S3E_APP_CHECK_READINESS.md) — exact-build App Check evidence gates, supported-browser matrix, selected-callable canary handoff, compact mobile injury status, deployment, and rollback.
+- [`docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md) — non-blocking Draft scheduling, verified Projection V11 background preparation, displaced-starter bench preservation during IR activation, deployment, and rollback.
+- [`docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md) — strict TypeScript narrowing for persisted Draft preparation states without changing the S3E.1 runtime contract.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 23 / Security Batch S3E**. S3E converts App Check monitor traffic into an exact-build readiness matrix across supported browsers, device classes, generalized platforms, manager-days, and high-value competitive actions. It never enables enforcement automatically; a later release must deliberately begin a selected-callable canary after the documented evidence gates pass.
+The current runtime family is **Release Candidate 23 / Security Batch S3E.1.1**. S3E keeps App Check in exact-build monitor mode, S3E.1 corrects the Draft-scheduling and IR roster-preservation blockers found by that evidence, and S3E.1.1 fixes the strict Functions TypeScript narrowing of persisted projection-preparation status without changing runtime behavior.
 
-The same release fixes the mobile Matchup injury presentation: an injured player now shows a compact icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page.
+The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. App Check enforcement remains off, and production scoring remains in Shadow.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3e` as the current verification command.
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3e-1-1` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -50,6 +52,8 @@ verify:batchs4a
 verify:batchb1d
 verify:batchs3d
 verify:batchs3e
+verify:batchs3e-1
+verify:batchs3e-1-1
 ```
 
 RinkRat pins:
@@ -69,7 +73,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3e
+npm run verify:batchs3e-1-1
 ```
 
 After verification and a clean commit:
@@ -78,6 +82,57 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+## Security Batch S3E.1.1 — Draft Preparation Status Type Hotfix
+
+The strict Functions build identified that `FantasyDraft['projectionPreparationStatus']` includes `undefined` because the model property is optional. The automation path now narrows persisted request values through a dedicated four-state type guard before assigning them to the local `status | null` variable. No optional indexed-property cast remains.
+
+Runtime behavior is unchanged: Draft scheduling still saves after one bounded preparation acknowledgement, server automation still waits safely for a verified Projection V11 board, App Check remains monitor-only, and scoring remains in Shadow.
+
+Verification:
+
+```bash
+npm run verify:batchs3e-1-1
+```
+
+Because the original Functions deployment stopped at compilation, deploy the complete S3E.1 Functions set after this hotfix passes:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3E.1.1 Draft preparation type hotfix"
+firebase deploy --only hosting:app -m "Security S3E.1 RC23 Draft and IR hotfix"
+```
+
+No Firestore Rules or index deployment is required.
+
+## Security Batch S3E.1 — Draft Scheduling and IR Roster Preservation
+
+S3E.1 removes complete Projection V11 generation from the Draft-settings request path. Draft Setup now starts or reuses one verified preparation request, saves the scheduled time after acknowledgement, and lets server automation wait in `waiting-projection` until the board is fully server-generated, catalog-validated, and hashed. No Draft can open or Auto-Draft against an unverified board.
+
+IR activation now preserves an occupied starter:
+
+```text
+Open bench:  displaced starter → bench; nobody dropped
+Full bench:  displaced starter → selected bench slot; selected bench occupant → waivers
+```
+
+Reserved bench spots are excluded, and both immediate and started-window server authorities enforce the same rule.
+
+Verification:
+
+```bash
+npm run verify:batchs3e-1
+```
+
+Deployment requires all Functions first, then Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3E.1 Draft schedule and IR roster preservation"
+firebase deploy --only hosting:app -m "Security S3E.1 RC23 Draft and IR hotfix"
+```
+
+No Firestore Rules or index deployment is required.
 
 ## Security Batch S3E — Exact-Build App Check Readiness and Mobile Injury Clarity
 

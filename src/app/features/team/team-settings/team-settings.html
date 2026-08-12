@@ -1134,7 +1134,7 @@
                   Where should {{ getRosterAssetName(activationAsset) }} go?
                 </h2>
                 <p>
-                  Choose any {{ activationAsset.position }} roster slot. If that slot is occupied, the current player will be placed on waivers.
+                  Choose any {{ activationAsset.position }} roster slot. If it is occupied, the current starter moves to your bench. When every usable bench spot is full, you must choose which bench player or goalie unit goes to waivers.
                 </p>
               </div>
 
@@ -1211,13 +1211,82 @@
                   </span>
 
                   @if (targetSlot.asset) {
-                    <span class="ir-waiver-warning">Waivers</span>
+                    <span class="ir-bench-move-label">Moves to Bench</span>
                   } @else {
                     <span class="ir-open-slot-label">Open Slot</span>
                   }
                 </label>
               }
             </div>
+
+            @if (getSelectedIrActivationTargetSlot(); as selectedTargetSlot) {
+              @if (selectedTargetSlot.asset; as displacedStarter) {
+                <section class="ir-activation-bench-step" aria-labelledby="ir-activation-bench-title">
+                  <div class="ir-activation-step-heading">
+                    <span class="eyebrow">Bench Destination</span>
+                    <h3 id="ir-activation-bench-title">
+                      Where should {{ getRosterAssetName(displacedStarter) }} go?
+                    </h3>
+                    <p>
+                      An open bench spot preserves everyone on your roster. Selecting an occupied bench spot places only that bench player or goalie unit on waivers.
+                    </p>
+                  </div>
+
+                  @if (getIrActivationBenchTargets().length > 0) {
+                    <div class="ir-activation-target-list ir-activation-bench-target-list">
+                      @for (benchSlot of getIrActivationBenchTargets(); track benchSlot.slotId) {
+                        <label
+                          class="ir-activation-target"
+                          [class.selected-ir-activation-target]="isIrActivationBenchTargetSelected(benchSlot.slotId)"
+                          [class.open-ir-activation-target]="!benchSlot.asset"
+                        >
+                          <input
+                            type="radio"
+                            name="ir-activation-bench-target"
+                            [value]="benchSlot.slotId"
+                            [checked]="isIrActivationBenchTargetSelected(benchSlot.slotId)"
+                            (change)="selectIrActivationBenchTarget(benchSlot.slotId)"
+                          />
+
+                          <span class="ir-activation-radio-mark"></span>
+
+                          @if (benchSlot.asset; as benchAsset) {
+                            @if (getRosterAssetLogoUrl(benchAsset); as benchLogoUrl) {
+                              <img
+                                class="ir-activation-target-logo"
+                                [src]="benchLogoUrl"
+                                [alt]="getRosterAssetTeamLabel(benchAsset) + ' logo'"
+                              />
+                            } @else {
+                              <span class="ir-activation-target-logo logo-fallback">
+                                {{ getRosterAssetTeamLabel(benchAsset) }}
+                              </span>
+                            }
+                          } @else {
+                            <span class="ir-activation-open-slot-icon">+</span>
+                          }
+
+                          <span class="ir-activation-target-copy">
+                            <strong>{{ getIrActivationBenchTargetHeading(benchSlot) }}</strong>
+                            <small>{{ getIrActivationBenchTargetDetail(benchSlot) }}</small>
+                          </span>
+
+                          @if (benchSlot.asset) {
+                            <span class="ir-waiver-warning">Waivers</span>
+                          } @else {
+                            <span class="ir-open-slot-label">Nobody Dropped</span>
+                          }
+                        </label>
+                      }
+                    </div>
+                  } @else {
+                    <div class="ir-activation-no-bench rr-state rr-state--warning">
+                      Every bench spot is reserved for another scheduled lineup move. Cancel this activation or wait until one of those moves finishes.
+                    </div>
+                  }
+                </section>
+              }
+            }
 
             <div class="ir-activation-cycle-note">
               If this player and the selected slot have not started their six-game counts, the move applies immediately. Otherwise, it waits until the first matchup where both can change fairly.

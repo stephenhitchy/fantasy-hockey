@@ -325,6 +325,11 @@ export interface FantasyDraft {
   /** Exact client request that most recently saved commissioner settings. */
   lastSettingsSubmissionId?: string | null;
 
+  /** Server-owned background request preparing the verified Draft board. */
+  projectionPreparationRequestId?: string | null;
+  /** Latest known preparation state when Draft settings were saved. */
+  projectionPreparationStatus?: 'ready' | 'queued' | 'processing' | 'error' | null;
+
   /** Verified shared projection snapshot frozen for the entire draft. */
   serverDraftProjectionSnapshotId?: string | null;
   /** Deterministic SHA-256 root hash of the frozen Draft pool. */

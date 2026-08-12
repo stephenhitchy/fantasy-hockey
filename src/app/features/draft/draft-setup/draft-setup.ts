@@ -8,7 +8,6 @@ import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import {
   settleOperationWithin,
   waitForOperationDelay,
-  withOperationDeadline,
 } from '../../../core/async/bounded-operation.util';
 import {
   CompetitiveActionMonitorService,
@@ -39,9 +38,10 @@ import {
 } from './draft-settings-confirmation.util';
 
 import {
-  generateSharedProjectionSnapshot,
+  createSharedProjectionGenerationRequestId,
   isSharedProjectionSnapshotFreshForDraft,
   loadSharedProjectionSnapshotMetadata,
+  queueSharedProjectionSnapshotGeneration,
   SHARED_PROJECTION_VERSION,
 } from '../../../core/projection/projection-snapshot.service';
 
@@ -344,7 +344,7 @@ export class DraftSetup implements OnDestroy {
   getDraftSaveStatusTitle(): string {
     switch (this.savePhase()) {
       case 'preparing':
-        return `Preparing Projection V${SHARED_PROJECTION_VERSION} rankings…`;
+        return `Starting Projection V${SHARED_PROJECTION_VERSION} preparation…`;
       case 'saving':
         return 'Sending draft settings…';
       case 'confirming':
@@ -357,7 +357,7 @@ export class DraftSetup implements OnDestroy {
   getDraftSaveStatusDetail(): string {
     switch (this.savePhase()) {
       case 'preparing':
-        return 'RinkRat is building the verified draft board. The page stays readable and the operation releases automatically if a data request stops responding.';
+        return 'RinkRat starts the verified draft-board build, then saves the start time without waiting for the full ranking job to finish.';
       case 'saving':
         return 'The secure draft command is being sent. Navigation remains protected until the server or the authoritative draft document confirms the save.';
       case 'confirming':
@@ -423,6 +423,8 @@ export class DraftSetup implements OnDestroy {
     try {
       const existingDraft = this.draft();
       let preparedAssetCount: number | null = null;
+      let projectionPreparationRequestId: string | null = null;
+      let projectionPreparationStatus: 'ready' | 'queued' | 'processing' | null = null;
 
       if (scheduledStartDate) {
         this.successMessage.set(
@@ -435,6 +437,7 @@ export class DraftSetup implements OnDestroy {
             teamCount: Math.max(this.teams().length, 2),
             requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
             generationReason: 'draft-setup' as const,
+            targetCycleNumber: 1,
           };
           const metadataResult = await settleOperationWithin(
             loadSharedProjectionSnapshotMetadata(this.leagueId),
@@ -452,40 +455,54 @@ export class DraftSetup implements OnDestroy {
             })
           ) {
             preparedAssetCount = existingMetadata?.assetCount ?? null;
+            projectionPreparationStatus = 'ready';
             this.successMessage.set(
               `Using the existing verified Projection V${SHARED_PROJECTION_VERSION} draft board…`,
             );
           } else {
+            projectionPreparationRequestId = createSharedProjectionGenerationRequestId();
             this.successMessage.set(
-              `Building verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
+              `Starting the verified Projection V${SHARED_PROJECTION_VERSION} draft board in the background…`,
             );
-            const snapshot = await withOperationDeadline(
-              generateSharedProjectionSnapshot(projectionInput),
-              75_000,
-              `Projection V${SHARED_PROJECTION_VERSION} preparation took too long. The page has been released without changing the saved draft settings. Check the connection and try again.`,
+            const queueResult = await settleOperationWithin(
+              queueSharedProjectionSnapshotGeneration({
+                ...projectionInput,
+                requestId: projectionPreparationRequestId,
+              }),
+              12_000,
             );
 
             if (generation !== this.draftSaveGeneration) {
               return;
             }
 
-            if (
-              snapshot.metadata.status !== 'ready' ||
-              snapshot.metadata.generationReason === 'server-emergency' ||
-              snapshot.assets.length === 0
-            ) {
-              throw new Error('The verified ranking snapshot was incomplete.');
+            if (queueResult.status === 'rejected') {
+              throw queueResult.error;
             }
 
-            preparedAssetCount = snapshot.metadata.assetCount;
+            if (queueResult.status === 'fulfilled') {
+              projectionPreparationRequestId = queueResult.value.requestId;
+              projectionPreparationStatus = queueResult.value.status;
+              this.projectionPreparationWarning.set(
+                queueResult.value.status === 'ready'
+                  ? ''
+                  : `The verified Projection V${SHARED_PROJECTION_VERSION} board is building in the background. The server will keep the draft scheduled and open it only after the board is ready.`,
+              );
+            } else {
+              projectionPreparationStatus = 'queued';
+              this.projectionPreparationWarning.set(
+                `RinkRat is still confirming the Projection V${SHARED_PROJECTION_VERSION} preparation request. The draft time can still be saved because the server independently verifies that request before accepting the schedule.`,
+              );
+              await waitForOperationDelay(600);
+            }
           }
         } catch (projectionError: unknown) {
           const detail = projectionError instanceof Error
             ? projectionError.message
-            : 'The projection build did not finish.';
+            : 'The projection preparation request could not be started.';
 
           throw new Error(
-            `The draft was not scheduled because verified Projection V${SHARED_PROJECTION_VERSION} rankings could not be prepared. ${detail} Your previous saved draft settings were left unchanged.`,
+            `The draft was not scheduled because RinkRat could not start verified Projection V${SHARED_PROJECTION_VERSION} preparation. ${detail} Your previous saved draft settings were left unchanged.`,
           );
         }
       }
@@ -510,6 +527,8 @@ export class DraftSetup implements OnDestroy {
         clockUpdatedBy: null,
         lastPickId: existingDraft?.lastPickId ?? null,
         lastSettingsSubmissionId: submissionId,
+        projectionPreparationRequestId,
+        projectionPreparationStatus,
         serverDraftProjectionSnapshotId: null,
         serverDraftProjectionSnapshotHash: null,
         serverDraftProjectionAuthorityVersion: null,
@@ -524,7 +543,12 @@ export class DraftSetup implements OnDestroy {
       };
 
       this.savePhase.set('saving');
-      const savePromise = saveFantasyDraft(this.leagueId, draftToSave, submissionId);
+      const savePromise = saveFantasyDraft(
+        this.leagueId,
+        draftToSave,
+        submissionId,
+        projectionPreparationRequestId,
+      );
       this.savePhase.set('confirming');
       const observedDraft = await this.awaitDraftSettingsConfirmation(
         savePromise,
@@ -540,7 +564,9 @@ export class DraftSetup implements OnDestroy {
 
       if (scheduledStartDate) {
         this.successMessage.set(
-          `Draft settings saved with ${preparedAssetCount ?? 0} verified shared projections. The server can open and complete the draft even when every browser is closed.`,
+          projectionPreparationStatus === 'ready'
+            ? `Draft settings saved with ${preparedAssetCount ?? 'the existing'} verified shared projections. The server can open and complete the draft even when every browser is closed.`
+            : `Draft time saved. The verified Projection V${SHARED_PROJECTION_VERSION} board is building in the background, and the server will open the draft only after it is ready. You may leave this page.`,
         );
       } else {
         this.successMessage.set('Draft order saved. No start time is scheduled yet.');

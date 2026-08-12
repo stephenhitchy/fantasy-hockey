@@ -237,6 +237,7 @@ export interface ActivateIrRosterAssetInput {
   ownerId: string;
   irSlotId: string;
   activeSlotId?: string | null;
+  benchSlotId?: string | null;
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
 }
@@ -611,6 +612,17 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
       typeof data.lastSettingsSubmissionId === 'string'
         ? data.lastSettingsSubmissionId
         : null,
+    projectionPreparationRequestId:
+      typeof data.projectionPreparationRequestId === 'string'
+        ? data.projectionPreparationRequestId
+        : null,
+    projectionPreparationStatus:
+      data.projectionPreparationStatus === 'ready' ||
+      data.projectionPreparationStatus === 'queued' ||
+      data.projectionPreparationStatus === 'processing' ||
+      data.projectionPreparationStatus === 'error'
+        ? data.projectionPreparationStatus
+        : null,
     serverDraftProjectionSnapshotId:
       typeof data.serverDraftProjectionSnapshotId === 'string'
         ? data.serverDraftProjectionSnapshotId
@@ -655,6 +667,8 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     clockUpdatedBy: null,
     lastPickId: null,
     lastSettingsSubmissionId: null,
+    projectionPreparationRequestId: null,
+    projectionPreparationStatus: null,
     serverDraftProjectionSnapshotId: null,
     serverDraftProjectionSnapshotHash: null,
     serverDraftProjectionAuthorityVersion: null,
@@ -925,6 +939,7 @@ export async function saveFantasyDraft(
   leagueId: string,
   draft: FantasyDraft,
   submissionId?: string,
+  projectionPreparationRequestId?: string | null,
 ): Promise<void> {
   const scheduledStart = getScheduledStartDate(draft);
 
@@ -932,6 +947,7 @@ export async function saveFantasyDraft(
     leagueId,
     action: 'save-settings',
     submissionId,
+    projectionPreparationRequestId: projectionPreparationRequestId ?? null,
     roundOneOrder: [...draft.roundOneOrder],
     scheduledStartAt: scheduledStart?.toISOString() ?? null,
     pickSeconds: normalizePickSeconds(draft.pickSeconds),
@@ -1551,6 +1567,7 @@ export async function activateIrRosterAsset({
   ownerId,
   irSlotId,
   activeSlotId = null,
+  benchSlotId = null,
   effectiveCycleNumber = null,
   effectiveLabel = null,
 }: ActivateIrRosterAssetInput): Promise<RosterMoveExecutionResult> {
@@ -1601,6 +1618,7 @@ export async function activateIrRosterAsset({
       moveType: 'activate-ir-active',
       activeSlotId: resolvedActiveSlotId,
       irSlotId,
+      benchSlotId,
     });
 
     return {
@@ -1614,6 +1632,7 @@ export async function activateIrRosterAsset({
     action: 'activate-ir-active',
     activeSlotId: resolvedActiveSlotId,
     irSlotId,
+    benchSlotId,
     effectiveCycleNumber,
     effectiveLabel,
   });

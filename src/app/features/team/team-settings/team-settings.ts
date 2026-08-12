@@ -169,6 +169,7 @@ export class TeamSettings implements OnDestroy {
   rosterMoveError = signal('');
   irActivationSlotId = signal('');
   irActivationTargetSlotId = signal('');
+  irActivationBenchSlotId = signal('');
   irBenchActivationSlotId = signal('');
   irBenchActivationTargetSlotId = signal('');
   benchSwapSlotId = signal('');
@@ -1028,11 +1029,13 @@ export class TeamSettings implements OnDestroy {
   }
 
   canActivateIrSlot(slot: IrRosterSlot): boolean {
-    return Boolean(
-      slot.asset &&
-      this.getActiveSlotsForIrAsset(slot.asset).length > 0 &&
-      !this.rosterMoveLoading(),
-    );
+    if (!slot.asset || this.rosterMoveLoading()) {
+      return false;
+    }
+
+    const activeSlots = this.getActiveSlotsForIrAsset(slot.asset);
+    return activeSlots.some((activeSlot) => activeSlot.asset === null) ||
+      (activeSlots.length > 0 && this.getIrActivationBenchTargets().length > 0);
   }
 
   getIrActivationHelp(slot: IrRosterSlot): string {
@@ -1054,9 +1057,16 @@ export class TeamSettings implements OnDestroy {
         : `Open ${slot.asset.position} Slot ${openSlot.slotNumber} is available.`;
     }
 
+    const availableBenchSlots = this.getIrActivationBenchTargets();
+    const openBenchSlot = availableBenchSlots.find((benchSlot) => benchSlot.asset === null);
+
     return availability && !availability.irEligible
       ? `${availability.label}. Choose a ${slot.asset.position} player to replace.`
-      : `Choose a ${slot.asset.position} player to replace. The replaced player goes to waivers.`;
+      : openBenchSlot
+        ? `Choose a ${slot.asset.position} starter to replace. That starter will move to Open Bench ${openBenchSlot.slotNumber}.`
+        : availableBenchSlots.length > 0
+          ? `Choose a ${slot.asset.position} starter, then choose the bench player or goalie unit to waive.`
+          : 'Every bench slot is reserved for another scheduled lineup move.';
   }
 
   getPendingIrActivationSlot(): IrRosterSlot | null {
@@ -1077,6 +1087,73 @@ export class TeamSettings implements OnDestroy {
     }
 
     return this.getActiveSlotsForIrAsset(irSlot.asset);
+  }
+
+  getSelectedIrActivationTargetSlot(): ActiveRosterSlot | null {
+    const irSlot = this.getPendingIrActivationSlot();
+    const targetSlotId = this.irActivationTargetSlotId();
+
+    if (!irSlot?.asset || !targetSlotId) {
+      return null;
+    }
+
+    return this.getActiveSlotsForIrAsset(irSlot.asset).find(
+      (slot) => slot.slotId === targetSlotId,
+    ) ?? null;
+  }
+
+  getIrActivationBenchTargets(): BenchRosterSlot[] {
+    return this.getBenchSlots().filter(
+      (slot) => !this.isBenchSlotReservedForActiveSwap(slot),
+    );
+  }
+
+  getSelectedIrActivationBenchSlot(): BenchRosterSlot | null {
+    const slotId = this.irActivationBenchSlotId();
+
+    if (!slotId) {
+      return null;
+    }
+
+    return this.getIrActivationBenchTargets().find(
+      (slot) => slot.slotId === slotId,
+    ) ?? null;
+  }
+
+  irActivationNeedsBenchDestination(): boolean {
+    return Boolean(this.getSelectedIrActivationTargetSlot()?.asset);
+  }
+
+  selectIrActivationBenchTarget(slotId: string): void {
+    const slot = this.getIrActivationBenchTargets().find(
+      (candidate) => candidate.slotId === slotId,
+    );
+
+    if (!this.rosterMoveLoading() && slot) {
+      this.irActivationBenchSlotId.set(slotId);
+    }
+  }
+
+  isIrActivationBenchTargetSelected(slotId: string): boolean {
+    return this.irActivationBenchSlotId() === slotId;
+  }
+
+  getIrActivationBenchTargetHeading(slot: BenchRosterSlot): string {
+    return slot.asset
+      ? this.getRosterAssetName(slot.asset)
+      : `Open Bench ${slot.slotNumber}`;
+  }
+
+  getIrActivationBenchTargetDetail(slot: BenchRosterSlot): string {
+    if (!slot.asset) {
+      return 'The displaced starter moves here. Nobody is dropped.';
+    }
+
+    return `${this.getRosterAssetTeamLabel(slot.asset)} · ${slot.asset.position} · This bench player or goalie unit will be placed on waivers.`;
+  }
+
+  private chooseDefaultIrActivationBenchSlot(): string {
+    return this.getIrActivationBenchTargets().find((slot) => slot.asset === null)?.slotId ?? '';
   }
 
   beginIrActivation(irSlotId: string): void {
@@ -1100,9 +1177,13 @@ export class TeamSettings implements OnDestroy {
     }
 
     const openSlot = targetSlots.find((slot) => slot.asset === null);
+    const defaultTarget = openSlot ?? targetSlots[0];
 
     this.irActivationSlotId.set(irSlotId);
-    this.irActivationTargetSlotId.set(openSlot?.slotId ?? targetSlots[0].slotId);
+    this.irActivationTargetSlotId.set(defaultTarget.slotId);
+    this.irActivationBenchSlotId.set(
+      defaultTarget.asset ? this.chooseDefaultIrActivationBenchSlot() : '',
+    );
   }
 
   cancelIrActivation(): void {
@@ -1112,10 +1193,29 @@ export class TeamSettings implements OnDestroy {
 
     this.irActivationSlotId.set('');
     this.irActivationTargetSlotId.set('');
+    this.irActivationBenchSlotId.set('');
   }
 
   selectIrActivationTarget(slotId: string): void {
+    const targetSlot = this.getIrActivationTargetSlots().find(
+      (slot) => slot.slotId === slotId,
+    );
+
+    if (!targetSlot || this.rosterMoveLoading()) {
+      return;
+    }
+
     this.irActivationTargetSlotId.set(slotId);
+
+    if (!targetSlot.asset) {
+      this.irActivationBenchSlotId.set('');
+      return;
+    }
+
+    const selectedBenchSlot = this.getSelectedIrActivationBenchSlot();
+    if (!selectedBenchSlot) {
+      this.irActivationBenchSlotId.set(this.chooseDefaultIrActivationBenchSlot());
+    }
   }
 
   isIrActivationTargetSelected(slotId: string): boolean {
@@ -1135,7 +1235,19 @@ export class TeamSettings implements OnDestroy {
       return false;
     }
 
-    return this.getActiveSlotsForIrAsset(irSlot.asset).some((slot) => slot.slotId === targetSlotId);
+    const targetSlot = this.getActiveSlotsForIrAsset(irSlot.asset).find(
+      (slot) => slot.slotId === targetSlotId,
+    );
+
+    if (!targetSlot) {
+      return false;
+    }
+
+    if (!targetSlot.asset) {
+      return true;
+    }
+
+    return Boolean(this.getSelectedIrActivationBenchSlot());
   }
 
   getIrActivationTargetHeading(slot: ActiveRosterSlot): string {
@@ -1151,7 +1263,7 @@ export class TeamSettings implements OnDestroy {
       return 'Activate into this open roster slot. No player will be dropped.';
     }
 
-    return `${this.getRosterAssetTeamLabel(slot.asset)} · ${slot.position} Slot ${slot.slotNumber} · Will be placed on waivers`;
+    return `${this.getRosterAssetTeamLabel(slot.asset)} · ${slot.position} Slot ${slot.slotNumber} · Moves to the selected bench slot`;
   }
 
   getPendingRosterDrop(): PendingRosterDrop | null {
@@ -1232,6 +1344,7 @@ export class TeamSettings implements OnDestroy {
 
     this.irActivationSlotId.set('');
     this.irActivationTargetSlotId.set('');
+    this.irActivationBenchSlotId.set('');
     this.rosterDropSource.set(sourceRosterArea);
     this.rosterDropSlotId.set(slotId);
   }
@@ -1814,8 +1927,22 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    const benchSlot = targetSlot.asset
+      ? this.getSelectedIrActivationBenchSlot()
+      : null;
+
+    if (targetSlot.asset && !benchSlot) {
+      this.rosterMoveError.set(
+        'Choose the bench spot that should receive the displaced starter. If every bench spot is full, choose the bench player or goalie unit to place on waivers.',
+      );
+      return;
+    }
+
     const playerName = this.getRosterAssetName(irSlot.asset);
     const replacedPlayerName = targetSlot.asset ? this.getRosterAssetName(targetSlot.asset) : '';
+    const waivedBenchAssetName = benchSlot?.asset
+      ? this.getRosterAssetName(benchSlot.asset)
+      : '';
     const actionHandle = this.actionMonitor.begin('injured-reserve');
     let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
     const operationGeneration = ++this.rosterOperationGeneration;
@@ -1823,6 +1950,7 @@ export class TeamSettings implements OnDestroy {
 
     this.irActivationSlotId.set('');
     this.irActivationTargetSlotId.set('');
+    this.irActivationBenchSlotId.set('');
     this.rosterMoveLoading.set(true);
 
     try {
@@ -1833,6 +1961,7 @@ export class TeamSettings implements OnDestroy {
         ownerId: this.userId,
         irSlotId: irSlot.slotId,
         activeSlotId: targetSlot.slotId,
+        benchSlotId: benchSlot?.slotId ?? null,
         effectiveCycleNumber,
         effectiveLabel,
       });
@@ -1852,10 +1981,10 @@ export class TeamSettings implements OnDestroy {
       this.rosterMoveMessage.set(
         mode === 'immediate'
           ? replacedPlayerName
-            ? `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. ${replacedPlayerName} was placed on waivers, and the untouched six-game count now belongs to ${playerName} in ${activationLabel}.`
+            ? `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. ${replacedPlayerName} moved to Bench ${benchSlot?.slotNumber ?? ''}${waivedBenchAssetName ? `, and ${waivedBenchAssetName} was placed on waivers` : ' without dropping anyone'}. The untouched six-game count now belongs to ${playerName} in ${activationLabel}.`
             : `${playerName} activated from Injured Reserve (IR) into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately for ${activationLabel}.`
           : replacedPlayerName
-            ? `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} was placed on waivers, while the already-started six-game count remains unchanged until ${activationLabel}.`
+            ? `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. ${replacedPlayerName} moved to Bench ${benchSlot?.slotNumber ?? ''}${waivedBenchAssetName ? `, and ${waivedBenchAssetName} was placed on waivers` : ' without dropping anyone'}. The already-started six-game scoring assignment remains unchanged until ${activationLabel}.`
             : `${playerName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber}. Scoring eligibility begins with ${activationLabel}.`,
       );
       actionOutcome = 'success';
@@ -2628,9 +2757,13 @@ export class TeamSettings implements OnDestroy {
         return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the active roster to Injured Reserve (IR).`;
 
       case 'activate-from-ir':
-        return transaction.droppedAsset
-          ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) to the active roster. ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
-          : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) back to the active roster.`;
+        if (transaction.movedAsset) {
+          return transaction.droppedAsset
+            ? `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) to the active roster. ${this.getTransactionAssetName(transaction.movedAsset)} moved to the bench, and ${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers.`
+            : `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) to the active roster. ${this.getTransactionAssetName(transaction.movedAsset)} moved into an open bench spot, so nobody was dropped.`;
+        }
+
+        return `${this.getTransactionAssetName(transaction.activatedAsset)} moved from Injured Reserve (IR) back to an open active roster slot.`;
 
       case 'drop-to-waivers':
         return `${this.getTransactionAssetName(transaction.droppedAsset)} was released from the ${

@@ -187,7 +187,7 @@ test('B1C scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.equal(packageJson.scripts['beta:preflight'], 'node scripts/release/invite-beta-release.mjs preflight');
   assert.match(packageJson.scripts['verify:batchb1c'], /toolchain:verify/);
   assert.match(packageJson.scripts['verify:batchb1c:core'], /verify:batchb1b-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1):core/);
   assert.match(await read('.github/workflows/rinkrat-ci.yml'), /npm install --global npm@11\.17\.0/);
   assert.match(readme, /verify:batchb1c/);
   assert.match(documentation, /Beta Operations Batch B1C/);

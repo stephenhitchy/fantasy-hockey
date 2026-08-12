@@ -165,6 +165,16 @@ function rosterContainsAsset(roster: FantasyRoster, assetKey: string): boolean {
   return assets.some((asset) => getAssetKey(asset) === assetKey);
 }
 
+function isBenchSlotReserved(roster: FantasyRoster, benchSlotId: string): boolean {
+  const benchAsset = roster.benchSlots.find((slot) => slot.slotId === benchSlotId)?.asset;
+  const assetKey = getAssetKey(benchAsset);
+
+  return Boolean(assetKey) && roster.activeSlots.some((slot) =>
+    slot.pendingMove?.sourceBenchSlotId === benchSlotId &&
+    getAssetKey(slot.pendingMove.incomingAsset) === assetKey,
+  );
+}
+
 function createRosterAsset(asset: DraftableAsset, cycleNumber: number, status: 'new' | 'active' | 'benched'): RosterAsset {
   return {
     ...asset,
@@ -763,6 +773,8 @@ export const applyImmediateRosterMove = onCall(
     let preflightBenchEligibilityCycle: number | null = null;
     let preflightIrAssetKey = '';
     let preflightIrEligibilityCycle: number | null = null;
+    let preflightIrBenchSlotId = '';
+    let preflightIrBenchAssetKey = '';
 
     if (moveType === 'active-bench-swap' || moveType === 'activate-ir-active') {
       if (moveType === 'active-bench-swap') {
@@ -793,6 +805,37 @@ export const applyImmediateRosterMove = onCall(
           preflightIrAsset.eligibleFromCycleNumber ?? 1,
           await getEarliestEligibleCycleNumber(preflightIrAsset, gamesPerCycle, leagueId),
         );
+
+        if (preflightActiveSlot.asset) {
+          const requestedBenchSlot = benchSlotId
+            ? preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId) ?? null
+            : null;
+          const fallbackOpenBenchSlot = !benchSlotId
+            ? preflightRoster.benchSlots.find(
+                (slot) => slot.asset === null && !isBenchSlotReserved(preflightRoster, slot.slotId),
+              ) ?? null
+            : null;
+          const selectedBenchSlot = requestedBenchSlot ?? fallbackOpenBenchSlot;
+
+          if (!selectedBenchSlot) {
+            throw new HttpsError(
+              'failed-precondition',
+              benchSlotId
+                ? 'The selected bench destination is unavailable.'
+                : 'Every usable bench spot is full. Choose the bench player or goalie unit to place on waivers.',
+            );
+          }
+
+          if (isBenchSlotReserved(preflightRoster, selectedBenchSlot.slotId)) {
+            throw new HttpsError(
+              'failed-precondition',
+              'That bench spot is reserved for another scheduled lineup move.',
+            );
+          }
+
+          preflightIrBenchSlotId = selectedBenchSlot.slotId;
+          preflightIrBenchAssetKey = getAssetKey(selectedBenchSlot.asset);
+        }
       }
     }
 
@@ -878,7 +921,9 @@ export const applyImmediateRosterMove = onCall(
 
       let incomingAsset: DraftableAsset | null = null;
       const outgoingAsset = activeSlot.asset;
-      let droppedAsset: RosterAsset | null = outgoingAsset;
+      let droppedAsset: RosterAsset | null = moveType === 'activate-ir-active'
+        ? null
+        : outgoingAsset;
       let benchSlotIdForTransaction: string | null = null;
       let irSlotIdForTransaction: string | null = null;
       const removesActiveAssignment =
@@ -969,6 +1014,45 @@ export const applyImmediateRosterMove = onCall(
         if (!incomingAsset || getAssetKey(incomingAsset) !== preflightIrAssetKey) {
           throw new HttpsError('aborted', 'The IR player projection could not be refreshed. Please try again.');
         }
+
+        if (outgoingAsset) {
+          if (!preflightIrBenchSlotId) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Choose the bench spot that should receive the displaced starter.',
+            );
+          }
+
+          const benchSlotIndex = roster.benchSlots.findIndex(
+            (slot) => slot.slotId === preflightIrBenchSlotId,
+          );
+          if (benchSlotIndex < 0) {
+            throw new HttpsError('failed-precondition', 'The selected bench destination was not found.');
+          }
+
+          const selectedBenchSlot = roster.benchSlots[benchSlotIndex];
+          if (isBenchSlotReserved(roster, selectedBenchSlot.slotId)) {
+            throw new HttpsError(
+              'failed-precondition',
+              'That bench spot is reserved for another scheduled lineup move.',
+            );
+          }
+
+          if (getAssetKey(selectedBenchSlot.asset) !== preflightIrBenchAssetKey) {
+            throw new HttpsError(
+              'aborted',
+              'The selected bench destination changed while the move was being checked. Please try again.',
+            );
+          }
+
+          droppedAsset = selectedBenchSlot.asset;
+          roster.benchSlots[benchSlotIndex] = {
+            ...selectedBenchSlot,
+            asset: { ...outgoingAsset, rosterStatus: 'benched' },
+          };
+          benchSlotIdForTransaction = selectedBenchSlot.slotId;
+        }
+
         roster.activeSlots[activeSlotIndex] = {
           ...activeSlot,
           asset: createRosterAsset(
@@ -1259,7 +1343,9 @@ export const applyImmediateRosterMove = onCall(
           ? roster.activeSlots[activeSlotIndex].asset
           : moveType === 'move-active-to-ir'
             ? outgoingAsset
-            : null,
+            : moveType === 'activate-ir-active'
+              ? outgoingAsset
+              : null,
         activatedAsset: moveType === 'activate-ir-active'
           ? roster.activeSlots[activeSlotIndex].asset
           : null,

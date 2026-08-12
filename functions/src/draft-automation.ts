@@ -12,6 +12,7 @@ import {
   FIRESTORE_AUTH_USER_ID_OPTIONS,
   FIRESTORE_DRAFT_PICK_ID_OPTIONS,
   FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
 import {
   DraftAutoPickReason,
@@ -60,9 +61,23 @@ const DRAFT_AUTOMATION_CONTENTION_RETRY_DELAYS = [125, 300, 700, 1_500];
 const DRAFT_PROJECTION_CACHE_TTL_MILLISECONDS = 5 * 60 * 1000;
 const MAX_DRAFT_PROJECTION_CACHE_ENTRIES = 12;
 
+type DraftProjectionPreparationStatus = Exclude<
+  FantasyDraft['projectionPreparationStatus'],
+  null | undefined
+>;
+
 interface CachedDraftProjection {
   snapshot: SharedProjectionSnapshot;
   expiresAt: number;
+}
+
+function isDraftProjectionPreparationStatus(
+  value: unknown,
+): value is DraftProjectionPreparationStatus {
+  return value === 'ready' ||
+    value === 'queued' ||
+    value === 'processing' ||
+    value === 'error';
 }
 
 const draftProjectionCache = new Map<string, CachedDraftProjection>();
@@ -787,6 +802,17 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
       typeof value.lastSettingsSubmissionId === 'string'
         ? value.lastSettingsSubmissionId
         : null,
+    projectionPreparationRequestId:
+      typeof value.projectionPreparationRequestId === 'string'
+        ? value.projectionPreparationRequestId
+        : null,
+    projectionPreparationStatus:
+      value.projectionPreparationStatus === 'ready' ||
+      value.projectionPreparationStatus === 'queued' ||
+      value.projectionPreparationStatus === 'processing' ||
+      value.projectionPreparationStatus === 'error'
+        ? value.projectionPreparationStatus
+        : null,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
@@ -1052,9 +1078,47 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
   const projection = await loadVerifiedDraftProjectionSnapshot(leagueId);
 
   if (!projection) {
-    throw new Error(
-      `Verified Projection V${SHARED_PROJECTION_VERSION} draft rankings are unavailable. The draft remained stopped so it cannot make inaccurate automatic selections. Open Draft Setup and save the schedule again to build fresh rankings.`,
+    const preparationRequestId = resolveSafeFirestoreDocumentId(
+      initialDraft.projectionPreparationRequestId,
+      FIRESTORE_REQUEST_ID_OPTIONS,
     );
+    let preparationStatus: DraftProjectionPreparationStatus | null =
+      initialDraft.projectionPreparationStatus ?? null;
+
+    if (preparationRequestId) {
+      const requestSnapshot = await db
+        .doc(`projectionGenerationRequests/${preparationRequestId}`)
+        .get()
+        .catch(() => null);
+      const requestData = requestSnapshot?.exists ? requestSnapshot.data() ?? {} : {};
+      const observedStatus = requestData['status'];
+
+      if (
+        requestData['leagueId'] === leagueId &&
+        isDraftProjectionPreparationStatus(observedStatus)
+      ) {
+        preparationStatus = observedStatus;
+      }
+    }
+
+    const preparationFailed = preparationStatus === 'error';
+    await draftRef.set(
+      {
+        projectionPreparationStatus: preparationStatus,
+        serverAutomationStatus: preparationFailed ? 'error' : 'waiting-projection',
+        serverAutomationMessage: preparationFailed
+          ? `Projection V${SHARED_PROJECTION_VERSION} preparation failed. Open Draft Setup and save the schedule again; no inaccurate automatic selections were made.`
+          : `The scheduled start time arrived while Projection V${SHARED_PROJECTION_VERSION} was still building. The draft remains safely scheduled and the server will retry automatically.`,
+        ...(preparationFailed
+          ? { serverAutomationLastErrorAt: FieldValue.serverTimestamp() }
+          : {}),
+        serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return false;
   }
 
   return withContentionRetry(
@@ -1074,6 +1138,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
         clockUpdatedBy: SERVER_DRAFT_ACTOR,
         clockUpdatedAt: FieldValue.serverTimestamp(),
         serverAutomationStatus: 'healthy',
+        projectionPreparationStatus: 'ready' as const,
         serverDraftProjectionSnapshotId: projection.metadata.activeSnapshotId,
         serverDraftProjectionSnapshotHash: projection.metadata.snapshotContentHash,
         serverDraftProjectionAuthorityVersion:

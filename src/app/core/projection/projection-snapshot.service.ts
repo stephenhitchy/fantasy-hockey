@@ -488,7 +488,7 @@ interface ProjectionGenerationCallableRequest {
   targetCycleNumber?: number;
 }
 
-interface ProjectionGenerationCallableResult {
+export interface ProjectionGenerationQueueResult {
   requestId: string;
   status: 'queued' | 'ready';
   snapshotId: string | null;
@@ -527,7 +527,7 @@ interface ProjectionGenerationRequestState {
 
 const requestProjectionSnapshotGenerationCallable = httpsCallable<
   ProjectionGenerationCallableRequest,
-  ProjectionGenerationCallableResult
+  ProjectionGenerationQueueResult
 >(functions, 'requestProjectionSnapshotGeneration', {
   timeout: 30_000,
 });
@@ -539,7 +539,7 @@ const manageProjectionSnapshotIntegrityCallable = httpsCallable<
   timeout: 135_000,
 });
 
-function createProjectionRequestId(): string {
+export function createSharedProjectionGenerationRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `projection-${crypto.randomUUID()}`;
   }
@@ -667,7 +667,7 @@ export async function manageProjectionSnapshotIntegrity(input: {
   }
 
   const response = await manageProjectionSnapshotIntegrityCallable({
-    requestId: createProjectionRequestId().replace(/^projection-/, 'projection-integrity-'),
+    requestId: createSharedProjectionGenerationRequestId().replace(/^projection-/, 'projection-integrity-'),
     leagueId,
     action: input.action,
     reason: (input.reason ?? '').trim().slice(0, 300),
@@ -690,9 +690,9 @@ export async function manageProjectionSnapshotIntegrity(input: {
   return { result, snapshot };
 }
 
-async function generateSnapshotInternal(
-  input: GenerateSharedProjectionSnapshotInput,
-): Promise<SharedProjectionSnapshot> {
+export async function queueSharedProjectionSnapshotGeneration(
+  input: GenerateSharedProjectionSnapshotInput & { requestId?: string },
+): Promise<ProjectionGenerationQueueResult> {
   const leagueId = input.leagueId.trim();
 
   if (!leagueId) {
@@ -700,7 +700,7 @@ async function generateSnapshotInternal(
   }
 
   invalidateSharedProjectionReadCache(leagueId);
-  const requestId = createProjectionRequestId();
+  const requestId = input.requestId?.trim() || createSharedProjectionGenerationRequestId();
   const response = await requestProjectionSnapshotGenerationCallable({
     requestId,
     leagueId,
@@ -710,7 +710,15 @@ async function generateSnapshotInternal(
         ? Math.max(1, Math.floor(input.targetCycleNumber))
         : undefined,
   });
-  const result = response.data;
+
+  return response.data;
+}
+
+async function generateSnapshotInternal(
+  input: GenerateSharedProjectionSnapshotInput,
+): Promise<SharedProjectionSnapshot> {
+  const leagueId = input.leagueId.trim();
+  const result = await queueSharedProjectionSnapshotGeneration(input);
   const snapshotId =
     result.status === 'ready' && result.snapshotId
       ? result.snapshotId

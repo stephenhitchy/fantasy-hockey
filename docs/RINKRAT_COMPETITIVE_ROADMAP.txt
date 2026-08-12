@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.13
+Version 1.13.2
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -49,7 +49,7 @@ CURRENT RECOMMENDED FOCUS:
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
 [~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, universal identifier-boundary validation, exact-build enforcement-readiness gates, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; collect the required supported-browser/action evidence, deliberately canary selected callables, and complete distributed NHL ingestion/rate protection. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC23 validation report, rollback rehearsal, annotated beta tag, first restore drill, and observed first-season cohort before adding broad social or trade features. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations Center, release-freeze tooling, the S3E.1 Draft/IR integrity hotfix, and the S3E.1.1 strict Functions type correction are implemented; complete the exact RC23 validation report, rollback rehearsal, annotated beta tag, first restore drill, and observed first-season cohort before adding broad social or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Repository tooling completed 2026-08-12; the first operator-run restore drill remains an exit gate.
 
 ================================================================================
@@ -314,6 +314,9 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 # [x] B1.23 Build a Beta Operations Center with structured feedback triage, sanitized public known issues, privacy-limited action/route evidence, and server scoring-duration aggregates. (P0 / L) — Completed 2026-08-11 in Beta Operations Batch B1B / Release Candidate 21.
 # [x] B1.24 Add exact-build invite-beta freeze, pinned Node/npm preflight, live manifest/header/TTL verification, annotated tag checks, and generated rollback records without changing the RC21 runtime. (P0 / M) — Completed 2026-08-11 in Beta Operations Batch B1C.
 # [x] B1.25 Replace long injury-report articles in mobile matchup rows with one compact status icon, short designation, and expected return date while preserving full detail on the player page. (P1 / S) — Completed 2026-08-12 in Security Batch S3E / Release Candidate 23.
+# [x] B1.26 Make Draft scheduling acknowledge verified Projection V11 preparation and save the start time without waiting for the full ranking job; keep automatic opening blocked until the verified board is ready. (P0 / M) — Completed 2026-08-12 in Security Batch S3E.1 / Release Candidate 23.
+# [x] B1.27 Preserve a displaced active player during Injured Reserve activation by moving that player to an open bench spot, or requiring the manager to choose the exact bench player or goalie unit to waive when the bench is full. (P0 / M) — Completed 2026-08-12 in Security Batch S3E.1 / Release Candidate 23.
+# [x] B1.28 Narrow persisted Draft projection-preparation states through an explicit server type guard so the optional shared model cannot reintroduce undefined into strict Functions builds. (P0 / S) — Completed 2026-08-12 in Security Batch S3E.1.1 / Release Candidate 23.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -752,6 +755,10 @@ Future entries:
 # [x] LOG.21 2026-08-12 — Completed Security Batch S3D / Release Candidate 22: add semantic Firestore identifier policies, normalize Cloud Tasks and Firestore trigger parameters before path use, validate persisted Draft/projection/replay cross-references, protect authenticated feedback membership paths, and add a source-controlled 13-module boundary inventory plus static CI audit without changing Scoring V3 or Projection V11.
 
 # [x] LOG.22 2026-08-12 — Completed Security Batch S3E / Release Candidate 23: add exact-build App Check readiness gates by browser, device, platform, manager-day, and competitive action; keep enforcement monitor-only and manual; and replace mobile matchup injury articles with a compact icon, designation, and return date without changing Scoring V3 or Projection V11.
+
+# [x] LOG.23 2026-08-12 — Completed Security Batch S3E.1 / Release Candidate 23 hotfix: remove full Projection V11 generation from the Draft-settings request path, let server automation wait safely for the verified board, and preserve displaced starters during IR activation by using an open bench spot or an explicit full-bench waiver choice.
+
+# [x] LOG.24 2026-08-12 — Completed Security Batch S3E.1.1 / Release Candidate 23 TypeScript hotfix: replace the optional indexed-property cast for projection preparation with a concrete four-state type guard, preventing undefined from entering Draft automation without changing runtime behavior.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 
