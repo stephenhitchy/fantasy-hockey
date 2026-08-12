@@ -11,6 +11,7 @@ const manifestPath = path.join(
 );
 const markerPath = path.join(projectRoot, '.github/rinkrat-automation-version');
 const SECURITY_REPORT_IGNORE_RULE = '/.security-reports/';
+const BETA_RELEASE_IGNORE_RULE = '/.beta-release/';
 
 function safeProjectPath(relativePath) {
   if (
@@ -41,22 +42,28 @@ async function readOptionalText(filePath) {
   }
 }
 
-async function ensureSecurityReportIgnoreRule() {
+async function ensureGeneratedIgnoreRules() {
   const gitignorePath = path.join(projectRoot, '.gitignore');
-  const current = await readOptionalText(gitignorePath) ?? '';
-  const normalizedLines = current.split(/\r?\n/).map((line) => line.trim());
+  let current = await readOptionalText(gitignorePath) ?? '';
+  const additions = [];
+  const normalizedLines = new Set(current.split(/\r?\n/).map((line) => line.trim()));
 
-  if (normalizedLines.includes(SECURITY_REPORT_IGNORE_RULE)) {
-    return false;
+  if (!normalizedLines.has(SECURITY_REPORT_IGNORE_RULE)) {
+    additions.push('# Generated security reports', SECURITY_REPORT_IGNORE_RULE);
+  }
+  if (!normalizedLines.has(BETA_RELEASE_IGNORE_RULE)) {
+    additions.push('# Generated invite-beta freeze records', BETA_RELEASE_IGNORE_RULE);
   }
 
-  const separator = current.length > 0 && !current.endsWith('\n') ? '\n' : '';
-  await writeFile(
-    gitignorePath,
-    `${current}${separator}\n# Generated security reports\n${SECURITY_REPORT_IGNORE_RULE}\n`,
-    'utf8',
-  );
-  return true;
+  if (additions.length === 0) {
+    return [];
+  }
+
+  if (current.length > 0 && !current.endsWith('\n')) {
+    current += '\n';
+  }
+  await writeFile(gitignorePath, `${current}\n${additions.join('\n')}\n`, 'utf8');
+  return additions.filter((line) => line.startsWith('/'));
 }
 
 async function main() {
@@ -94,14 +101,12 @@ async function main() {
 
   await mkdir(path.dirname(markerPath), { recursive: true });
   await writeFile(markerPath, `${manifest.automationVersion}\n`, 'utf8');
-  const gitignoreRepaired = await ensureSecurityReportIgnoreRule();
+  const restoredIgnoreRules = await ensureGeneratedIgnoreRules();
 
-  if (restored.length > 0 || gitignoreRepaired) {
+  if (restored.length > 0 || restoredIgnoreRules.length > 0) {
     console.log('Repository automation recovery completed:');
     restored.forEach((target) => console.log(`- restored ${target}`));
-    if (gitignoreRepaired) {
-      console.log(`- restored ${SECURITY_REPORT_IGNORE_RULE} in .gitignore`);
-    }
+    restoredIgnoreRules.forEach((rule) => console.log(`- restored ${rule} in .gitignore`));
   } else {
     console.log(`Repository automation is ready (version ${manifest.automationVersion}).`);
   }

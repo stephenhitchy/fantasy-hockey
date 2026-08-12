@@ -59,3 +59,6 @@ functions/.secret.local
 
 # Generated security reports
 /.security-reports/
+
+# Generated invite-beta freeze records
+/.beta-release/

@@ -188,7 +188,7 @@ test('S1C callables, logs, and verification scripts are installed', () => {
 
 test('the permanent roadmap preserves S1C completion and remains synchronized in later versions', () => {
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.[3-9][0-9]*/);
+  assert.match(roadmapRootSource, /Version 1\.(?:[3-9]|1[0-9])(?:\.\d+)?/);
   assert.match(roadmapRootSource, /# \[x\] S1\.8 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] S1\.9 .*Security Batch S1C/);
   assert.match(roadmapRootSource, /# \[x\] S1\.10 .*Security Batch S1C/);

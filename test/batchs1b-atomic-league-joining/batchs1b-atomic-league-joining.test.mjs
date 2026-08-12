@@ -245,7 +245,7 @@ test('roadmap files are permanent project artifacts and are excluded from docume
 });
 
 test('roadmap and release documentation record S1B without deleting completed work', () => {
-  assert.match(roadmapSource, /Version 1\.[2-9][0-9]*/);
+  assert.match(roadmapSource, /Version 1\.(?:[2-9]|1[0-9])(?:\.\d+)?/);
   assert.match(roadmapSource, /# \[x\] S1\.4 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /# \[x\] S1\.5 .*Completed 2026-08-07 in Security Batch S1B/);
   assert.match(roadmapSource, /\[~\] S1\.6 Add verified-email requirements/);

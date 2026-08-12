@@ -249,7 +249,7 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(readmeSource, /verify:batchs3b/);
   assert.match(documentationSource, /Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.(?:7(?:\.\d+)?|8|9)/);
+  assert.match(roadmapRootSource, /Version 1\.(?:7(?:\.\d+)?|8|9|1[0-9](?:\.\d+)?)/);
   assert.match(roadmapRootSource, /# \[x\] S3\.11/);
   assert.match(roadmapRootSource, /# \[x\] S3\.13/);
   assert.match(roadmapRootSource, /\[~\] SEQ\.7/);

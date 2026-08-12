@@ -25,6 +25,7 @@ test('GitHub Actions performs clean installs, emulator verification, builds, and
   assert.match(workflow, /node-version:\s*22\.23\.1/);
   assert.match(workflow, /actions\/setup-java@v5/);
   assert.match(workflow, /java-version:\s*'21'/);
+  assert.match(workflow, /npm install --global npm@11\.17\.0/);
   assert.match(workflow, /npm install --global firebase-tools@15\.24\.0/);
   assert.match(workflow, /run:\s*npm ci/);
   assert.match(workflow, /run:\s*npm --prefix functions ci/);
@@ -50,7 +51,7 @@ test('visible repository automation templates recover hidden macOS project files
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(manifest.schemaVersion, 1);
-  assert.equal(manifest.automationVersion, 1);
+  assert.equal(manifest.automationVersion, 2);
   assert.equal(manifest.targets.length, 3);
   assert.match(syncSource, /upgradeRequired/);
   assert.ok(manifest.targets.some((entry) => entry.target === '.github/workflows/rinkrat-ci.yml'));
@@ -247,7 +248,7 @@ test('S3C runbook, commands, release label, and permanent roadmap remain synchro
   assert.match(privacy, /Content Security Policy reports/);
   assert.match(privacy, /Temporary technical records use defined expiration periods/);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.9/);
+  assert.match(rootRoadmap, /Version 1\.10/);
   assert.match(rootRoadmap, /# \[x\] S3\.16/);
   assert.match(rootRoadmap, /# \[x\] S3\.20/);
   assert.match(rootRoadmap, /# \[x\] S4\.2/);

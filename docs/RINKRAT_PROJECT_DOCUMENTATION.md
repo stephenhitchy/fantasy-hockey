@@ -1,3 +1,41 @@
+# Beta Operations Batch B1C — Invite-Beta Release Freeze and Rollback Tooling
+
+**Runtime release:** Release Candidate 21 (unchanged)  
+**Scope:** Repository-only release operations that turn the exact deployed RC21 build, launch evidence, security posture, pinned toolchain, Git source revision, and rollback order into one reviewable invite-beta baseline. B1C introduces no Angular, Functions, Firestore Rules, index, scoring, projection, Draft, roster, or transaction behavior change.
+
+## Release-toolchain discipline
+
+B1C makes Node `22.23.1` and npm `11.17.0` explicit release requirements. `npm run toolchain:verify` rejects accidental drift. npm major-version notices are informational until a named maintenance release deliberately changes the `packageManager` pin and reruns the complete suite.
+
+## Exact-build freeze
+
+The release tooling verifies local source controls, the live `rinkratfantasy.com` manifest and security headers, App Check monitor configuration, the `cycle-puck` Hosting mapping, and all nine production Firestore TTL policies. The copied Release Readiness report must match the same live build and show a ready launch gate, complete automated/manual validation, and a passing full-season simulator.
+
+The guarded freeze command also requires explicit confirmation that GitHub CI passed, production queued scoring remains in Shadow, and the rollback procedure was rehearsed. It writes ignored JSON and Markdown records under `.beta-release/`; it never deploys, changes queue mode, creates a Git tag, or writes fantasy data.
+
+The generated tag command points to the source revision recorded in the live RC21 manifest. This is intentionally separate from the newer B1C tooling commit.
+
+## Verification
+
+```bash
+npm run verify:batchb1c
+npm run beta:preflight
+```
+
+## Deployment
+
+No Firebase deployment is required. Commit and push the B1C repository tooling, then complete the RC21 validation/freeze sequence in:
+
+```text
+docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md
+```
+
+## Rollback
+
+B1C does not alter production. Reverting B1C means reverting its repository commit. The frozen rollback plan defaults to Functions then Hosting, with Firestore Rules or indexes restored only when the incident specifically involves those resources.
+
+---
+
 # Beta Operations Batch B1B.1 — Server Scoring Trigger Type Hotfix
 
 **Release:** Release Candidate 21  

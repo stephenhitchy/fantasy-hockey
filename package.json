@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run verify:batchb1b:core && npm run test:batchb1b-1:run && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batchb1b:core && npm run test:batchb1b-1:run && npm run test:batchb1c:run && npm run validate:release-manifest && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -193,7 +193,18 @@
     "test:batchb1b-1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1b-1-functions-duration-type-hotfix/*.test.mjs",
     "preverify:batchb1b-1": "npm run security:sync-repository-automation",
     "verify:batchb1b-1:core": "npm run verify:batchb1b:core && npm run test:batchb1b-1:run && npm run validate:release-manifest",
-    "verify:batchb1b-1": "npm run verify:batchb1b-1:core && npm run security:dependency-audit"
+    "verify:batchb1b-1": "npm run verify:batchb1b-1:core && npm run security:dependency-audit",
+    "toolchain:inspect": "node scripts/release/toolchain-preflight.mjs",
+    "toolchain:verify": "node scripts/release/toolchain-preflight.mjs --strict",
+    "beta:preflight": "node scripts/release/invite-beta-release.mjs preflight",
+    "beta:freeze": "node scripts/release/invite-beta-release.mjs freeze",
+    "beta:verify-tag": "node scripts/release/invite-beta-release.mjs verify-tag",
+    "beta:verify-freeze": "node scripts/release/invite-beta-release.mjs verify-freeze",
+    "beta:rollback-plan": "node scripts/release/invite-beta-release.mjs rollback-plan",
+    "test:batchb1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1c-invite-beta-freeze/*.test.mjs",
+    "preverify:batchb1c": "npm run security:sync-repository-automation",
+    "verify:batchb1c:core": "npm run verify:batchb1b-1:core && npm run test:batchb1c:run && npm run validate:release-manifest",
+    "verify:batchb1c": "npm run toolchain:verify && npm run verify:batchb1c:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
@@ -218,6 +229,7 @@
     "vitest": "^4.0.8"
   },
   "engines": {
-    "node": ">=22.22.3 <23"
+    "node": ">=22.22.3 <23",
+    "npm": "11.17.x"
   }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "automationVersion": 1,
+  "automationVersion": 2,
   "targets": [
     {
       "source": "config/repository-automation/rinkrat-ci.yml",

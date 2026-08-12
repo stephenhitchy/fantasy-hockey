@@ -333,7 +333,7 @@ test('S3A verification, release manifest, permanent roadmap, and package command
   assert.match(packageJson.scripts['security:inspect-auth'], /auth-security-baseline/);
   assert.match(functionsPackageJson.scripts.logs, /getSecurityControlReadiness/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.(?:6(?:\.\d+)?|7(?:\.\d+)?|8|9)/);
+  assert.match(roadmapRootSource, /Version 1\.(?:6(?:\.\d+)?|7(?:\.\d+)?|8|9|1[0-9](?:\.\d+)?)/);
   assert.match(roadmapRootSource, /LOG\.9 .*Security Batch S3A/);
   assert.match(runtimeConfigSource, /Release Candidate \d+/);
   assert.match(productionRuntimeConfigSource, /Release Candidate \d+/);

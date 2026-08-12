@@ -35,6 +35,12 @@ jobs:
             package-lock.json
             functions/package-lock.json
 
+      - name: Install the pinned npm release toolchain
+        run: |
+          npm install --global npm@11.17.0
+          node --version
+          npm --version
+
       - name: Set up Java for Firebase emulators
         uses: actions/setup-java@v5
         with:
