@@ -16,6 +16,13 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
+  BETA_OPERATION_DAILY_RETENTION_MILLISECONDS,
+  addBetaDurationSample,
+  betaOperationsDateKey,
+  betaOperationsShardId,
+  normalizeBetaDurationAccumulator,
+} from './shared/core/observability/beta-operations.util';
+import {
   isSafeFirestoreDocumentId,
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
@@ -2316,6 +2323,53 @@ async function ensureCycleOneStarted(
   return true;
 }
 
+async function recordBetaServerScoringMetric(
+  leagueId: string,
+  trigger: LeagueAutomationTrigger,
+  outcome: 'success' | 'skipped' | 'error',
+  durationMilliseconds: number,
+): Promise<void> {
+  const dateKey = betaOperationsDateKey();
+  const shardId = betaOperationsShardId(leagueId);
+  const reference = db.doc(`betaOperationsDaily/${dateKey}-${shardId}`);
+  const triggerKey = trigger.replace(/[^a-z0-9-]/gi, '').slice(0, 40) || 'unknown';
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const data = snapshot.data() ?? {};
+    const serverScoring = addBetaDurationSample(
+      normalizeBetaDurationAccumulator(data['serverScoring']),
+      durationMilliseconds,
+      outcome,
+    );
+    const byTrigger = data['serverScoringByTrigger'] &&
+      typeof data['serverScoringByTrigger'] === 'object' &&
+      !Array.isArray(data['serverScoringByTrigger'])
+        ? data['serverScoringByTrigger'] as Record<string, unknown>
+        : {};
+    const serverScoringByTrigger = {
+      ...byTrigger,
+      [triggerKey]: addBetaDurationSample(
+        normalizeBetaDurationAccumulator(byTrigger[triggerKey]),
+        durationMilliseconds,
+        outcome,
+      ),
+    };
+
+    transaction.set(reference, {
+      schemaVersion: 1,
+      dateKey,
+      shardId,
+      serverScoring,
+      serverScoringByTrigger,
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(
+        Date.now() + BETA_OPERATION_DAILY_RETENTION_MILLISECONDS,
+      ),
+    }, { merge: true });
+  });
+}
+
 async function runLeagueAutomation(
   leagueId: string,
   force: boolean,
@@ -2338,6 +2392,14 @@ async function runLeagueAutomation(
         });
       });
 
+    const durationMilliseconds = Date.now() - startedAt;
+    await recordBetaServerScoringMetric(
+      leagueId,
+      trigger,
+      'skipped',
+      durationMilliseconds,
+    ).catch(() => undefined);
+
     return {
       leagueId,
       status: 'skipped',
@@ -2346,7 +2408,7 @@ async function runLeagueAutomation(
       publishedSnapshotCount: 0,
       skippedSnapshotCount: 0,
       cycleOneCreated: false,
-      durationMilliseconds: Date.now() - startedAt,
+      durationMilliseconds,
     };
   }
 
@@ -2374,6 +2436,14 @@ async function runLeagueAutomation(
         });
       });
 
+    const durationMilliseconds = Date.now() - startedAt;
+    await recordBetaServerScoringMetric(
+      leagueId,
+      trigger,
+      'skipped',
+      durationMilliseconds,
+    ).catch(() => undefined);
+
     return {
       leagueId,
       status: 'skipped',
@@ -2382,7 +2452,7 @@ async function runLeagueAutomation(
       publishedSnapshotCount: 0,
       skippedSnapshotCount: 0,
       cycleOneCreated: false,
-      durationMilliseconds: Date.now() - startedAt,
+      durationMilliseconds,
       nextRefreshAtMilliseconds: lease.nextRefreshAtMilliseconds,
     };
   }
@@ -2578,11 +2648,13 @@ async function runLeagueAutomation(
       { merge: true },
     );
 
+    const durationMilliseconds = Date.now() - startedAt;
+
     await recordLeagueAutomationSuccess(
       leagueId,
       trigger,
       nextRefreshAtMilliseconds,
-      Date.now() - startedAt,
+      durationMilliseconds,
       publishedSnapshotCount,
       skippedSnapshotCount,
     ).catch((error) => {
@@ -2593,6 +2665,13 @@ async function runLeagueAutomation(
       });
     });
 
+    await recordBetaServerScoringMetric(
+      leagueId,
+      trigger,
+      'success',
+      durationMilliseconds,
+    ).catch(() => undefined);
+
     return {
       leagueId,
       status: 'success',
@@ -2600,7 +2679,7 @@ async function runLeagueAutomation(
       publishedSnapshotCount,
       skippedSnapshotCount,
       cycleOneCreated,
-      durationMilliseconds: Date.now() - startedAt,
+      durationMilliseconds,
       nextRefreshAtMilliseconds,
     };
   } catch (error: unknown) {
@@ -2641,6 +2720,13 @@ async function runLeagueAutomation(
           scheduleError,
         });
       });
+
+    await recordBetaServerScoringMetric(
+      leagueId,
+      trigger,
+      'error',
+      Date.now() - startedAt,
+    ).catch(() => undefined);
 
     throw error;
   }

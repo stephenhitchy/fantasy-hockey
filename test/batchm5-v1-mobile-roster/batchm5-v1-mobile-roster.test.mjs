@@ -352,7 +352,7 @@ test('roster writes block route changes and browser exit until the server operat
   assert.match(freeAgentTemplate, /waits for the secure response or the live roster update/);
 });
 
-test('V1 keeps the readable interface font blocking and defers decorative fonts', async () => {
+test('V1 keeps the readable interface font prioritized and loads decorative fonts without inline handlers', async () => {
   const [index, angular, styles] = await Promise.all([
     read('src/index.html'),
     read('angular.json'),
@@ -360,7 +360,8 @@ test('V1 keeps the readable interface font blocking and defers decorative fonts'
   ]);
 
   assert.match(index, /Barlow\+Condensed[^>]+rel="stylesheet"[^>]+fetchpriority="high"/s);
-  assert.match(index, /Pixelify\+Sans[^>]+media="print"[^>]+onload="this\.media='all'"/s);
+  assert.match(index, /Pixelify\+Sans[^>]+rel="stylesheet"/s);
+  assert.doesNotMatch(index, /onload=/);
   assert.match(index, /<noscript>/);
 
   const config = JSON.parse(angular);

@@ -348,6 +348,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-snapshot.service.ts',
     'shared/core/projection/projection-snapshot-hash.util.ts',
     'security-authority.ts',
+    'security-operations.ts',
     'shared/security/auth-security.util.ts',
 
     // S3B intentionally hardens these public security boundaries.
@@ -367,6 +368,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/security/firestore-document-id.util.ts',
 
     'shared/security/nhl-proxy-security.util.ts',
+    // B1B adds isolated beta evidence and aggregate operations helpers.
+    'beta-operations.ts',
+    'shared/core/observability/beta-operations.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 33,

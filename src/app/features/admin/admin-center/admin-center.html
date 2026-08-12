@@ -1,72 +1,93 @@
-<section class="admin-center-page">
-  <header class="admin-hero">
+<section class="admin-center rr-page-shell">
+  <header class="admin-hero rr-card rr-card--raised rr-card--padded">
     <div>
-      <span class="eyebrow">Platform operations</span>
-      <h1>RinkRat Admin Center</h1>
+      <span class="eyebrow">Platform Administrator</span>
+      <h1>Beta Operations Center</h1>
       <p>
-        Review beta feedback, connect reports to technical errors, and keep track of what has
-        been fixed without opening raw Firestore documents.
+        Turn manager reports and privacy-limited live evidence into one release decision. Triage
+        competition problems first, publish sanitized known issues, and measure the workflows that
+        matter during the first live season.
       </p>
     </div>
-
-    <button type="button" class="secondary-button" [disabled]="refreshing()" (click)="loadInbox(true)">
-      {{ refreshing() ? 'Refreshing…' : 'Refresh Inbox' }}
-    </button>
+    <div class="hero-actions">
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="refreshing()"
+        (click)="loadDashboard(true)"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Refresh Center' }}
+      </button>
+      <a routerLink="/support/known-issues" class="rr-button rr-button--secondary">Public Known Issues</a>
+    </div>
   </header>
-
-  @if (errorMessage()) {
-    <p class="admin-message error" role="alert">{{ errorMessage() }}</p>
-  }
-
-  @if (successMessage()) {
-    <p class="admin-message success" role="status">{{ successMessage() }}</p>
-  }
 
   <app-admin-session-step-up></app-admin-session-step-up>
 
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
   @if (loading()) {
-    <section class="admin-loading" aria-live="polite">
-      <span class="loading-puck" aria-hidden="true"></span>
-      <strong>Loading the platform inbox…</strong>
+    <section class="admin-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Loading beta operations…</strong>
+      <span>Reading reports, error groups, scoring evidence, and queue health.</span>
     </section>
   } @else if (inbox(); as data) {
-    <section class="admin-summary-grid" aria-label="Admin inbox summary">
-      <article>
-        <span>New feedback</span>
-        <strong>{{ data.summary.newFeedbackCount }}</strong>
+    <section class="operations-summary" aria-label="Beta operations summary">
+      <article class="summary-card" data-tone="urgent">
+        <span>Integrity reports</span>
+        <strong>{{ data.summary.integrityFeedbackCount }}</strong>
+        <small>Competition truth and scoring</small>
       </article>
-      <article>
-        <span>Open error groups</span>
+      <article class="summary-card" data-tone="warning">
+        <span>Blocked actions</span>
+        <strong>{{ data.summary.blockerFeedbackCount }}</strong>
+        <small>Draft, roster, waiver, or account</small>
+      </article>
+      <article class="summary-card">
+        <span>Open feedback</span>
+        <strong>{{ data.summary.openFeedbackCount }}</strong>
+        <small>{{ data.summary.newFeedbackCount }} new</small>
+      </article>
+      <article class="summary-card">
+        <span>Error groups</span>
         <strong>{{ data.summary.unresolvedErrorCount }}</strong>
-      </article>
-      <article>
-        <span>Captured errors</span>
-        <strong>{{ data.summary.capturedErrorCount }}</strong>
-      </article>
-      <article>
-        <span>Newest captured release</span>
-        <strong class="release-label">{{ data.releaseLabel }}</strong>
+        <small>{{ data.summary.capturedErrorCount }} captured events</small>
       </article>
     </section>
 
-    <nav class="admin-tabs" aria-label="Admin Center sections">
+    <nav class="admin-tabs" aria-label="Beta Operations sections">
       <button
         type="button"
         [class.active]="activeTab() === 'feedback'"
-        [attr.aria-selected]="activeTab() === 'feedback'"
+        [attr.aria-current]="activeTab() === 'feedback' ? 'page' : null"
         (click)="showTab('feedback')"
       >
-        Feedback Inbox
-        <span>{{ data.summary.totalFeedbackCount }}</span>
+        Feedback Triage
+        <span>{{ data.summary.openFeedbackCount }}</span>
       </button>
       <button
         type="button"
         [class.active]="activeTab() === 'errors'"
-        [attr.aria-selected]="activeTab() === 'errors'"
+        [attr.aria-current]="activeTab() === 'errors' ? 'page' : null"
         (click)="showTab('errors')"
       >
         Error Groups
-        <span>{{ data.summary.totalErrorGroupCount }}</span>
+        <span>{{ data.summary.unresolvedErrorCount }}</span>
+      </button>
+      <button
+        type="button"
+        [class.active]="activeTab() === 'evidence'"
+        [attr.aria-current]="activeTab() === 'evidence' ? 'page' : null"
+        (click)="showTab('evidence')"
+      >
+        Live Evidence
+        <span>{{ operations()?.clientSampleCount ?? 0 }}</span>
       </button>
     </nav>
 
@@ -75,76 +96,136 @@
         <header class="section-heading">
           <div>
             <span class="eyebrow">Manager reports</span>
-            <h2>Feedback Inbox</h2>
-            <p>Reports are newest first. Email is shown only when the manager allowed follow-up.</p>
+            <h2>Structured Beta Triage</h2>
+            <p>
+              Prioritize competition integrity and blocked actions. Public issue text is written
+              separately so private manager details never appear on the known-issues page.
+            </p>
           </div>
         </header>
 
-        <div class="admin-filters">
+        <div class="admin-filters feedback-filters">
           <label>
             <span>Status</span>
             <select [(ngModel)]="feedbackStatusFilter">
-              <option value="open">Open items</option>
+              <option value="open">Open reports</option>
               <option value="all">All statuses</option>
               @for (option of feedbackStatusOptions; track option.value) {
                 <option [value]="option.value">{{ option.label }}</option>
               }
             </select>
           </label>
-
+          <label>
+            <span>Severity</span>
+            <select [(ngModel)]="feedbackSeverityFilter">
+              <option value="all">All severities</option>
+              @for (option of severityOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
           <label>
             <span>Category</span>
             <select [(ngModel)]="feedbackCategoryFilter">
               <option value="all">All categories</option>
-              <option value="bug">Something is broken</option>
-              <option value="confusing">Confusing screen or rule</option>
-              <option value="incorrect-result">Incorrect fantasy result</option>
-              <option value="feature-request">Feature request</option>
-              <option value="account-privacy">Account or privacy</option>
-              <option value="other">Other</option>
+              @for (option of categoryOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
             </select>
           </label>
-
           <label class="search-filter">
             <span>Search</span>
-            <input [(ngModel)]="feedbackSearch" placeholder="Message, page, email, or reference" />
+            <input [(ngModel)]="feedbackSearch" placeholder="Title, report, route, release, or reference" />
           </label>
         </div>
 
-        <p class="result-count">Showing {{ filteredFeedback().length }} feedback reports.</p>
+        <p class="result-count">Showing {{ filteredFeedback().length }} of {{ data.feedback.length }} reports.</p>
 
         <div class="admin-card-list">
           @for (item of filteredFeedback(); track item.feedbackId) {
-            <article class="admin-report-card" [attr.data-status]="item.status">
+            <article
+              class="admin-report-card feedback-card"
+              [attr.data-status]="item.status"
+              [attr.data-severity]="item.severity"
+            >
               <header>
-                <div>
-                  <span class="category-badge">{{ categoryLabel(item.category) }}</span>
-                  <h3>{{ item.message }}</h3>
+                <div class="report-title-block">
+                  <div class="report-badges">
+                    <span class="severity-badge">{{ statusLabel(item.severity) }}</span>
+                    <span class="category-badge">{{ categoryLabel(item.category) }}</span>
+                    @if (item.knownIssueId) {
+                      <span class="public-badge">Public issue</span>
+                    }
+                  </div>
+                  <h3>{{ item.summary }}</h3>
+                  <p>{{ item.message }}</p>
                 </div>
                 <span class="status-badge">{{ statusLabel(item.status) }}</span>
               </header>
 
+              @if (item.expectedResult || item.reproductionSteps) {
+                <div class="report-explanation-grid">
+                  @if (item.expectedResult) {
+                    <section>
+                      <h4>Expected</h4>
+                      <p>{{ item.expectedResult }}</p>
+                    </section>
+                  }
+                  @if (item.reproductionSteps) {
+                    <section>
+                      <h4>Reproduction steps</h4>
+                      <p>{{ item.reproductionSteps }}</p>
+                    </section>
+                  }
+                </div>
+              }
+
               <dl class="report-meta">
-                <div><dt>Submitted</dt><dd>{{ formatDate(item.createdAt) }}</dd></div>
-                <div><dt>Page</dt><dd><code>{{ item.route }}</code></dd></div>
-                <div><dt>Browser</dt><dd>{{ item.browser }}</dd></div>
                 <div><dt>Reference</dt><dd>{{ item.feedbackId.slice(0, 8).toUpperCase() }}</dd></div>
-                @if (item.leagueId) {
-                  <div><dt>League context</dt><dd>{{ item.leagueId }}</dd></div>
+                <div><dt>Reported</dt><dd>{{ formatDate(item.createdAt) }}</dd></div>
+                <div><dt>Release</dt><dd>{{ item.reportedRelease }}</dd></div>
+                <div><dt>Route</dt><dd><code>{{ item.route }}</code></dd></div>
+                <div><dt>Device</dt><dd>{{ item.technicalContext.viewportCategory }} · {{ item.browser }}</dd></div>
+                <div><dt>App Check</dt><dd>Client {{ item.clientAppCheckStatus }} · Server {{ item.serverAppCheckStatus }}</dd></div>
+                @if (item.hasLeagueContext) {
+                  <div><dt>League context</dt><dd>Private ref {{ item.leagueContextReference || 'available' }}</dd></div>
                 }
+                <div><dt>Related errors</dt><dd>{{ item.relatedErrorCount }}</dd></div>
               </dl>
 
-              @if (item.relatedErrorCount > 0) {
-                <aside class="related-error-callout">
-                  <strong>{{ item.relatedErrorCount }} possible related technical error{{ item.relatedErrorCount === 1 ? '' : 's' }}</strong>
-                  <span>{{ item.relatedErrorCategories.join(', ') }}</span>
-                </aside>
+              <button
+                type="button"
+                class="details-button"
+                (click)="toggleFeedbackDetails(item.feedbackId)"
+              >
+                {{ expandedFeedback() === item.feedbackId ? 'Hide technical context' : 'Show technical context' }}
+              </button>
+
+              @if (expandedFeedback() === item.feedbackId) {
+                <section class="technical-details context-details">
+                  <dl>
+                    <div><dt>Online</dt><dd>{{ item.technicalContext.online ? 'Yes' : 'No' }}</dd></div>
+                    <div><dt>Connection</dt><dd>{{ item.technicalContext.connectionType }}</dd></div>
+                    <div><dt>Data saver</dt><dd>{{ item.technicalContext.saveData ? 'On' : 'Off' }}</dd></div>
+                    <div><dt>Listeners</dt><dd>{{ item.technicalContext.listenerCount }}</dd></div>
+                    @if (item.technicalContext.recentAction; as action) {
+                      <div class="wide">
+                        <dt>Recent action</dt>
+                        <dd>{{ action.action }} · {{ action.outcome }} · {{ formatDuration(action.durationMilliseconds) }}</dd>
+                      </div>
+                    }
+                  </dl>
+                  <p>
+                    This context excludes raw league IDs, player IDs, rosters, scores, invite codes,
+                    Firestore documents, and full browsing history.
+                  </p>
+                </section>
               }
 
               @if (item.allowFollowUp) {
                 <div class="follow-up-row">
                   <div>
-                    <span>Follow-up allowed</span>
+                    <span>Follow-up permitted</span>
                     <strong>{{ item.followUpEmail || 'Email unavailable' }}</strong>
                   </div>
                   <button type="button" [disabled]="!item.followUpEmail" (click)="copyEmail(item.followUpEmail)">
@@ -154,50 +235,103 @@
               }
 
               <div class="review-editor">
-                <label>
-                  <span>Status</span>
-                  <select [(ngModel)]="feedbackStatusDraft[item.feedbackId]">
-                    @for (option of feedbackStatusOptions; track option.value) {
-                      <option [value]="option.value">{{ option.label }}</option>
-                    }
-                  </select>
-                </label>
+                <div class="review-grid">
+                  <label>
+                    <span>Status</span>
+                    <select [(ngModel)]="feedbackStatusDraft[item.feedbackId]">
+                      @for (option of feedbackStatusOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>Severity</span>
+                    <select [(ngModel)]="feedbackSeverityDraft[item.feedbackId]">
+                      @for (option of severityOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>Owner</span>
+                    <input [(ngModel)]="feedbackOwnerDraft[item.feedbackId]" maxlength="80" placeholder="Stephen, security, scoring…" />
+                  </label>
+                  <label>
+                    <span>Resolution release</span>
+                    <input [(ngModel)]="feedbackResolutionDraft[item.feedbackId]" maxlength="80" placeholder="RC21 or later" />
+                  </label>
+                  <label class="wide-field">
+                    <span>Duplicate of report ID</span>
+                    <input [(ngModel)]="feedbackDuplicateDraft[item.feedbackId]" maxlength="80" placeholder="Leave blank unless this is a duplicate" />
+                  </label>
+                </div>
 
                 <label class="notes-field">
-                  <span>Private admin notes</span>
+                  <span>Private administrator notes</span>
                   <textarea
                     [(ngModel)]="feedbackNotesDraft[item.feedbackId]"
                     maxlength="2000"
-                    rows="3"
-                    placeholder="What did you find, what should change, or why was this closed?"
+                    rows="4"
+                    placeholder="Cause, reproduction, linked commit, deployment, or reason for deferring."
                   ></textarea>
                 </label>
 
+                <section class="known-issue-editor">
+                  <label class="publish-toggle">
+                    <input type="checkbox" [(ngModel)]="feedbackPublishDraft[item.feedbackId]" />
+                    <span>
+                      <strong>Publish a sanitized known issue</strong>
+                      <small>No manager text is published automatically. Only the public title and summary below appear.</small>
+                    </span>
+                  </label>
+
+                  @if (feedbackPublishDraft[item.feedbackId]) {
+                    <div class="known-issue-grid">
+                      <label>
+                        <span>Public status</span>
+                        <select [(ngModel)]="feedbackKnownIssueStatusDraft[item.feedbackId]">
+                          @for (option of knownIssueStatusOptions; track option.value) {
+                            <option [value]="option.value">{{ option.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        <span>Public title</span>
+                        <input [(ngModel)]="feedbackPublicTitleDraft[item.feedbackId]" maxlength="120" />
+                      </label>
+                      <label class="wide-field">
+                        <span>Public summary</span>
+                        <textarea [(ngModel)]="feedbackPublicSummaryDraft[item.feedbackId]" maxlength="600" rows="3"></textarea>
+                      </label>
+                    </div>
+                  }
+                </section>
+
                 <button
                   type="button"
-                  class="primary-button"
+                  class="primary-button rr-button rr-button--primary"
                   [disabled]="savingId() === item.feedbackId"
                   (click)="saveFeedback(item)"
                 >
-                  {{ savingId() === item.feedbackId ? 'Saving…' : 'Save Review' }}
+                  {{ savingId() === item.feedbackId ? 'Saving Triage…' : 'Save Triage' }}
                 </button>
               </div>
             </article>
           } @empty {
-            <section class="admin-empty-state">
+            <section class="admin-empty-state rr-card rr-card--padded">
               <strong>No feedback matches those filters.</strong>
               <span>Try showing all statuses or clearing the search.</span>
             </section>
           }
         </div>
       </section>
-    } @else {
+    } @else if (activeTab() === 'errors') {
       <section class="admin-section">
         <header class="section-heading">
           <div>
             <span class="eyebrow">Automatic diagnostics</span>
             <h2>Error Groups</h2>
-            <p>Similar browser errors are grouped so one repeated problem does not flood the inbox.</p>
+            <p>Similar browser failures are grouped so repeated symptoms do not flood the beta inbox.</p>
           </div>
         </header>
 
@@ -263,7 +397,7 @@
                 </div>
               }
 
-              <div class="review-editor">
+              <div class="review-editor compact-review">
                 <label>
                   <span>Status</span>
                   <select [(ngModel)]="errorStatusDraft[item.fingerprint]">
@@ -272,9 +406,8 @@
                     }
                   </select>
                 </label>
-
                 <label class="notes-field">
-                  <span>Private admin notes</span>
+                  <span>Private administrator notes</span>
                   <textarea
                     [(ngModel)]="errorNotesDraft[item.fingerprint]"
                     maxlength="2000"
@@ -282,10 +415,9 @@
                     placeholder="Cause, test steps, commit, deployment, or reason for ignoring."
                   ></textarea>
                 </label>
-
                 <button
                   type="button"
-                  class="primary-button"
+                  class="primary-button rr-button rr-button--primary"
                   [disabled]="savingId() === item.fingerprint"
                   (click)="saveErrorReview(item)"
                 >
@@ -294,12 +426,241 @@
               </div>
             </article>
           } @empty {
-            <section class="admin-empty-state">
+            <section class="admin-empty-state rr-card rr-card--padded">
               <strong>No error groups match those filters.</strong>
               <span>That is good news—or the current filters are hiding them.</span>
             </section>
           }
         </div>
+      </section>
+    } @else if (operations(); as evidence) {
+      <section class="admin-section evidence-section">
+        <header class="section-heading evidence-heading">
+          <div>
+            <span class="eyebrow">Privacy-limited production evidence</span>
+            <h2>Live-Season Evidence</h2>
+            <p>
+              These aggregates measure responsiveness and reliability without storing raw manager,
+              league, player, roster, score, or Firestore-document identifiers.
+            </p>
+          </div>
+          <label class="window-picker">
+            <span>Evidence window</span>
+            <select [(ngModel)]="evidenceWindowDays" (change)="refreshEvidenceWindow()">
+              <option [ngValue]="7">Last 7 days</option>
+              <option [ngValue]="14">Last 14 days</option>
+              <option [ngValue]="30">Last 30 days</option>
+            </select>
+          </label>
+        </header>
+
+        <section class="evidence-summary-grid">
+          <article>
+            <span>Client samples</span>
+            <strong>{{ evidence.clientSampleCount }}</strong>
+            <small>{{ evidence.uniqueDailyUserCount }} privacy-limited manager-days</small>
+            @if (evidence.clientSampleLimitReached) {
+              <small>Newest 1,000 samples shown; use a shorter window for complete detail.</small>
+            }
+          </article>
+          <article>
+            <span>Competitive actions</span>
+            <strong>{{ evidence.actionSampleCount }}</strong>
+            <small>{{ evidence.actions.length }} action types</small>
+          </article>
+          <article>
+            <span>Route samples</span>
+            <strong>{{ evidence.routeSampleCount }}</strong>
+            <small>{{ evidence.routes.length }} generalized routes</small>
+          </article>
+          <article>
+            <span>Verified App Check</span>
+            <strong>{{ evidenceCoveragePercent() }}%</strong>
+            <small>{{ evidence.appCheckValidCount }} valid · {{ evidence.appCheckMissingCount }} missing</small>
+          </article>
+          <article>
+            <span>Server scoring runs</span>
+            <strong>{{ evidence.serverScoring.total }}</strong>
+            <small>p95 {{ formatDuration(evidence.serverScoring.p95DurationMilliseconds) }}</small>
+          </article>
+          <article>
+            <span>Queue mode</span>
+            <strong>{{ statusLabel(evidence.queue.mode) }}</strong>
+            <small>{{ evidence.queue.activeTaskCount }}/{{ evidence.queue.maxPendingTasks }} active tasks</small>
+          </article>
+        </section>
+
+        <section class="evidence-panel">
+          <header>
+            <div>
+              <h3>Competitive action responsiveness</h3>
+              <p>Client-side time from submitting an action until server or live-data reconciliation resolves it.</p>
+            </div>
+          </header>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Samples</th>
+                  <th>Success</th>
+                  <th>Average</th>
+                  <th>p95</th>
+                  <th>Maximum</th>
+                  <th>Errors / uncertain</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of evidence.actions; track item.action) {
+                  <tr>
+                    <td><strong>{{ statusLabel(item.action) }}</strong></td>
+                    <td>{{ item.total }}</td>
+                    <td>{{ item.successRatePercent }}%</td>
+                    <td>{{ formatDuration(item.averageDurationMilliseconds) }}</td>
+                    <td>{{ formatDuration(item.p95DurationMilliseconds) }}</td>
+                    <td>{{ formatDuration(item.maximumDurationMilliseconds) }}</td>
+                    <td>{{ item.errors }} / {{ item.uncertain }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="7">No competitive action evidence has been collected in this window yet.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="evidence-panel">
+          <header>
+            <div>
+              <h3>Route readiness and Firestore listener load</h3>
+              <p>Generalized routes only; league, player, matchup, and user identifiers are removed.</p>
+            </div>
+          </header>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Samples</th>
+                  <th>Average ready</th>
+                  <th>p95 ready</th>
+                  <th>Max ready</th>
+                  <th>Avg listeners</th>
+                  <th>Max listeners</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of evidence.routes; track item.route) {
+                  <tr>
+                    <td><code>{{ item.route }}</code></td>
+                    <td>{{ item.total }}</td>
+                    <td>{{ formatDuration(item.averageReadyMilliseconds) }}</td>
+                    <td>{{ formatDuration(item.p95ReadyMilliseconds) }}</td>
+                    <td>{{ formatDuration(item.maximumReadyMilliseconds) }}</td>
+                    <td>{{ item.averageListenerCount }}</td>
+                    <td>{{ item.maximumListenerCount }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="7">No route-readiness evidence has been collected in this window yet.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="evidence-two-column">
+          <section class="evidence-panel">
+            <header>
+              <div>
+                <h3>Server scoring worker</h3>
+                <p>League-level duration aggregated into 16 daily shards.</p>
+              </div>
+            </header>
+            <dl class="metric-list">
+              <div><dt>Total runs</dt><dd>{{ evidence.serverScoring.total }}</dd></div>
+              <div><dt>Successful</dt><dd>{{ evidence.serverScoring.successes }}</dd></div>
+              <div><dt>Skipped</dt><dd>{{ evidence.serverScoring.skipped }}</dd></div>
+              <div><dt>Errors</dt><dd>{{ evidence.serverScoring.errors }}</dd></div>
+              <div><dt>Average</dt><dd>{{ formatDuration(evidence.serverScoring.averageDurationMilliseconds) }}</dd></div>
+              <div><dt>p95</dt><dd>{{ formatDuration(evidence.serverScoring.p95DurationMilliseconds) }}</dd></div>
+              <div><dt>Maximum</dt><dd>{{ formatDuration(evidence.serverScoring.maximumDurationMilliseconds) }}</dd></div>
+            </dl>
+            @if (evidence.serverScoring.byTrigger.length) {
+              <div class="mini-table">
+                @for (item of evidence.serverScoring.byTrigger; track item.trigger) {
+                  <div>
+                    <span>{{ statusLabel(item.trigger) }}</span>
+                    <strong>{{ item.total }} · p95 {{ formatDuration(item.p95DurationMilliseconds) }}</strong>
+                  </div>
+                }
+              </div>
+            }
+          </section>
+
+          <section class="evidence-panel">
+            <header>
+              <div>
+                <h3>Automation health</h3>
+                <p>Queue and Draft recovery signals for the current project.</p>
+              </div>
+            </header>
+            <dl class="metric-list">
+              <div><dt>Queue dispatcher</dt><dd>{{ statusLabel(evidence.queue.dispatcherStatus) }}</dd></div>
+              <div><dt>Schedules</dt><dd>{{ evidence.queue.scheduleCount }}</dd></div>
+              <div><dt>Overdue schedules</dt><dd>{{ evidence.queue.overdueScheduleCount }}</dd></div>
+              <div><dt>Failed legacy leagues</dt><dd>{{ evidence.queue.failedLeagueCount }}</dd></div>
+              <div><dt>Draft automation</dt><dd>{{ statusLabel(evidence.draftAutomation.status) }}</dd></div>
+              <div><dt>Draft run duration</dt><dd>{{ formatDuration(evidence.draftAutomation.durationMilliseconds) }}</dd></div>
+              <div><dt>Failed Drafts</dt><dd>{{ evidence.draftAutomation.failedDraftCount }}</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="evidence-panel">
+          <header>
+            <div>
+              <h3>Evidence coverage</h3>
+              <p>Use this to spot unsupported browsers, device concentrations, and stale releases.</p>
+            </div>
+          </header>
+          <div class="coverage-grid">
+            <section>
+              <h4>Browsers</h4>
+              @for (item of evidence.browsers; track item.name) {
+                <div><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>
+              } @empty { <p>No samples yet.</p> }
+            </section>
+            <section>
+              <h4>Device classes</h4>
+              @for (item of evidence.devices; track item.name) {
+                <div><span>{{ statusLabel(item.name) }}</span><strong>{{ item.count }}</strong></div>
+              } @empty { <p>No samples yet.</p> }
+            </section>
+            <section>
+              <h4>Builds</h4>
+              @for (item of evidence.builds; track item.name) {
+                <div><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>
+              } @empty { <p>No samples yet.</p> }
+            </section>
+            <section>
+              <h4>Known issues</h4>
+              <div><span>Investigating</span><strong>{{ evidence.knownIssueSummary.investigating }}</strong></div>
+              <div><span>Fix prepared</span><strong>{{ evidence.knownIssueSummary.fixPrepared }}</strong></div>
+              <div><span>Monitoring</span><strong>{{ evidence.knownIssueSummary.monitoring }}</strong></div>
+              <div><span>Resolved</span><strong>{{ evidence.knownIssueSummary.resolved }}</strong></div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="evidence-notice rr-notice rr-notice--info">
+          <strong>Scoring freshness</strong>
+          <span>{{ evidence.scoringFreshnessMessage }}</span>
+        </aside>
+
+        <footer class="evidence-footer">
+          <span>Window {{ evidence.dateFrom }} through {{ evidence.dateTo }} · generated {{ formatDate(evidence.generatedAt) }}</span>
+          <span>Raw evidence expires after 90 days; daily aggregate evidence expires after 180 days.</span>
+        </footer>
       </section>
     }
 

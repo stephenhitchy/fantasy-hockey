@@ -8,6 +8,7 @@ import {
 } from '@angular/router';
 import { Subscription } from 'rxjs';
 
+import { BetaOperationsService } from '../beta-operations/beta-operations.service';
 import { ClientHealthService } from './client-health.service';
 import type { ClientConnectionSnapshot } from './client-health.service';
 import {
@@ -84,6 +85,7 @@ export class ClientPerformanceMonitorService implements OnDestroy {
   constructor(
     private readonly telemetry: TelemetryService,
     private readonly clientHealth: ClientHealthService,
+    private readonly betaOperations: BetaOperationsService,
   ) {}
 
   start(router: Router): void {
@@ -205,6 +207,11 @@ export class ClientPerformanceMonitorService implements OnDestroy {
           online: this.clientHealth.online(),
           connection_type: this.clientHealth.effectiveConnectionType(),
         });
+        this.betaOperations.recordRouteReady(
+          route,
+          roundMetric(duration) ?? 0,
+          listenerSnapshot.total,
+        );
 
         if (
           isClientHealthMonitorEnabled() &&

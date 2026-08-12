@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "database": "(default)",
+  "field": "expiresAt",
+  "policies": [
+    {
+      "collectionGroup": "clientErrorReports",
+      "retention": "90 days",
+      "reason": "Privacy-limited browser error diagnostics"
+    },
+    {
+      "collectionGroup": "feedbackReports",
+      "retention": "365 days",
+      "reason": "Manager feedback and follow-up workflow"
+    },
+    {
+      "collectionGroup": "projectionGenerationRequests",
+      "retention": "7 days",
+      "reason": "Temporary server projection-generation request state"
+    },
+    {
+      "collectionGroup": "leagueAutomationTasks",
+      "retention": "7 days",
+      "reason": "Temporary queued live-scoring task history"
+    },
+    {
+      "collectionGroup": "leagueCreationRequests",
+      "retention": "30 days",
+      "reason": "Idempotent league-creation request results"
+    },
+    {
+      "collectionGroup": "leagueJoinRequests",
+      "retention": "30 days",
+      "reason": "Idempotent league-join request and abuse-throttle state"
+    },
+    {
+      "collectionGroup": "cspViolationReports",
+      "retention": "30 days",
+      "reason": "Privacy-limited Content Security Policy report-only observations"
+    },
+    {
+      "collectionGroup": "betaEvidenceEvents",
+      "retention": "90 days",
+      "reason": "Privacy-limited raw beta performance and action evidence"
+    },
+    {
+      "collectionGroup": "betaOperationsDaily",
+      "retention": "180 days",
+      "reason": "Aggregated live-season operational evidence without raw manager identifiers"
+    }
+  ]
+}

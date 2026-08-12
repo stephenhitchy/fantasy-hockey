@@ -276,6 +276,7 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'package.json',
         'scripts/auth-security-baseline.cjs',
         'src/security-authority.ts',
+        'src/security-operations.ts',
         'src/shared/security/auth-security.util.ts',
         // S3B intentionally hardens these public security boundaries.
         'src/email-notifications.ts',
@@ -287,6 +288,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/security/firestore-document-id-core.util.ts',
         'src/shared/security/firestore-document-id.util.ts',
         'src/shared/security/nhl-proxy-security.util.ts',
+        // B1B adds isolated beta evidence and aggregate operations helpers.
+        'src/beta-operations.ts',
+        'src/shared/core/observability/beta-operations.util.ts',
       ]),
     ),
     '2a1fb1e2cb40222f626de6b2abb39a0e58a9e4d6d7c2cb3897bd36313fcbbff8',

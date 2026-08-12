@@ -7,9 +7,15 @@ import {
   AdminFeedbackItem,
   AdminInboxData,
   ErrorAdminStatus,
-  FeedbackAdminStatus,
   PlatformAdminService,
 } from '../../../core/admin/platform-admin.service';
+import type {
+  BetaFeedbackCategory,
+  BetaFeedbackStatus,
+  BetaKnownIssueStatus,
+  BetaOperationsOverview,
+  BetaTriageSeverity,
+} from '../../../core/beta-operations/beta-operations.models';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { AdminSessionStepUp } from '../../../shared/admin-session-step-up/admin-session-step-up';
 
@@ -27,22 +33,52 @@ export class AdminCenter {
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
   readonly inbox = signal<AdminInboxData | null>(null);
-  readonly activeTab = signal<'feedback' | 'errors'>('feedback');
+  readonly operations = signal<BetaOperationsOverview | null>(null);
+  readonly activeTab = signal<'feedback' | 'errors' | 'evidence'>('feedback');
   readonly expandedError = signal('');
+  readonly expandedFeedback = signal('');
 
   feedbackStatusFilter = 'open';
+  feedbackSeverityFilter = 'all';
   feedbackCategoryFilter = 'all';
   feedbackSearch = '';
   errorStatusFilter = 'open';
   errorSearch = '';
+  evidenceWindowDays = 14;
 
-  readonly feedbackStatusOptions: Array<{ value: FeedbackAdminStatus; label: string }> = [
+  readonly feedbackStatusOptions: Array<{ value: BetaFeedbackStatus; label: string }> = [
     { value: 'new', label: 'New' },
-    { value: 'reviewing', label: 'Reviewing' },
-    { value: 'planned', label: 'Planned' },
-    { value: 'in-progress', label: 'In progress' },
+    { value: 'investigating', label: 'Investigating' },
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'fix-next-release', label: 'Fix in next release' },
     { value: 'resolved', label: 'Resolved' },
-    { value: 'not-planned', label: 'Not planned' },
+    { value: 'not-reproducible', label: 'Not reproducible' },
+    { value: 'deferred', label: 'Deferred' },
+  ];
+
+  readonly severityOptions: Array<{ value: BetaTriageSeverity; label: string }> = [
+    { value: 'integrity', label: 'Competition integrity' },
+    { value: 'blocker', label: 'Blocked action' },
+    { value: 'serious', label: 'Serious usability' },
+    { value: 'cosmetic', label: 'Cosmetic' },
+    { value: 'idea', label: 'Idea' },
+  ];
+
+  readonly categoryOptions: Array<{ value: BetaFeedbackCategory; label: string }> = [
+    { value: 'competition-integrity', label: 'Competition integrity' },
+    { value: 'blocked-action', label: 'Blocked action' },
+    { value: 'serious-usability', label: 'Serious usability' },
+    { value: 'cosmetic', label: 'Cosmetic' },
+    { value: 'feature-idea', label: 'Feature idea' },
+    { value: 'account-privacy', label: 'Account or privacy' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  readonly knownIssueStatusOptions: Array<{ value: BetaKnownIssueStatus; label: string }> = [
+    { value: 'investigating', label: 'Under investigation' },
+    { value: 'fix-prepared', label: 'Fix prepared' },
+    { value: 'monitoring', label: 'Monitoring after fix' },
+    { value: 'resolved', label: 'Resolved' },
   ];
 
   readonly errorStatusOptions: Array<{ value: ErrorAdminStatus; label: string }> = [
@@ -52,10 +88,25 @@ export class AdminCenter {
     { value: 'ignored', label: 'Ignored' },
   ];
 
-  readonly feedbackStatusDraft: Record<string, FeedbackAdminStatus> = {};
+  readonly feedbackStatusDraft: Record<string, BetaFeedbackStatus> = {};
+  readonly feedbackSeverityDraft: Record<string, BetaTriageSeverity> = {};
+  readonly feedbackOwnerDraft: Record<string, string> = {};
+  readonly feedbackDuplicateDraft: Record<string, string> = {};
+  readonly feedbackResolutionDraft: Record<string, string> = {};
   readonly feedbackNotesDraft: Record<string, string> = {};
+  readonly feedbackPublishDraft: Record<string, boolean> = {};
+  readonly feedbackKnownIssueStatusDraft: Record<string, BetaKnownIssueStatus> = {};
+  readonly feedbackPublicTitleDraft: Record<string, string> = {};
+  readonly feedbackPublicSummaryDraft: Record<string, string> = {};
   readonly errorStatusDraft: Record<string, ErrorAdminStatus> = {};
   readonly errorNotesDraft: Record<string, string> = {};
+
+  constructor(
+    private readonly platformAdmin: PlatformAdminService,
+    private readonly telemetry: TelemetryService,
+  ) {
+    void this.loadDashboard();
+  }
 
   filteredFeedback(): AdminFeedbackItem[] {
     const search = this.feedbackSearch.trim().toLowerCase();
@@ -64,18 +115,22 @@ export class AdminCenter {
       const statusMatches =
         this.feedbackStatusFilter === 'all' ||
         (this.feedbackStatusFilter === 'open'
-          ? !['resolved', 'not-planned'].includes(item.status)
+          ? !['resolved', 'not-reproducible', 'deferred'].includes(item.status)
           : item.status === this.feedbackStatusFilter);
+      const severityMatches =
+        this.feedbackSeverityFilter === 'all' || item.severity === this.feedbackSeverityFilter;
       const categoryMatches =
         this.feedbackCategoryFilter === 'all' || item.category === this.feedbackCategoryFilter;
       const searchMatches =
         !search ||
+        item.summary.toLowerCase().includes(search) ||
         item.message.toLowerCase().includes(search) ||
         item.route.toLowerCase().includes(search) ||
         item.feedbackId.toLowerCase().includes(search) ||
+        item.reportedRelease.toLowerCase().includes(search) ||
         (item.followUpEmail ?? '').toLowerCase().includes(search);
 
-      return statusMatches && categoryMatches && searchMatches;
+      return statusMatches && severityMatches && categoryMatches && searchMatches;
     });
   }
 
@@ -99,14 +154,7 @@ export class AdminCenter {
     });
   }
 
-  constructor(
-    private readonly platformAdmin: PlatformAdminService,
-    private readonly telemetry: TelemetryService,
-  ) {
-    void this.loadInbox();
-  }
-
-  async loadInbox(refresh = false): Promise<void> {
+  async loadDashboard(refresh = false): Promise<void> {
     if (this.refreshing()) {
       return;
     }
@@ -121,22 +169,43 @@ export class AdminCenter {
     this.successMessage.set('');
 
     try {
-      const inbox = await this.platformAdmin.loadInbox();
+      const [inbox, operations] = await Promise.all([
+        this.platformAdmin.loadInbox(),
+        this.platformAdmin.loadBetaOperations(this.evidenceWindowDays),
+      ]);
       this.inbox.set(inbox);
+      this.operations.set(operations);
       this.initializeDrafts(inbox);
-      this.telemetry.track('admin_inbox_opened', {
+      this.telemetry.track('admin_beta_operations_opened', {
         feedback_count: inbox.summary.totalFeedbackCount,
         error_group_count: inbox.summary.totalErrorGroupCount,
+        action_sample_count: operations.actionSampleCount,
+        route_sample_count: operations.routeSampleCount,
       });
     } catch (error: unknown) {
-      this.errorMessage.set(this.friendlyError(error, 'Unable to load the Admin Center inbox.'));
+      this.errorMessage.set(this.friendlyError(error, 'Unable to load the Beta Operations Center.'));
     } finally {
       this.loading.set(false);
       this.refreshing.set(false);
     }
   }
 
-  showTab(tab: 'feedback' | 'errors'): void {
+  async refreshEvidenceWindow(): Promise<void> {
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      this.refreshing.set(true);
+      this.operations.set(await this.platformAdmin.loadBetaOperations(this.evidenceWindowDays));
+      this.successMessage.set(`Live evidence refreshed for the last ${this.evidenceWindowDays} days.`);
+    } catch (error: unknown) {
+      this.errorMessage.set(this.friendlyError(error, 'Unable to refresh live-season evidence.'));
+    } finally {
+      this.refreshing.set(false);
+    }
+  }
+
+  showTab(tab: 'feedback' | 'errors' | 'evidence'): void {
     this.activeTab.set(tab);
     this.successMessage.set('');
   }
@@ -151,15 +220,39 @@ export class AdminCenter {
     this.successMessage.set('');
 
     try {
-      const status = this.feedbackStatusDraft[item.feedbackId] ?? item.status;
-      const notes = this.feedbackNotesDraft[item.feedbackId] ?? '';
-      await this.platformAdmin.updateFeedback(item.feedbackId, status, notes);
-      item.status = status;
-      item.adminNotes = notes;
-      this.inbox.update((current) => (current ? { ...current, feedback: [...current.feedback] } : current));
-      this.successMessage.set(`Feedback ${item.feedbackId.slice(0, 8).toUpperCase()} was updated.`);
+      const update = {
+        feedbackId: item.feedbackId,
+        status: this.feedbackStatusDraft[item.feedbackId] ?? item.status,
+        severity: this.feedbackSeverityDraft[item.feedbackId] ?? item.severity,
+        owner: (this.feedbackOwnerDraft[item.feedbackId] ?? '').trim(),
+        duplicateOf: (this.feedbackDuplicateDraft[item.feedbackId] ?? '').trim(),
+        resolutionRelease: (this.feedbackResolutionDraft[item.feedbackId] ?? '').trim(),
+        adminNotes: this.feedbackNotesDraft[item.feedbackId] ?? '',
+        publishKnownIssue: this.feedbackPublishDraft[item.feedbackId] === true,
+        knownIssueStatus:
+          this.feedbackKnownIssueStatusDraft[item.feedbackId] ?? 'investigating',
+        publicTitle: this.feedbackPublicTitleDraft[item.feedbackId] ?? '',
+        publicSummary: this.feedbackPublicSummaryDraft[item.feedbackId] ?? '',
+      } as const;
+
+      await this.platformAdmin.updateBetaFeedbackTriage(update);
+      item.status = update.status;
+      item.severity = update.severity;
+      item.owner = update.owner;
+      item.duplicateOf = update.duplicateOf;
+      item.resolutionRelease = update.resolutionRelease;
+      item.adminNotes = update.adminNotes;
+      item.knownIssueId = update.publishKnownIssue ? item.feedbackId : '';
+      item.knownIssueStatus = update.publishKnownIssue ? update.knownIssueStatus : '';
+      item.publicTitle = update.publishKnownIssue ? update.publicTitle : '';
+      item.publicSummary = update.publishKnownIssue ? update.publicSummary : '';
+      this.inbox.update((current) =>
+        current ? { ...current, feedback: [...current.feedback] } : current,
+      );
+      this.successMessage.set(`Report ${item.feedbackId.slice(0, 8).toUpperCase()} was updated.`);
+      this.operations.set(await this.platformAdmin.loadBetaOperations(this.evidenceWindowDays));
     } catch (error: unknown) {
-      this.errorMessage.set(this.friendlyError(error, 'Unable to update that feedback report.'));
+      this.errorMessage.set(this.friendlyError(error, 'Unable to update that beta report.'));
     } finally {
       this.savingId.set('');
     }
@@ -195,10 +288,12 @@ export class AdminCenter {
     this.expandedError.update((current) => (current === fingerprint ? '' : fingerprint));
   }
 
+  toggleFeedbackDetails(feedbackId: string): void {
+    this.expandedFeedback.update((current) => (current === feedbackId ? '' : feedbackId));
+  }
+
   async copyEmail(email: string | null): Promise<void> {
-    if (!email) {
-      return;
-    }
+    if (!email) return;
 
     try {
       await navigator.clipboard.writeText(email);
@@ -209,13 +304,11 @@ export class AdminCenter {
   }
 
   formatDate(value: string | null): string {
-    if (!value) {
-      return 'Unknown time';
-    }
+    if (!value) return 'Not recorded';
 
     const date = new Date(value);
     return Number.isNaN(date.getTime())
-      ? 'Unknown time'
+      ? 'Not recorded'
       : new Intl.DateTimeFormat('en-US', {
           month: 'short',
           day: 'numeric',
@@ -225,27 +318,50 @@ export class AdminCenter {
         }).format(date);
   }
 
+  formatDuration(milliseconds: number): string {
+    const value = Math.max(0, Math.round(milliseconds));
+    if (value < 1_000) return `${value} ms`;
+    if (value < 60_000) return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
+    return `${(value / 60_000).toFixed(1)} min`;
+  }
+
   categoryLabel(category: string): string {
     const labels: Record<string, string> = {
-      bug: 'Something is broken',
-      confusing: 'Confusing screen or rule',
-      'incorrect-result': 'Incorrect fantasy result',
-      'feature-request': 'Feature request',
+      'competition-integrity': 'Competition integrity',
+      'blocked-action': 'Blocked action',
+      'serious-usability': 'Serious usability',
+      cosmetic: 'Cosmetic',
+      'feature-idea': 'Feature idea',
       'account-privacy': 'Account or privacy',
       other: 'Other',
     };
-
-    return labels[category] ?? category;
+    return labels[category] ?? this.statusLabel(category);
   }
 
   statusLabel(status: string): string {
     return status.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+  evidenceCoveragePercent(): number {
+    const data = this.operations();
+    if (!data) return 0;
+    const total = data.appCheckValidCount + data.appCheckMissingCount;
+    return total > 0 ? Math.round((data.appCheckValidCount / total) * 100) : 0;
+  }
+
   private initializeDrafts(inbox: AdminInboxData): void {
     for (const item of inbox.feedback) {
       this.feedbackStatusDraft[item.feedbackId] = item.status;
+      this.feedbackSeverityDraft[item.feedbackId] = item.severity;
+      this.feedbackOwnerDraft[item.feedbackId] = item.owner ?? '';
+      this.feedbackDuplicateDraft[item.feedbackId] = item.duplicateOf ?? '';
+      this.feedbackResolutionDraft[item.feedbackId] = item.resolutionRelease ?? '';
       this.feedbackNotesDraft[item.feedbackId] = item.adminNotes ?? '';
+      this.feedbackPublishDraft[item.feedbackId] = Boolean(item.knownIssueId);
+      this.feedbackKnownIssueStatusDraft[item.feedbackId] =
+        item.knownIssueStatus || 'investigating';
+      this.feedbackPublicTitleDraft[item.feedbackId] = item.publicTitle || item.summary;
+      this.feedbackPublicSummaryDraft[item.feedbackId] = item.publicSummary || item.message;
     }
 
     for (const item of inbox.errorGroups) {
@@ -263,10 +379,13 @@ export class AdminCenter {
     }
 
     if (code.includes('unauthenticated')) {
-      return 'Your login session expired. Sign in again before opening the Admin Center.';
+      return 'Your login session expired. Sign in again before opening Beta Operations.';
     }
 
-    if (code.includes('failed-precondition') && String(candidate.message ?? '').includes('current password')) {
+    if (
+      code.includes('failed-precondition') &&
+      String(candidate.message ?? '').includes('current password')
+    ) {
       return 'Unlock protected administrator actions with your current password, then try again.';
     }
 

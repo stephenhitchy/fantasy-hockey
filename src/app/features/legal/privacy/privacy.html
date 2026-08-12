@@ -3,7 +3,7 @@
   <article class="legal-card rr-card rr-card--raised rr-card--padded">
     <span class="eyebrow">RinkRat Fantasy</span>
     <h1>Privacy Policy</h1>
-    <p class="legal-updated">Last updated: July 2026</p>
+    <p class="legal-updated">Last updated: August 2026</p>
 
     <section>
       <h2>What RinkRat stores</h2>
@@ -18,16 +18,24 @@
     <section>
       <h2>Analytics and diagnostics</h2>
       <p>RinkRat may collect privacy-conscious usage events such as page type, feature usage, device category, and generalized error categories. Analytics events do not intentionally include league names, invite codes, player search text, email addresses, or free-form messages. Error reports may include your account identifier, a generalized route, browser details, and a sanitized technical error message so problems can be diagnosed.</p>
+      <p>Content Security Policy reports may record a generalized RinkRat page path, the blocked resource origin, the affected browser directive, and limited line or status information. Query strings, fragments, script samples, raw IP addresses, and user-agent strings are not stored in these reports.</p>
+      <p>During the invite beta, RinkRat may collect privacy-limited operational evidence such as a generalized route, device and browser category, connection state, App Check status, Firestore listener count, competitive-action type, result, and duration. Raw league IDs, player IDs, matchup IDs, roster contents, fantasy scores, invite codes, email addresses, and raw Firestore documents are excluded. A daily rotating manager hash is used only to estimate participation without keeping a stable identity inside the evidence collection.</p>
+      <p>Known issues shown publicly are written and approved by a platform administrator. A manager's private report, account email, reproduction notes, and technical context are never published automatically.</p>
     </section>
 
     <section>
       <h2>Service providers</h2>
-      <p>RinkRat uses Google Firebase services for authentication, database storage, hosting, server functions, analytics, and related infrastructure. Hockey data may be retrieved from public NHL and ESPN data endpoints through RinkRat's server-side proxy.</p>
+      <p>RinkRat uses Google Firebase services for authentication, database storage, hosting, server functions, analytics, App Check, and related infrastructure. Firebase App Check uses an invisible reCAPTCHA Enterprise assessment to help distinguish the legitimate RinkRat web client from automated abuse. Hockey data may be retrieved from public NHL and ESPN data endpoints through RinkRat's server-side proxy.</p>
     </section>
 
     <section>
       <h2>Email and notifications</h2>
       <p>Email injury alerts and similar notifications are optional. You can disable them in Account Settings. Transactional security messages, such as verification and password-reset emails, may still be sent when requested.</p>
+    </section>
+
+    <section>
+      <h2>Retention and deletion</h2>
+      <p>Temporary technical records use defined expiration periods. Projection-generation and scoring-task request records are generally kept for 7 days, league creation and join request records for 30 days, Content Security Policy reports for 30 days, client error reports and raw beta evidence for 90 days, aggregated beta operations evidence for 180 days, and support feedback for up to 365 days. Scheduled cleanup and Firestore expiration policies remove eligible records after their retention period; deletion may not be immediate at the exact expiration time.</p>
     </section>
 
     <section>

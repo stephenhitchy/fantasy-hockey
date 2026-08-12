@@ -37,6 +37,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'support/known-issues',
+    title: 'Known Issues',
+    loadComponent: () =>
+      import('./features/support/known-issues/known-issues').then(
+        (module) => module.KnownIssuesPage,
+      ),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authChildGuard],

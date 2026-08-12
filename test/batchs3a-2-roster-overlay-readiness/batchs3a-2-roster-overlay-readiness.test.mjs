@@ -116,7 +116,7 @@ test('S3A.2 verification, documentation, release label, and permanent roadmap st
   assert.match(packageJson.scripts['verify:batchs3a-2'], /verify:batchs3a-1/);
   assert.match(packageJson.scripts['verify:batchs3a-2'], /test:batchs3a-2:run/);
   assert.match(packageJson.scripts['verify:batchs3a-2'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3A\.2|Security S3B(?:\.\d+)?|Onboarding Batch B1A)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3A\.2|Security S3B(?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Beta Operations Batch B1B)/);
   assert.match(documentationSource, /Security Batch S3A\.2 — Roster Overlay Teardown and Readiness Recovery/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
   assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);

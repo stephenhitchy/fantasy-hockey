@@ -84,7 +84,37 @@ export interface SecurityControlReadinessResult {
     factorIds: string[];
     providerCount: number;
   };
+  securityOperations: {
+    available: boolean;
+    retentionCleanupStatus: string;
+    retentionCleanupLastCompletedAt: string | null;
+    retentionCleanupDeletedCount: number;
+    retentionCleanupFailureCount: number;
+    cspReportReceivedCount: number;
+    cspReportLastReceivedAt: string | null;
+  };
   configurationError: string | null;
+}
+
+
+function timestampIso(value: unknown): string | null {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  }
+
+  return null;
+}
+
+function safeCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
 }
 
 export const getSecurityControlReadiness = onCall(
@@ -118,6 +148,8 @@ export const getSecurityControlReadiness = onCall(
     const multiFactor = projectConfig?.multiFactorConfig;
     const factorIds = (multiFactor?.factorIds ?? []).map((factorId) => String(factorId));
     const providerCount = multiFactor?.providerConfigs?.length ?? 0;
+    const securityOperationsSnapshot = await db.doc('appData/securityOperations').get();
+    const securityOperationsData = securityOperationsSnapshot.data() ?? {};
 
     return {
       generatedAt: new Date().toISOString(),
@@ -147,6 +179,27 @@ export const getSecurityControlReadiness = onCall(
         state: String(multiFactor?.state ?? 'DISABLED'),
         factorIds,
         providerCount,
+      },
+      securityOperations: {
+        available: securityOperationsSnapshot.exists,
+        retentionCleanupStatus: String(
+          securityOperationsData['retentionCleanupStatus'] ?? 'not-run',
+        ),
+        retentionCleanupLastCompletedAt: timestampIso(
+          securityOperationsData['retentionCleanupLastCompletedAt'],
+        ),
+        retentionCleanupDeletedCount: safeCount(
+          securityOperationsData['retentionCleanupDeletedCount'],
+        ),
+        retentionCleanupFailureCount: safeCount(
+          securityOperationsData['retentionCleanupFailureCount'],
+        ),
+        cspReportReceivedCount: safeCount(
+          securityOperationsData['cspReportReceivedCount'],
+        ),
+        cspReportLastReceivedAt: timestampIso(
+          securityOperationsData['cspReportLastReceivedAt'],
+        ),
       },
       configurationError,
     };

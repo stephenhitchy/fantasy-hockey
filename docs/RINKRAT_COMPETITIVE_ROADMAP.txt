@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.7.2
+Version 1.9.1
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,7 +48,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, the enforced password policy, shared path validation, and first NHL proxy abuse controls are implemented; finish supported-browser monitoring, complete distributed NHL ingestion/rate protection, then continue with S3C CI and browser security. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, shared path validation, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; finish supported-browser monitoring, App Check enforcement gates, the remaining internal-ID audit, and distributed NHL ingestion/rate protection. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations Center is implemented; freeze RC21, finish the exact-build launch gate, rehearse rollback, and begin the observed first-season beta before adding broad social or trade features. (P0 / L)
 
 ================================================================================
 NORTH STAR
@@ -244,18 +245,18 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 [~] S3.15 Add proxy rate monitoring, abuse limits, and alerts. (P0 / M)
     S3B adds App Check-aware per-instance requester/global limits, HTTP 429 recovery guidance, structured logs, and privacy-limited Firestore health counters. Distributed cross-instance limiting and operational alert thresholds remain with S3.14/S3C scale operations.
 
-[ ] S3.16 Add GitHub Actions for clean installs, Angular build, Functions build, emulator rules tests, regression tests, release manifest checks, and security audits. (P0 / L)
-[ ] S3.17 Add Dependabot or Renovate with controlled update policies. (P1 / M)
-[ ] S3.18 Add secret scanning and block accidental service-account/private-key commits. (P0 / S)
-[ ] S3.19 Add npm production dependency audits for root and Functions. (P0 / S)
-[ ] S3.20 Add a dependency update and emergency-patch runbook. (P1 / S)
+# [x] S3.16 Add GitHub Actions for clean installs, Angular build, Functions build, emulator rules tests, regression tests, release manifest checks, and security audits. (P0 / L) — Completed 2026-08-11 in Security Batch S3C with Node 22.23.1, Java 21, Firebase Emulator, the full inherited verification chain, and short-lived security-report artifacts, plus visible macOS recovery templates that restore missing `.github` and `.nvmrc` files before verification.
+# [x] S3.17 Add Dependabot or Renovate with controlled update policies. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with separate browser, Functions, and GitHub Actions schedules, grouped minor/patch updates, and manual major-version gates.
+# [x] S3.18 Add secret scanning and block accidental service-account/private-key commits. (P0 / S) — Completed 2026-08-11 in Security Batch S3C with a dependency-free scanner for private keys, service accounts, OAuth secrets, cloud tokens, and provider credentials while recognizing only the expected public Firebase/App Check browser identifiers.
+# [x] S3.19 Add npm production dependency audits for root and Functions. (P0 / S) — Completed 2026-08-11 in Security Batch S3C with local advisory mode, strict CI mode, high/critical production thresholds, and downloadable JSON reports.
+# [x] S3.20 Add a dependency update and emergency-patch runbook. (P1 / S) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
 
 PHASE S3 EXIT CHECKLIST:
 
 [ ] S3.G1 Legitimate production traffic shows a healthy App Check verification rate.
 [ ] S3.G2 Expensive callables reject missing/invalid App Check tokens after enforcement.
 [ ] S3.G3 No supported browser workflow is broken by enforcement.
-[ ] S3.G4 Every pull request/build runs security and emulator checks automatically.
+[~] S3.G4 Every pull request/build runs security and emulator checks automatically. — Workflow implemented in S3C; complete after the first GitHub pull-request and main-branch runs pass.
 [ ] S3.G5 Platform-admin access has stronger authentication than an ordinary manager account.
 
 ================================================================================
@@ -264,15 +265,15 @@ Goal: Reach a public-facing browser and data-protection standard comparable to e
 ================================================================================
 
 [ ] S4.1 Self-host critical fonts/assets needed for a strict Content Security Policy. (P1 / M)
-[ ] S4.2 Deploy CSP in report-only mode. (P1 / M)
-[ ] S4.3 Review and fix all valid CSP violations. (P1 / M)
+# [x] S4.2 Deploy CSP in report-only mode. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with same-origin defaults, constrained Google/Firebase/reCAPTCHA/NHL sources, Trusted Types preparation, privacy-limited reporting, and no blocking enforcement.
+[~] S4.3 Review and fix all valid CSP violations. (P1 / M) — CSP telemetry and grouping are implemented in S3C; complete after supported browser workflows generate and clear real production reports.
 [ ] S4.4 Enforce CSP and Angular-compatible Trusted Types. (P1 / L)
-[ ] S4.5 Verify HSTS on the live domain and add it explicitly when appropriate. (P1 / S)
+# [x] S4.5 Verify HSTS on the live domain and add it explicitly when appropriate. (P1 / S) — Completed 2026-08-11 after the production custom-domain security-header audit passed. One-year apex HSTS is active; includeSubDomains remains intentionally off until www is resolved.
 [ ] S4.6 Fix, redirect, or remove www.rinkratfantasy.com. (P1 / S)
-[ ] S4.7 Verify TTL policies or scheduled cleanup for feedback, error reports, queue/task audit records, and temporary diagnostics. (P1 / M)
-[ ] S4.8 Add privacy documentation for stored diagnostics, retention, deletion, and exported reports. (P1 / M)
+# [x] S4.7 Verify TTL policies or scheduled cleanup for feedback, error reports, queue/task audit records, and temporary diagnostics. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with a source-controlled retention inventory, daily cleanup for six temporary collections, preserved scoring-task cleanup, privacy-limited health reporting, and Release Readiness monitoring.
+# [x] S4.8 Add privacy documentation for stored diagnostics, retention, deletion, and exported reports. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with App Check, CSP telemetry, defined temporary-record retention, deletion behavior, and privacy-limited diagnostic language.
 [ ] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L)
-[ ] S4.10 Add incident severity levels, owner, response checklist, and post-incident review template. (P1 / M)
+# [x] S4.10 Add incident severity levels, owner, response checklist, and post-incident review template. (P1 / M) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
 
 ================================================================================
 PHASE B1 — INVITE BETA LAUNCH AND FIRST-SEASON PROOF
@@ -285,7 +286,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [ ] B1.3 Rehearse Hosting, Functions, rules, and queue-mode rollback. (P0 / M)
 [ ] B1.4 Begin with 2-4 leagues and approximately 10-30 observed managers. (P0 / M)
 [ ] B1.5 Include hockey experts, casual fans, beginners, iPhone users, Android users, and at least one commissioner other than the creator. (P1 / M)
-[ ] B1.6 Create a structured issue-triage process: integrity, blocker, serious UX, cosmetic, idea. (P0 / S)
+# [x] B1.6 Create a structured issue-triage process: integrity, blocker, serious UX, cosmetic, idea. (P0 / S) — Completed 2026-08-11 in Beta Operations Batch B1B with manager classification, administrator status/severity/owner/duplicate/resolution workflow, private notes, and sanitized public known issues.
 [ ] B1.7 Do not change Scoring V3 or Projection V11 midseason except for objective bugs. (P0 / Policy)
 
 [ ] B1.8 Run one ordinary live-canary league through the queued scoring worker. (P0 / M)
@@ -293,11 +294,11 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [ ] B1.10 Expand canary gradually across the creator's internal leagues while friend leagues remain on legacy scoring. (P0 / M)
 [ ] B1.11 Keep production Primary locked until staging and canary gates pass. (P0 / Policy)
 
-[ ] B1.12 Measure actual scoring-worker mean, p95, and maximum duration. (P0 / M)
-[ ] B1.13 Measure scoring freshness from NHL final/update to visible RinkRat result. (P0 / M)
-[ ] B1.14 Measure Draft pick confirmation and next-turn handoff latency. (P0 / M)
-[ ] B1.15 Measure add/drop, waiver, IR, and roster-operation latency and uncertain outcomes. (P0 / M)
-[ ] B1.16 Measure Firestore listeners by route and confirm cleanup after navigation. (P0 / M)
+[~] B1.12 Measure actual scoring-worker mean, p95, and maximum duration. (P0 / M) — B1B now aggregates every league-automation run into daily shards; complete after multiple live scoring nights produce a representative sample.
+[~] B1.13 Measure scoring freshness from NHL final/update to visible RinkRat result. (P0 / M) — B1B measures worker duration and explicitly tracks the missing source timestamp; complete when live ingestion records a trusted NHL update time and visible publication time.
+[~] B1.14 Measure Draft pick confirmation and next-turn handoff latency. (P0 / M) — B1B collects privacy-limited Draft-pick, queue, Auto-Draft, clock, and settings action durations; complete after live Draft samples are reviewed.
+[~] B1.15 Measure add/drop, waiver, IR, and roster-operation latency and uncertain outcomes. (P0 / M) — B1B collects action type, outcome, mean, p95, maximum, and error/uncertain totals; complete after live-season volume is sufficient.
+[~] B1.16 Measure Firestore listeners by route and confirm cleanup after navigation. (P0 / M) — B1B samples generalized route-ready duration and listener counts with session cooldowns; complete after supported-browser route evidence is reviewed.
 [ ] B1.17 Measure reads, writes, Function duration, queue age, retries, and cost per active league/week. (P0 / M)
 
 [ ] B1.18 Conduct at least five observed beginner sessions without coaching the user. (P1 / M)
@@ -305,6 +306,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [ ] B1.20 Record where users misunderstand matchup number, six-game progress, transaction timing, projections, waivers, or IR. (P1 / M)
 [ ] B1.21 Add only evidence-backed clarity fixes during the first season. (P1 / Policy)
 # [x] B1.22 Add a fantasy-football position translation to Training Camp so wings, centers, defensemen, and the team goalie unit have an immediately familiar workload/scoring analogy. (P1 / S) — Completed 2026-08-11 in Onboarding Batch B1A / Release Candidate 19.
+# [x] B1.23 Build a Beta Operations Center with structured feedback triage, sanitized public known issues, privacy-limited action/route evidence, and server scoring-duration aggregates. (P0 / L) — Completed 2026-08-11 in Beta Operations Batch B1B / Release Candidate 21.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -644,10 +646,10 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
-[~] SEQ.6 Security Batch S3A — App Check monitor mode, stronger passwords, verified email, and admin step-up. App Check and email privacy are verified; the production password-policy baseline and supported-browser monitoring remain.
+[~] SEQ.6 Security Batch S3A — App Check monitor mode, enforced password policy, verified email, and administrator step-up are implemented; complete supported-browser traffic monitoring and the measured App Check enforcement gates before closing the sequence.
 [~] SEQ.7 Security Batch S3B — Shared ID validation and NHL proxy query/rate hardening implemented; complete the remaining internal-ID audit and distributed cache/rate controls before marking the sequence fully complete.
-[ ] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL verification.
-[ ] SEQ.9 Freeze and run the first live-season beta.
+# [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B operational evidence and triage are implemented; complete the RC21 exact-build validation, rollback rehearsal, Git tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
@@ -731,6 +733,10 @@ Future entries:
 # [x] LOG.12 2026-08-10 — Implemented Security Batch S3B / Release Candidate 17: synchronized the registration UI with the live Firebase password policy, preserved capital/number/special requirements in the apply script, introduced shared Firestore document-ID validation, and added strict App Check-aware NHL proxy query, response-size, rate, and health controls.
 # [x] LOG.13 2026-08-10 — Completed Security Batch S3B.1 / Release Candidate 18: allow deterministic pregame add/drop and IR replacement timing when historical replay is paused before any NHL game has been released, while continuing to block roster changes after a failed date could affect competitive game history; align client and server replay-date evaluation.
 # [x] LOG.14 2026-08-11 — Completed Onboarding Batch B1A / Release Candidate 19: add an expanded-by-default fantasy-football position guide to Training Camp, group LW/RW honestly as outside receivers, distinguish centers through Projection V11's slightly more playmaking-oriented baseline, and explain defensemen, goalie units, and positional replacement value without changing scoring or projections.
+# [x] LOG.15 2026-08-11 — Completed Security Batch S3C / Release Candidate 20: add GitHub security/release CI, controlled Dependabot updates, production dependency and secret audits, CSP and Trusted Types report-only telemetry, HSTS/header validation, privacy-limited CSP collection, and scheduled temporary-data retention with Release Readiness health reporting, with visible repository-automation recovery for dot-prefixed macOS project files.
+# [x] LOG.16 2026-08-11 — Completed Beta Operations Batch B1B / Release Candidate 21: add structured manager issue classification, private administrator triage, sanitized public known issues, privacy-limited competitive-action and route evidence, daily server scoring-duration aggregation, expanded retention, and the first-season operations runbook.
+
+# [x] LOG.17 2026-08-11 — Completed Beta Operations Batch B1B.1 TypeScript build hotfix: give scoring-duration summaries concrete overview types so trigger totals remain visible to strict TypeScript sorting without changing runtime evidence or competitive behavior.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

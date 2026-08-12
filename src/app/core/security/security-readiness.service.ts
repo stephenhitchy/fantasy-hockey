@@ -36,6 +36,15 @@ export interface SecurityControlReadinessResult {
     factorIds: string[];
     providerCount: number;
   };
+  securityOperations: {
+    available: boolean;
+    retentionCleanupStatus: string;
+    retentionCleanupLastCompletedAt: string | null;
+    retentionCleanupDeletedCount: number;
+    retentionCleanupFailureCount: number;
+    cspReportReceivedCount: number;
+    cspReportLastReceivedAt: string | null;
+  };
   configurationError: string | null;
 }
 

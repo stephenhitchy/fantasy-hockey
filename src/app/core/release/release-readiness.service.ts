@@ -102,6 +102,48 @@ async function loadAutomationDocument(documentId: string): Promise<Record<string
   }
 }
 
+interface HostingSecurityHeaderSnapshot {
+  available: boolean;
+  cspReportOnlyReady: boolean;
+  hstsReady: boolean;
+  errorMessage: string;
+}
+
+async function inspectHostingSecurityHeaders(): Promise<HostingSecurityHeaderSnapshot> {
+  try {
+    const response = await fetch(
+      `/release-manifest.json?security-headers=${Date.now()}`,
+      {
+        method: 'HEAD',
+        cache: 'no-store',
+      },
+    );
+    const csp = response.headers.get('content-security-policy-report-only') ?? '';
+    const hsts = response.headers.get('strict-transport-security') ?? '';
+
+    return {
+      available: response.ok,
+      cspReportOnlyReady:
+        csp.includes("default-src 'self'") &&
+        csp.includes("require-trusted-types-for 'script'") &&
+        csp.includes('report-uri /security/csp-report'),
+      hstsReady: /max-age=\d{7,}/.test(hsts),
+      errorMessage: response.ok ? '' : `Hosting returned HTTP ${response.status}.`,
+    };
+  } catch (error: unknown) {
+    const candidate = error as { message?: unknown };
+    return {
+      available: false,
+      cspReportOnlyReady: false,
+      hstsReady: false,
+      errorMessage:
+        typeof candidate.message === 'string' && candidate.message.trim()
+          ? candidate.message.trim()
+          : 'Hosting security headers could not be inspected from this browser.',
+    };
+  }
+}
+
 function timestampAgeMinutes(value: unknown, now = Date.now()): number | null {
   const iso = toIso(value);
 
@@ -167,6 +209,7 @@ export async function loadReleaseReadinessSnapshot(
     injuryEmailAutomation,
     seasonAutomation,
     securityReadiness,
+    hostingSecurityHeaders,
   ] = await Promise.all([
     getLeagueById(leagueId),
     getLeagueTeams(leagueId),
@@ -183,6 +226,7 @@ export async function loadReleaseReadinessSnapshot(
     loadAutomationDocument('injuryEmailAutomation'),
     loadAutomationDocument('seasonAutomation'),
     loadSecurityReadinessSnapshot(),
+    inspectHostingSecurityHeaders(),
   ]);
 
   if (!league) {
@@ -332,6 +376,51 @@ export async function loadReleaseReadinessSnapshot(
           : 'Read-only diagnostics remain available. Enter the current account password before queue changes, projection restore, authority migration, or review mutations.'
         : securityReadiness.errorMessage || 'The secure-session age could not be inspected.',
       serverSecurity?.recentAuthenticationReady ? 'pass' : 'warning',
+      false,
+    ),
+  );
+
+  const hostingSecurityReady =
+    hostingSecurityHeaders.cspReportOnlyReady && hostingSecurityHeaders.hstsReady;
+  checks.push(
+    createCheck(
+      'hosting-security-headers',
+      'configuration',
+      hostingSecurityReady
+        ? 'Hosting security headers are in monitored hardening mode'
+        : 'Hosting security headers still need deployment or review',
+      hostingSecurityReady
+        ? 'CSP report-only, Trusted Types preparation, HSTS, framing protection, and the privacy-limited report endpoint are active. Review reports before enforcing CSP.'
+        : hostingSecurityHeaders.errorMessage ||
+          `CSP report-only ${hostingSecurityHeaders.cspReportOnlyReady ? 'present' : 'missing'}; HSTS ${hostingSecurityHeaders.hstsReady ? 'present' : 'missing'}. Local development servers do not normally include Firebase Hosting headers.`,
+      hostingSecurityReady ? 'pass' : 'warning',
+      false,
+    ),
+  );
+
+  const retentionOperations = serverSecurity?.securityOperations;
+  const retentionCompletedAt = retentionOperations?.retentionCleanupLastCompletedAt ?? null;
+  const retentionAgeMinutes = retentionCompletedAt
+    ? timestampAgeMinutes(retentionCompletedAt)
+    : null;
+  const retentionReady = Boolean(
+    retentionOperations?.available &&
+    retentionOperations.retentionCleanupStatus === 'success' &&
+    retentionOperations.retentionCleanupFailureCount === 0 &&
+    retentionAgeMinutes !== null &&
+    retentionAgeMinutes <= 48 * 60,
+  );
+  checks.push(
+    createCheck(
+      'security-retention-cleanup',
+      'configuration',
+      retentionReady
+        ? 'Temporary security and diagnostic data retention is healthy'
+        : 'Security retention cleanup is awaiting its first healthy run',
+      retentionOperations?.available
+        ? `Status ${retentionOperations.retentionCleanupStatus}; last completed ${formatAgeMinutes(retentionAgeMinutes)}; ${retentionOperations.retentionCleanupDeletedCount} expired document(s) removed; ${retentionOperations.retentionCleanupFailureCount} collection failure(s). CSP telemetry has recorded ${retentionOperations.cspReportReceivedCount} privacy-limited report(s).`
+        : 'The daily cleanup worker has not written a health record yet. This is expected immediately after deployment; refresh after its first scheduled run.',
+      retentionReady ? 'pass' : 'warning',
       false,
     ),
   );
@@ -765,6 +854,20 @@ export async function loadReleaseReadinessSnapshot(
       recentAuthenticationWindowSeconds:
         serverSecurity?.recentAuthenticationWindowSeconds ?? 15 * 60,
       multiFactorState: serverSecurity?.multiFactor.state ?? 'unavailable',
+      retentionCleanupStatus:
+        serverSecurity?.securityOperations.retentionCleanupStatus ?? 'unavailable',
+      retentionCleanupLastCompletedAt:
+        serverSecurity?.securityOperations.retentionCleanupLastCompletedAt ?? null,
+      retentionCleanupDeletedCount:
+        serverSecurity?.securityOperations.retentionCleanupDeletedCount ?? 0,
+      retentionCleanupFailureCount:
+        serverSecurity?.securityOperations.retentionCleanupFailureCount ?? 0,
+      cspReportReceivedCount:
+        serverSecurity?.securityOperations.cspReportReceivedCount ?? 0,
+      cspReportLastReceivedAt:
+        serverSecurity?.securityOperations.cspReportLastReceivedAt ?? null,
+      hostingCspReportOnlyReady: hostingSecurityHeaders.cspReportOnlyReady,
+      hostingHstsReady: hostingSecurityHeaders.hstsReady,
       configurationError:
         serverSecurity?.configurationError ?? securityReadiness.errorMessage,
     },

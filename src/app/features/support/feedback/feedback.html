@@ -1,8 +1,13 @@
 <section class="feedback-page">
   <header class="feedback-hero rr-card rr-card--raised rr-card--padded">
-    <span class="eyebrow">Beta Bench</span>
-    <h1>Send RinkRat Feedback</h1>
-    <p>Your report includes the generalized page route and basic technical context. Do not include passwords, invite codes, or private personal information.</p>
+    <span class="eyebrow">Beta Operations</span>
+    <h1>Report an Issue or Idea</h1>
+    <p>
+      Choose the closest category, explain what happened, and RinkRat will attach privacy-limited
+      build and browser context automatically. Never include passwords, invite codes, or sensitive
+      personal information.
+    </p>
+    <a routerLink="/support/known-issues" class="known-issues-link">Check known issues first</a>
   </header>
 
   <article class="feedback-card rr-card rr-card--raised rr-card--padded">
@@ -14,16 +19,32 @@
       <p class="feedback-status error rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
     }
 
+    <div class="feedback-progress" aria-label="Report flow">
+      <span class="active">1. Classify</span>
+      <span>2. Explain</span>
+      <span>3. Send</span>
+    </div>
+
     <label class="feedback-field rr-field-group">
-      <span>Type of feedback</span>
+      <span>What kind of report is this?</span>
       <select class="rr-select" [(ngModel)]="category" [disabled]="submitting()">
-        <option value="bug">Something is broken</option>
-        <option value="confusing">A screen or rule is confusing</option>
-        <option value="incorrect-result">A fantasy result looks incorrect</option>
-        <option value="feature-request">Feature idea</option>
-        <option value="account-privacy">Account or privacy request</option>
-        <option value="other">Other</option>
+        @for (option of categoryOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
       </select>
+      <small class="category-hint">{{ selectedCategoryHelp() }}</small>
+    </label>
+
+    <label class="feedback-field rr-field-group">
+      <span>Short title</span>
+      <input
+        class="rr-input"
+        [(ngModel)]="summary"
+        maxlength="120"
+        [disabled]="submitting()"
+        placeholder="Example: Add/drop stays locked after I confirm the move"
+      />
+      <small>{{ summaryCharactersRemaining() }} characters remaining</small>
     </label>
 
     <label class="feedback-field rr-field-group">
@@ -32,18 +53,72 @@
         class="rr-textarea"
         [(ngModel)]="message"
         maxlength="2000"
-        rows="10"
+        rows="8"
         [disabled]="submitting()"
-        placeholder="What page were you on? What did you do? What did you expect, and what happened instead?"
+        placeholder="Describe the result you saw. Mention whether refreshing changed anything and whether another manager saw the same result."
       ></textarea>
-      <small>{{ charactersRemaining() }} characters remaining</small>
+      <small>{{ messageCharactersRemaining() }} characters remaining</small>
     </label>
+
+    <div class="feedback-two-column">
+      <label class="feedback-field rr-field-group">
+        <span>What did you expect?</span>
+        <textarea
+          class="rr-textarea compact-textarea"
+          [(ngModel)]="expectedResult"
+          maxlength="1000"
+          rows="5"
+          [disabled]="submitting()"
+          placeholder="Optional, but especially useful for scoring, roster timing, or confusing rules."
+        ></textarea>
+      </label>
+
+      <label class="feedback-field rr-field-group">
+        <span>Steps to reproduce</span>
+        <textarea
+          class="rr-textarea compact-textarea"
+          [(ngModel)]="reproductionSteps"
+          maxlength="1500"
+          rows="5"
+          [disabled]="submitting()"
+          placeholder="Optional: 1. Opened My Team 2. Selected a bench player 3. Confirmed the move..."
+        ></textarea>
+      </label>
+    </div>
+
+    <section class="technical-context" aria-labelledby="technical-context-title">
+      <div>
+        <span class="eyebrow">Attached automatically</span>
+        <h2 id="technical-context-title">Privacy-limited technical context</h2>
+        <p>Build, generalized route, device class, connection state, App Check status, listener count, and the most recent competitive action when available.</p>
+      </div>
+      <button type="button" class="rr-button rr-button--secondary" (click)="toggleTechnicalContext()">
+        {{ technicalContextExpanded() ? 'Hide Context' : 'Preview Context' }}
+      </button>
+
+      @if (technicalContextExpanded()) {
+        @let context = currentTechnicalContext();
+        <dl class="technical-context-grid">
+          <div><dt>Release</dt><dd>{{ context.releaseLabel }}</dd></div>
+          <div><dt>Page</dt><dd><code>{{ context.route }}</code></dd></div>
+          <div><dt>Device</dt><dd>{{ context.viewportCategory }}</dd></div>
+          <div><dt>Connection</dt><dd>{{ context.online ? 'Online' : 'Offline' }} · {{ context.connectionType }}</dd></div>
+          <div><dt>App Check</dt><dd>{{ context.appCheckClientStatus }}</dd></div>
+          <div><dt>Listeners</dt><dd>{{ context.listenerCount }}</dd></div>
+          @if (context.recentAction) {
+            <div class="wide"><dt>Recent action</dt><dd>{{ context.recentAction.action }} · {{ context.recentAction.outcome }} · {{ context.recentAction.durationMilliseconds }} ms</dd></div>
+          }
+        </dl>
+      }
+
+      <small>League IDs, player IDs, roster contents, scores, invite codes, email addresses, raw Firestore data, and full browsing history are not attached.</small>
+    </section>
 
     <label class="feedback-toggle">
       <input type="checkbox" [(ngModel)]="allowFollowUp" [disabled]="submitting()" />
       <span>
         <strong>Allow follow-up</strong>
-        <small>RinkRat may use your signed-in account to ask for more details.</small>
+        <small>RinkRat may use your signed-in account email to ask for more details.</small>
       </span>
     </label>
 
@@ -51,8 +126,13 @@
       <button type="button" class="secondary-button rr-button rr-button--secondary" (click)="returnToPreviousPage()">
         Go Back
       </button>
-      <button type="button" class="primary-button rr-button rr-button--primary" [disabled]="submitting()" (click)="submit()">
-        {{ submitting() ? 'Sending Report...' : 'Send Feedback' }}
+      <button
+        type="button"
+        class="primary-button rr-button rr-button--primary"
+        [disabled]="submitting() || !summary.trim() || !message.trim()"
+        (click)="submit()"
+      >
+        {{ submitting() ? 'Sending Report...' : 'Send Report' }}
       </button>
     </div>
 

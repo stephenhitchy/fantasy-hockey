@@ -39,6 +39,14 @@ export interface ReleaseSecuritySummary {
   recentAuthenticationReady: boolean;
   recentAuthenticationWindowSeconds: number;
   multiFactorState: string;
+  retentionCleanupStatus: string;
+  retentionCleanupLastCompletedAt: string | null;
+  retentionCleanupDeletedCount: number;
+  retentionCleanupFailureCount: number;
+  cspReportReceivedCount: number;
+  cspReportLastReceivedAt: string | null;
+  hostingCspReportOnlyReady: boolean;
+  hostingHstsReady: boolean;
   configurationError: string;
 }
 

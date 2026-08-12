@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "defaultField": "expiresAt",
+  "collections": [
+    {
+      "collection": "clientErrorReports",
+      "retentionDays": 90,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Privacy-limited browser error diagnostics"
+    },
+    {
+      "collection": "feedbackReports",
+      "retentionDays": 365,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Manager feedback and follow-up workflow"
+    },
+    {
+      "collection": "projectionGenerationRequests",
+      "retentionDays": 7,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Temporary server projection-generation request state"
+    },
+    {
+      "collection": "leagueCreationRequests",
+      "retentionDays": 30,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Idempotent league-creation request results"
+    },
+    {
+      "collection": "leagueJoinRequests",
+      "retentionDays": 30,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Idempotent league-join request and abuse-throttle state"
+    },
+    {
+      "collection": "cspViolationReports",
+      "retentionDays": 30,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Privacy-limited Content Security Policy observations"
+    },
+    {
+      "collection": "leagueAutomationTasks",
+      "retentionDays": 7,
+      "cleanupOwner": "cleanupLeagueAutomationTaskHistory",
+      "purpose": "Temporary queued live-scoring task history"
+    },
+    {
+      "collection": "betaEvidenceEvents",
+      "retentionDays": 90,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Privacy-limited raw beta performance and action evidence"
+    },
+    {
+      "collection": "betaOperationsDaily",
+      "retentionDays": 180,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Aggregated live-season operational evidence without raw manager identifiers"
+    }
+  ]
+}

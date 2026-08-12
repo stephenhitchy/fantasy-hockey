@@ -130,13 +130,14 @@ test('B1A release, verification, documentation, and permanent roadmap stay synch
   assert.match(packageJson.scripts['verify:batchb1a'], /verify:batchs3b-1/);
   assert.match(packageJson.scripts['verify:batchb1a'], /test:batchb1a:run/);
   assert.match(packageJson.scripts['verify:batchb1a'], /validate:release-manifest/);
-  assert.match(readme, /Release Candidate 19 \/ Onboarding Batch B1A/);
   assert.match(readme, /verify:batchb1a/);
   assert.match(docs, /Onboarding Batch B1A — Fantasy-Football Position Translation/);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.7\.2/);
+  assert.match(rootRoadmap, /RINKRAT COMPETITIVE ROADMAP/);
   assert.match(rootRoadmap, /# \[x\] B1\.22/);
   assert.match(rootRoadmap, /# \[x\] LOG\.14/);
-  assert.match(runtime, /Release Candidate 19/);
-  assert.match(productionRuntime, /Release Candidate 19/);
+  const runtimeRelease = Number(runtime.match(/Release Candidate (\d+)/)?.[1] ?? 0);
+  const productionRelease = Number(productionRuntime.match(/Release Candidate (\d+)/)?.[1] ?? 0);
+  assert.ok(runtimeRelease >= 19, `Expected a successor of RC19, received RC${runtimeRelease}.`);
+  assert.ok(productionRelease >= 19, `Expected a successor of RC19, received RC${productionRelease}.`);
 });

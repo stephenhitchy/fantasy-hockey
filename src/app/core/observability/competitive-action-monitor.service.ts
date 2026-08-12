@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
+import { BetaOperationsService } from '../beta-operations/beta-operations.service';
 import { ClientHealthService } from './client-health.service';
 import {
   buildCompetitiveActionHealthSnapshot,
@@ -36,6 +37,7 @@ export class CompetitiveActionMonitorService {
   constructor(
     private readonly telemetry: TelemetryService,
     private readonly clientHealth: ClientHealthService,
+    private readonly betaOperations: BetaOperationsService,
   ) {
     this.completedRecords = this.readStoredRecords();
   }
@@ -115,6 +117,7 @@ export class CompetitiveActionMonitorService {
       connection_type: record.connectionType,
       started_online: record.online,
     });
+    this.betaOperations.recordCompetitiveAction(record);
   }
 
   private readStoredRecords(): CompetitiveActionRecord[] {

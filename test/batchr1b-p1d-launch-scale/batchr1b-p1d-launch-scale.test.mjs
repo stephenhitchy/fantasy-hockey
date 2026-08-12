@@ -392,6 +392,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'package.json',
         'scripts/auth-security-baseline.cjs',
         'src/security-authority.ts',
+        'src/security-operations.ts',
         'src/shared/security/auth-security.util.ts',
 
         // S3B intentionally hardens these public security boundaries.
@@ -411,6 +412,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/security/firestore-document-id.util.ts',
 
         'src/shared/security/nhl-proxy-security.util.ts',
+        // B1B adds isolated beta evidence and aggregate operations helpers.
+        'src/beta-operations.ts',
+        'src/shared/core/observability/beta-operations.util.ts',
       ]),
     ),
     '7f29102fee1e3c712a78891b4692de1779bcfd7145e5a9f4500b1f5a5ca1765c',

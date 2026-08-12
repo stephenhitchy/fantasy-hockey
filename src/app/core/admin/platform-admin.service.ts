@@ -1,17 +1,19 @@
 import { Injectable, signal } from '@angular/core';
 import { httpsCallable } from 'firebase/functions';
 
+import type {
+  BetaFeedbackCategory,
+  BetaFeedbackStatus,
+  BetaFeedbackTechnicalContext,
+  BetaFeedbackTriageUpdate,
+  BetaKnownIssueStatus,
+  BetaOperationsOverview,
+  BetaTriageSeverity,
+} from '../beta-operations/beta-operations.models';
 import { auth } from '../firebase-auth';
 import { functions } from '../firebase-functions';
 
-export type FeedbackAdminStatus =
-  | 'new'
-  | 'reviewing'
-  | 'planned'
-  | 'in-progress'
-  | 'resolved'
-  | 'not-planned';
-
+export type FeedbackAdminStatus = BetaFeedbackStatus;
 export type ErrorAdminStatus = 'new' | 'investigating' | 'fixed' | 'ignored';
 
 export interface PlatformAdminAccess {
@@ -19,17 +21,38 @@ export interface PlatformAdminAccess {
   role: string;
 }
 
+export interface AdminFeedbackTechnicalContext
+  extends Omit<BetaFeedbackTechnicalContext, 'releaseLabel' | 'buildId' | 'route' | 'appCheckClientStatus'> {
+  recentAction: BetaFeedbackTechnicalContext['recentAction'];
+}
+
 export interface AdminFeedbackItem {
   feedbackId: string;
-  category: string;
+  category: BetaFeedbackCategory | string;
+  severity: BetaTriageSeverity;
+  summary: string;
   message: string;
+  expectedResult: string;
+  reproductionSteps: string;
   route: string;
-  leagueId: string | null;
+  hasLeagueContext: boolean;
+  leagueContextReference: string;
   allowFollowUp: boolean;
   followUpEmail: string | null;
-  status: FeedbackAdminStatus;
+  status: BetaFeedbackStatus;
+  owner: string;
+  duplicateOf: string;
+  resolutionRelease: string;
+  knownIssueId: string;
+  knownIssueStatus: BetaKnownIssueStatus | '';
+  publicTitle: string;
+  publicSummary: string;
   adminNotes: string;
-  userAgent: string;
+  reportedRelease: string;
+  buildId: string;
+  clientAppCheckStatus: string;
+  serverAppCheckStatus: string;
+  technicalContext: AdminFeedbackTechnicalContext;
   browser: string;
   createdAt: string | null;
   updatedAt: string | null;
@@ -62,6 +85,9 @@ export interface AdminErrorGroup {
 
 export interface AdminInboxSummary {
   newFeedbackCount: number;
+  openFeedbackCount: number;
+  integrityFeedbackCount: number;
+  blockerFeedbackCount: number;
   totalFeedbackCount: number;
   unresolvedErrorCount: number;
   totalErrorGroupCount: number;
@@ -74,12 +100,6 @@ export interface AdminInboxData {
   feedback: AdminFeedbackItem[];
   errorGroups: AdminErrorGroup[];
   summary: AdminInboxSummary;
-}
-
-interface UpdateFeedbackRequest {
-  feedbackId: string;
-  status: FeedbackAdminStatus;
-  adminNotes: string;
 }
 
 interface UpdateErrorRequest {
@@ -129,17 +149,29 @@ export class PlatformAdminService {
     return response.data;
   }
 
-  async updateFeedback(
-    feedbackId: string,
-    status: FeedbackAdminStatus,
-    adminNotes: string,
-  ): Promise<void> {
-    const callable = httpsCallable<UpdateFeedbackRequest, { updated: boolean }>(
+  async loadBetaOperations(windowDays = 14): Promise<BetaOperationsOverview> {
+    const callable = httpsCallable<{ windowDays: number }, BetaOperationsOverview>(
       functions,
-      'updateAdminFeedback',
-      { timeout: 35_000 },
+      'getBetaOperationsSnapshot',
+      { timeout: 65_000 },
     );
-    await callable({ feedbackId, status, adminNotes });
+    const response = await callable({ windowDays });
+    return response.data;
+  }
+
+  async updateBetaFeedbackTriage(
+    update: BetaFeedbackTriageUpdate,
+  ): Promise<{ updated: boolean; knownIssuePublished: boolean }> {
+    const callable = httpsCallable<
+      BetaFeedbackTriageUpdate,
+      { updated: boolean; knownIssuePublished: boolean }
+    >(
+      functions,
+      'updateBetaFeedbackTriage',
+      { timeout: 40_000 },
+    );
+    const response = await callable(update);
+    return response.data;
   }
 
   async updateErrorReview(

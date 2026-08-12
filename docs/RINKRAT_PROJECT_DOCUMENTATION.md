@@ -1,3 +1,139 @@
+# Beta Operations Batch B1B.1 — Server Scoring Trigger Type Hotfix
+
+**Release:** Release Candidate 21  
+**Scope:** Strict Functions TypeScript compile correction for server scoring-duration trigger aggregation. No runtime, scoring, Draft, roster, feedback, evidence, security, Firestore Rules, or index behavior changes.
+
+## Compile correction
+
+The B1B server summary helper returned `Record<string, number>`. Although the object always contained `total`, TypeScript could not retain that named property after spreading the generic record into a trigger row. It therefore inferred each row as only `{ trigger: string }` and rejected the descending `total` sort.
+
+B1B.1 introduces explicit `BetaDurationOverview` and `BetaTriggerDurationOverview` interfaces, changes `durationOverview()` to return the concrete overview type, and stores the trigger rows in a typed array before sorting. The emitted data shape is unchanged; only the compile-time contract is corrected.
+
+## Verification
+
+```bash
+npm run verify:batchb1b-1
+```
+
+## Deployment
+
+When the original B1B Functions deployment did not occur because compilation failed, use the complete B1B order after verification:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Beta Operations B1B.1 scoring trigger type hotfix"
+firebase deploy --only hosting:app -m "Beta Operations B1B center and known issues"
+```
+
+Then apply and inspect the two B1B TTL policies. When B1B Hosting and TTL were already completed independently, the corrected Functions deployment is the only required deployment.
+
+---
+
+# Beta Operations Batch B1B — Feedback Triage and Live-Season Evidence
+
+**Release:** Release Candidate 21  
+**Scope:** Structured manager issue classification, private administrator triage, sanitized public known issues, privacy-limited action/route evidence, daily server scoring-duration aggregation, and first-season operational decision support.
+
+## Manager reports and public status
+
+The Feedback page now separates competition integrity, blocked actions, serious usability, cosmetic issues, ideas, account/privacy requests, and other feedback. Reports include a short title, observed result, expected result, optional reproduction steps, and privacy-limited release/device/connection/App Check/listener/recent-action context. Raw league IDs are verified server-side when supplied but stored only as a short private context reference.
+
+The platform-admin Beta Operations Center adds severity, owner, duplicate, resolution release, private notes, and a complete beta triage status workflow. Administrators may publish only separately written public titles and summaries to `/support/known-issues`; private manager text and contact information are never copied automatically.
+
+## Live-season evidence
+
+Signed-in beta sessions send bounded, best-effort evidence for completed competitive actions and generalized route readiness. Raw manager, league, player, matchup, roster, score, invite-code, and Firestore-document identifiers are excluded. A daily rotating manager hash estimates participation without creating a stable evidence identity.
+
+League automation writes duration and outcome to 16 daily aggregate shards so Release Candidate 21 can measure scoring-worker total, mean, histogram-based p95, maximum, error/skip totals, and trigger type. Raw evidence expires after 90 days; daily aggregates expire after 180 days. Exact NHL-source-update-to-visible-score freshness remains explicitly unavailable until live ingestion has a trustworthy upstream timestamp.
+
+The full operating procedure is in:
+
+```text
+docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md
+```
+
+## Verification
+
+```bash
+npm run verify:batchb1b
+```
+
+## Deployment
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Beta Operations B1B evidence and triage"
+firebase deploy --only hosting:app -m "Beta Operations B1B center and known issues"
+```
+
+Then apply the two new TTL policies through the guarded baseline command. No Firestore Rules or index deployment is required.
+
+## Rollback
+
+Redeploy the approved RC20 Hosting build. Redeploy RC20 Functions only when the B1B server code is the identified incident source. The evidence collections and TTL policies may remain because they are isolated from competitive data and automatically expire.
+
+---
+
+# Security Batch S3C — CI, Browser Hardening, and Retention
+
+**Release:** Release Candidate 20  
+**Scope:** Repeatable clean-build/emulator verification, controlled dependency updates, private-secret scanning, production dependency audits, non-blocking CSP/Trusted Types observation, explicit HSTS, privacy-limited CSP reporting, and cleanup/TTL validation for temporary security data.
+
+## Continuous integration and supply-chain controls
+
+The project now includes `.github/workflows/rinkrat-ci.yml`. Pull requests to `main`, pushes to `main`, and manual runs use Node 22.23.1, Java 21, clean root and Functions installs, Firebase CLI 15.24.0, the complete inherited verification chain, secret scanning, Hosting-header validation, retention validation, and high/critical production dependency audits. The workflow has read-only repository permission and no production deployment credential.
+
+Dependabot monitors the root npm project, the Functions npm project, and GitHub Actions weekly. Patch/minor runtime updates are grouped. Major Angular, Firebase browser SDK, Firebase Admin, Firebase Functions, and TypeScript updates remain manually gated behind a named release and rollback plan.
+
+## CSP report-only and browser headers
+
+Firebase Hosting now sends `Content-Security-Policy-Report-Only`; it does not block managers in RC20. The policy uses same-origin defaults, blocks plugins and external framing, restricts approved Firebase/reCAPTCHA/Google Fonts/NHL/ESPN origins, declares Angular/Firebase Trusted Types policy names for observation, and reports to `/security/csp-report`.
+
+The `collectCspReport` Function accepts bounded reports for known RinkRat hosts, removes query strings/fragments, redacts common league/user/team/matchup/player path identifiers, never stores script samples, raw IP addresses, requester hashes, or user-agent strings, groups duplicate violations by day/fingerprint, applies a per-instance rate limit, and retains reports for 30 days. It returns HTTP 204 even when persistence fails so browsers do not create retry storms.
+
+Hosting also configures one-year apex HSTS, `same-origin-allow-popups` for Firebase Authentication popup compatibility, `nosniff`, framing denial, strict referrer behavior, a restrictive Permissions Policy, and cross-domain-policy denial. `includeSubDomains` remains omitted until the `www` domain is deliberately fixed, redirected, or removed.
+
+## Temporary data retention
+
+`config/security-retention-policy.json` is the canonical retention inventory. `config/firestore-ttl-baseline.json` is the guarded optional Google Cloud TTL baseline. The daily `cleanupExpiredSecurityData` worker deletes expired client-error, feedback, projection-request, league-create/join-request, and CSP-report documents; the scoring queue retains its own task-history cleanup. Privacy-limited health and aggregate CSP report counts are stored in `appData/securityOperations` and surfaced in Release Readiness.
+
+The Privacy Policy now explains App Check, CSP telemetry, defined temporary-record periods, and deletion behavior. The full operational, dependency, secret, CSP, TTL, incident-response, deployment, and rollback procedure is in:
+
+```text
+docs/RINKRAT_SECURITY_S3C_RUNBOOK.md
+```
+
+## Verification
+
+```bash
+npm run verify:batchs3c
+```
+
+Optional infrastructure checks:
+
+```bash
+npm run security:headers:live
+npm run security:inspect-ttl -- --project=nhl-fantasy-app-ab673
+```
+
+## Deployment
+
+Deploy the report endpoint and cleanup worker before Hosting advertises the report route:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions:collectCspReport,functions:cleanupExpiredSecurityData,functions:getSecurityControlReadiness -m "Security S3C CSP reporting and retention"
+firebase deploy --only hosting:app -m "Security S3C CI and CSP report-only"
+```
+
+No Firestore Rules or index deployment is required. GitHub Actions and Dependabot activate after their files reach the repository default branch. TTL policies are applied separately through the guarded command and may coexist with the scheduled cleanup.
+
+## Rollback
+
+Redeploy the approved B1A Hosting build to remove the new report-only headers and route. The retention worker may remain deployed unless its logs identify it as the incident source. CI and Dependabot do not modify production fantasy data and can be reverted independently through Git.
+
+---
+
 # Onboarding Batch B1A — Fantasy-Football Position Translation
 
 **Release:** Release Candidate 19  

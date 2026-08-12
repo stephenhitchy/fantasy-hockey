@@ -699,6 +699,17 @@
             <strong>{{ current.security.recentAuthenticationReady ? 'Unlocked' : 'Password required' }}</strong>
             <small>MFA: {{ current.security.multiFactorState }}</small>
           </article>
+          <article>
+            <span>Browser hardening</span>
+            <strong>{{ current.security.hostingCspReportOnlyReady ? 'CSP monitoring' : 'Needs deploy' }}</strong>
+            <small>HSTS: {{ current.security.hostingHstsReady ? 'active' : 'not confirmed' }}</small>
+          </article>
+          <article>
+            <span>Data retention</span>
+            <strong>{{ current.security.retentionCleanupStatus }}</strong>
+            <small>{{ current.security.retentionCleanupDeletedCount }} expired document(s) removed last run</small>
+            <small>CSP reports: {{ current.security.cspReportReceivedCount }}</small>
+          </article>
         </div>
       </section>
     }

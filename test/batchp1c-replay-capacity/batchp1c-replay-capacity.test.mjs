@@ -196,6 +196,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'package.json',
     'scripts/auth-security-baseline.cjs',
     'src/security-authority.ts',
+        'src/security-operations.ts',
     'src/shared/security/auth-security.util.ts',
 
     // S3B intentionally hardens these public security boundaries.
@@ -215,6 +216,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/shared/security/firestore-document-id.util.ts',
 
     'src/shared/security/nhl-proxy-security.util.ts',
+        // B1B adds isolated beta evidence and aggregate operations helpers.
+        'src/beta-operations.ts',
+        'src/shared/core/observability/beta-operations.util.ts',
   ]);
 
   assert.equal(

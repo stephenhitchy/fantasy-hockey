@@ -1,0 +1,245 @@
+.known-issues-shell {
+  min-height: 100vh;
+  padding: 28px 16px 64px;
+  background: var(--page-bg);
+  color: var(--text-main);
+}
+
+.known-issues-back,
+.known-issues-hero,
+.known-issues-section,
+.resolved-issues,
+.known-issues-loading,
+.known-issues-message {
+  width: min(1040px, 100%);
+  margin-inline: auto;
+}
+
+.known-issues-back {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--text-main);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.known-issues-hero,
+.known-issue-card,
+.known-issues-empty,
+.resolved-issues,
+.known-issues-loading {
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-info) 30%, transparent);
+}
+
+.known-issues-hero {
+  --rr-card-padding: 28px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--rr-warning) 14%, transparent), transparent 60%),
+    var(--surface-raised);
+}
+
+.known-issues-hero h1,
+.known-issues-section h2 {
+  margin: 6px 0 8px;
+  color: var(--text-strong);
+}
+
+.known-issues-hero p,
+.known-issues-section header p,
+.known-issue-card > p,
+.known-issues-empty span {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.known-issues-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.known-issues-section {
+  margin-top: 24px;
+}
+
+.known-issues-section > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.known-issues-section > header p {
+  margin: 0;
+  font-weight: 800;
+}
+
+.known-issues-list {
+  display: grid;
+  gap: 16px;
+}
+
+.known-issue-card {
+  --rr-card-padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.known-issue-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--rr-warning);
+}
+
+.known-issue-card[data-severity='integrity']::before,
+.known-issue-card[data-severity='blocker']::before {
+  background: var(--rr-danger);
+}
+
+.known-issue-card[data-severity='cosmetic']::before,
+.known-issue-card[data-severity='idea']::before {
+  background: var(--rr-info);
+}
+
+.known-issue-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.known-issue-card h3 {
+  margin: 7px 0 0;
+  color: var(--text-strong);
+  font-size: 1.18rem;
+}
+
+.severity-badge,
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-inset);
+  color: var(--text-main);
+  font-family: var(--rr-font-micro, monospace);
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.status-badge {
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--user-team-primary) 16%, var(--surface-inset));
+}
+
+.known-issue-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.known-issue-card dl div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-inset);
+}
+
+.known-issue-card dt {
+  color: var(--text-muted);
+  font-size: .67rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.known-issue-card dd {
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+.known-issues-empty,
+.known-issues-loading {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 150px;
+  text-align: center;
+}
+
+.resolved-issues {
+  margin-top: 22px;
+  --rr-card-padding: 20px;
+}
+
+.resolved-issues summary {
+  cursor: pointer;
+  color: var(--text-strong);
+  font-weight: 900;
+}
+
+.resolved-list {
+  margin-top: 16px;
+}
+
+.known-issue-card.resolved {
+  padding: 18px;
+  border: 2px solid var(--border-soft);
+  background: var(--surface-inset);
+}
+
+.known-issue-card.resolved::before {
+  background: var(--rr-success);
+}
+
+.known-issues-message {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 2px solid currentColor;
+  font-weight: 800;
+}
+
+.known-issues-message.error {
+  color: var(--rr-danger);
+}
+
+.loading-puck {
+  width: 30px;
+  height: 10px;
+  border-radius: 50%;
+  background: #101820;
+  animation: known-issues-puck 1.2s steps(8, end) infinite alternate;
+}
+
+@keyframes known-issues-puck {
+  from { transform: translateX(-16px); }
+  to { transform: translateX(16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-puck { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .known-issues-shell { padding-inline: 8px; }
+  .known-issues-hero { --rr-card-padding: 20px; }
+  .known-issues-section > header,
+  .known-issue-card > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .known-issues-actions { display: grid; }
+  .known-issue-card dl { grid-template-columns: 1fr; }
+  .status-badge { align-self: flex-start; }
+}

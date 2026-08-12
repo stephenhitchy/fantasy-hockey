@@ -1,0 +1,90 @@
+<main class="known-issues-shell">
+  <a routerLink="/support" class="known-issues-back">← Back to Support</a>
+
+  <header class="known-issues-hero rr-card rr-card--raised rr-card--padded">
+    <span class="eyebrow">Beta status board</span>
+    <h1>Known Issues</h1>
+    <p>
+      These are confirmed or actively investigated RinkRat beta issues. A missing item does not
+      mean a report was ignored; some reports still need reproduction or may affect only one setup.
+    </p>
+    <div class="known-issues-actions">
+      <a routerLink="/support/feedback" class="rr-button rr-button--primary">Report Something New</a>
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="loading()" (click)="load()">
+        {{ loading() ? 'Refreshing…' : 'Refresh Status' }}
+      </button>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="known-issues-message error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="known-issues-loading rr-card rr-card--raised rr-card--padded" aria-live="polite">
+      <span class="loading-puck" aria-hidden="true"></span>
+      <strong>Checking the beta status board…</strong>
+    </section>
+  } @else {
+    <section class="known-issues-section" aria-labelledby="open-known-issues-title">
+      <header>
+        <div>
+          <span class="eyebrow">Needs attention</span>
+          <h2 id="open-known-issues-title">Open known issues</h2>
+        </div>
+        <p>{{ openIssues().length }} currently published.</p>
+      </header>
+
+      <div class="known-issues-list">
+        @for (issue of openIssues(); track issue.issueId) {
+          <article class="known-issue-card rr-card rr-card--raised rr-card--padded" [attr.data-severity]="issue.severity">
+            <header>
+              <div>
+                <span class="severity-badge">{{ severityLabel(issue.severity) }}</span>
+                <h3>{{ issue.title }}</h3>
+              </div>
+              <span class="status-badge">{{ statusLabel(issue.status) }}</span>
+            </header>
+            <p>{{ issue.summary }}</p>
+            <dl>
+              <div><dt>Affected release</dt><dd>{{ issue.affectedRelease || 'Multiple or under review' }}</dd></div>
+              <div><dt>Last updated</dt><dd>{{ formatDate(issue.updatedAt) }}</dd></div>
+              @if (issue.resolutionRelease) {
+                <div><dt>Planned fix</dt><dd>{{ issue.resolutionRelease }}</dd></div>
+              }
+            </dl>
+          </article>
+        } @empty {
+          <article class="known-issues-empty rr-card rr-card--raised rr-card--padded">
+            <strong>No open issue is currently published.</strong>
+            <span>Continue reporting anything that looks incorrect, blocked, or confusing.</span>
+          </article>
+        }
+      </div>
+    </section>
+
+    @if (resolvedIssues().length > 0) {
+      <details class="resolved-issues rr-card rr-card--raised rr-card--padded">
+        <summary>Recently resolved issues ({{ resolvedIssues().length }})</summary>
+        <div class="known-issues-list resolved-list">
+          @for (issue of resolvedIssues(); track issue.issueId) {
+            <article class="known-issue-card resolved" [attr.data-severity]="issue.severity">
+              <header>
+                <div>
+                  <span class="severity-badge">{{ severityLabel(issue.severity) }}</span>
+                  <h3>{{ issue.title }}</h3>
+                </div>
+                <span class="status-badge">Resolved</span>
+              </header>
+              <p>{{ issue.summary }}</p>
+              <dl>
+                <div><dt>Resolved in</dt><dd>{{ issue.resolutionRelease || 'Current release' }}</dd></div>
+                <div><dt>Resolved</dt><dd>{{ formatDate(issue.resolvedAt || issue.updatedAt) }}</dd></div>
+              </dl>
+            </article>
+          }
+        </div>
+      </details>
+    }
+  }
+</main>

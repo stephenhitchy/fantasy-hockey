@@ -2929,13 +2929,87 @@ export const deleteMyAccount = onCall(
 
 
 const FEEDBACK_CATEGORIES = new Set([
+  'competition-integrity',
+  'blocked-action',
+  'serious-usability',
+  'cosmetic',
+  'feature-idea',
+  'account-privacy',
+  'other',
+  // Legacy categories remain readable for reports submitted by older clients.
   'bug',
   'confusing',
   'incorrect-result',
-  'feature-request',
-  'account-privacy',
-  'other'
+  'feature-request'
 ]);
+
+const BETA_FEEDBACK_STATUSES = new Set([
+  'new',
+  'investigating',
+  'confirmed',
+  'fix-next-release',
+  'resolved',
+  'not-reproducible',
+  'deferred'
+]);
+
+const BETA_FEEDBACK_SEVERITIES = new Set([
+  'integrity',
+  'blocker',
+  'serious',
+  'cosmetic',
+  'idea'
+]);
+
+function normalizeFeedbackCategory(category: string): string {
+  const aliases: Record<string, string> = {
+    bug: 'blocked-action',
+    confusing: 'serious-usability',
+    'incorrect-result': 'competition-integrity',
+    'feature-request': 'feature-idea'
+  };
+
+  return aliases[category] ?? category;
+}
+
+function defaultFeedbackSeverity(category: string): string {
+  switch (normalizeFeedbackCategory(category)) {
+    case 'competition-integrity':
+      return 'integrity';
+    case 'blocked-action':
+      return 'blocker';
+    case 'serious-usability':
+    case 'account-privacy':
+      return 'serious';
+    case 'cosmetic':
+      return 'cosmetic';
+    case 'feature-idea':
+    case 'other':
+    default:
+      return 'idea';
+  }
+}
+
+function normalizeBetaRoute(value: unknown): string {
+  const rawRoute = asString(value).split(/[?#]/)[0] || '/';
+
+  return rawRoute
+    .replace(/\/leagues\/[^/]+/gi, '/leagues/:leagueId')
+    .replace(/\/players\/[^/]+/gi, '/players/:playerId')
+    .replace(/\/matchups\/[^/]+/gi, '/matchups/:matchupId')
+    .replace(/\/assets\/[^/]+/gi, '/assets/:assetKey')
+    .replace(/\/users\/[^/]+/gi, '/users/:userId')
+    .slice(0, 300);
+}
+
+function feedbackLeagueContextReference(leagueId: string): string {
+  return leagueId
+    ? createHash('sha256')
+        .update(`rinkrat-feedback-league:${leagueId}`)
+        .digest('hex')
+        .slice(0, 16)
+    : '';
+}
 
 async function enforceUserSubmissionLimit(
   userId: string,
@@ -3022,6 +3096,48 @@ function normalizedClientContext(headers: {
   return {
     userAgent: normalizedHeaderValue(headers['user-agent'], 300),
     language: normalizedHeaderValue(headers['accept-language'], 120)
+  };
+}
+
+function normalizeFeedbackTechnicalContext(value: unknown): Record<string, unknown> {
+  const source = asRecord(value);
+  const viewport = asString(source['viewportCategory']).slice(0, 24);
+  const recentActionSource = asRecord(source['recentAction']);
+  const action = asString(recentActionSource['action']).slice(0, 50);
+  const outcome = asString(recentActionSource['outcome']).slice(0, 30);
+  const durationValue = recentActionSource['durationMilliseconds'];
+  const listenerValue = source['listenerCount'];
+  const durationMilliseconds = typeof durationValue === 'number' && Number.isFinite(durationValue)
+    ? Math.max(0, Math.min(10 * 60 * 1000, Math.round(durationValue)))
+    : 0;
+  const listenerCount = typeof listenerValue === 'number' && Number.isFinite(listenerValue)
+    ? Math.max(0, Math.min(500, Math.round(listenerValue)))
+    : 0;
+
+  return {
+    releaseLabel: asString(source['releaseLabel']).slice(0, 80),
+    buildId: asString(source['buildId']).slice(0, 160),
+    route: normalizeBetaRoute(source['route']),
+    viewportCategory: [
+      'small-phone',
+      'phone',
+      'tablet',
+      'desktop',
+      'unknown'
+    ].includes(viewport) ? viewport : 'unknown',
+    online: source['online'] !== false,
+    connectionType: asString(source['connectionType']).slice(0, 24) || 'unknown',
+    saveData: source['saveData'] === true,
+    appCheckClientStatus: asString(source['appCheckClientStatus']).slice(0, 30) || 'unknown',
+    listenerCount,
+    recentAction: action && outcome
+      ? {
+          action,
+          outcome,
+          durationMilliseconds,
+          finishedAt: asString(recentActionSource['finishedAt']).slice(0, 40)
+        }
+      : null
   };
 }
 
@@ -3150,25 +3266,41 @@ export const submitFeedback = onCall(
     await enforceUserSubmissionLimit(
       request.auth.uid,
       'feedback',
-      3,
+      5,
       10 * 60 * 1000
     );
 
     const data = asRecord(request.data);
-    const category = asString(data['category']);
-    const message = asString(data['message']).trim();
-    const route = asString(data['route']).slice(0, 300);
+    const submittedCategory = asString(data['category']);
+    const category = normalizeFeedbackCategory(submittedCategory);
+    const summary = redactDiagnosticText(asString(data['summary'])).slice(0, 120);
+    const message = redactDiagnosticText(asString(data['message'])).slice(0, 2_000);
+    const expectedResult = redactDiagnosticText(
+      asString(data['expectedResult'])
+    ).slice(0, 1_000);
+    const reproductionSteps = redactDiagnosticText(
+      asString(data['reproductionSteps'])
+    ).slice(0, 1_500);
+    const route = normalizeBetaRoute(data['route']);
     const leagueId = optionalFirestoreDocumentId(data['leagueId'], 'league context', {
       minimumLength: 6,
       maxBytes: 128,
       pattern: /^[A-Za-z0-9_-]+$/,
     }) ?? '';
     const allowFollowUp = data['allowFollowUp'] === true;
+    const technicalContext = normalizeFeedbackTechnicalContext(data['technicalContext']);
 
-    if (!FEEDBACK_CATEGORIES.has(category)) {
+    if (!FEEDBACK_CATEGORIES.has(submittedCategory) || !FEEDBACK_CATEGORIES.has(category)) {
       throw new HttpsError(
         'invalid-argument',
         'Choose a valid feedback category.'
+      );
+    }
+
+    if (!summary || summary.length > 120) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Add a short report title of 120 characters or fewer.'
       );
     }
 
@@ -3204,18 +3336,48 @@ export const submitFeedback = onCall(
 
     const feedbackId = randomUUID();
     const context = normalizedClientContext(request.rawRequest.headers);
+    const reportedRelease = asString(technicalContext['releaseLabel']).slice(0, 80);
+    const buildId = asString(technicalContext['buildId']).slice(0, 160);
+    const clientAppCheckStatus = asString(
+      technicalContext['appCheckClientStatus']
+    ).slice(0, 30) || 'unknown';
 
     await db.doc(`feedbackReports/${feedbackId}`).set({
+      schemaVersion: 2,
       feedbackId,
       userId: request.auth.uid,
       category,
+      severity: defaultFeedbackSeverity(category),
+      summary,
       message,
-      route: route || '/',
-      leagueId: leagueId || null,
+      expectedResult,
+      reproductionSteps,
+      route,
+      routeFamily: route.split('/').filter(Boolean).slice(0, 2).join('/') || 'home',
+      hasLeagueContext: Boolean(leagueId),
+      leagueContextReference: feedbackLeagueContextReference(leagueId),
       allowFollowUp,
       userAgent: context.userAgent,
       language: context.language,
+      browser: browserFamily(context.userAgent),
+      technicalContext: {
+        ...technicalContext,
+        route,
+        serverAppCheckStatus: request.app ? 'valid' : 'missing'
+      },
+      reportedRelease: reportedRelease || 'Unknown release',
+      buildId: buildId || 'unknown-build',
+      clientAppCheckStatus,
+      serverAppCheckStatus: request.app ? 'valid' : 'missing',
       status: 'new',
+      owner: '',
+      duplicateOf: '',
+      resolutionRelease: '',
+      adminNotes: '',
+      knownIssueId: '',
+      knownIssueStatus: '',
+      publicTitle: '',
+      publicSummary: '',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(
@@ -3232,11 +3394,11 @@ export const submitFeedback = onCall(
 
 
 const ADMIN_FEEDBACK_STATUSES = new Set([
-  'new',
+  ...BETA_FEEDBACK_STATUSES,
+  // Legacy values remain accepted by old tabs during a staggered Hosting rollout.
   'reviewing',
   'planned',
   'in-progress',
-  'resolved',
   'not-planned'
 ]);
 
@@ -3325,6 +3487,25 @@ function browserFamily(userAgent: string): string {
   if (value.includes('chrome/') && !value.includes('edg/')) return 'Chrome';
   if (value.includes('safari/') && !value.includes('chrome/')) return 'Safari';
   return 'Other';
+}
+
+function normalizeAdminFeedbackStatus(value: unknown): string {
+  const status = asString(value);
+  const aliases: Record<string, string> = {
+    reviewing: 'investigating',
+    planned: 'confirmed',
+    'in-progress': 'fix-next-release',
+    'not-planned': 'deferred'
+  };
+  const normalized = aliases[status] ?? status;
+  return BETA_FEEDBACK_STATUSES.has(normalized) ? normalized : 'new';
+}
+
+function normalizeAdminFeedbackSeverity(value: unknown, category: string): string {
+  const severity = asString(value);
+  return BETA_FEEDBACK_SEVERITIES.has(severity)
+    ? severity
+    : defaultFeedbackSeverity(category);
 }
 
 async function lookupUserEmails(userIds: string[]): Promise<Map<string, string>> {
@@ -3490,27 +3671,73 @@ export const getAdminInbox = onCall(
     const feedback = feedbackDocuments.map(({ id, data }) => {
       const createdAtMs = timestampMilliseconds(data['createdAt']);
       const userId = asString(data['userId']);
-      const route = asString(data['route']) || '/';
+      const category = normalizeFeedbackCategory(asString(data['category']) || 'other');
+      const route = normalizeBetaRoute(data['route']);
+      const technicalContext = asRecord(data['technicalContext']);
+      const recentAction = asRecord(technicalContext['recentAction']);
       const relatedErrors = rawErrors.filter((error) =>
         error.userId === userId &&
-        error.route === route &&
+        normalizeBetaRoute(error.route) === route &&
         Math.abs(error.createdAtMs - createdAtMs) <= 30 * 60 * 1000
       );
+      const legacyLeagueId = asString(data['leagueId']);
+      const userAgent = asString(data['userAgent']);
 
       return {
         feedbackId: id,
-        category: asString(data['category']) || 'other',
-        message: asString(data['message']),
+        category,
+        severity: normalizeAdminFeedbackSeverity(data['severity'], category),
+        summary: asString(data['summary']).slice(0, 120) ||
+          asString(data['message']).slice(0, 120) ||
+          'Untitled beta report',
+        message: asString(data['message']).slice(0, 2_000),
+        expectedResult: asString(data['expectedResult']).slice(0, 1_000),
+        reproductionSteps: asString(data['reproductionSteps']).slice(0, 1_500),
         route,
-        leagueId: asString(data['leagueId']) || null,
+        hasLeagueContext: data['hasLeagueContext'] === true || Boolean(legacyLeagueId),
+        leagueContextReference: asString(data['leagueContextReference']).slice(0, 32) ||
+          feedbackLeagueContextReference(legacyLeagueId),
         allowFollowUp: data['allowFollowUp'] === true,
         followUpEmail: data['allowFollowUp'] === true
           ? emailByUserId.get(userId) ?? null
           : null,
-        status: asString(data['status']) || 'new',
-        adminNotes: asString(data['adminNotes']),
-        userAgent: asString(data['userAgent']),
-        browser: browserFamily(asString(data['userAgent'])),
+        status: normalizeAdminFeedbackStatus(data['status']),
+        owner: asString(data['owner']).slice(0, 80),
+        duplicateOf: asString(data['duplicateOf']).slice(0, 80),
+        resolutionRelease: asString(data['resolutionRelease']).slice(0, 80),
+        knownIssueId: asString(data['knownIssueId']).slice(0, 80),
+        knownIssueStatus: asString(data['knownIssueStatus']).slice(0, 30),
+        publicTitle: asString(data['publicTitle']).slice(0, 120),
+        publicSummary: asString(data['publicSummary']).slice(0, 600),
+        adminNotes: asString(data['adminNotes']).slice(0, 2_000),
+        reportedRelease: asString(data['reportedRelease']).slice(0, 80) || 'Unknown release',
+        buildId: asString(data['buildId']).slice(0, 160) || 'unknown-build',
+        clientAppCheckStatus: asString(data['clientAppCheckStatus']).slice(0, 30) ||
+          asString(technicalContext['appCheckClientStatus']).slice(0, 30) ||
+          'unknown',
+        serverAppCheckStatus: asString(data['serverAppCheckStatus']).slice(0, 30) ||
+          asString(technicalContext['serverAppCheckStatus']).slice(0, 30) ||
+          'unknown',
+        technicalContext: {
+          viewportCategory: asString(technicalContext['viewportCategory']).slice(0, 24) || 'unknown',
+          online: technicalContext['online'] !== false,
+          connectionType: asString(technicalContext['connectionType']).slice(0, 24) || 'unknown',
+          saveData: technicalContext['saveData'] === true,
+          listenerCount: typeof technicalContext['listenerCount'] === 'number'
+            ? Math.max(0, Math.min(500, Math.round(technicalContext['listenerCount'])))
+            : 0,
+          recentAction: Object.keys(recentAction).length > 0
+            ? {
+                action: asString(recentAction['action']).slice(0, 50),
+                outcome: asString(recentAction['outcome']).slice(0, 30),
+                durationMilliseconds: typeof recentAction['durationMilliseconds'] === 'number'
+                  ? Math.max(0, Math.min(10 * 60 * 1000, Math.round(recentAction['durationMilliseconds'])))
+                  : 0,
+                finishedAt: asString(recentAction['finishedAt']).slice(0, 40)
+              }
+            : null
+        },
+        browser: asString(data['browser']).slice(0, 40) || browserFamily(userAgent),
         createdAt: timestampIso(data['createdAt']),
         updatedAt: timestampIso(data['updatedAt']),
         relatedErrorCount: relatedErrors.length,
@@ -3549,10 +3776,18 @@ export const getAdminInbox = onCall(
       );
 
     const newFeedbackCount = feedback.filter((item) => item.status === 'new').length;
+    const openFeedbackCount = feedback.filter((item) =>
+      item.status !== 'resolved' && item.status !== 'not-reproducible' && item.status !== 'deferred'
+    ).length;
+    const integrityFeedbackCount = feedback.filter((item) => item.severity === 'integrity').length;
+    const blockerFeedbackCount = feedback.filter((item) => item.severity === 'blocker').length;
     const unresolvedErrorCount = errorGroups.filter((item) =>
       item.status !== 'fixed' && item.status !== 'ignored'
     ).length;
-    const releases = errorGroups.flatMap((item) => item.releases as string[]);
+    const releases = [
+      ...feedback.map((item) => String(item.reportedRelease ?? '')).filter(Boolean),
+      ...errorGroups.flatMap((item) => item.releases as string[])
+    ];
     const releaseLabel = releases[0] ?? 'No captured release';
 
     return {
@@ -3562,6 +3797,9 @@ export const getAdminInbox = onCall(
       errorGroups,
       summary: {
         newFeedbackCount,
+        openFeedbackCount,
+        integrityFeedbackCount,
+        blockerFeedbackCount,
         totalFeedbackCount: feedback.length,
         unresolvedErrorCount,
         totalErrorGroupCount: errorGroups.length,
@@ -3730,6 +3968,19 @@ export {
   recoverStaleProjectionGenerationRequests,
   requestProjectionSnapshotGeneration,
 } from './projection-authority';
+
+
+export {
+  cleanupExpiredSecurityData,
+  collectCspReport,
+} from './security-operations';
+
+export {
+  getBetaOperationsSnapshot,
+  getPublicBetaKnownIssues,
+  recordBetaOperationMetric,
+  updateBetaFeedbackTriage,
+} from './beta-operations';
 
 export { getSecurityControlReadiness } from './security-authority';
 
