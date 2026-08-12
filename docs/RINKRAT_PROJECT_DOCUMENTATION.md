@@ -11189,3 +11189,93 @@ firebase deploy --only hosting:app -m "Batch R1D universal async recovery"
 ```
 
 No Firestore rules, indexes, or data migration are required.
+
+# Security Operations Batch S4A — Firestore Backup, Restore Rehearsal, and TTL Index Synchronization
+
+## Purpose
+
+S4A closes the remaining operational-recovery gap before the observed invite beta. It does not change the RC21 Angular application, Cloud Functions runtime, Firestore Rules, Scoring V3, Projection V11, Draft behavior, roster timing, or live-scoring path.
+
+The batch adds a source-controlled recovery baseline at:
+
+```text
+config/firestore-backup-baseline.json
+```
+
+The baseline defines:
+
+- production database delete protection;
+- a daily scheduled backup retained 14 days;
+- a Sunday weekly scheduled backup retained 12 weeks;
+- optional PITR activation through a separate guarded command;
+- restore drills that may target only a new `restore-drill-*` named database;
+- critical collection and competition-contract verification;
+- guarded deletion of the temporary drill database.
+
+## Commands
+
+Read-only production inspection:
+
+```bash
+npm run security:backup:inspect -- --project=nhl-fantasy-app-ab673
+```
+
+Apply missing schedules and delete protection:
+
+```bash
+RINKRAT_APPLY_FIRESTORE_BACKUPS=APPLY \
+npm run security:backup:apply -- \
+  --project=nhl-fantasy-app-ab673
+```
+
+Optional PITR activation after cost review:
+
+```bash
+RINKRAT_ENABLE_FIRESTORE_PITR=ENABLE \
+npm run security:backup:enable-pitr -- \
+  --project=nhl-fantasy-app-ab673
+```
+
+List and plan:
+
+```bash
+npm run security:backup:list -- --project=nhl-fantasy-app-ab673
+npm run security:backup:plan-restore -- --project=nhl-fantasy-app-ab673
+```
+
+The full operator procedure is maintained in:
+
+```text
+docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md
+```
+
+## Restore-drill safety
+
+The tooling refuses to use `(default)` as a drill destination. Restore creation and drill deletion require separate explicit environment confirmations. A successful restore is not considered evidence until the privacy-limited verifier confirms critical collections and sampled six-game/Scoring V3 league contracts.
+
+No command in S4A reroutes production traffic or performs an in-place restore.
+
+## TTL index synchronization
+
+The nine active production TTL policies are now mirrored into `firestore.indexes.json` using `fieldOverrides` with `ttl: true`. Default collection-group indexes for `expiresAt` remain present because RinkRat's scheduled cleanup fallback queries expiration time.
+
+Run:
+
+```bash
+npm run security:sync-ttl-index-config -- --check
+```
+
+This prevents future Firestore index deployments from interpreting the production TTL overrides as undeclared remote state and prompting the operator to delete them.
+
+## Verification
+
+```bash
+cd /Users/StephenH/Documents/Programming/fantasy-hockey
+nvm use 22.23.1
+npm install -g npm@11.17.0
+npm ci
+npm --prefix functions ci
+npm run verify:batchs4a
+```
+
+S4A has no Firebase application deployment. Commit and push the repository changes, apply the Google Cloud recovery baseline deliberately, wait for a READY backup, and complete one named-database restore rehearsal before marking roadmap item S4.9 complete.

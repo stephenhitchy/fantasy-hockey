@@ -1,0 +1,659 @@
+{
+  "schemaVersion": 2,
+  "reportType": "rinkrat-invite-beta-validation",
+  "releaseKey": "release-candidate-21-20260812T010025042Z-923cce8825",
+  "releaseLabel": "Release Candidate 21",
+  "generatedAt": "2026-08-12T01:23:04.752Z",
+  "build": {
+    "schemaVersion": 1,
+    "releaseLabel": "Release Candidate 21",
+    "buildId": "release-candidate-21-20260812T010025042Z-923cce8825",
+    "builtAt": "2026-08-12T01:00:25.042Z",
+    "sourceRevision": "923cce882503e08a336f32951ee492599c64e238",
+    "packageVersion": "0.0.0",
+    "scoringRulesVersion": 3,
+    "projectionVersion": 11
+  },
+  "tester": {
+    "label": null,
+    "deviceLabel": null,
+    "browser": "Chrome",
+    "viewport": "1677x732 @ 1x"
+  },
+  "launchGate": {
+    "status": "testing",
+    "headline": "Invite-beta validation is still in progress",
+    "detail": "Continue the required tests. A new release candidate intentionally starts a fresh validation board.",
+    "blockers": [
+      "Run the deterministic full-season simulator for this release candidate.",
+      "27 required manual validation items remain untested."
+    ],
+    "advisories": [
+      "Review 3 failed and 0 uncertain competitive operations from this browser session before inviting managers."
+    ],
+    "automatedPassedCount": 20,
+    "automatedRequiredCount": 20,
+    "manualPassedCount": 0,
+    "manualRequiredCount": 27,
+    "manualAttentionCount": 0,
+    "manualUntestedCount": 27,
+    "simulationStatus": "not-run"
+  },
+  "automatedChecks": [
+    {
+      "id": "scoring-mode",
+      "category": "configuration",
+      "label": "Live NHL scoring mode is active",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "This build uses the current NHL season."
+    },
+    {
+      "id": "production-history-guard",
+      "category": "configuration",
+      "label": "Production historical-mode guard",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Production-like host is using the safe effective scoring mode."
+    },
+    {
+      "id": "developer-tools",
+      "category": "configuration",
+      "label": "Developer simulators are hidden",
+      "level": "pass",
+      "requiredForLiveLaunch": false,
+      "detail": "Production-facing pages do not display temporary simulator controls."
+    },
+    {
+      "id": "app-check-client",
+      "category": "configuration",
+      "label": "Firebase App Check monitor client is verified end to end",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "This browser received a valid reCAPTCHA Enterprise App Check token and the callable verified app 1:721213878690:web:1c5ba29562b332f84e02fb. Keep enforcement disabled until legitimate traffic metrics are clean."
+    },
+    {
+      "id": "authentication-password-policy",
+      "category": "configuration",
+      "label": "Firebase Authentication password policy is enforced",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Enforcement ENFORCE; minimum 12; maximum 128; capital required; number required; special character required; lowercase optional; force-upgrade off. The registration checklist is synchronized with the live Firebase policy."
+    },
+    {
+      "id": "authentication-email-enumeration",
+      "category": "configuration",
+      "label": "Email-enumeration protection is enabled",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Firebase Authentication returns privacy-preserving account errors for supported sign-in and recovery flows."
+    },
+    {
+      "id": "platform-admin-step-up",
+      "category": "configuration",
+      "label": "Protected administrator session is unlocked",
+      "level": "pass",
+      "requiredForLiveLaunch": false,
+      "detail": "This administrator proved identity within the 15-minute security window."
+    },
+    {
+      "id": "hosting-security-headers",
+      "category": "configuration",
+      "label": "Hosting security headers are in monitored hardening mode",
+      "level": "pass",
+      "requiredForLiveLaunch": false,
+      "detail": "CSP report-only, Trusted Types preparation, HSTS, framing protection, and the privacy-limited report endpoint are active. Review reports before enforcing CSP."
+    },
+    {
+      "id": "security-retention-cleanup",
+      "category": "configuration",
+      "label": "Security retention cleanup is awaiting its first healthy run",
+      "level": "warning",
+      "requiredForLiveLaunch": false,
+      "detail": "The daily cleanup worker has not written a health record yet. This is expected immediately after deployment; refresh after its first scheduled run."
+    },
+    {
+      "id": "six-game-format",
+      "category": "league",
+      "label": "Six-game scoring format",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "League setting: 6 scheduled NHL games per roster-slot window."
+    },
+    {
+      "id": "scoring-rules-version",
+      "category": "league",
+      "label": "Current scoring-rules version",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "League version 3; application version 3."
+    },
+    {
+      "id": "league-authority-schema",
+      "category": "league",
+      "label": "League authority schema is current",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Authority v2; document schema v1; competitive settings are server locked."
+    },
+    {
+      "id": "team-count",
+      "category": "league",
+      "label": "League membership is filled",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "6 of 6 team slots currently exist."
+    },
+    {
+      "id": "draft-complete",
+      "category": "league",
+      "label": "Draft completed",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Draft status: complete."
+    },
+    {
+      "id": "server-draft-automation",
+      "category": "league",
+      "label": "Server-controlled draft automation",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "success; last run less than 2 minutes ago; 0 failed draft(s)."
+    },
+    {
+      "id": "automatic-cycle-one",
+      "category": "league",
+      "label": "Automatic Cycle 1 after the draft",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Cycle 1 exists and no commissioner start action is required."
+    },
+    {
+      "id": "cycle-schema",
+      "category": "scoring",
+      "label": "Active cycles use independent-window metadata",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "1 active cycle document(s) checked."
+    },
+    {
+      "id": "live-scoring-status",
+      "category": "scoring",
+      "label": "Shared live-scoring worker",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "5 successful refresh(es); 0 unchanged write(s) skipped."
+    },
+    {
+      "id": "server-league-automation",
+      "category": "scoring",
+      "label": "Scheduled season and scoring automation",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "success; last run 8 minutes ago; 0 failed league(s)."
+    },
+    {
+      "id": "league-scoring-queue-foundation",
+      "category": "scoring",
+      "label": "Queued league scoring foundation is observing only",
+      "level": "warning",
+      "requiredForLiveLaunch": false,
+      "detail": "Mode shadow; dispatcher last ran less than 2 minutes ago; 2 due schedule(s) sampled, 0 eligible for enqueue; 0 selected this pass, 0/24 pending; oldest due age 7363.3 minutes (observation only; the legacy scorer remains authoritative); schedule coverage 4/4 (bootstrap 9 minutes ago); 0 enqueue failure(s), 0 stale task(s) recovered in the latest sweep."
+    },
+    {
+      "id": "projection-status",
+      "category": "projection",
+      "label": "Shared projection snapshot is server hashed and Draft ready",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Status ready; version 11; target Cycle 2; source manual; server catalog catalog-v1-20262027-7fe0d94ad9b1cab0185c validated 755 assets; root hash 79ba3aae7261… is verified."
+    },
+    {
+      "id": "injury-sync",
+      "category": "injury",
+      "label": "Shared injury report",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "success: Matched 75 injured skaters from 103 ESPN entries. Saved one server-authoritative report for every league and account. 21 names could not be matched to current NHL rosters."
+    },
+    {
+      "id": "scheduled-injury-refresh",
+      "category": "injury",
+      "label": "Scheduled global injury refresh",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "healthy; last successful run 15 minutes ago."
+    },
+    {
+      "id": "injury-email-worker",
+      "category": "injury",
+      "label": "Injury email queue worker",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "healthy; last run less than 2 minutes ago; 0 pending alert(s)."
+    },
+    {
+      "id": "playoff-format",
+      "category": "playoffs",
+      "label": "Banked playoff format",
+      "level": "pass",
+      "requiredForLiveLaunch": true,
+      "detail": "Playoffs have not been created yet; the release simulator validates the format separately."
+    }
+  ],
+  "lifecycleSimulation": null,
+  "manualValidation": [
+    {
+      "id": "accounts",
+      "label": "Accounts and onboarding",
+      "items": [
+        {
+          "id": "neutral-account-onboarding",
+          "title": "Create a new neutral RinkRat account",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "identity-theme-switching",
+          "title": "Switch between RinkRat and NHL identities",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "second-manager-join",
+          "title": "Join with a second manager account",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    {
+      "id": "draft",
+      "label": "League and draft",
+      "items": [
+        {
+          "id": "draft-settings-save",
+          "title": "Save and reload the draft time",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "complete-mobile-draft",
+          "title": "Complete a full phone-width draft",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "draft-reconnect",
+          "title": "Recover the Draft Room after connectivity loss",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    {
+      "id": "scoring",
+      "label": "Scoring and matchup windows",
+      "items": [
+        {
+          "id": "score-refresh-completion",
+          "title": "Advance scoring and confirm the control recovers",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "multi-league-replay-queue",
+          "title": "Queue several historical test leagues safely",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "independent-window-rollover",
+          "title": "Verify independent seventh-game rollover",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "game-film-audit",
+          "title": "Audit one complete Game Film breakdown",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "matchup-finish-date",
+          "title": "Check the matchup finish date",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    {
+      "id": "roster",
+      "label": "Roster, waivers, and Injured Reserve",
+      "items": [
+        {
+          "id": "immediate-add-drop",
+          "title": "Complete an immediate add/drop",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "scheduled-add-drop",
+          "title": "Complete a scheduled add/drop",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "waiver-claim",
+          "title": "Submit and process a waiver claim",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "injured-reserve-roundtrip",
+          "title": "Move a player through Injured Reserve",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "goalie-unit-roundtrip",
+          "title": "Add and remove a team goalie unit",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    {
+      "id": "mobile",
+      "label": "Phones, themes, and accessibility",
+      "items": [
+        {
+          "id": "phone-browser-matrix",
+          "title": "Test the core phone-width matrix",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "themes-zoom-motion",
+          "title": "Test themes, 200% zoom, and reduced motion",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "overlay-viewport",
+          "title": "Open every important overlay inside the viewport",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "desktop-utility-layout",
+          "title": "Check desktop utility layouts",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    {
+      "id": "recovery",
+      "label": "Recovery, diagnostics, and launch operations",
+      "items": [
+        {
+          "id": "offline-action-blocking",
+          "title": "Verify offline competitive-action blocking",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "diagnostics-feedback",
+          "title": "Copy diagnostics and submit feedback",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "app-check-monitoring",
+          "title": "Confirm App Check monitor traffic",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "rollback-rehearsal",
+          "title": "Record and rehearse the rollback path",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "injury-email-flow",
+          "title": "Verify one opt-in injury email",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "deletion-safety",
+          "title": "Test disposable league and account deletion",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "capacity-boundary-recorded",
+          "title": "Record the invite-beta capacity boundary",
+          "required": false,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        },
+        {
+          "id": "fresh-league-lifecycle",
+          "title": "Finish one completely fresh league lifecycle",
+          "required": true,
+          "status": "untested",
+          "note": null,
+          "updatedAt": null
+        }
+      ]
+    }
+  ],
+  "clientPerformance": {
+    "route": "/leagues/:leagueId/release-readiness",
+    "metrics": {
+      "firstContentfulPaintMilliseconds": 1132,
+      "largestContentfulPaintMilliseconds": 2048,
+      "cumulativeLayoutShift": 0.10325214568060898,
+      "interactionToNextPaintMilliseconds": 72,
+      "longTaskCount": 0,
+      "longestTaskMilliseconds": 0,
+      "latestRouteReadyMilliseconds": 724.5,
+      "slowestRouteReadyMilliseconds": 724.5
+    },
+    "connection": {
+      "online": true,
+      "visible": true,
+      "effectiveConnectionType": "4g",
+      "saveData": false,
+      "downlinkMbps": 10,
+      "roundTripMilliseconds": 50
+    },
+    "firestoreListeners": {
+      "total": 4,
+      "byLabel": {
+        "draft:state": 1,
+        "cycle:list": 1,
+        "availability:global": 1,
+        "cycle:matchups": 1
+      },
+      "longestActiveMilliseconds": 485000
+    },
+    "generatedAt": "2026-08-12T01:23:04.082Z"
+  },
+  "competitiveActions": {
+    "completedCount": 6,
+    "successCount": 3,
+    "errorCount": 3,
+    "uncertainCount": 0,
+    "cancelledCount": 0,
+    "activeCount": 0,
+    "averageDurationMilliseconds": 27566,
+    "slowestDurationMilliseconds": 74361,
+    "slowActionCount": 4,
+    "byAction": [
+      {
+        "action": "historical-replay",
+        "total": 4,
+        "successes": 2,
+        "errors": 2,
+        "uncertain": 0,
+        "averageDurationMilliseconds": 38466,
+        "slowestDurationMilliseconds": 74361
+      },
+      {
+        "action": "add-drop",
+        "total": 1,
+        "successes": 1,
+        "errors": 0,
+        "uncertain": 0,
+        "averageDurationMilliseconds": 5816,
+        "slowestDurationMilliseconds": 5816
+      },
+      {
+        "action": "lineup-swap",
+        "total": 1,
+        "successes": 0,
+        "errors": 1,
+        "uncertain": 0,
+        "averageDurationMilliseconds": 5717,
+        "slowestDurationMilliseconds": 5717
+      }
+    ],
+    "recent": [
+      {
+        "id": "historical-replay-msp403ny-1xc1tbw",
+        "action": "historical-replay",
+        "outcome": "success",
+        "route": "/leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId",
+        "startedAt": "2026-08-11T20:24:53.134Z",
+        "finishedAt": "2026-08-11T20:26:06.386Z",
+        "durationMilliseconds": 73252,
+        "connectionType": "4g",
+        "online": true
+      },
+      {
+        "id": "historical-replay-msp3yc9x-zmqxxd8",
+        "action": "historical-replay",
+        "outcome": "success",
+        "route": "/leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId",
+        "startedAt": "2026-08-11T20:23:30.981Z",
+        "finishedAt": "2026-08-11T20:24:45.342Z",
+        "durationMilliseconds": 74361,
+        "connectionType": "4g",
+        "online": true
+      },
+      {
+        "id": "historical-replay-msp3wdyl-0i35u74",
+        "action": "historical-replay",
+        "outcome": "error",
+        "route": "/leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId",
+        "startedAt": "2026-08-11T20:21:59.853Z",
+        "finishedAt": "2026-08-11T20:22:01.888Z",
+        "durationMilliseconds": 2035,
+        "connectionType": "4g",
+        "online": true
+      },
+      {
+        "id": "historical-replay-msp3w227-lpyi71y",
+        "action": "historical-replay",
+        "outcome": "error",
+        "route": "/leagues/:leagueId/cycles/:cycleNumber/matchups/:matchupId",
+        "startedAt": "2026-08-11T20:21:44.431Z",
+        "finishedAt": "2026-08-11T20:21:48.647Z",
+        "durationMilliseconds": 4216,
+        "connectionType": "4g",
+        "online": true
+      },
+      {
+        "id": "add-drop-msp395hk-4eiiphw",
+        "action": "add-drop",
+        "outcome": "success",
+        "route": "/leagues/:leagueId/free-agents",
+        "startedAt": "2026-08-11T20:03:55.784Z",
+        "finishedAt": "2026-08-11T20:04:01.600Z",
+        "durationMilliseconds": 5816,
+        "connectionType": "4g",
+        "online": true
+      },
+      {
+        "id": "lineup-swap-msp37w30-cgolqq7",
+        "action": "lineup-swap",
+        "outcome": "error",
+        "route": "/leagues/:leagueId/team",
+        "startedAt": "2026-08-11T20:02:56.940Z",
+        "finishedAt": "2026-08-11T20:03:02.657Z",
+        "durationMilliseconds": 5717,
+        "connectionType": "4g",
+        "online": true
+      }
+    ],
+    "generatedAt": "2026-08-12T01:23:04.082Z"
+  },
+  "privacy": {
+    "automaticallyExcluded": [
+      "league identifiers",
+      "matchup identifiers",
+      "player identifiers and names",
+      "scores and roster contents",
+      "email addresses",
+      "raw Firestore documents"
+    ],
+    "manualNotesIncluded": true
+  }
+}

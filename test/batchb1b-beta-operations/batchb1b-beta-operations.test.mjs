@@ -217,7 +217,7 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(readme, /verify:batchb1b/);
   assert.match(docs, /Beta Operations Batch B1B/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.10/);
+  assert.match(roadmap, /Version 1\.11/);
   assert.match(roadmap, /# \[x\] B1\.6/);
   assert.match(roadmap, /# \[x\] B1\.23/);
   assert.match(roadmap, /# \[x\] LOG\.16/);

@@ -372,7 +372,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
   assert.equal(createHash('sha256').update(engine).digest('hex'), 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a');
-  assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c18738f1fe9547da2c59fbcd6b3d725db8ea8ff1f190ca82cc0c1b27ebc0d8a0');
+  assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b');
   assert.equal(
     await hashTree(
       'functions',

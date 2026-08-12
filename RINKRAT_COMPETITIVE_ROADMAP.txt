@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.10
+Version 1.11
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -50,6 +50,7 @@ CURRENT RECOMMENDED FOCUS:
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
 [~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, shared path validation, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; finish supported-browser monitoring, App Check enforcement gates, the remaining internal-ID audit, and distributed NHL ingestion/rate protection. (P0 / L)
 [~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC21 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
+# [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Repository tooling completed 2026-08-12; the first operator-run restore drill remains an exit gate.
 
 ================================================================================
 NORTH STAR
@@ -272,8 +273,11 @@ Goal: Reach a public-facing browser and data-protection standard comparable to e
 [ ] S4.6 Fix, redirect, or remove www.rinkratfantasy.com. (P1 / S)
 # [x] S4.7 Verify TTL policies or scheduled cleanup for feedback, error reports, queue/task audit records, and temporary diagnostics. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with a source-controlled retention inventory, daily cleanup for six temporary collections, preserved scoring-task cleanup, privacy-limited health reporting, and Release Readiness monitoring.
 # [x] S4.8 Add privacy documentation for stored diagnostics, retention, deletion, and exported reports. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with App Check, CSP telemetry, defined temporary-record retention, deletion behavior, and privacy-limited diagnostic language.
-[ ] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L)
+[~] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L) — S4A adds guarded daily/weekly native backup schedules, production database delete protection, optional PITR activation, latest-ready-backup selection, named restore-drill creation, privacy-limited integrity verification, cleanup, and a permanent runbook. Complete after the first production backup becomes READY and one restore-drill database is created, verified, recorded, and deleted.
 # [x] S4.10 Add incident severity levels, owner, response checklist, and post-incident review template. (P1 / M) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
+# [x] S4.11 Mirror every active Firestore TTL policy into firestore.indexes.json so index deployments preserve retention field overrides instead of asking to delete them. (P0 / S) — Completed 2026-08-12 in Security Operations Batch S4A with an idempotent sync/check command and nine canonical ttl:true overrides.
+# [x] S4.12 Add guarded backup, delete-protection, PITR, restore-plan, named restore-drill, verification, and drill-cleanup tooling. (P0 / L) — Completed 2026-08-12 in Security Operations Batch S4A.
+[~] S4.13 Complete and record the first named-database Firestore restore rehearsal. (P0 / M) — Tooling and verification are installed; complete after an actual READY backup is restored into restore-drill-*, verified, and deleted without touching (default).
 
 ================================================================================
 PHASE B1 — INVITE BETA LAUNCH AND FIRST-SEASON PROOF
@@ -650,7 +654,7 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 [~] SEQ.6 Security Batch S3A — App Check monitor mode, enforced password policy, verified email, and administrator step-up are implemented; complete supported-browser traffic monitoring and the measured App Check enforcement gates before closing the sequence.
 [~] SEQ.7 Security Batch S3B — Shared ID validation and NHL proxy query/rate hardening implemented; complete the remaining internal-ID audit and distributed cache/rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
-[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage and B1C freeze/rollback tooling are implemented; complete the ready RC21 validation report, rehearsal, annotated tag, and observed cohort before marking this sequence complete.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, and S4A Firestore backup/restore controls are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
@@ -739,6 +743,7 @@ Future entries:
 
 # [x] LOG.17 2026-08-11 — Completed Beta Operations Batch B1B.1 TypeScript build hotfix: give scoring-duration summaries concrete overview types so trigger totals remain visible to strict TypeScript sorting without changing runtime evidence or competitive behavior.
 # [x] LOG.18 2026-08-11 — Completed Beta Operations Batch B1C: pin Node 22.23.1 and npm 11.17.0 for release work, verify the live RC21 manifest/headers/TTL baseline, validate copied exact-build launch evidence, generate ignored freeze and rollback records, and verify the annotated tag without redeploying or changing the runtime.
+# [x] LOG.19 2026-08-12 — Completed Security Operations Batch S4A repository implementation: source-control all nine TTL field overrides, add daily/weekly Firestore backup and delete-protection baselines, optional PITR activation, guarded named-database restore rehearsal, privacy-limited integrity verification, drill cleanup, CI checks, and the permanent recovery runbook without changing RC21 runtime code.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

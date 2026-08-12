@@ -5,14 +5,9 @@
   "functions/src/draft-authority.ts": "c1f1314210f1d37d60339ced69fc220507e4a9d429396bce0dc992dc59332db9",
   "functions/src/roster-authority.ts": "9b8b049f5bab3970f2644262eeef7d65dcb0636a7ecdc84f6783a78fd17db5a5",
   "firestore.rules": "30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a",
-  "firestore.indexes.json": "c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b",
   "firebase.json": "07e81a4839658037d6dc4e26c01338bea2a41ac776b601d09b43c4bfd346ebdd",
   "src/app/core/release/invite-beta-validation.util.ts": "cdd9d863887669ed70c792b35b3b5bd3be3584502f3c69b788fae5cf2088a9ac",
   "src/app/features/release/invite-beta-validation/invite-beta-validation.ts": "ed78452f8f151e6eb58303f7abb5dbdeb767b13a4a30e934f37e6040f12c0a06",
-  "src/app/features/release/invite-beta-validation/invite-beta-validation.html": "0914eb384db3f20e81ba491ad44156737e6c9653ca60568bb6d4347dd8a1caed",
-  "src/app/features/release/invite-beta-validation/invite-beta-validation.css": "abbead223b263ffca41e9cd1fac50bdf6bb458fb6c7cba8d2853d069fbac5a5d",
-  "src/environments/app-runtime.config.ts": "a71afd582c50b7e3b464e16b2fa7d23fd5bc6bb73d5bf9f5f49f080041333ebc",
   "src/environments/app-runtime.config.production.ts": "b672a8c87c246cff2000314cb09e66d642e587b2d40800f1d834585941431aa9",
-  "config/security-retention-policy.json": "57f290c9fa5938c30d4f5459a37f82afe722f1313b52eea52988b1c6bdd331b7",
-  "config/firestore-ttl-baseline.json": "f26b1d2fd470a669067af496053dd47915dc74fb459229e3f702c0a517542693"
+  "config/security-retention-policy.json": "57f290c9fa5938c30d4f5459a37f82afe722f1313b52eea52988b1c6bdd331b7"
 }

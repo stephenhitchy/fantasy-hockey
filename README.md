@@ -4,7 +4,8 @@ Core project references:
 
 - [`docs/RINKRAT_PROJECT_DOCUMENTATION.md`](docs/RINKRAT_PROJECT_DOCUMENTATION.md) — consolidated architecture, release history, deployment, and testing guidance.
 - [`docs/RINKRAT_COMPETITIVE_ROADMAP.txt`](docs/RINKRAT_COMPETITIVE_ROADMAP.txt) — permanent completed/in-progress tracker from invite beta through public-scale competition.
-- [`docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md`](docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md) — pinned Node/npm toolchain, TTL procedure, exact-build validation export, freeze record, annotated beta tag, and rollback rehearsal.
+- [`docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md`](docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md) — pinned Node/npm toolchain, TTL procedure, exact-build validation export, freeze record, annotated beta tag, and application rollback rehearsal.
+- [`docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md`](docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md) — native backup schedules, delete protection, optional PITR, named-database restore drills, verification, cleanup, and recovery evidence.
 - [`docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md`](docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md) — beta issue severity, triage, public known issues, live evidence, privacy, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3C_RUNBOOK.md`](docs/RINKRAT_SECURITY_S3C_RUNBOOK.md) — CI, dependency/secret auditing, CSP report-only, HSTS, TTL, cleanup, and emergency patch procedure.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
@@ -13,10 +14,35 @@ Core project references:
 
 ## Current release and toolchain
 
-The deployed competitive runtime remains **Release Candidate 21 / Beta Operations B1B.1**. B1C is repository-only release tooling; it does not change or redeploy the Angular client, Cloud Functions, Firestore Rules, Scoring V3, or Projection V11.
-The inherited runtime family remains **Release Candidate 21 / Beta Operations Batch B1B**, and its exact hotfix verification remains available through `npm run verify:batchb1b-1`.
+The deployed competitive runtime remains **Release Candidate 21 / Beta Operations B1B.1**. B1C and S4A are repository/operations tooling only; neither changes or redeploys the Angular client, Cloud Functions runtime, Firestore Rules, Scoring V3, or Projection V11.
+The inherited runtime family remains **Release Candidate 21 / Beta Operations Batch B1B**, with the B1B.1 TypeScript hotfix preserved by `npm run verify:batchb1b-1`.
 The inherited security baseline remains available through `npm run verify:batchs3c`.
-Named historical checkpoints remain available: `verify:batchr1f`, `verify:batchp1e`, `verify:batchp1f`, `verify:batchp1f-1`, `verify:batchs1a`, `verify:batchs1b`, `verify:batchs1c`, `verify:batchs2a`, `verify:batchs2b`, `verify:batchs3a`, `verify:batchs3a-1`, `verify:batchs3a-2`, `verify:batchs3b`, `verify:batchs3b-1`, `verify:batchb1a`, `verify:batchb1b`, and `verify:batchb1b-1`.
+
+Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
+
+```text
+verify:batchr1f
+verify:batchp1e
+verify:batchp1f
+verify:batchp1f-1
+verify:batchs1a
+verify:batchs1b
+verify:batchs1c
+verify:batchs2a
+verify:batchs2a-1
+verify:batchs2b
+verify:batchs2b-1
+verify:batchs3a
+verify:batchs3a-1
+verify:batchs3a-2
+verify:batchs3b
+verify:batchs3b-1
+verify:batchb1a
+verify:batchb1b
+verify:batchb1b-1
+verify:batchb1c
+verify:batchs4a
+```
 
 RinkRat pins:
 
@@ -35,7 +61,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchb1c
+npm run verify:batchs4a
 ```
 
 After verification and a clean commit:
@@ -43,6 +69,36 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+
+## Security Operations Batch S4A — Firestore Backup and Restore Rehearsal
+
+S4A adds repository-controlled disaster-recovery operations without changing the RC21 application runtime:
+
+- production Firestore delete-protection inspection and guarded activation;
+- daily backups retained 14 days;
+- weekly Sunday backups retained 12 weeks;
+- safe refusal when an existing daily/weekly recurrence conflicts with the baseline;
+- optional, separately confirmed PITR activation;
+- newest-READY-backup selection and restore planning;
+- restore only into a new `restore-drill-*` database;
+- privacy-limited comparison of critical collections and sampled league contracts;
+- guarded restore-drill cleanup;
+- source-controlled TTL field overrides so future index deployments preserve all nine active policies.
+
+Inspect the baseline:
+
+```bash
+npm run security:backup:inspect -- --project=nhl-fantasy-app-ab673
+```
+
+Follow the full rehearsal sequence in:
+
+```text
+docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md
+```
+
+S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud backup schedules, delete protection, optional PITR, and a temporary named restore database are managed only through the guarded operator commands in the runbook.
 
 ## Beta Operations Batch B1C — Invite-Beta Release Freeze and Rollback Tooling
 
@@ -77,4 +133,8 @@ npm run security:apply-ttl-baseline -- \
   --project=nhl-fantasy-app-ab673
 ```
 
-The apply command is idempotent but is not required after every ordinary deployment.
+The apply command is idempotent but is not required after every ordinary deployment. Keep the local index configuration synchronized with the same policies:
+
+```bash
+npm run security:sync-ttl-index-config -- --check
+```

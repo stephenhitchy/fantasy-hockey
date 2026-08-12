@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "projectId": "nhl-fantasy-app-ab673",
+  "database": "(default)",
+  "deleteProtectionRequired": true,
+  "pointInTimeRecovery": {
+    "recommended": true,
+    "applyByDefault": false,
+    "reason": "Provides minute-granularity recovery for recent accidental writes or deletions while scheduled backups provide longer retention."
+  },
+  "schedules": [
+    {
+      "key": "daily",
+      "recurrence": "daily",
+      "retention": "14d",
+      "reason": "Frequent recovery point for ordinary operational mistakes."
+    },
+    {
+      "key": "weekly-sun",
+      "recurrence": "weekly",
+      "dayOfWeek": "SUN",
+      "retention": "12w",
+      "reason": "Longer-lived weekly recovery points while remaining below Firestore's 14-week maximum."
+    }
+  ],
+  "restoreDrill": {
+    "databasePrefix": "restore-drill",
+    "maximumLeagueSamples": 20,
+    "criticalTopLevelCollections": [
+      "appData",
+      "leagues",
+      "publicProfiles",
+      "users"
+    ],
+    "criticalCollectionGroups": [
+      "members",
+      "teams",
+      "rosters",
+      "draft",
+      "draftPicks",
+      "cycles",
+      "matchups",
+      "transactions"
+    ],
+    "criticalAppDataDocuments": [
+      "playerAvailability",
+      "projectionAssetCatalog",
+      "leagueAutomationQueueConfig"
+    ]
+  }
+}

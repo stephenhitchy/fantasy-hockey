@@ -248,7 +248,7 @@ test('S3C runbook, commands, release label, and permanent roadmap remain synchro
   assert.match(privacy, /Content Security Policy reports/);
   assert.match(privacy, /Temporary technical records use defined expiration periods/);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.10/);
+  assert.match(rootRoadmap, /Version 1\.11/);
   assert.match(rootRoadmap, /# \[x\] S3\.16/);
   assert.match(rootRoadmap, /# \[x\] S3\.20/);
   assert.match(rootRoadmap, /# \[x\] S4\.2/);
