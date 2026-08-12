@@ -1,0 +1,57 @@
+<section
+  class="live-score-freshness"
+  [class.live-score-freshness--embedded]="embedded()"
+  [class.freshness-tone-fresh]="model().tone === 'fresh'"
+  [class.freshness-tone-scheduled]="model().tone === 'scheduled'"
+  [class.freshness-tone-working]="model().tone === 'working'"
+  [class.freshness-tone-delayed]="model().tone === 'delayed'"
+  [class.freshness-tone-error]="model().tone === 'error'"
+  [class.freshness-tone-waiting]="model().tone === 'waiting'"
+  [class.freshness-tone-complete]="model().tone === 'complete'"
+  role="group"
+  aria-label="Fantasy score update timing"
+>
+  <p class="rr-visually-hidden" aria-live="polite" aria-atomic="true">
+    {{ model().statusLabel }}. {{ model().title }}. {{ model().summary }}
+  </p>
+  <div class="freshness-summary">
+    <span class="freshness-indicator" aria-hidden="true"></span>
+
+    <div class="freshness-copy">
+      <div class="freshness-title-row">
+        <strong>{{ model().title }}</strong>
+        <span class="freshness-status-pill">{{ model().statusLabel }}</span>
+      </div>
+      <p>{{ model().summary }}</p>
+    </div>
+  </div>
+
+  <div class="freshness-metrics" aria-label="Fantasy score update timing">
+    <span
+      [title]="exactTimestamp(model().lastCheckedAt)"
+      [attr.aria-label]="'Last checked ' + model().lastCheckedLabel + '. Exact time ' + exactTimestamp(model().lastCheckedAt)"
+    >
+      <small>Last checked</small>
+      <b>{{ model().lastCheckedLabel }}</b>
+    </span>
+    <span
+      [title]="exactTimestamp(model().lastChangedAt)"
+      [attr.aria-label]="'Last score change ' + model().lastChangedLabel + '. Exact time ' + exactTimestamp(model().lastChangedAt)"
+    >
+      <small>Last score change</small>
+      <b>{{ model().lastChangedLabel }}</b>
+    </span>
+    <span
+      [title]="exactTimestamp(model().nextCheckAt)"
+      [attr.aria-label]="'Next check ' + model().nextCheckLabel + '. Exact time ' + exactTimestamp(model().nextCheckAt)"
+    >
+      <small>Next check</small>
+      <b>{{ model().nextCheckLabel }}</b>
+    </span>
+  </div>
+
+  <details class="freshness-explanation">
+    <summary>How score timing works</summary>
+    <p>{{ model().explanation }}</p>
+  </details>
+</section>

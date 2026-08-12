@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.14
+Version 1.15.1
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,9 +48,9 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, and guarded exact-league selected-callable canary controls are implemented alongside authentication, identifier, proxy, CI, and retention hardening; collect the RC24 evidence matrix, prove the canary safely, then complete distributed NHL ingestion/rate protection. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, and the RC24 App Check canary control are implemented; complete the exact RC24 validation report, rollback rehearsal, annotated beta tag, first restore drill, and observed first-season cohort before adding broad social or trade features. (P0 / L)
-# [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Repository tooling completed 2026-08-12; the first operator-run restore drill remains an exit gate.
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, and guarded exact-league selected-callable canary controls are implemented alongside authentication, identifier, proxy, CI, and retention hardening; collect the RC25 evidence matrix, prove the canary safely, then complete distributed NHL ingestion/rate protection. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, and the D1A.1 strict timestamp-build hotfix are complete; finish the exact RC25 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
+# [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
 
 ================================================================================
 NORTH STAR
@@ -228,8 +228,8 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.1 Register the production web app in Firebase App Check. (P0 / S) — Completed 2026-08-10 after RC15 reported a valid browser token and valid server-received App Check context.
 # [x] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S) — Completed 2026-08-10 with the registered public score-based reCAPTCHA Enterprise key and production debug mode disabled.
 # [x] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S) — Completed 2026-08-10; Release Readiness verified the client token and callable App Check context end to end while enforcement remains off.
-[~] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M) — S3E adds exact-build browser, device, platform, manager-day, and competitive-action coverage gates in Beta Operations. Complete after RC23 reaches the documented sample and 99% verification thresholds across the required matrix.
-[~] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M) — S3F installs a manual exact-league and exact-callable canary with evidence revalidation, valid-admin-token activation, recent-auth step-up, health proof, immutable audit history, and an App-Check-independent monitor rollback. Complete after one RC24 canary scope produces clean proof across the supported matrix, then expand deliberately in a later release.
+[~] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M) — S3E adds exact-build browser, device, platform, manager-day, and competitive-action coverage gates in Beta Operations. Continue on RC25 after D1A; complete when the current exact build reaches the documented sample and 99% verification thresholds across the required matrix.
+[~] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M) — S3F installs a manual exact-league and exact-callable canary with evidence revalidation, valid-admin-token activation, recent-auth step-up, health proof, immutable audit history, and an App-Check-independent monitor rollback. Complete after one RC25 canary scope produces clean proof across the supported matrix, then expand deliberately in a later release.
 [ ] S3.6 Enforce App Check for Firestore only after legitimate browser traffic is consistently verified. (P0 / M)
 
 # [x] S3.7 Raise the Firebase password minimum and UI requirement to at least 10-12 characters. (P1 / S) — Completed 2026-08-10 in Security Batch S3B with the enforced 12-128 character policy, capital/number/special requirements, live Firebase validation, and an explicit missing-requirement checklist.
@@ -275,11 +275,12 @@ Goal: Reach a public-facing browser and data-protection standard comparable to e
 [ ] S4.6 Fix, redirect, or remove www.rinkratfantasy.com. (P1 / S)
 # [x] S4.7 Verify TTL policies or scheduled cleanup for feedback, error reports, queue/task audit records, and temporary diagnostics. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with a source-controlled retention inventory, daily cleanup for six temporary collections, preserved scoring-task cleanup, privacy-limited health reporting, and Release Readiness monitoring.
 # [x] S4.8 Add privacy documentation for stored diagnostics, retention, deletion, and exported reports. (P1 / M) — Completed 2026-08-11 in Security Batch S3C with App Check, CSP telemetry, defined temporary-record retention, deletion behavior, and privacy-limited diagnostic language.
-[~] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L) — S4A adds guarded daily/weekly native backup schedules, production database delete protection, optional PITR activation, latest-ready-backup selection, named restore-drill creation, privacy-limited integrity verification, cleanup, and a permanent runbook. Complete after the first production backup becomes READY and one restore-drill database is created, verified, recorded, and deleted.
+# [x] S4.9 Add backup/export and restore rehearsal for Firestore. (P0 / L) — Completed 2026-08-12 after a READY production backup was restored into an isolated restore-drill database, reached 100%, passed privacy-limited structural verification, was archived by hash, and was deleted without touching (default).
 # [x] S4.10 Add incident severity levels, owner, response checklist, and post-incident review template. (P1 / M) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
 # [x] S4.11 Mirror every active Firestore TTL policy into firestore.indexes.json so index deployments preserve retention field overrides instead of asking to delete them. (P0 / S) — Completed 2026-08-12 in Security Operations Batch S4A with an idempotent sync/check command and nine canonical ttl:true overrides.
 # [x] S4.12 Add guarded backup, delete-protection, PITR, restore-plan, named restore-drill, verification, and drill-cleanup tooling. (P0 / L) — Completed 2026-08-12 in Security Operations Batch S4A.
-[~] S4.13 Complete and record the first named-database Firestore restore rehearsal. (P0 / M) — Tooling and verification are installed; complete after an actual READY backup is restored into restore-drill-*, verified, and deleted without touching (default).
+# [x] S4.13 Complete and record the first named-database Firestore restore rehearsal. (P0 / M) — Completed 2026-08-12 with restore-drill-20260812t193124z; operation successful, verifier PASS, report SHA-256 157d0b876c350148ea5ff65d17471f74ed3637c9d13a127b4183bf1eba494a75, drill deleted, production untouched.
+# [x] S4.14 Accept current gcloud weeklyRecurrence.day output in recovery inspection so a healthy Sunday schedule does not appear as a recurrence conflict. (P1 / S) — Completed 2026-08-12 in Data Quality Batch D1A.
 
 ================================================================================
 PHASE B1 — INVITE BETA LAUNCH AND FIRST-SEASON PROOF
@@ -287,8 +288,8 @@ Goal: Prove the product with real managers and real NHL game flow before adding 
 Exit gate: Multiple leagues complete several live weeks without integrity failures, and the team has usable product/technical evidence.
 ================================================================================
 
-[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC24 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
-[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC24 report is ready.
+[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC25 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
+[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC25 report is ready.
 [~] B1.3 Rehearse Hosting, Functions, rules, and queue-mode rollback. (P0 / M) — B1C supplies the reviewed incident order, exact source/tag checks, and generated rollback commands; complete after the operator performs and records the rehearsal.
 [ ] B1.4 Begin with 2-4 leagues and approximately 10-30 observed managers. (P0 / M)
 [ ] B1.5 Include hockey experts, casual fans, beginners, iPhone users, Android users, and at least one commissioner other than the creator. (P1 / M)
@@ -353,7 +354,8 @@ Goal: Turn RinkRat's transparent models into a proven competitive advantage.
 
 [ ] D1.14 Evaluate whether the ten-minute score interval meets user expectations. (P1 / M)
 [ ] D1.15 Improve update frequency only after measuring queue capacity and NHL-data cost. (P1 / Policy)
-[ ] D1.16 Add a visible score-freshness indicator and plain-language expected refresh interval everywhere it matters. (P1 / S)
+# [x] D1.16 Add a visible score-freshness indicator and plain-language expected refresh interval everywhere it matters. (P1 / S) — Completed 2026-08-12 in Data Quality Batch D1A / Release Candidate 25 with Last checked, Last score change, Next check, due/delayed states, mobile layout, and explicit separation from official NHL correction timestamps.
+# [x] D1.17 Narrow Firestore Timestamp-like values through one strict unknown-record guard so Angular TypeScript 6 can compile the score-freshness helper without overlapping required-property assertions. (P0 / S) — Completed 2026-08-12 in Data Quality Batch D1A.1 / Release Candidate 25 hotfix; runtime score timing behavior remains unchanged.
 
 ================================================================================
 PHASE C1 — SOCIAL RETENTION AND LEAGUE COMMUNITY
@@ -658,10 +660,10 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.3 Security Batch S1C — Strict rules, audit history, migration, and malicious-client tests. — Completed 2026-08-07.
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
-[~] SEQ.6 Security Batches S3A/S3E/S3F — App Check monitor mode, exact-build readiness gates, and guarded exact-league selected-callable canary controls are implemented with authentication hardening; collect the RC24 matrix and complete clean live canary proof before closing the sequence.
+[~] SEQ.6 Security Batches S3A/S3E/S3F — App Check monitor mode, exact-build readiness gates, and guarded exact-league selected-callable canary controls are implemented with authentication hardening; collect the RC25 matrix and complete clean live canary proof before closing the sequence.
 [~] SEQ.7 Security Batches S3B/S3D — Shared ID validation, universal boundary closure, and NHL proxy query/rate hardening are implemented; complete distributed shared ingestion/rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
-[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls, and the RC24 S3F canary release are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls and completed restore drill, S3F canary controls, and RC25 score-timing clarity are implemented; complete the ready exact-build validation report, application rollback rehearsal, annotated tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
@@ -763,6 +765,10 @@ Future entries:
 # [x] LOG.24 2026-08-12 — Completed Security Batch S3E.1.1 / Release Candidate 23 TypeScript hotfix: replace the optional indexed-property cast for projection preparation with a concrete four-state type guard, preventing undefined from entering Draft automation without changing runtime behavior.
 
 # [x] LOG.25 2026-08-12 — Completed Security Batch S3F / Release Candidate 24: add server-owned exact-league and exact-callable App Check canary routing, revalidate exact-build readiness before activation, require valid administrator App Check and recent authentication to start, record privacy-limited proof and immutable audits, and preserve a monitor rollback that remains available when App Check itself is failing.
+
+# [x] LOG.26 2026-08-12 — Completed Data Quality Batch D1A / Release Candidate 25: show honest shared-score timing on detailed and overview matchup pages, distinguish server checks from changed snapshots and NHL corrections, fix the weekly backup recurrence parser, and record completion of the first isolated Firestore restore rehearsal without changing Scoring V3 or Projection V11.
+
+# [x] LOG.27 2026-08-12 — Completed Data Quality Batch D1A.1 / Release Candidate 25 TypeScript hotfix: replace overlapping `seconds`/`nanoseconds` object assertions with one `Record<string, unknown>` type guard and independently validated timestamp fields, preserving all D1A runtime behavior.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

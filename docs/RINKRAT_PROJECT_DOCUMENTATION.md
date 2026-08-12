@@ -11398,3 +11398,18 @@ npm run verify:batchs3f
 
 Deploy all Functions first, then Hosting. Firestore Rules, indexes, TTL policies, backup schedules, Scoring V3, Projection V11, and the scoring queue mode are unchanged. Full operator guidance remains in `docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`.
 
+
+# Data Quality Batch D1A — Release Candidate 25
+
+D1A adds a compact, reusable fantasy-score timing panel to the detailed Game Center matchup and the all-matchups overview. It reads the existing shared scoring control and snapshot documents and distinguishes:
+
+- the last completed RinkRat score check;
+- the last changed shared fantasy snapshot;
+- the next server-owned scheduled check; and
+- later official NHL stat corrections, which are not yet represented by an upstream correction timestamp.
+
+The panel uses Live, On schedule, Due, Delayed, Updating, Needs attention, Replay, and Final states. Relative labels refresh locally every 30 seconds without adding another Firestore listener. The detailed page reuses its existing control and snapshot listeners; the overview adds one shared control listener alongside its existing scoring snapshot listener.
+
+D1A also updates the Firestore recovery parser for the current Google Cloud CLI shape `weeklyRecurrence.day: SUNDAY`. The first isolated Firestore restore rehearsal completed successfully on 2026-08-12, passed the privacy-limited verifier, was archived under SHA-256 `157d0b876c350148ea5ff65d17471f74ed3637c9d13a127b4183bf1eba494a75`, and the temporary drill database was deleted without touching production.
+
+Production Scoring V3, Projection V11, scoring cadence, queue mode, App Check canary state, Draft, roster, waiver, IR, Rules, indexes, TTL, PITR, and backup schedules are unchanged.

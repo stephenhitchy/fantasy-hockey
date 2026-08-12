@@ -950,40 +950,6 @@ export class CycleOne implements OnDestroy {
     }
   }
 
-  getSharedScoringStatusLabel(): string {
-    const control = this.liveScoringControl();
-
-    if (!control) {
-      return 'Waiting for shared scorer';
-    }
-
-    if (control.status === 'refreshing') {
-      return 'Checking NHL scores';
-    }
-
-    if (control.status === 'error') {
-      return 'Shared scorer needs attention';
-    }
-
-    return this.cycleScoring() ? 'Shared scoring active' : 'Waiting for first shared update';
-  }
-
-  getSharedScoringStatusText(): string {
-    const control = this.liveScoringControl();
-
-    if (control?.lastError) {
-      return control.lastError;
-    }
-
-    const snapshot = this.sharedScoringSnapshot();
-
-    if (snapshot?.result.refreshedAt) {
-      return `Last NHL calculation: ${new Date(snapshot.result.refreshedAt).toLocaleString()}. Live games refresh about every 10 minutes.`;
-    }
-
-    return 'The server checks NHL results for the entire league. Everyone reads the same shared scoring update.';
-  }
-
   readonly forwardPositions: DraftPosition[] = ['LW', 'C', 'RW'];
 
   readonly defensePositions: DraftPosition[] = ['D'];

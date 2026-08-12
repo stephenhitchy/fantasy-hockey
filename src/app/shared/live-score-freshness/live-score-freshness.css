@@ -1,0 +1,213 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.live-score-freshness {
+  --freshness-accent: var(--rr-color-success);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-success) 14%, transparent);
+  --freshness-border: color-mix(in srgb, var(--rr-color-border-strong) 48%, transparent);
+  --freshness-surface: color-mix(in srgb, var(--rr-color-surface) 94%, transparent);
+  display: grid;
+  gap: 13px;
+  width: 100%;
+  padding: 15px 16px;
+  border: 1px solid var(--freshness-border);
+  border-radius: 15px;
+  background: var(--freshness-surface);
+  color: var(--rr-color-text);
+  box-shadow: var(--rr-shadow-card);
+}
+
+.live-score-freshness--embedded {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.freshness-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.freshness-indicator {
+  width: 11px;
+  height: 11px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--freshness-accent);
+  box-shadow: 0 0 0 5px var(--freshness-accent-soft);
+}
+
+.freshness-copy,
+.freshness-title-row {
+  min-width: 0;
+}
+
+.freshness-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+}
+
+.freshness-title-row strong {
+  color: inherit;
+  font-size: 0.95rem;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.freshness-copy p {
+  margin: 4px 0 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 0.81rem;
+  font-weight: 700;
+  line-height: 1.48;
+}
+
+.freshness-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--freshness-accent);
+  border-radius: 999px;
+  background: var(--freshness-accent-soft);
+  color: var(--freshness-accent);
+  font-size: 0.66rem;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.freshness-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.freshness-metrics > span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-border) 58%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 44%, transparent);
+}
+
+.freshness-metrics small,
+.freshness-metrics b {
+  display: block;
+}
+
+.freshness-metrics small {
+  color: var(--rr-color-text-muted);
+  font-size: 0.63rem;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.freshness-metrics b {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--rr-color-text);
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.freshness-explanation {
+  border-top: 1px solid color-mix(in srgb, var(--rr-color-border) 52%, transparent);
+  padding-top: 8px;
+}
+
+.freshness-explanation summary {
+  width: fit-content;
+  color: var(--freshness-accent);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.freshness-explanation p {
+  margin: 7px 0 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.freshness-tone-working {
+  --freshness-accent: var(--rr-color-info);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-info) 14%, transparent);
+}
+
+.freshness-tone-working .freshness-indicator {
+  animation: freshness-pulse 1.35s ease-in-out infinite;
+}
+
+.freshness-tone-scheduled {
+  --freshness-accent: var(--rr-color-warning);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-warning) 14%, transparent);
+}
+
+.freshness-tone-delayed {
+  --freshness-accent: var(--rr-color-warning);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-warning) 18%, transparent);
+  --freshness-border: color-mix(in srgb, var(--rr-color-warning) 58%, transparent);
+}
+
+.freshness-tone-error {
+  --freshness-accent: var(--rr-color-danger);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-danger) 16%, transparent);
+  --freshness-border: color-mix(in srgb, var(--rr-color-danger) 62%, transparent);
+}
+
+.freshness-tone-waiting {
+  --freshness-accent: var(--rr-color-accent);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-accent) 14%, transparent);
+}
+
+.freshness-tone-complete {
+  --freshness-accent: var(--rr-color-success);
+  --freshness-accent-soft: color-mix(in srgb, var(--rr-color-success) 14%, transparent);
+}
+
+@keyframes freshness-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@media (max-width: 560px) {
+  .live-score-freshness {
+    gap: 11px;
+    padding: 13px;
+  }
+
+  .live-score-freshness--embedded {
+    padding: 0;
+  }
+
+  .freshness-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .freshness-metrics > span:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freshness-tone-working .freshness-indicator {
+    animation: none;
+  }
+}

@@ -368,3 +368,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+app-live-score-freshness {
+  display: block;
+  margin-bottom: 16px;
+}

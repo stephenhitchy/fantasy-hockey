@@ -60,6 +60,12 @@
       </span>
     </section>
 
+    <app-live-score-freshness
+      [control]="liveScoringControl()"
+      [snapshot]="sharedScoringSnapshot()"
+      [cycleStatus]="cycle()?.status ?? null"
+    ></app-live-score-freshness>
+
     @if (getMatchupList().length === 0) {
       <section class="empty-overview-card">
         <h2>No matchups found.</h2>

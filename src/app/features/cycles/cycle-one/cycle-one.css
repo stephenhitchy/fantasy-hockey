@@ -2305,29 +2305,13 @@
 }
 
 .g .shared-scoring-status-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 12px;
+  display: block;
   margin: 14px 0 0;
   padding: 13px 16px;
   border: 1px solid #35536d;
   border-radius: 14px;
   color: #d8e8f5;
   background: rgba(12, 31, 48, 0.88);
-}
-
-.g .shared-scoring-status-card strong,
-.g .shared-scoring-status-card p {
-  display: block;
-  margin: 0;
-}
-
-.g .shared-scoring-status-card p {
-  margin-top: 3px;
-  color: #aebfd0;
-  font-size: 0.82rem;
-  line-height: 1.45;
 }
 
 .g .shared-scoring-pulse {

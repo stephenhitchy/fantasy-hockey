@@ -21,7 +21,7 @@ function canaryControl(overrides = {}) {
     ...DEFAULT_APP_CHECK_CALLABLE_CANARY_CONTROL,
     mode: 'canary',
     revision: 4,
-    approvedBuildId: 'release-candidate-24-test-build',
+    approvedBuildId: 'release-candidate-25-test-build',
     approvedAppId: '1:721213878690:web:1c5ba29562b332f84e02fb',
     selectedCallables: ['requestProjectionSnapshotGeneration'],
     canaryLeagueIds: ['league-test-123'],
@@ -192,7 +192,7 @@ test('source-controlled policy stays monitor-first and corrects the real callabl
   assert.equal(readinessConfig.firstEnforcementScope.includes('makeSecureDraftPick'), true);
 });
 
-test('S3F advances to RC24 without changing Scoring V3 or Projection V11', async () => {
+test('S3F advances to RC25 without changing Scoring V3 or Projection V11', async () => {
   const [
     runtime,
     productionRuntime,
@@ -211,14 +211,14 @@ test('S3F advances to RC24 without changing Scoring V3 or Projection V11', async
     read('package.json').then(JSON.parse),
   ]);
 
-  assert.match(runtime, /Release Candidate 24/);
-  assert.match(productionRuntime, /Release Candidate 24/);
+  assert.match(runtime, /Release Candidate 25/);
+  assert.match(productionRuntime, /Release Candidate 25/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
   assert.match(roadmap, /S3\.23/);
   assert.match(roadmap, /Security Batch S3F/);
   assert.match(runbook, /exact set of callable Functions/i);
   assert.match(runbook, /exact set of league IDs/i);
-  assert.match(packageJson.scripts['verify:batchs3f:core'], /verify:batch(?:s3e-1-1|s3f):core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchs3f:core/);
+  assert.match(packageJson.scripts['verify:batchs3f:core'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1):core/);
 });

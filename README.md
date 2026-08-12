@@ -13,17 +13,19 @@ Core project references:
 - [`docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_DRAFT_IR_HOTFIX.md) — non-blocking Draft scheduling, verified Projection V11 background preparation, displaced-starter bench preservation during IR activation, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md`](docs/RINKRAT_SECURITY_S3E_1_1_DRAFT_PREPARATION_TYPE_HOTFIX.md) — strict TypeScript narrowing for persisted Draft preparation states without changing the S3E.1 runtime contract.
 - [`docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`](docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md) — exact-build evidence revalidation, exact-league and exact-callable App Check canary routing, health proof, audit history, and emergency monitor rollback.
+- [`docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md`](docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md) — manager-facing score timing, honest NHL correction language, first restore-drill evidence, and backup recurrence inspection.
+- [`docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md`](docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md) — strict Angular TypeScript narrowing for Firestore timestamp-like values without changing score-freshness behavior.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 24 / Security Batch S3F**. S3F keeps App Check monitor-first while installing a guarded runtime canary that can reject missing App Check only for exact selected callables in exact selected Internal Test leagues after the RC24 evidence gate passes. Draft scheduling, IR roster preservation, Scoring V3, and Projection V11 remain unchanged.
+The current runtime family is **Release Candidate 25 / Data Quality Batch D1A.1**. D1A adds honest score-timing visibility to detailed and overview matchup pages, records the completed Firestore restore rehearsal, and fixes weekly-backup inspection. D1A.1 removes the strict Angular TypeScript overlap error from Firestore timestamp parsing while preserving the S3F App Check canary, Draft scheduling, IR roster preservation, Scoring V3, and Projection V11.
 
 The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. Global callable and Firestore App Check enforcement remain off. The exact Internal Test league canary also remains disabled until a platform administrator deliberately starts it after the evidence gate passes. Production scoring remains in Shadow.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchs3f` as the current verification command.
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1a-1` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -55,6 +57,9 @@ verify:batchs3d
 verify:batchs3e
 verify:batchs3e-1
 verify:batchs3e-1-1
+verify:batchs3f
+verify:batchd1a
+verify:batchd1a-1
 ```
 
 RinkRat pins:
@@ -74,7 +79,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchs3f
+npm run verify:batchd1a-1
 ```
 
 After verification and a clean commit:
@@ -84,9 +89,32 @@ npm run beta:preflight
 ```
 
 
+
+## Data Quality Batch D1A.1 — Live-Scoring Timestamp Type Hotfix
+
+The Angular TypeScript 6 build rejected a required `{ nanoseconds: number }` assertion after the value had only been proven to contain numeric `seconds`. D1A.1 narrows the unknown Firestore timestamp-like value once as `Record<string, unknown>`, validates `seconds` and `nanoseconds` independently, and safely defaults missing nanoseconds to zero.
+
+Runtime behavior is unchanged. Score-freshness wording, timing thresholds, Scoring V3, Projection V11, App Check controls, queue routing, Firestore configuration, and recovery settings remain identical.
+
+Verification:
+
+```bash
+npm run verify:batchd1a-1
+```
+
+The failed D1A build stopped before Hosting deployment, so after verification and a clean commit:
+
+```bash
+npm run build:all
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only hosting:app -m "Data D1A.1 RC25 timestamp type hotfix"
+```
+
+No Functions, Firestore Rules, indexes, TTL, PITR, or backup deployment is required.
+
 ## Security Batch S3F — Exact Internal Test League App Check Canary
 
-S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC24 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
+S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC25 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
 
 Only a request matching both an approved callable and an approved Internal Test league may be rejected for missing or mismatched App Check context. Every other callable and league remains monitor-only. The server rechecks readiness, validates the Internal Test allowlist, stores an immutable administrator audit entry, records privacy-limited allowed/blocked proof, and preserves a recently authenticated emergency route back to Monitor that does not depend on App Check.
 
@@ -118,7 +146,7 @@ Because the original Functions deployment stopped at compilation, deploy the com
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E.1.1 Draft preparation type hotfix"
-firebase deploy --only hosting:app -m "Security S3E.1 RC24 Draft and IR hotfix"
+firebase deploy --only hosting:app -m "Security S3E.1 RC25 Draft and IR hotfix"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -147,7 +175,7 @@ Deployment requires all Functions first, then Hosting:
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E.1 Draft schedule and IR roster preservation"
-firebase deploy --only hosting:app -m "Security S3E.1 RC24 Draft and IR hotfix"
+firebase deploy --only hosting:app -m "Security S3E.1 RC25 Draft and IR hotfix"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -178,7 +206,7 @@ Deployment requires Functions first, then Hosting:
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions -m "Security S3E App Check readiness evidence"
-firebase deploy --only hosting:app -m "Security S3E RC24 readiness and mobile injury clarity"
+firebase deploy --only hosting:app -m "Security S3E RC25 readiness and mobile injury clarity"
 ```
 
 No Firestore Rules or index deployment is required.
@@ -256,13 +284,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC24 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC25 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC24 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC25 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md

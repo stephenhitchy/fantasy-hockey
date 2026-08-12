@@ -6,7 +6,7 @@ import { AppRuntimeConfig } from './app-runtime.types';
  * controls cannot accidentally ship to the live site.
  */
 export const APP_RUNTIME_CONFIG: AppRuntimeConfig = {
-  releaseLabel: 'Release Candidate 24',
+  releaseLabel: 'Release Candidate 25',
   scoringMode: 'live',
   historicalScoringDateIso: null,
   developerToolsEnabled: false,

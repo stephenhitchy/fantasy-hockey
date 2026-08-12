@@ -81,7 +81,7 @@ function recurrenceFromSchedule(raw) {
 
   const weekly = raw?.weeklyRecurrence ?? raw?.weekly_recurrence;
   if (weekly !== undefined && weekly !== null) {
-    const day = weekly?.dayOfWeek ?? weekly?.day_of_week ?? raw?.dayOfWeek ?? raw?.day_of_week ?? '';
+    const day = weekly?.day ?? weekly?.dayOfWeek ?? weekly?.day_of_week ?? raw?.day ?? raw?.dayOfWeek ?? raw?.day_of_week ?? '';
     return { recurrence: 'weekly', dayOfWeek: normalizeDayOfWeek(day) };
   }
 

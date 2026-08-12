@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { LiveScoreFreshness } from '../../../shared/live-score-freshness/live-score-freshness';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
@@ -34,7 +35,14 @@ import { getStandardRegularSeasonCycleCount } from '../../../core/playoffs/playo
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
-import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
+import {
+  listenToSharedCycleScoring,
+  listenToSharedLiveScoringControl,
+} from '../../../core/live-scoring/live-scoring.service';
+import {
+  SharedCycleScoringSnapshot,
+  SharedLiveScoringControl,
+} from '../../../core/live-scoring/live-scoring.models';
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
@@ -51,7 +59,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-matchup-overview',
-  imports: [RouterLink, ManagerAvatar],
+  imports: [RouterLink, ManagerAvatar, LiveScoreFreshness],
   templateUrl: './cycle-matchup-overview.html',
   styleUrl: './cycle-matchup-overview.css',
 })
@@ -67,6 +75,8 @@ export class CycleMatchupOverview implements OnDestroy {
   picks = signal<DraftPick[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
   cycleScoring = signal<CycleScoringResult | null>(null);
+  sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
+  liveScoringControl = signal<SharedLiveScoringControl | null>(null);
 
   loading = signal(true);
   scoringLoading = signal(false);
@@ -78,6 +88,7 @@ export class CycleMatchupOverview implements OnDestroy {
   private stopPicksListener: (() => void) | null = null;
   private stopCycleRosterPicksListener: (() => void) | null = null;
   private stopSharedScoringListener: (() => void) | null = null;
+  private stopLiveScoringControlListener: (() => void) | null = null;
   private liveDraftPicks: DraftPick[] = [];
   private cycleRosterSnapshotPicks: DraftPick[] = [];
 
@@ -94,6 +105,7 @@ export class CycleMatchupOverview implements OnDestroy {
     this.stopPicksListener?.();
     this.stopCycleRosterPicksListener?.();
     this.stopSharedScoringListener?.();
+    this.stopLiveScoringControlListener?.();
   }
 
   async loadOverviewPage(): Promise<void> {
@@ -133,6 +145,7 @@ export class CycleMatchupOverview implements OnDestroy {
         leagueId,
         this.cycleNumber,
         (snapshot) => {
+          this.sharedScoringSnapshot.set(snapshot);
           this.cycleScoring.set(snapshot?.result ?? null);
           this.scoringLoading.set(false);
           this.scoringError.set('');
@@ -141,6 +154,12 @@ export class CycleMatchupOverview implements OnDestroy {
           this.scoringLoading.set(false);
           this.scoringError.set(error.message);
         },
+      );
+
+      this.stopLiveScoringControlListener = listenToSharedLiveScoringControl(
+        leagueId,
+        (control) => this.liveScoringControl.set(control),
+        (error) => this.scoringError.set(error.message),
       );
 
       const regularSeasonCycleCount = getStandardRegularSeasonCycleCount(teams.length);
