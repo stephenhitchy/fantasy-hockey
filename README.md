@@ -8,15 +8,16 @@ Core project references:
 - [`docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md`](docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md) — native backup schedules, delete protection, optional PITR, named-database restore drills, verification, cleanup, and recovery evidence.
 - [`docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md`](docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md) — beta issue severity, triage, public known issues, live evidence, privacy, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3C_RUNBOOK.md`](docs/RINKRAT_SECURITY_S3C_RUNBOOK.md) — CI, dependency/secret auditing, CSP report-only, HSTS, TTL, cleanup, and emergency patch procedure.
+- [`docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md`](docs/RINKRAT_SECURITY_S3D_IDENTIFIER_BOUNDARIES.md) — Firestore identifier policies, task/trigger boundary rules, static audit, deployment, and rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The runtime family remains **Release Candidate 21**. Onboarding Batch B1D is a Hosting-only Training Camp wording refinement that describes LW/RW as **big-play wide receivers** with **fewer chances and bigger scoring swings**. B1C and S4A remain repository/operations tooling, and B1D does not change Cloud Functions, Firestore Rules, Scoring V3, Projection V11, Draft behavior, or roster timing.
-The inherited competitive runtime remains **Release Candidate 21 / Beta Operations Batch B1B**, with the B1B.1 TypeScript safeguard and B1D wording refinement layered on top.
-The inherited security baseline remains available through `npm run verify:batchs3c`.
+The current runtime family is **Release Candidate 22 / Security Batch S3D**. S3D closes the remaining Firestore identifier-boundary gap by normalizing Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, persisted Draft-owner references, projection snapshot/catalog identities, and replay cross-references before they become path segments.
+The competitive models remain **Scoring V3** and **Projection V11**. App Check remains in monitor mode; S3D does not enable enforcement, change Draft rankings, alter six-game windows, or modify transaction timing.
+The inherited security and beta-operations baselines remain available through `npm run verify:batchs3c`, `npm run verify:batchb1b-1`, and the current `npm run verify:batchs3d` chain.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -43,6 +44,7 @@ verify:batchb1b-1
 verify:batchb1c
 verify:batchs4a
 verify:batchb1d
+verify:batchs3d
 ```
 
 RinkRat pins:
@@ -62,7 +64,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchb1d
+npm run verify:batchs3d
 ```
 
 After verification and a clean commit:
@@ -71,6 +73,28 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+## Security Batch S3D — Universal Firestore Identifier Boundary Closure
+
+S3D adds one shared normalized resolver, server-side path guards, semantic policies for league/user/request/task/pick/slot/asset/snapshot/catalog/invite/player/feedback/fingerprint IDs, and a source-controlled boundary inventory covering 13 authority modules.
+
+The static audit rejects direct interpolation of `event.params`, `request.auth.uid`, `request.data`, or Cloud Tasks payload IDs into Firestore paths. It also verifies every task/trigger surface uses the shared resolver and that projection/Draft/replay cross-references are validated before lookup.
+
+Verification:
+
+```bash
+npm run verify:batchs3d
+```
+
+Deployment requires Functions first, then Hosting so the current RC22 release identity and documentation match the hardened server authorities:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Security S3D Firestore identifier boundary closure"
+firebase deploy --only hosting:app -m "Security S3D Release Candidate 22"
+```
+
+No Firestore Rules or index deployment is required.
 
 ## Onboarding Batch B1D — Big-Play Winger Comparison Clarity
 
@@ -91,7 +115,7 @@ firebase deploy --only hosting:app -m "Onboarding B1D big-play winger comparison
 
 ## Security Operations Batch S4A — Firestore Backup and Restore Rehearsal
 
-S4A adds repository-controlled disaster-recovery operations without changing the RC21 application runtime:
+S4A adds repository-controlled disaster-recovery operations without changing the then-current RC21 application runtime:
 
 - production Firestore delete-protection inspection and guarded activation;
 - daily backups retained 14 days;
@@ -123,13 +147,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC21 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC22 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC21 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC22 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md

@@ -66,3 +66,12 @@ export function isSafeFirestoreDocumentId(
 
   return true;
 }
+
+export function resolveSafeFirestoreDocumentId(
+  value: unknown,
+  options: FirestoreDocumentIdOptions = {},
+): string | null {
+  const id = normalizeFirestoreDocumentId(value, options.normalizeCase ?? 'none');
+
+  return isSafeFirestoreDocumentId(id, options) ? id : null;
+}

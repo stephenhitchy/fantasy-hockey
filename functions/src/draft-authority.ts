@@ -41,7 +41,14 @@ import {
   LEAGUE_AUDIT_SCHEMA_VERSION,
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
-import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
+import {
+  requireFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from './shared/security/firestore-document-id.util';
+import {
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+  FIRESTORE_INVITE_CODE_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -219,9 +226,11 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
         ? Math.max(0, Math.trunc(value.benchSlots))
         : DEFAULT_BENCH_SLOTS,
     roundOneOrder: Array.isArray(value.roundOneOrder)
-      ? value.roundOneOrder.filter(
-          (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
-        )
+      ? value.roundOneOrder
+          .map((entry) =>
+            resolveSafeFirestoreDocumentId(entry, FIRESTORE_AUTH_USER_ID_OPTIONS),
+          )
+          .filter((entry): entry is string => entry !== null)
       : [],
     nextOverallPick:
       typeof value.nextOverallPick === 'number' && Number.isFinite(value.nextOverallPick)
@@ -382,7 +391,13 @@ function parseRoundOneOrder(value: unknown): string[] {
     throw new HttpsError('invalid-argument', 'A draft order is required.');
   }
 
-  const order = value.map(asString).filter(Boolean);
+  const order = value.map((entry) =>
+    requireFirestoreDocumentId(
+      entry,
+      'draft-order manager ID',
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    ),
+  );
 
   if (order.length < 2 || order.length > MAX_LEAGUE_TEAMS) {
     throw new HttpsError(
@@ -461,7 +476,10 @@ async function saveDraftSettings(
     }
 
     const leagueData = leagueSnapshot.data() ?? {};
-    const inviteCode = asString(leagueData['inviteCode']);
+    const inviteCode = resolveSafeFirestoreDocumentId(
+      leagueData['inviteCode'],
+      FIRESTORE_INVITE_CODE_OPTIONS,
+    );
     const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
     const inviteSnapshot = inviteRef
       ? await transaction.get(inviteRef)
@@ -1277,7 +1295,20 @@ export const makeSecureDraftPick = onCall(
           ? queueSnapshot.data() as Partial<DraftQueue>
           : undefined,
       );
-      const rosterOwners = [...new Set(draft.roundOneOrder)];
+      const uniqueRosterOwners = [...new Set(draft.roundOneOrder)];
+      const rosterOwners = uniqueRosterOwners
+        .map((ownerId) =>
+          resolveSafeFirestoreDocumentId(ownerId, FIRESTORE_AUTH_USER_ID_OPTIONS),
+        )
+        .filter((ownerId): ownerId is string => ownerId !== null);
+
+      if (rosterOwners.length !== uniqueRosterOwners.length) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The saved Draft order contains an invalid manager identity.',
+        );
+      }
+
       const rosterRefs = rosterOwners.map((ownerId) =>
         db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`),
       );

@@ -41,7 +41,7 @@ test('the current Training Camp and documentation no longer rely on outside-rece
   assert.doesNotMatch(docs, /Wings \(LW\/RW\) → outside wide receivers/i);
   assert.match(docs, /Wings \(LW\/RW\) → big-play wide receivers/i);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.11\.1/);
+  assert.match(rootRoadmap, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(rootRoadmap, /# \[x\] LOG\.20/);
 });
 

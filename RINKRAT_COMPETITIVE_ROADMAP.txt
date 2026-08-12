@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.11.1
+Version 1.12
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,8 +48,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, shared path validation, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; finish supported-browser monitoring, App Check enforcement gates, the remaining internal-ID audit, and distributed NHL ingestion/rate protection. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC21 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, enforced authentication policy, universal identifier-boundary validation, NHL proxy abuse controls, CI, dependency/secret audits, CSP report-only telemetry, and temporary-data cleanup are implemented; finish supported-browser monitoring, measured App Check enforcement, and distributed NHL ingestion/rate protection. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations Center and B1C release-freeze tooling are implemented; complete the exact RC22 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Repository tooling completed 2026-08-12; the first operator-run restore drill remains an exit gate.
 
 ================================================================================
@@ -238,8 +238,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.10 Require recent authentication before account deletion, critical admin changes, and future billing changes. (P1 / M) — Completed 2026-08-10 in Security Batch S3A for account/league deletion and current high-impact platform operations; future billing actions must reuse the same guard.
 
 # [x] S3.11 Create one shared requireFirestoreDocumentId() validator. (P0 / M) — Completed 2026-08-10 in Security Batch S3B with pure and callable-safe validators for path length, slash/control characters, reserved IDs, and route-specific formats.
-[~] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L)
-    Public Draft, league lifecycle, projection, roster, replay, profile, email, feedback, deletion, and platform-admin request boundaries are covered in S3B. Continue the internal persisted-ID audit before App Check enforcement and unrestricted public registration.
+# [x] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L) — Completed 2026-08-12 in Security Batch S3D with normalized Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, persisted Draft-owner references, projection snapshot/catalog helpers, replay assets, and callable feedback membership paths.
 
 # [x] S3.13 Harden the public NHL proxy query allowlists and numeric bounds. (P0 / M) — Completed 2026-08-10 in Security Batch S3B with exact route/query contracts, duplicate-parameter rejection, bounded offsets/results, route-specific sorts, and response-size ceilings.
 [ ] S3.14 Add shared caching or route competitive NHL requests through server-owned ingestion. (P0 / XL)
@@ -251,6 +250,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.18 Add secret scanning and block accidental service-account/private-key commits. (P0 / S) — Completed 2026-08-11 in Security Batch S3C with a dependency-free scanner for private keys, service accounts, OAuth secrets, cloud tokens, and provider credentials while recognizing only the expected public Firebase/App Check browser identifiers.
 # [x] S3.19 Add npm production dependency audits for root and Functions. (P0 / S) — Completed 2026-08-11 in Security Batch S3C with local advisory mode, strict CI mode, high/critical production thresholds, and downloadable JSON reports.
 # [x] S3.20 Add a dependency update and emergency-patch runbook. (P1 / S) — Completed 2026-08-11 in docs/RINKRAT_SECURITY_S3C_RUNBOOK.md.
+# [x] S3.21 Add a source-controlled identifier-boundary inventory and static audit that rejects direct external-ID interpolation into Firestore paths. (P0 / M) — Completed 2026-08-12 in Security Batch S3D with 13 boundary modules, semantic identifier policies, Cloud Tasks/trigger guards, and CI verification across the Functions tree.
 
 PHASE S3 EXIT CHECKLIST:
 
@@ -652,9 +652,9 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
 [~] SEQ.6 Security Batch S3A — App Check monitor mode, enforced password policy, verified email, and administrator step-up are implemented; complete supported-browser traffic monitoring and the measured App Check enforcement gates before closing the sequence.
-[~] SEQ.7 Security Batch S3B — Shared ID validation and NHL proxy query/rate hardening implemented; complete the remaining internal-ID audit and distributed cache/rate controls before marking the sequence fully complete.
+[~] SEQ.7 Security Batches S3B/S3D — Shared ID validation, universal boundary closure, and NHL proxy query/rate hardening are implemented; complete distributed shared ingestion/rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
-[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, and S4A Firestore backup/restore controls are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore backup/restore controls, and the RC22 S3D identifier-boundary release are implemented; complete the ready exact-build validation report, application rollback rehearsal, first named-database restore drill, annotated tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
@@ -742,10 +742,12 @@ Future entries:
 # [x] LOG.16 2026-08-11 — Completed Beta Operations Batch B1B / Release Candidate 21: add structured manager issue classification, private administrator triage, sanitized public known issues, privacy-limited competitive-action and route evidence, daily server scoring-duration aggregation, expanded retention, and the first-season operations runbook.
 
 # [x] LOG.17 2026-08-11 — Completed Beta Operations Batch B1B.1 TypeScript build hotfix: give scoring-duration summaries concrete overview types so trigger totals remain visible to strict TypeScript sorting without changing runtime evidence or competitive behavior.
-# [x] LOG.18 2026-08-11 — Completed Beta Operations Batch B1C: pin Node 22.23.1 and npm 11.17.0 for release work, verify the live RC21 manifest/headers/TTL baseline, validate copied exact-build launch evidence, generate ignored freeze and rollback records, and verify the annotated tag without redeploying or changing the runtime.
-# [x] LOG.19 2026-08-12 — Completed Security Operations Batch S4A repository implementation: source-control all nine TTL field overrides, add daily/weekly Firestore backup and delete-protection baselines, optional PITR activation, guarded named-database restore rehearsal, privacy-limited integrity verification, drill cleanup, CI checks, and the permanent recovery runbook without changing RC21 runtime code.
+# [x] LOG.18 2026-08-11 — Completed Beta Operations Batch B1C: pin Node 22.23.1 and npm 11.17.0 for release work, verify the then-live RC21 manifest/headers/TTL baseline, validate copied exact-build launch evidence, generate ignored freeze and rollback records, and verify the annotated tag without redeploying or changing the runtime.
+# [x] LOG.19 2026-08-12 — Completed Security Operations Batch S4A repository implementation: source-control all nine TTL field overrides, add daily/weekly Firestore backup and delete-protection baselines, optional PITR activation, guarded named-database restore rehearsal, privacy-limited integrity verification, drill cleanup, CI checks, and the permanent recovery runbook without changing the then-current RC21 runtime code.
 
 # [x] LOG.20 2026-08-12 — Completed Onboarding Batch B1D: replace the football-specific LW/RW label outside wide receivers with the clearer big-play wide receivers, lead with fewer chances and bigger scoring swings, and preserve the existing four-position guide, Scoring V3, and Projection V11.
+
+# [x] LOG.21 2026-08-12 — Completed Security Batch S3D / Release Candidate 22: add semantic Firestore identifier policies, normalize Cloud Tasks and Firestore trigger parameters before path use, validate persisted Draft/projection/replay cross-references, protect authenticated feedback membership paths, and add a source-controlled 13-module boundary inventory plus static CI audit without changing Scoring V3 or Projection V11.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

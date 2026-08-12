@@ -7,7 +7,12 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { db } from './shared/core/firebase';
-import { isSafeFirestoreDocumentId } from './shared/security/firestore-document-id-core.util';
+import { resolveSafeFirestoreDocumentId } from './shared/security/firestore-document-id-core.util';
+import {
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+  FIRESTORE_DRAFT_PICK_ID_OPTIONS,
+  FIRESTORE_LEAGUE_ID_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 import {
   DraftAutoPickReason,
   DraftQueue,
@@ -1168,12 +1173,21 @@ async function makeOneServerAutomaticPick(
       return false;
     }
 
+    const currentOwnerId = resolveSafeFirestoreDocumentId(
+      currentPick.ownerId,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!currentOwnerId) {
+      throw new Error('The current Draft owner identifier is invalid.');
+    }
+
     const queueRef = db.doc(
-      `leagues/${leagueId}/draft/current/queues/${currentPick.ownerId}`,
+      `leagues/${leagueId}/draft/current/queues/${currentOwnerId}`,
     );
     const queueSnapshot = await transaction.get(queueRef);
     const queue = normalizeQueue(
-      currentPick.ownerId,
+      currentOwnerId,
       queueSnapshot.exists
         ? (queueSnapshot.data() as Partial<DraftQueue>)
         : undefined,
@@ -1186,7 +1200,17 @@ async function makeOneServerAutomaticPick(
       return false;
     }
 
-    const rosterOwners = [...new Set(draft.roundOneOrder)];
+    const uniqueDraftOwners = [...new Set(draft.roundOneOrder)];
+    const rosterOwners = uniqueDraftOwners
+      .map((ownerId) =>
+        resolveSafeFirestoreDocumentId(ownerId, FIRESTORE_AUTH_USER_ID_OPTIONS),
+      )
+      .filter((ownerId): ownerId is string => ownerId !== null);
+
+    if (rosterOwners.length !== uniqueDraftOwners.length) {
+      throw new Error('The saved Draft order contains an invalid owner identifier.');
+    }
+
     const rosterRefs = rosterOwners.map((ownerId) =>
       db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`),
     );
@@ -1204,7 +1228,7 @@ async function makeOneServerAutomaticPick(
       );
     });
 
-    const roster = rostersByOwnerId.get(currentPick.ownerId) ?? createEmptyFantasyRoster();
+    const roster = rostersByOwnerId.get(currentOwnerId) ?? createEmptyFantasyRoster();
     const selected = selectAutomaticDraftCandidate({
       queue,
       draft,
@@ -1215,7 +1239,7 @@ async function makeOneServerAutomaticPick(
 
     if (!selected) {
       throw new Error(
-        `No legal automatic draft candidate was available for ${currentPick.ownerId}.`,
+        `No legal automatic draft candidate was available for ${currentOwnerId}.`,
       );
     }
 
@@ -1261,7 +1285,7 @@ async function makeOneServerAutomaticPick(
     const nextOverallPick = currentPick.overallPick + 1;
     const draftComplete = nextOverallPick > getDraftTotalPickCount(draft);
     const rosterRef = db.doc(
-      `leagues/${leagueId}/teams/${currentPick.ownerId}/roster/current`,
+      `leagues/${leagueId}/teams/${currentOwnerId}/roster/current`,
     );
 
     transaction.set(pickRef, {
@@ -1277,7 +1301,7 @@ async function makeOneServerAutomaticPick(
         benchSlots: updatedRoster.benchSlots,
         irSlots: updatedRoster.irSlots,
         updatedAt: FieldValue.serverTimestamp(),
-        ...(rosterSnapshots[rosterOwners.indexOf(currentPick.ownerId)].exists
+        ...(rosterSnapshots[rosterOwners.indexOf(currentOwnerId)].exists
           ? {}
           : { createdAt: FieldValue.serverTimestamp() }),
       },
@@ -1286,7 +1310,7 @@ async function makeOneServerAutomaticPick(
     transaction.set(
       queueRef,
       {
-        ownerId: currentPick.ownerId,
+        ownerId: currentOwnerId,
         assetKeys: queue.assetKeys.filter((assetKey) => assetKey !== selected.asset.assetKey),
         autoDraftEnabled: nextAutoDraftEnabled,
         consecutiveClockExpirations: nextConsecutiveClockExpirations,
@@ -1325,6 +1349,21 @@ async function makeOneServerAutomaticPick(
 async function processLeagueDraftAutomation(
   leagueId: string,
 ): Promise<DraftAutomationRunResult> {
+  const normalizedLeagueId = resolveSafeFirestoreDocumentId(
+    leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+
+  if (!normalizedLeagueId) {
+    return {
+      leagueId: '',
+      status: 'error',
+      picksMade: 0,
+      message: 'RinkRat rejected an invalid league identifier before draft automation.',
+    };
+  }
+
+  leagueId = normalizedLeagueId;
   const lease = await claimDraftAutomationLease(leagueId);
 
   if (!lease) {
@@ -1392,11 +1431,20 @@ async function processLeagueDraftAutomation(
       };
     }
 
+    const currentOwnerId = resolveSafeFirestoreDocumentId(
+      currentPick.ownerId,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!currentOwnerId) {
+      throw new Error('The current Draft owner identifier is invalid.');
+    }
+
     const queueSnapshot = await db.doc(
-      `leagues/${leagueId}/draft/current/queues/${currentPick.ownerId}`,
+      `leagues/${leagueId}/draft/current/queues/${currentOwnerId}`,
     ).get();
     const currentQueue = normalizeQueue(
-      currentPick.ownerId,
+      currentOwnerId,
       queueSnapshot.exists
         ? (queueSnapshot.data() as Partial<DraftQueue>)
         : undefined,
@@ -1487,12 +1535,24 @@ async function getAutomatedDraftLeagueIds(): Promise<string[]> {
     .limit(DRAFT_AUTOMATION_SCAN_LIMIT)
     .get();
 
-  return [...new Set(
-    draftSnapshot.docs
-      .filter((document) => document.id === 'current')
-      .map((document) => document.ref.parent.parent?.id ?? '')
-      .filter(Boolean),
-  )].sort();
+  const leagueIds: string[] = [];
+
+  for (const document of draftSnapshot.docs) {
+    if (document.id !== 'current') {
+      continue;
+    }
+
+    const leagueId = resolveSafeFirestoreDocumentId(
+      document.ref.parent.parent?.id,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
+    if (leagueId) {
+      leagueIds.push(leagueId);
+    }
+  }
+
+  return [...new Set(leagueIds)].sort();
 }
 
 export const runScheduledDraftAutomation = onSchedule(
@@ -1561,13 +1621,14 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
   async (request) => {
     const payload = request.data;
 
+    const leagueId = resolveSafeFirestoreDocumentId(
+      payload?.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
     if (
       !payload ||
-      !isSafeFirestoreDocumentId(payload.leagueId, {
-        minimumLength: 6,
-        maxBytes: 128,
-        pattern: /^[A-Za-z0-9_-]+$/,
-      }) ||
+      !leagueId ||
       !Number.isFinite(payload.expectedOverallPick) ||
       !Number.isFinite(payload.expectedPickStartedAtMilliseconds) ||
       !Number.isFinite(payload.expectedDueAtMilliseconds)
@@ -1576,7 +1637,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       return;
     }
 
-    const draftRef = db.doc(`leagues/${payload.leagueId}/draft/current`);
+    const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
     const draftSnapshot = await draftRef.get();
 
     if (!draftSnapshot.exists) {
@@ -1594,7 +1655,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       pickStartedAt.getTime() !== Math.trunc(payload.expectedPickStartedAtMilliseconds)
     ) {
       console.info('Ignored stale draft clock task.', {
-        leagueId: payload.leagueId,
+        leagueId: leagueId,
         expectedOverallPick: payload.expectedOverallPick,
         currentOverallPick: draft.nextOverallPick,
       });
@@ -1633,7 +1694,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       throw new Error('Draft clock task arrived before its exact deadline. Retrying shortly.');
     }
 
-    const result = await processLeagueDraftAutomation(payload.leagueId);
+    const result = await processLeagueDraftAutomation(leagueId);
 
     if (result.status === 'error') {
       throw new Error(result.message);
@@ -1644,7 +1705,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
     }
 
     console.info('Exact draft clock task completed.', {
-      leagueId: payload.leagueId,
+      leagueId: leagueId,
       expectedOverallPick: payload.expectedOverallPick,
       status: result.status,
       picksMade: result.picksMade,
@@ -1666,7 +1727,20 @@ export const reconcileDraftTurnAfterCommittedPick = onDocumentWritten(
       return;
     }
 
-    const leagueId = event.params.leagueId;
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const pickId = resolveSafeFirestoreDocumentId(
+      event.params.pickId,
+      FIRESTORE_DRAFT_PICK_ID_OPTIONS,
+    );
+
+    if (!leagueId || !pickId) {
+      console.warn('Ignored malformed committed Draft pick trigger.');
+      return;
+    }
+
     const result = await repairDraftTurnFromCommittedPicks(
       leagueId,
       `${SERVER_DRAFT_ACTOR}:pick-handoff`,
@@ -1680,7 +1754,7 @@ export const reconcileDraftTurnAfterCommittedPick = onDocumentWritten(
 
     if (!taskScheduled) {
       throw new Error(
-        `Pick ${event.params.pickId} committed, but RinkRat could not schedule the next exact draft deadline.`,
+        `Pick ${pickId} committed, but RinkRat could not schedule the next exact draft deadline.`,
       );
     }
   },
@@ -1716,14 +1790,24 @@ export const continueServerDraftAutomation = onDocumentWritten(
       return;
     }
 
-    const result = await processLeagueDraftAutomation(event.params.leagueId);
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
+    if (!leagueId) {
+      console.warn('Ignored malformed Draft continuation trigger.');
+      return;
+    }
+
+    const result = await processLeagueDraftAutomation(leagueId);
 
     if (result.status === 'error') {
       throw new Error(result.message);
     }
 
     if (result.status === 'waiting' && result.message.includes('Another server worker')) {
-      const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, after);
+      const taskScheduled = await scheduleDraftClockTask(leagueId, after);
 
       if (!taskScheduled) {
         throw new Error('Unable to schedule the exact draft clock deadline.');
@@ -1741,9 +1825,23 @@ export const processAutoDraftQueueChange = onDocumentWritten(
     retry: false,
   },
   async (event) => {
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const ownerId = resolveSafeFirestoreDocumentId(
+      event.params.ownerId,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!leagueId || !ownerId) {
+      console.warn('Ignored malformed Auto-Draft queue trigger.');
+      return;
+    }
+
     const after = event.data?.after.exists
       ? normalizeQueue(
-          event.params.ownerId,
+          ownerId,
           event.data.after.data() as Partial<DraftQueue>,
         )
       : null;
@@ -1756,7 +1854,7 @@ export const processAutoDraftQueueChange = onDocumentWritten(
     }
 
     const draftSnapshot = await db.doc(
-      `leagues/${event.params.leagueId}/draft/current`,
+      `leagues/${leagueId}/draft/current`,
     ).get();
 
     if (!draftSnapshot.exists) {
@@ -1766,18 +1864,18 @@ export const processAutoDraftQueueChange = onDocumentWritten(
     const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
     const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
-    if (!currentPick || currentPick.ownerId !== event.params.ownerId) {
+    if (!currentPick || currentPick.ownerId !== ownerId) {
       return;
     }
 
-    const result = await processLeagueDraftAutomation(event.params.leagueId);
+    const result = await processLeagueDraftAutomation(leagueId);
 
     if (result.status === 'error') {
       throw new Error(result.message);
     }
 
     if (result.status === 'waiting' && result.message.includes('Another server worker')) {
-      const taskScheduled = await scheduleDraftClockTask(event.params.leagueId, draft);
+      const taskScheduled = await scheduleDraftClockTask(leagueId, draft);
 
       if (!taskScheduled) {
         throw new Error('Unable to schedule the auto-draft task.');

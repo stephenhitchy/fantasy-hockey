@@ -29,7 +29,11 @@ import {
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
   requireFirestoreDocumentIds,
+  resolveSafeFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
+import {
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 import {
   getNhlProxyRateLimitPolicy,
   isNhlProxyResolutionFailure,
@@ -3263,8 +3267,17 @@ export const submitFeedback = onCall(
       );
     }
 
-    await enforceUserSubmissionLimit(
+    const userId = resolveSafeFirestoreDocumentId(
       request.auth.uid,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!userId) {
+      throw new HttpsError('unauthenticated', 'Your manager identity is invalid. Sign in again.');
+    }
+
+    await enforceUserSubmissionLimit(
+      userId,
       'feedback',
       5,
       10 * 60 * 1000
@@ -3314,14 +3327,14 @@ export const submitFeedback = onCall(
     if (leagueId) {
       const [leagueSnapshot, memberSnapshot, teamSnapshot] = await Promise.all([
         db.doc(`leagues/${leagueId}`).get(),
-        db.doc(`leagues/${leagueId}/members/${request.auth.uid}`).get(),
-        db.doc(`leagues/${leagueId}/teams/${request.auth.uid}`).get()
+        db.doc(`leagues/${leagueId}/members/${userId}`).get(),
+        db.doc(`leagues/${leagueId}/teams/${userId}`).get()
       ]);
       const commissionerId = asString(
         (leagueSnapshot.data() ?? {})['commissionerId']
       );
       const hasLeagueAccess = leagueSnapshot.exists && (
-        commissionerId === request.auth.uid ||
+        commissionerId === userId ||
         memberSnapshot.exists ||
         teamSnapshot.exists
       );
@@ -3345,7 +3358,7 @@ export const submitFeedback = onCall(
     await db.doc(`feedbackReports/${feedbackId}`).set({
       schemaVersion: 2,
       feedbackId,
-      userId: request.auth.uid,
+      userId: userId,
       category,
       severity: defaultFeedbackSeverity(category),
       summary,
@@ -3453,7 +3466,7 @@ async function requirePlatformAdmin(
   const uid = requireFirestoreDocumentId(
     request.auth.uid,
     'platform administrator ID',
-    { maxBytes: 128 },
+    FIRESTORE_AUTH_USER_ID_OPTIONS,
   );
   let role = 'platform-admin';
 

@@ -214,6 +214,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/shared/security/firestore-document-id-core.util.ts',
 
     'src/shared/security/firestore-document-id.util.ts',
+        'src/shared/security/firestore-document-id-policies.ts',
 
     'src/shared/security/nhl-proxy-security.util.ts',
         // B1B adds isolated beta evidence and aggregate operations helpers.

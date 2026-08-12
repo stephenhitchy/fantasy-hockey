@@ -312,6 +312,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/security/firestore-document-id-core.util.ts',
 
         'src/shared/security/firestore-document-id.util.ts',
+        'src/shared/security/firestore-document-id-policies.ts',
 
         'src/shared/security/nhl-proxy-security.util.ts',
         // B1B adds isolated beta evidence and aggregate operations helpers.

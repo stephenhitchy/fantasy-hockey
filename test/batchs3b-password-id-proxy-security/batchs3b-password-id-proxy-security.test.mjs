@@ -159,7 +159,7 @@ test('user-controlled competitive path fragments use the shared validator', () =
   ]) {
     assert.match(
       source,
-      /requireFirestoreDocumentId|isSafeFirestoreDocumentId|optionalFirestoreDocumentId|requireFirestoreDocumentIds/,
+      /requireFirestoreDocumentId|requireServerFirestoreDocumentId|resolveSafeFirestoreDocumentId|isSafeFirestoreDocumentId|optionalFirestoreDocumentId|requireFirestoreDocumentIds/,
       `${label} must use the shared Firestore path validator`,
     );
   }
@@ -245,7 +245,7 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(packageJson.scripts['verify:batchs3b'], /verify:batchs3a-2/);
   assert.match(packageJson.scripts['verify:batchs3b'], /test:batchs3b:run/);
   assert.match(packageJson.scripts['verify:batchs3b'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Beta Operations Batch B1B)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Beta Operations Batch B1B)/);
   assert.match(readmeSource, /verify:batchs3b/);
   assert.match(documentationSource, /Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening/);
   assert.equal(roadmapRootSource, roadmapDocsSource);

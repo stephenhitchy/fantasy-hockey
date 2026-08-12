@@ -212,8 +212,8 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(packageJson.scripts['verify:batchb1b'], /verify:batchb1b:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /verify:batchs3c:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /test:batchb1b:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1b:core/);
-  assert.match(readme, /Release Candidate 21 \/ Beta Operations Batch B1B/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d):core/);
+  assert.match(readme, /RINKRAT_BETA_OPERATIONS_RUNBOOK\.md/);
   assert.match(readme, /verify:batchb1b/);
   assert.match(docs, /Beta Operations Batch B1B/);
   assert.equal(roadmap, docsRoadmap);
@@ -221,8 +221,10 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(roadmap, /# \[x\] B1\.6/);
   assert.match(roadmap, /# \[x\] B1\.23/);
   assert.match(roadmap, /# \[x\] LOG\.16/);
-  assert.match(runtime, /Release Candidate 21/);
-  assert.match(productionRuntime, /Release Candidate 21/);
+  const runtimeRelease = Number(runtime.match(/Release Candidate (\d+)/)?.[1] ?? 0);
+  const productionRelease = Number(productionRuntime.match(/Release Candidate (\d+)/)?.[1] ?? 0);
+  assert.ok(runtimeRelease >= 21);
+  assert.ok(productionRelease >= 21);
 });
 
 test('B1B preserves Production Scoring V3, Projection V11, Firestore Rules, and indexes', async () => {

@@ -2,6 +2,14 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 import { db } from '../firebase';
 import {
+  requireServerFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from '../../security/firestore-document-id.util';
+import {
+  FIRESTORE_CATALOG_ID_OPTIONS,
+  FIRESTORE_SNAPSHOT_ID_OPTIONS,
+} from '../../security/firestore-document-id-policies';
+import {
   getCurrentNhlDraftSkaters,
   NHL_DRAFT_CLUBS,
   NhlDraftSkater,
@@ -106,7 +114,12 @@ function createCatalog(
 }
 
 async function persistCatalog(catalog: CanonicalProjectionAssetCatalog): Promise<void> {
-  const catalogRef = db.doc(`${CATALOG_COLLECTION}/${catalog.catalogId}`);
+  const catalogId = requireServerFirestoreDocumentId(
+    catalog.catalogId,
+    'projection catalog identifier',
+    FIRESTORE_CATALOG_ID_OPTIONS,
+  );
+  const catalogRef = db.doc(`${CATALOG_COLLECTION}/${catalogId}`);
   const existing = await catalogRef.get();
 
   if (!existing.exists) {
@@ -122,7 +135,11 @@ async function persistCatalog(catalog: CanonicalProjectionAssetCatalog): Promise
 
       writeGroup.forEach((assets, offset) => {
         const chunkIndex = index + offset;
-        const chunkId = `chunk-${String(chunkIndex + 1).padStart(4, '0')}`;
+        const chunkId = requireServerFirestoreDocumentId(
+          `chunk-${String(chunkIndex + 1).padStart(4, '0')}`,
+          'projection catalog chunk identifier',
+          FIRESTORE_SNAPSHOT_ID_OPTIONS,
+        );
 
         batch.set(
           catalogRef.collection('assets').doc(chunkId),
@@ -184,7 +201,10 @@ async function persistCatalog(catalog: CanonicalProjectionAssetCatalog): Promise
 export async function loadCanonicalProjectionAssetCatalog(
   catalogId: string,
 ): Promise<CanonicalProjectionAssetCatalog | null> {
-  const normalizedCatalogId = catalogId.trim();
+  const normalizedCatalogId = resolveSafeFirestoreDocumentId(
+    catalogId,
+    FIRESTORE_CATALOG_ID_OPTIONS,
+  );
 
   if (!normalizedCatalogId) {
     return null;

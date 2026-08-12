@@ -22,7 +22,7 @@ import {
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outputDirectory = path.join(projectRoot, '.beta-release');
-const defaultTag = 'rinkrat-rc21-invite-beta';
+const defaultTag = 'rinkrat-rc22-invite-beta';
 
 function parseArguments(argv) {
   const args = [...argv];
@@ -163,7 +163,7 @@ async function inspectStaticSource() {
   requireCondition(ttlBaseline?.policies?.length === policy.requiredTtlPolicyCount, 'The source TTL baseline count does not match the freeze policy.');
   requireCondition(runtimeSource.includes(`releaseLabel: '${policy.releaseLabel}'`), 'The development runtime release label changed.');
   requireCondition(productionRuntimeSource.includes(`releaseLabel: '${policy.releaseLabel}'`), 'The production runtime release label changed.');
-  requireCondition(packageJson.scripts?.['verify:batchb1b-1'], 'The RC21 verification command is missing.');
+  requireCondition(packageJson.scripts?.['verify:batchs3d'], 'The approved runtime verification command is missing.');
   requireCondition(packageJson.scripts?.['verify:batchb1c'], 'The B1C verification command is missing.');
 
   return {
@@ -317,7 +317,7 @@ async function writeRecordAndPlan(record) {
 }
 
 function requireFreezeAcknowledgements(options) {
-  requireCondition(optionEnabled(options, 'ci-passed'), 'Freeze requires --ci-passed after the RC21 GitHub Actions verification succeeds.');
+  requireCondition(optionEnabled(options, 'ci-passed'), 'Freeze requires --ci-passed after the current-release GitHub Actions verification succeeds.');
   requireCondition(optionEnabled(options, 'rollback-rehearsed'), 'Freeze requires --rollback-rehearsed after the rollback commands and queue-mode return path are rehearsed.');
   requireCondition(optionEnabled(options, 'queue-shadow'), 'Freeze requires --queue-shadow after Release Readiness confirms production queued scoring remains in Shadow.');
 }
@@ -325,7 +325,7 @@ function requireFreezeAcknowledgements(options) {
 async function preflight(options) {
   const source = await inspectStaticSource();
   if (optionEnabled(options, 'source-only')) {
-    console.log(`Invite-beta source preflight passed: Node ${source.expectedNode}, npm ${source.expectedNpm}, ${source.ttlPolicyCount} TTL policies, RC21 runtime, App Check monitor mode, CSP report-only, and Hosting target ${source.policy.hostingSite}.`);
+    console.log(`Invite-beta source preflight passed: Node ${source.expectedNode}, npm ${source.expectedNpm}, ${source.ttlPolicyCount} TTL policies, ${source.policy.releaseLabel} runtime, App Check monitor mode, CSP report-only, and Hosting target ${source.policy.hostingSite}.`);
     return;
   }
 
@@ -424,7 +424,7 @@ async function freeze(options) {
   console.log(`Invite-beta freeze record created: ${paths.recordPath}`);
   console.log(`Rollback plan created: ${paths.planPath}`);
   console.log('Review both files, then create the annotated tag on the deployed source commit:');
-  console.log(`git tag -a ${tag} ${live.manifest.sourceRevision} -m "RinkRat RC21 invite beta baseline"`);
+  console.log(`git tag -a ${tag} ${live.manifest.sourceRevision} -m "RinkRat ${live.manifest.releaseLabel} invite beta baseline"`);
   console.log(`git push origin ${tag}`);
   console.log(`npm run beta:verify-tag -- --tag=${tag}`);
 }

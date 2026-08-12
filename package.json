@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run toolchain:verify && npm run verify:batchb1d:core && node -e \"console.log('Inherited CI coverage: verify:batchb1b:core test:batchb1b-1:run test:batchb1c:run verify:batchs4a:core test:batchs4a:run')\" && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batchs3d:core && node -e \"console.log('Inherited CI coverage through Security Batch S3D')\" && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -222,7 +222,13 @@
     "test:batchb1d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1d-training-camp-wing-clarity/*.test.mjs",
     "preverify:batchb1d": "npm run security:sync-repository-automation",
     "verify:batchb1d:core": "npm run verify:batchs4a:core && npm run test:batchb1d:run && npm run validate:release-manifest",
-    "verify:batchb1d": "npm run toolchain:verify && npm run verify:batchb1d:core && npm run security:dependency-audit"
+    "verify:batchb1d": "npm run toolchain:verify && npm run verify:batchb1d:core && npm run security:dependency-audit",
+    "security:audit-firestore-ids": "node scripts/security/firestore-id-boundary-audit.mjs",
+    "pretest:batchs3d:run": "npm run generate:release-manifest",
+    "test:batchs3d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3d-firestore-id-boundaries/*.test.mjs",
+    "preverify:batchs3d": "npm run security:sync-repository-automation",
+    "verify:batchs3d:core": "npm run verify:batchb1d:core && npm run security:audit-firestore-ids && npm run test:batchs3d:run && npm run validate:release-manifest",
+    "verify:batchs3d": "npm run toolchain:verify && npm run verify:batchs3d:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

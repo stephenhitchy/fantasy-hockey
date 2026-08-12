@@ -9,7 +9,15 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
-import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
+import {
+  requireFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from './shared/security/firestore-document-id.util';
+import {
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+  FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_PLAYER_ID_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 
 const FUNCTION_REGION = 'us-central1';
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -1799,7 +1807,16 @@ export const sendWelcomeEmailOnProfileCreated = onDocumentCreated(
       return;
     }
 
-    const userId = event.params.userId;
+    const userId = resolveSafeFirestoreDocumentId(
+      event.params.userId,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!userId) {
+      console.warn('Ignored malformed profile-created email trigger.');
+      return;
+    }
+
     const user = await getAuth().getUser(userId);
 
     if (!user.email) {
@@ -1875,8 +1892,20 @@ export const sendInjuryEmailOnAvailabilityChange = onDocumentWritten(
       return;
     }
 
-    const leagueId = event.params.leagueId;
-    const numericPlayerId = Number(afterData['playerId'] ?? event.params.playerId);
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const playerId = resolveSafeFirestoreDocumentId(
+      event.params.playerId,
+      FIRESTORE_PLAYER_ID_OPTIONS,
+    );
+    const numericPlayerId = Number(afterData['playerId'] ?? playerId);
+
+    if (!leagueId || !playerId) {
+      console.warn('Ignored malformed injury-email availability trigger.');
+      return;
+    }
 
     if (!Number.isFinite(numericPlayerId) || numericPlayerId <= 0) {
       return;

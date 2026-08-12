@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "release": "Security Batch S3D",
+  "purpose": "Inventory every external or persisted identifier boundary that can become a Firestore path segment.",
+  "policies": {
+    "authUserId": "FIRESTORE_AUTH_USER_ID_OPTIONS",
+    "leagueId": "FIRESTORE_LEAGUE_ID_OPTIONS",
+    "requestId": "FIRESTORE_REQUEST_ID_OPTIONS",
+    "taskId": "FIRESTORE_TASK_ID_OPTIONS",
+    "draftPickId": "FIRESTORE_DRAFT_PICK_ID_OPTIONS",
+    "rosterSlotId": "FIRESTORE_ROSTER_SLOT_ID_OPTIONS",
+    "assetKey": "FIRESTORE_ASSET_KEY_OPTIONS",
+    "snapshotId": "FIRESTORE_SNAPSHOT_ID_OPTIONS",
+    "catalogId": "FIRESTORE_CATALOG_ID_OPTIONS",
+    "inviteCode": "FIRESTORE_INVITE_CODE_OPTIONS",
+    "playerId": "FIRESTORE_PLAYER_ID_OPTIONS",
+    "feedbackId": "FIRESTORE_FEEDBACK_ID_OPTIONS",
+    "fingerprintId": "FIRESTORE_FINGERPRINT_ID_OPTIONS"
+  },
+  "boundaries": [
+    {
+      "file": "functions/src/draft-automation.ts",
+      "kind": "Cloud Tasks and Firestore trigger parameters",
+      "requiredTokens": [
+        "resolveSafeFirestoreDocumentId",
+        "FIRESTORE_LEAGUE_ID_OPTIONS",
+        "FIRESTORE_DRAFT_PICK_ID_OPTIONS",
+        "FIRESTORE_AUTH_USER_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/league-automation.ts",
+      "kind": "Scoring queue, historical replay, and schedule identifiers",
+      "requiredTokens": [
+        "requireServerFirestoreDocumentId",
+        "FIRESTORE_TASK_ID_OPTIONS",
+        "FIRESTORE_REQUEST_ID_OPTIONS",
+        "FIRESTORE_ASSET_KEY_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/projection-authority.ts",
+      "kind": "Projection queue request and manager identifiers",
+      "requiredTokens": [
+        "resolveSafeFirestoreDocumentId",
+        "FIRESTORE_REQUEST_ID_OPTIONS",
+        "FIRESTORE_AUTH_USER_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/shared/core/projection/projection-snapshot.service.ts",
+      "kind": "Projection snapshot and league path helpers",
+      "requiredTokens": [
+        "requireServerFirestoreDocumentId",
+        "FIRESTORE_SNAPSHOT_ID_OPTIONS",
+        "FIRESTORE_LEAGUE_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/shared/core/projection/projection-asset-catalog.service.ts",
+      "kind": "Canonical catalog and chunk identifiers",
+      "requiredTokens": [
+        "requireServerFirestoreDocumentId",
+        "FIRESTORE_CATALOG_ID_OPTIONS",
+        "resolveSafeFirestoreDocumentId"
+      ]
+    },
+    {
+      "file": "functions/src/draft-authority.ts",
+      "kind": "Draft order, invite, and persisted manager identifiers",
+      "requiredTokens": [
+        "resolveSafeFirestoreDocumentId",
+        "FIRESTORE_INVITE_CODE_OPTIONS",
+        "FIRESTORE_AUTH_USER_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/email-notifications.ts",
+      "kind": "Profile and injury trigger parameters",
+      "requiredTokens": [
+        "resolveSafeFirestoreDocumentId",
+        "FIRESTORE_PLAYER_ID_OPTIONS",
+        "FIRESTORE_AUTH_USER_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/index.ts",
+      "kind": "Callable authentication and feedback membership paths",
+      "requiredTokens": [
+        "resolveSafeFirestoreDocumentId",
+        "FIRESTORE_AUTH_USER_ID_OPTIONS"
+      ]
+    },
+    {
+      "file": "functions/src/roster-authority.ts",
+      "kind": "Roster, waiver, owner, slot, and asset callable inputs",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "normalizedSecureRosterActionRequest"
+      ]
+    },
+    {
+      "file": "functions/src/roster-moves.ts",
+      "kind": "Add-drop and lineup callable path inputs",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "input.activeSlotId"
+      ]
+    },
+    {
+      "file": "functions/src/league-lifecycle-authority.ts",
+      "kind": "League create, join, migration, invite, and owner inputs",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "createLeagueSecure",
+        "joinLeagueSecure"
+      ]
+    },
+    {
+      "file": "functions/src/manager-profile-authority.ts",
+      "kind": "Private and public profile owner identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId"
+      ]
+    },
+    {
+      "file": "functions/src/beta-operations.ts",
+      "kind": "Feedback, evidence, known-issue, and rate-limit identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId"
+      ]
+    }
+  ],
+  "forbiddenDirectPathSources": [
+    "event.params",
+    "request.auth.uid",
+    "request.data",
+    "payload."
+  ]
+}

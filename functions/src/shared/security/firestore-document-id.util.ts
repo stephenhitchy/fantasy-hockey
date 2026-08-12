@@ -4,19 +4,23 @@ import {
   type FirestoreDocumentIdOptions,
   isSafeFirestoreDocumentId,
   normalizeFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
 } from './firestore-document-id-core.util';
 
 export type { FirestoreDocumentIdOptions } from './firestore-document-id-core.util';
-export { isSafeFirestoreDocumentId } from './firestore-document-id-core.util';
+export {
+  isSafeFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from './firestore-document-id-core.util';
 
 export function requireFirestoreDocumentId(
   value: unknown,
   fieldLabel: string,
   options: FirestoreDocumentIdOptions = {},
 ): string {
-  const id = normalizeFirestoreDocumentId(value, options.normalizeCase ?? 'none');
+  const id = resolveSafeFirestoreDocumentId(value, options);
 
-  if (!isSafeFirestoreDocumentId(id, options)) {
+  if (!id) {
     throw new HttpsError(
       'invalid-argument',
       `The ${fieldLabel} is invalid. Refresh the page and try again.`,
@@ -65,4 +69,18 @@ export function requireFirestoreDocumentIds(
   }
 
   return value.map((entry) => requireFirestoreDocumentId(entry, fieldLabel, options));
+}
+
+export function requireServerFirestoreDocumentId(
+  value: unknown,
+  fieldLabel: string,
+  options: FirestoreDocumentIdOptions = {},
+): string {
+  const id = resolveSafeFirestoreDocumentId(value, options);
+
+  if (!id) {
+    throw new Error(`RinkRat rejected an invalid ${fieldLabel}.`);
+  }
+
+  return id;
 }

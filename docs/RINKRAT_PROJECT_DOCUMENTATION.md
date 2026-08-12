@@ -11313,3 +11313,9 @@ npm run verify:batchs4a
 ```
 
 S4A has no Firebase application deployment. Commit and push the repository changes, apply the Google Cloud recovery baseline deliberately, wait for a READY backup, and complete one named-database restore rehearsal before marking roadmap item S4.9 complete.
+
+## Security Batch S3D — Universal Firestore Identifier Boundary Closure
+
+Release Candidate 22 completes the remaining identifier-boundary audit. One normalized resolver and semantic policy catalog now guard Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, saved Draft owners, replay request/task identities, projection snapshot/catalog references, and feedback membership paths before Admin SDK path construction.
+
+The source-controlled inventory is `config/firestore-document-id-boundaries.json`; the static audit is `npm run security:audit-firestore-ids`; the full release verification is `npm run verify:batchs3d`. App Check remains monitor-only, while Scoring V3 and Projection V11 are unchanged. Deployment order is Functions, then Hosting; no Rules or indexes are part of S3D.

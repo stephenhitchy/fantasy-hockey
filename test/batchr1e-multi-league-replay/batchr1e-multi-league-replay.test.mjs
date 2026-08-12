@@ -45,12 +45,13 @@ test('replay queue submissions are idempotent and exact to league, manager, and 
 
   assert.match(automation, /normalizeHistoricalReplayRequestId/);
   assert.match(automation, /buildHistoricalReplayTaskId/);
-  assert.match(automation, /historicalReplayRequests\/\$\{requestId\}/);
+  assert.match(automation, /function getHistoricalReplayRequestRef/);
+  assert.match(automation, /historicalReplayRequests\/\$\{safeRequestId\}/);
   assert.match(automation, /activeRequestId/);
   assert.match(automation, /task-already-exists/);
   assert.match(automation, /This league already has a replay day queued or processing/);
-  assert.match(automation, /requestData\['leagueId'\] !== payload\.leagueId/);
-  assert.match(automation, /requestData\['requestedBy'\] !== payload\.requestedBy/);
+  assert.match(automation, /requestData\['leagueId'\] !== leagueId/);
+  assert.match(automation, /requestData\['requestedBy'\] !== requestedBy/);
 });
 
 test('a failed simulated date remains the retry date after the request enters queued status', async () => {

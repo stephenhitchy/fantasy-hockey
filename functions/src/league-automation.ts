@@ -27,7 +27,16 @@ import {
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
   requireFirestoreDocumentIds,
+  requireServerFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
+import {
+  FIRESTORE_ASSET_KEY_OPTIONS,
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+  FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_REQUEST_ID_OPTIONS,
+  FIRESTORE_TASK_ID_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 import {
   advanceCompletedRegularSeasonAssetWindows,
   completeCycle,
@@ -331,7 +340,10 @@ async function requireHistoricalReplayPlatformAdmin(request: {
     token: Record<string, unknown>;
   } | null;
 }): Promise<string> {
-  const userId = request.auth?.uid;
+  const userId = resolveSafeFirestoreDocumentId(
+    request.auth?.uid,
+    FIRESTORE_AUTH_USER_ID_OPTIONS,
+  );
 
   if (!userId) {
     throw new HttpsError('unauthenticated', 'You must be signed in to advance the replay.');
@@ -354,11 +366,21 @@ async function requireHistoricalReplayPlatformAdmin(request: {
 }
 
 function getHistoricalReplayControlRef(leagueId: string) {
-  return db.doc(`leagues/${leagueId}/historicalReplay/control`);
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'historical replay league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  return db.doc(`leagues/${safeLeagueId}/historicalReplay/control`);
 }
 
 function getHistoricalReplayRequestRef(requestId: string) {
-  return db.doc(`historicalReplayRequests/${requestId}`);
+  const safeRequestId = requireServerFirestoreDocumentId(
+    requestId,
+    'historical replay request identifier',
+    FIRESTORE_REQUEST_ID_OPTIONS,
+  );
+  return db.doc(`historicalReplayRequests/${safeRequestId}`);
 }
 
 function getHistoricalReplayTaskQueue() {
@@ -368,11 +390,21 @@ function getHistoricalReplayTaskQueue() {
 }
 
 function getLeagueAutomationScheduleRef(leagueId: string) {
-  return db.doc(`leagueAutomationSchedules/${leagueId}`);
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'league automation schedule identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  return db.doc(`leagueAutomationSchedules/${safeLeagueId}`);
 }
 
 function getLeagueAutomationTaskRef(taskId: string) {
-  return db.doc(`leagueAutomationTasks/${taskId}`);
+  const safeTaskId = requireServerFirestoreDocumentId(
+    taskId,
+    'league automation task identifier',
+    FIRESTORE_TASK_ID_OPTIONS,
+  );
+  return db.doc(`leagueAutomationTasks/${safeTaskId}`);
 }
 
 function getLeagueAutomationTaskQueue() {
@@ -394,9 +426,10 @@ function normalizeLeagueAutomationLeagueIds(value: unknown): string[] {
 
   return [...new Set(
     value
-      .filter((entry): entry is string => typeof entry === 'string')
-      .map((entry) => entry.trim())
-      .filter((entry) => /^[A-Za-z0-9_-]{6,128}$/.test(entry))
+      .map((entry) =>
+        resolveSafeFirestoreDocumentId(entry, FIRESTORE_LEAGUE_ID_OPTIONS),
+      )
+      .filter((entry): entry is string => entry !== null)
       .slice(0, 100),
   )].sort();
 }
@@ -1245,7 +1278,17 @@ function isHistoricalReplayTaskAlreadyExistsError(error: unknown): boolean {
 }
 
 function getHistoricalReplayAssetRef(leagueId: string, assetKey: string) {
-  return db.doc(`leagues/${leagueId}/historicalReplayAssets/${assetKey}`);
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'historical replay league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const safeAssetKey = requireServerFirestoreDocumentId(
+    assetKey,
+    'historical replay asset identifier',
+    FIRESTORE_ASSET_KEY_OPTIONS,
+  );
+  return db.doc(`leagues/${safeLeagueId}/historicalReplayAssets/${safeAssetKey}`);
 }
 
 function normalizeReplayControl(value: DocumentData | undefined): HistoricalReplayControl {
@@ -2375,6 +2418,12 @@ async function runLeagueAutomation(
   force: boolean,
   trigger: LeagueAutomationTrigger,
 ): Promise<LeagueAutomationResult> {
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'league automation identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  leagueId = safeLeagueId;
   const startedAt = Date.now();
 
   // Historical replay leagues advance only when a platform administrator
@@ -2836,12 +2885,17 @@ function normalizeDueLeagueAutomationSchedule(
 ): DueLeagueAutomationSchedule | null {
   const expectedDueAtMilliseconds = toMilliseconds(value?.['nextScoringAt']);
 
-  if (!leagueId || expectedDueAtMilliseconds <= 0 || value?.['scoringEnabled'] === false) {
+  const safeLeagueId = resolveSafeFirestoreDocumentId(
+    leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+
+  if (!safeLeagueId || expectedDueAtMilliseconds <= 0 || value?.['scoringEnabled'] === false) {
     return null;
   }
 
   return {
-    leagueId,
+    leagueId: safeLeagueId,
     expectedDueAtMilliseconds,
     queueStatus:
       typeof value?.['queueStatus'] === 'string'
@@ -4082,14 +4136,15 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
   async (request) => {
     const payload = request.data;
 
+    const leagueId = resolveSafeFirestoreDocumentId(
+      payload?.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
     if (
       !payload ||
       payload.taskSchemaVersion !== LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION ||
-      !isSafeFirestoreDocumentId(payload.leagueId, {
-        minimumLength: 6,
-        maxBytes: 128,
-        pattern: /^[A-Za-z0-9_-]+$/,
-      }) ||
+      !leagueId ||
       !Number.isFinite(payload.expectedDueAtMilliseconds) ||
       typeof payload.dueBucket !== 'string' ||
       !payload.dueBucket ||
@@ -4102,7 +4157,7 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
     }
 
     const taskId = buildLeagueAutomationTaskId(payload);
-    const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+    const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
     const taskRef = getLeagueAutomationTaskRef(taskId);
     const scheduleSnapshot = await scheduleRef.get();
 
@@ -4177,7 +4232,7 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
 
     try {
       const result = await runLeagueAutomation(
-        payload.leagueId,
+        leagueId,
         payload.reason === 'canary-manual',
         'queue-task',
       );
@@ -4504,8 +4559,18 @@ export const initializeSeasonAfterDraft = onDocumentWritten(
       return;
     }
 
-    await runLeagueAutomation(
+    const leagueId = resolveSafeFirestoreDocumentId(
       event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
+    if (!leagueId) {
+      console.warn('Ignored malformed season initialization trigger.');
+      return;
+    }
+
+    await runLeagueAutomation(
+      leagueId,
       true,
       'draft-complete',
     );
@@ -5143,7 +5208,19 @@ export const advanceHistoricalReplayDay = onCall(
         activeRequestId !== requestId &&
         (controlStatus === 'queued' || controlStatus === 'advancing')
       ) {
-        const activeRequestRef = getHistoricalReplayRequestRef(activeRequestId);
+        const safeActiveRequestId = resolveSafeFirestoreDocumentId(
+          activeRequestId,
+          FIRESTORE_REQUEST_ID_OPTIONS,
+        );
+
+        if (!safeActiveRequestId) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The saved replay request identity is invalid. Retry from Release Readiness.',
+          );
+        }
+
+        const activeRequestRef = getHistoricalReplayRequestRef(safeActiveRequestId);
         const activeRequestSnapshot = await transaction.get(activeRequestRef);
 
         if (!isHistoricalReplayRequestStale(activeRequestSnapshot.data(), now)) {
@@ -5279,25 +5356,26 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
   async (request) => {
     const payload = request.data;
 
-    if (
-      !payload ||
-      !isSafeFirestoreDocumentId(payload.requestId, {
-        maxBytes: 96,
-        pattern: /^[A-Za-z0-9_-]+$/,
-      }) ||
-      !isSafeFirestoreDocumentId(payload.leagueId, {
-        minimumLength: 6,
-        maxBytes: 128,
-        pattern: /^[A-Za-z0-9_-]+$/,
-      }) ||
-      !isSafeFirestoreDocumentId(payload.requestedBy, { maxBytes: 128 })
-    ) {
+    const requestId = resolveSafeFirestoreDocumentId(
+      payload?.requestId,
+      FIRESTORE_REQUEST_ID_OPTIONS,
+    );
+    const leagueId = resolveSafeFirestoreDocumentId(
+      payload?.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const requestedBy = resolveSafeFirestoreDocumentId(
+      payload?.requestedBy,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!payload || !requestId || !leagueId || !requestedBy) {
       console.warn('Ignored malformed historical replay task.', { payload });
       return;
     }
 
-    const requestRef = getHistoricalReplayRequestRef(payload.requestId);
-    const controlRef = getHistoricalReplayControlRef(payload.leagueId);
+    const requestRef = getHistoricalReplayRequestRef(requestId);
+    const controlRef = getHistoricalReplayControlRef(leagueId);
     const now = Date.now();
     const claimed = await db.runTransaction(async (transaction) => {
       const [requestSnapshot, controlSnapshot] = await Promise.all([
@@ -5319,8 +5397,8 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
       }
 
       if (
-        requestData['leagueId'] !== payload.leagueId ||
-        requestData['requestedBy'] !== payload.requestedBy
+        requestData['leagueId'] !== leagueId ||
+        requestData['requestedBy'] !== requestedBy
       ) {
         transaction.set(
           requestRef,
@@ -5348,7 +5426,7 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
           ? controlData['activeRequestId']
           : '';
 
-      if (activeRequestId && activeRequestId !== payload.requestId) {
+      if (activeRequestId && activeRequestId !== requestId) {
         transaction.set(
           requestRef,
           {
@@ -5381,7 +5459,7 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
           schemaVersion: 2,
           enabled: true,
           status: 'advancing',
-          activeRequestId: payload.requestId,
+          activeRequestId: requestId,
           message: 'Replay worker started. Scores and roster windows will update from the saved historical NHL ledger.',
           lastError: '',
           workerStartedAt: FieldValue.serverTimestamp(),
@@ -5405,9 +5483,9 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
 
     try {
       const result = await performHistoricalReplayAdvance(
-        payload.leagueId,
-        payload.requestedBy,
-        payload.requestId,
+        leagueId,
+        requestedBy,
+        requestId,
         retrySimulatedDate,
       );
 
@@ -5442,8 +5520,8 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
       ).catch(() => undefined);
 
       console.error('Historical replay queue task failed.', {
-        requestId: payload.requestId,
-        leagueId: payload.leagueId,
+        requestId: requestId,
+        leagueId: leagueId,
         message,
       });
     }

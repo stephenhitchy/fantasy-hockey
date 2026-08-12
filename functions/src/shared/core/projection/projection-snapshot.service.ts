@@ -7,6 +7,14 @@ import {
   writeBatch,
 } from '../firebase-admin-compat';
 import { db } from '../firebase';
+import {
+  requireServerFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from '../../security/firestore-document-id.util';
+import {
+  FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_SNAPSHOT_ID_OPTIONS,
+} from '../../security/firestore-document-id-policies';
 import { DraftableAsset, DraftPosition, SharedProjectionAvailabilityStatus } from '../draft/draft.models';
 import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
 import { getCurrentNhlDraftSkaters, NHL_DRAFT_CLUBS } from '../nhl/nhl-api.service';
@@ -106,11 +114,31 @@ export interface WindowSnapshotFreshnessInput {
 }
 
 function getPointerRef(leagueId: string, pointerId: string) {
-  return doc(db, 'leagues', leagueId, 'projectionSnapshots', pointerId);
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'projection league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const safePointerId = requireServerFirestoreDocumentId(
+    pointerId,
+    'projection snapshot identifier',
+    FIRESTORE_SNAPSHOT_ID_OPTIONS,
+  );
+  return doc(db, 'leagues', safeLeagueId, 'projectionSnapshots', safePointerId);
 }
 
 function getAssetsRef(leagueId: string, snapshotId: string) {
-  return collection(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId, 'assets');
+  const safeLeagueId = requireServerFirestoreDocumentId(
+    leagueId,
+    'projection league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const safeSnapshotId = requireServerFirestoreDocumentId(
+    snapshotId,
+    'projection snapshot identifier',
+    FIRESTORE_SNAPSHOT_ID_OPTIONS,
+  );
+  return collection(db, 'leagues', safeLeagueId, 'projectionSnapshots', safeSnapshotId, 'assets');
 }
 
 function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): SharedProjectionSnapshotMetadata | null {
@@ -339,13 +367,20 @@ export async function loadSharedProjectionSnapshotById(
   leagueId: string,
   snapshotId: string,
 ): Promise<SharedProjectionSnapshot | null> {
-  const normalizedSnapshotId = snapshotId.trim();
+  const normalizedLeagueId = resolveSafeFirestoreDocumentId(
+    leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const normalizedSnapshotId = resolveSafeFirestoreDocumentId(
+    snapshotId,
+    FIRESTORE_SNAPSHOT_ID_OPTIONS,
+  );
 
-  if (!normalizedSnapshotId) {
+  if (!normalizedLeagueId || !normalizedSnapshotId) {
     return null;
   }
 
-  const snapshotDocument = await getDoc(getPointerRef(leagueId, normalizedSnapshotId));
+  const snapshotDocument = await getDoc(getPointerRef(normalizedLeagueId, normalizedSnapshotId));
 
   if (!snapshotDocument.exists()) {
     return null;
@@ -359,7 +394,7 @@ export async function loadSharedProjectionSnapshotById(
     return null;
   }
 
-  return loadSnapshotFromMetadata(leagueId, metadata);
+  return loadSnapshotFromMetadata(normalizedLeagueId, metadata);
 }
 
 export function isSharedProjectionSnapshotFreshForWindow(
@@ -415,11 +450,17 @@ export async function sealSharedProjectionSnapshotIntegrity(
   leagueId: string,
   snapshotId: string,
 ): Promise<SealSharedProjectionSnapshotIntegrityResult> {
-  const normalizedLeagueId = leagueId.trim();
-  const normalizedSnapshotId = snapshotId.trim();
+  const normalizedLeagueId = resolveSafeFirestoreDocumentId(
+    leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const normalizedSnapshotId = resolveSafeFirestoreDocumentId(
+    snapshotId,
+    FIRESTORE_SNAPSHOT_ID_OPTIONS,
+  );
 
   if (!normalizedLeagueId || !normalizedSnapshotId) {
-    throw new Error('A league and projection snapshot are required for integrity migration.');
+    throw new Error('A valid league and projection snapshot are required for integrity migration.');
   }
 
   const snapshotRef = getPointerRef(normalizedLeagueId, normalizedSnapshotId);

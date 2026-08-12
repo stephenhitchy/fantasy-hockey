@@ -6,7 +6,16 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
-import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
+import {
+  requireFirestoreDocumentId,
+  requireServerFirestoreDocumentId,
+  resolveSafeFirestoreDocumentId,
+} from './shared/security/firestore-document-id.util';
+import {
+  FIRESTORE_AUTH_USER_ID_OPTIONS,
+  FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_REQUEST_ID_OPTIONS,
+} from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
@@ -246,7 +255,12 @@ function controlId(leagueId: string, targetCycleNumber: number): string {
 }
 
 function getRequestRef(requestId: string) {
-  return db.doc(`projectionGenerationRequests/${requestId}`);
+  const safeRequestId = requireServerFirestoreDocumentId(
+    requestId,
+    'projection request identifier',
+    FIRESTORE_REQUEST_ID_OPTIONS,
+  );
+  return db.doc(`projectionGenerationRequests/${safeRequestId}`);
 }
 
 function getControlRef(leagueId: string, targetCycleNumber: number) {
@@ -282,11 +296,17 @@ async function isPlatformAdministrator(
   userId: string,
   token: Record<string, unknown>,
 ): Promise<boolean> {
+  const safeUserId = requireServerFirestoreDocumentId(
+    userId,
+    'platform administrator user identifier',
+    FIRESTORE_AUTH_USER_ID_OPTIONS,
+  );
+
   if (token['platformAdmin'] === true) {
     return true;
   }
 
-  const snapshot = await db.doc(`platformAdmins/${userId}`).get();
+  const snapshot = await db.doc(`platformAdmins/${safeUserId}`).get();
   return snapshot.exists && snapshot.data()?.['enabled'] === true;
 }
 
@@ -996,12 +1016,24 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
   async (request) => {
     const payload = request.data;
 
+    const requestId = resolveSafeFirestoreDocumentId(
+      payload?.requestId,
+      FIRESTORE_REQUEST_ID_OPTIONS,
+    );
+    const leagueId = resolveSafeFirestoreDocumentId(
+      payload?.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const requestedBy = resolveSafeFirestoreDocumentId(
+      payload?.requestedBy,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
     if (
       !payload ||
-      !PROJECTION_REQUEST_ID_PATTERN.test(payload.requestId ?? '') ||
-      !LEAGUE_ID_PATTERN.test(payload.leagueId ?? '') ||
-      typeof payload.requestedBy !== 'string' ||
-      !payload.requestedBy ||
+      !requestId ||
+      !leagueId ||
+      !requestedBy ||
       !Number.isFinite(payload.targetCycleNumber) ||
       payload.targetCycleNumber < 1
     ) {
@@ -1009,8 +1041,8 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
       return;
     }
 
-    const requestRef = getRequestRef(payload.requestId);
-    const controlRef = getControlRef(payload.leagueId, payload.targetCycleNumber);
+    const requestRef = getRequestRef(requestId);
+    const controlRef = getControlRef(leagueId, payload.targetCycleNumber);
     const now = Date.now();
     const processingLease = Timestamp.fromMillis(
       now + PROJECTION_REQUEST_LEASE_MILLISECONDS,
@@ -1035,10 +1067,10 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
       }
 
       if (
-        requestData['leagueId'] !== payload.leagueId ||
-        requestData['requestedBy'] !== payload.requestedBy ||
+        requestData['leagueId'] !== leagueId ||
+        requestData['requestedBy'] !== requestedBy ||
         requestData['targetCycleNumber'] !== payload.targetCycleNumber ||
-        controlData['activeRequestId'] !== payload.requestId
+        controlData['activeRequestId'] !== requestId
       ) {
         transaction.set(requestRef, {
           status: 'error',
@@ -1103,7 +1135,7 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         }, { merge: true }),
         controlRef.set({
           status: 'ready',
-          activeRequestId: payload.requestId,
+          activeRequestId: requestId,
           lastSnapshotId: snapshot.metadata.activeSnapshotId,
           lastSnapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
           lastCompletedAt: FieldValue.serverTimestamp(),
@@ -1115,7 +1147,7 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         db.doc('appData/projectionGeneration').set({
           schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
           lastStatus: 'success',
-          lastLeagueId: payload.leagueId,
+          lastLeagueId: leagueId,
           lastTargetCycleNumber: payload.targetCycleNumber,
           lastSnapshotId: snapshot.metadata.activeSnapshotId,
           lastCatalogSnapshotId: snapshot.metadata.catalogSnapshotId ?? null,
@@ -1155,7 +1187,7 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         db.doc('appData/projectionGeneration').set({
           schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
           lastStatus: 'error',
-          lastLeagueId: payload.leagueId,
+          lastLeagueId: leagueId,
           lastTargetCycleNumber: payload.targetCycleNumber,
           lastError: message.slice(0, 500),
           lastDurationMilliseconds: durationMilliseconds,
@@ -1166,9 +1198,9 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
       ]).catch(() => undefined);
 
       console.error('Projection generation task failed.', {
-        leagueId: payload.leagueId,
+        leagueId: leagueId,
         targetCycleNumber: payload.targetCycleNumber,
-        requestId: payload.requestId,
+        requestId: requestId,
         error,
       });
     }
@@ -1217,8 +1249,13 @@ export const recoverStaleProjectionGenerationRequests = onSchedule(
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      if (PROJECTION_REQUEST_ID_PATTERN.test(activeRequestId)) {
-        batch.set(getRequestRef(activeRequestId), {
+      const safeActiveRequestId = resolveSafeFirestoreDocumentId(
+        activeRequestId,
+        FIRESTORE_REQUEST_ID_OPTIONS,
+      );
+
+      if (safeActiveRequestId) {
+        batch.set(getRequestRef(safeActiveRequestId), {
           status: 'error',
           message,
           lastError: message,

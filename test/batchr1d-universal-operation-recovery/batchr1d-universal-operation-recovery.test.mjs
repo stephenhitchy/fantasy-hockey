@@ -366,6 +366,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/security/firestore-document-id-core.util.ts',
 
     'shared/security/firestore-document-id.util.ts',
+    'shared/security/firestore-document-id-policies.ts',
 
     'shared/security/nhl-proxy-security.util.ts',
     // B1B adds isolated beta evidence and aggregate operations helpers.

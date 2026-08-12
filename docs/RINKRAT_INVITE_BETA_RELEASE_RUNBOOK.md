@@ -1,10 +1,10 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
 **Batch:** B1C  
-**Runtime release being frozen:** Release Candidate 21  
+**Runtime release being frozen:** Release Candidate 22  
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C is repository and release-operations tooling. It does not change the Angular runtime, Cloud Functions, Firestore Rules, indexes, Scoring V3, Projection V11, Draft behavior, roster behavior, or the Release Candidate 21 label. No Firebase deployment is required for B1C itself.
+B1C is repository and release-operations tooling. It does not change the Angular runtime, Cloud Functions, Firestore Rules, indexes, Scoring V3, Projection V11, Draft behavior, roster behavior, or the Release Candidate 22 label. No Firebase deployment is required for B1C itself.
 
 ## Approved toolchain
 
@@ -85,7 +85,7 @@ git commit -m "Add invite beta release freeze and rollback tooling"
 git push
 ```
 
-Do not run `npm run build:all` merely to deploy B1C. The exact competitive runtime remains the already deployed Release Candidate 21 build.
+Do not run `npm run build:all` merely to deploy B1C. The exact competitive runtime remains the already deployed Release Candidate 22 build.
 
 ## Preflight
 
@@ -99,17 +99,17 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 21, Scoring V3, and Projection V11.
+- The live domain serves Release Candidate 22, Scoring V3, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
 - The `app` Hosting target still maps to `cycle-puck`.
 - All 9 production TTL policies are active.
-- The runtime release label remains RC21.
+- The runtime release label remains RC22.
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 21 Release Readiness page:
+On the deployed Release Candidate 22 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -119,14 +119,14 @@ On the deployed Release Candidate 21 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc21-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc22-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc21-validation.json"
+  "$HOME/Downloads/rinkrat-rc22-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -163,8 +163,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc21-validation.json" \
-  --tag=rinkrat-rc21-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc22-validation.json" \
+  --tag=rinkrat-rc22-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -178,32 +178,32 @@ The command creates ignored local records under:
 
 It never deploys, creates a Git tag, changes queue mode, or writes competitive Firebase data.
 
-Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC21 manifest, not automatically to the newer B1C tooling commit.
+Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC22 manifest, not automatically to the newer B1C tooling commit.
 
 Example:
 
 ```bash
-git tag -a rinkrat-rc21-invite-beta LIVE_SOURCE_REVISION \
-  -m "RinkRat RC21 invite beta baseline"
-git push origin rinkrat-rc21-invite-beta
+git tag -a rinkrat-rc22-invite-beta LIVE_SOURCE_REVISION \
+  -m "RinkRat RC22 invite beta baseline"
+git push origin rinkrat-rc22-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc21-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc22-invite-beta
 ```
 
-Verify the complete frozen state while RC21 remains live:
+Verify the complete frozen state while RC22 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc21-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc22-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc21-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc22-invite-beta
 ```
 
 ## After the freeze

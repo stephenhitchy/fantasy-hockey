@@ -287,6 +287,7 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/replay/roster-move-replay-context.util.ts',
         'src/shared/security/firestore-document-id-core.util.ts',
         'src/shared/security/firestore-document-id.util.ts',
+        'src/shared/security/firestore-document-id-policies.ts',
         'src/shared/security/nhl-proxy-security.util.ts',
         // B1B adds isolated beta evidence and aggregate operations helpers.
         'src/beta-operations.ts',
