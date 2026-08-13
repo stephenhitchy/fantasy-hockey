@@ -323,8 +323,12 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // B1B adds isolated beta evidence and aggregate operations helpers.
         'src/beta-operations.ts',
         'src/shared/core/observability/beta-operations.util.ts',
+        // D1B adds isolated shared injury identity diagnostics.
+        'src/shared/core/player/injury-match-quality.util.ts',
+        'src/shared/core/player/injury-player-aliases.ts',
+        'src/shared/core/player/player-availability.models.ts',
       ]),
     ),
-    '2a1fb1e2cb40222f626de6b2abb39a0e58a9e4d6d7c2cb3897bd36313fcbbff8',
+    'e84fa02d765a36de1e885cd2cb1e4d1d60b8d2b08943a67e08b27121df030633',
   );
 });

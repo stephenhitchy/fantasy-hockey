@@ -15,6 +15,11 @@ import { NHLPlayer } from './player.models';
 import {
   DailyPlayerAvailabilityRefreshResult,
   PlayerAvailabilityDatabaseRecord,
+  PlayerAvailabilityMatchCandidateSuggestion,
+  PlayerAvailabilityMatchIssue,
+  PlayerAvailabilityMatchIssueCategory,
+  PlayerAvailabilityMatchIssueResolution,
+  PlayerAvailabilityMatchQuality,
   PlayerAvailabilityStatus,
   PlayerAvailabilitySyncResult,
   PlayerAvailabilitySyncState,
@@ -37,6 +42,26 @@ const VALID_STATUSES = new Set<PlayerAvailabilityStatus>([
   'suspended',
   'personal-leave',
   'unknown',
+]);
+
+const VALID_MATCH_ISSUE_CATEGORIES = new Set<PlayerAvailabilityMatchIssueCategory>([
+  'name-not-found',
+  'ambiguous-name',
+  'alias-target-missing',
+  'team-discrepancy',
+  'position-discrepancy',
+]);
+
+const VALID_MATCH_ISSUE_RESOLUTIONS = new Set<PlayerAvailabilityMatchIssueResolution>([
+  'unresolved',
+  'matched-with-advisory',
+]);
+
+const VALID_MATCH_POSITIONS = new Set<PlayerAvailabilityMatchCandidateSuggestion['position']>([
+  'LW',
+  'C',
+  'RW',
+  'D',
 ]);
 
 interface RefreshDailyPlayerAvailabilityRequest {
@@ -144,6 +169,107 @@ function normalizeGlobalRecords(
   return records;
 }
 
+function nonNegativeCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : 0;
+}
+
+function normalizeMatchCandidate(
+  value: unknown,
+): PlayerAvailabilityMatchCandidateSuggestion | null {
+  const data = asRecord(value);
+  const playerName = asString(data['playerName']);
+  const teamAbbreviation = asString(data['teamAbbreviation']).toUpperCase();
+  const position = asString(data['position']).toUpperCase() as
+    PlayerAvailabilityMatchCandidateSuggestion['position'];
+
+  if (!playerName || !VALID_MATCH_POSITIONS.has(position)) {
+    return null;
+  }
+
+  return {
+    playerName,
+    teamAbbreviation,
+    position,
+    reason: asString(data['reason']),
+  };
+}
+
+function normalizeMatchIssue(value: unknown): PlayerAvailabilityMatchIssue | null {
+  const data = asRecord(value);
+  const category = asString(data['category']) as PlayerAvailabilityMatchIssueCategory;
+  const resolution = asString(data['resolution']) as PlayerAvailabilityMatchIssueResolution;
+  const sourcePlayerName = asString(data['sourcePlayerName']);
+
+  if (
+    !sourcePlayerName ||
+    !VALID_MATCH_ISSUE_CATEGORIES.has(category) ||
+    !VALID_MATCH_ISSUE_RESOLUTIONS.has(resolution)
+  ) {
+    return null;
+  }
+
+  const candidateSuggestions: PlayerAvailabilityMatchCandidateSuggestion[] = [];
+
+  for (const candidateValue of asArray(data['candidateSuggestions']).slice(0, 3)) {
+    const candidate = normalizeMatchCandidate(candidateValue);
+
+    if (candidate) {
+      candidateSuggestions.push(candidate);
+    }
+  }
+
+  return {
+    sourcePlayerName,
+    sourceTeamName: asString(data['sourceTeamName']),
+    sourceTeamAbbreviation: asString(data['sourceTeamAbbreviation']).toUpperCase(),
+    sourcePosition: asString(data['sourcePosition']).toUpperCase(),
+    sourceStatus: asString(data['sourceStatus']),
+    category,
+    resolution,
+    candidateSuggestions,
+  };
+}
+
+function normalizeMatchQuality(value: unknown): PlayerAvailabilityMatchQuality | undefined {
+  const data = asRecord(value);
+
+  if (data['schemaVersion'] !== 1) {
+    return undefined;
+  }
+
+  const rawCounts = asRecord(data['counts']);
+  const issues: PlayerAvailabilityMatchIssue[] = [];
+
+  for (const issueValue of asArray(data['issues']).slice(0, 60)) {
+    const issue = normalizeMatchIssue(issueValue);
+
+    if (issue) {
+      issues.push(issue);
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    generatedAt: toIsoDate(data['generatedAt']) || asString(data['generatedAt']),
+    sourceEntryCount: nonNegativeCount(data['sourceEntryCount']),
+    matchedSkaterCount: nonNegativeCount(data['matchedSkaterCount']),
+    unresolvedSkaterCount: nonNegativeCount(data['unresolvedSkaterCount']),
+    matchedWithAdvisoryCount: nonNegativeCount(data['matchedWithAdvisoryCount']),
+    aliasResolvedCount: nonNegativeCount(data['aliasResolvedCount']),
+    skippedGoalieCount: nonNegativeCount(data['skippedGoalieCount']),
+    counts: {
+      nameNotFound: nonNegativeCount(rawCounts['nameNotFound']),
+      ambiguousName: nonNegativeCount(rawCounts['ambiguousName']),
+      aliasTargetMissing: nonNegativeCount(rawCounts['aliasTargetMissing']),
+      teamDiscrepancy: nonNegativeCount(rawCounts['teamDiscrepancy']),
+      positionDiscrepancy: nonNegativeCount(rawCounts['positionDiscrepancy']),
+    },
+    issues,
+  };
+}
+
 function normalizeSyncState(
   data: Record<string, unknown>,
 ): PlayerAvailabilitySyncState | null {
@@ -195,6 +321,7 @@ function normalizeSyncState(
     preservedManualOverrideCount: 0,
     skippedGoalieCount:
       typeof data['skippedGoalieCount'] === 'number' ? data['skippedGoalieCount'] : 0,
+    matchQuality: normalizeMatchQuality(data['matchQuality']),
     message: staleRunningLease
       ? 'The previous injury refresh was interrupted. The last saved report remains available and the server can retry.'
       : storedMessage,
@@ -481,6 +608,11 @@ async function performServerPlayerAvailabilityRefresh(input: {
   // current afterward, but this makes commissioner feedback feel immediate.
   await loadGlobalAvailabilityOnce();
 
+  const matchQuality = globalSyncStateSignal()?.matchQuality;
+  const unmatchedPlayerNames = matchQuality?.issues
+    .filter((issue) => issue.resolution === 'unresolved')
+    .map((issue) => issue.sourcePlayerName) ?? [];
+
   return {
     skipped: result.skipped,
     fetchedCount: result.fetchedCount,
@@ -490,7 +622,10 @@ async function performServerPlayerAvailabilityRefresh(input: {
     clearedRecordCount: result.clearedRecordCount,
     preservedManualOverrideCount: result.preservedManualOverrideCount,
     skippedGoalieCount: result.skippedGoalieCount,
-    unmatchedPlayerNames: [],
+    matchQuality,
+    unmatchedPlayerNames: [...new Set(unmatchedPlayerNames)].sort((left, right) =>
+      left.localeCompare(right),
+    ),
     completedAt: result.completedAt,
     message: result.message,
   };

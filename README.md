@@ -15,17 +15,18 @@ Core project references:
 - [`docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md`](docs/RINKRAT_SECURITY_S3F_APP_CHECK_CALLABLE_CANARY.md) — exact-build evidence revalidation, exact-league and exact-callable App Check canary routing, health proof, audit history, and emergency monitor rollback.
 - [`docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md`](docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md) — manager-facing score timing, honest NHL correction language, first restore-drill evidence, and backup recurrence inspection.
 - [`docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md`](docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md) — strict Angular TypeScript narrowing for Firestore timestamp-like values without changing score-freshness behavior.
+- [`docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md`](docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md) — categorized ESPN-to-NHL identity matching, bounded candidate context, source-controlled aliases, intentionally ignored individual goalies, deployment, and rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 25 / Data Quality Batch D1A.1**. D1A adds honest score-timing visibility to detailed and overview matchup pages, records the completed Firestore restore rehearsal, and fixes weekly-backup inspection. D1A.1 removes the strict Angular TypeScript overlap error from Firestore timestamp parsing while preserving the S3F App Check canary, Draft scheduling, IR roster preservation, Scoring V3, and Projection V11.
+The current runtime family is **Release Candidate 26 / Data Quality Batch D1B**. D1B categorizes every unresolved ESPN skater identity, preserves matched team/position advisories, installs a reviewed source-controlled alias registry, and adds an Injury Match Quality panel plus a Release Readiness advisory. It never guesses a player match, never applies candidate suggestions automatically, and continues to ignore individual goalie injuries because RinkRat drafts Team Goalie Units.
 
 The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. Global callable and Firestore App Check enforcement remain off. The exact Internal Test league canary also remains disabled until a platform administrator deliberately starts it after the evidence gate passes. Production scoring remains in Shadow.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1a-1` as the current verification command.
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1b` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -60,6 +61,7 @@ verify:batchs3e-1-1
 verify:batchs3f
 verify:batchd1a
 verify:batchd1a-1
+verify:batchd1b
 ```
 
 RinkRat pins:
@@ -79,7 +81,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchd1a-1
+npm run verify:batchd1b
 ```
 
 After verification and a clean commit:
@@ -89,6 +91,29 @@ npm run beta:preflight
 ```
 
 
+
+
+## Data Quality Batch D1B — Injury Identity Match Quality
+
+The shared ESPN injury report now records why a skater identity was not matched instead of exposing only one unexplained total. The commissioner Player Availability page separates missing names, ambiguous identities, alias maintenance, and safe team or position discrepancies. It also shows bounded current-roster suggestions that are never applied automatically.
+
+Individual ESPN goalie entries are counted separately and intentionally ignored because RinkRat uses Team Goalie Units. Verified exceptions remain source controlled in `functions/src/shared/core/player/injury-player-aliases.ts`, and Release Readiness exposes injury identity coverage as a non-blocking advisory.
+
+Verification:
+
+```bash
+npm run verify:batchd1b
+```
+
+Deployment:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Data D1B injury identity match quality"
+firebase deploy --only hosting:app -m "Data D1B Release Candidate 26"
+```
+
+No Firestore Rules, indexes, TTL, PITR, or backup deployment is required.
 
 ## Data Quality Batch D1A.1 — Live-Scoring Timestamp Type Hotfix
 
@@ -114,7 +139,7 @@ No Functions, Firestore Rules, indexes, TTL, PITR, or backup deployment is requi
 
 ## Security Batch S3F — Exact Internal Test League App Check Canary
 
-S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC25 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
+S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC26 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
 
 Only a request matching both an approved callable and an approved Internal Test league may be rejected for missing or mismatched App Check context. Every other callable and league remains monitor-only. The server rechecks readiness, validates the Internal Test allowlist, stores an immutable administrator audit entry, records privacy-limited allowed/blocked proof, and preserves a recently authenticated emergency route back to Monitor that does not depend on App Check.
 
@@ -284,13 +309,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC25 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC26 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC25 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC26 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md

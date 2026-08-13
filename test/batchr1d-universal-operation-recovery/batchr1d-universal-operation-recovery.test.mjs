@@ -380,9 +380,13 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // B1B adds isolated beta evidence and aggregate operations helpers.
     'beta-operations.ts',
     'shared/core/observability/beta-operations.util.ts',
+    // D1B adds isolated shared injury identity diagnostics.
+    'shared/core/player/injury-match-quality.util.ts',
+    'shared/core/player/injury-player-aliases.ts',
+    'shared/core/player/player-availability.models.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 33,
-    digest: '8e98afbd4cb413b93abf7a385cb295b0490e5a28fa71fdcf23243138a42de618',
+    count: 32,
+    digest: 'ab3a21a51e5fd01fbeaa7d9a9b39649a551970b9b29a6aa80a25177ae7eafeac',
   });
 });

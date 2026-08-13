@@ -751,6 +751,36 @@ export async function loadReleaseReadinessSnapshot(
   );
 
 
+  const injuryMatchQuality = injurySync?.matchQuality;
+  const injuryMatchDetail = !injuryMatchQuality
+    ? 'The next successful shared injury refresh will create categorized identity-match diagnostics.'
+    : `${injuryMatchQuality.matchedSkaterCount} skaters matched; ` +
+      `${injuryMatchQuality.unresolvedSkaterCount} unresolved skater identit${
+        injuryMatchQuality.unresolvedSkaterCount === 1 ? 'y' : 'ies'
+      }; ${injuryMatchQuality.matchedWithAdvisoryCount} matched team/position advisor${
+        injuryMatchQuality.matchedWithAdvisoryCount === 1 ? 'y' : 'ies'
+      }; ${injuryMatchQuality.aliasResolvedCount} verified alias match${
+        injuryMatchQuality.aliasResolvedCount === 1 ? '' : 'es'
+      }; ${injuryMatchQuality.skippedGoalieCount} individual goalie entr${
+        injuryMatchQuality.skippedGoalieCount === 1 ? 'y' : 'ies'
+      } intentionally ignored because RinkRat uses team goalie units.`;
+
+  checks.push(
+    createCheck(
+      'injury-match-quality',
+      'injury',
+      'Shared injury identity coverage',
+      injuryMatchDetail,
+      !injuryMatchQuality
+        ? 'warning'
+        : injuryMatchQuality.unresolvedSkaterCount === 0
+          ? 'pass'
+          : 'warning',
+      false,
+    ),
+  );
+
+
   const injuryAutomationAge = timestampAgeMinutes(
     injuryAutomation?.['lastSuccessfulRunAt'] ?? injuryAutomation?.['lastRunAt'],
   );

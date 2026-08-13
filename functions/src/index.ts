@@ -41,6 +41,8 @@ import {
   type NhlProxyAppCheckStatus,
   type NhlProxyRouteClass,
 } from './shared/security/nhl-proxy-security.util';
+import { ESPN_INJURY_PLAYER_ALIASES } from './shared/core/player/injury-player-aliases';
+import { matchInjuryEntriesToCurrentPlayers } from './shared/core/player/injury-match-quality.util';
 
 initializeApp();
 
@@ -1116,87 +1118,6 @@ function chooseStrongerInjury(
     : first;
 }
 
-function matchInjuriesToPlayers(
-  injuries: EspnInjuryEntry[],
-  players: NhlSkater[]
-): {
-  matches: MatchedInjury[];
-  unmatchedNames: string[];
-  skippedGoalieCount: number;
-} {
-  const playersByName = new Map<string, NhlSkater[]>();
-
-  for (const player of players) {
-    const key = normalizeText(player.fullName);
-    const candidates = playersByName.get(key) ?? [];
-    candidates.push(player);
-    playersByName.set(key, candidates);
-  }
-
-  const matchedByPlayerId = new Map<number, MatchedInjury>();
-  const unmatchedNames = new Set<string>();
-  let skippedGoalieCount = 0;
-
-  for (const injury of injuries) {
-    if (injury.position.toUpperCase() === 'G') {
-      skippedGoalieCount += 1;
-      continue;
-    }
-
-    let candidates = playersByName.get(
-      normalizeText(injury.playerName)
-    ) ?? [];
-
-    if (candidates.length > 1 && injury.position) {
-      const matchingPosition = candidates.filter(
-        (candidate) =>
-          candidate.position === injury.position.toUpperCase()
-      );
-
-      if (matchingPosition.length > 0) {
-        candidates = matchingPosition;
-      }
-    }
-
-    if (candidates.length > 1 && injury.teamName) {
-      const teamAbbreviation =
-        getEspnTeamAbbreviation(injury.teamName);
-
-      const matchingTeam = candidates.filter(
-        (candidate) =>
-          candidate.nhlTeamAbbreviation === teamAbbreviation
-      );
-
-      if (matchingTeam.length > 0) {
-        candidates = matchingTeam;
-      }
-    }
-
-    if (candidates.length !== 1) {
-      unmatchedNames.add(injury.playerName);
-      continue;
-    }
-
-    const player = candidates[0];
-    const existing = matchedByPlayerId.get(player.id);
-
-    matchedByPlayerId.set(player.id, {
-      player,
-      injury: existing
-        ? chooseStrongerInjury(existing.injury, injury)
-        : injury
-    });
-  }
-
-  return {
-    matches: [...matchedByPlayerId.values()],
-    unmatchedNames: [...unmatchedNames].sort(
-      (first, second) => first.localeCompare(second)
-    ),
-    skippedGoalieCount
-  };
-}
-
 function isPlayerIrEligible(
   status: PlayerAvailabilityStatus
 ): boolean {
@@ -1418,6 +1339,7 @@ async function claimDailyRefresh(
             typeof globalData['skippedGoalieCount'] === 'number'
               ? globalData['skippedGoalieCount']
               : 0,
+          matchQuality: globalData['matchQuality'] ?? null,
           message,
           updatedAt: FieldValue.serverTimestamp()
         },
@@ -1998,10 +1920,19 @@ async function runGlobalInjuryRefresh(
       );
     }
 
-    const matchResult = matchInjuriesToPlayers(parsed.entries, players);
+    const syncedAt = new Date().toISOString();
+    const matchResult = matchInjuryEntriesToCurrentPlayers(
+      parsed.entries,
+      players,
+      {
+        generatedAt: syncedAt,
+        resolveTeamAbbreviation: getEspnTeamAbbreviation,
+        chooseStrongerEntry: chooseStrongerInjury,
+        aliases: ESPN_INJURY_PLAYER_ALIASES,
+      },
+    );
     const snapshot = await reference.get();
     const previousRecords = normalizeGlobalAvailabilityRecords(snapshot.data());
-    const syncedAt = new Date().toISOString();
     const nextRecords = new Map<number, DocumentData>();
 
     for (const match of matchResult.matches) {
@@ -2025,7 +1956,7 @@ async function runGlobalInjuryRefresh(
     const clearedRecordCount = feedLooksCompleteEnoughToClear
       ? [...previousRecords.keys()].filter((playerId) => !nextRecords.has(playerId)).length
       : 0;
-    const unmatchedCount = matchResult.unmatchedNames.length;
+    const unmatchedCount = matchResult.matchQuality.unresolvedSkaterCount;
     const messageParts = [
       `Matched ${matchResult.matches.length} injured skaters from ${parsed.entries.length} ESPN entries.`,
       'Saved one server-authoritative report for every league and account.'
@@ -2045,7 +1976,25 @@ async function runGlobalInjuryRefresh(
 
     if (unmatchedCount > 0) {
       messageParts.push(
-        `${unmatchedCount} names could not be matched to current NHL rosters.`
+        `${unmatchedCount} skater identities were categorized for match review.`
+      );
+    }
+
+    if (matchResult.matchQuality.matchedWithAdvisoryCount > 0) {
+      messageParts.push(
+        `${matchResult.matchQuality.matchedWithAdvisoryCount} matched identity advisories record a current team or position discrepancy.`
+      );
+    }
+
+    if (matchResult.matchQuality.aliasResolvedCount > 0) {
+      messageParts.push(
+        `${matchResult.matchQuality.aliasResolvedCount} identities were resolved through the verified alias registry.`
+      );
+    }
+
+    if (matchResult.skippedGoalieCount > 0) {
+      messageParts.push(
+        `${matchResult.skippedGoalieCount} individual goalie entries were intentionally ignored because RinkRat uses team goalie units.`
       );
     }
 
@@ -2074,6 +2023,7 @@ async function runGlobalInjuryRefresh(
           clearedRecordCount,
           preservedManualOverrideCount: 0,
           skippedGoalieCount: matchResult.skippedGoalieCount,
+          matchQuality: matchResult.matchQuality,
           records: [...nextRecords.values()]
             .sort((first, second) =>
               (first['playerId'] as number) - (second['playerId'] as number)
@@ -2092,6 +2042,8 @@ async function runGlobalInjuryRefresh(
           unmatchedCount,
           syncedRecordCount: nextRecords.size,
           clearedRecordCount,
+          skippedGoalieCount: matchResult.skippedGoalieCount,
+          matchQuality: matchResult.matchQuality,
           lastRunResult: 'success',
           lastRunAt: FieldValue.serverTimestamp(),
           lastSuccessfulRunAt: FieldValue.serverTimestamp(),

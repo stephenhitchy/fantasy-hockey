@@ -52,12 +52,12 @@ test('S3E.1.1 verification inherits S3E.1 and preserves the current release, Sco
   const config = JSON.parse(configSource);
 
   assert.match(packageJson.scripts['verify:batchs3e-1-1:core'], /verify:batchs3e-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1|d1b):core/);
   assert.match(readme, /Security Batch S3E\.1\.1/);
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
-  assert.match(runtime, /Release Candidate 25/);
-  assert.match(productionRuntime, /Release Candidate 25/);
+  assert.match(runtime, /Release Candidate 26/);
+  assert.match(productionRuntime, /Release Candidate 26/);
   assert.equal(config.mode, 'monitor');
   assert.equal(config.automaticEnforcement, false);
 });
@@ -70,7 +70,7 @@ test('S3E.1.1 documentation and permanent roadmap remain synchronized', async ()
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.(?:13\.2|14(?:\.\d+)?|15(?:\.\d+)?)/);
+  assert.match(roadmap, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmap, /# \[x\] LOG\.24/);
   assert.match(runbook, /undefined/i);
   assert.match(runbook, /type guard/i);

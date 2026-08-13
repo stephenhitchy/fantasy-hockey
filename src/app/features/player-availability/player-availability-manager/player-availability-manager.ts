@@ -18,6 +18,8 @@ import { NHLPlayer } from '../../../core/player/player.models';
 import {
   PlayerAvailability,
   PlayerAvailabilityDatabaseRecord,
+  PlayerAvailabilityMatchIssue,
+  PlayerAvailabilityMatchIssueCategory,
   PlayerAvailabilityStatus,
   PlayerAvailabilitySyncResult,
   PlayerAvailabilitySyncState,
@@ -194,6 +196,16 @@ export class PlayerAvailabilityManager {
   });
 
   readonly selectedStatusIrEligible = computed(() => isPlayerIrEligible(this.selectedStatus()));
+
+  readonly matchQuality = computed(() => this.syncState()?.matchQuality ?? null);
+
+  readonly unresolvedMatchIssues = computed(() =>
+    this.matchQuality()?.issues.filter((issue) => issue.resolution === 'unresolved') ?? [],
+  );
+
+  readonly matchAdvisoryIssues = computed(() =>
+    this.matchQuality()?.issues.filter((issue) => issue.resolution === 'matched-with-advisory') ?? [],
+  );
 
   constructor(
     private route: ActivatedRoute,
@@ -470,6 +482,54 @@ export class PlayerAvailabilityManager {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
+  }
+
+  getMatchIssueCategoryLabel(category: PlayerAvailabilityMatchIssueCategory): string {
+    switch (category) {
+      case 'name-not-found':
+        return 'No exact roster name';
+
+      case 'ambiguous-name':
+        return 'Ambiguous roster identity';
+
+      case 'alias-target-missing':
+        return 'Alias needs maintenance';
+
+      case 'team-discrepancy':
+        return 'Matched · team differs';
+
+      case 'position-discrepancy':
+        return 'Matched · position differs';
+    }
+  }
+
+  getMatchIssueExplanation(issue: PlayerAvailabilityMatchIssue): string {
+    switch (issue.category) {
+      case 'name-not-found':
+        return 'ESPN’s public name did not exactly match a skater on the current NHL roster feed. RinkRat left the player unmatched instead of guessing.';
+
+      case 'ambiguous-name':
+        return 'More than one current NHL skater shared this normalized identity, and team or position context did not safely resolve it.';
+
+      case 'alias-target-missing':
+        return 'A source-controlled alias exists, but its canonical NHL player is not present in the current roster feed. Review the alias before the next refresh.';
+
+      case 'team-discrepancy':
+        return 'The player matched safely by identity, but ESPN and the current NHL roster feed list different teams. This may reflect trade or feed timing.';
+
+      case 'position-discrepancy':
+        return 'The player matched safely by identity, but ESPN and the current NHL roster feed list different primary positions.';
+    }
+  }
+
+  getMatchIssueSourceLabel(issue: PlayerAvailabilityMatchIssue): string {
+    return [
+      issue.sourceTeamAbbreviation || issue.sourceTeamName,
+      issue.sourcePosition,
+      issue.sourceStatus,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   async saveSelectedPlayer(): Promise<void> {

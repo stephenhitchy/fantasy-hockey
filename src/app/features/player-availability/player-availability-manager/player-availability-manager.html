@@ -66,6 +66,11 @@
           <div class="sync-stat-row">
             <span>{{ state.fetchedCount }} feed entries</span>
             <span>{{ state.matchedCount }} matched skaters</span>
+            <span>
+              {{ state.matchQuality?.unresolvedSkaterCount ?? state.unmatchedCount }}
+              skater identities to review
+            </span>
+            <span>{{ state.matchQuality?.skippedGoalieCount ?? state.skippedGoalieCount }} goalie entries ignored</span>
             <span>{{ manualRecordCount() }} league overrides</span>
           </div>
         }
@@ -95,16 +100,131 @@
       </section>
     }
 
-    @if (lastSyncResult()?.unmatchedPlayerNames?.length) {
-      <details class="unmatched-card">
+    @if (matchQuality(); as quality) {
+      <details
+        class="match-quality-card"
+        [open]="quality.unresolvedSkaterCount > 0"
+      >
         <summary>
-          {{ lastSyncResult()?.unmatchedPlayerNames?.length }} ESPN names could not be matched
+          <span>
+            <strong>Injury Match Quality</strong>
+            <small>
+              {{ quality.unresolvedSkaterCount }} unresolved ·
+              {{ quality.matchedWithAdvisoryCount }} identity advisories ·
+              {{ quality.skippedGoalieCount }} individual goalies intentionally ignored
+            </small>
+          </span>
+          <span class="match-quality-status" [attr.data-clear]="quality.unresolvedSkaterCount === 0">
+            {{ quality.unresolvedSkaterCount === 0 ? 'All skaters categorized' : 'Review identities' }}
+          </span>
         </summary>
 
-        <div class="unmatched-name-list">
-          @for (name of lastSyncResult()?.unmatchedPlayerNames ?? []; track name) {
-            <span>{{ name }}</span>
+        <div class="match-quality-body">
+          <p class="match-quality-intro">
+            RinkRat matches ESPN injuries against the current NHL skater roster. It never guesses
+            when an identity is missing or ambiguous. Individual goalie injuries are informational
+            only because fantasy rosters use one Team Goalie Unit.
+          </p>
+
+          <div class="match-quality-metrics" aria-label="Injury identity match totals">
+            <div>
+              <strong>{{ quality.matchedSkaterCount }}</strong>
+              <span>Matched skaters</span>
+            </div>
+            <div>
+              <strong>{{ quality.unresolvedSkaterCount }}</strong>
+              <span>Unresolved skaters</span>
+            </div>
+            <div>
+              <strong>{{ quality.aliasResolvedCount }}</strong>
+              <span>Verified aliases</span>
+            </div>
+            <div>
+              <strong>{{ quality.skippedGoalieCount }}</strong>
+              <span>Goalies ignored</span>
+            </div>
+          </div>
+
+          @if (unresolvedMatchIssues().length > 0) {
+            <section class="match-issue-section" aria-labelledby="unresolved-injury-identities">
+              <header>
+                <div>
+                  <span class="eyebrow">Needs source review</span>
+                  <h3 id="unresolved-injury-identities">Unresolved skater identities</h3>
+                </div>
+                <strong>{{ unresolvedMatchIssues().length }}</strong>
+              </header>
+
+              <div class="match-issue-list">
+                @for (issue of unresolvedMatchIssues(); track issue.sourcePlayerName + issue.sourceTeamAbbreviation + issue.sourcePosition + issue.category) {
+                  <article class="match-issue" data-resolution="unresolved">
+                    <div class="match-issue-heading">
+                      <div>
+                        <strong>{{ issue.sourcePlayerName }}</strong>
+                        <span>{{ getMatchIssueSourceLabel(issue) || 'Source context unavailable' }}</span>
+                      </div>
+                      <span class="match-issue-badge">
+                        {{ getMatchIssueCategoryLabel(issue.category) }}
+                      </span>
+                    </div>
+
+                    <p>{{ getMatchIssueExplanation(issue) }}</p>
+
+                    @if (issue.candidateSuggestions.length > 0) {
+                      <div class="match-suggestions">
+                        <span>Possible current-roster context</span>
+                        @for (candidate of issue.candidateSuggestions; track candidate.playerName + candidate.teamAbbreviation + candidate.position) {
+                          <div>
+                            <strong>{{ candidate.playerName }} · {{ candidate.teamAbbreviation }} · {{ candidate.position }}</strong>
+                            <small>{{ candidate.reason }}</small>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </article>
+                }
+              </div>
+            </section>
+          } @else {
+            <section class="match-quality-clear">
+              <strong>No unresolved skater identities.</strong>
+              <span>The latest report matched or intentionally categorized every source entry.</span>
+            </section>
           }
+
+          @if (matchAdvisoryIssues().length > 0) {
+            <section class="match-issue-section advisory-section" aria-labelledby="matched-injury-advisories">
+              <header>
+                <div>
+                  <span class="eyebrow">Matched safely</span>
+                  <h3 id="matched-injury-advisories">Team or position advisories</h3>
+                </div>
+                <strong>{{ matchAdvisoryIssues().length }}</strong>
+              </header>
+
+              <div class="match-issue-list compact-match-issues">
+                @for (issue of matchAdvisoryIssues(); track issue.sourcePlayerName + issue.sourceTeamAbbreviation + issue.sourcePosition + issue.category) {
+                  <article class="match-issue" data-resolution="matched-with-advisory">
+                    <div class="match-issue-heading">
+                      <div>
+                        <strong>{{ issue.sourcePlayerName }}</strong>
+                        <span>{{ getMatchIssueSourceLabel(issue) }}</span>
+                      </div>
+                      <span class="match-issue-badge">
+                        {{ getMatchIssueCategoryLabel(issue.category) }}
+                      </span>
+                    </div>
+                    <p>{{ getMatchIssueExplanation(issue) }}</p>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+
+          <p class="match-quality-footnote">
+            Verified aliases are source controlled and apply only after review. Candidate suggestions
+            are never applied automatically and do not change player availability by themselves.
+          </p>
         </div>
       </details>
     }

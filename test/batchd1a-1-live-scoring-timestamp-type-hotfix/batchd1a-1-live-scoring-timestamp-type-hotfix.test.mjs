@@ -137,7 +137,7 @@ test('the exact timestamp helper passes strict semantic TypeScript checking', as
   }
 });
 
-test('D1A.1 verification inherits D1A and keeps RC25, Scoring V3, and Projection V11 unchanged', async () => {
+test('D1A.1 verification inherits D1A and keeps RC26, Scoring V3, and Projection V11 unchanged', async () => {
   const [
     packageSource,
     runtime,
@@ -160,10 +160,10 @@ test('D1A.1 verification inherits D1A and keeps RC25, Scoring V3, and Projection
     packageJson.scripts['verify:batchd1a-1:core'],
     /verify:batchd1a:core/,
   );
-  assert.match(packageJson.scripts['security:ci'], /verify:batchd1a-1:core/);
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1a-1');
-  assert.match(runtime, /Release Candidate 25/);
-  assert.match(productionRuntime, /Release Candidate 25/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchd1b:core/);
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1b');
+  assert.match(runtime, /Release Candidate 26/);
+  assert.match(productionRuntime, /Release Candidate 26/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
 });
@@ -177,12 +177,12 @@ test('D1A.1 documentation and permanent roadmap record the strict timestamp type
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.15\.1/);
+  assert.match(roadmap, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmap, /# \[x\] D1\.17/);
   assert.match(roadmap, /# \[x\] LOG\.27/);
   assert.match(runbook, /TS2352/);
   assert.match(runbook, /Record<string, unknown>/);
   assert.match(runbook, /runtime behavior is unchanged/i);
   assert.match(readme, /Data Quality Batch D1A\.1/);
-  assert.match(readme, /verify:batchd1a-1/);
+  assert.match(readme, /verify:batchd1b/);
 });

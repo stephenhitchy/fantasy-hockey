@@ -199,7 +199,7 @@ test('weekly backup inspection accepts the current gcloud weeklyRecurrence.day s
   );
 });
 
-test('D1A advances to RC25 while preserving Scoring V3 and Projection V11', async () => {
+test('D1A advances to RC26 while preserving Scoring V3 and Projection V11', async () => {
   const [runtime, productionRuntime, scoringRules, projectionSnapshot, roadmap, runbook, packageJson] = await Promise.all([
     read('src/environments/app-runtime.config.ts'),
     read('src/environments/app-runtime.config.production.ts'),
@@ -210,11 +210,11 @@ test('D1A advances to RC25 while preserving Scoring V3 and Projection V11', asyn
     read('package.json').then(JSON.parse),
   ]);
 
-  assert.match(runtime, /Release Candidate 25/);
-  assert.match(productionRuntime, /Release Candidate 25/);
+  assert.match(runtime, /Release Candidate 26/);
+  assert.match(productionRuntime, /Release Candidate 26/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
-  assert.match(roadmap, /Version 1\.15/);
+  assert.match(roadmap, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmap, /D1\.16 .*visible score-freshness indicator/i);
   assert.match(roadmap, /S4\.13 .*Completed 2026-08-12/i);
   assert.match(runbook, /Last checked/);

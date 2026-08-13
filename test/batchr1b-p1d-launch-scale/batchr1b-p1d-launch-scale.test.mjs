@@ -421,8 +421,12 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // B1B adds isolated beta evidence and aggregate operations helpers.
         'src/beta-operations.ts',
         'src/shared/core/observability/beta-operations.util.ts',
+        // D1B adds isolated shared injury identity diagnostics.
+        'src/shared/core/player/injury-match-quality.util.ts',
+        'src/shared/core/player/injury-player-aliases.ts',
+        'src/shared/core/player/player-availability.models.ts',
       ]),
     ),
-    '7f29102fee1e3c712a78891b4692de1779bcfd7145e5a9f4500b1f5a5ca1765c',
+    'cdbf92db41e87352e1c702922eb8fe6a3d9c97d637efe6c6d902c409fadbda08',
   );
 });

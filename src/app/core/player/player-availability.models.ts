@@ -24,6 +24,55 @@ export type PlayerAvailabilitySyncTrigger =
   | 'commissioner-browser'
   | 'scheduled-server';
 
+
+export type PlayerAvailabilityMatchIssueCategory =
+  | 'name-not-found'
+  | 'ambiguous-name'
+  | 'alias-target-missing'
+  | 'team-discrepancy'
+  | 'position-discrepancy';
+
+export type PlayerAvailabilityMatchIssueResolution =
+  | 'unresolved'
+  | 'matched-with-advisory';
+
+export interface PlayerAvailabilityMatchCandidateSuggestion {
+  playerName: string;
+  teamAbbreviation: string;
+  position: 'LW' | 'C' | 'RW' | 'D';
+  reason: string;
+}
+
+export interface PlayerAvailabilityMatchIssue {
+  sourcePlayerName: string;
+  sourceTeamName: string;
+  sourceTeamAbbreviation: string;
+  sourcePosition: string;
+  sourceStatus: string;
+  category: PlayerAvailabilityMatchIssueCategory;
+  resolution: PlayerAvailabilityMatchIssueResolution;
+  candidateSuggestions: PlayerAvailabilityMatchCandidateSuggestion[];
+}
+
+export interface PlayerAvailabilityMatchQuality {
+  schemaVersion: 1;
+  generatedAt: string;
+  sourceEntryCount: number;
+  matchedSkaterCount: number;
+  unresolvedSkaterCount: number;
+  matchedWithAdvisoryCount: number;
+  aliasResolvedCount: number;
+  skippedGoalieCount: number;
+  counts: {
+    nameNotFound: number;
+    ambiguousName: number;
+    aliasTargetMissing: number;
+    teamDiscrepancy: number;
+    positionDiscrepancy: number;
+  };
+  issues: PlayerAvailabilityMatchIssue[];
+}
+
 export interface PlayerAvailabilityOverride {
   /** Prefer playerId whenever it is available. */
   playerId?: number;
@@ -96,6 +145,7 @@ export interface PlayerAvailabilitySyncState {
   clearedRecordCount: number;
   preservedManualOverrideCount: number;
   skippedGoalieCount: number;
+  matchQuality?: PlayerAvailabilityMatchQuality;
   message: string;
 
   /** Identifies what requested the most recent shared refresh. */
@@ -130,6 +180,7 @@ export interface DailyPlayerAvailabilityRefreshResult {
   clearedRecordCount: number;
   preservedManualOverrideCount: number;
   skippedGoalieCount: number;
+  matchQuality?: PlayerAvailabilityMatchQuality;
 }
 
 export interface PlayerAvailabilitySyncResult {
@@ -141,6 +192,7 @@ export interface PlayerAvailabilitySyncResult {
   clearedRecordCount: number;
   preservedManualOverrideCount: number;
   skippedGoalieCount: number;
+  matchQuality?: PlayerAvailabilityMatchQuality;
   unmatchedPlayerNames: string[];
   completedAt: string;
   message: string;
