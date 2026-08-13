@@ -151,7 +151,7 @@ test('all active TTL policies are source-controlled without deleting default exp
     entry,
   ]));
 
-  assert.equal(baseline.policies.length, 9);
+  assert.equal(baseline.policies.length, 10);
   for (const policy of baseline.policies) {
     const entry = overrides.get(`${policy.collectionGroup}/${baseline.field}`);
     assert.ok(entry, `${policy.collectionGroup}.${baseline.field} is missing`);
@@ -164,7 +164,7 @@ test('all active TTL policies are source-controlled without deleting default exp
     ['scripts/security/sync-ttl-index-config.mjs', '--check'],
     { cwd: new URL('.', ROOT), encoding: 'utf8' },
   );
-  assert.match(output, /mirrors 9 TTL policies/);
+  assert.match(output, /mirrors 10 TTL policies/);
 });
 
 test('operator commands require explicit confirmations and never automate an in-place production restore', async () => {
@@ -198,7 +198,7 @@ test('S4A scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.equal(packageJson.scripts['security:backup:inspect'], 'node scripts/security/firestore-backup-restore.mjs inspect');
   assert.match(packageJson.scripts['verify:batchs4a:core'], /verify:batchb1c:core/);
   assert.match(packageJson.scripts['verify:batchs4a:core'], /sync-ttl-index-config/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c):core/);
   assert.match(readme, /verify:batchs4a/);
   assert.match(documentation, /Security Operations Batch S4A/);
   assert.match(runbook, /Never restore a backup directly over the live `\(default\)` database/);

@@ -220,5 +220,5 @@ test('S3F advances to RC26 without changing Scoring V3 or Projection V11', async
   assert.match(runbook, /exact set of callable Functions/i);
   assert.match(runbook, /exact set of league IDs/i);
   assert.match(packageJson.scripts['verify:batchs3f:core'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1):core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b|d1c):core/);
 });

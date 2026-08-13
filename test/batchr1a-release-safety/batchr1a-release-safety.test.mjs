@@ -316,7 +316,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
-    'c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b',
+    '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
   );
   assert.equal(
     await hashTree(
@@ -374,6 +374,6 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/player/player-availability.models.ts',
       ]),
     ),
-    'e84fa02d765a36de1e885cd2cb1e4d1d60b8d2b08943a67e08b27121df030633',
+    '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',
   );
 });

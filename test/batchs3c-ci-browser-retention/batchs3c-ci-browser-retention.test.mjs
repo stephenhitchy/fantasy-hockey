@@ -178,6 +178,7 @@ test('Firestore TTL baseline and scheduled cleanup cover every temporary securit
     'leagueAutomationTasks',
     'leagueCreationRequests',
     'leagueJoinRequests',
+    'nhlSharedDataCache',
     'projectionGenerationRequests',
   ]);
   assert.equal(baseline.field, 'expiresAt');
@@ -188,7 +189,7 @@ test('Firestore TTL baseline and scheduled cleanup cover every temporary securit
   assert.match(cleanup, /schedule: '35 4 \* \* \*'/);
   assert.match(cleanup, /retentionCleanupStatus/);
   assert.equal(retentionPolicy.defaultField, 'expiresAt');
-  assert.equal(retentionPolicy.collections.length, 9);
+  assert.equal(retentionPolicy.collections.length, 10);
   assert.match(retentionAudit, /cleanupExpiredSecurityData/);
   assert.match(retentionAudit, /cleanupLeagueAutomationTaskHistory/);
 });

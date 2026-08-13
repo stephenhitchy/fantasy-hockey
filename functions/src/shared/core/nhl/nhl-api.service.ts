@@ -1,3 +1,5 @@
+import { queueNhlSharedCacheObservation } from './nhl-shared-cache.service';
+
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 
 interface CachedApiResponse {
@@ -81,7 +83,15 @@ async function requestApiJsonWithRetry<T>(
     }
 
     if (response.ok) {
-      return await response.json() as T;
+      const value = await response.json() as T;
+
+      queueNhlSharedCacheObservation({
+        url,
+        payload: value,
+        source: 'functions-core',
+      });
+
+      return value;
     }
 
     const error = new Error(

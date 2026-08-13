@@ -55,6 +55,12 @@
       "retentionDays": 180,
       "cleanupOwner": "cleanupExpiredSecurityData",
       "purpose": "Aggregated live-season operational evidence without raw manager identifiers"
+    },
+    {
+      "collection": "nhlSharedDataCache",
+      "retentionDays": 30,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Best-effort shared NHL response cache with shorter per-route expiration dates"
     }
   ]
 }

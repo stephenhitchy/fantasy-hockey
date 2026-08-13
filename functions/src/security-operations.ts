@@ -52,6 +52,7 @@ const SECURITY_RETENTION_TARGETS: readonly RetentionTarget[] = [
   { collection: 'cspViolationReports', cleanupOwner: 'security-operations' },
   { collection: 'betaEvidenceEvents', cleanupOwner: 'security-operations' },
   { collection: 'betaOperationsDaily', cleanupOwner: 'security-operations' },
+  { collection: 'nhlSharedDataCache', cleanupOwner: 'security-operations' },
   // The scoring queue already owns a dedicated, more frequent cleanup worker.
   { collection: 'leagueAutomationTasks', cleanupOwner: 'league-automation' },
 ] as const;

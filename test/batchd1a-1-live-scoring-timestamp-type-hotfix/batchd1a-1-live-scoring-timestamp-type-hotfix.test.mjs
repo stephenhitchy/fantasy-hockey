@@ -160,8 +160,8 @@ test('D1A.1 verification inherits D1A and keeps RC26, Scoring V3, and Projection
     packageJson.scripts['verify:batchd1a-1:core'],
     /verify:batchd1a:core/,
   );
-  assert.match(packageJson.scripts['security:ci'], /verify:batchd1b:core/);
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1b');
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c):core/);
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1c');
   assert.match(runtime, /Release Candidate 26/);
   assert.match(productionRuntime, /Release Candidate 26/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);

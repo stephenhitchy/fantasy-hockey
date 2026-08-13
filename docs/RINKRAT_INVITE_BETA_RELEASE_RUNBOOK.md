@@ -104,7 +104,7 @@ Preflight verifies:
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
 - The `app` Hosting target still maps to `cycle-puck`.
-- All 9 production TTL policies are active.
+- All 10 production TTL policies are active.
 - The runtime release label remains RC26.
 
 ## Produce the exact-build validation JSON

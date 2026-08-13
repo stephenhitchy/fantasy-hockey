@@ -16,17 +16,18 @@ Core project references:
 - [`docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md`](docs/RINKRAT_DATA_D1A_SCORE_FRESHNESS.md) — manager-facing score timing, honest NHL correction language, first restore-drill evidence, and backup recurrence inspection.
 - [`docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md`](docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md) — strict Angular TypeScript narrowing for Firestore timestamp-like values without changing score-freshness behavior.
 - [`docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md`](docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md) — categorized ESPN-to-NHL identity matching, bounded candidate context, source-controlled aliases, intentionally ignored individual goalies, deployment, and rollback.
+- [`docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md`](docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md) — deterministic shared NHL Shadow cache, hash deduplication, bounded payloads, retention, inspection, deployment, and future cutover gates.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current runtime family is **Release Candidate 26 / Data Quality Batch D1B**. D1B categorizes every unresolved ESPN skater identity, preserves matched team/position advisories, installs a reviewed source-controlled alias registry, and adds an Injury Match Quality panel plus a Release Readiness advisory. It never guesses a player match, never applies candidate suggestions automatically, and continues to ignore individual goalie injuries because RinkRat drafts Team Goalie Units.
+The current browser runtime remains **Release Candidate 26 / Data Quality Batch D1B**. The latest server infrastructure is **Data Infrastructure Batch D1C**, which observes successful server-owned NHL requests into a deterministic Firestore-backed Shadow cache while keeping every direct upstream response and process-local cache authoritative. D1C adds no shared-cache reads, no automatic promotion, and no change to Scoring V3 or Projection V11.
 
 The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. Global callable and Firestore App Check enforcement remain off. The exact Internal Test league canary also remains disabled until a platform administrator deliberately starts it after the evidence gate passes. Production scoring remains in Shadow.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1b` as the current verification command.
+The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1c` as the current verification command.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -62,6 +63,7 @@ verify:batchs3f
 verify:batchd1a
 verify:batchd1a-1
 verify:batchd1b
+verify:batchd1c
 ```
 
 RinkRat pins:
@@ -81,7 +83,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchd1b
+npm run verify:batchd1c
 ```
 
 After verification and a clean commit:
@@ -91,6 +93,39 @@ npm run beta:preflight
 ```
 
 
+
+
+## Data Infrastructure Batch D1C — Shared NHL Cache Shadow Foundation
+
+D1C begins the P0 shared-ingestion work without changing the RC26 browser build or allowing cached data to affect competition. Successful server-owned NHL schedule, game, player-log, statistics, roster, scoreboard, injury, bounded proxy, and roster-timing requests are canonicalized into deterministic SHA-256 document keys and observed in `nhlSharedDataCache`.
+
+The shared documents remain explicitly non-authoritative. Unchanged payloads are suppressed by content hash, route-specific freshness and expiration dates are recorded, observations are bounded to 100 in flight per instance, and JSON larger than 700 KiB is skipped and measured rather than risking a Firestore document-size failure. The existing upstream response remains the only value returned to scoring, projection, Draft, replay, and roster logic.
+
+Verification:
+
+```bash
+npm run verify:batchd1c
+```
+
+Deployment is Functions-only:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only functions -m "Data D1C shared NHL cache Shadow foundation"
+```
+
+Activate the newly source-controlled tenth TTL policy once, then inspect Shadow coverage after a score refresh, projection run, or historical replay:
+
+```bash
+RINKRAT_APPLY_TTL_SECURITY=APPLY \
+npm run security:apply-ttl-baseline -- \
+  --project=nhl-fantasy-app-ab673
+
+npm run data:inspect-nhl-shared-cache -- \
+  --project=nhl-fantasy-app-ab673
+```
+
+Do not deploy Hosting, enable shared-cache reads, or claim capacity improvement from D1C alone. The later cutover still requires oversized-payload storage, direct-versus-shared hash parity, staging canary reads, freshness/stat-correction proof, cost measurements, and rollback.
 
 
 ## Data Quality Batch D1B — Injury Identity Match Quality
@@ -288,7 +323,7 @@ S4A adds repository-controlled disaster-recovery operations without changing the
 - restore only into a new `restore-drill-*` database;
 - privacy-limited comparison of critical collections and sampled league contracts;
 - guarded restore-drill cleanup;
-- source-controlled TTL field overrides so future index deployments preserve all nine active policies.
+- source-controlled TTL field overrides so future index deployments preserve all ten active policies.
 
 Inspect the baseline:
 
@@ -309,7 +344,7 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC26 manifest, HSTS, CSP report-only, App Check, Hosting target, and 9/9 TTL checks;
+- live RC26 manifest, HSTS, CSP report-only, App Check, Hosting target, and 10/10 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;

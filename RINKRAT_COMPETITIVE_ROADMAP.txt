@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.16
+Version 1.17
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -48,7 +48,7 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, and guarded exact-league selected-callable canary controls are implemented alongside authentication, identifier, proxy, CI, and retention hardening; collect the RC26 evidence matrix, prove the canary safely, then complete distributed NHL ingestion/rate protection. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, and retention hardening; collect the RC26 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
 [~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, and categorized injury identity diagnostics are complete; finish the exact RC26 validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before adding broad social or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
 
@@ -241,7 +241,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.12 Apply the validator to every user-controlled league, owner, slot, asset, matchup, task, request, and document path fragment. (P0 / L) — Completed 2026-08-12 in Security Batch S3D with normalized Cloud Tasks payloads, Firestore trigger parameters, authenticated manager IDs, persisted Draft-owner references, projection snapshot/catalog helpers, replay assets, and callable feedback membership paths.
 
 # [x] S3.13 Harden the public NHL proxy query allowlists and numeric bounds. (P0 / M) — Completed 2026-08-10 in Security Batch S3B with exact route/query contracts, duplicate-parameter rejection, bounded offsets/results, route-specific sorts, and response-size ceilings.
-[ ] S3.14 Add shared caching or route competitive NHL requests through server-owned ingestion. (P0 / XL)
+[~] S3.14 Add shared caching or route competitive NHL requests through server-owned ingestion. (P0 / XL) — D1C adds deterministic Firestore-backed Shadow observations for successful server-owned NHL requests, content-hash deduplication, bounded payloads, health counters, and TTL cleanup. Complete after oversized payload storage, direct-vs-shared parity, staging canary reads, and deliberate authoritative cutover are proven.
 [~] S3.15 Add proxy rate monitoring, abuse limits, and alerts. (P0 / M)
     S3B adds App Check-aware per-instance requester/global limits, HTTP 429 recovery guidance, structured logs, and privacy-limited Firestore health counters. Distributed cross-instance limiting and operational alert thresholds remain with S3.14/S3C scale operations.
 
@@ -253,6 +253,7 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.21 Add a source-controlled identifier-boundary inventory and static audit that rejects direct external-ID interpolation into Firestore paths. (P0 / M) — Completed 2026-08-12 in Security Batch S3D with 13 boundary modules, semantic identifier policies, Cloud Tasks/trigger guards, and CI verification across the Functions tree.
 # [x] S3.22 Add an exact-build App Check enforcement-readiness matrix with documented sample, browser, device, action, and verification gates; keep automatic enforcement disabled. (P0 / M) — Completed 2026-08-12 in Security Batch S3E / Release Candidate 23 with Beta Operations coverage, normalized platform evidence, a static monitor-mode audit, and a deliberate selected-callable canary handoff.
 # [x] S3.23 Add guarded runtime App Check canary routing for exact selected callables and exact selected leagues, with server-side readiness revalidation, valid administrator App Check activation, recent-auth protection, bounded health proof, immutable audit history, and an emergency return to monitor mode that does not depend on App Check. (P0 / L) — Completed 2026-08-12 in Security Batch S3F / Release Candidate 24.
+# [x] S3.24 Add a deterministic shared NHL Shadow cache with approved-route canonicalization, SHA-256 keys and payload hashes, duplicate suppression, non-authoritative markers, bounded per-instance observation pressure, TTL, cleanup fallback, static audit, and production inspection tooling. (P0 / L) — Completed 2026-08-13 in Data Infrastructure Batch D1C; authoritative reads remain disabled.
 
 PHASE S3 EXIT CHECKLIST:
 
@@ -345,8 +346,8 @@ Goal: Turn RinkRat's transparent models into a proven competitive advantage.
 [ ] D1.6 Version every future model change and preserve historical frozen projections. (P0 / Policy)
 [ ] D1.7 Add model-change notes explaining why a projection changed. (P1 / M)
 
-[ ] D1.8 Centralize official NHL schedule, roster, injury, game, and stat ingestion. (P0 / XL)
-[ ] D1.9 Fetch each competitive NHL result once and reuse it across every league. (P0 / XL)
+[~] D1.8 Centralize official NHL schedule, roster, injury, game, and stat ingestion. (P0 / XL) — D1C begins a server-owned Shadow cache for schedules, game data, player logs, statistics, rosters, scoreboards, and injuries. Complete after ingestion ownership, oversized payload storage, freshness/correction handling, and staging/production cutover are proven.
+[~] D1.9 Fetch each competitive NHL result once and reuse it across every league. (P0 / XL) — D1C gives identical canonical requests one deterministic cross-instance document and suppresses unchanged observations. Competitive reads still use the direct upstream response until a later canary proves parity and cost.
 [ ] D1.10 Add upstream freshness, stat-correction, missing-game, and roster-match alerts. (P0 / L)
 # [x] D1.11 Resolve or categorize unmatched injury names. (P1 / M) — Completed 2026-08-12 in Data Quality Batch D1B / Release Candidate 26 with bounded unresolved categories, safe candidate context, team/position advisories, and intentional team-goalie-unit handling.
 [ ] D1.12 Add a safe stat-correction replay that does not duplicate transactions or windows. (P0 / L)
@@ -357,6 +358,7 @@ Goal: Turn RinkRat's transparent models into a proven competitive advantage.
 # [x] D1.16 Add a visible score-freshness indicator and plain-language expected refresh interval everywhere it matters. (P1 / S) — Completed 2026-08-12 in Data Quality Batch D1A / Release Candidate 25 with Last checked, Last score change, Next check, due/delayed states, mobile layout, and explicit separation from official NHL correction timestamps.
 # [x] D1.17 Narrow Firestore Timestamp-like values through one strict unknown-record guard so Angular TypeScript 6 can compile the score-freshness helper without overlapping required-property assertions. (P0 / S) — Completed 2026-08-12 in Data Quality Batch D1A.1 / Release Candidate 25 hotfix; runtime score timing behavior remains unchanged.
 # [x] D1.18 Add a source-controlled ESPN injury alias registry, categorized match-quality record, commissioner review panel, and Release Readiness advisory without allowing candidate suggestions to change player availability automatically. (P1 / M) — Completed 2026-08-12 in Data Quality Batch D1B / Release Candidate 26.
+# [x] D1.19 Add a Functions-only shared NHL response Shadow foundation with canonical route identity, JSON content hashes, route-specific freshness/retention, bounded 700 KiB Firestore payloads, best-effort health, and no change to the authoritative competitive data path. (P0 / L) — Completed 2026-08-13 in Data Infrastructure Batch D1C while preserving the RC26 client.
 
 ================================================================================
 PHASE C1 — SOCIAL RETENTION AND LEAGUE COMMUNITY
@@ -485,7 +487,7 @@ Goal: Prove, rather than assume, that RinkRat can support increasing public traf
 [ ] SC1.9 Add Draft task queue age, retry count, duration, and deadline-drift monitoring. (P0 / M)
 [ ] SC1.10 Tune Draft deadline concurrency only from staging measurements. (P0 / M)
 
-[ ] SC1.11 Replace process-local NHL proxy cache with shared ingestion/cache for competitive data. (P0 / XL)
+[~] SC1.11 Replace process-local NHL proxy cache with shared ingestion/cache for competitive data. (P0 / XL) — D1C installs the shared Firestore Shadow storage and observation evidence while leaving process-local/direct upstream responses authoritative. Complete after Cloud Storage or chunking for oversized payloads, staging read canary, shared freshness SLOs, and production rollback proof.
 [ ] SC1.12 Index affected leagues from shared NHL game/team changes to avoid scanning unrelated leagues. (P0 / XL)
 [ ] SC1.13 Add bounded fanout and backpressure when many games finish together. (P0 / L)
 
@@ -662,7 +664,7 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 # [x] SEQ.4 Security Batch S2A — Server Projection V11 generation and canonical assets. — Completed 2026-08-07.
 # [x] SEQ.5 Security Batch S2B — Read-only snapshots, hash enforcement, and Draft migration. — Completed 2026-08-07.
 [~] SEQ.6 Security Batches S3A/S3E/S3F — App Check monitor mode, exact-build readiness gates, and guarded exact-league selected-callable canary controls are implemented with authentication hardening; collect the RC26 matrix and complete clean live canary proof before closing the sequence.
-[~] SEQ.7 Security Batches S3B/S3D — Shared ID validation, universal boundary closure, and NHL proxy query/rate hardening are implemented; complete distributed shared ingestion/rate controls before marking the sequence fully complete.
+[~] SEQ.7 Security Batches S3B/S3D plus Data Infrastructure D1C — Shared ID validation, universal boundary closure, proxy query/rate hardening, and a deterministic non-authoritative NHL Shadow cache are implemented; complete oversized storage, staging parity, authoritative shared reads, and distributed rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
 [~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls and completed restore drill, S3F canary controls, RC25 score-timing clarity, and RC26 injury identity diagnostics are implemented; complete the ready exact-build validation report, application rollback rehearsal, annotated tag, and observed cohort before marking this sequence complete.
 [ ] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback.
@@ -772,6 +774,8 @@ Future entries:
 # [x] LOG.27 2026-08-12 — Completed Data Quality Batch D1A.1 / Release Candidate 25 TypeScript hotfix: replace overlapping `seconds`/`nanoseconds` object assertions with one `Record<string, unknown>` type guard and independently validated timestamp fields, preserving all D1A runtime behavior.
 
 # [x] LOG.28 2026-08-12 — Completed Data Quality Batch D1B / Release Candidate 26: categorize every unresolved ESPN skater identity, preserve safe team/position advisories, install a reviewed alias registry, expose bounded match context in Player Availability and Release Readiness, and continue intentionally ignoring individual goalie injuries because RinkRat uses Team Goalie Units.
+
+# [x] LOG.29 2026-08-13 — Completed Data Infrastructure Batch D1C without changing the RC26 client: add a deterministic Firestore-backed shared NHL Shadow cache, canonical route and query identity, content-hash deduplication, bounded payload and in-flight limits, health/inspection tooling, and a tenth TTL policy while keeping every direct upstream response authoritative.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

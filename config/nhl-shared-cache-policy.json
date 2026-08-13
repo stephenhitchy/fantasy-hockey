@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "authoritativeReadsEnabled": false,
+  "collection": "nhlSharedDataCache",
+  "healthDocument": "appData/nhlSharedDataCacheHealth",
+  "maximumPayloadBytes": 716800,
+  "heartbeatMinutes": 15,
+  "maximumInFlightObservationsPerInstance": 100,
+  "routePolicies": {
+    "schedule": { "freshnessSeconds": 600, "retentionDays": 14 },
+    "game-boxscore": { "freshnessSeconds": 120, "retentionDays": 30 },
+    "game-play-by-play": { "freshnessSeconds": 120, "retentionDays": 30 },
+    "player-log": { "freshnessSeconds": 900, "retentionDays": 7 },
+    "stats": { "freshnessSeconds": 300, "retentionDays": 2 },
+    "roster": { "freshnessSeconds": 900, "retentionDays": 7 },
+    "scoreboard": { "freshnessSeconds": 20, "retentionDays": 1 },
+    "injuries": { "freshnessSeconds": 900, "retentionDays": 2 }
+  },
+  "cutoverRules": {
+    "automaticPromotion": false,
+    "shadowWritesAreAuthoritative": false,
+    "requiresStagingBeforePrimary": true,
+    "requiresHashAndFreshnessValidation": true,
+    "oversizedPayloadStrategy": "skip-and-measure-until-cloud-storage-chunking"
+  }
+}

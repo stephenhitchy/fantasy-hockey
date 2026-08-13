@@ -233,7 +233,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
   assert.equal(
     await hashTree('functions', exclusions),
-    'e84fa02d765a36de1e885cd2cb1e4d1d60b8d2b08943a67e08b27121df030633',
+    '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
@@ -248,6 +248,6 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
   assert.equal(createHash('sha256').update(engine).digest('hex'), 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a');
-  assert.equal(createHash('sha256').update(indexes).digest('hex'), 'c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b');
+  assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
 });
 

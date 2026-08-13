@@ -202,6 +202,6 @@ test('competitive scoring, Projection V11, Firestore rules, and indexes remain u
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
-    'c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b',
+    '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
   );
 });

@@ -228,9 +228,9 @@ test('D1B advances to RC26 while preserving Scoring V3, Projection V11, monitor 
   assert.match(appCheckConfig, /"defaultMode": "monitor"/);
   assert.match(queueConfig, /LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE\s*=\s*'shadow'/);
   assert.match(packageJson.scripts['verify:batchd1b:core'], /verify:batchd1a-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchd1b:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c):core/);
   assert.equal(freezePolicy.releaseLabel, 'Release Candidate 26');
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1b');
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchd1c');
   assert.equal(freezePolicy.defaultTag, 'rinkrat-rc26-invite-beta');
 });
 
@@ -244,7 +244,7 @@ test('D1B documentation and permanent roadmap record categorized injury identity
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.16/);
+  assert.match(roadmap, /Version 1\.17/);
   assert.match(roadmap, /# \[x\] D1\.11/);
   assert.match(roadmap, /# \[x\] D1\.18/);
   assert.match(roadmap, /# \[x\] LOG\.28/);

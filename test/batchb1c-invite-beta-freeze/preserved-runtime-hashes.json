@@ -5,7 +5,7 @@
   "functions/src/draft-authority.ts": "c1f1314210f1d37d60339ced69fc220507e4a9d429396bce0dc992dc59332db9",
   "functions/src/roster-authority.ts": "9b8b049f5bab3970f2644262eeef7d65dcb0636a7ecdc84f6783a78fd17db5a5",
   "firestore.rules": "30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a",
-  "firestore.indexes.json": "c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b",
+  "firestore.indexes.json": "62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13",
   "firebase.json": "07e81a4839658037d6dc4e26c01338bea2a41ac776b601d09b43c4bfd346ebdd",
   "src/app/core/release/invite-beta-validation.util.ts": "cdd9d863887669ed70c792b35b3b5bd3be3584502f3c69b788fae5cf2088a9ac",
   "src/app/features/release/invite-beta-validation/invite-beta-validation.ts": "ed78452f8f151e6eb58303f7abb5dbdeb767b13a4a30e934f37e6040f12c0a06",

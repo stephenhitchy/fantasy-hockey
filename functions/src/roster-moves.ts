@@ -3,6 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
+import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
   optionalFirestoreDocumentId,
@@ -374,7 +375,15 @@ export async function getEarliestEligibleCycleNumber(
     );
   }
 
-  const body = asRecord(await response.json());
+  const payload = await response.json();
+
+  queueNhlSharedCacheObservation({
+    url: `${NHL_API_BASE_URL}/club-schedule-season/${team}/${season}`,
+    payload,
+    source: 'functions-core',
+  });
+
+  const body = asRecord(payload);
   const schedule = asArray(body['games'])
     .map((value) => asRecord(value) as NhlScheduleGame)
     .filter((game) => game.gameType === 2)

@@ -97,7 +97,7 @@ test('the source-only preflight validates RC26 controls without requiring the ho
   );
   assert.match(output, /Invite-beta source preflight passed/);
   assert.match(output, /npm 11\.17\.0/);
-  assert.match(output, /9 TTL policies/);
+  assert.match(output, /10 TTL policies/);
   assert.match(output, /(?:RC26|Release Candidate 26) runtime/);
 });
 
@@ -140,7 +140,7 @@ test('freeze and rollback tooling is explicit, non-deploying, and does not creat
   assert.doesNotMatch(source, /run\(['"]firebase['"]/);
   assert.doesNotMatch(source, /run\(['"]git['"], \[['"]tag['"]/);
   assert.equal(policy.releaseLabel, 'Release Candidate 26');
-  assert.equal(policy.requiredTtlPolicyCount, 9);
+  assert.equal(policy.requiredTtlPolicyCount, 10);
   assert.equal(policy.queueMode, 'shadow');
   assert.equal(policy.appCheckMode, 'monitor');
   assert.equal(policy.cspMode, 'report-only');
@@ -187,7 +187,7 @@ test('B1C scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.equal(packageJson.scripts['beta:preflight'], 'node scripts/release/invite-beta-release.mjs preflight');
   assert.match(packageJson.scripts['verify:batchb1c'], /toolchain:verify/);
   assert.match(packageJson.scripts['verify:batchb1c:core'], /verify:batchb1b-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c):core/);
   assert.match(await read('.github/workflows/rinkrat-ci.yml'), /npm install --global npm@11\.17\.0/);
   assert.match(readme, /verify:batchb1c/);
   assert.match(documentation, /Beta Operations Batch B1C/);

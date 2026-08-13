@@ -334,7 +334,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
-    'c34b23d20b0756c1d3df1bc4fd6edbdad416dd381d1c7f40fec59c34c17b225b',
+    '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
   );
 
   const unchangedFunctions = await hashFunctionTreeExcept(new Set([
@@ -386,7 +386,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/player/player-availability.models.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 32,
-    digest: 'ab3a21a51e5fd01fbeaa7d9a9b39649a551970b9b29a6aa80a25177ae7eafeac',
+    count: 34,
+    digest: '384b9560eb2781b93c81aaafed79fc18f414ce7e789858dc75a97853d14a3270',
   });
 });

@@ -47,6 +47,11 @@
       "collectionGroup": "betaOperationsDaily",
       "retention": "180 days",
       "reason": "Aggregated live-season operational evidence without raw manager identifiers"
+    },
+    {
+      "collectionGroup": "nhlSharedDataCache",
+      "retention": "up to 30 days by route",
+      "reason": "Best-effort shared NHL response cache; each document carries a route-specific expiration"
     }
   ]
 }

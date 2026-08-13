@@ -31,6 +31,10 @@ const betaOperationsSource = await readFile(
   path.join(projectRoot, 'functions/src/beta-operations.ts'),
   'utf8',
 );
+const nhlSharedCacheSource = await readFile(
+  path.join(projectRoot, 'functions/src/shared/core/nhl/nhl-shared-cache.service.ts'),
+  'utf8',
+);
 const failures = [];
 
 if (baseline.schemaVersion !== 1 || baseline.field !== 'expiresAt') {
@@ -47,6 +51,7 @@ const expectedCollections = [
   'cspViolationReports',
   'betaEvidenceEvents',
   'betaOperationsDaily',
+  'nhlSharedDataCache',
   'leagueAutomationTasks',
 ];
 const actualCollections = policies
@@ -67,6 +72,7 @@ const sourceByCollection = new Map([
   ['cspViolationReports', operationsSource],
   ['betaEvidenceEvents', betaOperationsSource],
   ['betaOperationsDaily', leagueAutomationSource],
+  ['nhlSharedDataCache', nhlSharedCacheSource],
   ['leagueAutomationTasks', leagueAutomationSource],
 ]);
 

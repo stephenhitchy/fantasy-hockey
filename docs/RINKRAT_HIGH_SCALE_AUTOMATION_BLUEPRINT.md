@@ -433,3 +433,9 @@ Define exact numbers before each test. Recommended initial gates:
 - Firebase App Check monitoring: https://firebase.google.com/docs/app-check/monitor-metrics
 
 **Last reviewed:** August 2026
+
+## D1C shared NHL cache Shadow foundation
+
+Data Infrastructure Batch D1C adds the first cross-instance storage layer for server-owned NHL responses. The foundation uses deterministic canonical URL hashes, JSON content hashes, route-specific freshness, bounded 700 KiB payloads, duplicate suppression, TTL, and health counters. It is deliberately Shadow-only: direct upstream/process-local responses remain authoritative and cached documents are marked ineligible for authoritative reads.
+
+This does not remove the existing capacity warning yet. Before promotion, RinkRat must add oversized-response storage, compare direct and shared hashes in staging, model stat-correction replacement, measure Firestore read/write cost, define shared-data freshness SLOs, and prove an exact rollback to direct upstream reads. Only then may the shared layer move through canary and Primary ingestion modes.

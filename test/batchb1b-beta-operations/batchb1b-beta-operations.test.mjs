@@ -170,8 +170,8 @@ test('B1B evidence collections have source-controlled TTL and scheduled cleanup 
   const ttlConfig = JSON.parse(ttl);
   const retentionConfig = JSON.parse(retention);
 
-  assert.equal(ttlConfig.policies.length, 9);
-  assert.equal(retentionConfig.collections.length, 9);
+  assert.equal(ttlConfig.policies.length, 10);
+  assert.equal(retentionConfig.collections.length, 10);
   assert.ok(ttlConfig.policies.some((item) => item.collectionGroup === 'betaEvidenceEvents' && item.retention === '90 days'));
   assert.ok(ttlConfig.policies.some((item) => item.collectionGroup === 'betaOperationsDaily' && item.retention === '180 days'));
   assert.match(cleanup, /collection: 'betaEvidenceEvents'/);
@@ -212,7 +212,7 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(packageJson.scripts['verify:batchb1b'], /verify:batchb1b:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /verify:batchs3c:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /test:batchb1b:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c):core/);
   assert.match(readme, /RINKRAT_BETA_OPERATIONS_RUNBOOK\.md/);
   assert.match(readme, /verify:batchb1b/);
   assert.match(docs, /Beta Operations Batch B1B/);

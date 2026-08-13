@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { initializeApp } from 'firebase-admin/app';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import {
@@ -43,8 +43,11 @@ import {
 } from './shared/security/nhl-proxy-security.util';
 import { ESPN_INJURY_PLAYER_ALIASES } from './shared/core/player/injury-player-aliases';
 import { matchInjuryEntriesToCurrentPlayers } from './shared/core/player/injury-match-quality.util';
+import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
 
-initializeApp();
+if (getApps().length === 0) {
+  initializeApp();
+}
 
 const db = getFirestore();
 
@@ -863,7 +866,15 @@ async function fetchJson(url: string): Promise<unknown> {
     );
   }
 
-  return response.json();
+  const value = await response.json();
+
+  queueNhlSharedCacheObservation({
+    url,
+    payload: value,
+    source: 'functions-core',
+  });
+
+  return value;
 }
 
 async function fetchNhlRoster(
@@ -1628,6 +1639,12 @@ export const nhlApiProxy = onRequest(
         'application/json; charset=utf-8';
 
       if (upstreamResponse.ok) {
+        queueNhlSharedCacheObservation({
+          url: target.toString(),
+          payload: upstreamBody,
+          source: 'public-proxy',
+        });
+
         nhlProxyResponseCache.set(cacheKey, {
           loadedAt: Date.now(),
           status: upstreamResponse.status,

@@ -7,13 +7,13 @@
   "hostingSite": "cycle-puck",
   "requiredNodeVersion": "22.23.1",
   "requiredNpmVersion": "11.17.0",
-  "requiredTtlPolicyCount": 9,
+  "requiredTtlPolicyCount": 10,
   "scoringRulesVersion": 3,
   "projectionVersion": 11,
   "requiredGamesPerRosterSlot": 6,
   "queueMode": "shadow",
   "appCheckMode": "monitor",
   "cspMode": "report-only",
-  "verificationCommand": "npm run verify:batchd1b",
+  "verificationCommand": "npm run verify:batchd1c",
   "defaultTag": "rinkrat-rc26-invite-beta"
 }

@@ -11413,3 +11413,15 @@ The panel uses Live, On schedule, Due, Delayed, Updating, Needs attention, Repla
 D1A also updates the Firestore recovery parser for the current Google Cloud CLI shape `weeklyRecurrence.day: SUNDAY`. The first isolated Firestore restore rehearsal completed successfully on 2026-08-12, passed the privacy-limited verifier, was archived under SHA-256 `157d0b876c350148ea5ff65d17471f74ed3637c9d13a127b4183bf1eba494a75`, and the temporary drill database was deleted without touching production.
 
 Production Scoring V3, Projection V11, scoring cadence, queue mode, App Check canary state, Draft, roster, waiver, IR, Rules, indexes, TTL, PITR, and backup schedules are unchanged.
+
+# Data Infrastructure Batch D1C — Shared NHL Cache Shadow Foundation
+
+D1C begins the shared-ingestion work required before RinkRat can reuse one competitive NHL response across multiple Cloud Functions instances and leagues. It adds `functions/src/shared/core/nhl/nhl-shared-cache.util.ts` for approved-route canonicalization, deterministic SHA-256 cache identity, route-specific freshness/retention, and bounded JSON serialization. `nhl-shared-cache.service.ts` writes best-effort Shadow observations into `nhlSharedDataCache/{hash}` after a server-owned upstream NHL request succeeds. Coverage includes the shared NHL service, the bounded public proxy's original upstream JSON, the global injury/roster refresh, and the direct roster-timing schedule lookup.
+
+The existing NHL response remains authoritative. D1C sets `authoritativeReadsEnabled: false`, marks every entry `eligibleForAuthoritativeRead: false`, never awaits the observer in the request path, and provides no automatic promotion control. Process-local cache, direct upstream retries, Scoring V3, Projection V11, historical replay, Draft preparation, and roster timing continue unchanged.
+
+Repeated canonical requests share one document. Query parameters are sorted before hashing, the complete query is represented only by a one-way hash, response JSON receives a separate SHA-256 content hash, and unchanged observations inside the heartbeat window are suppressed. Payloads above 700 KiB are skipped and measured until a later Cloud Storage or deterministic chunking design is implemented.
+
+The new source-controlled retention entry `nhlSharedDataCache.expiresAt` is the tenth TTL policy. Route-specific expiration is one to thirty days, and `cleanupExpiredSecurityData` supplies a scheduled deletion fallback. Production operators can run `npm run data:inspect-nhl-shared-cache -- --project=nhl-fantasy-app-ab673` to review Shadow mode, non-authoritative safety, sampled route coverage, payload volume, unchanged suppression, oversized skips, and errors without changing data.
+
+D1C is a Functions-only deployment and preserves the RC26 client build. S3.14, D1.8, D1.9, and SC1.11 remain in progress until oversized responses, source freshness, stat corrections, staging read parity, cost, load, and rollback are proven before any shared-cache result can affect competition.
