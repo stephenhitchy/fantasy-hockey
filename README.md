@@ -23,17 +23,20 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`](docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md) — public commissioner Draft controls and player-availability overrides, privacy boundaries, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`](docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md) — commissioner-only plain-text announcements, optional pinning, bounded League Wire presentation, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`](docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md) — one immutable regular-season round recap, top-score and closest-finish context, League Wire-era scoring high-water, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — four bounded hockey reactions, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 32 / Social Batch C1F**. C1F adds exactly one server-created regular-season round recap after an authoritative matchup cycle first becomes complete. The recap highlights the top team score and closest finish while leaving live score changes, byes, playoffs, one-game rounds, and historical backfill off the wire.
+The current source runtime is **Release Candidate 33 / Social Batch C1G**. C1G adds four bounded hockey reactions to eligible League Wire moments: **Stick tap**, **On fire**, **No way**, and **Rink Rat**. Each verified league member may hold one reaction per item, switch it, or remove it through the server-authoritative `setLeagueActivityReaction` callable.
 
-The recap reuses the existing bounded League Wire listener and mobile card. It adds no modal, backdrop, sticky panel, or additional browser query. Commissioner announcements and optional pinning from C1E remain unchanged. A server-only high-water mark can identify a strictly higher score in a later League Wire-era round without claiming an all-time record from pre-C1F history.
+Reactions update the existing member-readable activity document, so League Wire keeps the same two Firestore listeners: the ordered 40-item feed and the exact pinned-announcement document. The picker opens inline with 44-pixel controls, uses two columns on phones, and adds no modal, backdrop, sticky panel, unbounded query, Rules deployment, index, or TTL policy.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL remain unchanged. The current verification command is `npm run verify:batchc1f`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1g`.
+
+C1G.1 is a strict Functions TypeScript build hotfix. It narrows the normalized nullable reaction rate-window timestamp through a local constant before arithmetic, preserving identical reaction throttling and RC33 runtime behavior.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -76,6 +79,7 @@ verify:batchc1c
 verify:batchc1d
 verify:batchc1e
 verify:batchc1f
+verify:batchc1g
 ```
 
 RinkRat pins:
@@ -95,7 +99,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1f
+npm run verify:batchc1g
 ```
 
 After verification and a clean commit:
@@ -103,6 +107,25 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+
+
+
+## Social Batch C1G — League Wire Reactions
+
+C1G adds four compact reactions to eligible Draft picks, completed roster and waiver outcomes, final matchups, commissioner announcements, and Round Recaps. One verified manager can hold only one reaction per item; selecting another switches it, and selecting the same option removes it. The server derives totals from a bounded member record set, treats retries idempotently, and applies short and rolling-window throttles.
+
+Reaction fields stay on the existing server-owned activity document. The browser therefore keeps the same two Firestore listeners and uses the current activity snapshot to show both totals and the signed-in manager's selection. The inline picker adds no modal, sticky element, Firestore Rule, index, TTL policy, or social subcollection listener.
+
+Verification:
+
+```bash
+npm run verify:batchc1g
+```
+
+C1G.1 corrects only strict Functions TypeScript narrowing in the reaction rate-limit utility; the callable contract, stored fields, limits, browser feature, and RC33 release identity are unchanged.
+
+The normal owner workflow is one automated gate, a targeted deployment of `setLeagueActivityReaction`, RC33 Hosting, and a short site-first smoke test with two managers. Full authority, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
 
 
 

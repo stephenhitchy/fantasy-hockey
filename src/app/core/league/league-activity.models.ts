@@ -43,6 +43,28 @@ export type LeagueActivityAvailabilityStatus =
   | 'personal-leave'
   | 'unknown';
 
+
+
+export type LeagueActivityReactionType =
+  | 'stick-tap'
+  | 'fire'
+  | 'wow'
+  | 'rink-rat';
+
+export interface LeagueActivityReactionCounts {
+  'stick-tap': number;
+  fire: number;
+  wow: number;
+  'rink-rat': number;
+}
+
+export interface LeagueActivityReactionRecord {
+  ownerId: string;
+  reactionType: LeagueActivityReactionType;
+  firstChangedAt: Date;
+  updatedAt: Date;
+}
+
 export interface LeagueActivityAssetSummary {
   name: string;
   position: 'LW' | 'C' | 'RW' | 'D' | 'G' | null;
@@ -88,6 +110,8 @@ export interface LeagueActivity {
   recapClosestMargin: number | null;
   recapNewLeagueHighScore: boolean;
   recapPreviousLeagueHighScore: number | null;
+  reactionRecords: LeagueActivityReactionRecord[];
+  reactionCounts: LeagueActivityReactionCounts;
   occurredAt: Date | null;
 }
 

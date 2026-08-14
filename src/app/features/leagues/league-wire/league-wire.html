@@ -26,6 +26,11 @@
     Commissioner announcements, Draft picks, commissioner controls, final matchup results, one compact completed-round recap, and completed league moves—without live-score noise or exposed claims.
   </p>
 
+
+  <p class="rr-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+    {{ reactionStatusMessage() }}
+  </p>
+
   @if (announcementStatusMessage()) {
     <p class="league-wire-message league-wire-message-success" role="status">
       {{ announcementStatusMessage() }}
@@ -226,6 +231,69 @@
                 {{ item.detail }}
               </span>
             }
+
+            @if (supportsReactions(item)) {
+              <div class="league-wire-reactions">
+                <div class="league-wire-reaction-summary" aria-label="League reactions">
+                  @for (option of reactionOptions; track option.reactionType) {
+                    @if (reactionCount(item, option.reactionType) > 0) {
+                      <button
+                        class="league-wire-reaction-chip"
+                        type="button"
+                        [class.league-wire-reaction-chip-selected]="currentReactionType(item) === option.reactionType"
+                        [attr.aria-label]="reactionAriaLabel(item, option)"
+                        [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
+                        [disabled]="isReactionSaving(item)"
+                        (click)="chooseReaction(item, option)"
+                      >
+                        <span aria-hidden="true">{{ option.emoji }}</span>
+                        <span>{{ reactionCount(item, option.reactionType) }}</span>
+                      </button>
+                    }
+                  }
+
+                  <button
+                    class="league-wire-reaction-toggle"
+                    type="button"
+                    aria-controls="league-wire-reaction-picker-{{ item.id }}"
+                    [attr.aria-expanded]="isReactionPickerOpen(item)"
+                    [disabled]="isReactionSaving(item)"
+                    (click)="toggleReactionPicker(item)"
+                  >
+                    {{ currentReactionType(item) ? 'Change' : 'React' }}
+                  </button>
+                </div>
+
+                @if (isReactionPickerOpen(item)) {
+                  <div
+                    class="league-wire-reaction-picker"
+                    id="league-wire-reaction-picker-{{ item.id }}"
+                    aria-label="Choose a hockey reaction"
+                  >
+                    @for (option of reactionOptions; track option.reactionType) {
+                      <button
+                        class="league-wire-reaction-option"
+                        type="button"
+                        [class.league-wire-reaction-option-selected]="currentReactionType(item) === option.reactionType"
+                        [attr.aria-label]="reactionAriaLabel(item, option)"
+                        [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
+                        [disabled]="isReactionSaving(item)"
+                        (click)="chooseReaction(item, option)"
+                      >
+                        <span class="league-wire-reaction-emoji" aria-hidden="true">{{ option.emoji }}</span>
+                        <span>{{ option.label }}</span>
+                      </button>
+                    }
+                  </div>
+                }
+
+                @if (reactionError(item)) {
+                  <p class="league-wire-reaction-error" role="alert">
+                    {{ reactionError(item) }}
+                  </p>
+                }
+              </div>
+            }
           </div>
         </li>
       }
@@ -244,6 +312,6 @@
   }
 
   <footer class="league-wire-footer">
-    Announcements are plain text and league-only. Only final matchup outcomes post, plus one compact regular-season recap after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
+    Announcements and reactions are visible only to league members. Only final matchup outcomes post, plus one compact regular-season recap after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
   </footer>
 </section>

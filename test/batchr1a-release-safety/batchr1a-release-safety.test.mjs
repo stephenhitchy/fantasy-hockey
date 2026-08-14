@@ -377,6 +377,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // C1A adds isolated server-sanitized League Wire projections.
         'src/league-activity.ts',
         'src/shared/core/league/league-activity.util.ts',
+        'src/shared/core/league/league-activity-reaction.util.ts',
         'scripts/league-matchup-activity-inspect.cjs',
         // C1B adds guarded additive migration and inspection commands.
         'scripts/transaction-privacy-backfill.cjs',

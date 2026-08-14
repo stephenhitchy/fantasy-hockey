@@ -4000,5 +4000,6 @@ export {
   publishLeagueRoundRecapActivity,
   publishLeagueTransactionActivity,
   publishLeagueWaiverPrivacy,
+  setLeagueActivityReaction,
   unpinLeagueAnnouncement,
 } from './league-activity';

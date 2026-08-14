@@ -27,7 +27,7 @@ async function hash(relativePath) {
 function liveManifest() {
   return {
     schemaVersion: 1,
-    releaseLabel: 'Release Candidate 32',
+    releaseLabel: 'Release Candidate 33',
     buildId: 'release-candidate-30-test-aabbccddeeff',
     sourceRevision: 'a'.repeat(40),
     scoringRulesVersion: 3,
@@ -89,7 +89,7 @@ test('B1C pins the exact Node and npm release toolchain and explains how to reco
   assert.match(drifted.issues.join('\n'), /npm install -g npm@11\.17\.0/);
 });
 
-test('the source-only preflight validates RC32 controls without requiring the host machine toolchain', () => {
+test('the source-only preflight validates RC33 controls without requiring the host machine toolchain', () => {
   const output = execFileSync(
     process.execPath,
     ['scripts/release/invite-beta-release.mjs', 'preflight', '--source-only'],
@@ -98,7 +98,7 @@ test('the source-only preflight validates RC32 controls without requiring the ho
   assert.match(output, /Invite-beta source preflight passed/);
   assert.match(output, /npm 11\.17\.0/);
   assert.match(output, /10 TTL policies/);
-  assert.match(output, /(?:RC32|Release Candidate 32) runtime/);
+  assert.match(output, /(?:RC32|Release Candidate 33) runtime/);
 });
 
 test('exact-build validation accepts only a ready report matching the live release', () => {
@@ -139,13 +139,13 @@ test('freeze and rollback tooling is explicit, non-deploying, and does not creat
   assert.match(source, /scripts\/security\/firestore-ttl-baseline\.mjs/);
   assert.doesNotMatch(source, /run\(['"]firebase['"]/);
   assert.doesNotMatch(source, /run\(['"]git['"], \[['"]tag['"]/);
-  assert.equal(policy.releaseLabel, 'Release Candidate 32');
+  assert.equal(policy.releaseLabel, 'Release Candidate 33');
   assert.equal(policy.requiredTtlPolicyCount, 10);
   assert.equal(policy.queueMode, 'shadow');
   assert.equal(policy.appCheckMode, 'monitor');
   assert.equal(policy.cspMode, 'report-only');
 
-  assert.equal(safeTagName('rinkrat-rc32-invite-beta'), 'rinkrat-rc32-invite-beta');
+  assert.equal(safeTagName('rinkrat-rc33-invite-beta'), 'rinkrat-rc33-invite-beta');
   assert.throws(() => safeTagName('../unsafe'), /safe Git tag/);
 });
 
@@ -154,10 +154,10 @@ test('generated rollback guidance uses the frozen source and the smallest normal
     release: liveManifest(),
     toolchain: { node: '22.23.1', npm: '11.17.0' },
     firebase: { projectId: 'nhl-fantasy-app-ab673', hostingTarget: 'app' },
-    git: { tag: 'rinkrat-rc32-invite-beta' },
+    git: { tag: 'rinkrat-rc33-invite-beta' },
   });
 
-  assert.match(plan, /git checkout rinkrat-rc32-invite-beta/);
+  assert.match(plan, /git checkout rinkrat-rc33-invite-beta/);
   assert.match(plan, /npm install -g npm@11\.17\.0/);
   assert.match(plan, /firebase deploy --only functions/);
   assert.match(plan, /firebase deploy --only hosting:app/);
@@ -187,11 +187,11 @@ test('B1C scripts, documentation, roadmap, and CI verification remain synchroniz
   assert.equal(packageJson.scripts['beta:preflight'], 'node scripts/release/invite-beta-release.mjs preflight');
   assert.match(packageJson.scripts['verify:batchb1c'], /toolchain:verify/);
   assert.match(packageJson.scripts['verify:batchb1c:core'], /verify:batchb1b-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g):core/);
   assert.match(await read('.github/workflows/rinkrat-ci.yml'), /npm install --global npm@11\.17\.0/);
   assert.match(readme, /verify:batchb1c/);
   assert.match(documentation, /Beta Operations Batch B1C/);
-  assert.match(runbook, /pbpaste > .*rinkrat-rc32-validation\.json/);
+  assert.match(runbook, /pbpaste > .*rinkrat-rc33-validation\.json/);
   assert.equal(roadmapRoot, roadmapDocs);
   assert.match(roadmapRoot, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRoot, /B1\.24 .*invite-beta freeze/i);

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -34,6 +35,15 @@ import {
   type LeagueActivitySourceKind,
   type SanitizedLeagueActivity,
 } from './shared/core/league/league-activity.util';
+import {
+  applyLeagueActivityReactionSelection,
+  evaluateLeagueActivityReactionRateLimit,
+  isLeagueActivityReactionEligibleEventType,
+  normalizeLeagueActivityReactionRecords,
+  normalizeLeagueActivityReactionType,
+  type LeagueActivityReactionCounts,
+  type LeagueActivityReactionType,
+} from './shared/core/league/league-activity-reaction.util';
 import {
   requireAuthenticatedUserId,
   requireVerifiedEmail,
@@ -318,10 +328,54 @@ interface UnpinLeagueAnnouncementResult {
   unpinned: boolean;
 }
 
+
+interface SetLeagueActivityReactionRequest {
+  leagueId: string;
+  activityId: string;
+  reactionType: LeagueActivityReactionType | null;
+}
+
+interface SetLeagueActivityReactionResult {
+  activityId: string;
+  reactionType: LeagueActivityReactionType | null;
+  reactionCounts: LeagueActivityReactionCounts;
+  changed: boolean;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+
+function normalizeSetLeagueActivityReactionRequest(
+  value: unknown,
+): SetLeagueActivityReactionRequest {
+  const source = asRecord(value);
+  const leagueId = resolveSafeFirestoreDocumentId(
+    source['leagueId'],
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const activityId = resolveSafeFirestoreDocumentId(
+    source['activityId'],
+    { maxBytes: 256 },
+  );
+  const rawReactionType = source['reactionType'];
+  const reactionType = rawReactionType === null
+    ? null
+    : normalizeLeagueActivityReactionType(rawReactionType);
+
+  if (
+    !leagueId ||
+    !activityId ||
+    activityId === PINNED_ANNOUNCEMENT_DOCUMENT_ID ||
+    (rawReactionType !== null && !reactionType)
+  ) {
+    throw new HttpsError('invalid-argument', 'Choose a valid League Wire reaction.');
+  }
+
+  return { leagueId, activityId, reactionType };
 }
 
 function normalizePublishLeagueAnnouncementRequest(
@@ -605,6 +659,157 @@ export const unpinLeagueAnnouncement = onCall(
 
       return { unpinned: pinnedSnapshot.exists };
     });
+  },
+);
+
+
+export const setLeagueActivityReaction = onCall(
+  ACTIVITY_CALLABLE_OPTIONS,
+  async (request): Promise<SetLeagueActivityReactionResult> => {
+    const actionLabel = 'react to a League Wire update';
+    const userId = requireAuthenticatedUserId(request.auth, actionLabel);
+    requireVerifiedEmail(request.auth, actionLabel);
+    const input = normalizeSetLeagueActivityReactionRequest(request.data);
+    const memberReference = db.doc(
+      `leagues/${input.leagueId}/members/${userId}`,
+    );
+    const activityReference = db.doc(
+      `leagues/${input.leagueId}/activity/${input.activityId}`,
+    );
+    const controlReference = db.doc(
+      `leagues/${input.leagueId}/members/${userId}/activityReactionControls/current`,
+    );
+    const now = Timestamp.now();
+
+    const result = await db.runTransaction(async (transaction) => {
+      const [memberSnapshot, activitySnapshot, controlSnapshot] = await Promise.all([
+        transaction.get(memberReference),
+        transaction.get(activityReference),
+        transaction.get(controlReference),
+      ]);
+
+      if (!memberSnapshot.exists) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only current league members can react to League Wire updates.',
+        );
+      }
+
+      if (!activitySnapshot.exists) {
+        throw new HttpsError('not-found', 'That League Wire update is no longer available.');
+      }
+
+      const activity = activitySnapshot.data() ?? {};
+
+      if (
+        activity['authority'] !== 'league-activity-authority' ||
+        !isLeagueActivityReactionEligibleEventType(activity['eventType'])
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'That League Wire update does not accept reactions.',
+        );
+      }
+
+      const reactionRecords = normalizeLeagueActivityReactionRecords(
+        activity['reactionRecords'],
+      );
+
+      if (!reactionRecords) {
+        throw new HttpsError(
+          'failed-precondition',
+          'That League Wire reaction history needs repair before it can be changed.',
+        );
+      }
+
+      const transition = applyLeagueActivityReactionSelection({
+        records: reactionRecords,
+        ownerId: userId,
+        desiredReactionType: input.reactionType,
+        changedAt: now.toDate(),
+      });
+
+      if (!transition) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'That League Wire update has reached its reaction limit.',
+        );
+      }
+
+      if (!transition.changed) {
+        return {
+          activityId: input.activityId,
+          reactionType: transition.nextReactionType,
+          reactionCounts: transition.nextCounts,
+          changed: false,
+        };
+      }
+
+      const control = controlSnapshot.exists ? controlSnapshot.data() ?? {} : {};
+      const lastChangedAt = timestampFromUnknown(control['lastChangedAt']);
+      const windowStartedAt = timestampFromUnknown(control['windowStartedAt']);
+      const changesInWindow = controlSnapshot.exists ? control['changesInWindow'] : 0;
+      const rateLimit = evaluateLeagueActivityReactionRateLimit({
+        control: {
+          lastChangedAtMilliseconds: lastChangedAt?.toMillis() ?? null,
+          windowStartedAtMilliseconds: windowStartedAt?.toMillis() ?? null,
+          changesInWindow,
+        },
+        nowMilliseconds: now.toMillis(),
+      });
+
+      if (!rateLimit) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Your League Wire reaction control needs repair before it can be changed.',
+        );
+      }
+
+      if (!rateLimit.allowed) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Wait a moment before changing another League Wire reaction.',
+          { retryAfterMilliseconds: rateLimit.retryAfterMilliseconds },
+        );
+      }
+
+      transaction.update(activityReference, {
+        reactionRecords: transition.nextRecords,
+        reactionCounts: transition.nextCounts,
+        reactionUpdatedAt: now,
+        reactionAuthority: 'league-activity-reaction-authority',
+        reactionRelease: 'Social Batch C1G',
+      });
+      transaction.set(controlReference, {
+        lastChangedAt: Timestamp.fromMillis(
+          rateLimit.nextControl.lastChangedAtMilliseconds ?? now.toMillis(),
+        ),
+        windowStartedAt: Timestamp.fromMillis(
+          rateLimit.nextControl.windowStartedAtMilliseconds ?? now.toMillis(),
+        ),
+        changesInWindow: rateLimit.nextControl.changesInWindow,
+        authority: 'league-activity-reaction-control-authority',
+        release: 'Social Batch C1G',
+      });
+
+      return {
+        activityId: input.activityId,
+        reactionType: transition.nextReactionType,
+        reactionCounts: transition.nextCounts,
+        changed: true,
+      };
+    });
+
+    if (result.changed) {
+      logger.info('League Wire reaction changed.', {
+        leagueId: input.leagueId,
+        activityId: input.activityId,
+        ownerId: userId,
+        reactionType: result.reactionType,
+      });
+    }
+
+    return result;
   },
 );
 

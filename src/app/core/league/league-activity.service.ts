@@ -15,10 +15,20 @@ import {
   type LeagueActivityAssetSummary,
   type LeagueActivityCategory,
   type LeagueActivityEventType,
+  type LeagueActivityReactionCounts,
+  type LeagueActivityReactionRecord,
+  type LeagueActivityReactionType,
   type PinnedLeagueAnnouncement,
 } from './league-activity.models';
 
 const LEAGUE_ACTIVITY_LIMIT = 40;
+const LEAGUE_ACTIVITY_REACTION_MAX_COUNT = 32;
+const REACTION_TYPES = new Set<LeagueActivityReactionType>([
+  'stick-tap',
+  'fire',
+  'wow',
+  'rink-rat',
+]);
 const CATEGORIES = new Set<LeagueActivityCategory>([
   'league',
   'draft',
@@ -138,6 +148,65 @@ function asDate(value: unknown): Date | null {
   return null;
 }
 
+
+function emptyReactionCounts(): LeagueActivityReactionCounts {
+  return {
+    'stick-tap': 0,
+    fire: 0,
+    wow: 0,
+    'rink-rat': 0,
+  };
+}
+
+function normalizeReactionRecords(value: unknown): LeagueActivityReactionRecord[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value) || value.length > LEAGUE_ACTIVITY_REACTION_MAX_COUNT) {
+    return [];
+  }
+
+  const ownerIds = new Set<string>();
+  const records: LeagueActivityReactionRecord[] = [];
+
+  for (const candidate of value) {
+    const source = asRecord(candidate);
+    const ownerId = asString(source['ownerId']);
+    const reactionType = asString(source['reactionType']) as LeagueActivityReactionType;
+    const firstChangedAt = asDate(source['firstChangedAt']);
+    const updatedAt = asDate(source['updatedAt']);
+
+    if (
+      !ownerId ||
+      ownerIds.has(ownerId) ||
+      !REACTION_TYPES.has(reactionType) ||
+      !firstChangedAt ||
+      !updatedAt ||
+      firstChangedAt.getTime() > updatedAt.getTime()
+    ) {
+      return [];
+    }
+
+    ownerIds.add(ownerId);
+    records.push({ ownerId, reactionType, firstChangedAt, updatedAt });
+  }
+
+  return records.sort((left, right) => left.ownerId.localeCompare(right.ownerId));
+}
+
+function summarizeReactionRecords(
+  records: readonly LeagueActivityReactionRecord[],
+): LeagueActivityReactionCounts {
+  const counts = emptyReactionCounts();
+
+  for (const record of records) {
+    counts[record.reactionType] += 1;
+  }
+
+  return counts;
+}
+
 function normalizeAsset(value: unknown): LeagueActivityAssetSummary | null {
   const source = asRecord(value);
   const name = asString(source['name']);
@@ -195,6 +264,7 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   const recapClosestMargin = asBoundedScore(source['recapClosestMargin']);
   const recapPreviousLeagueHighScore = asBoundedScore(source['recapPreviousLeagueHighScore']);
   const recapNewLeagueHighScore = source['recapNewLeagueHighScore'] === true;
+  const reactionRecords = normalizeReactionRecords(source['reactionRecords']);
 
   if (
     eventType === 'matchup-round-recap' &&
@@ -269,6 +339,8 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     recapClosestMargin,
     recapNewLeagueHighScore,
     recapPreviousLeagueHighScore,
+    reactionRecords,
+    reactionCounts: summarizeReactionRecords(reactionRecords),
     occurredAt: asDate(source['occurredAt']),
   };
 }

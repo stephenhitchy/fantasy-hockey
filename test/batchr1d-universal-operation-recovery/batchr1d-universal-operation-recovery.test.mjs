@@ -389,6 +389,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // C1A adds isolated server-sanitized League Wire projections.
     'league-activity.ts',
     'shared/core/league/league-activity.util.ts',
+    'shared/core/league/league-activity-reaction.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

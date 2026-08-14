@@ -13,6 +13,10 @@ import { FormsModule } from '@angular/forms';
 import {
   type LeagueActivity,
   type LeagueActivityCategory,
+  type LeagueActivityEventType,
+  type LeagueActivityReactionCounts,
+  type LeagueActivityReactionRecord,
+  type LeagueActivityReactionType,
   type PinnedLeagueAnnouncement,
 } from '../../../core/league/league-activity.models';
 import {
@@ -29,17 +33,27 @@ import {
   listenToLeagueActivity,
   listenToPinnedLeagueAnnouncement,
 } from '../../../core/league/league-activity.service';
+import {
+  LEAGUE_ACTIVITY_REACTION_OPTIONS,
+  leagueActivitySupportsReactions,
+  setLeagueActivityReaction,
+  type LeagueActivityReactionOption,
+  type SetLeagueActivityReactionResult,
+} from '../../../core/league/league-activity-reaction.service';
 import { type FantasyTeam } from '../../../core/team/team.service';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 
 interface LeagueWireItem {
   id: string;
   category: LeagueActivityCategory;
+  eventType: LeagueActivityEventType;
   categoryLabel: string;
   actorLabel: string;
   profileIconId: string | null;
   headline: string;
   detail: string | null;
+  reactionRecords: LeagueActivityReactionRecord[];
+  reactionCounts: LeagueActivityReactionCounts;
   occurredAt: Date | null;
 }
 
@@ -57,6 +71,7 @@ export class LeagueWire {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly leagueId = input.required<string>();
+  readonly userId = input.required<string>();
   readonly teams = input<readonly FantasyTeam[]>([]);
   readonly isCommissioner = input(false);
 
@@ -75,6 +90,11 @@ export class LeagueWire {
   readonly announcementUnpinning = signal(false);
   readonly announcementStatusMessage = signal('');
   readonly announcementErrorMessage = signal('');
+  readonly reactionOptions = LEAGUE_ACTIVITY_REACTION_OPTIONS;
+  readonly openReactionActivityId = signal('');
+  readonly reactionSavingActivityId = signal('');
+  readonly reactionStatusMessage = signal('');
+  readonly reactionErrors = signal<Record<string, string>>({});
 
   private readonly announcementRequestId = signal('');
 
@@ -149,6 +169,10 @@ export class LeagueWire {
       this.activity.set([]);
       this.errorMessage.set('');
       this.expanded.set(false);
+      this.openReactionActivityId.set('');
+      this.reactionSavingActivityId.set('');
+      this.reactionStatusMessage.set('');
+      this.reactionErrors.set({});
 
       if (!leagueId) {
         this.loading.set(false);
@@ -205,6 +229,149 @@ export class LeagueWire {
 
     const clock = setInterval(() => this.now.set(Date.now()), 60_000);
     this.destroyRef.onDestroy(() => clearInterval(clock));
+  }
+
+
+  supportsReactions(item: LeagueWireItem): boolean {
+    return Boolean(this.userId().trim()) && leagueActivitySupportsReactions(item.eventType);
+  }
+
+  currentReactionType(item: LeagueWireItem): LeagueActivityReactionType | null {
+    const userId = this.userId().trim();
+
+    return userId
+      ? item.reactionRecords.find((record) => record.ownerId === userId)?.reactionType ?? null
+      : null;
+  }
+
+  reactionCount(
+    item: LeagueWireItem,
+    reactionType: LeagueActivityReactionType,
+  ): number {
+    return item.reactionCounts[reactionType];
+  }
+
+  reactionError(item: LeagueWireItem): string {
+    return this.reactionErrors()[item.id] ?? '';
+  }
+
+  isReactionPickerOpen(item: LeagueWireItem): boolean {
+    return this.openReactionActivityId() === item.id;
+  }
+
+  isReactionSaving(item: LeagueWireItem): boolean {
+    return this.reactionSavingActivityId() === item.id;
+  }
+
+  toggleReactionPicker(item: LeagueWireItem): void {
+    if (!this.supportsReactions(item) || this.isReactionSaving(item)) {
+      return;
+    }
+
+    this.openReactionActivityId.update((activityId) =>
+      activityId === item.id ? '' : item.id,
+    );
+    this.clearReactionError(item.id);
+  }
+
+  async chooseReaction(
+    item: LeagueWireItem,
+    option: LeagueActivityReactionOption,
+  ): Promise<void> {
+    if (!this.supportsReactions(item) || this.reactionSavingActivityId()) {
+      return;
+    }
+
+    const currentReactionType = this.currentReactionType(item);
+    const desiredReactionType = currentReactionType === option.reactionType
+      ? null
+      : option.reactionType;
+
+    this.reactionSavingActivityId.set(item.id);
+    this.reactionStatusMessage.set('');
+    this.clearReactionError(item.id);
+
+    try {
+      const result = await setLeagueActivityReaction({
+        leagueId: this.leagueId(),
+        activityId: item.id,
+        reactionType: desiredReactionType,
+      });
+
+      this.applyReactionResult(result);
+      this.openReactionActivityId.set('');
+      this.reactionStatusMessage.set(
+        result.reactionType
+          ? `${option.label} reaction saved.`
+          : 'Reaction removed.',
+      );
+    } catch (error) {
+      this.reactionErrors.update((errors) => ({
+        ...errors,
+        [item.id]: error instanceof Error
+          ? error.message
+          : 'Unable to update that reaction right now.',
+      }));
+    } finally {
+      this.reactionSavingActivityId.set('');
+    }
+  }
+
+  reactionAriaLabel(
+    item: LeagueWireItem,
+    option: LeagueActivityReactionOption,
+  ): string {
+    const count = this.reactionCount(item, option.reactionType);
+    const selected = this.currentReactionType(item) === option.reactionType;
+    const countLabel = `${count} ${count === 1 ? 'reaction' : 'reactions'}`;
+
+    return selected
+      ? `${option.label}, selected, ${countLabel}. Press to remove.`
+      : `${option.label}, ${countLabel}. Press to react.`;
+  }
+
+  private applyReactionResult(result: SetLeagueActivityReactionResult): void {
+    const userId = this.userId().trim();
+    const changedAt = new Date();
+
+    this.activity.update((activityItems) => activityItems.map((activity) => {
+      if (activity.id !== result.activityId || !userId) {
+        return activity;
+      }
+
+      const existing = activity.reactionRecords.find((record) => record.ownerId === userId);
+      const reactionRecords = activity.reactionRecords.filter(
+        (record) => record.ownerId !== userId,
+      );
+
+      if (result.reactionType) {
+        reactionRecords.push({
+          ownerId: userId,
+          reactionType: result.reactionType,
+          firstChangedAt: existing?.firstChangedAt ?? changedAt,
+          updatedAt: changedAt,
+        });
+        reactionRecords.sort((left, right) => left.ownerId.localeCompare(right.ownerId));
+      }
+
+      return {
+        ...activity,
+        reactionRecords,
+        reactionCounts: result.reactionCounts,
+      };
+    }));
+  }
+
+  private clearReactionError(activityId: string): void {
+    this.reactionErrors.update((errors) => {
+      if (!errors[activityId]) {
+        return errors;
+      }
+
+      const nextErrors = { ...errors };
+      delete nextErrors[activityId];
+      return nextErrors;
+    });
   }
 
 
@@ -610,6 +777,7 @@ export class LeagueWire {
     return {
       id: activity.id,
       category: activity.category,
+      eventType: activity.eventType,
       categoryLabel: activity.category === 'draft'
         ? 'Draft'
         : activity.category === 'roster'
@@ -627,6 +795,8 @@ export class LeagueWire {
       profileIconId: team?.profileIconId ?? null,
       headline,
       detail,
+      reactionRecords: activity.reactionRecords,
+      reactionCounts: activity.reactionCounts,
       occurredAt: activity.occurredAt,
     };
   }

@@ -11554,3 +11554,34 @@ The first eligible post-deployment round establishes a server-only League Wire-e
 
 Verification and deployment are documented in `docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`. The normal owner path remains one complete `npm run verify:batchc1f` gate, targeted deployment of the single new trigger, RC32 Hosting, and a short live-site smoke test. Logs are fallback diagnostics only when the site result is missing or incorrect.
 
+
+# Social Batch C1G — League Wire Reactions
+
+**Completed:** 2026-08-14
+
+**Runtime release:** Release Candidate 33
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+C1G adds four bounded hockey reactions—Stick tap, On fire, No way, and Rink Rat—to eligible League Wire Draft picks, completed roster/waiver outcomes, final matchups, commissioner announcements, and Round Recaps. A verified current league member may hold one reaction per item, switch it, or remove it through the server-authoritative `setLeagueActivityReaction` callable.
+
+The server stores at most one bounded reaction record per manager on the existing activity document, derives all counts from those records, rejects malformed history, and applies a 750-millisecond minimum interval plus a 20-change rolling minute window. Idempotent retries for the already-saved selection return without consuming another change.
+
+The browser continues using the same two Firestore listeners: the capped ordered activity feed and exact pinned-announcement document. The selected reaction is derived from the current activity snapshot, and the four-option picker opens inline with 44-pixel controls and a two-column phone layout. C1G adds no modal, sticky control, Firestore Rule, index, TTL policy, transaction migration, or extra listener.
+
+The normal owner workflow is one automated `npm run verify:batchc1g` gate, targeted deployment of `setLeagueActivityReaction`, RC33 Hosting, and a two-manager site-first smoke test. Detailed authority, storage, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
+
+# Social Batch C1G.1 — Reaction Rate-Limit TypeScript Hotfix
+
+**Completed:** 2026-08-14
+
+**Runtime release:** Release Candidate 33 (unchanged)
+
+**Competitive models:** Production Scoring V3 and Projection V11 (unchanged)
+
+The original C1G reaction rate limiter normalized `windowStartedAtMilliseconds` to `number | null` and correctly treated `null` as a fresh rolling window. It then stored that condition in an intermediate boolean. Strict Functions TypeScript compilation did not preserve the property narrowing through that alias and reported TS18047 when the same value was used in remaining-window arithmetic.
+
+C1G.1 copies the normalized timestamp into a local constant, performs an explicit null-or-expired guard, and uses the narrowed number for the capped-window retry calculation and next control state. Runtime behavior, persisted reaction fields, the 750-millisecond minimum interval, the 20-change rolling minute window, the callable contract, the browser interface, and the RC33 release identity remain unchanged.
+
+The focused C1G suite includes a source regression guard, while the complete release gate remains `npm run verify:batchc1g`. No Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, App Check mode, scoring-queue mode, transaction/waiver privacy behavior, or shared NHL cache authority changed.
+
