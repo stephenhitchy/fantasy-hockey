@@ -65,6 +65,11 @@ export interface LeagueActivityAssetSummary {
   assetType: 'skater' | 'team-goalie-unit' | null;
 }
 
+export interface LeagueActivityRecapPerformer {
+  ownerId: string;
+  asset: LeagueActivityAssetSummary;
+}
+
 export interface SanitizedLeagueActivity {
   schemaVersion: typeof LEAGUE_ACTIVITY_SCHEMA_VERSION;
   category: LeagueActivityCategory;
@@ -103,6 +108,9 @@ export interface SanitizedLeagueActivity {
   recapClosestMargin?: number;
   recapNewLeagueHighScore?: boolean;
   recapPreviousLeagueHighScore?: number | null;
+  recapTopPerformers?: LeagueActivityRecapPerformer[];
+  recapTopPerformerScore?: number;
+  recapTopPerformerTieCount?: number;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -651,10 +659,136 @@ export interface LeagueRoundRecapResult {
   activity: SanitizedLeagueActivity;
   highestScore: number;
   highestScoreOwnerIds: string[];
+  topPerformers: LeagueActivityRecapPerformer[];
+  topPerformerTieCount: number;
+  topPerformerScore: number | null;
 }
 
 function roundActivityScore(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+const MAX_RECAP_TOP_PERFORMERS = 3;
+
+interface RoundRecapTopPerformerResult {
+  performers: LeagueActivityRecapPerformer[];
+  performerTieCount: number;
+  performerScore: number;
+}
+
+function buildRoundRecapTopPerformers(
+  values: readonly unknown[],
+  cycleNumber: number,
+  expectedOwnerIds: ReadonlySet<string>,
+): RoundRecapTopPerformerResult | null {
+  if (values.length === 0 || expectedOwnerIds.size === 0) {
+    return null;
+  }
+
+  const seenOwnerIds = new Set<string>();
+  const candidates: Array<LeagueActivityRecapPerformer & { fantasyPoints: number; rosterSlotId: string }> = [];
+
+  for (const value of values) {
+    const source = asRecord(value);
+    const ownerId = sanitizeOwnerId(source['ownerId']);
+
+    if (!ownerId || !expectedOwnerIds.has(ownerId)) {
+      continue;
+    }
+
+    const expectedRosterSlotIdValues = source['expectedRosterSlotIds'];
+    const expectedRosterSlotIds = Array.isArray(expectedRosterSlotIdValues)
+      ? expectedRosterSlotIdValues
+        .map((slotId) => asBoundedString(slotId, 80))
+        .filter(Boolean)
+      : [];
+    const expectedRosterSlotIdSet = new Set(expectedRosterSlotIds);
+    const totalWindowCount = asPositiveInteger(source['totalWindowCount']);
+    const completedWindowCount = asPositiveInteger(source['completedWindowCount']);
+
+    if (
+      seenOwnerIds.has(ownerId) ||
+      asPositiveInteger(source['cycleNumber']) !== cycleNumber ||
+      source['status'] !== 'complete' ||
+      !Array.isArray(source['windows']) ||
+      source['windows'].length === 0 ||
+      source['windows'].length > 64 ||
+      expectedRosterSlotIds.length === 0 ||
+      expectedRosterSlotIds.length > 32 ||
+      expectedRosterSlotIdSet.size !== expectedRosterSlotIds.length ||
+      totalWindowCount !== expectedRosterSlotIds.length ||
+      completedWindowCount !== expectedRosterSlotIds.length
+    ) {
+      return null;
+    }
+
+    seenOwnerIds.add(ownerId);
+    const seenRosterSlotIds = new Set<string>();
+
+    for (const rawWindow of source['windows']) {
+      const window = asRecord(rawWindow);
+      const rosterSlotId = asBoundedString(window['rosterSlotId'], 80);
+
+      if (!rosterSlotId || !expectedRosterSlotIdSet.has(rosterSlotId)) {
+        // Team-window documents may retain a completed historical assignment
+        // after an active slot is removed. Only the source-authoritative
+        // expected slot set participates in the current round award.
+        continue;
+      }
+
+      const windowOwnerId = sanitizeOwnerId(window['ownerId']);
+      const fantasyPoints = asBoundedScore(window['fantasyPoints']);
+      const asset = sanitizeAsset(window['asset']);
+
+      if (
+        seenRosterSlotIds.has(rosterSlotId) ||
+        windowOwnerId !== ownerId ||
+        asPositiveInteger(window['cycleNumber']) !== cycleNumber ||
+        window['status'] !== 'complete' ||
+        fantasyPoints === null ||
+        !asset
+      ) {
+        return null;
+      }
+
+      seenRosterSlotIds.add(rosterSlotId);
+
+      if (asset.assetType === 'skater') {
+        candidates.push({
+          ownerId,
+          asset,
+          fantasyPoints: roundActivityScore(fantasyPoints),
+          rosterSlotId,
+        });
+      }
+    }
+
+    if (seenRosterSlotIds.size !== expectedRosterSlotIdSet.size) {
+      return null;
+    }
+  }
+
+  if (seenOwnerIds.size !== expectedOwnerIds.size || candidates.length === 0) {
+    return null;
+  }
+
+  const performerScore = Math.max(...candidates.map((candidate) => candidate.fantasyPoints));
+  const tiedPerformers = candidates
+    .filter((candidate) => candidate.fantasyPoints === performerScore)
+    .sort((left, right) =>
+      left.asset.name.localeCompare(right.asset.name) ||
+      left.ownerId.localeCompare(right.ownerId) ||
+      left.rosterSlotId.localeCompare(right.rosterSlotId),
+    );
+
+  return {
+    performers: tiedPerformers.slice(0, MAX_RECAP_TOP_PERFORMERS).map((candidate) => ({
+      ownerId: candidate.ownerId,
+      asset: candidate.asset,
+    })),
+    performerTieCount: tiedPerformers.length,
+    performerScore,
+  };
 }
 
 /**
@@ -666,6 +800,7 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
   values: readonly unknown[],
   previousHighScoreValue: unknown = null,
   allowNewHighScoreClaim = true,
+  teamWindowValues: readonly unknown[] = [],
 ): LeagueRoundRecapResult | null {
   const hasPreviousHighScore =
     previousHighScoreValue !== null && previousHighScoreValue !== undefined;
@@ -722,6 +857,14 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
 
     seenOwnerIds.add(teamAOwnerId);
     seenOwnerIds.add(teamBOwnerId);
+  }
+
+  const topPerformerResult = teamWindowValues.length > 0
+    ? buildRoundRecapTopPerformers(teamWindowValues, cycleNumber, seenOwnerIds)
+    : null;
+
+  if (teamWindowValues.length > 0 && !topPerformerResult) {
+    return null;
   }
 
   let highestScore = Number.NEGATIVE_INFINITY;
@@ -796,10 +939,19 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
     highestScore > previousHighScore;
   activity.recapPreviousLeagueHighScore = previousHighScore;
 
+  if (topPerformerResult) {
+    activity.recapTopPerformers = topPerformerResult.performers;
+    activity.recapTopPerformerTieCount = topPerformerResult.performerTieCount;
+    activity.recapTopPerformerScore = topPerformerResult.performerScore;
+  }
+
   return {
     activity,
     highestScore,
     highestScoreOwnerIds,
+    topPerformers: topPerformerResult?.performers ?? [],
+    topPerformerTieCount: topPerformerResult?.performerTieCount ?? 0,
+    topPerformerScore: topPerformerResult?.performerScore ?? null,
   };
 }
 

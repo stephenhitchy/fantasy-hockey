@@ -17,6 +17,7 @@ import {
   type LeagueActivityEventType,
   type LeagueActivityReactionCounts,
   type LeagueActivityReactionRecord,
+  type LeagueActivityRecapPerformer,
   type PinnedLeagueAnnouncement,
 } from './league-activity.models';
 import {
@@ -220,6 +221,40 @@ function normalizeAsset(value: unknown): LeagueActivityAssetSummary | null {
   };
 }
 
+function normalizeRecapPerformers(value: unknown): LeagueActivityRecapPerformer[] | null {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value) || value.length === 0 || value.length > 3) {
+    return null;
+  }
+
+  const performers: LeagueActivityRecapPerformer[] = [];
+  const identities = new Set<string>();
+
+  for (const candidate of value) {
+    const source = asRecord(candidate);
+    const ownerId = asString(source['ownerId']);
+    const asset = normalizeAsset(source['asset']);
+
+    if (!ownerId || !asset) {
+      return null;
+    }
+
+    const identity = `${ownerId}::${asset.assetType ?? ''}::${asset.name}`;
+
+    if (identities.has(identity)) {
+      return null;
+    }
+
+    identities.add(identity);
+    performers.push({ ownerId, asset });
+  }
+
+  return performers;
+}
+
 function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivity | null {
   const source = asRecord(value);
   const category = asString(source['category']) as LeagueActivityCategory;
@@ -255,6 +290,12 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   const recapClosestMargin = asBoundedScore(source['recapClosestMargin']);
   const recapPreviousLeagueHighScore = asBoundedScore(source['recapPreviousLeagueHighScore']);
   const recapNewLeagueHighScore = source['recapNewLeagueHighScore'] === true;
+  const recapTopPerformers = normalizeRecapPerformers(source['recapTopPerformers']);
+  const recapTopPerformerScore = asBoundedScore(source['recapTopPerformerScore']);
+  const recapTopPerformerTieCount = asPositiveInteger(source['recapTopPerformerTieCount']);
+  const hasRecapPerformerFields = source['recapTopPerformers'] !== undefined ||
+    source['recapTopPerformerScore'] !== undefined ||
+    source['recapTopPerformerTieCount'] !== undefined;
   const reactionRecords = normalizeReactionRecords(source['reactionRecords']);
 
   if (
@@ -277,7 +318,15 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
       (recapClosestMargin === 0 && recapClosestWinnerOwnerId !== null) ||
       (recapClosestMargin > 0 && recapClosestWinnerOwnerId === null) ||
       (recapNewLeagueHighScore &&
-        (recapPreviousLeagueHighScore === null || recapTopScore <= recapPreviousLeagueHighScore))
+        (recapPreviousLeagueHighScore === null || recapTopScore <= recapPreviousLeagueHighScore)) ||
+      recapTopPerformers === null ||
+      (hasRecapPerformerFields &&
+        (
+          recapTopPerformers.length === 0 ||
+          recapTopPerformerScore === null ||
+          recapTopPerformerTieCount === null ||
+          recapTopPerformerTieCount < recapTopPerformers.length
+        ))
     )
   ) {
     return null;
@@ -330,6 +379,9 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     recapClosestMargin,
     recapNewLeagueHighScore,
     recapPreviousLeagueHighScore,
+    recapTopPerformers: recapTopPerformers ?? [],
+    recapTopPerformerScore,
+    recapTopPerformerTieCount: recapTopPerformerTieCount ?? 0,
     reactionRecords,
     reactionCounts: summarizeReactionRecords(reactionRecords),
     occurredAt: asDate(source['occurredAt']),

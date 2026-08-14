@@ -24,19 +24,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`](docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md) — commissioner-only plain-text announcements, optional pinning, bounded League Wire presentation, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`](docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md) — one immutable regular-season round recap, top-score and closest-finish context, League Wire-era scoring high-water, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — the full locally bundled Unicode Emoji 17 reaction catalog, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`](docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md) — Player of the Round authority, emoji-only picker cleanup, phone category access, scroll behavior, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 33 / Social Batch C1G.3**. C1G.3 keeps the full **3,944 fully-qualified Unicode Emoji 17.0 sequences** picker, but replaces the quick row with five custom RinkRat reaction icons: **Stick tap**, **On fire**, **No way**, **Rink Rat**, and **Laughing**. Each verified league member may hold one reaction per item, switch it, or remove it through the server-authoritative `setLeagueActivityReaction` callable.
+The current source runtime is **Release Candidate 34 / Social Batch C1H**. C1H adds a server-derived **Player of the Round** line to the existing immutable regular-season Round Recap by validating the completed six-game roster-slot windows for every real matchup owner. It also removes the custom quick-pick row so reactions use only the full **3,944 fully-qualified Unicode Emoji 17.0 sequences** catalog.
 
-The full labeled catalog is bundled locally and lazy-loads only after **React** opens. Search, Unicode categories, 48-item progressive disclosure, 44-pixel phone targets, and an eight-type summary cap keep the picker useful without adding a modal, backdrop, sticky panel, unbounded query, third Firestore listener, npm picker dependency, or runtime emoji CDN. Existing C1G reaction IDs normalize to their canonical emoji without a migration.
+On phones, all emoji categories are now exposed through a native selector and results scroll vertically inside a bounded inline region with momentum scrolling. Search, 48-item progressive disclosure, 44-pixel targets, and an eight-type summary cap remain. Existing quick/custom reaction identifiers normalize to standard emoji without a migration.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1g`.
-
-C1G.1 remains the strict Functions TypeScript build hotfix for nullable reaction rate-window narrowing. C1G.3 preserves that correction and the identical throttle behavior while upgrading only the validated reaction presentation and inline browser picker.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1h`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -80,6 +79,7 @@ verify:batchc1d
 verify:batchc1e
 verify:batchc1f
 verify:batchc1g
+verify:batchc1h
 ```
 
 RinkRat pins:
@@ -99,7 +99,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1g
+npm run verify:batchc1h
 ```
 
 After verification and a clean commit:
@@ -111,9 +111,23 @@ npm run beta:preflight
 
 
 
+## Social Batch C1H — Player of the Round and Mobile Emoji Picker
+
+C1H reads the authoritative completed team-window documents only after a regular-season cycle first becomes complete. It validates owner, cycle, slot, status, asset, and score boundaries before storing at most three tied public performer summaries plus the final score and total tie count. The existing Round Recap then shows Top team, Player of the Round, and Closest as three compact mobile-readable lines.
+
+The reaction picker no longer contains Quick Picks or custom artwork. Existing legacy/custom IDs normalize to 🏒, 🔥, 😮, 🐀, or 😂, while all new selections come from the standard local Emoji 17.0 catalog. A native category selector and bounded vertical result scroller make every category and progressively disclosed result reachable on phones without a modal or extra listener.
+
+Verification:
+
+```bash
+npm run verify:batchc1h
+```
+
+The release updates only `publishLeagueRoundRecapActivity`, `setLeagueActivityReaction`, and RC34 Hosting. Full guidance is in `docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`.
+
 ## Social Batch C1G — League Wire Reactions
 
-C1G.3 supports the complete locally generated Unicode Emoji 17.0 keyboard/display catalog on eligible Draft picks, completed roster and waiver outcomes, final matchups, commissioner announcements, and Round Recaps. Five custom RinkRat quick reactions remain first, while search and categories expose the rest. One verified manager can hold only one reaction per item; selecting another switches it, and selecting the same option removes it. The server validates exact catalog membership, derives totals from a bounded member record set, treats retries idempotently, and preserves the existing short and rolling-window throttles.
+C1G established the complete locally generated Unicode Emoji 17.0 keyboard/display catalog on eligible Draft picks, completed roster and waiver outcomes, final matchups, commissioner announcements, and Round Recaps. C1H removes the later custom quick row, so search and standard categories now expose every selectable reaction. One verified manager can hold only one reaction per item; selecting another switches it, and selecting the same option removes it. The server validates exact catalog membership, derives totals from a bounded member record set, treats retries idempotently, and preserves the existing short and rolling-window throttles.
 
 Reaction fields stay on the existing server-owned activity document. The browser therefore keeps the same two Firestore listeners and uses the current activity snapshot to show both totals and the signed-in manager's selection. The 3,944-entry catalog is a local lazy chunk rather than part of the initial application bundle. The inline picker adds no modal, sticky element, Firestore Rule, index, TTL policy, social subcollection listener, npm picker dependency, or remote emoji service.
 
@@ -123,9 +137,9 @@ Verification:
 npm run verify:batchc1g
 ```
 
-C1G.1 preserves strict Functions TypeScript compilation in the rate limiter. C1G.3 retains that fix, maps old reaction identifiers to custom quick IDs, and keeps the expanded catalog while keeping RC33.
+C1G.1 preserves strict Functions TypeScript compilation in the rate limiter. C1H retains that fix and maps every retired quick/custom identifier back to its standard emoji equivalent.
 
-The normal owner workflow is one automated gate, a targeted deployment of `setLeagueActivityReaction`, RC33 Hosting, and a short site-first smoke test with two managers. Full authority, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
+The current owner workflow is the C1H automated gate, targeted deployment of `setLeagueActivityReaction`, RC34 Hosting, and a short site-first smoke test with two managers. Full authority, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
 
 ## Social Batch C1F — Matchup Round Recaps
 

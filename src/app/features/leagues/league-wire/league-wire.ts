@@ -34,7 +34,6 @@ import {
   listenToPinnedLeagueAnnouncement,
 } from '../../../core/league/league-activity.service';
 import {
-  LEAGUE_ACTIVITY_REACTION_OPTIONS,
   leagueActivitySupportsReactions,
   loadLeagueEmojiCatalog,
   reactionOptionFromType,
@@ -94,7 +93,6 @@ export class LeagueWire {
   readonly announcementUnpinning = signal(false);
   readonly announcementStatusMessage = signal('');
   readonly announcementErrorMessage = signal('');
-  readonly reactionOptions = LEAGUE_ACTIVITY_REACTION_OPTIONS;
   readonly openReactionActivityId = signal('');
   readonly reactionSavingActivityId = signal('');
   readonly reactionStatusMessage = signal('');
@@ -105,11 +103,9 @@ export class LeagueWire {
   readonly emojiCatalogLoading = signal(false);
   readonly emojiCatalogError = signal('');
   readonly emojiSearch = signal('');
-  readonly emojiGroupIndex = signal<number | null>(null);
+  readonly emojiGroupIndex = signal(0);
   readonly emojiVisibleLimit = signal(EMOJI_PICKER_PAGE_SIZE);
-  readonly emojiLabelByValue = signal<ReadonlyMap<string, string>>(
-    new Map(LEAGUE_ACTIVITY_REACTION_OPTIONS.map((option) => [option.reactionType, option.label])),
-  );
+  readonly emojiLabelByValue = signal<ReadonlyMap<string, string>>(new Map());
 
   private readonly announcementRequestId = signal('');
 
@@ -174,9 +170,7 @@ export class LeagueWire {
     }
 
     const groupIndex = this.emojiGroupIndex();
-    return groupIndex === null
-      ? this.reactionOptions
-      : this.emojiCatalog().filter((option) => option.groupIndex === groupIndex);
+    return this.emojiCatalog().filter((option) => option.groupIndex === groupIndex);
   });
 
   readonly visibleEmojiOptions = computed(() =>
@@ -212,7 +206,7 @@ export class LeagueWire {
       this.reactionStatusMessage.set('');
       this.reactionErrors.set({});
       this.emojiSearch.set('');
-      this.emojiGroupIndex.set(null);
+      this.emojiGroupIndex.set(0);
       this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
       this.emojiCatalogError.set('');
 
@@ -345,7 +339,7 @@ export class LeagueWire {
 
     if (opening) {
       this.emojiSearch.set('');
-      this.emojiGroupIndex.set(null);
+      this.emojiGroupIndex.set(0);
       this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
       void this.ensureEmojiCatalogLoaded();
     }
@@ -356,13 +350,25 @@ export class LeagueWire {
     this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
   }
 
-  selectEmojiGroup(groupIndex: number | null): void {
+  selectEmojiGroup(groupIndex: number): void {
     this.emojiGroupIndex.set(groupIndex);
     this.emojiSearch.set('');
     this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
   }
 
-  isEmojiGroupSelected(groupIndex: number | null): boolean {
+  selectEmojiGroupFromInput(value: number | string): void {
+    const groupIndex = typeof value === 'number' ? value : Number.parseInt(value, 10);
+
+    if (
+      Number.isInteger(groupIndex) &&
+      groupIndex >= 0 &&
+      groupIndex < this.emojiCatalogGroups().length
+    ) {
+      this.selectEmojiGroup(groupIndex);
+    }
+  }
+
+  isEmojiGroupSelected(groupIndex: number): boolean {
     return !this.emojiSearch().trim() && this.emojiGroupIndex() === groupIndex;
   }
 
@@ -439,15 +445,12 @@ export class LeagueWire {
       this.emojiCatalog.set(catalog.options);
       this.emojiCatalogGroups.set(catalog.groups);
       this.emojiCatalogVersion.set(catalog.version);
-      this.emojiLabelByValue.set(new Map([
-        ...catalog.options.map((option) => [option.reactionType, option.label] as const),
-        ...LEAGUE_ACTIVITY_REACTION_OPTIONS.map(
-          (option) => [option.reactionType, option.label] as const,
-        ),
-      ]));
+      this.emojiLabelByValue.set(new Map(
+        catalog.options.map((option) => [option.reactionType, option.label] as const),
+      ));
     } catch {
       this.emojiCatalogError.set(
-        'The full emoji list could not load. The quick reactions are still available.',
+        'The emoji list could not load. Close the picker and try again.',
       );
     } finally {
       this.emojiCatalogLoading.set(false);
@@ -835,10 +838,35 @@ export class LeagueWire {
             : 'The matchup round is complete.';
         }
 
-        detail = [
-          `Top score: ${topScoreLabel} · ${this.formatScore(activity.recapTopScore)}`,
-          `Closest: ${closestFinish}`,
-        ].join(' · ');
+        const performerLabels = activity.recapTopPerformers.map((performer) => {
+          const teamName = this.teamByOwnerId().get(performer.ownerId)?.teamName;
+          return teamName
+            ? `${performer.asset.name} (${teamName})`
+            : performer.asset.name;
+        });
+        const omittedPerformerCount = Math.max(
+          0,
+          activity.recapTopPerformerTieCount - performerLabels.length,
+        );
+        const performerLabel = performerLabels.length > 0
+          ? `${this.joinLabels(performerLabels)}${
+            omittedPerformerCount > 0 ? ` +${omittedPerformerCount} tied` : ''
+          }`
+          : '';
+        const performerDetail = performerLabel && activity.recapTopPerformerScore !== null
+          ? `${activity.recapTopPerformerTieCount > 1 ? 'Players of the Round' : 'Player of the Round'}: ` +
+            `${performerLabel} · ${this.formatScore(activity.recapTopPerformerScore)}`
+          : null;
+        const recapDetails = [
+          `Top team: ${topScoreLabel} · ${this.formatScore(activity.recapTopScore)}`,
+        ];
+
+        if (performerDetail) {
+          recapDetails.push(performerDetail);
+        }
+
+        recapDetails.push(`Closest: ${closestFinish}`);
+        detail = recapDetails.join('\n');
         break;
       }
       case 'matchup-result': {

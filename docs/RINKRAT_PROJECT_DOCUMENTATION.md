@@ -11603,3 +11603,13 @@ The callable validates exact membership in a matching generated server allowlist
 C1G.2 preserves the C1G.1 strict TypeScript narrowing fix, one-reaction-per-manager semantics, idempotent retries, 32-manager cap, 750-millisecond minimum interval, and 20-change rolling minute window. It changes no Firestore Rule, index, TTL policy, scoring or projection source, six-game window behavior, seventh-game rollover, transaction/waiver privacy, App Check mode, scoring-queue mode, or shared NHL-cache authority.
 
 The release remains `npm run verify:batchc1g`, targeted deployment of `functions:setLeagueActivityReaction`, RC33 Hosting, and a two-manager site-first smoke test. Full implementation and rollback guidance are maintained in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
+
+## Social Batch C1H — Player of the Round and mobile emoji picker
+
+**Runtime release:** Release Candidate 34
+
+C1H extends the existing immutable regular-season Round Recap with one server-derived Player of the Round line. The publisher reads the completed cycle's bounded team-window documents, validates every real matchup owner and complete slot window, stores at most three tied public asset summaries plus the final score and total tie count, and copies no game ledger or roster-slot identifier.
+
+The reaction interface now contains only the standard local Emoji 17.0 catalog. Retired quick/custom identifiers normalize to their standard emoji equivalents. On phones, all categories are exposed through a native selector and the result grid scrolls inside a bounded momentum-enabled region, fixing the site-observed clipped category/result behavior without a modal or new listener.
+
+The normal owner workflow is one `npm run verify:batchc1h` gate, targeted updates of `publishLeagueRoundRecapActivity` and `setLeagueActivityReaction`, RC34 Hosting, and a site-first round/emoji smoke test. Full implementation and rollback guidance are maintained in `docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`.

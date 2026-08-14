@@ -26,7 +26,7 @@
   --rr-card-shadow: var(--rr-shadow-card);
   --rr-card-padding: var(--rr-space-5);
 
-  overflow: hidden;
+  overflow: visible;
   border-radius: var(--rr-radius-md);
   font-family: var(--rr-font-interface);
 }
@@ -552,7 +552,8 @@
   color: color-mix(in srgb, var(--rr-color-success) 72%, var(--rr-color-text));
 }
 
-.league-wire-detail-announcement {
+.league-wire-detail-announcement,
+.league-wire-detail-recap {
   white-space: pre-line;
 }
 
@@ -657,6 +658,7 @@
 
 .league-wire-reaction-picker {
   display: grid;
+  min-width: 0;
   gap: 10px;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--rr-color-info) 28%, var(--rr-color-border));
@@ -671,19 +673,25 @@
   gap: 10px;
 }
 
-.league-wire-emoji-search {
+.league-wire-emoji-search,
+.league-wire-emoji-category-select {
   display: grid;
-  flex: 1 1 260px;
-  min-width: 0;
   gap: 5px;
   color: var(--rr-color-text-secondary);
   font-size: 11px;
   font-weight: 800;
 }
 
-.league-wire-emoji-search input {
+.league-wire-emoji-search {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.league-wire-emoji-search input,
+.league-wire-emoji-category-select select {
   width: 100%;
   min-height: 44px;
+  box-sizing: border-box;
   padding: 9px 11px;
   border: 1px solid var(--rr-color-border);
   border-radius: var(--rr-radius-md);
@@ -692,6 +700,10 @@
   font: inherit;
   font-size: 13px;
   font-weight: 650;
+}
+
+.league-wire-emoji-category-select select {
+  padding-right: 36px;
 }
 
 .league-wire-emoji-search input::placeholder {
@@ -707,14 +719,20 @@
   white-space: nowrap;
 }
 
+.league-wire-emoji-category-select {
+  display: none;
+}
+
 .league-wire-emoji-categories {
   display: flex;
   gap: 6px;
   max-width: 100%;
-  padding-bottom: 2px;
+  padding-bottom: 4px;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
 }
 
 .league-wire-emoji-category {
@@ -725,6 +743,26 @@
   font-size: 11px;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+.league-wire-emoji-results {
+  display: grid;
+  min-width: 0;
+  max-height: min(420px, 58vh);
+  gap: 8px;
+  padding: 2px 4px 3px 1px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.league-wire-emoji-results:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--rr-color-info) 50%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--rr-radius-md);
 }
 
 .league-wire-emoji-grid {
@@ -749,19 +787,6 @@
   font-size: 21px;
   line-height: 1;
   transform: translateZ(0);
-}
-
-
-.league-wire-reaction-icon {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  object-fit: contain;
-}
-
-.league-wire-reaction-icon-large {
-  width: 24px;
-  height: 24px;
 }
 
 .league-wire-emoji-state {
@@ -796,7 +821,8 @@
 .league-wire-reaction-option:focus-visible,
 .league-wire-emoji-category:focus-visible,
 .league-wire-emoji-more:focus-visible,
-.league-wire-emoji-search input:focus-visible {
+.league-wire-emoji-search input:focus-visible,
+.league-wire-emoji-category-select select:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--rr-color-info) 50%, transparent);
   outline-offset: 2px;
 }
@@ -806,7 +832,8 @@
 .league-wire-reaction-option:disabled,
 .league-wire-emoji-category:disabled,
 .league-wire-emoji-more:disabled,
-.league-wire-emoji-search input:disabled {
+.league-wire-emoji-search input:disabled,
+.league-wire-emoji-category-select select:disabled {
   cursor: wait;
   opacity: 0.65;
 }
@@ -836,8 +863,20 @@
     padding: 0;
   }
 
+  .league-wire-emoji-categories {
+    display: none;
+  }
+
+  .league-wire-emoji-category-select {
+    display: grid;
+  }
+
+  .league-wire-emoji-results {
+    max-height: min(360px, 52vh);
+  }
+
   .league-wire-emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
   }
 }

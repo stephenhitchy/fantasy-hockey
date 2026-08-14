@@ -62,6 +62,11 @@ export interface LeagueActivityAssetSummary {
   assetType: 'skater' | 'team-goalie-unit' | null;
 }
 
+export interface LeagueActivityRecapPerformer {
+  ownerId: string;
+  asset: LeagueActivityAssetSummary;
+}
+
 export interface LeagueActivity {
   id: string;
   schemaVersion: number;
@@ -101,6 +106,9 @@ export interface LeagueActivity {
   recapClosestMargin: number | null;
   recapNewLeagueHighScore: boolean;
   recapPreviousLeagueHighScore: number | null;
+  recapTopPerformers: LeagueActivityRecapPerformer[];
+  recapTopPerformerScore: number | null;
+  recapTopPerformerTieCount: number;
   reactionRecords: LeagueActivityReactionRecord[];
   reactionCounts: LeagueActivityReactionCounts;
   occurredAt: Date | null;

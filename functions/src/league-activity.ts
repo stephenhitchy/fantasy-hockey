@@ -778,7 +778,7 @@ export const setLeagueActivityReaction = onCall(
         reactionCounts: transition.nextCounts,
         reactionUpdatedAt: now,
         reactionAuthority: 'league-activity-reaction-authority',
-        reactionRelease: 'Social Batch C1G.3',
+        reactionRelease: 'Social Batch C1H',
       });
       transaction.set(controlReference, {
         lastChangedAt: Timestamp.fromMillis(
@@ -789,7 +789,7 @@ export const setLeagueActivityReaction = onCall(
         ),
         changesInWindow: rateLimit.nextControl.changesInWindow,
         authority: 'league-activity-reaction-control-authority',
-        release: 'Social Batch C1G.3',
+        release: 'Social Batch C1H',
       });
 
       return {
@@ -1013,15 +1013,17 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
       return;
     }
 
-    const matchupSnapshots = await db
-      .collection(`leagues/${leagueId}/cycles/${cycleId}/matchups`)
-      .get();
+    const [matchupSnapshots, teamWindowSnapshots] = await Promise.all([
+      db.collection(`leagues/${leagueId}/cycles/${cycleId}/matchups`).get(),
+      db.collection(`leagues/${leagueId}/cycles/${cycleId}/teamWindows`).get(),
+    ]);
 
-    if (matchupSnapshots.size !== totalMatchupCount) {
+    if (matchupSnapshots.size !== totalMatchupCount || teamWindowSnapshots.empty) {
       return;
     }
 
     const matchupValues = matchupSnapshots.docs.map((snapshot) => snapshot.data());
+    const teamWindowValues = teamWindowSnapshots.docs.map((snapshot) => snapshot.data());
     const activityId = getLeagueActivityDocumentId('cycle-recap', sourceDocumentId);
     const activityReference = db.doc(`leagues/${leagueId}/activity/${activityId}`);
     const milestoneReference = db.doc(
@@ -1072,9 +1074,16 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
         matchupValues,
         previousHighScore,
         previousLastRecapCycleNumber === cycleNumber - 1,
+        teamWindowValues,
       );
 
-      if (!recap || recap.activity.recapCycleNumber !== cycleNumber) {
+      if (
+        !recap ||
+        recap.activity.recapCycleNumber !== cycleNumber ||
+        recap.topPerformers.length === 0 ||
+        recap.topPerformerScore === null ||
+        recap.topPerformerTieCount < recap.topPerformers.length
+      ) {
         return;
       }
 
@@ -1088,14 +1097,14 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
         occurredAt,
         publishedAt: FieldValue.serverTimestamp(),
         authority: 'league-activity-authority',
-        release: 'Social Batch C1F',
+        release: 'Social Batch C1H',
       });
 
       const milestoneUpdate: Record<string, unknown> = {
         schemaVersion: 1,
         updatedAt: FieldValue.serverTimestamp(),
         authority: 'league-social-milestone-authority',
-        release: 'Social Batch C1F',
+        release: 'Social Batch C1H',
       };
       const isNewestObservedRecap = previousLastRecapCycleNumber === null ||
         cycleNumber >= previousLastRecapCycleNumber;

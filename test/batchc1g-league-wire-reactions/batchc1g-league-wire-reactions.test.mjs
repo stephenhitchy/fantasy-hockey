@@ -6,7 +6,6 @@ import test from 'node:test';
 import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 import {
   LEAGUE_ACTIVITY_REACTION_CATALOG_VERSION,
-  LEAGUE_ACTIVITY_REACTION_FAVORITES,
   LEAGUE_ACTIVITY_REACTION_MAX_BYTES,
   LEAGUE_ACTIVITY_REACTION_MAX_CHANGES_PER_WINDOW,
   LEAGUE_ACTIVITY_REACTION_MAX_COUNT,
@@ -58,28 +57,26 @@ test('C1G.2 accepts the complete locally generated Unicode Emoji 17 catalog', ()
     'Symbols',
     'Flags',
   ]);
-  assert.deepEqual(LEAGUE_ACTIVITY_REACTION_FAVORITES, ['rr_stick_tap', 'rr_on_fire', 'rr_no_way', 'rr_rink_rat', 'rr_laugh']);
-
   for (const emoji of ['🤣', '🏆', '👩🏽‍💻', '🏳️‍🌈', '🇺🇸', '#️⃣']) {
     assert.equal(LEAGUE_EMOJI_SET.has(emoji), true, emoji);
     assert.equal(normalizeLeagueActivityReactionType(emoji), emoji, emoji);
   }
   assert.equal(LEAGUE_EMOJI_SET.has('🏒'), true);
-  assert.equal(normalizeLeagueActivityReactionType('🏒'), 'rr_stick_tap');
-  assert.equal(normalizeLeagueActivityReactionType('🔥'), 'rr_on_fire');
-  assert.equal(normalizeLeagueActivityReactionType('😮'), 'rr_no_way');
-  assert.equal(normalizeLeagueActivityReactionType('🐀'), 'rr_rink_rat');
-  assert.equal(normalizeLeagueActivityReactionType('😂'), 'rr_laugh');
+  assert.equal(normalizeLeagueActivityReactionType('🏒'), '🏒');
+  assert.equal(normalizeLeagueActivityReactionType('🔥'), '🔥');
+  assert.equal(normalizeLeagueActivityReactionType('😮'), '😮');
+  assert.equal(normalizeLeagueActivityReactionType('🐀'), '🐀');
+  assert.equal(normalizeLeagueActivityReactionType('😂'), '😂');
 
-  assert.equal(normalizeLeagueActivityReactionType('rr_stick_tap'), 'rr_stick_tap');
-  assert.equal(normalizeLeagueActivityReactionType('rr_on_fire'), 'rr_on_fire');
-  assert.equal(normalizeLeagueActivityReactionType('rr_no_way'), 'rr_no_way');
-  assert.equal(normalizeLeagueActivityReactionType('rr_rink_rat'), 'rr_rink_rat');
-  assert.equal(normalizeLeagueActivityReactionType('rr_laugh'), 'rr_laugh');
-  assert.equal(normalizeLeagueActivityReactionType('stick-tap'), 'rr_stick_tap');
-  assert.equal(normalizeLeagueActivityReactionType('fire'), 'rr_on_fire');
-  assert.equal(normalizeLeagueActivityReactionType('wow'), 'rr_no_way');
-  assert.equal(normalizeLeagueActivityReactionType('rink-rat'), 'rr_rink_rat');
+  assert.equal(normalizeLeagueActivityReactionType('rr_stick_tap'), '🏒');
+  assert.equal(normalizeLeagueActivityReactionType('rr_on_fire'), '🔥');
+  assert.equal(normalizeLeagueActivityReactionType('rr_no_way'), '😮');
+  assert.equal(normalizeLeagueActivityReactionType('rr_rink_rat'), '🐀');
+  assert.equal(normalizeLeagueActivityReactionType('rr_laugh'), '😂');
+  assert.equal(normalizeLeagueActivityReactionType('stick-tap'), '🏒');
+  assert.equal(normalizeLeagueActivityReactionType('fire'), '🔥');
+  assert.equal(normalizeLeagueActivityReactionType('wow'), '😮');
+  assert.equal(normalizeLeagueActivityReactionType('rink-rat'), '🐀');
   assert.equal(normalizeLeagueActivityReactionType('thumbs-up'), null);
   assert.equal(normalizeLeagueActivityReactionType('😀😀'), null);
   assert.equal(normalizeLeagueActivityReactionType(''), null);
@@ -109,7 +106,7 @@ test('public reaction records stay bounded, unique, canonical, and fail closed w
   ];
   const normalized = normalizeLeagueActivityReactionRecords(records);
   assert.deepEqual(normalized?.map((record) => record.ownerId), ['owner-a', 'owner-b']);
-  assert.deepEqual(normalized?.map((record) => record.reactionType), ['rr_stick_tap', 'rr_laugh']);
+  assert.deepEqual(normalized?.map((record) => record.reactionType), ['🏒', '😂']);
   assert.equal(normalizeLeagueActivityReactionRecords({}), null);
   assert.equal(normalizeLeagueActivityReactionRecords([
     reactionRecord('owner-a', '🔥'),
@@ -128,15 +125,15 @@ test('public reaction records stay bounded, unique, canonical, and fail closed w
 
 test('reaction summaries are dynamic and derived from member records instead of browser totals', () => {
   const counts = summarizeLeagueActivityReactionRecords([
-    reactionRecord('owner-a', 'rr_stick_tap'),
+    reactionRecord('owner-a', '🏒'),
     reactionRecord('owner-b', '😂'),
     reactionRecord('owner-c', '😂'),
     reactionRecord('owner-d', '🏆'),
   ]);
 
   assert.deepEqual(counts, {
-    rr_stick_tap: 1,
-    rr_laugh: 2,
+    '🏒': 1,
+    '😂': 2,
     '🏆': 1,
   });
   assert.deepEqual(summarizeLeagueActivityReactionRecords([]), emptyLeagueActivityReactionCounts());
@@ -146,18 +143,18 @@ test('one manager selection adds, switches, removes, and retries idempotently', 
   const added = applyLeagueActivityReactionSelection({
     records: [],
     ownerId: 'owner-a',
-    desiredReactionType: 'rr_laugh',
+    desiredReactionType: '😂',
     changedAt: new Date(1_000),
   });
   assert.equal(added?.changed, true);
   assert.equal(added?.previousReactionType, null);
-  assert.equal(added?.nextReactionType, 'rr_laugh');
-  assert.deepEqual(added?.nextCounts, { rr_laugh: 1 });
+  assert.equal(added?.nextReactionType, '😂');
+  assert.deepEqual(added?.nextCounts, { '😂': 1 });
 
   const replay = applyLeagueActivityReactionSelection({
     records: added?.nextRecords,
     ownerId: 'owner-a',
-    desiredReactionType: 'rr_laugh',
+    desiredReactionType: '😂',
     changedAt: new Date(2_000),
   });
   assert.equal(replay?.changed, false);
@@ -169,7 +166,7 @@ test('one manager selection adds, switches, removes, and retries idempotently', 
     desiredReactionType: '🏆',
     changedAt: new Date(3_000),
   });
-  assert.equal(switched?.previousReactionType, 'rr_laugh');
+  assert.equal(switched?.previousReactionType, '😂');
   assert.equal(switched?.nextReactionType, '🏆');
   assert.deepEqual(switched?.nextCounts, { '🏆': 1 });
 
@@ -304,7 +301,7 @@ test('the callable validates against the exact catalog and preserves member auth
 
   assert.match(reactionUtility, /LEAGUE_EMOJI_SET\.has\(normalized\)/);
   assert.match(reactionUtility, /LEGACY_REACTION_TYPE_MAP/);
-  assert.match(reactionUtility, /QUICK_REACTION_TYPE_SET/);
+  assert.doesNotMatch(reactionUtility, /QUICK_REACTION_TYPE_SET/);
   assert.match(publisher, /export const setLeagueActivityReaction = onCall/);
   assert.match(publisher, /requireAuthenticatedUserId\(request\.auth, actionLabel\)/);
   assert.match(publisher, /requireVerifiedEmail\(request\.auth, actionLabel\)/);
@@ -317,7 +314,7 @@ test('the callable validates against the exact catalog and preserves member auth
   assert.match(publisher, /reactionRecords: transition\.nextRecords/);
   assert.match(publisher, /reactionCounts: transition\.nextCounts/);
   assert.match(publisher, /reactionAuthority: 'league-activity-reaction-authority'/);
-  assert.match(publisher, /reactionRelease: 'Social Batch C1G\.3'/);
+  assert.match(publisher, /reactionRelease: 'Social Batch C1H'/);
   assert.match(publisher, /logger\.info\('League Wire reaction changed\.'/);
   assert.doesNotMatch(publisher, /members\/\$\{userId\}\/activityReactions/);
   assert.match(index, /setLeagueActivityReaction/);
@@ -347,7 +344,7 @@ test('the browser keeps two League Wire listeners and lazy-loads the local emoji
   assert.match(detailTemplate, /\[userId\]="userId"/);
 });
 
-test('League Wire provides custom quick icons, search, categories, pagination, bounded summaries, and an inline phone-safe picker', async () => {
+test('League Wire provides an emoji-only catalog, search, categories, pagination, bounded summaries, and an inline phone-safe picker', async () => {
   const [template, styles, component] = await Promise.all([
     read('src/app/features/leagues/league-wire/league-wire.html'),
     read('src/app/features/leagues/league-wire/league-wire.css'),
@@ -357,9 +354,9 @@ test('League Wire provides custom quick icons, search, categories, pagination, b
   assert.match(template, /Search emojis/);
   assert.match(template, /Emoji \{\{ emojiCatalogVersion\(\) \}\}/);
   assert.match(template, /league-wire-emoji-categories/);
-  assert.match(template, />\s*Quick picks\s*</);
+  assert.match(template, /league-wire-emoji-category-select/);
   assert.match(template, /visibleEmojiOptions\(\)/);
-  assert.match(template, /league-wire-reaction-icon/);
+  assert.doesNotMatch(template, /Quick picks|league-wire-reaction-icon/);
   assert.match(template, /showMoreEmojis\(\)/);
   assert.match(template, /aria-pressed/);
   assert.match(template, /reactionAriaLabel/);
@@ -368,14 +365,15 @@ test('League Wire provides custom quick icons, search, categories, pagination, b
   assert.match(component, /const REACTION_SUMMARY_LIMIT = 8;/);
   assert.match(component, /const EMOJI_PICKER_PAGE_SIZE = 48;/);
   assert.match(styles, /league-wire-reaction-option[\s\S]*?min-height:\s*44px/);
-  assert.match(styles, /league-wire-reaction-icon-large/);
+  assert.match(styles, /league-wire-emoji-results[\s\S]*?overflow-y:\s*auto/);
+  assert.match(styles, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(auto-fill, minmax\(44px, 1fr\)\)/);
   assert.match(styles, /overflow-x:\s*auto/);
   assert.doesNotMatch(template, /role="dialog"|viewport-overlay|action-sheet|innerHTML/i);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
 });
 
-test('C1G.3 keeps legacy reactions readable while migrating them to custom quick IDs on change', async () => {
+test('C1G.4 keeps legacy reactions readable while canonicalizing them to Unicode emoji on change', async () => {
   const [clientUtility, activityService, serverUtility] = await Promise.all([
     read('src/app/core/league/league-activity-reaction.util.ts'),
     read('src/app/core/league/league-activity.service.ts'),
@@ -383,17 +381,17 @@ test('C1G.3 keeps legacy reactions readable while migrating them to custom quick
   ]);
 
   for (const source of [clientUtility, serverUtility]) {
-    assert.match(source, /'stick-tap': 'rr_stick_tap'/);
-    assert.match(source, /fire: 'rr_on_fire'/);
-    assert.match(source, /wow: 'rr_no_way'/);
-    assert.match(source, /'rink-rat': 'rr_rink_rat'/);
-    assert.match(source, /'😂': 'rr_laugh'/);
+    assert.match(source, /'stick-tap': '🏒'/);
+    assert.match(source, /fire: '🔥'/);
+    assert.match(source, /wow: '😮'/);
+    assert.match(source, /'rink-rat': '🐀'/);
+    assert.match(source, /rr_laugh: '😂'/);
   }
   assert.match(activityService, /normalizeLeagueActivityReactionType\(source\['reactionType'\]\)/);
   assert.match(serverUtility, /reactionType: desiredReactionType/);
 });
 
-test('C1G.3 remains RC33 and preserves competitive models, Rules, indexes, and inactive safety controls', async () => {
+test('C1G.4 remains intact under RC34 and preserves competitive models, Rules, indexes, and inactive safety controls', async () => {
   const [
     scoringRules,
     scoringEngine,
@@ -432,24 +430,25 @@ test('C1G.3 remains RC33 and preserves competitive models, Rules, indexes, and i
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 33/);
-  assert.match(productionRuntime, /Release Candidate 33/);
+  assert.match(runtime, /Release Candidate 34/);
+  assert.match(productionRuntime, /Release Candidate 34/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1g');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc33-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1h');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc34-invite-beta');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1g:core'], /verify:batchc1f:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1g:core/);
+  assert.match(packageJson.scripts['verify:batchc1h:core'], /verify:batchc1g:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1h:core/);
 });
 
-test('C1G.3 documentation and roadmap record the custom quick icons, full local catalog, and site-first proof', async () => {
+test('C1G.4 documentation records the emoji-only catalog and mobile picker repair', async () => {
   const [roadmap, docsRoadmap, runbook, readme, releaseRunbook] = await Promise.all([
     read('RINKRAT_COMPETITIVE_ROADMAP.txt'),
     read('docs/RINKRAT_COMPETITIVE_ROADMAP.txt'),
@@ -459,24 +458,24 @@ test('C1G.3 documentation and roadmap record the custom quick icons, full local 
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.24\.3/);
+  assert.match(roadmap, /Version 1\.25/);
   assert.match(roadmap, /# \[x\] C1\.4/);
   assert.match(roadmap, /# \[x\] C1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.39/);
   assert.match(roadmap, /# \[x\] LOG\.40/);
   assert.match(roadmap, /# \[x\] LOG\.41/);
   assert.match(runbook, /3,944 fully-qualified Emoji 17\.0 sequences/);
-  assert.match(runbook, /C1G\.3 custom quick reactions/);
+  assert.match(runbook, /mobile picker repair/i);
   assert.match(runbook, /lazy-load/i);
   assert.match(runbook, /same two Firestore listeners/i);
-  assert.match(runbook, /one automated verification gate/i);
+  assert.match(runbook, /verification gate/i);
   assert.match(runbook, /functions:setLeagueActivityReaction/);
   assert.doesNotMatch(runbook, /--only firestore:rules/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 33 \/ Social Batch C1G\.3/);
+  assert.match(readme, /Release Candidate 34 \/ Social Batch C1H/);
   assert.match(readme, /RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS\.md/);
-  assert.match(releaseRunbook, /C1G\.3/);
-  assert.match(releaseRunbook, /npm run verify:batchc1g/);
-  assert.match(releaseRunbook, /rinkrat-rc33-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc33-invite-beta/);
+  assert.match(releaseRunbook, /C1H/);
+  assert.match(releaseRunbook, /npm run verify:batchc1h/);
+  assert.match(releaseRunbook, /rinkrat-rc34-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc34-invite-beta/);
 });

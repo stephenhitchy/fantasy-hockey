@@ -7,17 +7,14 @@ import {
   type LeagueActivityReactionType,
 } from './league-activity.models';
 import {
-  LEAGUE_ACTIVITY_QUICK_REACTIONS,
   leagueActivityReactionLabel,
   normalizeLeagueActivityReactionType,
-  quickReactionOption,
 } from './league-activity-reaction.util';
 
 export interface LeagueActivityReactionOption {
   reactionType: LeagueActivityReactionType;
-  emoji?: string;
+  emoji: string;
   label: string;
-  assetPath?: string;
   groupIndex?: number;
 }
 
@@ -27,9 +24,6 @@ export interface LeagueEmojiCatalog {
   options: readonly LeagueActivityReactionOption[];
 }
 
-export const LEAGUE_ACTIVITY_REACTION_OPTIONS: readonly LeagueActivityReactionOption[] =
-  LEAGUE_ACTIVITY_QUICK_REACTIONS;
-
 let emojiCatalogPromise: Promise<LeagueEmojiCatalog> | null = null;
 
 export function loadLeagueEmojiCatalog(): Promise<LeagueEmojiCatalog> {
@@ -37,7 +31,7 @@ export function loadLeagueEmojiCatalog(): Promise<LeagueEmojiCatalog> {
     version: catalog.LEAGUE_EMOJI_CATALOG_VERSION,
     groups: catalog.LEAGUE_EMOJI_GROUPS,
     options: catalog.LEAGUE_EMOJI_CATALOG.map(([emoji, label, groupIndex]) => ({
-      reactionType: normalizeLeagueActivityReactionType(emoji) ?? emoji,
+      reactionType: emoji,
       emoji,
       label,
       groupIndex,
@@ -51,17 +45,11 @@ export function reactionOptionFromType(
   reactionType: LeagueActivityReactionType,
   label?: string,
 ): LeagueActivityReactionOption {
-  return quickReactionOption(reactionType)
-    ? {
-      reactionType,
-      label: quickReactionOption(reactionType)?.label ?? leagueActivityReactionLabel(reactionType),
-      assetPath: quickReactionOption(reactionType)?.assetPath,
-    }
-    : {
-      reactionType,
-      emoji: reactionType,
-      label: label || leagueActivityReactionLabel(reactionType),
-    };
+  return {
+    reactionType,
+    emoji: reactionType,
+    label: label || leagueActivityReactionLabel(reactionType),
+  };
 }
 
 const REACTION_EVENT_TYPES = new Set<LeagueActivityEventType>([

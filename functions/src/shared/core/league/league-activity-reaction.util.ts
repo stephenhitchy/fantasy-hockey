@@ -3963,34 +3963,16 @@ export const LEAGUE_ACTIVITY_REACTION_CATALOG_VERSION = LEAGUE_EMOJI_CATALOG_VER
 export const LEAGUE_ACTIVITY_REACTION_MAX_BYTES = 64;
 export const LEAGUE_ACTIVITY_REACTION_MAX_COUNT = 32;
 
-export const LEAGUE_ACTIVITY_REACTION_FAVORITES = [
-  'rr_stick_tap',
-  'rr_on_fire',
-  'rr_no_way',
-  'rr_rink_rat',
-  'rr_laugh',
-] as const;
-
-export const LEAGUE_ACTIVITY_REACTION_QUICK_LABELS: Readonly<Record<string, string>> = {
-  rr_stick_tap: 'Stick tap',
-  rr_on_fire: 'On fire',
-  rr_no_way: 'No way',
-  rr_rink_rat: 'Rink Rat',
-  rr_laugh: 'Laughing',
-};
-
-const QUICK_REACTION_TYPE_SET = new Set<string>(LEAGUE_ACTIVITY_REACTION_FAVORITES);
-
 const LEGACY_REACTION_TYPE_MAP: Readonly<Record<string, string>> = {
-  'stick-tap': 'rr_stick_tap',
-  fire: 'rr_on_fire',
-  wow: 'rr_no_way',
-  'rink-rat': 'rr_rink_rat',
-  '🏒': 'rr_stick_tap',
-  '🔥': 'rr_on_fire',
-  '😮': 'rr_no_way',
-  '🐀': 'rr_rink_rat',
-  '😂': 'rr_laugh',
+  'stick-tap': '🏒',
+  fire: '🔥',
+  wow: '😮',
+  'rink-rat': '🐀',
+  rr_stick_tap: '🏒',
+  rr_on_fire: '🔥',
+  rr_no_way: '😮',
+  rr_rink_rat: '🐀',
+  rr_laugh: '😂',
 };
 export const LEAGUE_ACTIVITY_REACTION_MIN_INTERVAL_MILLISECONDS = 750;
 export const LEAGUE_ACTIVITY_REACTION_WINDOW_MILLISECONDS = 60_000;
@@ -4060,7 +4042,7 @@ export function normalizeLeagueActivityReactionType(
 
   return normalized &&
       byteLength <= LEAGUE_ACTIVITY_REACTION_MAX_BYTES &&
-      (QUICK_REACTION_TYPE_SET.has(normalized) || LEAGUE_EMOJI_SET.has(normalized))
+      LEAGUE_EMOJI_SET.has(normalized)
     ? normalized
     : null;
 }

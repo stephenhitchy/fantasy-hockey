@@ -222,7 +222,7 @@ test('the publisher observes only first regular-season cycle completion and writ
   assert.match(publisher, /recap\.highestScore > previousHighScore/);
   assert.match(publisher, /transaction\.create\(activityReference/);
   assert.match(publisher, /sourceKind: 'cycle-recap'/);
-  assert.match(publisher, /release: 'Social Batch C1F'/);
+  assert.match(publisher, /release: 'Social Batch C1H'/);
   assert.match(index, /publishLeagueRoundRecapActivity/);
   assert.match(functionsPackage.scripts.logs, /publishLeagueRoundRecapActivity/);
 });
@@ -243,7 +243,8 @@ test('League Wire renders the recap through the existing bounded feed while pres
   assert.equal((service.match(/onSnapshot\(/g) ?? []).length, 2);
   assert.match(component, /case 'matchup-round-recap'/);
   assert.match(component, /set a new League Wire scoring high/);
-  assert.match(component, /Top score:/);
+  assert.match(component, /Top team:/);
+  assert.match(component, /Player of the Round/);
   assert.match(component, /Closest:/);
   assert.match(component, /Round Recap/);
   assert.match(template, /Post announcement/);
@@ -254,7 +255,7 @@ test('League Wire renders the recap through the existing bounded feed while pres
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
 });
 
-test('C1F remains intact under RC33 while preserving competitive models, Rules, indexes, and safety modes', async () => {
+test('C1F remains intact under RC34 while preserving competitive models, Rules, indexes, and safety modes', async () => {
   const [
     scoringRules,
     scoringEngine,
@@ -293,20 +294,20 @@ test('C1F remains intact under RC33 while preserving competitive models, Rules, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 33/);
-  assert.match(productionRuntime, /Release Candidate 33/);
+  assert.match(runtime, /Release Candidate 34/);
+  assert.match(productionRuntime, /Release Candidate 34/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1g');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1h');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1f:core'], /verify:batchc1e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1g:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1h:core/);
 });
 
 test('C1F documentation and roadmap record the bounded recap and site-first workflow', async () => {
@@ -319,7 +320,7 @@ test('C1F documentation and roadmap record the bounded recap and site-first work
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.24/);
+  assert.match(roadmap, /Version 1\.25/);
   assert.match(roadmap, /# \[x\] C1\.18/);
   assert.match(roadmap, /# \[x\] LOG\.38/);
   assert.match(runbook, /League Wire-era/);
@@ -327,9 +328,9 @@ test('C1F documentation and roadmap record the bounded recap and site-first work
   assert.match(runbook, /functions:publishLeagueRoundRecapActivity/);
   assert.match(runbook, /Do not deploy Rules, indexes, TTL/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 33 \/ Social Batch C1G/);
+  assert.match(readme, /Release Candidate 34 \/ Social Batch C1H/);
   assert.match(readme, /RINKRAT_SOCIAL_C1F_ROUND_RECAPS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1g/);
-  assert.match(releaseRunbook, /rinkrat-rc33-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc33-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchc1h/);
+  assert.match(releaseRunbook, /rinkrat-rc34-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc34-invite-beta/);
 });
