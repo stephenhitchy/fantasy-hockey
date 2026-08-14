@@ -45,18 +45,9 @@ export type LeagueActivityAvailabilityStatus =
 
 
 
-export type LeagueActivityReactionType =
-  | 'stick-tap'
-  | 'fire'
-  | 'wow'
-  | 'rink-rat';
+export type LeagueActivityReactionType = string;
 
-export interface LeagueActivityReactionCounts {
-  'stick-tap': number;
-  fire: number;
-  wow: number;
-  'rink-rat': number;
-}
+export type LeagueActivityReactionCounts = Record<string, number>;
 
 export interface LeagueActivityReactionRecord {
   ownerId: string;

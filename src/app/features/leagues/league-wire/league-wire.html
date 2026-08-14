@@ -23,7 +23,7 @@
   </header>
 
   <p class="league-wire-intro">
-    Commissioner announcements, Draft picks, commissioner controls, final matchup results, one compact completed-round recap, and completed league moves—without live-score noise or exposed claims.
+    Commissioner announcements, Draft picks, commissioner controls, final matchup results, one compact completed-round recap, completed league moves, and member reactions—without live-score noise or exposed claims.
   </p>
 
 
@@ -235,21 +235,37 @@
             @if (supportsReactions(item)) {
               <div class="league-wire-reactions">
                 <div class="league-wire-reaction-summary" aria-label="League reactions">
-                  @for (option of reactionOptions; track option.reactionType) {
-                    @if (reactionCount(item, option.reactionType) > 0) {
-                      <button
-                        class="league-wire-reaction-chip"
-                        type="button"
-                        [class.league-wire-reaction-chip-selected]="currentReactionType(item) === option.reactionType"
-                        [attr.aria-label]="reactionAriaLabel(item, option)"
-                        [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
-                        [disabled]="isReactionSaving(item)"
-                        (click)="chooseReaction(item, option)"
-                      >
-                        <span aria-hidden="true">{{ option.emoji }}</span>
-                        <span>{{ reactionCount(item, option.reactionType) }}</span>
-                      </button>
-                    }
+                  @for (option of reactionSummaryOptions(item); track option.reactionType) {
+                    <button
+                      class="league-wire-reaction-chip"
+                      type="button"
+                      [class.league-wire-reaction-chip-selected]="currentReactionType(item) === option.reactionType"
+                      [attr.aria-label]="reactionAriaLabel(item, option)"
+                      [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
+                      [disabled]="isReactionSaving(item)"
+                      (click)="chooseReaction(item, option)"
+                    >
+                      @if (option.assetPath) {
+                        <img
+                          class="league-wire-reaction-icon"
+                          [src]="option.assetPath"
+                          alt=""
+                          aria-hidden="true"
+                        />
+                      } @else {
+                        <span class="league-wire-reaction-emoji" aria-hidden="true">{{ option.emoji ?? option.label }}</span>
+                      }
+                      <span>{{ reactionCount(item, option.reactionType) }}</span>
+                    </button>
+                  }
+
+                  @if (hiddenReactionSummaryCount(item) > 0) {
+                    <span
+                      class="league-wire-reaction-more-count"
+                      [attr.aria-label]="hiddenReactionSummaryCount(item) + ' more reaction types'"
+                    >
+                      +{{ hiddenReactionSummaryCount(item) }}
+                    </span>
                   }
 
                   <button
@@ -265,26 +281,109 @@
                 </div>
 
                 @if (isReactionPickerOpen(item)) {
-                  <div
+                  <section
                     class="league-wire-reaction-picker"
                     id="league-wire-reaction-picker-{{ item.id }}"
-                    aria-label="Choose a hockey reaction"
+                    aria-label="Choose a reaction"
                   >
-                    @for (option of reactionOptions; track option.reactionType) {
+                    <div class="league-wire-emoji-picker-header">
+                      <label class="league-wire-emoji-search">
+                        <span>Search emojis</span>
+                        <input
+                          type="search"
+                          autocomplete="off"
+                          placeholder="Try hockey, laugh, trophy..."
+                          [ngModel]="emojiSearch()"
+                          [disabled]="emojiCatalogLoading() && emojiCatalog().length === 0"
+                          (ngModelChange)="updateEmojiSearch($event)"
+                        />
+                      </label>
+
+                      @if (emojiCatalogVersion()) {
+                        <span class="league-wire-emoji-version">
+                          Emoji {{ emojiCatalogVersion() }}
+                        </span>
+                      }
+                    </div>
+
+                    <div class="league-wire-emoji-categories" aria-label="Emoji categories">
                       <button
-                        class="league-wire-reaction-option"
+                        class="league-wire-emoji-category"
                         type="button"
-                        [class.league-wire-reaction-option-selected]="currentReactionType(item) === option.reactionType"
-                        [attr.aria-label]="reactionAriaLabel(item, option)"
-                        [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
-                        [disabled]="isReactionSaving(item)"
-                        (click)="chooseReaction(item, option)"
+                        [class.league-wire-emoji-category-selected]="isEmojiGroupSelected(null)"
+                        [attr.aria-pressed]="isEmojiGroupSelected(null)"
+                        (click)="selectEmojiGroup(null)"
                       >
-                        <span class="league-wire-reaction-emoji" aria-hidden="true">{{ option.emoji }}</span>
-                        <span>{{ option.label }}</span>
+                        Quick picks
+                      </button>
+
+                      @for (group of emojiCatalogGroups(); track group; let groupIndex = $index) {
+                        <button
+                          class="league-wire-emoji-category"
+                          type="button"
+                          [class.league-wire-emoji-category-selected]="isEmojiGroupSelected(groupIndex)"
+                          [attr.aria-pressed]="isEmojiGroupSelected(groupIndex)"
+                          (click)="selectEmojiGroup(groupIndex)"
+                        >
+                          {{ group }}
+                        </button>
+                      }
+                    </div>
+
+                    @if (emojiCatalogLoading()) {
+                      <p class="league-wire-emoji-state" role="status">
+                        Loading the full emoji list...
+                      </p>
+                    }
+
+                    @if (emojiCatalogError()) {
+                      <p class="league-wire-emoji-state league-wire-emoji-state-error" role="alert">
+                        {{ emojiCatalogError() }}
+                      </p>
+                    }
+
+                    @if (visibleEmojiOptions().length > 0) {
+                      <div class="league-wire-emoji-grid" aria-label="Emoji choices">
+                        @for (option of visibleEmojiOptions(); track option.reactionType) {
+                          <button
+                            class="league-wire-reaction-option"
+                            type="button"
+                            [class.league-wire-reaction-option-selected]="currentReactionType(item) === option.reactionType"
+                            [attr.aria-label]="reactionAriaLabel(item, option)"
+                            [attr.aria-pressed]="currentReactionType(item) === option.reactionType"
+                            [title]="option.label"
+                            [disabled]="isReactionSaving(item)"
+                            (click)="chooseReaction(item, option)"
+                          >
+                            @if (option.assetPath) {
+                              <img
+                                class="league-wire-reaction-icon league-wire-reaction-icon-large"
+                                [src]="option.assetPath"
+                                alt=""
+                                aria-hidden="true"
+                              />
+                            } @else {
+                              <span class="league-wire-reaction-emoji" aria-hidden="true">{{ option.emoji ?? option.label }}</span>
+                            }
+                          </button>
+                        }
+                      </div>
+                    } @else if (!emojiCatalogLoading()) {
+                      <p class="league-wire-emoji-state">
+                        No emojis matched that search.
+                      </p>
+                    }
+
+                    @if (hiddenEmojiOptionCount() > 0) {
+                      <button
+                        class="league-wire-emoji-more"
+                        type="button"
+                        (click)="showMoreEmojis()"
+                      >
+                        Show {{ hiddenEmojiOptionCount() > 48 ? 48 : hiddenEmojiOptionCount() }} more
                       </button>
                     }
-                  </div>
+                  </section>
                 }
 
                 @if (reactionError(item)) {
@@ -312,6 +411,6 @@
   }
 
   <footer class="league-wire-footer">
-    Announcements and reactions are visible only to league members. Only final matchup outcomes post, plus one compact regular-season recap after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
+    Announcements and reactions are visible only to league members. Quick reactions use custom RinkRat icons, and the full emoji picker stays optional. Only final matchup outcomes post, plus one compact regular-season recap after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
   </footer>
 </section>

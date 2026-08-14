@@ -23,20 +23,20 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`](docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md) — public commissioner Draft controls and player-availability overrides, privacy boundaries, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`](docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md) — commissioner-only plain-text announcements, optional pinning, bounded League Wire presentation, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`](docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md) — one immutable regular-season round recap, top-score and closest-finish context, League Wire-era scoring high-water, targeted deployment, and site-first proof.
-- [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — four bounded hockey reactions, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — the full locally bundled Unicode Emoji 17 reaction catalog, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 33 / Social Batch C1G**. C1G adds four bounded hockey reactions to eligible League Wire moments: **Stick tap**, **On fire**, **No way**, and **Rink Rat**. Each verified league member may hold one reaction per item, switch it, or remove it through the server-authoritative `setLeagueActivityReaction` callable.
+The current source runtime is **Release Candidate 33 / Social Batch C1G.3**. C1G.3 keeps the full **3,944 fully-qualified Unicode Emoji 17.0 sequences** picker, but replaces the quick row with five custom RinkRat reaction icons: **Stick tap**, **On fire**, **No way**, **Rink Rat**, and **Laughing**. Each verified league member may hold one reaction per item, switch it, or remove it through the server-authoritative `setLeagueActivityReaction` callable.
 
-Reactions update the existing member-readable activity document, so League Wire keeps the same two Firestore listeners: the ordered 40-item feed and the exact pinned-announcement document. The picker opens inline with 44-pixel controls, uses two columns on phones, and adds no modal, backdrop, sticky panel, unbounded query, Rules deployment, index, or TTL policy.
+The full labeled catalog is bundled locally and lazy-loads only after **React** opens. Search, Unicode categories, 48-item progressive disclosure, 44-pixel phone targets, and an eight-type summary cap keep the picker useful without adding a modal, backdrop, sticky panel, unbounded query, third Firestore listener, npm picker dependency, or runtime emoji CDN. Existing C1G reaction IDs normalize to their canonical emoji without a migration.
 
 Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1g`.
 
-C1G.1 is a strict Functions TypeScript build hotfix. It narrows the normalized nullable reaction rate-window timestamp through a local constant before arithmetic, preserving identical reaction throttling and RC33 runtime behavior.
+C1G.1 remains the strict Functions TypeScript build hotfix for nullable reaction rate-window narrowing. C1G.3 preserves that correction and the identical throttle behavior while upgrading only the validated reaction presentation and inline browser picker.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -113,9 +113,9 @@ npm run beta:preflight
 
 ## Social Batch C1G — League Wire Reactions
 
-C1G adds four compact reactions to eligible Draft picks, completed roster and waiver outcomes, final matchups, commissioner announcements, and Round Recaps. One verified manager can hold only one reaction per item; selecting another switches it, and selecting the same option removes it. The server derives totals from a bounded member record set, treats retries idempotently, and applies short and rolling-window throttles.
+C1G.3 supports the complete locally generated Unicode Emoji 17.0 keyboard/display catalog on eligible Draft picks, completed roster and waiver outcomes, final matchups, commissioner announcements, and Round Recaps. Five custom RinkRat quick reactions remain first, while search and categories expose the rest. One verified manager can hold only one reaction per item; selecting another switches it, and selecting the same option removes it. The server validates exact catalog membership, derives totals from a bounded member record set, treats retries idempotently, and preserves the existing short and rolling-window throttles.
 
-Reaction fields stay on the existing server-owned activity document. The browser therefore keeps the same two Firestore listeners and uses the current activity snapshot to show both totals and the signed-in manager's selection. The inline picker adds no modal, sticky element, Firestore Rule, index, TTL policy, or social subcollection listener.
+Reaction fields stay on the existing server-owned activity document. The browser therefore keeps the same two Firestore listeners and uses the current activity snapshot to show both totals and the signed-in manager's selection. The 3,944-entry catalog is a local lazy chunk rather than part of the initial application bundle. The inline picker adds no modal, sticky element, Firestore Rule, index, TTL policy, social subcollection listener, npm picker dependency, or remote emoji service.
 
 Verification:
 
@@ -123,12 +123,9 @@ Verification:
 npm run verify:batchc1g
 ```
 
-C1G.1 corrects only strict Functions TypeScript narrowing in the reaction rate-limit utility; the callable contract, stored fields, limits, browser feature, and RC33 release identity are unchanged.
+C1G.1 preserves strict Functions TypeScript compilation in the rate limiter. C1G.3 retains that fix, maps old reaction identifiers to custom quick IDs, and keeps the expanded catalog while keeping RC33.
 
 The normal owner workflow is one automated gate, a targeted deployment of `setLeagueActivityReaction`, RC33 Hosting, and a short site-first smoke test with two managers. Full authority, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
-
-
-
 
 ## Social Batch C1F — Matchup Round Recaps
 

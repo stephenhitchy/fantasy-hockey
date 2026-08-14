@@ -602,9 +602,10 @@
 
 .league-wire-reaction-chip,
 .league-wire-reaction-toggle,
-.league-wire-reaction-option {
+.league-wire-reaction-option,
+.league-wire-emoji-category,
+.league-wire-emoji-more {
   border: 1px solid color-mix(in srgb, var(--rr-color-info) 28%, var(--rr-color-border));
-  border-radius: 999px;
   background: color-mix(in srgb, var(--rr-color-surface-raised) 91%, var(--rr-color-info) 9%);
   color: var(--rr-color-text-secondary);
   font-family: var(--rr-font-interface);
@@ -620,12 +621,14 @@
   justify-content: center;
   gap: 5px;
   padding: 6px 10px;
+  border-radius: 999px;
   font-size: 12px;
   line-height: 1;
 }
 
 .league-wire-reaction-chip-selected,
-.league-wire-reaction-option-selected {
+.league-wire-reaction-option-selected,
+.league-wire-emoji-category-selected {
   border-color: color-mix(in srgb, var(--rr-color-info) 68%, var(--rr-color-border-strong));
   background: color-mix(in srgb, var(--rr-color-info) 18%, var(--rr-color-surface-raised));
   color: var(--rr-color-text);
@@ -637,54 +640,175 @@
   color: color-mix(in srgb, var(--rr-color-info) 64%, var(--rr-color-text));
 }
 
+.league-wire-reaction-more-count {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: 999px;
+  background: var(--rr-color-surface);
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.league-wire-reaction-picker {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 28%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-color-surface) 92%, var(--rr-color-info) 8%);
+}
+
+.league-wire-emoji-picker-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.league-wire-emoji-search {
+  display: grid;
+  flex: 1 1 260px;
+  min-width: 0;
+  gap: 5px;
+  color: var(--rr-color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.league-wire-emoji-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.league-wire-emoji-search input::placeholder {
+  color: var(--rr-color-text-muted);
+}
+
+.league-wire-emoji-version {
+  flex: 0 0 auto;
+  padding-bottom: 10px;
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.league-wire-emoji-categories {
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.league-wire-emoji-category {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.league-wire-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.league-wire-reaction-option {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: var(--rr-radius-md);
+  line-height: 1;
+}
+
+.league-wire-reaction-emoji {
+  display: inline-block;
+  font-size: 21px;
+  line-height: 1;
+  transform: translateZ(0);
+}
+
+
+.league-wire-reaction-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.league-wire-reaction-icon-large {
+  width: 24px;
+  height: 24px;
+}
+
+.league-wire-emoji-state {
+  margin: 0;
+  padding: 8px 2px;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.league-wire-emoji-state-error,
+.league-wire-reaction-error {
+  color: color-mix(in srgb, var(--rr-color-danger) 72%, var(--rr-color-text));
+}
+
+.league-wire-emoji-more {
+  justify-self: stretch;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--rr-radius-md);
+  font-size: 12px;
+}
+
+.league-wire-reaction-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .league-wire-reaction-chip:focus-visible,
 .league-wire-reaction-toggle:focus-visible,
-.league-wire-reaction-option:focus-visible {
+.league-wire-reaction-option:focus-visible,
+.league-wire-emoji-category:focus-visible,
+.league-wire-emoji-more:focus-visible,
+.league-wire-emoji-search input:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--rr-color-info) 50%, transparent);
   outline-offset: 2px;
 }
 
 .league-wire-reaction-chip:disabled,
 .league-wire-reaction-toggle:disabled,
-.league-wire-reaction-option:disabled {
+.league-wire-reaction-option:disabled,
+.league-wire-emoji-category:disabled,
+.league-wire-emoji-more:disabled,
+.league-wire-emoji-search input:disabled {
   cursor: wait;
   opacity: 0.65;
-}
-
-.league-wire-reaction-picker {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--rr-color-info) 28%, var(--rr-color-border));
-  border-radius: var(--rr-radius-md);
-  background: color-mix(in srgb, var(--rr-color-surface) 92%, var(--rr-color-info) 8%);
-}
-
-.league-wire-reaction-option {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px;
-  border-radius: var(--rr-radius-md);
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-.league-wire-reaction-emoji {
-  flex: 0 0 auto;
-  font-size: 17px;
-  line-height: 1;
-}
-
-.league-wire-reaction-error {
-  margin: 0;
-  color: color-mix(in srgb, var(--rr-color-danger) 72%, var(--rr-color-text));
-  font-size: 11px;
-  line-height: 1.4;
 }
 
 @media (max-width: 560px) {
@@ -694,12 +818,26 @@
   }
 
   .league-wire-reaction-picker {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 9px;
   }
 
-  .league-wire-reaction-option {
-    justify-content: flex-start;
-    padding-inline: 11px;
-    font-size: 12px;
+  .league-wire-emoji-picker-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .league-wire-emoji-search {
+    flex-basis: auto;
+  }
+
+  .league-wire-emoji-version {
+    align-self: flex-end;
+    padding: 0;
+  }
+
+  .league-wire-emoji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 5px;
   }
 }

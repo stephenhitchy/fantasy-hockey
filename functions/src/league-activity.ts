@@ -778,7 +778,7 @@ export const setLeagueActivityReaction = onCall(
         reactionCounts: transition.nextCounts,
         reactionUpdatedAt: now,
         reactionAuthority: 'league-activity-reaction-authority',
-        reactionRelease: 'Social Batch C1G',
+        reactionRelease: 'Social Batch C1G.3',
       });
       transaction.set(controlReference, {
         lastChangedAt: Timestamp.fromMillis(
@@ -789,7 +789,7 @@ export const setLeagueActivityReaction = onCall(
         ),
         changesInWindow: rateLimit.nextControl.changesInWindow,
         authority: 'league-activity-reaction-control-authority',
-        release: 'Social Batch C1G',
+        release: 'Social Batch C1G.3',
       });
 
       return {

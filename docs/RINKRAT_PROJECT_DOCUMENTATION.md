@@ -11585,3 +11585,21 @@ C1G.1 copies the normalized timestamp into a local constant, performs an explici
 
 The focused C1G suite includes a source regression guard, while the complete release gate remains `npm run verify:batchc1g`. No Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, App Check mode, scoring-queue mode, transaction/waiver privacy behavior, or shared NHL cache authority changed.
 
+
+# Social Batch C1G.2 — Full Emoji Reaction Catalog
+
+**Completed:** 2026-08-14
+
+**Runtime release:** Release Candidate 33 (unchanged)
+
+**Competitive models:** Production Scoring V3 and Projection V11 (unchanged)
+
+C1G.2 expands the original four fixed League Wire choices to the complete pinned Unicode Emoji 17.0 keyboard/display catalog: 3,944 fully-qualified sequences across nine groups. Stick tap, On fire, No way, and Rink Rat remain the immediate quick-access category.
+
+The browser keeps its original two League Wire listeners. It dynamically imports the local labeled catalog only when **React** opens, then provides search, horizontally scrollable categories, 48-item progressive disclosure, 44-pixel emoji targets, and an eight-distinct-type summary cap. No picker dependency, remote emoji fetch, modal, backdrop, fixed panel, sticky element, or new Firestore listener is added.
+
+The callable validates exact membership in a matching generated server allowlist before changing a reaction. Counts become a dynamic emoji-keyed map but remain derived from at most one bounded record per manager. Existing `stick-tap`, `fire`, `wow`, and `rink-rat` values normalize to 🏒, 🔥, 😮, and 🐀 on read and canonicalize on a later real update, so no production migration or historical backfill is required.
+
+C1G.2 preserves the C1G.1 strict TypeScript narrowing fix, one-reaction-per-manager semantics, idempotent retries, 32-manager cap, 750-millisecond minimum interval, and 20-change rolling minute window. It changes no Firestore Rule, index, TTL policy, scoring or projection source, six-game window behavior, seventh-game rollover, transaction/waiver privacy, App Check mode, scoring-queue mode, or shared NHL-cache authority.
+
+The release remains `npm run verify:batchc1g`, targeted deployment of `functions:setLeagueActivityReaction`, RC33 Hosting, and a two-manager site-first smoke test. Full implementation and rollback guidance are maintained in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.

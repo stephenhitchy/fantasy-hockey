@@ -6,19 +6,63 @@ import {
   type LeagueActivityReactionCounts,
   type LeagueActivityReactionType,
 } from './league-activity.models';
+import {
+  LEAGUE_ACTIVITY_QUICK_REACTIONS,
+  leagueActivityReactionLabel,
+  normalizeLeagueActivityReactionType,
+  quickReactionOption,
+} from './league-activity-reaction.util';
 
 export interface LeagueActivityReactionOption {
   reactionType: LeagueActivityReactionType;
-  emoji: string;
+  emoji?: string;
   label: string;
+  assetPath?: string;
+  groupIndex?: number;
 }
 
-export const LEAGUE_ACTIVITY_REACTION_OPTIONS: readonly LeagueActivityReactionOption[] = [
-  { reactionType: 'stick-tap', emoji: '🏒', label: 'Stick tap' },
-  { reactionType: 'fire', emoji: '🔥', label: 'On fire' },
-  { reactionType: 'wow', emoji: '😮', label: 'No way' },
-  { reactionType: 'rink-rat', emoji: '🐀', label: 'Rink Rat' },
-];
+export interface LeagueEmojiCatalog {
+  version: string;
+  groups: readonly string[];
+  options: readonly LeagueActivityReactionOption[];
+}
+
+export const LEAGUE_ACTIVITY_REACTION_OPTIONS: readonly LeagueActivityReactionOption[] =
+  LEAGUE_ACTIVITY_QUICK_REACTIONS;
+
+let emojiCatalogPromise: Promise<LeagueEmojiCatalog> | null = null;
+
+export function loadLeagueEmojiCatalog(): Promise<LeagueEmojiCatalog> {
+  emojiCatalogPromise ??= import('./league-emoji-catalog.generated').then((catalog) => ({
+    version: catalog.LEAGUE_EMOJI_CATALOG_VERSION,
+    groups: catalog.LEAGUE_EMOJI_GROUPS,
+    options: catalog.LEAGUE_EMOJI_CATALOG.map(([emoji, label, groupIndex]) => ({
+      reactionType: normalizeLeagueActivityReactionType(emoji) ?? emoji,
+      emoji,
+      label,
+      groupIndex,
+    })),
+  }));
+
+  return emojiCatalogPromise;
+}
+
+export function reactionOptionFromType(
+  reactionType: LeagueActivityReactionType,
+  label?: string,
+): LeagueActivityReactionOption {
+  return quickReactionOption(reactionType)
+    ? {
+      reactionType,
+      label: quickReactionOption(reactionType)?.label ?? leagueActivityReactionLabel(reactionType),
+      assetPath: quickReactionOption(reactionType)?.assetPath,
+    }
+    : {
+      reactionType,
+      emoji: reactionType,
+      label: label || leagueActivityReactionLabel(reactionType),
+    };
+}
 
 const REACTION_EVENT_TYPES = new Set<LeagueActivityEventType>([
   'draft-pick',
@@ -76,16 +120,19 @@ export async function setLeagueActivityReaction(
 ): Promise<SetLeagueActivityReactionResult> {
   const leagueId = input.leagueId.trim();
   const activityId = input.activityId.trim();
+  const reactionType = input.reactionType === null
+    ? null
+    : normalizeLeagueActivityReactionType(input.reactionType);
 
-  if (!leagueId || !activityId) {
-    throw new Error('Choose a valid League Wire update.');
+  if (!leagueId || !activityId || (input.reactionType !== null && !reactionType)) {
+    throw new Error('Choose a valid League Wire reaction.');
   }
 
   try {
     const response = await setLeagueActivityReactionCallable({
       leagueId,
       activityId,
-      reactionType: input.reactionType,
+      reactionType,
     });
     return response.data;
   } catch (error) {

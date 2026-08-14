@@ -36,6 +36,8 @@ import {
 import {
   LEAGUE_ACTIVITY_REACTION_OPTIONS,
   leagueActivitySupportsReactions,
+  loadLeagueEmojiCatalog,
+  reactionOptionFromType,
   setLeagueActivityReaction,
   type LeagueActivityReactionOption,
   type SetLeagueActivityReactionResult,
@@ -58,6 +60,8 @@ interface LeagueWireItem {
 }
 
 const COLLAPSED_ACTIVITY_COUNT = 5;
+const REACTION_SUMMARY_LIMIT = 8;
+const EMOJI_PICKER_PAGE_SIZE = 48;
 
 @Component({
   selector: 'app-league-wire',
@@ -95,6 +99,17 @@ export class LeagueWire {
   readonly reactionSavingActivityId = signal('');
   readonly reactionStatusMessage = signal('');
   readonly reactionErrors = signal<Record<string, string>>({});
+  readonly emojiCatalog = signal<readonly LeagueActivityReactionOption[]>([]);
+  readonly emojiCatalogGroups = signal<readonly string[]>([]);
+  readonly emojiCatalogVersion = signal('');
+  readonly emojiCatalogLoading = signal(false);
+  readonly emojiCatalogError = signal('');
+  readonly emojiSearch = signal('');
+  readonly emojiGroupIndex = signal<number | null>(null);
+  readonly emojiVisibleLimit = signal(EMOJI_PICKER_PAGE_SIZE);
+  readonly emojiLabelByValue = signal<ReadonlyMap<string, string>>(
+    new Map(LEAGUE_ACTIVITY_REACTION_OPTIONS.map((option) => [option.reactionType, option.label])),
+  );
 
   private readonly announcementRequestId = signal('');
 
@@ -149,6 +164,29 @@ export class LeagueWire {
       lineCount <= LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES;
   });
 
+  readonly filteredEmojiOptions = computed<readonly LeagueActivityReactionOption[]>(() => {
+    const search = this.emojiSearch().trim().toLocaleLowerCase();
+
+    if (search) {
+      return this.emojiCatalog().filter((option) =>
+        (option.emoji?.includes(search) ?? false) || option.label.toLocaleLowerCase().includes(search),
+      );
+    }
+
+    const groupIndex = this.emojiGroupIndex();
+    return groupIndex === null
+      ? this.reactionOptions
+      : this.emojiCatalog().filter((option) => option.groupIndex === groupIndex);
+  });
+
+  readonly visibleEmojiOptions = computed(() =>
+    this.filteredEmojiOptions().slice(0, this.emojiVisibleLimit()),
+  );
+
+  readonly hiddenEmojiOptionCount = computed(() =>
+    Math.max(0, this.filteredEmojiOptions().length - this.visibleEmojiOptions().length),
+  );
+
   readonly allItems = computed<LeagueWireItem[]>(() =>
     this.activity().map((activity) => this.toWireItem(activity)),
   );
@@ -173,6 +211,10 @@ export class LeagueWire {
       this.reactionSavingActivityId.set('');
       this.reactionStatusMessage.set('');
       this.reactionErrors.set({});
+      this.emojiSearch.set('');
+      this.emojiGroupIndex.set(null);
+      this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
+      this.emojiCatalogError.set('');
 
       if (!leagueId) {
         this.loading.set(false);
@@ -248,7 +290,36 @@ export class LeagueWire {
     item: LeagueWireItem,
     reactionType: LeagueActivityReactionType,
   ): number {
-    return item.reactionCounts[reactionType];
+    return item.reactionCounts[reactionType] ?? 0;
+  }
+
+  reactionSummaryOptions(item: LeagueWireItem): readonly LeagueActivityReactionOption[] {
+    const selected = this.currentReactionType(item);
+    const labels = this.emojiLabelByValue();
+
+    return Object.entries(item.reactionCounts)
+      .filter(([, count]) => Number.isInteger(count) && count > 0)
+      .sort(([leftType, leftCount], [rightType, rightCount]) => {
+        if (leftType === selected && rightType !== selected) {
+          return -1;
+        }
+        if (rightType === selected && leftType !== selected) {
+          return 1;
+        }
+        return rightCount - leftCount || leftType.localeCompare(rightType);
+      })
+      .slice(0, REACTION_SUMMARY_LIMIT)
+      .map(([reactionType]) => reactionOptionFromType(
+        reactionType,
+        labels.get(reactionType),
+      ));
+  }
+
+  hiddenReactionSummaryCount(item: LeagueWireItem): number {
+    const usedReactionCount = Object.values(item.reactionCounts)
+      .filter((count) => Number.isInteger(count) && count > 0)
+      .length;
+    return Math.max(0, usedReactionCount - REACTION_SUMMARY_LIMIT);
   }
 
   reactionError(item: LeagueWireItem): string {
@@ -268,10 +339,35 @@ export class LeagueWire {
       return;
     }
 
-    this.openReactionActivityId.update((activityId) =>
-      activityId === item.id ? '' : item.id,
-    );
+    const opening = this.openReactionActivityId() !== item.id;
+    this.openReactionActivityId.set(opening ? item.id : '');
     this.clearReactionError(item.id);
+
+    if (opening) {
+      this.emojiSearch.set('');
+      this.emojiGroupIndex.set(null);
+      this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
+      void this.ensureEmojiCatalogLoaded();
+    }
+  }
+
+  updateEmojiSearch(value: string): void {
+    this.emojiSearch.set(value);
+    this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
+  }
+
+  selectEmojiGroup(groupIndex: number | null): void {
+    this.emojiGroupIndex.set(groupIndex);
+    this.emojiSearch.set('');
+    this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
+  }
+
+  isEmojiGroupSelected(groupIndex: number | null): boolean {
+    return !this.emojiSearch().trim() && this.emojiGroupIndex() === groupIndex;
+  }
+
+  showMoreEmojis(): void {
+    this.emojiVisibleLimit.update((limit) => limit + EMOJI_PICKER_PAGE_SIZE);
   }
 
   async chooseReaction(
@@ -328,6 +424,34 @@ export class LeagueWire {
     return selected
       ? `${option.label}, selected, ${countLabel}. Press to remove.`
       : `${option.label}, ${countLabel}. Press to react.`;
+  }
+
+  private async ensureEmojiCatalogLoaded(): Promise<void> {
+    if (this.emojiCatalog().length || this.emojiCatalogLoading()) {
+      return;
+    }
+
+    this.emojiCatalogLoading.set(true);
+    this.emojiCatalogError.set('');
+
+    try {
+      const catalog = await loadLeagueEmojiCatalog();
+      this.emojiCatalog.set(catalog.options);
+      this.emojiCatalogGroups.set(catalog.groups);
+      this.emojiCatalogVersion.set(catalog.version);
+      this.emojiLabelByValue.set(new Map([
+        ...catalog.options.map((option) => [option.reactionType, option.label] as const),
+        ...LEAGUE_ACTIVITY_REACTION_OPTIONS.map(
+          (option) => [option.reactionType, option.label] as const,
+        ),
+      ]));
+    } catch {
+      this.emojiCatalogError.set(
+        'The full emoji list could not load. The quick reactions are still available.',
+      );
+    } finally {
+      this.emojiCatalogLoading.set(false);
+    }
   }
 
   private applyReactionResult(result: SetLeagueActivityReactionResult): void {

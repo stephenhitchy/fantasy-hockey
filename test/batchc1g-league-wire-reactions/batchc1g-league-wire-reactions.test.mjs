@@ -5,10 +5,13 @@ import test from 'node:test';
 
 import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 import {
+  LEAGUE_ACTIVITY_REACTION_CATALOG_VERSION,
+  LEAGUE_ACTIVITY_REACTION_FAVORITES,
+  LEAGUE_ACTIVITY_REACTION_MAX_BYTES,
   LEAGUE_ACTIVITY_REACTION_MAX_CHANGES_PER_WINDOW,
   LEAGUE_ACTIVITY_REACTION_MAX_COUNT,
   LEAGUE_ACTIVITY_REACTION_MIN_INTERVAL_MILLISECONDS,
-  LEAGUE_ACTIVITY_REACTION_TYPES,
+  LEAGUE_EMOJI_SET,
   applyLeagueActivityReactionSelection,
   emptyLeagueActivityReactionCounts,
   evaluateLeagueActivityReactionRateLimit,
@@ -17,8 +20,13 @@ import {
   normalizeLeagueActivityReactionType,
   summarizeLeagueActivityReactionRecords,
 } from '../../functions/src/shared/core/league/league-activity-reaction.util.ts';
-
+import {
+  LEAGUE_EMOJI_CATALOG,
+  LEAGUE_EMOJI_CATALOG_VERSION as CLIENT_EMOJI_CATALOG_VERSION,
+  LEAGUE_EMOJI_GROUPS,
+} from '../../src/app/core/league/league-emoji-catalog.generated.ts';
 const ROOT = new URL('../../', import.meta.url);
+const EXPECTED_EMOJI_COUNT = 3_944;
 
 async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
@@ -34,62 +42,102 @@ function reactionRecord(ownerId, reactionType, milliseconds = 1_000) {
   };
 }
 
-test('C1G exposes exactly four bounded hockey reactions', () => {
-  assert.deepEqual(LEAGUE_ACTIVITY_REACTION_TYPES, [
-    'stick-tap',
-    'fire',
-    'wow',
-    'rink-rat',
+test('C1G.2 accepts the complete locally generated Unicode Emoji 17 catalog', () => {
+  assert.equal(LEAGUE_ACTIVITY_REACTION_CATALOG_VERSION, '17.0');
+  assert.equal(CLIENT_EMOJI_CATALOG_VERSION, '17.0');
+  assert.equal(LEAGUE_EMOJI_CATALOG.length, EXPECTED_EMOJI_COUNT);
+  assert.equal(LEAGUE_EMOJI_SET.size, EXPECTED_EMOJI_COUNT);
+  assert.deepEqual(LEAGUE_EMOJI_GROUPS, [
+    'Smileys & Emotion',
+    'People & Body',
+    'Animals & Nature',
+    'Food & Drink',
+    'Travel & Places',
+    'Activities',
+    'Objects',
+    'Symbols',
+    'Flags',
   ]);
-  assert.equal(LEAGUE_ACTIVITY_REACTION_MAX_COUNT, 32);
-  assert.equal(normalizeLeagueActivityReactionType('stick-tap'), 'stick-tap');
-  assert.equal(normalizeLeagueActivityReactionType('fire'), 'fire');
-  assert.equal(normalizeLeagueActivityReactionType('wow'), 'wow');
-  assert.equal(normalizeLeagueActivityReactionType('rink-rat'), 'rink-rat');
+  assert.deepEqual(LEAGUE_ACTIVITY_REACTION_FAVORITES, ['rr_stick_tap', 'rr_on_fire', 'rr_no_way', 'rr_rink_rat', 'rr_laugh']);
+
+  for (const emoji of ['🤣', '🏆', '👩🏽‍💻', '🏳️‍🌈', '🇺🇸', '#️⃣']) {
+    assert.equal(LEAGUE_EMOJI_SET.has(emoji), true, emoji);
+    assert.equal(normalizeLeagueActivityReactionType(emoji), emoji, emoji);
+  }
+  assert.equal(LEAGUE_EMOJI_SET.has('🏒'), true);
+  assert.equal(normalizeLeagueActivityReactionType('🏒'), 'rr_stick_tap');
+  assert.equal(normalizeLeagueActivityReactionType('🔥'), 'rr_on_fire');
+  assert.equal(normalizeLeagueActivityReactionType('😮'), 'rr_no_way');
+  assert.equal(normalizeLeagueActivityReactionType('🐀'), 'rr_rink_rat');
+  assert.equal(normalizeLeagueActivityReactionType('😂'), 'rr_laugh');
+
+  assert.equal(normalizeLeagueActivityReactionType('rr_stick_tap'), 'rr_stick_tap');
+  assert.equal(normalizeLeagueActivityReactionType('rr_on_fire'), 'rr_on_fire');
+  assert.equal(normalizeLeagueActivityReactionType('rr_no_way'), 'rr_no_way');
+  assert.equal(normalizeLeagueActivityReactionType('rr_rink_rat'), 'rr_rink_rat');
+  assert.equal(normalizeLeagueActivityReactionType('rr_laugh'), 'rr_laugh');
+  assert.equal(normalizeLeagueActivityReactionType('stick-tap'), 'rr_stick_tap');
+  assert.equal(normalizeLeagueActivityReactionType('fire'), 'rr_on_fire');
+  assert.equal(normalizeLeagueActivityReactionType('wow'), 'rr_no_way');
+  assert.equal(normalizeLeagueActivityReactionType('rink-rat'), 'rr_rink_rat');
   assert.equal(normalizeLeagueActivityReactionType('thumbs-up'), null);
+  assert.equal(normalizeLeagueActivityReactionType('😀😀'), null);
   assert.equal(normalizeLeagueActivityReactionType(''), null);
+  assert.ok(
+    Math.max(...LEAGUE_EMOJI_CATALOG.map(([emoji]) => Buffer.byteLength(emoji, 'utf8'))) <=
+      LEAGUE_ACTIVITY_REACTION_MAX_BYTES,
+  );
 });
 
-test('public reaction records stay bounded, unique, and fail closed when malformed', () => {
+test('the generated client catalog and server allowlist stay exactly synchronized', () => {
+  const clientEmoji = LEAGUE_EMOJI_CATALOG.map(([emoji]) => emoji);
+  assert.equal(new Set(clientEmoji).size, clientEmoji.length);
+  assert.deepEqual(new Set(clientEmoji), LEAGUE_EMOJI_SET);
+  assert.ok(LEAGUE_EMOJI_CATALOG.every(([, label, groupIndex]) =>
+    label.length > 0 &&
+    Number.isInteger(groupIndex) &&
+    groupIndex >= 0 &&
+    groupIndex < LEAGUE_EMOJI_GROUPS.length));
+});
+
+test('public reaction records stay bounded, unique, canonical, and fail closed when malformed', () => {
   assert.deepEqual(normalizeLeagueActivityReactionRecords(undefined), []);
 
   const records = [
-    reactionRecord('owner-b', 'fire', 2_000),
+    reactionRecord('owner-b', '😂', 2_000),
     reactionRecord('owner-a', 'stick-tap', 1_000),
   ];
-  assert.deepEqual(
-    normalizeLeagueActivityReactionRecords(records)?.map((record) => record.ownerId),
-    ['owner-a', 'owner-b'],
-  );
+  const normalized = normalizeLeagueActivityReactionRecords(records);
+  assert.deepEqual(normalized?.map((record) => record.ownerId), ['owner-a', 'owner-b']);
+  assert.deepEqual(normalized?.map((record) => record.reactionType), ['rr_stick_tap', 'rr_laugh']);
   assert.equal(normalizeLeagueActivityReactionRecords({}), null);
   assert.equal(normalizeLeagueActivityReactionRecords([
-    reactionRecord('owner-a', 'fire'),
-    reactionRecord('owner-a', 'wow'),
+    reactionRecord('owner-a', '🔥'),
+    reactionRecord('owner-a', '😮'),
   ]), null);
   assert.equal(normalizeLeagueActivityReactionRecords([
-    { ...reactionRecord('owner-a', 'fire'), reactionType: 'unsafe' },
+    { ...reactionRecord('owner-a', '🔥'), reactionType: 'unsafe' },
   ]), null);
   assert.equal(normalizeLeagueActivityReactionRecords([
-    { ...reactionRecord('owner-a', 'fire'), updatedAt: null },
+    { ...reactionRecord('owner-a', '🔥'), updatedAt: null },
   ]), null);
   assert.equal(normalizeLeagueActivityReactionRecords(
-    Array.from({ length: 33 }, (_, index) => reactionRecord(`owner-${index}`, 'wow')),
+    Array.from({ length: 33 }, (_, index) => reactionRecord(`owner-${index}`, '😮')),
   ), null);
 });
 
-test('reaction summaries are derived from member records instead of trusting browser totals', () => {
+test('reaction summaries are dynamic and derived from member records instead of browser totals', () => {
   const counts = summarizeLeagueActivityReactionRecords([
-    reactionRecord('owner-a', 'stick-tap'),
-    reactionRecord('owner-b', 'fire'),
-    reactionRecord('owner-c', 'fire'),
-    reactionRecord('owner-d', 'rink-rat'),
+    reactionRecord('owner-a', 'rr_stick_tap'),
+    reactionRecord('owner-b', '😂'),
+    reactionRecord('owner-c', '😂'),
+    reactionRecord('owner-d', '🏆'),
   ]);
 
   assert.deepEqual(counts, {
-    'stick-tap': 1,
-    fire: 2,
-    wow: 0,
-    'rink-rat': 1,
+    rr_stick_tap: 1,
+    rr_laugh: 2,
+    '🏆': 1,
   });
   assert.deepEqual(summarizeLeagueActivityReactionRecords([]), emptyLeagueActivityReactionCounts());
 });
@@ -98,23 +146,18 @@ test('one manager selection adds, switches, removes, and retries idempotently', 
   const added = applyLeagueActivityReactionSelection({
     records: [],
     ownerId: 'owner-a',
-    desiredReactionType: 'stick-tap',
+    desiredReactionType: 'rr_laugh',
     changedAt: new Date(1_000),
   });
   assert.equal(added?.changed, true);
   assert.equal(added?.previousReactionType, null);
-  assert.equal(added?.nextReactionType, 'stick-tap');
-  assert.deepEqual(added?.nextCounts, {
-    'stick-tap': 1,
-    fire: 0,
-    wow: 0,
-    'rink-rat': 0,
-  });
+  assert.equal(added?.nextReactionType, 'rr_laugh');
+  assert.deepEqual(added?.nextCounts, { rr_laugh: 1 });
 
   const replay = applyLeagueActivityReactionSelection({
     records: added?.nextRecords,
     ownerId: 'owner-a',
-    desiredReactionType: 'stick-tap',
+    desiredReactionType: 'rr_laugh',
     changedAt: new Date(2_000),
   });
   assert.equal(replay?.changed, false);
@@ -123,17 +166,12 @@ test('one manager selection adds, switches, removes, and retries idempotently', 
   const switched = applyLeagueActivityReactionSelection({
     records: added?.nextRecords,
     ownerId: 'owner-a',
-    desiredReactionType: 'fire',
+    desiredReactionType: '🏆',
     changedAt: new Date(3_000),
   });
-  assert.equal(switched?.previousReactionType, 'stick-tap');
-  assert.equal(switched?.nextReactionType, 'fire');
-  assert.deepEqual(switched?.nextCounts, {
-    'stick-tap': 0,
-    fire: 1,
-    wow: 0,
-    'rink-rat': 0,
-  });
+  assert.equal(switched?.previousReactionType, 'rr_laugh');
+  assert.equal(switched?.nextReactionType, '🏆');
+  assert.deepEqual(switched?.nextCounts, { '🏆': 1 });
 
   const removed = applyLeagueActivityReactionSelection({
     records: switched?.nextRecords,
@@ -143,32 +181,33 @@ test('one manager selection adds, switches, removes, and retries idempotently', 
   });
   assert.equal(removed?.nextReactionType, null);
   assert.deepEqual(removed?.nextRecords, []);
+  assert.deepEqual(removed?.nextCounts, {});
 });
 
 test('a full activity cannot silently exceed the league-sized reaction bound', () => {
   const records = Array.from(
     { length: LEAGUE_ACTIVITY_REACTION_MAX_COUNT },
-    (_, index) => reactionRecord(`owner-${index}`, 'wow'),
+    (_, index) => reactionRecord(`owner-${index}`, '😮'),
   );
 
   assert.equal(applyLeagueActivityReactionSelection({
     records,
     ownerId: 'owner-new',
-    desiredReactionType: 'fire',
+    desiredReactionType: '😂',
     changedAt: new Date(5_000),
   }), null);
 
   const switchAtCapacity = applyLeagueActivityReactionSelection({
     records,
     ownerId: 'owner-0',
-    desiredReactionType: 'fire',
+    desiredReactionType: '🏆',
     changedAt: new Date(5_000),
   });
   assert.equal(switchAtCapacity?.nextRecords.length, LEAGUE_ACTIVITY_REACTION_MAX_COUNT);
-  assert.equal(switchAtCapacity?.nextReactionType, 'fire');
+  assert.equal(switchAtCapacity?.nextReactionType, '🏆');
 });
 
-test('reaction writes have both a short throttle and a bounded minute window', () => {
+test('reaction writes keep the existing short throttle and bounded minute window', () => {
   const first = evaluateLeagueActivityReactionRateLimit({
     control: {
       lastChangedAtMilliseconds: null,
@@ -210,7 +249,7 @@ test('reaction writes have both a short throttle and a bounded minute window', (
   assert.equal(reset?.nextControl.changesInWindow, 1);
 });
 
-test('C1G.1 narrows the nullable rate-window timestamp before arithmetic', async () => {
+test('C1G.1 nullable rate-window TypeScript narrowing remains intact', async () => {
   const source = await read(
     'functions/src/shared/core/league/league-activity-reaction.util.ts',
   );
@@ -254,14 +293,18 @@ test('reactions stay limited to celebratory competitive and commissioner-announc
   }
 });
 
-test('the callable is verified-member-only, idempotent, rate-limited, and updates one activity document', async () => {
-  const [publisher, index, functionsPackageSource] = await Promise.all([
+test('the callable validates against the exact catalog and preserves member authority and rate controls', async () => {
+  const [publisher, index, functionsPackageSource, reactionUtility] = await Promise.all([
     read('functions/src/league-activity.ts'),
     read('functions/src/index.ts'),
     read('functions/package.json'),
+    read('functions/src/shared/core/league/league-activity-reaction.util.ts'),
   ]);
   const functionsPackage = JSON.parse(functionsPackageSource);
 
+  assert.match(reactionUtility, /LEAGUE_EMOJI_SET\.has\(normalized\)/);
+  assert.match(reactionUtility, /LEGACY_REACTION_TYPE_MAP/);
+  assert.match(reactionUtility, /QUICK_REACTION_TYPE_SET/);
   assert.match(publisher, /export const setLeagueActivityReaction = onCall/);
   assert.match(publisher, /requireAuthenticatedUserId\(request\.auth, actionLabel\)/);
   assert.match(publisher, /requireVerifiedEmail\(request\.auth, actionLabel\)/);
@@ -274,13 +317,14 @@ test('the callable is verified-member-only, idempotent, rate-limited, and update
   assert.match(publisher, /reactionRecords: transition\.nextRecords/);
   assert.match(publisher, /reactionCounts: transition\.nextCounts/);
   assert.match(publisher, /reactionAuthority: 'league-activity-reaction-authority'/);
+  assert.match(publisher, /reactionRelease: 'Social Batch C1G\.3'/);
   assert.match(publisher, /logger\.info\('League Wire reaction changed\.'/);
   assert.doesNotMatch(publisher, /members\/\$\{userId\}\/activityReactions/);
   assert.match(index, /setLeagueActivityReaction/);
   assert.match(functionsPackage.scripts.logs, /setLeagueActivityReaction/);
 });
 
-test('the browser keeps the original two League Wire listeners and derives the current manager reaction from the activity document', async () => {
+test('the browser keeps two League Wire listeners and lazy-loads the local emoji catalog only when the picker opens', async () => {
   const [activityService, reactionService, component, detailTemplate] = await Promise.all([
     read('src/app/core/league/league-activity.service.ts'),
     read('src/app/core/league/league-activity-reaction.service.ts'),
@@ -294,38 +338,62 @@ test('the browser keeps the original two League Wire listeners and derives the c
   assert.match(activityService, /reactionCounts: summarizeReactionRecords\(reactionRecords\)/);
   assert.equal((activityService.match(/onSnapshot\(/g) ?? []).length, 2);
   assert.doesNotMatch(activityService, /listenToMyLeagueActivityReactions|my-activity-reactions/);
-  assert.match(reactionService, /httpsCallable/);
-  assert.match(reactionService, /setLeagueActivityReaction/);
+  assert.match(reactionService, /import\('\.\/league-emoji-catalog\.generated'\)/);
+  assert.match(reactionService, /emojiCatalogPromise \?\?=/);
+  assert.doesNotMatch(reactionService, /fetch\(|emoji-picker-element|https?:\/\//);
+  assert.match(component, /void this\.ensureEmojiCatalogLoaded\(\)/);
   assert.match(component, /activity\.reactionRecords\.find/);
   assert.match(component, /applyReactionResult/);
   assert.match(detailTemplate, /\[userId\]="userId"/);
 });
 
-test('League Wire uses a compact inline picker without a modal, sticky panel, or extra data listener', async () => {
-  const [template, styles, reactionService] = await Promise.all([
+test('League Wire provides custom quick icons, search, categories, pagination, bounded summaries, and an inline phone-safe picker', async () => {
+  const [template, styles, component] = await Promise.all([
     read('src/app/features/leagues/league-wire/league-wire.html'),
     read('src/app/features/leagues/league-wire/league-wire.css'),
-    read('src/app/core/league/league-activity-reaction.service.ts'),
+    read('src/app/features/leagues/league-wire/league-wire.ts'),
   ]);
 
-  assert.match(reactionService, /emoji: '🏒'/);
-  assert.match(reactionService, /emoji: '🔥'/);
-  assert.match(reactionService, /emoji: '😮'/);
-  assert.match(reactionService, /emoji: '🐀'/);
-  assert.match(template, /'React'/);
-  assert.match(template, /league-wire-reaction-picker/);
+  assert.match(template, /Search emojis/);
+  assert.match(template, /Emoji \{\{ emojiCatalogVersion\(\) \}\}/);
+  assert.match(template, /league-wire-emoji-categories/);
+  assert.match(template, />\s*Quick picks\s*</);
+  assert.match(template, /visibleEmojiOptions\(\)/);
+  assert.match(template, /league-wire-reaction-icon/);
+  assert.match(template, /showMoreEmojis\(\)/);
   assert.match(template, /aria-pressed/);
   assert.match(template, /reactionAriaLabel/);
   assert.match(template, /chooseReaction\(item, option\)/);
   assert.match(template, /reactions are visible only to league members/i);
-  assert.match(styles, /league-wire-reaction-chip,[\s\S]*?league-wire-reaction-toggle[\s\S]*?min-height:\s*44px/);
+  assert.match(component, /const REACTION_SUMMARY_LIMIT = 8;/);
+  assert.match(component, /const EMOJI_PICKER_PAGE_SIZE = 48;/);
   assert.match(styles, /league-wire-reaction-option[\s\S]*?min-height:\s*44px/);
-  assert.match(styles, /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /league-wire-reaction-icon-large/);
+  assert.match(styles, /grid-template-columns:\s*repeat\(auto-fill, minmax\(44px, 1fr\)\)/);
+  assert.match(styles, /overflow-x:\s*auto/);
   assert.doesNotMatch(template, /role="dialog"|viewport-overlay|action-sheet|innerHTML/i);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
 });
 
-test('C1G advances RC33 while preserving competitive models, Rules, indexes, and inactive safety controls', async () => {
+test('C1G.3 keeps legacy reactions readable while migrating them to custom quick IDs on change', async () => {
+  const [clientUtility, activityService, serverUtility] = await Promise.all([
+    read('src/app/core/league/league-activity-reaction.util.ts'),
+    read('src/app/core/league/league-activity.service.ts'),
+    read('functions/src/shared/core/league/league-activity-reaction.util.ts'),
+  ]);
+
+  for (const source of [clientUtility, serverUtility]) {
+    assert.match(source, /'stick-tap': 'rr_stick_tap'/);
+    assert.match(source, /fire: 'rr_on_fire'/);
+    assert.match(source, /wow: 'rr_no_way'/);
+    assert.match(source, /'rink-rat': 'rr_rink_rat'/);
+    assert.match(source, /'😂': 'rr_laugh'/);
+  }
+  assert.match(activityService, /normalizeLeagueActivityReactionType\(source\['reactionType'\]\)/);
+  assert.match(serverUtility, /reactionType: desiredReactionType/);
+});
+
+test('C1G.3 remains RC33 and preserves competitive models, Rules, indexes, and inactive safety controls', async () => {
   const [
     scoringRules,
     scoringEngine,
@@ -381,7 +449,7 @@ test('C1G advances RC33 while preserving competitive models, Rules, indexes, and
   assert.match(packageJson.scripts['security:ci'], /verify:batchc1g:core/);
 });
 
-test('C1G documentation and roadmap record the bounded two-listener feature and site-first proof', async () => {
+test('C1G.3 documentation and roadmap record the custom quick icons, full local catalog, and site-first proof', async () => {
   const [roadmap, docsRoadmap, runbook, readme, releaseRunbook] = await Promise.all([
     read('RINKRAT_COMPETITIVE_ROADMAP.txt'),
     read('docs/RINKRAT_COMPETITIVE_ROADMAP.txt'),
@@ -391,20 +459,23 @@ test('C1G documentation and roadmap record the bounded two-listener feature and 
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.24\.1/);
+  assert.match(roadmap, /Version 1\.24\.3/);
   assert.match(roadmap, /# \[x\] C1\.4/);
   assert.match(roadmap, /# \[x\] C1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.39/);
   assert.match(roadmap, /# \[x\] LOG\.40/);
-  assert.match(runbook, /four reactions/i);
-  assert.match(runbook, /C1G\.1 TypeScript build hotfix/);
+  assert.match(roadmap, /# \[x\] LOG\.41/);
+  assert.match(runbook, /3,944 fully-qualified Emoji 17\.0 sequences/);
+  assert.match(runbook, /C1G\.3 custom quick reactions/);
+  assert.match(runbook, /lazy-load/i);
   assert.match(runbook, /same two Firestore listeners/i);
   assert.match(runbook, /one automated verification gate/i);
   assert.match(runbook, /functions:setLeagueActivityReaction/);
   assert.doesNotMatch(runbook, /--only firestore:rules/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 33 \/ Social Batch C1G/);
+  assert.match(readme, /Release Candidate 33 \/ Social Batch C1G\.3/);
   assert.match(readme, /RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS\.md/);
+  assert.match(releaseRunbook, /C1G\.3/);
   assert.match(releaseRunbook, /npm run verify:batchc1g/);
   assert.match(releaseRunbook, /rinkrat-rc33-validation\.json/);
   assert.match(releaseRunbook, /rinkrat-rc33-invite-beta/);

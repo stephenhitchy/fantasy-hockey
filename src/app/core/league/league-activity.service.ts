@@ -17,18 +17,14 @@ import {
   type LeagueActivityEventType,
   type LeagueActivityReactionCounts,
   type LeagueActivityReactionRecord,
-  type LeagueActivityReactionType,
   type PinnedLeagueAnnouncement,
 } from './league-activity.models';
+import {
+  normalizeLeagueActivityReactionType,
+} from './league-activity-reaction.util';
 
 const LEAGUE_ACTIVITY_LIMIT = 40;
 const LEAGUE_ACTIVITY_REACTION_MAX_COUNT = 32;
-const REACTION_TYPES = new Set<LeagueActivityReactionType>([
-  'stick-tap',
-  'fire',
-  'wow',
-  'rink-rat',
-]);
 const CATEGORIES = new Set<LeagueActivityCategory>([
   'league',
   'draft',
@@ -150,12 +146,7 @@ function asDate(value: unknown): Date | null {
 
 
 function emptyReactionCounts(): LeagueActivityReactionCounts {
-  return {
-    'stick-tap': 0,
-    fire: 0,
-    wow: 0,
-    'rink-rat': 0,
-  };
+  return {};
 }
 
 function normalizeReactionRecords(value: unknown): LeagueActivityReactionRecord[] {
@@ -173,14 +164,14 @@ function normalizeReactionRecords(value: unknown): LeagueActivityReactionRecord[
   for (const candidate of value) {
     const source = asRecord(candidate);
     const ownerId = asString(source['ownerId']);
-    const reactionType = asString(source['reactionType']) as LeagueActivityReactionType;
+    const reactionType = normalizeLeagueActivityReactionType(source['reactionType']);
     const firstChangedAt = asDate(source['firstChangedAt']);
     const updatedAt = asDate(source['updatedAt']);
 
     if (
       !ownerId ||
       ownerIds.has(ownerId) ||
-      !REACTION_TYPES.has(reactionType) ||
+      !reactionType ||
       !firstChangedAt ||
       !updatedAt ||
       firstChangedAt.getTime() > updatedAt.getTime()
@@ -201,7 +192,7 @@ function summarizeReactionRecords(
   const counts = emptyReactionCounts();
 
   for (const record of records) {
-    counts[record.reactionType] += 1;
+    counts[record.reactionType] = (counts[record.reactionType] ?? 0) + 1;
   }
 
   return counts;

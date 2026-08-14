@@ -4,9 +4,9 @@
 **Runtime release being frozen:** Release Candidate 33
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 33 / Social Batch C1G runtime; Scoring V3 and Projection V11 remain unchanged.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 33 / Social Batch C1G.3 runtime; Scoring V3 and Projection V11 remain unchanged.
 
-C1G.1 is a compiler-only source hotfix for nullable reaction rate-window narrowing. It does not change the RC33 manifest, runtime behavior, deployment targets, or validation evidence requirements.
+C1G.1 is the compiler-only nullable reaction rate-window hotfix. C1G.2 kept RC33 while expanding the local picker/server allowlist to the complete pinned Unicode Emoji 17.0 catalog. C1G.3 still keeps RC33, preserves those limits and the full picker, and swaps the quick row to five bundled custom RinkRat icon reactions without a migration, third listener, new Rule, index, or TTL policy.
 
 ## Approved toolchain
 
@@ -83,7 +83,7 @@ Commit and push the verified RC33 source:
 ```bash
 git status
 git add .
-git commit -m "Add League Wire reactions"
+git commit -m "Expand League Wire emoji reactions"
 git push
 ```
 
@@ -91,7 +91,7 @@ Do not run the freeze command until Social Batch C1G has been deployed and the l
 
 ## C1B privacy-cutover prerequisite
 
-The C1B transaction and waiver privacy cutover must already be complete before RC33 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. C1G adds only the verified-member reaction callable and RC33 browser presentation; it reuses existing member-readable activity documents and does not deploy or change Firestore Rules, indexes, or TTL policies.
+The C1B transaction and waiver privacy cutover must already be complete before RC33 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. C1G.3 updates only the verified-member reaction callable and RC33 browser presentation; it reuses existing member-readable activity documents, lazy-loads the locally bundled catalog, bundles five SVG quick-reaction assets, and does not deploy or change Firestore Rules, indexes, or TTL policies.
 
 ## Preflight
 
