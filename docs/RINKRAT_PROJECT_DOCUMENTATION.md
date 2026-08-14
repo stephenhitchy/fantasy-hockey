@@ -11511,3 +11511,19 @@ C1C adds `publishLeagueMatchupResultActivity`, an idempotent Firestore update tr
 The existing member-only `activity` collection, 40-document listener, and five-item collapsed card are reused. `Game Final` entries add no live-score listener, historical backfill, modal, backdrop, sticky panel, or duplicate dialog. Byes, malformed results, live score changes, and updates to already-complete matchups stay off the wire. The scoped read-only `social:inspect-matchup-activity` command validates projection identity, schema, privacy fields, timestamps, winner/score consistency, and duplicate fingerprints before the new browser is live.
 
 C1C changes no Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, six-game window behavior, seventh-game rollover, App Check mode, exact-league/callable canary state, scoring-queue authority, or shared NHL cache authority. Verification is `npm run verify:batchc1c`. The inherited C1B global backfill, zero-issue inspection, temporary dual-read bridge, RC29 projection smoke test, and final privacy Rules lock remain deployment prerequisites. Full operations guidance is maintained in `docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`.
+
+# Social Batch C1D — Commissioner Transparency
+
+> **Operator validation:** C1D uses one automated verification gate, a targeted two-Function and Hosting deployment, and a live-site Player Availability test. Function logs are fallback diagnostics only when the visible result is missing, duplicated, or incorrect.
+
+**Runtime release:** Release Candidate 30
+
+**Competitive models:** Production Scoring V3 and Projection V11 (unchanged)
+
+**Primary surface:** League HQ / League Wire
+
+C1D adds `publishLeagueAvailabilityOverrideActivity` and `publishLeagueDraftControlActivity`. Both observe existing authoritative records, verify the saved actor against the live league commissioner, and publish idempotent create-only League Wire projections. Player-availability activity includes only a bounded player name and allowlisted public status. Draft activity includes only successful commissioner open, pause, and resume transitions.
+
+Commissioner notes, note-only edits, failed saves, automatic server Draft actions, first-manager clock starts, raw source identifiers, request identifiers, recovery details, and platform-administration controls remain outside the feed. Existing activity Rules, the bounded 40-document listener, the five-item collapsed mobile card, and inline progressive disclosure are reused without an additional listener, modal, backdrop, or sticky surface.
+
+C1D changes no Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, six-game window behavior, seventh-game rollover, App Check mode, selected-callable canary state, scoring-queue authority, shared NHL cache authority, transaction privacy boundary, or waiver adjudication. Verification is `npm run verify:batchc1d`. Deploy only `publishLeagueAvailabilityOverrideActivity`, `publishLeagueDraftControlActivity`, and Hosting RC30. Full operations guidance is maintained in `docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`.

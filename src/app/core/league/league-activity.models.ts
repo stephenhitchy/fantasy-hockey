@@ -1,4 +1,9 @@
-export type LeagueActivityCategory = 'league' | 'draft' | 'roster' | 'matchup';
+export type LeagueActivityCategory =
+  | 'league'
+  | 'draft'
+  | 'roster'
+  | 'matchup'
+  | 'commissioner';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -17,7 +22,22 @@ export type LeagueActivityEventType =
   | 'active-bench-swap-activated'
   | 'move-bench-to-ir'
   | 'activate-ir-to-bench'
-  | 'matchup-result';
+  | 'matchup-result'
+  | 'commissioner-availability-override-set'
+  | 'commissioner-availability-override-cleared'
+  | 'commissioner-draft-opened'
+  | 'commissioner-draft-clock-paused'
+  | 'commissioner-draft-clock-resumed';
+
+export type LeagueActivityAvailabilityStatus =
+  | 'active'
+  | 'day-to-day'
+  | 'out'
+  | 'injured-reserve'
+  | 'long-term-injured-reserve'
+  | 'suspended'
+  | 'personal-leave'
+  | 'unknown';
 
 export interface LeagueActivityAssetSummary {
   name: string;
@@ -50,5 +70,7 @@ export interface LeagueActivity {
   winnerPlace: number | null;
   loserPlace: number | null;
   tieBrokenByHigherSeed: boolean;
+  availabilityPlayerName: string | null;
+  availabilityStatus: LeagueActivityAvailabilityStatus | null;
   occurredAt: Date | null;
 }

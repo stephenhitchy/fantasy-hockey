@@ -8,6 +8,8 @@ import {
 import { db } from './shared/core/firebase';
 import {
   buildAuditLeagueActivity,
+  buildCommissionerAvailabilityLeagueActivity,
+  buildCommissionerDraftControlLeagueActivity,
   buildDraftPickLeagueActivity,
   buildMatchupResultLeagueActivity,
   buildPrivateTransactionProjection,
@@ -70,7 +72,7 @@ async function publishLeagueActivity(options: {
   sourceDocumentId: string;
   activity: SanitizedLeagueActivity;
   occurredAt: Timestamp;
-  release?: 'Social Batch C1A' | 'Social Batch C1C';
+  release?: 'Social Batch C1A' | 'Social Batch C1C' | 'Social Batch C1D';
 }): Promise<void> {
   const fingerprint = getLeagueActivityFingerprint(
     options.sourceKind,
@@ -154,6 +156,108 @@ export const publishLeagueDraftPickActivity = onDocumentCreated(
       sourceDocumentId,
       activity,
       occurredAt: resolveOccurredAt(source['madeAt'], event.time),
+    });
+  },
+);
+
+async function getLeagueCommissionerId(leagueId: string): Promise<string | null> {
+  const leagueSnapshot = await db.doc(`leagues/${leagueId}`).get();
+
+  return resolveSafeFirestoreDocumentId(
+    leagueSnapshot.data()?.['commissionerId'],
+    FIRESTORE_AUTH_USER_ID_OPTIONS,
+  );
+}
+
+export const publishLeagueAvailabilityOverrideActivity = onDocumentWritten(
+  {
+    ...ACTIVITY_TRIGGER_OPTIONS,
+    document: 'leagues/{leagueId}/playerAvailability/{playerId}',
+  },
+  async (event) => {
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const sourceDocumentId = resolveSourceDocumentId(
+      event.id,
+      'commissioner-availability',
+    );
+
+    if (!leagueId || !sourceDocumentId) {
+      return;
+    }
+
+    const beforeSource = event.data?.before.exists
+      ? event.data.before.data()
+      : null;
+    const afterSource = event.data?.after.exists
+      ? event.data.after.data()
+      : null;
+    const commissionerId = await getLeagueCommissionerId(leagueId);
+    const activity = buildCommissionerAvailabilityLeagueActivity(
+      beforeSource,
+      afterSource,
+      commissionerId,
+    );
+
+    if (!activity) {
+      return;
+    }
+
+    await publishLeagueActivity({
+      leagueId,
+      sourceKind: 'commissioner-availability',
+      sourceDocumentId,
+      activity,
+      occurredAt: resolveOccurredAt(
+        afterSource?.['updatedAt'] ?? beforeSource?.['updatedAt'],
+        event.time,
+      ),
+      release: 'Social Batch C1D',
+    });
+  },
+);
+
+export const publishLeagueDraftControlActivity = onDocumentUpdated(
+  {
+    ...ACTIVITY_TRIGGER_OPTIONS,
+    document: 'leagues/{leagueId}/draft/current',
+  },
+  async (event) => {
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const sourceDocumentId = resolveSourceDocumentId(event.id, 'draft-control');
+    const beforeSource = event.data?.before.data();
+    const afterSource = event.data?.after.data();
+
+    if (!leagueId || !sourceDocumentId || !beforeSource || !afterSource) {
+      return;
+    }
+
+    const commissionerId = await getLeagueCommissionerId(leagueId);
+    const activity = buildCommissionerDraftControlLeagueActivity(
+      beforeSource,
+      afterSource,
+      commissionerId,
+    );
+
+    if (!activity) {
+      return;
+    }
+
+    await publishLeagueActivity({
+      leagueId,
+      sourceKind: 'draft-control',
+      sourceDocumentId,
+      activity,
+      occurredAt: resolveOccurredAt(
+        afterSource['clockUpdatedAt'] ?? afterSource['updatedAt'],
+        event.time,
+      ),
+      release: 'Social Batch C1D',
     });
   },
 );

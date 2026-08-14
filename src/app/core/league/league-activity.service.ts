@@ -17,7 +17,13 @@ import {
 } from './league-activity.models';
 
 const LEAGUE_ACTIVITY_LIMIT = 40;
-const CATEGORIES = new Set<LeagueActivityCategory>(['league', 'draft', 'roster', 'matchup']);
+const CATEGORIES = new Set<LeagueActivityCategory>([
+  'league',
+  'draft',
+  'roster',
+  'matchup',
+  'commissioner',
+]);
 const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'league-created',
   'member-joined',
@@ -36,6 +42,22 @@ const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'move-bench-to-ir',
   'activate-ir-to-bench',
   'matchup-result',
+  'commissioner-availability-override-set',
+  'commissioner-availability-override-cleared',
+  'commissioner-draft-opened',
+  'commissioner-draft-clock-paused',
+  'commissioner-draft-clock-resumed',
+]);
+
+const AVAILABILITY_STATUSES = new Set<LeagueActivity['availabilityStatus']>([
+  'active',
+  'day-to-day',
+  'out',
+  'injured-reserve',
+  'long-term-injured-reserve',
+  'suspended',
+  'personal-leave',
+  'unknown',
 ]);
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -132,6 +154,7 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   const selectionType = asString(source['selectionType']);
   const matchupPhase = asString(source['matchupPhase']);
   const playoffBracketType = asString(source['playoffBracketType']);
+  const availabilityStatus = asString(source['availabilityStatus']) as LeagueActivity['availabilityStatus'];
 
   return {
     id,
@@ -164,6 +187,10 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     winnerPlace: asPositiveInteger(source['winnerPlace']),
     loserPlace: asPositiveInteger(source['loserPlace']),
     tieBrokenByHigherSeed: source['tieBrokenByHigherSeed'] === true,
+    availabilityPlayerName: asString(source['availabilityPlayerName']) || null,
+    availabilityStatus: AVAILABILITY_STATUSES.has(availabilityStatus)
+      ? availabilityStatus
+      : null,
     occurredAt: asDate(source['occurredAt']),
   };
 }

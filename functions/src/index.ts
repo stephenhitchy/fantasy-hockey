@@ -3992,6 +3992,8 @@ export {
 
 export {
   publishLeagueAuditActivity,
+  publishLeagueAvailabilityOverrideActivity,
+  publishLeagueDraftControlActivity,
   publishLeagueDraftPickActivity,
   publishLeagueMatchupResultActivity,
   publishLeagueTransactionActivity,

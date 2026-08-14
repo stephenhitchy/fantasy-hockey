@@ -118,6 +118,11 @@
   background: color-mix(in srgb, var(--rr-color-success) 11%, var(--rr-color-surface-raised));
 }
 
+.league-wire-item[data-category='commissioner'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 62%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-warning) 13%, var(--rr-color-surface-raised));
+}
+
 .league-wire-item[data-category='matchup'] .league-wire-avatar {
   border-color: color-mix(in srgb, var(--rr-scoreboard) 48%, var(--rr-color-info));
   background: color-mix(in srgb, var(--rr-scoreboard) 18%, var(--rr-color-surface-raised));
@@ -151,6 +156,10 @@
 
 .league-wire-item[data-category='roster'] .league-wire-category {
   color: var(--rr-color-success);
+}
+
+.league-wire-item[data-category='commissioner'] .league-wire-category {
+  color: var(--rr-color-warning);
 }
 
 .league-wire-item[data-category='matchup'] .league-wire-category {

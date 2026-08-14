@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.20
+Version 1.21
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -49,8 +49,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC29 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, and final-matchup activity are complete; finish the staged RC29 privacy cutover, exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before broader social, notification, or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC30 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, final-matchup activity, and ordinary commissioner transparency are complete; finish the RC30 exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before broader social, notification, or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
 
 ================================================================================
@@ -290,8 +290,8 @@ Goal: Prove the product with real managers and real NHL game flow before adding 
 Exit gate: Multiple leagues complete several live weeks without integrity failures, and the team has usable product/technical evidence.
 ================================================================================
 
-[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC29 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
-[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC29 report is ready.
+[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC30 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
+[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC30 report is ready.
 [~] B1.3 Rehearse Hosting, Functions, rules, and queue-mode rollback. (P0 / M) — B1C supplies the reviewed incident order, exact source/tag checks, and generated rollback commands; complete after the operator performs and records the rehearsal.
 [ ] B1.4 Begin with 2-4 leagues and approximately 10-30 observed managers. (P0 / M)
 [ ] B1.5 Include hockey experts, casual fans, beginners, iPhone users, Android users, and at least one commissioner other than the creator. (P1 / M)
@@ -367,10 +367,10 @@ Goal: Match the engagement strengths of Sleeper, Yahoo, and ESPN without overwhe
 Exit gate: Managers have a reason to open RinkRat between roster decisions and can communicate without leaving the league.
 ================================================================================
 
-[~] C1.1 Build a league activity feed before full chat. (P1 / L) — C1A delivered the bounded League Wire foundation, C1B completed the underlying transaction/waiver privacy boundary, and C1C adds one immutable final-matchup result without live-score spam; broader milestones, reactions, and notification fanout remain evidence-gated follow-ups.
-    C1A/C1C foundation complete: joins, selected commissioner lifecycle actions, Draft picks, completed add/drops, completed waivers, IR moves, activated queued roster moves, final regular-season matchups, playoff advancement, placements, and championships are published through a bounded server-sanitized League Wire. Remaining: evidence-backed scoring milestones, weekly recaps, reactions, notification controls, and trades later.
+[~] C1.1 Build a league activity feed before full chat. (P1 / L) — C1A delivered the bounded League Wire foundation, C1B completed the underlying transaction/waiver privacy boundary, C1C added immutable final-matchup results, and C1D adds ordinary commissioner Draft controls and availability overrides without exposing notes or operational noise; broader milestones, announcements, reactions, and notification fanout remain evidence-gated follow-ups.
+    C1A-C1D foundation complete: joins, commissioner setup/presentation actions, successful Draft open/pause/resume controls, player-availability override set/clear outcomes, Draft picks, completed add/drops, completed waivers, IR moves, activated queued roster moves, final regular-season matchups, playoff advancement, placements, and championships are published through a bounded server-sanitized League Wire. Remaining: announcements, evidence-backed scoring milestones, weekly recaps, reactions, notification controls, and trades later.
 
-[ ] C1.2 Automatically publish commissioner setting changes and overrides to the activity feed. (P0 / M)
+# [x] C1.2 Automatically publish commissioner setting changes and overrides to the activity feed. (P0 / M) — Completed 2026-08-14 in Social Batch C1D / Release Candidate 30 for ordinary member-facing commissioner actions: Draft setup/open/pause/resume, league presentation, player-availability override set/clear, and completed waiver outcomes. Failed attempts, notes, automatic server actions, and internal diagnostics/recovery controls are intentionally excluded.
     Goal: commissioner transparency similar to modern social fantasy platforms.
 
 [ ] C1.3 Add commissioner announcements with optional pinning. (P1 / M)
@@ -387,10 +387,11 @@ Exit gate: Managers have a reason to open RinkRat between roster decisions and c
 # [x] C1.13 Add a server-sanitized, member-only League Wire foundation with deterministic idempotent activity projections, completed-outcome allowlists, pending-claim and queued-plan privacy exclusions, a bounded mobile-first listener, and no browser write authority. (P1 / L) — Completed 2026-08-13 in Social Batch C1A / Release Candidate 27.
 # [x] C1.14 Replace league-wide raw transaction reads with owner-specific private records plus a public completed-outcome projection so pending waiver targets remain private outside League Wire as well. (P0 / L) — Completed 2026-08-13 in Social Batch C1B / Release Candidate 28.
 # [x] C1.15 Publish exactly one server-sanitized League Wire result when a two-team matchup first becomes final, including regular ties, playoff advancement, placements, championships, and higher-seed tiebreak context without live-score spam or historical backfill; include a scoped read-only production inspector for Functions-first proof. (P1 / M) — Completed 2026-08-14 in Social Batch C1C / Release Candidate 29.
+# [x] C1.16 Publish successful commissioner Draft openings and clock pauses/resumes plus league-specific player-availability override set/clear outcomes through create-only server-sanitized League Wire entries; verify the saved actor against the live commissioner, exclude notes and failed/automatic/internal operations, and add no browser listener or Firestore Rule/index change. (P0 / M) — Completed 2026-08-14 in Social Batch C1D / Release Candidate 30.
 
 SOCIAL EXIT CHECKLIST:
 
-[ ] C1.G1 Every commissioner action that affects competition is visible to league members.
+# [x] C1.G1 Every ordinary member-facing commissioner action that affects competition is visible to league members. — Completed 2026-08-14 in Social Batch C1D; internal diagnostics/recovery operations remain intentionally outside the social feed.
 [ ] C1.G2 Managers can control notification volume.
 [ ] C1.G3 Abuse can be reported, reviewed, and actioned.
 [ ] C1.G4 Social features do not slow competitive pages or increase Firestore listeners without limits.
@@ -792,6 +793,8 @@ Future entries:
 # [x] LOG.34 2026-08-14 — Completed Social Batch C1B.1 verification-harness hotfix without changing RC28 runtime behavior: make each intentionally denied Firestore write lazy so its rejection handler is attached before the emulator request begins, eliminate false unhandled-rejection failures, and add a focused regression guard while preserving the final transaction/waiver privacy Rules unchanged.
 
 # [x] LOG.35 2026-08-14 — Completed Social Batch C1C / Release Candidate 29: publish one deterministic server-sanitized League Wire activity only when a two-team matchup first transitions from active to complete; include final scores, regular ties, playoff advancement, placement, championship, and higher-seed tiebreak context; skip byes, malformed outcomes, live score changes, and historical backfill; add a scoped read-only production inspector as fallback diagnostics; adopt a proportionate owner workflow of one automated gate, targeted deployment, and live-site smoke testing for routine additive releases; retain the existing bounded mobile feed and preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL.
+
+# [x] LOG.36 2026-08-14 — Completed Social Batch C1D / Release Candidate 30: add create-only League Wire projections for successful commissioner Draft open/pause/resume transitions and league-specific player-availability override set/clear outcomes; verify each actor against the live commissioner; exclude commissioner notes, note-only edits, failed attempts, automatic server Draft actions, first-manager clock starts, and internal recovery controls; retain the existing bounded mobile listener and preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

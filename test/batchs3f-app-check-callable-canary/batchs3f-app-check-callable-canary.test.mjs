@@ -192,7 +192,7 @@ test('source-controlled policy stays monitor-first and corrects the real callabl
   assert.equal(readinessConfig.firstEnforcementScope.includes('makeSecureDraftPick'), true);
 });
 
-test('S3F advances to RC29 without changing Scoring V3 or Projection V11', async () => {
+test('S3F remains intact under RC30 without changing Scoring V3 or Projection V11', async () => {
   const [
     runtime,
     productionRuntime,
@@ -211,8 +211,8 @@ test('S3F advances to RC29 without changing Scoring V3 or Projection V11', async
     read('package.json').then(JSON.parse),
   ]);
 
-  assert.match(runtime, /Release Candidate 29/);
-  assert.match(productionRuntime, /Release Candidate 29/);
+  assert.match(runtime, /Release Candidate 30/);
+  assert.match(productionRuntime, /Release Candidate 30/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
   assert.match(roadmap, /S3\.23/);
@@ -220,5 +220,5 @@ test('S3F advances to RC29 without changing Scoring V3 or Projection V11', async
   assert.match(runbook, /exact set of callable Functions/i);
   assert.match(runbook, /exact set of league IDs/i);
   assert.match(packageJson.scripts['verify:batchs3f:core'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1):core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d):core/);
 });

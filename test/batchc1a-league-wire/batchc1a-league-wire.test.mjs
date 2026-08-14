@@ -255,7 +255,7 @@ test('member-only rules and the compact client listener keep League Wire bounded
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}\b/i);
 });
 
-test('C1A remains intact under RC29 while preserving competitive models and safety modes', async () => {
+test('C1A remains intact under RC30 while preserving competitive models and safety modes', async () => {
   const [
     runtime,
     productionRuntime,
@@ -280,18 +280,18 @@ test('C1A remains intact under RC29 while preserving competitive models and safe
   const appCheck = JSON.parse(appCheckSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 29/);
-  assert.match(productionRuntime, /Release Candidate 29/);
+  assert.match(runtime, /Release Candidate 30/);
+  assert.match(productionRuntime, /Release Candidate 30/);
   assert.match(scoring, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projection, /SHARED_PROJECTION_VERSION\s*=\s*11/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 29');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1c');
+  assert.equal(freeze.releaseLabel, 'Release Candidate 30');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1d');
   assert.equal(cachePolicy.mode, 'shadow');
   assert.equal(cachePolicy.authoritativeReadsEnabled, false);
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(freeze.queueMode, 'shadow');
   assert.match(packageJson.scripts['verify:batchc1a:core'], /verify:batchd1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1c:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1d:core/);
 });
 
 test('active integrity tests share one approved current Firestore Rules baseline', async () => {
@@ -322,7 +322,7 @@ test('active integrity tests share one approved current Firestore Rules baseline
   assert.deepEqual(staleHistoricalHashes, []);
 });
 
-test('legacy release and Functions-tree guards recognize the isolated C1A through C1C additions', async () => {
+test('legacy release and Functions-tree guards recognize the isolated C1A through C1D additions', async () => {
   const executableTests = await listExecutableTests();
   const missingFunctionTreeExclusions = [];
   const staleReleaseFamilyAllowlists = [];
@@ -356,7 +356,7 @@ test('legacy release and Functions-tree guards recognize the isolated C1A throug
     if (
       source.includes('Release Candidate \d+ \/') &&
       source.includes('Data Quality Batch D1B') &&
-      !source.includes('Social Batch C1C')
+      !source.includes('Social Batch C1D')
     ) {
       staleReleaseFamilyAllowlists.push(relativePath);
     }
@@ -376,7 +376,7 @@ test('C1A documentation and permanent roadmap record the bounded foundation and 
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.20/);
+  assert.match(roadmap, /Version 1\.21/);
   assert.match(roadmap, /\[~\] C1\.1/);
   assert.match(roadmap, /# \[x\] C1\.13/);
   assert.match(roadmap, /# \[x\] C1\.14/);
@@ -390,8 +390,8 @@ test('C1A documentation and permanent roadmap record the bounded foundation and 
   assert.match(runbook, /single active source-controlled Firestore Rules hash baseline/i);
   assert.match(runbook, /whole-Functions-tree guards/i);
   assert.match(runbook, /release-family allowlists/i);
-  assert.match(readme, /Release Candidate 29 \/ Social Batch C1C/);
+  assert.match(readme, /Release Candidate 30 \/ Social Batch C1D/);
   assert.match(readme, /RINKRAT_SOCIAL_C1A_LEAGUE_WIRE\.md/);
-  assert.match(freezeRunbook, /rinkrat-rc29-validation\.json/);
-  assert.match(freezeRunbook, /rinkrat-rc29-invite-beta/);
+  assert.match(freezeRunbook, /rinkrat-rc30-validation\.json/);
+  assert.match(freezeRunbook, /rinkrat-rc30-invite-beta/);
 });

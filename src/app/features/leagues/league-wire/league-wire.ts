@@ -254,6 +254,33 @@ export class LeagueWire {
           ? `${secondaryName} moved to the bench${timingDetail ? ` · ${timingDetail}` : ''}.`
           : timingDetail;
         break;
+      case 'commissioner-availability-override-set': {
+        const playerName = activity.availabilityPlayerName || 'a player';
+        const statusLabel = this.availabilityStatusLabel(activity.availabilityStatus);
+        headline = `${commissionerLabel} marked ${playerName} ${statusLabel}.`;
+        detail = 'League availability override';
+        break;
+      }
+      case 'commissioner-availability-override-cleared': {
+        const playerName = activity.availabilityPlayerName || 'a player';
+        headline = `${commissionerLabel} cleared ${playerName}'s availability override.`;
+        detail = 'The shared NHL injury report applies again.';
+        break;
+      }
+      case 'commissioner-draft-opened':
+        headline = `${commissionerLabel} opened the Draft.`;
+        detail = activity.overallPick
+          ? `The clock is running at Pick ${activity.overallPick}.`
+          : 'The Draft clock is running.';
+        break;
+      case 'commissioner-draft-clock-paused':
+        headline = `${commissionerLabel} paused the Draft clock.`;
+        detail = activity.overallPick ? `Paused at Pick ${activity.overallPick}.` : null;
+        break;
+      case 'commissioner-draft-clock-resumed':
+        headline = `${commissionerLabel} resumed the Draft clock.`;
+        detail = activity.overallPick ? `Resumed at Pick ${activity.overallPick}.` : null;
+        break;
       case 'matchup-result': {
         const teamA = activity.teamAOwnerId
           ? this.teamByOwnerId().get(activity.teamAOwnerId) ?? null
@@ -320,13 +347,38 @@ export class LeagueWire {
           ? 'Roster'
           : activity.category === 'matchup'
             ? 'Game Final'
-            : 'League',
+            : activity.category === 'commissioner'
+              ? 'Commissioner'
+              : 'League',
       actorLabel,
       profileIconId: team?.profileIconId ?? null,
       headline,
       detail,
       occurredAt: activity.occurredAt,
     };
+  }
+
+  private availabilityStatusLabel(
+    status: LeagueActivity['availabilityStatus'],
+  ): string {
+    switch (status) {
+      case 'active':
+        return 'Active';
+      case 'day-to-day':
+        return 'Day-to-Day';
+      case 'out':
+        return 'Out';
+      case 'injured-reserve':
+        return 'Injured Reserve';
+      case 'long-term-injured-reserve':
+        return 'Long-Term Injured Reserve';
+      case 'suspended':
+        return 'Suspended';
+      case 'personal-leave':
+        return 'Personal Leave';
+      default:
+        return 'Unknown';
+    }
   }
 
   private formatScore(value: number | null): string {

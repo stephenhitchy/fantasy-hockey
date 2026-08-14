@@ -2,8 +2,19 @@ import { createHash } from 'node:crypto';
 
 export const LEAGUE_ACTIVITY_SCHEMA_VERSION = 1;
 
-export type LeagueActivitySourceKind = 'audit' | 'draft-pick' | 'transaction' | 'matchup';
-export type LeagueActivityCategory = 'league' | 'draft' | 'roster' | 'matchup';
+export type LeagueActivitySourceKind =
+  | 'audit'
+  | 'draft-pick'
+  | 'transaction'
+  | 'matchup'
+  | 'commissioner-availability'
+  | 'draft-control';
+export type LeagueActivityCategory =
+  | 'league'
+  | 'draft'
+  | 'roster'
+  | 'matchup'
+  | 'commissioner';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -22,7 +33,22 @@ export type LeagueActivityEventType =
   | 'active-bench-swap-activated'
   | 'move-bench-to-ir'
   | 'activate-ir-to-bench'
-  | 'matchup-result';
+  | 'matchup-result'
+  | 'commissioner-availability-override-set'
+  | 'commissioner-availability-override-cleared'
+  | 'commissioner-draft-opened'
+  | 'commissioner-draft-clock-paused'
+  | 'commissioner-draft-clock-resumed';
+
+export type LeagueActivityAvailabilityStatus =
+  | 'active'
+  | 'day-to-day'
+  | 'out'
+  | 'injured-reserve'
+  | 'long-term-injured-reserve'
+  | 'suspended'
+  | 'personal-leave'
+  | 'unknown';
 
 export interface LeagueActivityAssetSummary {
   name: string;
@@ -54,6 +80,8 @@ export interface SanitizedLeagueActivity {
   winnerPlace?: number | null;
   loserPlace?: number | null;
   tieBrokenByHigherSeed?: boolean;
+  availabilityPlayerName?: string | null;
+  availabilityStatus?: LeagueActivityAvailabilityStatus | null;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -83,6 +111,16 @@ const TRANSACTION_TYPE_ALIASES = new Map<string, LeagueActivityEventType>([
 
 const SUPPORTED_POSITIONS = new Set(['LW', 'C', 'RW', 'D', 'G']);
 const SUPPORTED_SELECTION_TYPES = new Set(['manual', 'queue', 'automatic']);
+const SUPPORTED_AVAILABILITY_STATUSES = new Set<LeagueActivityAvailabilityStatus>([
+  'active',
+  'day-to-day',
+  'out',
+  'injured-reserve',
+  'long-term-injured-reserve',
+  'suspended',
+  'personal-leave',
+  'unknown',
+]);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -239,6 +277,110 @@ export function buildAuditLeagueActivity(
   }
 
   return baseActivity('league', action, sanitizeOwnerId(source['actorId']));
+}
+
+export function buildCommissionerAvailabilityLeagueActivity(
+  beforeValue: unknown,
+  afterValue: unknown,
+  commissionerIdValue: unknown,
+): SanitizedLeagueActivity | null {
+  const beforeSource = asRecord(beforeValue);
+  const afterSource = asRecord(afterValue);
+  const hasBefore = Object.keys(beforeSource).length > 0;
+  const hasAfter = Object.keys(afterSource).length > 0;
+  const commissionerId = sanitizeOwnerId(commissionerIdValue);
+  const source = hasAfter ? afterSource : beforeSource;
+  const ownerId = sanitizeOwnerId(source['updatedBy']);
+  const playerName = asBoundedString(source['playerName'], 80);
+
+  if (
+    !commissionerId ||
+    !ownerId ||
+    ownerId !== commissionerId ||
+    source['source'] !== 'commissioner' ||
+    !playerName ||
+    (!hasBefore && !hasAfter)
+  ) {
+    return null;
+  }
+
+  if (!hasAfter) {
+    const activity = baseActivity(
+      'commissioner',
+      'commissioner-availability-override-cleared',
+      commissionerId,
+    );
+    activity.availabilityPlayerName = playerName;
+    activity.availabilityStatus = null;
+    return activity;
+  }
+
+  const status = asBoundedString(
+    afterSource['status'],
+    40,
+  ) as LeagueActivityAvailabilityStatus;
+
+  if (!SUPPORTED_AVAILABILITY_STATUSES.has(status)) {
+    return null;
+  }
+
+  if (
+    hasBefore &&
+    beforeSource['status'] === afterSource['status'] &&
+    beforeSource['irEligible'] === afterSource['irEligible']
+  ) {
+    // Commissioner notes remain outside League Wire. A note-only edit should
+    // not create social noise or imply that the competitive status changed.
+    return null;
+  }
+
+  const activity = baseActivity(
+    'commissioner',
+    'commissioner-availability-override-set',
+    commissionerId,
+  );
+  activity.availabilityPlayerName = playerName;
+  activity.availabilityStatus = status;
+  return activity;
+}
+
+export function buildCommissionerDraftControlLeagueActivity(
+  beforeValue: unknown,
+  afterValue: unknown,
+  commissionerIdValue: unknown,
+): SanitizedLeagueActivity | null {
+  const beforeSource = asRecord(beforeValue);
+  const afterSource = asRecord(afterValue);
+  const commissionerId = sanitizeOwnerId(commissionerIdValue);
+  const actorId = sanitizeOwnerId(afterSource['clockUpdatedBy']);
+
+  if (!commissionerId || !actorId || actorId !== commissionerId) {
+    // Automatic server openings and first-manager clock starts stay off the
+    // commissioner wire because they are not commissioner control actions.
+    return null;
+  }
+
+  const beforeStatus = asBoundedString(beforeSource['status'], 20);
+  const afterStatus = asBoundedString(afterSource['status'], 20);
+  const beforeClockStatus = asBoundedString(beforeSource['clockStatus'], 20);
+  const afterClockStatus = asBoundedString(afterSource['clockStatus'], 20);
+  let eventType: LeagueActivityEventType | null = null;
+
+  if (beforeStatus !== 'live' && afterStatus === 'live') {
+    eventType = 'commissioner-draft-opened';
+  } else if (beforeClockStatus === 'running' && afterClockStatus === 'paused') {
+    eventType = 'commissioner-draft-clock-paused';
+  } else if (beforeClockStatus === 'paused' && afterClockStatus === 'running') {
+    eventType = 'commissioner-draft-clock-resumed';
+  }
+
+  if (!eventType) {
+    return null;
+  }
+
+  const activity = baseActivity('commissioner', eventType, commissionerId);
+  activity.overallPick = asPositiveInteger(afterSource['nextOverallPick']);
+  return activity;
 }
 
 export function buildDraftPickLeagueActivity(
