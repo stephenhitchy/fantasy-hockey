@@ -11527,3 +11527,17 @@ C1D adds `publishLeagueAvailabilityOverrideActivity` and `publishLeagueDraftCont
 Commissioner notes, note-only edits, failed saves, automatic server Draft actions, first-manager clock starts, raw source identifiers, request identifiers, recovery details, and platform-administration controls remain outside the feed. Existing activity Rules, the bounded 40-document listener, the five-item collapsed mobile card, and inline progressive disclosure are reused without an additional listener, modal, backdrop, or sticky surface.
 
 C1D changes no Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, six-game window behavior, seventh-game rollover, App Check mode, selected-callable canary state, scoring-queue authority, shared NHL cache authority, transaction privacy boundary, or waiver adjudication. Verification is `npm run verify:batchc1d`. Deploy only `publishLeagueAvailabilityOverrideActivity`, `publishLeagueDraftControlActivity`, and Hosting RC30. Full operations guidance is maintained in `docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`.
+
+# Social Batch C1E — Commissioner Announcements
+
+**Completed:** 2026-08-14
+
+**Runtime release:** Release Candidate 31
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+C1E adds commissioner-only plain-text announcements to the existing bounded League Wire. The server verifies authentication, email verification, and the live commissioner inside a Firestore transaction, then creates one deterministic immutable announcement activity. Optional pinning replaces one exact member-readable snapshot; unpinning removes only that snapshot and preserves history.
+
+The UI remains inline and mobile-first. It adds no modal, backdrop, sticky content, attachment surface, or unbounded query. The existing 40-item feed listener remains unchanged, and one exact-document listener observes only `activity/pinned-announcement`. Firestore Rules, indexes, TTL, scoring, projections, transaction privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow remain unchanged.
+
+The normal owner workflow is one automated gate (`npm run verify:batchc1e`), targeted deployment of `publishLeagueAnnouncement` and `unpinLeagueAnnouncement`, RC31 Hosting, and a short site-first smoke test. Detailed limits, authority behavior, deployment, validation, diagnostics, and rollback are in `docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`.

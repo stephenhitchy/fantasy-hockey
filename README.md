@@ -21,17 +21,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`](docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md) — owner-private transaction and claim projections, claim-free waiver pool, guarded backfill, privacy inspection, staged cutover, smoke test, and coordinated rollback.
 - [`docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`](docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md) — one-event final matchup activity, playoff/championship context, no live-score spam, Functions-first deployment, mobile smoke testing, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`](docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md) — public commissioner Draft controls and player-availability overrides, privacy boundaries, targeted deployment, and live-site proof.
+- [`docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`](docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md) — commissioner-only plain-text announcements, optional pinning, bounded League Wire presentation, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 30 / Social Batch C1D**. C1D closes the ordinary commissioner-transparency gap in League Wire: successful commissioner Draft openings, Draft-clock pauses/resumes, and league-specific player-availability override changes now publish compact server-sanitized entries.
+The current source runtime is **Release Candidate 31 / Social Batch C1E**. C1E adds commissioner-only plain-text announcements directly inside League Wire, with an optional single pinned announcement that every league member can read. Publishing and unpinning are server-authoritative callables; ordinary managers cannot publish, edit, forge, or unpin announcements.
 
-Commissioner notes, failed attempts, automatic server Draft actions, first-manager clock starts, and internal diagnostics/recovery controls stay off the wire. League Wire keeps the existing 40-document listener and five-item collapsed view, so the feature adds no browser listener, modal, backdrop, sticky panel, or blocking flow.
+The announcement composer stays inline and mobile-first: no dialog, backdrop, sticky panel, image upload, HTML rendering, or extra unbounded query. The normal feed remains limited to 40 activities and five collapsed items. One exact-document listener watches only the current pin, and the pinned snapshot intentionally stays out of the ordered activity query so it does not render twice.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL remain unchanged. The current verification command is `npm run verify:batchc1d`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL remain unchanged. The current verification command is `npm run verify:batchc1e`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -72,6 +73,7 @@ verify:batchc1a
 verify:batchc1b
 verify:batchc1c
 verify:batchc1d
+verify:batchc1e
 ```
 
 RinkRat pins:
@@ -91,7 +93,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1d
+npm run verify:batchc1e
 ```
 
 After verification and a clean commit:
@@ -100,6 +102,21 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Social Batch C1E — Commissioner Announcements
+
+C1E lets the live league commissioner post a bounded title and message to League Wire and optionally replace the single pinned announcement shown above recent activity. The server verifies authentication, verified email, and the current commissioner inside one Firestore transaction; deterministic request identity makes retries idempotent, and a short server-only rate limit prevents accidental rapid duplicates.
+
+Pinned content uses the existing member-only activity collection and an exact document named `pinned-announcement`. It omits the feed's ordered `occurredAt` field, so the existing 40-item query never returns the pinned snapshot a second time. Unpinning removes only the pin; the original immutable League Wire entry remains in history.
+
+Verification:
+
+```bash
+npm run verify:batchc1e
+```
+
+The normal owner workflow is one automated gate, a targeted deployment of `publishLeagueAnnouncement` and `unpinLeagueAnnouncement`, RC31 Hosting, and a short site-first smoke test. Firestore Rules, indexes, TTL, scoring, projections, and queue/cache modes are not deployed for C1E. Full guidance is in `docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`.
 
 
 ## Social Batch C1D — Commissioner Transparency

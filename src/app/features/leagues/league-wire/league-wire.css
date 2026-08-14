@@ -278,3 +278,302 @@
     scroll-behavior: auto;
   }
 }
+
+.league-wire-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--rr-space-2);
+  flex-wrap: wrap;
+}
+
+.league-wire-compose-toggle {
+  --rr-button-border: color-mix(in srgb, var(--rr-color-info) 42%, var(--rr-color-border-strong));
+  --rr-button-background: color-mix(in srgb, var(--rr-color-info) 9%, var(--rr-color-surface-raised));
+  --rr-button-color: var(--rr-color-text);
+  --rr-button-radius: var(--rr-radius-md);
+
+  min-height: 44px;
+  padding-inline: 11px;
+  font-size: 12px;
+}
+
+.league-wire-message,
+.league-wire-pin-error {
+  margin: 0 0 var(--rr-space-3);
+  padding: 9px 11px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.league-wire-message-success {
+  border-color: color-mix(in srgb, var(--rr-color-success) 44%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-success) 9%, var(--rr-color-surface-raised));
+  color: color-mix(in srgb, var(--rr-color-success) 64%, var(--rr-color-text));
+}
+
+.league-wire-message-error,
+.league-wire-pin-error {
+  border-color: color-mix(in srgb, var(--rr-color-danger) 48%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-danger) 8%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text-secondary);
+}
+
+.league-wire-announcement-form {
+  display: grid;
+  gap: var(--rr-space-3);
+  margin-bottom: var(--rr-space-4);
+  padding: var(--rr-space-4);
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 44%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 92%, var(--rr-color-info) 8%);
+}
+
+.league-wire-announcement-form-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+}
+
+.league-wire-announcement-form-heading strong,
+.league-wire-announcement-form-heading span {
+  display: block;
+}
+
+.league-wire-announcement-form-heading strong {
+  color: var(--rr-color-text);
+  font-size: 14px;
+}
+
+.league-wire-announcement-form-heading div > span {
+  margin-top: 3px;
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.league-wire-form-badge {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-color-info) 12%, var(--rr-color-surface-strong));
+  color: var(--rr-color-text-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.league-wire-field {
+  display: grid;
+  gap: 6px;
+}
+
+.league-wire-field > span {
+  color: var(--rr-color-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.league-wire-field input,
+.league-wire-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface);
+  color: var(--rr-color-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.league-wire-field input {
+  min-height: 43px;
+  padding: 9px 11px;
+}
+
+.league-wire-field textarea {
+  min-height: 100px;
+  padding: 10px 11px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.league-wire-field input:focus-visible,
+.league-wire-field textarea:focus-visible,
+.league-wire-pin-option input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--rr-color-info) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.league-wire-field small,
+.league-wire-pin-option small {
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.league-wire-pin-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-warning) 36%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-color-warning) 7%, var(--rr-color-surface));
+  cursor: pointer;
+}
+
+.league-wire-pin-option input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--rr-color-info);
+}
+
+.league-wire-pin-option strong,
+.league-wire-pin-option small {
+  display: block;
+}
+
+.league-wire-pin-option strong {
+  color: var(--rr-color-text);
+  font-size: 12px;
+}
+
+.league-wire-pin-option small {
+  margin-top: 2px;
+}
+
+.league-wire-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-2);
+  flex-wrap: wrap;
+}
+
+.league-wire-form-actions .rr-button {
+  min-height: 44px;
+}
+
+.league-wire-pinned {
+  position: relative;
+  display: grid;
+  gap: var(--rr-space-3);
+  margin-bottom: var(--rr-space-4);
+  padding: var(--rr-space-4);
+  border: 1px solid color-mix(in srgb, var(--rr-color-warning) 55%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--rr-color-warning) 10%, var(--rr-color-surface-raised)),
+      color-mix(in srgb, var(--rr-color-info) 7%, var(--rr-color-surface))
+    );
+}
+
+.league-wire-pinned-flag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: color-mix(in srgb, var(--rr-color-warning) 72%, var(--rr-color-text));
+  font-family: var(--rr-font-micro);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.league-wire-pinned-content {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+}
+
+.league-wire-pinned-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 58%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-warning) 12%, var(--rr-color-surface-raised));
+}
+
+.league-wire-pinned-copy {
+  min-width: 0;
+}
+
+.league-wire-pinned-copy h3,
+.league-wire-pinned-copy p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.league-wire-pinned-copy h3 {
+  color: var(--rr-color-text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.league-wire-pinned-copy p {
+  margin-top: 5px;
+  color: var(--rr-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.league-wire-unpin {
+  --rr-button-border: color-mix(in srgb, var(--rr-color-warning) 36%, var(--rr-color-border));
+  --rr-button-background: color-mix(in srgb, var(--rr-color-surface-raised) 90%, var(--rr-color-warning) 6%);
+  --rr-button-color: var(--rr-color-text-secondary);
+  --rr-button-radius: var(--rr-radius-md);
+
+  justify-self: start;
+  min-height: 44px;
+}
+
+.league-wire-item[data-category='announcement'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-info) 58%, var(--rr-color-warning));
+  background: color-mix(in srgb, var(--rr-color-info) 12%, var(--rr-color-surface-raised));
+}
+
+.league-wire-item[data-category='announcement'] .league-wire-category {
+  color: color-mix(in srgb, var(--rr-color-info) 68%, var(--rr-color-text));
+}
+
+.league-wire-detail-announcement {
+  white-space: pre-line;
+}
+
+@media (max-width: 560px) {
+  .league-wire-heading-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .league-wire-compose-toggle {
+    min-height: 44px;
+  }
+
+  .league-wire-announcement-form,
+  .league-wire-pinned {
+    padding: 13px;
+  }
+
+  .league-wire-announcement-form-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .league-wire-form-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .league-wire-pinned-content {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+  }
+}

@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   limit,
   onSnapshot,
   orderBy,
@@ -14,6 +15,7 @@ import {
   type LeagueActivityAssetSummary,
   type LeagueActivityCategory,
   type LeagueActivityEventType,
+  type PinnedLeagueAnnouncement,
 } from './league-activity.models';
 
 const LEAGUE_ACTIVITY_LIMIT = 40;
@@ -23,6 +25,7 @@ const CATEGORIES = new Set<LeagueActivityCategory>([
   'roster',
   'matchup',
   'commissioner',
+  'announcement',
 ]);
 const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'league-created',
@@ -47,6 +50,7 @@ const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'commissioner-draft-opened',
   'commissioner-draft-clock-paused',
   'commissioner-draft-clock-resumed',
+  'commissioner-announcement',
 ]);
 
 const AVAILABILITY_STATUSES = new Set<LeagueActivity['availabilityStatus']>([
@@ -155,6 +159,17 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   const matchupPhase = asString(source['matchupPhase']);
   const playoffBracketType = asString(source['playoffBracketType']);
   const availabilityStatus = asString(source['availabilityStatus']) as LeagueActivity['availabilityStatus'];
+  const announcementTitle = asString(source['announcementTitle']);
+  const announcementBody = typeof source['announcementBody'] === 'string'
+    ? source['announcementBody'].trim()
+    : '';
+
+  if (
+    eventType === 'commissioner-announcement' &&
+    (!announcementTitle || !announcementBody)
+  ) {
+    return null;
+  }
 
   return {
     id,
@@ -191,6 +206,8 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     availabilityStatus: AVAILABILITY_STATUSES.has(availabilityStatus)
       ? availabilityStatus
       : null,
+    announcementTitle: announcementTitle || null,
+    announcementBody: announcementBody || null,
     occurredAt: asDate(source['occurredAt']),
   };
 }
@@ -226,6 +243,65 @@ export function listenToLeagueActivity(
       }
 
       console.error('Unable to load League Wire.', error);
+    },
+  ));
+}
+
+
+function normalizePinnedLeagueAnnouncement(
+  value: DocumentData,
+): PinnedLeagueAnnouncement | null {
+  const source = asRecord(value);
+  const ownerId = asString(source['ownerId']);
+  const title = asString(source['announcementTitle']);
+  const body = typeof source['announcementBody'] === 'string'
+    ? source['announcementBody'].trim()
+    : '';
+  const activityId = asString(source['activityId']);
+
+  return ownerId && title && body && activityId
+    ? {
+        ownerId,
+        title,
+        body,
+        activityId,
+        occurredAt: asDate(source['announcementOccurredAt']),
+        pinnedAt: asDate(source['pinnedAt']),
+      }
+    : null;
+}
+
+export function listenToPinnedLeagueAnnouncement(
+  leagueId: string,
+  callback: (announcement: PinnedLeagueAnnouncement | null) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const announcementReference = doc(
+    db,
+    'leagues',
+    leagueId,
+    'activity',
+    'pinned-announcement',
+  );
+
+  return monitorFirestoreListener('league:pinned-announcement', () => onSnapshot(
+    announcementReference,
+    (snapshot) => {
+      callback(snapshot.exists()
+        ? normalizePinnedLeagueAnnouncement(snapshot.data())
+        : null);
+    },
+    (error) => {
+      const normalizedError = error instanceof Error
+        ? error
+        : new Error('Unable to load the pinned league announcement.');
+
+      if (onError) {
+        onError(normalizedError);
+        return;
+      }
+
+      console.error('Unable to load the pinned league announcement.', error);
     },
   ));
 }

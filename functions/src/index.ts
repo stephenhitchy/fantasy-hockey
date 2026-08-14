@@ -3991,6 +3991,7 @@ export {
 } from './email-notifications';
 
 export {
+  publishLeagueAnnouncement,
   publishLeagueAuditActivity,
   publishLeagueAvailabilityOverrideActivity,
   publishLeagueDraftControlActivity,
@@ -3998,4 +3999,5 @@ export {
   publishLeagueMatchupResultActivity,
   publishLeagueTransactionActivity,
   publishLeagueWaiverPrivacy,
+  unpinLeagueAnnouncement,
 } from './league-activity';

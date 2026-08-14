@@ -137,7 +137,7 @@ test('the exact timestamp helper passes strict semantic TypeScript checking', as
   }
 });
 
-test('D1A.1 verification inherits D1A and keeps RC30, Scoring V3, and Projection V11 unchanged', async () => {
+test('D1A.1 verification inherits D1A and keeps RC31, Scoring V3, and Projection V11 unchanged', async () => {
   const [
     packageSource,
     runtime,
@@ -160,10 +160,10 @@ test('D1A.1 verification inherits D1A and keeps RC30, Scoring V3, and Projection
     packageJson.scripts['verify:batchd1a-1:core'],
     /verify:batchd1a:core/,
   );
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d):core/);
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchc1d');
-  assert.match(runtime, /Release Candidate 30/);
-  assert.match(productionRuntime, /Release Candidate 30/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e):core/);
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchc1e');
+  assert.match(runtime, /Release Candidate 31/);
+  assert.match(productionRuntime, /Release Candidate 31/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
 });

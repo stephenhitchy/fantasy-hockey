@@ -5,12 +5,165 @@
       <h2 id="league-wire-title">What just happened</h2>
     </div>
 
-    <span class="league-wire-visibility">League only</span>
+    <div class="league-wire-heading-actions">
+      <span class="league-wire-visibility">League only</span>
+
+      @if (isCommissioner()) {
+        <button
+          class="league-wire-compose-toggle rr-button rr-button--quiet"
+          type="button"
+          aria-controls="league-wire-announcement-composer"
+          [attr.aria-expanded]="announcementComposerOpen()"
+          (click)="toggleAnnouncementComposer()"
+        >
+          {{ announcementComposerOpen() ? 'Close announcement' : 'Post announcement' }}
+        </button>
+      }
+    </div>
   </header>
 
   <p class="league-wire-intro">
-    Draft picks, commissioner controls, final matchup results, and completed league moves—without live-score noise or exposed claims.
+    Commissioner announcements, Draft picks, commissioner controls, final matchup results, and completed league moves—without live-score noise or exposed claims.
   </p>
+
+  @if (announcementStatusMessage()) {
+    <p class="league-wire-message league-wire-message-success" role="status">
+      {{ announcementStatusMessage() }}
+    </p>
+  }
+
+  @if (announcementErrorMessage()) {
+    <p class="league-wire-message league-wire-message-error" role="alert">
+      {{ announcementErrorMessage() }}
+    </p>
+  }
+
+  @if (announcementComposerOpen() && isCommissioner()) {
+    <form
+      id="league-wire-announcement-composer"
+      class="league-wire-announcement-form"
+      (ngSubmit)="submitAnnouncement()"
+    >
+      <div class="league-wire-announcement-form-heading">
+        <div>
+          <strong>Commissioner announcement</strong>
+          <span>Plain text for every league member. No private notes or attachments.</span>
+        </div>
+        <span class="league-wire-form-badge">League only</span>
+      </div>
+
+      <label class="league-wire-field">
+        <span>Title</span>
+        <input
+          type="text"
+          name="announcementTitle"
+          autocomplete="off"
+          maxlength="72"
+          placeholder="Draft night reminder"
+          [ngModel]="announcementTitleDraft()"
+          (ngModelChange)="updateAnnouncementTitle($event)"
+        />
+        <small>{{ announcementTitleRemaining() }} characters remaining</small>
+      </label>
+
+      <label class="league-wire-field">
+        <span>Message</span>
+        <textarea
+          name="announcementBody"
+          rows="4"
+          maxlength="500"
+          placeholder="Add the details managers need to know."
+          [ngModel]="announcementBodyDraft()"
+          (ngModelChange)="updateAnnouncementBody($event)"
+        ></textarea>
+        <small>
+          {{ announcementBodyRemaining() }} characters remaining ·
+          {{ announcementBodyLineCount() }}/8 lines
+        </small>
+      </label>
+
+      <label class="league-wire-pin-option">
+        <input
+          type="checkbox"
+          name="announcementPinned"
+          [ngModel]="announcementPinDraft()"
+          (ngModelChange)="updateAnnouncementPin($event)"
+        />
+        <span>
+          <strong>Pin at the top</strong>
+          <small>Replaces the current pin but keeps every announcement in Wire history.</small>
+        </span>
+      </label>
+
+      <div class="league-wire-form-actions">
+        <button
+          class="rr-button rr-button--primary"
+          type="submit"
+          [disabled]="!canPostAnnouncement()"
+        >
+          {{ announcementSaving() ? 'Posting...' : 'Post announcement' }}
+        </button>
+        <button
+          class="rr-button rr-button--quiet"
+          type="button"
+          [disabled]="announcementSaving()"
+          (click)="cancelAnnouncementComposer()"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (pinnedAnnouncement(); as pinned) {
+    <article class="league-wire-pinned" aria-labelledby="league-wire-pinned-title">
+      <div class="league-wire-pinned-flag">
+        <span aria-hidden="true">📌</span>
+        Pinned announcement
+      </div>
+
+      <div class="league-wire-pinned-content">
+        <div class="league-wire-avatar league-wire-pinned-avatar" aria-hidden="true">
+          @if (pinnedAnnouncementProfileIconId(); as pinnedIconId) {
+            <app-manager-avatar
+              [profileIconId]="pinnedIconId"
+              [label]="pinnedAnnouncementActorLabel()"
+              size="sm"
+            />
+          } @else {
+            <span class="league-wire-puck"></span>
+          }
+        </div>
+
+        <div class="league-wire-pinned-copy">
+          <div class="league-wire-meta">
+            <span class="league-wire-category">{{ pinnedAnnouncementActorLabel() }}</span>
+            <time
+              [attr.datetime]="pinned.occurredAt?.toISOString() ?? null"
+              [attr.title]="fullTimeLabel(pinned.occurredAt)"
+            >
+              {{ formatTime(pinned.occurredAt) }}
+            </time>
+          </div>
+          <h3 id="league-wire-pinned-title">{{ pinned.title }}</h3>
+          <p>{{ pinned.body }}</p>
+        </div>
+      </div>
+
+      @if (isCommissioner()) {
+        <button
+          class="league-wire-unpin rr-button rr-button--quiet"
+          type="button"
+          [disabled]="announcementUnpinning()"
+          (click)="unpinCurrentAnnouncement()"
+        >
+          {{ announcementUnpinning() ? 'Unpinning...' : 'Unpin' }}
+        </button>
+      }
+    </article>
+  } @else if (pinnedAnnouncementError()) {
+    <p class="league-wire-pin-error" role="status">{{ pinnedAnnouncementError() }}</p>
+  }
 
   @if (loading()) {
     <div class="league-wire-state" aria-live="polite">
@@ -33,7 +186,7 @@
       <span class="league-wire-puck" aria-hidden="true"></span>
       <div>
         <strong>The first update is still in the tunnel.</strong>
-        <span>New public commissioner, Draft, final matchup, and roster outcomes will appear here.</span>
+        <span>New announcements and public league outcomes will appear here.</span>
       </div>
     </div>
   } @else {
@@ -66,7 +219,12 @@
             <strong>{{ item.headline }}</strong>
 
             @if (item.detail) {
-              <span class="league-wire-detail">{{ item.detail }}</span>
+              <span
+                class="league-wire-detail"
+                [class.league-wire-detail-announcement]="item.category === 'announcement'"
+              >
+                {{ item.detail }}
+              </span>
             }
           </div>
         </li>
@@ -86,6 +244,6 @@
   }
 
   <footer class="league-wire-footer">
-    Only final matchup outcomes post. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire too.
+    Announcements are plain text and league-only. Only final matchup outcomes post. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
   </footer>
 </section>

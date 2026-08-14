@@ -3,7 +3,8 @@ export type LeagueActivityCategory =
   | 'draft'
   | 'roster'
   | 'matchup'
-  | 'commissioner';
+  | 'commissioner'
+  | 'announcement';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -27,7 +28,8 @@ export type LeagueActivityEventType =
   | 'commissioner-availability-override-cleared'
   | 'commissioner-draft-opened'
   | 'commissioner-draft-clock-paused'
-  | 'commissioner-draft-clock-resumed';
+  | 'commissioner-draft-clock-resumed'
+  | 'commissioner-announcement';
 
 export type LeagueActivityAvailabilityStatus =
   | 'active'
@@ -72,5 +74,16 @@ export interface LeagueActivity {
   tieBrokenByHigherSeed: boolean;
   availabilityPlayerName: string | null;
   availabilityStatus: LeagueActivityAvailabilityStatus | null;
+  announcementTitle: string | null;
+  announcementBody: string | null;
   occurredAt: Date | null;
+}
+
+export interface PinnedLeagueAnnouncement {
+  ownerId: string;
+  title: string;
+  body: string;
+  activityId: string;
+  occurredAt: Date | null;
+  pinnedAt: Date | null;
 }

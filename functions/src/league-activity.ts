@@ -1,13 +1,17 @@
+import { createHash } from 'node:crypto';
+
 import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import {
   onDocumentCreated,
   onDocumentUpdated,
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { db } from './shared/core/firebase';
 import {
   buildAuditLeagueActivity,
+  buildCommissionerAnnouncementLeagueActivity,
   buildCommissionerAvailabilityLeagueActivity,
   buildCommissionerDraftControlLeagueActivity,
   buildDraftPickLeagueActivity,
@@ -18,6 +22,10 @@ import {
   buildPublicWaiverProjection,
   buildTransactionLeagueActivity,
   getLeagueActivityDocumentId,
+  LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH,
+  LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES,
+  LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH,
+  normalizeLeagueAnnouncementText,
   getLeagueActivityFingerprint,
   getPrivateTransactionDocumentId,
   getPublicTransactionResultDocumentId,
@@ -25,13 +33,19 @@ import {
   type LeagueActivitySourceKind,
   type SanitizedLeagueActivity,
 } from './shared/core/league/league-activity.util';
+import {
+  requireAuthenticatedUserId,
+  requireVerifiedEmail,
+} from './shared/security/auth-security.util';
 import { resolveSafeFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import {
   FIRESTORE_ASSET_KEY_OPTIONS,
   FIRESTORE_AUTH_USER_ID_OPTIONS,
   FIRESTORE_DRAFT_PICK_ID_OPTIONS,
   FIRESTORE_LEAGUE_ID_OPTIONS,
+  FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
+import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const ACTIVITY_TRIGGER_OPTIONS = {
@@ -41,6 +55,16 @@ const ACTIVITY_TRIGGER_OPTIONS = {
   retry: true,
   maxInstances: 80,
 };
+const ACTIVITY_CALLABLE_OPTIONS = {
+  region: FUNCTION_REGION,
+  timeoutSeconds: 30,
+  memory: '256MiB' as const,
+  maxInstances: 40,
+  cors: TRUSTED_WEB_ORIGINS,
+  invoker: 'public' as const,
+};
+const PINNED_ANNOUNCEMENT_DOCUMENT_ID = 'pinned-announcement';
+const ANNOUNCEMENT_RATE_LIMIT_MILLISECONDS = 10_000;
 
 function resolveSourceDocumentId(
   value: unknown,
@@ -72,7 +96,7 @@ async function publishLeagueActivity(options: {
   sourceDocumentId: string;
   activity: SanitizedLeagueActivity;
   occurredAt: Timestamp;
-  release?: 'Social Batch C1A' | 'Social Batch C1C' | 'Social Batch C1D';
+  release?: 'Social Batch C1A' | 'Social Batch C1C' | 'Social Batch C1D' | 'Social Batch C1E';
 }): Promise<void> {
   const fingerprint = getLeagueActivityFingerprint(
     options.sourceKind,
@@ -258,6 +282,316 @@ export const publishLeagueDraftControlActivity = onDocumentUpdated(
         event.time,
       ),
       release: 'Social Batch C1D',
+    });
+  },
+);
+
+
+interface PublishLeagueAnnouncementRequest {
+  leagueId: string;
+  title: string;
+  body: string;
+  pin: boolean;
+  requestId: string;
+}
+
+interface PublishLeagueAnnouncementResult {
+  published: true;
+  activityId: string;
+  pinned: boolean;
+  idempotentReplay: boolean;
+}
+
+interface UnpinLeagueAnnouncementResult {
+  unpinned: boolean;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function normalizePublishLeagueAnnouncementRequest(
+  value: unknown,
+): PublishLeagueAnnouncementRequest {
+  const source = asRecord(value);
+  const leagueId = resolveSafeFirestoreDocumentId(
+    source['leagueId'],
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const requestId = resolveSafeFirestoreDocumentId(
+    source['requestId'],
+    FIRESTORE_REQUEST_ID_OPTIONS,
+  );
+  const announcement = normalizeLeagueAnnouncementText(source);
+
+  if (!leagueId || !requestId) {
+    throw new HttpsError(
+      'invalid-argument',
+      'The announcement request was missing a valid league or request identifier.',
+    );
+  }
+
+  if (!announcement.valid) {
+    throw new HttpsError(
+      'invalid-argument',
+      `Use a title up to ${LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH} characters and a message up to ${LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH} characters across ${LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES} lines.`,
+    );
+  }
+
+  return {
+    leagueId,
+    requestId,
+    title: announcement.title,
+    body: announcement.body,
+    pin: source['pin'] === true,
+  };
+}
+
+function createAnnouncementPayloadHash(
+  input: PublishLeagueAnnouncementRequest,
+  ownerId: string,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      ownerId,
+      leagueId: input.leagueId,
+      title: input.title,
+      body: input.body,
+      pin: input.pin,
+    }))
+    .digest('hex');
+}
+
+function timestampFromUnknown(value: unknown): Timestamp | null {
+  return value instanceof Timestamp ? value : null;
+}
+
+function pinnedAnnouncementDocument(options: {
+  activityId: string;
+  activity: SanitizedLeagueActivity;
+  announcementOccurredAt: Timestamp;
+}): Record<string, unknown> {
+  return {
+    schemaVersion: options.activity.schemaVersion,
+    category: 'announcement',
+    eventType: 'commissioner-announcement',
+    ownerId: options.activity.ownerId,
+    announcementTitle: options.activity.announcementTitle,
+    announcementBody: options.activity.announcementBody,
+    activityId: options.activityId,
+    announcementOccurredAt: options.announcementOccurredAt,
+    pinnedAt: FieldValue.serverTimestamp(),
+    authority: 'league-activity-authority',
+    release: 'Social Batch C1E',
+  };
+}
+
+export const publishLeagueAnnouncement = onCall(
+  ACTIVITY_CALLABLE_OPTIONS,
+  async (request): Promise<PublishLeagueAnnouncementResult> => {
+    const actionLabel = 'post a league announcement';
+    const userId = requireAuthenticatedUserId(request.auth, actionLabel);
+    requireVerifiedEmail(request.auth, actionLabel);
+    const input = normalizePublishLeagueAnnouncementRequest(request.data);
+    const payloadHash = createAnnouncementPayloadHash(input, userId);
+    const activityId = getLeagueActivityDocumentId('announcement', input.requestId);
+    const sourceFingerprint = getLeagueActivityFingerprint('announcement', input.requestId);
+    const leagueReference = db.doc(`leagues/${input.leagueId}`);
+    const activityReference = db.doc(
+      `leagues/${input.leagueId}/activity/${activityId}`,
+    );
+    const pinnedReference = db.doc(
+      `leagues/${input.leagueId}/activity/${PINNED_ANNOUNCEMENT_DOCUMENT_ID}`,
+    );
+    const controlReference = db.doc(
+      `leagues/${input.leagueId}/activityControls/announcements`,
+    );
+
+    return db.runTransaction(async (transaction) => {
+      const [leagueSnapshot, activitySnapshot, controlSnapshot] = await Promise.all([
+        transaction.get(leagueReference),
+        transaction.get(activityReference),
+        transaction.get(controlReference),
+      ]);
+
+      if (!leagueSnapshot.exists) {
+        throw new HttpsError('not-found', 'This league no longer exists.');
+      }
+
+      const commissionerId = resolveSafeFirestoreDocumentId(
+        leagueSnapshot.data()?.['commissionerId'],
+        FIRESTORE_AUTH_USER_ID_OPTIONS,
+      );
+
+      if (!commissionerId || commissionerId !== userId) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the league commissioner can post an announcement.',
+        );
+      }
+
+      const activity = buildCommissionerAnnouncementLeagueActivity(
+        {
+          ownerId: userId,
+          title: input.title,
+          body: input.body,
+        },
+        commissionerId,
+      );
+
+      if (!activity) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The announcement could not be converted into a safe League Wire update.',
+        );
+      }
+
+      if (activitySnapshot.exists) {
+        const existing = activitySnapshot.data() ?? {};
+
+        if (
+          existing['payloadHash'] !== payloadHash ||
+          existing['ownerId'] !== userId ||
+          existing['eventType'] !== 'commissioner-announcement'
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'That announcement request identifier was already used for different information.',
+          );
+        }
+
+        const existingOccurredAt = timestampFromUnknown(existing['occurredAt']) ?? Timestamp.now();
+
+        if (input.pin) {
+          transaction.set(
+            pinnedReference,
+            pinnedAnnouncementDocument({
+              activityId,
+              activity,
+              announcementOccurredAt: existingOccurredAt,
+            }),
+          );
+        }
+
+        return {
+          published: true,
+          activityId,
+          pinned: input.pin,
+          idempotentReplay: true,
+        };
+      }
+
+      const now = Timestamp.now();
+      const lastPublishedAt = timestampFromUnknown(
+        controlSnapshot.data()?.['lastPublishedAt'],
+      );
+      const elapsedMilliseconds = lastPublishedAt
+        ? now.toMillis() - lastPublishedAt.toMillis()
+        : Number.POSITIVE_INFINITY;
+
+      if (elapsedMilliseconds < ANNOUNCEMENT_RATE_LIMIT_MILLISECONDS) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Wait a few seconds before posting another league announcement.',
+          {
+            retryAfterSeconds: Math.max(
+              1,
+              Math.ceil(
+                (ANNOUNCEMENT_RATE_LIMIT_MILLISECONDS - elapsedMilliseconds) / 1_000,
+              ),
+            ),
+          },
+        );
+      }
+
+      transaction.create(activityReference, {
+        ...activity,
+        sourceKind: 'announcement',
+        sourceFingerprint,
+        payloadHash,
+        occurredAt: now,
+        publishedAt: FieldValue.serverTimestamp(),
+        authority: 'league-activity-authority',
+        release: 'Social Batch C1E',
+      });
+      transaction.set(controlReference, {
+        lastPublishedAt: now,
+        lastPublisherId: userId,
+        authority: 'league-activity-authority',
+        release: 'Social Batch C1E',
+      });
+
+      if (input.pin) {
+        transaction.set(
+          pinnedReference,
+          pinnedAnnouncementDocument({
+            activityId,
+            activity,
+            announcementOccurredAt: now,
+          }),
+        );
+      }
+
+      return {
+        published: true,
+        activityId,
+        pinned: input.pin,
+        idempotentReplay: false,
+      };
+    });
+  },
+);
+
+export const unpinLeagueAnnouncement = onCall(
+  ACTIVITY_CALLABLE_OPTIONS,
+  async (request): Promise<UnpinLeagueAnnouncementResult> => {
+    const actionLabel = 'unpin a league announcement';
+    const userId = requireAuthenticatedUserId(request.auth, actionLabel);
+    requireVerifiedEmail(request.auth, actionLabel);
+    const source = asRecord(request.data);
+    const leagueId = resolveSafeFirestoreDocumentId(
+      source['leagueId'],
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+
+    if (!leagueId) {
+      throw new HttpsError('invalid-argument', 'Choose a valid league announcement.');
+    }
+
+    const leagueReference = db.doc(`leagues/${leagueId}`);
+    const pinnedReference = db.doc(
+      `leagues/${leagueId}/activity/${PINNED_ANNOUNCEMENT_DOCUMENT_ID}`,
+    );
+
+    return db.runTransaction(async (transaction) => {
+      const [leagueSnapshot, pinnedSnapshot] = await Promise.all([
+        transaction.get(leagueReference),
+        transaction.get(pinnedReference),
+      ]);
+
+      if (!leagueSnapshot.exists) {
+        throw new HttpsError('not-found', 'This league no longer exists.');
+      }
+
+      const commissionerId = resolveSafeFirestoreDocumentId(
+        leagueSnapshot.data()?.['commissionerId'],
+        FIRESTORE_AUTH_USER_ID_OPTIONS,
+      );
+
+      if (!commissionerId || commissionerId !== userId) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the league commissioner can unpin an announcement.',
+        );
+      }
+
+      if (pinnedSnapshot.exists) {
+        transaction.delete(pinnedReference);
+      }
+
+      return { unpinned: pinnedSnapshot.exists };
     });
   },
 );

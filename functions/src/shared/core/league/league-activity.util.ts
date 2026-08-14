@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 
 export const LEAGUE_ACTIVITY_SCHEMA_VERSION = 1;
+export const LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH = 72;
+export const LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH = 500;
+export const LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES = 8;
 
 export type LeagueActivitySourceKind =
   | 'audit'
@@ -8,13 +11,15 @@ export type LeagueActivitySourceKind =
   | 'transaction'
   | 'matchup'
   | 'commissioner-availability'
-  | 'draft-control';
+  | 'draft-control'
+  | 'announcement';
 export type LeagueActivityCategory =
   | 'league'
   | 'draft'
   | 'roster'
   | 'matchup'
-  | 'commissioner';
+  | 'commissioner'
+  | 'announcement';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -38,7 +43,8 @@ export type LeagueActivityEventType =
   | 'commissioner-availability-override-cleared'
   | 'commissioner-draft-opened'
   | 'commissioner-draft-clock-paused'
-  | 'commissioner-draft-clock-resumed';
+  | 'commissioner-draft-clock-resumed'
+  | 'commissioner-announcement';
 
 export type LeagueActivityAvailabilityStatus =
   | 'active'
@@ -82,6 +88,8 @@ export interface SanitizedLeagueActivity {
   tieBrokenByHigherSeed?: boolean;
   availabilityPlayerName?: string | null;
   availabilityStatus?: LeagueActivityAvailabilityStatus | null;
+  announcementTitle?: string | null;
+  announcementBody?: string | null;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -132,6 +140,49 @@ function asBoundedString(value: unknown, maximumLength = 100): string {
   return typeof value === 'string'
     ? value.trim().replace(/\s+/g, ' ').slice(0, maximumLength)
     : '';
+}
+
+
+function stripUnsafeAnnouncementCharacters(value: string): string {
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
+}
+
+export function normalizeLeagueAnnouncementText(value: unknown): {
+  title: string;
+  body: string;
+  valid: boolean;
+} {
+  const source = asRecord(value);
+  const rawTitle = typeof source['title'] === 'string'
+    ? stripUnsafeAnnouncementCharacters(source['title'])
+    : '';
+  const rawBody = typeof source['body'] === 'string'
+    ? stripUnsafeAnnouncementCharacters(source['body'])
+    : '';
+  const title = rawTitle.trim().replace(/\s+/g, ' ');
+  const bodyLines = rawBody
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\t/g, ' ').trim().replace(/[ ]{2,}/g, ' '));
+
+  while (bodyLines.length > 0 && !bodyLines[0]) {
+    bodyLines.shift();
+  }
+
+  while (bodyLines.length > 0 && !bodyLines[bodyLines.length - 1]) {
+    bodyLines.pop();
+  }
+
+  const body = bodyLines.join('\n');
+  const valid = title.length > 0 &&
+    title.length <= LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH &&
+    body.length > 0 &&
+    body.length <= LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH &&
+    bodyLines.length <= LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES;
+
+  return { title, body, valid };
 }
 
 function asPositiveInteger(value: unknown): number | null {
@@ -341,6 +392,30 @@ export function buildCommissionerAvailabilityLeagueActivity(
   );
   activity.availabilityPlayerName = playerName;
   activity.availabilityStatus = status;
+  return activity;
+}
+
+
+export function buildCommissionerAnnouncementLeagueActivity(
+  value: unknown,
+  commissionerIdValue: unknown,
+): SanitizedLeagueActivity | null {
+  const source = asRecord(value);
+  const commissionerId = sanitizeOwnerId(commissionerIdValue);
+  const ownerId = sanitizeOwnerId(source['ownerId']);
+  const announcement = normalizeLeagueAnnouncementText(source);
+
+  if (!commissionerId || ownerId !== commissionerId || !announcement.valid) {
+    return null;
+  }
+
+  const activity = baseActivity(
+    'announcement',
+    'commissioner-announcement',
+    commissionerId,
+  );
+  activity.announcementTitle = announcement.title;
+  activity.announcementBody = announcement.body;
   return activity;
 }
 

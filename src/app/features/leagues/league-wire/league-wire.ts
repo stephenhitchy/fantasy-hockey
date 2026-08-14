@@ -8,12 +8,27 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 
 import {
   type LeagueActivity,
   type LeagueActivityCategory,
+  type PinnedLeagueAnnouncement,
 } from '../../../core/league/league-activity.models';
-import { listenToLeagueActivity } from '../../../core/league/league-activity.service';
+import {
+  createLeagueAnnouncementRequestId,
+  LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH,
+  LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES,
+  LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH,
+  normalizeLeagueAnnouncementBody,
+  normalizeLeagueAnnouncementTitle,
+  publishLeagueAnnouncement,
+  unpinLeagueAnnouncement,
+} from '../../../core/league/league-announcement.service';
+import {
+  listenToLeagueActivity,
+  listenToPinnedLeagueAnnouncement,
+} from '../../../core/league/league-activity.service';
 import { type FantasyTeam } from '../../../core/team/team.service';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 
@@ -33,7 +48,7 @@ const COLLAPSED_ACTIVITY_COUNT = 5;
 @Component({
   selector: 'app-league-wire',
   standalone: true,
-  imports: [ManagerAvatar],
+  imports: [FormsModule, ManagerAvatar],
   templateUrl: './league-wire.html',
   styleUrl: './league-wire.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -43,16 +58,76 @@ export class LeagueWire {
 
   readonly leagueId = input.required<string>();
   readonly teams = input<readonly FantasyTeam[]>([]);
+  readonly isCommissioner = input(false);
 
   readonly activity = signal<LeagueActivity[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal('');
   readonly expanded = signal(false);
   readonly now = signal(Date.now());
+  readonly pinnedAnnouncement = signal<PinnedLeagueAnnouncement | null>(null);
+  readonly pinnedAnnouncementError = signal('');
+  readonly announcementComposerOpen = signal(false);
+  readonly announcementTitleDraft = signal('');
+  readonly announcementBodyDraft = signal('');
+  readonly announcementPinDraft = signal(false);
+  readonly announcementSaving = signal(false);
+  readonly announcementUnpinning = signal(false);
+  readonly announcementStatusMessage = signal('');
+  readonly announcementErrorMessage = signal('');
+
+  private readonly announcementRequestId = signal('');
 
   private readonly teamByOwnerId = computed(() =>
     new Map(this.teams().map((team) => [team.ownerId, team] as const)),
   );
+
+
+  private readonly pinnedAnnouncementTeam = computed(() => {
+    const ownerId = this.pinnedAnnouncement()?.ownerId;
+    return ownerId ? this.teamByOwnerId().get(ownerId) ?? null : null;
+  });
+
+  readonly pinnedAnnouncementActorLabel = computed(() =>
+    this.pinnedAnnouncementTeam()?.teamName || 'The commissioner',
+  );
+
+  readonly pinnedAnnouncementProfileIconId = computed(() =>
+    this.pinnedAnnouncementTeam()?.profileIconId ?? null,
+  );
+
+  readonly announcementTitleRemaining = computed(() =>
+    Math.max(
+      0,
+      LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH - this.announcementTitleDraft().length,
+    ),
+  );
+
+  readonly announcementBodyRemaining = computed(() =>
+    Math.max(
+      0,
+      LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH - this.announcementBodyDraft().length,
+    ),
+  );
+
+  readonly announcementBodyLineCount = computed(() => {
+    const body = normalizeLeagueAnnouncementBody(this.announcementBodyDraft());
+    return body ? body.split('\n').length : 0;
+  });
+
+  readonly canPostAnnouncement = computed(() => {
+    const title = normalizeLeagueAnnouncementTitle(this.announcementTitleDraft());
+    const body = normalizeLeagueAnnouncementBody(this.announcementBodyDraft());
+    const lineCount = body ? body.split('\n').length : 0;
+
+    return this.isCommissioner() &&
+      !this.announcementSaving() &&
+      title.length > 0 &&
+      title.length <= LEAGUE_ANNOUNCEMENT_TITLE_MAX_LENGTH &&
+      body.length > 0 &&
+      body.length <= LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH &&
+      lineCount <= LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES;
+  });
 
   readonly allItems = computed<LeagueWireItem[]>(() =>
     this.activity().map((activity) => this.toWireItem(activity)),
@@ -100,8 +175,153 @@ export class LeagueWire {
       onCleanup(stop);
     });
 
+    effect((onCleanup) => {
+      const leagueId = this.leagueId().trim();
+
+      this.pinnedAnnouncement.set(null);
+      this.pinnedAnnouncementError.set('');
+      this.resetAnnouncementComposer();
+      this.announcementStatusMessage.set('');
+
+      if (!leagueId) {
+        return;
+      }
+
+      const stop = listenToPinnedLeagueAnnouncement(
+        leagueId,
+        (announcement) => {
+          this.pinnedAnnouncement.set(announcement);
+          this.pinnedAnnouncementError.set('');
+        },
+        () => {
+          this.pinnedAnnouncementError.set(
+            'The pinned announcement could not be loaded. The rest of League Wire is still available.',
+          );
+        },
+      );
+
+      onCleanup(stop);
+    });
+
     const clock = setInterval(() => this.now.set(Date.now()), 60_000);
     this.destroyRef.onDestroy(() => clearInterval(clock));
+  }
+
+
+  toggleAnnouncementComposer(): void {
+    if (!this.isCommissioner()) {
+      return;
+    }
+
+    if (this.announcementComposerOpen()) {
+      this.resetAnnouncementComposer();
+      return;
+    }
+
+    this.announcementComposerOpen.set(true);
+    this.announcementErrorMessage.set('');
+    this.announcementStatusMessage.set('');
+  }
+
+  cancelAnnouncementComposer(): void {
+    this.resetAnnouncementComposer();
+  }
+
+  updateAnnouncementTitle(value: string): void {
+    this.announcementTitleDraft.set(value);
+    this.resetAnnouncementSubmissionIdentity();
+  }
+
+  updateAnnouncementBody(value: string): void {
+    this.announcementBodyDraft.set(value);
+    this.resetAnnouncementSubmissionIdentity();
+  }
+
+  updateAnnouncementPin(value: boolean): void {
+    this.announcementPinDraft.set(value);
+    this.resetAnnouncementSubmissionIdentity();
+  }
+
+  async submitAnnouncement(): Promise<void> {
+    if (!this.canPostAnnouncement()) {
+      this.announcementErrorMessage.set(
+        `Add a title and a message no longer than ${LEAGUE_ANNOUNCEMENT_BODY_MAX_LINES} lines.`,
+      );
+      return;
+    }
+
+    const requestId = this.announcementRequestId() || createLeagueAnnouncementRequestId();
+    this.announcementRequestId.set(requestId);
+    this.announcementSaving.set(true);
+    this.announcementErrorMessage.set('');
+    this.announcementStatusMessage.set('');
+
+    try {
+      const result = await publishLeagueAnnouncement({
+        leagueId: this.leagueId(),
+        title: this.announcementTitleDraft(),
+        body: this.announcementBodyDraft(),
+        pin: this.announcementPinDraft(),
+        requestId,
+      });
+
+      this.resetAnnouncementComposer();
+      this.announcementStatusMessage.set(
+        result.pinned
+          ? 'Announcement posted and pinned for the league.'
+          : 'Announcement posted to League Wire.',
+      );
+    } catch (error) {
+      this.announcementErrorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to post the announcement right now.',
+      );
+    } finally {
+      this.announcementSaving.set(false);
+    }
+  }
+
+  async unpinCurrentAnnouncement(): Promise<void> {
+    if (!this.isCommissioner() || this.announcementUnpinning()) {
+      return;
+    }
+
+    this.announcementUnpinning.set(true);
+    this.announcementErrorMessage.set('');
+    this.announcementStatusMessage.set('');
+
+    try {
+      const result = await unpinLeagueAnnouncement(this.leagueId());
+      this.announcementStatusMessage.set(
+        result.unpinned
+          ? 'Announcement unpinned. It remains in League Wire history.'
+          : 'There was no pinned announcement to remove.',
+      );
+    } catch (error) {
+      this.announcementErrorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to unpin the announcement right now.',
+      );
+    } finally {
+      this.announcementUnpinning.set(false);
+    }
+  }
+
+  private resetAnnouncementSubmissionIdentity(): void {
+    this.announcementRequestId.set('');
+    this.announcementErrorMessage.set('');
+    this.announcementStatusMessage.set('');
+  }
+
+  private resetAnnouncementComposer(): void {
+    this.announcementComposerOpen.set(false);
+    this.announcementTitleDraft.set('');
+    this.announcementBodyDraft.set('');
+    this.announcementPinDraft.set(false);
+    this.announcementRequestId.set('');
+    this.announcementErrorMessage.set('');
   }
 
   toggleExpanded(): void {
@@ -281,6 +501,11 @@ export class LeagueWire {
         headline = `${commissionerLabel} resumed the Draft clock.`;
         detail = activity.overallPick ? `Resumed at Pick ${activity.overallPick}.` : null;
         break;
+      case 'commissioner-announcement':
+        actorLabel = commissionerLabel;
+        headline = activity.announcementTitle || 'Commissioner announcement';
+        detail = activity.announcementBody;
+        break;
       case 'matchup-result': {
         const teamA = activity.teamAOwnerId
           ? this.teamByOwnerId().get(activity.teamAOwnerId) ?? null
@@ -349,7 +574,9 @@ export class LeagueWire {
             ? 'Game Final'
             : activity.category === 'commissioner'
               ? 'Commissioner'
-              : 'League',
+              : activity.category === 'announcement'
+                ? 'Announcement'
+                : 'League',
       actorLabel,
       profileIconId: team?.profileIconId ?? null,
       headline,
