@@ -1,10 +1,10 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
-**Batch:** B1C  
-**Runtime release being frozen:** Release Candidate 28
+**Batch:** B1C
+**Runtime release being frozen:** Release Candidate 29
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 28 / Social Batch C1B runtime; Scoring V3 and Projection V11 remain unchanged.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 29 / Social Batch C1C runtime; Scoring V3 and Projection V11 remain unchanged.
 
 ## Approved toolchain
 
@@ -73,23 +73,23 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1b
+npm run verify:batchc1c
 ```
 
-Commit and push the verified RC28 source:
+Commit and push the verified RC29 source:
 
 ```bash
 git status
 git add .
-git commit -m "Harden transaction and waiver privacy"
+git commit -m "Add League Wire matchup results"
 git push
 ```
 
-Do not run the freeze command until Social Batch C1B has been deployed and the live manifest identifies Release Candidate 28. The freeze tooling itself never deploys or mutates production.
+Do not run the freeze command until Social Batch C1C has been deployed and the live manifest identifies Release Candidate 29. The freeze tooling itself never deploys or mutates production.
 
 ## C1B privacy-cutover prerequisite
 
-RC28 cannot use an ordinary all-at-once deployment because RC27 reads the canonical transaction and waiver collections while final C1B Rules deny those reads. Before the final invite-beta preflight:
+RC29 cannot use an ordinary all-at-once deployment while a pre-projection browser still reads the canonical transaction and waiver collections and final C1B Rules deny those reads. Before the final invite-beta preflight:
 
 1. Deploy the verified complete Functions codebase only.
 2. Run the guarded transaction-privacy backfill in dry-run mode.
@@ -97,11 +97,11 @@ RC28 cannot use an ordinary all-at-once deployment because RC27 reads the canoni
 4. Require the read-only privacy inspector to report zero issues.
 5. Exercise one waiver claim and one adjudication in an Internal Test league and inspect again.
 6. Audit and deploy the temporary dual-read transition Rules.
-7. Verify RC27 still functions, then deploy Hosting RC28 only.
-8. Prove RC28 against the projections and inspect again.
+7. Verify the currently live pre-projection browser still functions, then deploy Hosting RC29 only.
+8. Prove RC29 against the projections and inspect again.
 9. Deploy the default final privacy Rules only.
 
-Do not deploy Hosting before the projection inspection passes. The transition bridge exists because a combined Rules/Hosting command is not an atomic browser cutover. After final privacy Rules are live, restore the transition Rules before any RC27 Hosting rollback. C1B adds no Firestore index or TTL policy. Full commands are maintained in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`.
+Do not deploy Hosting before the projection inspection passes. The transition bridge exists because a combined Rules/Hosting command is not an atomic browser cutover. After final privacy Rules are live, restore the transition Rules before any pre-RC29 Hosting rollback. C1B adds no Firestore index or TTL policy. The superseding RC29 sequence is maintained in `docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`; the underlying projection contract remains documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`.
 
 ## Preflight
 
@@ -115,17 +115,17 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 28, Scoring V3, and Projection V11.
+- The live domain serves Release Candidate 29, Scoring V3, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
 - The `app` Hosting target still maps to `cycle-puck`.
 - All 10 production TTL policies are active.
-- The runtime release label remains RC28.
+- The runtime release label remains RC29.
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 28 Release Readiness page:
+On the deployed Release Candidate 29 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -135,14 +135,14 @@ On the deployed Release Candidate 28 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc28-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc29-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc28-validation.json"
+  "$HOME/Downloads/rinkrat-rc29-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -166,7 +166,7 @@ Before freezing, rehearse rather than improvise:
 git cat-file -e "$(curl -fsSL https://rinkratfantasy.com/release-manifest.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).sourceRevision")^{commit}"
 ```
 
-4. Review the RC28 rollback selectors: Firestore Rules, complete Functions, and Hosting from the same known-good revision.
+4. Review the RC29 rollback selectors: Firestore Rules, complete Functions, and Hosting from the same known-good revision.
 5. Confirm Firestore indexes are deployed only when an incident or known-good revision specifically requires them; C1B adds no index.
 6. Confirm Release Readiness, action evidence, Function logs, and the known-issues workflow are available after rollback.
 
@@ -179,8 +179,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc28-validation.json" \
-  --tag=rinkrat-rc28-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc29-validation.json" \
+  --tag=rinkrat-rc29-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -194,32 +194,32 @@ The command creates ignored local records under:
 
 It never deploys, creates a Git tag, changes queue mode, or writes competitive Firebase data.
 
-Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC28 manifest, not automatically to the newer B1C tooling commit.
+Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC29 manifest, not automatically to a newer release-tooling commit.
 
 Example:
 
 ```bash
-git tag -a rinkrat-rc28-invite-beta LIVE_SOURCE_REVISION \
-  -m "RinkRat RC28 invite beta baseline"
-git push origin rinkrat-rc28-invite-beta
+git tag -a rinkrat-rc29-invite-beta LIVE_SOURCE_REVISION \
+  -m "RinkRat RC29 invite beta baseline"
+git push origin rinkrat-rc29-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc28-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc29-invite-beta
 ```
 
-Verify the complete frozen state while RC28 remains live:
+Verify the complete frozen state while RC29 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc28-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc29-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc28-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc29-invite-beta
 ```
 
 ## After the freeze

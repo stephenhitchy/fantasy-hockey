@@ -315,7 +315,7 @@ test('S3A remains monitor-only and documents the deliberate activation and enfor
   assert.match(setupGuideSource, /security:apply-auth-baseline/);
   assert.match(setupGuideSource, /S3A does not set `enforceAppCheck: true`/);
   assert.match(documentationSource, /Security Batch S3A — App Check Monitor Mode and Authentication Hardening/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3[AB](?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3[AB](?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C)/);
 });
 
 test('S3A verification, release manifest, permanent roadmap, and package commands stay synchronized', () => {
@@ -333,7 +333,7 @@ test('S3A verification, release manifest, permanent roadmap, and package command
   assert.match(packageJson.scripts['security:inspect-auth'], /auth-security-baseline/);
   assert.match(functionsPackageJson.scripts.logs, /getSecurityControlReadiness/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.(?:6(?:\.\d+)?|7(?:\.\d+)?|8|9|1[0-9](?:\.\d+)?)/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /LOG\.9 .*Security Batch S3A/);
   assert.match(runtimeConfigSource, /Release Candidate \d+/);
   assert.match(productionRuntimeConfigSource, /Release Candidate \d+/);

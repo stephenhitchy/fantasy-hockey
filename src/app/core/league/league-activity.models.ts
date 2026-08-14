@@ -1,4 +1,4 @@
-export type LeagueActivityCategory = 'league' | 'draft' | 'roster';
+export type LeagueActivityCategory = 'league' | 'draft' | 'roster' | 'matchup';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -16,7 +16,8 @@ export type LeagueActivityEventType =
   | 'slot-move-activated'
   | 'active-bench-swap-activated'
   | 'move-bench-to-ir'
-  | 'activate-ir-to-bench';
+  | 'activate-ir-to-bench'
+  | 'matchup-result';
 
 export interface LeagueActivityAssetSummary {
   name: string;
@@ -37,5 +38,17 @@ export interface LeagueActivity {
   selectionType: 'manual' | 'queue' | 'automatic' | null;
   effectiveCycleNumber: number | null;
   effectiveLabel: string | null;
+  matchupPhase: 'regular_season' | 'playoffs' | null;
+  matchupCycleNumber: number | null;
+  teamAOwnerId: string | null;
+  teamBOwnerId: string | null;
+  teamAScore: number | null;
+  teamBScore: number | null;
+  winnerOwnerId: string | null;
+  playoffBracketType: 'championship' | 'consolation' | null;
+  playoffRoundNumber: number | null;
+  winnerPlace: number | null;
+  loserPlace: number | null;
+  tieBrokenByHigherSeed: boolean;
   occurredAt: Date | null;
 }

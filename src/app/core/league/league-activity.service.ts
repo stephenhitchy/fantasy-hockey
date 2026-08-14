@@ -17,7 +17,7 @@ import {
 } from './league-activity.models';
 
 const LEAGUE_ACTIVITY_LIMIT = 40;
-const CATEGORIES = new Set<LeagueActivityCategory>(['league', 'draft', 'roster']);
+const CATEGORIES = new Set<LeagueActivityCategory>(['league', 'draft', 'roster', 'matchup']);
 const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'league-created',
   'member-joined',
@@ -35,6 +35,7 @@ const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'active-bench-swap-activated',
   'move-bench-to-ir',
   'activate-ir-to-bench',
+  'matchup-result',
 ]);
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -49,6 +50,15 @@ function asString(value: unknown): string {
 
 function asPositiveInteger(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function asBoundedScore(value: unknown): number | null {
+  return typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= -100_000 &&
+      value <= 100_000
     ? value
     : null;
 }
@@ -120,6 +130,8 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   }
 
   const selectionType = asString(source['selectionType']);
+  const matchupPhase = asString(source['matchupPhase']);
+  const playoffBracketType = asString(source['playoffBracketType']);
 
   return {
     id,
@@ -136,6 +148,22 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
       : null,
     effectiveCycleNumber: asPositiveInteger(source['effectiveCycleNumber']),
     effectiveLabel: asString(source['effectiveLabel']) || null,
+    matchupPhase: matchupPhase === 'regular_season' || matchupPhase === 'playoffs'
+      ? matchupPhase
+      : null,
+    matchupCycleNumber: asPositiveInteger(source['matchupCycleNumber']),
+    teamAOwnerId: asString(source['teamAOwnerId']) || null,
+    teamBOwnerId: asString(source['teamBOwnerId']) || null,
+    teamAScore: asBoundedScore(source['teamAScore']),
+    teamBScore: asBoundedScore(source['teamBScore']),
+    winnerOwnerId: asString(source['winnerOwnerId']) || null,
+    playoffBracketType: playoffBracketType === 'championship' || playoffBracketType === 'consolation'
+      ? playoffBracketType
+      : null,
+    playoffRoundNumber: asPositiveInteger(source['playoffRoundNumber']),
+    winnerPlace: asPositiveInteger(source['winnerPlace']),
+    loserPlace: asPositiveInteger(source['loserPlace']),
+    tieBrokenByHigherSeed: source['tieBrokenByHigherSeed'] === true,
     occurredAt: asDate(source['occurredAt']),
   };
 }

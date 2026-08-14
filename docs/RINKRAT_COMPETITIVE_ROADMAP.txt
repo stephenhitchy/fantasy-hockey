@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.19.1
+Version 1.20
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -30,6 +30,7 @@ Rules for maintaining this roadmap:
 3. Add new discoveries beneath the most relevant phase; do not renumber old tasks.
 4. Do not start a lower-priority feature if a P0 integrity or security item is unresolved.
 5. After every major phase, run the full regression suite, release simulator, six-team lifecycle, mobile checks, and rollback rehearsal.
+5A. For routine additive batches, use a proportionate owner workflow: one automated verification gate, a targeted deployment, and a live-site smoke test. Use logs and read-only inspectors only for invisible security/data changes or when the site test fails.
 6. Avoid changing Production Scoring or Projection V11 in the middle of a live season unless a calculation is objectively wrong.
 7. Preserve RinkRat's identity. The goal is not to become a generic Yahoo or Fantrax clone.
 
@@ -48,8 +49,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC28 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, and owner-private transaction/waiver projections are complete; finish the staged RC28 privacy cutover, exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before broader social, notification, or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC29 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, and final-matchup activity are complete; finish the staged RC29 privacy cutover, exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before broader social, notification, or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
 
 ================================================================================
@@ -228,8 +229,8 @@ Exit gate: Legitimate traffic is verified, high-value Functions enforce App Chec
 # [x] S3.1 Register the production web app in Firebase App Check. (P0 / S) — Completed 2026-08-10 after RC15 reported a valid browser token and valid server-received App Check context.
 # [x] S3.2 Add the public reCAPTCHA Enterprise site key to the production configuration. (P0 / S) — Completed 2026-08-10 with the registered public score-based reCAPTCHA Enterprise key and production debug mode disabled.
 # [x] S3.3 Deploy App Check in monitor mode with enforcement disabled. (P0 / S) — Completed 2026-08-10; Release Readiness verified the client token and callable App Check context end to end while enforcement remains off.
-[~] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M) — S3E adds exact-build browser, device, platform, manager-day, and competitive-action coverage gates in Beta Operations. Continue on RC27 after C1A; complete when the current exact build reaches the documented sample and 99% verification thresholds across the required matrix.
-[~] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M) — S3F installs a manual exact-league and exact-callable canary with evidence revalidation, valid-admin-token activation, recent-auth step-up, health proof, immutable audit history, and an App-Check-independent monitor rollback. Complete after one RC27 canary scope produces clean proof across the supported matrix, then expand deliberately in a later release.
+[~] S3.4 Test every important workflow across supported browsers while monitoring valid/unverified traffic. (P0 / M) — S3E adds exact-build browser, device, platform, manager-day, and competitive-action coverage gates in Beta Operations. Continue on RC29 after C1C; complete when the current exact build reaches the documented sample and 99% verification thresholds across the required matrix.
+[~] S3.5 Enforce App Check first on expensive and competitive callable Functions. (P0 / M) — S3F installs a manual exact-league and exact-callable canary with evidence revalidation, valid-admin-token activation, recent-auth step-up, health proof, immutable audit history, and an App-Check-independent monitor rollback. Complete after one RC29 canary scope produces clean proof across the supported matrix, then expand deliberately in a later release.
 [ ] S3.6 Enforce App Check for Firestore only after legitimate browser traffic is consistently verified. (P0 / M)
 
 # [x] S3.7 Raise the Firebase password minimum and UI requirement to at least 10-12 characters. (P1 / S) — Completed 2026-08-10 in Security Batch S3B with the enforced 12-128 character policy, capital/number/special requirements, live Firebase validation, and an explicit missing-requirement checklist.
@@ -289,8 +290,8 @@ Goal: Prove the product with real managers and real NHL game flow before adding 
 Exit gate: Multiple leagues complete several live weeks without integrity failures, and the team has usable product/technical evidence.
 ================================================================================
 
-[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC27 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
-[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC27 report is ready.
+[~] B1.1 Freeze a known-good beta release and Git tag. (P0 / S) — B1C now targets the current RC29 source revision, security posture, exact-build validation report, pinned toolchain, and annotated tag target; complete after the guarded freeze record is reviewed and the tag is pushed.
+[~] B1.2 Finish the exact-build Release Readiness board and full-season simulator. (P0 / M) — B1C validates the copied report against the live manifest and refuses a freeze unless every required automated/manual item and the simulator pass; complete after the current RC29 report is ready.
 [~] B1.3 Rehearse Hosting, Functions, rules, and queue-mode rollback. (P0 / M) — B1C supplies the reviewed incident order, exact source/tag checks, and generated rollback commands; complete after the operator performs and records the rehearsal.
 [ ] B1.4 Begin with 2-4 leagues and approximately 10-30 observed managers. (P0 / M)
 [ ] B1.5 Include hockey experts, casual fans, beginners, iPhone users, Android users, and at least one commissioner other than the creator. (P1 / M)
@@ -366,8 +367,8 @@ Goal: Match the engagement strengths of Sleeper, Yahoo, and ESPN without overwhe
 Exit gate: Managers have a reason to open RinkRat between roster decisions and can communicate without leaving the league.
 ================================================================================
 
-[~] C1.1 Build a league activity feed before full chat. (P1 / L) — C1A delivered the bounded League Wire foundation and C1B completed the underlying transaction/waiver privacy boundary; scoring milestones, reactions, and notification fanout remain evidence-gated follow-ups.
-    C1A foundation complete: joins, selected commissioner lifecycle actions, Draft picks, completed add/drops, completed waivers, IR moves, and activated queued roster moves are published through a bounded server-sanitized League Wire. Remaining: scoring milestones, matchup results, playoff advancement, trades later, and evidence-backed retention controls.
+[~] C1.1 Build a league activity feed before full chat. (P1 / L) — C1A delivered the bounded League Wire foundation, C1B completed the underlying transaction/waiver privacy boundary, and C1C adds one immutable final-matchup result without live-score spam; broader milestones, reactions, and notification fanout remain evidence-gated follow-ups.
+    C1A/C1C foundation complete: joins, selected commissioner lifecycle actions, Draft picks, completed add/drops, completed waivers, IR moves, activated queued roster moves, final regular-season matchups, playoff advancement, placements, and championships are published through a bounded server-sanitized League Wire. Remaining: evidence-backed scoring milestones, weekly recaps, reactions, notification controls, and trades later.
 
 [ ] C1.2 Automatically publish commissioner setting changes and overrides to the activity feed. (P0 / M)
     Goal: commissioner transparency similar to modern social fantasy platforms.
@@ -385,6 +386,7 @@ Exit gate: Managers have a reason to open RinkRat between roster decisions and c
 [ ] C1.12 Add report, block, commissioner moderation, platform moderation, and immutable moderation audit history. (P0 / XL)
 # [x] C1.13 Add a server-sanitized, member-only League Wire foundation with deterministic idempotent activity projections, completed-outcome allowlists, pending-claim and queued-plan privacy exclusions, a bounded mobile-first listener, and no browser write authority. (P1 / L) — Completed 2026-08-13 in Social Batch C1A / Release Candidate 27.
 # [x] C1.14 Replace league-wide raw transaction reads with owner-specific private records plus a public completed-outcome projection so pending waiver targets remain private outside League Wire as well. (P0 / L) — Completed 2026-08-13 in Social Batch C1B / Release Candidate 28.
+# [x] C1.15 Publish exactly one server-sanitized League Wire result when a two-team matchup first becomes final, including regular ties, playoff advancement, placements, championships, and higher-seed tiebreak context without live-score spam or historical backfill; include a scoped read-only production inspector for Functions-first proof. (P1 / M) — Completed 2026-08-14 in Social Batch C1C / Release Candidate 29.
 
 SOCIAL EXIT CHECKLIST:
 
@@ -668,8 +670,8 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 [~] SEQ.6 Security Batches S3A/S3E/S3F — App Check monitor mode, exact-build readiness gates, and guarded exact-league selected-callable canary controls are implemented with authentication hardening; collect the RC27 matrix and complete clean live canary proof before closing the sequence.
 [~] SEQ.7 Security Batches S3B/S3D plus Data Infrastructure D1C — Shared ID validation, universal boundary closure, proxy query/rate hardening, and a deterministic non-authoritative NHL Shadow cache are implemented; complete oversized storage, staging parity, authoritative shared reads, and distributed rate controls before marking the sequence fully complete.
 # [x] SEQ.8 Security Batch S3C — CI, dependency audits, secret scanning, CSP report-only, and TTL/retention verification. — Completed 2026-08-11; first hosted CI and production CSP review remain operational validation rather than implementation gaps.
-[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls and completed restore drill, S3F canary controls, score-timing clarity, injury identity diagnostics, League Wire, and C1B transaction/waiver privacy are implemented; complete the staged RC28 privacy cutover, exact-build validation report, application rollback rehearsal, annotated tag, and observed cohort before marking this sequence complete.
-[~] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback. — The bounded League Wire foundation and its owner-private transaction/waiver boundary are complete in C1A/C1B; measure usage and finish launch evidence before expanding into chat, reactions, notifications, or trades.
+[~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls and completed restore drill, S3F canary controls, score-timing clarity, injury identity diagnostics, League Wire, C1B transaction/waiver privacy, and C1C final-matchup activity are implemented; complete the staged RC29 privacy cutover, exact-build validation report, application rollback rehearsal, annotated tag, and observed cohort before marking this sequence complete.
+[~] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback. — The bounded League Wire foundation, owner-private transaction/waiver boundary, and one-event final-matchup layer are complete in C1A/C1B/C1C; measure usage and finish launch evidence before expanding into chat, reactions, notifications, or trades.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
 
 ================================================================================
@@ -788,6 +790,8 @@ Future entries:
 # [x] LOG.33 2026-08-13 — Completed Social Batch C1B / Release Candidate 28: make canonical league transactions and waivers server-only; publish deterministic owner-private transaction and claim projections plus claim-free member-public waiver and completed-outcome projections; remove claim counts and claimant discovery from Free Agents; add a guarded projection backfill and read-only inspector; require a Functions-first, backfill-and-inspect, audited dual-read Rules bridge, RC28 Hosting proof, and final privacy-Rules lock; and preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, shared NHL cache Shadow, TTL, and indexes.
 
 # [x] LOG.34 2026-08-14 — Completed Social Batch C1B.1 verification-harness hotfix without changing RC28 runtime behavior: make each intentionally denied Firestore write lazy so its rejection handler is attached before the emulator request begins, eliminate false unhandled-rejection failures, and add a focused regression guard while preserving the final transaction/waiver privacy Rules unchanged.
+
+# [x] LOG.35 2026-08-14 — Completed Social Batch C1C / Release Candidate 29: publish one deterministic server-sanitized League Wire activity only when a two-team matchup first transitions from active to complete; include final scores, regular ties, playoff advancement, placement, championship, and higher-seed tiebreak context; skip byes, malformed outcomes, live score changes, and historical backfill; add a scoped read-only production inspector as fallback diagnostics; adopt a proportionate owner workflow of one automated gate, targeted deployment, and live-site smoke testing for routine additive releases; retain the existing bounded mobile feed and preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

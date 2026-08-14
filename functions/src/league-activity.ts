@@ -1,10 +1,15 @@
 import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import {
+  onDocumentCreated,
+  onDocumentUpdated,
+  onDocumentWritten,
+} from 'firebase-functions/v2/firestore';
 
 import { db } from './shared/core/firebase';
 import {
   buildAuditLeagueActivity,
   buildDraftPickLeagueActivity,
+  buildMatchupResultLeagueActivity,
   buildPrivateTransactionProjection,
   buildPrivateWaiverClaimProjections,
   buildPublicTransactionResultProjection,
@@ -65,6 +70,7 @@ async function publishLeagueActivity(options: {
   sourceDocumentId: string;
   activity: SanitizedLeagueActivity;
   occurredAt: Timestamp;
+  release?: 'Social Batch C1A' | 'Social Batch C1C';
 }): Promise<void> {
   const fingerprint = getLeagueActivityFingerprint(
     options.sourceKind,
@@ -91,7 +97,7 @@ async function publishLeagueActivity(options: {
       occurredAt: options.occurredAt,
       publishedAt: FieldValue.serverTimestamp(),
       authority: 'league-activity-authority',
-      release: 'Social Batch C1A',
+      release: options.release ?? 'Social Batch C1A',
     });
   });
 }
@@ -248,6 +254,63 @@ export const publishLeagueTransactionActivity = onDocumentCreated(
     }
 
     await Promise.all(writes);
+  },
+);
+
+export const publishLeagueMatchupResultActivity = onDocumentUpdated(
+  {
+    ...ACTIVITY_TRIGGER_OPTIONS,
+    document: 'leagues/{leagueId}/cycles/{cycleId}/matchups/{matchupId}',
+  },
+  async (event) => {
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const cycleId = resolveSafeFirestoreDocumentId(
+      event.params.cycleId,
+      { maxBytes: 128 },
+    );
+    const matchupId = resolveSafeFirestoreDocumentId(
+      event.params.matchupId,
+      { maxBytes: 128 },
+    );
+    const beforeSource = event.data?.before.data();
+    const afterSource = event.data?.after.data();
+
+    if (
+      !leagueId ||
+      !cycleId ||
+      !matchupId ||
+      !beforeSource ||
+      !afterSource ||
+      beforeSource['status'] === 'complete' ||
+      afterSource['status'] !== 'complete'
+    ) {
+      return;
+    }
+
+    const sourceDocumentId = resolveSourceDocumentId(
+      `${cycleId}:${matchupId}`,
+      'matchup',
+    );
+    const activity = buildMatchupResultLeagueActivity(afterSource);
+
+    if (!sourceDocumentId || !activity) {
+      return;
+    }
+
+    await publishLeagueActivity({
+      leagueId,
+      sourceKind: 'matchup',
+      sourceDocumentId,
+      activity,
+      occurredAt: resolveOccurredAt(
+        afterSource['completedAt'] ?? afterSource['updatedAt'],
+        event.time,
+      ),
+      release: 'Social Batch C1C',
+    });
   },
 );
 

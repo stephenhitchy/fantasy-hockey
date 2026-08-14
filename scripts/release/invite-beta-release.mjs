@@ -22,7 +22,7 @@ import {
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outputDirectory = path.join(projectRoot, '.beta-release');
-const defaultTag = 'rinkrat-rc28-invite-beta';
+const defaultTag = 'rinkrat-rc29-invite-beta';
 
 function parseArguments(argv) {
   const args = [...argv];

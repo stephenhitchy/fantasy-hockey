@@ -245,11 +245,11 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(packageJson.scripts['verify:batchs3b'], /verify:batchs3a-2/);
   assert.match(packageJson.scripts['verify:batchs3b'], /test:batchs3b:run/);
   assert.match(packageJson.scripts['verify:batchs3b'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C)/);
   assert.match(readmeSource, /verify:batchs3b/);
   assert.match(documentationSource, /Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
-  assert.match(roadmapRootSource, /Version 1\.(?:7(?:\.\d+)?|8|9|1[0-9](?:\.\d+)?)/);
+  assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmapRootSource, /# \[x\] S3\.11/);
   assert.match(roadmapRootSource, /# \[x\] S3\.13/);
   assert.match(roadmapRootSource, /\[~\] SEQ\.7/);

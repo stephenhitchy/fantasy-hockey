@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 
 export const LEAGUE_ACTIVITY_SCHEMA_VERSION = 1;
 
-export type LeagueActivitySourceKind = 'audit' | 'draft-pick' | 'transaction';
-export type LeagueActivityCategory = 'league' | 'draft' | 'roster';
+export type LeagueActivitySourceKind = 'audit' | 'draft-pick' | 'transaction' | 'matchup';
+export type LeagueActivityCategory = 'league' | 'draft' | 'roster' | 'matchup';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -21,7 +21,8 @@ export type LeagueActivityEventType =
   | 'slot-move-activated'
   | 'active-bench-swap-activated'
   | 'move-bench-to-ir'
-  | 'activate-ir-to-bench';
+  | 'activate-ir-to-bench'
+  | 'matchup-result';
 
 export interface LeagueActivityAssetSummary {
   name: string;
@@ -41,6 +42,18 @@ export interface SanitizedLeagueActivity {
   selectionType: 'manual' | 'queue' | 'automatic' | null;
   effectiveCycleNumber: number | null;
   effectiveLabel: string | null;
+  matchupPhase?: 'regular_season' | 'playoffs';
+  matchupCycleNumber?: number;
+  teamAOwnerId?: string;
+  teamBOwnerId?: string;
+  teamAScore?: number;
+  teamBScore?: number;
+  winnerOwnerId?: string | null;
+  playoffBracketType?: 'championship' | 'consolation' | null;
+  playoffRoundNumber?: number | null;
+  winnerPlace?: number | null;
+  loserPlace?: number | null;
+  tieBrokenByHigherSeed?: boolean;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -85,6 +98,15 @@ function asBoundedString(value: unknown, maximumLength = 100): string {
 
 function asPositiveInteger(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function asBoundedScore(value: unknown): number | null {
+  return typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= -100_000 &&
+      value <= 100_000
     ? value
     : null;
 }
@@ -304,6 +326,92 @@ export function buildTransactionLeagueActivity(
 
   activity.effectiveCycleNumber = asPositiveInteger(source['effectiveCycleNumber']);
   activity.effectiveLabel = sanitizeEffectiveLabel(source['effectiveLabel']);
+
+  return activity;
+}
+
+export function buildMatchupResultLeagueActivity(
+  value: unknown,
+): SanitizedLeagueActivity | null {
+  const source = asRecord(value);
+
+  if (source['status'] !== 'complete') {
+    return null;
+  }
+
+  const matchupPhase = source['phase'];
+  const matchupCycleNumber = asPositiveInteger(source['cycleNumber']);
+  const teamAOwnerId = sanitizeOwnerId(source['teamAOwnerId']);
+  const teamBOwnerId = sanitizeOwnerId(source['teamBOwnerId']);
+  const teamAScore = asBoundedScore(source['teamAScore']);
+  const teamBScore = asBoundedScore(source['teamBScore']);
+  const winnerOwnerId = sanitizeOwnerId(source['winnerOwnerId']);
+
+  if (
+    (matchupPhase !== 'regular_season' && matchupPhase !== 'playoffs') ||
+    matchupCycleNumber === null ||
+    !teamAOwnerId ||
+    !teamBOwnerId ||
+    teamAOwnerId === teamBOwnerId ||
+    teamAScore === null ||
+    teamBScore === null
+  ) {
+    // Bye matchups have no opponent and stay off the wire. The feed should
+    // celebrate completed competition, not routine bracket bookkeeping.
+    return null;
+  }
+
+  const scoresAreTied = teamAScore === teamBScore;
+  const expectedWinnerOwnerId = teamAScore > teamBScore
+    ? teamAOwnerId
+    : teamBScore > teamAScore
+      ? teamBOwnerId
+      : null;
+
+  if (
+    (!scoresAreTied && winnerOwnerId !== expectedWinnerOwnerId) ||
+    (scoresAreTied && winnerOwnerId !== null &&
+      winnerOwnerId !== teamAOwnerId && winnerOwnerId !== teamBOwnerId)
+  ) {
+    return null;
+  }
+
+  if (
+    (matchupPhase === 'regular_season' && scoresAreTied && winnerOwnerId !== null) ||
+    (matchupPhase === 'playoffs' &&
+      (!winnerOwnerId || (scoresAreTied && source['tieBrokenByHigherSeed'] !== true)))
+  ) {
+    return null;
+  }
+
+  const playoffBracketType = source['bracketType'] === 'championship' ||
+      source['bracketType'] === 'consolation'
+    ? source['bracketType']
+    : null;
+  const activity = baseActivity('matchup', 'matchup-result', winnerOwnerId);
+
+  activity.matchupPhase = matchupPhase;
+  activity.matchupCycleNumber = matchupCycleNumber;
+  activity.teamAOwnerId = teamAOwnerId;
+  activity.teamBOwnerId = teamBOwnerId;
+  activity.teamAScore = teamAScore;
+  activity.teamBScore = teamBScore;
+  activity.winnerOwnerId = winnerOwnerId;
+  activity.playoffBracketType = matchupPhase === 'playoffs'
+    ? playoffBracketType
+    : null;
+  activity.playoffRoundNumber = matchupPhase === 'playoffs'
+    ? asPositiveInteger(source['playoffRoundNumber'])
+    : null;
+  activity.winnerPlace = matchupPhase === 'playoffs'
+    ? asPositiveInteger(source['winnerPlace'])
+    : null;
+  activity.loserPlace = matchupPhase === 'playoffs'
+    ? asPositiveInteger(source['loserPlace'])
+    : null;
+  activity.tieBrokenByHigherSeed = matchupPhase === 'playoffs' &&
+    scoresAreTied &&
+    source['tieBrokenByHigherSeed'] === true;
 
   return activity;
 }

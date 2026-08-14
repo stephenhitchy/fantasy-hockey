@@ -3993,6 +3993,7 @@ export {
 export {
   publishLeagueAuditActivity,
   publishLeagueDraftPickActivity,
+  publishLeagueMatchupResultActivity,
   publishLeagueTransactionActivity,
   publishLeagueWaiverPrivacy,
 } from './league-activity';

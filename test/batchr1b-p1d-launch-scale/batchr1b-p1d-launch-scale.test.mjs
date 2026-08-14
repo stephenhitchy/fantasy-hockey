@@ -430,6 +430,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // C1A adds isolated server-sanitized League Wire projections.
         'src/league-activity.ts',
         'src/shared/core/league/league-activity.util.ts',
+        'scripts/league-matchup-activity-inspect.cjs',
         // C1B adds guarded additive migration and inspection commands.
         'scripts/transaction-privacy-backfill.cjs',
         'scripts/transaction-privacy-inspect.cjs',

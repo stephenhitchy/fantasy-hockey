@@ -472,7 +472,7 @@ test('migration tooling is guarded, projection-only, independently inspectable, 
   assert.equal('functions' in transitionConfig, false);
 });
 
-test('RC28 preserves the frozen competitive models, six-game contract, and Shadow safety modes', async () => {
+test('RC29 preserves the frozen competitive models, six-game contract, and Shadow safety modes', async () => {
   const [
     scoringSource,
     scoringEngineSource,
@@ -511,20 +511,20 @@ test('RC28 preserves the frozen competitive models, six-game contract, and Shado
   assert.equal(createHash('sha256').update(projectionSource).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(rulesSource).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(indexesSource).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 28/);
-  assert.match(productionRuntime, /Release Candidate 28/);
+  assert.match(runtime, /Release Candidate 29/);
+  assert.match(productionRuntime, /Release Candidate 29/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1b');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1c');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cachePolicy.mode, 'shadow');
   assert.equal(cachePolicy.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1b:core'], /verify:batchc1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1b:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1c:core/);
 });
 
 test('C1B documentation records the staged privacy cutover, rollback unit, and permanent roadmap completion', async () => {
@@ -537,7 +537,7 @@ test('C1B documentation records the staged privacy cutover, rollback unit, and p
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.19\.1/);
+  assert.match(roadmap, /Version 1\.20/);
   assert.match(roadmap, /# \[x\] C1\.14/);
   assert.match(roadmap, /# \[x\] LOG\.33/);
   assert.match(roadmap, /# \[x\] LOG\.34/);
@@ -559,8 +559,8 @@ test('C1B documentation records the staged privacy cutover, rollback unit, and p
   );
   assert.match(runbook, /Your claim is private/);
   assert.match(runbook, /C1B\.1 verification-harness hotfix/);
-  assert.match(readme, /Release Candidate 28 \/ Social Batch C1B/);
+  assert.match(readme, /Release Candidate 29 \/ Social Batch C1C/);
   assert.match(readme, /RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY\.md/);
-  assert.match(releaseRunbook, /rinkrat-rc28-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc28-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc29-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc29-invite-beta/);
 });

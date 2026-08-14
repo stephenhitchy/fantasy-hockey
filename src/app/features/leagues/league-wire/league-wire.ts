@@ -154,7 +154,7 @@ export class LeagueWire {
       : null;
     const managerLabel = team?.teamName || 'A manager';
     const commissionerLabel = team?.teamName || 'The commissioner';
-    const actorLabel = team?.teamName || (activity.ownerId ? 'A manager' : 'League activity');
+    let actorLabel = team?.teamName || (activity.ownerId ? 'A manager' : 'League activity');
     const primaryName = activity.primaryAsset?.name || 'a roster asset';
     const secondaryName = activity.secondaryAsset?.name || '';
     const position = activity.primaryAsset?.position;
@@ -254,6 +254,61 @@ export class LeagueWire {
           ? `${secondaryName} moved to the bench${timingDetail ? ` · ${timingDetail}` : ''}.`
           : timingDetail;
         break;
+      case 'matchup-result': {
+        const teamA = activity.teamAOwnerId
+          ? this.teamByOwnerId().get(activity.teamAOwnerId) ?? null
+          : null;
+        const teamB = activity.teamBOwnerId
+          ? this.teamByOwnerId().get(activity.teamBOwnerId) ?? null
+          : null;
+        const teamALabel = teamA?.teamName || 'Team A';
+        const teamBLabel = teamB?.teamName || 'Team B';
+        const teamAScore = this.formatScore(activity.teamAScore);
+        const teamBScore = this.formatScore(activity.teamBScore);
+        const matchupContext = activity.matchupPhase === 'playoffs'
+          ? activity.playoffRoundNumber
+            ? `Playoff Round ${activity.playoffRoundNumber}`
+            : 'Playoffs'
+          : activity.matchupCycleNumber
+            ? `Matchup ${activity.matchupCycleNumber}`
+            : 'Final';
+
+        if (!activity.winnerOwnerId) {
+          actorLabel = 'Matchup final';
+          headline = `${teamALabel} and ${teamBLabel} finished tied.`;
+          detail = [`${teamAScore}–${teamBScore}`, matchupContext].join(' · ');
+          break;
+        }
+
+        const winnerIsTeamA = activity.winnerOwnerId === activity.teamAOwnerId;
+        const winnerTeam = winnerIsTeamA ? teamA : teamB;
+        const winnerLabel = winnerIsTeamA ? teamALabel : teamBLabel;
+        const loserLabel = winnerIsTeamA ? teamBLabel : teamALabel;
+        const winnerScore = winnerIsTeamA ? teamAScore : teamBScore;
+        const loserScore = winnerIsTeamA ? teamBScore : teamAScore;
+        actorLabel = winnerTeam?.teamName || winnerLabel;
+
+        if (activity.winnerPlace === 1) {
+          headline = `${winnerLabel} won the RinkRat Championship.`;
+          detail = `Defeated ${loserLabel}, ${winnerScore}–${loserScore}`;
+        } else if (activity.winnerPlace) {
+          headline = `${winnerLabel} claimed ${this.ordinalPlace(activity.winnerPlace)} place.`;
+          detail = `${winnerScore}–${loserScore} over ${loserLabel}`;
+        } else if (activity.matchupPhase === 'playoffs') {
+          headline = `${winnerLabel} advanced past ${loserLabel}.`;
+          detail = `${winnerScore}–${loserScore}`;
+        } else {
+          headline = `${winnerLabel} beat ${loserLabel}.`;
+          detail = `${winnerScore}–${loserScore}`;
+        }
+
+        detail = [
+          detail,
+          activity.tieBrokenByHigherSeed ? 'Higher seed advanced' : null,
+          matchupContext,
+        ].filter(Boolean).join(' · ');
+        break;
+      }
     }
 
     return {
@@ -263,12 +318,41 @@ export class LeagueWire {
         ? 'Draft'
         : activity.category === 'roster'
           ? 'Roster'
-          : 'League',
+          : activity.category === 'matchup'
+            ? 'Game Final'
+            : 'League',
       actorLabel,
       profileIconId: team?.profileIconId ?? null,
       headline,
       detail,
       occurredAt: activity.occurredAt,
     };
+  }
+
+  private formatScore(value: number | null): string {
+    return value === null
+      ? '—'
+      : new Intl.NumberFormat(undefined, {
+          maximumFractionDigits: 2,
+        }).format(value);
+  }
+
+  private ordinalPlace(value: number): string {
+    const lastTwoDigits = value % 100;
+
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+      return `${value}th`;
+    }
+
+    switch (value % 10) {
+      case 1:
+        return `${value}st`;
+      case 2:
+        return `${value}nd`;
+      case 3:
+        return `${value}rd`;
+      default:
+        return `${value}th`;
+    }
   }
 }

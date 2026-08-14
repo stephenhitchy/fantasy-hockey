@@ -11495,3 +11495,19 @@ Scoring V3, Projection V11, independent immutable six-game roster-slot windows, 
 The initial C1B emulator test constructed seven forbidden Firestore write promises before awaiting the first denial. Because later promises could reject before `expectDenied` attached a handler, Node could report a temporary unhandled rejection and fail the suite even though Firestore correctly denied every operation. C1B.1 converts the write list to lazy operation factories and invokes each operation only inside its awaited denial assertion.
 
 The focused C1B suite now guards the lazy structure and the complete verification command remains `npm run verify:batchc1b`. No Angular application file, Cloud Function, Firestore Rule, Firestore index, TTL policy, Scoring V3 source, Projection V11 source, App Check mode, scoring-queue mode, or shared NHL cache authority changed.
+
+# Social Batch C1C — League Wire Matchup Results
+
+> **Operator validation:** C1C uses one automated verification gate, a targeted Function/Hosting deployment, and a live-site Internal Test matchup. The read-only inspector and Function logs are fallback diagnostics only when the visible result is missing, duplicated, or incorrect.
+
+**Runtime release:** Release Candidate 29
+
+**Competitive models:** Production Scoring V3 and Projection V11 (unchanged)
+
+**Primary surface:** League HQ / League Wire
+
+C1C adds `publishLeagueMatchupResultActivity`, an idempotent Firestore update trigger that publishes one server-sanitized activity only when a two-team matchup first moves from `active` to `complete`. The projection includes bounded final scores, team-owner identities used to resolve existing league names/icons, regular-season tie context, playoff advancement, placement, championship, and higher-seed tiebreak context. It excludes source document IDs, seeds, roster-slot/window IDs, score ledgers, individual player scoring, projections, requests, and administrative details.
+
+The existing member-only `activity` collection, 40-document listener, and five-item collapsed card are reused. `Game Final` entries add no live-score listener, historical backfill, modal, backdrop, sticky panel, or duplicate dialog. Byes, malformed results, live score changes, and updates to already-complete matchups stay off the wire. The scoped read-only `social:inspect-matchup-activity` command validates projection identity, schema, privacy fields, timestamps, winner/score consistency, and duplicate fingerprints before the new browser is live.
+
+C1C changes no Firestore Rule, index, TTL policy, Scoring V3 source, Projection V11 source, six-game window behavior, seventh-game rollover, App Check mode, exact-league/callable canary state, scoring-queue authority, or shared NHL cache authority. Verification is `npm run verify:batchc1c`. The inherited C1B global backfill, zero-issue inspection, temporary dual-read bridge, RC29 projection smoke test, and final privacy Rules lock remain deployment prerequisites. Full operations guidance is maintained in `docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`.

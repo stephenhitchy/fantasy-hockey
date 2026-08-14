@@ -19,17 +19,18 @@ Core project references:
 - [`docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md`](docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md) — deterministic shared NHL Shadow cache, hash deduplication, bounded payloads, retention, inspection, deployment, and future cutover gates.
 - [`docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md`](docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md) — member-only League Wire, server-sanitized public outcomes, waiver and queued-action privacy boundaries, bounded mobile UX, deployment, smoke test, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`](docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md) — owner-private transaction and claim projections, claim-free waiver pool, guarded backfill, privacy inspection, staged cutover, smoke test, and coordinated rollback.
+- [`docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`](docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md) — one-event final matchup activity, playoff/championship context, no live-score spam, Functions-first deployment, mobile smoke testing, and rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 28 / Social Batch C1B**. C1B completes the P0 privacy follow-up discovered during League Wire: canonical league-wide `transactions` and `waivers` are now server-only, managers read only their own private transaction and claim projections, and league members read a claim-free waiver pool plus allowlisted completed outcomes. Free Agents no longer displays league-wide claim counts or claimant identity.
+The current source runtime is **Release Candidate 29 / Social Batch C1C**. C1C adds one deterministic League Wire result only when a two-team fantasy matchup first becomes final. Regular wins and ties, playoff advancement, placement games, championships, and higher-seed playoff tiebreaks receive compact mobile-readable entries; live score changes, byes, malformed outcomes, and historical results stay off the wire.
 
-League Wire remains compact and server-sanitized. Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. C1B adds no Firestore index or TTL policy and does not promote any safety control.
+League Wire keeps the existing 40-document listener and five-item collapsed view. Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. C1C changes no Firestore Rule, index, TTL policy, or safety-control mode.
 
-The RC28 cutover is staged to avoid a non-atomic Rules/Hosting handoff: deploy Functions first, backfill and inspect the projections, deploy the audited temporary dual-read Rules bridge, deploy and prove RC28 Hosting, and only then deploy the final privacy Rules that remove canonical browser reads. The current verification command is `npm run verify:batchc1b`.
+The inherited C1B privacy cutover remains a prerequisite for RC29 Hosting: complete the global projection backfill and zero-issue inspection, deploy the audited temporary dual-read Rules bridge, prove the projection-reading RC29 browser, and only then deploy the final privacy Rules that remove canonical browser reads. When production is still on a pre-RC28 browser, RC29 can be the first projection-reading Hosting release; an intermediate RC28 Hosting deployment is not required. The current verification command is `npm run verify:batchc1c`.
 
 C1B.1 is a verification-only maintenance hotfix. It starts each intentionally denied Firestore emulator write only after its rejection handler is attached, preventing false unhandled-rejection failures while leaving RC28 application code and final privacy Rules unchanged.
 
@@ -70,6 +71,7 @@ verify:batchd1b
 verify:batchd1c
 verify:batchc1a
 verify:batchc1b
+verify:batchc1c
 ```
 
 RinkRat pins:
@@ -89,7 +91,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1b
+npm run verify:batchc1c
 ```
 
 After verification and a clean commit:
@@ -98,6 +100,21 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Social Batch C1C — League Wire Matchup Results
+
+C1C observes the existing server-owned matchup document and publishes exactly once when it first changes from `active` to `complete`. The deterministic activity ID combines the cycle and matchup identity only before hashing; raw source IDs, score ledgers, player scoring, projections, seeds, request IDs, and administrative details are never copied to League Wire.
+
+The feed labels the item **Game Final** and resolves team names and manager icons from the existing league-team input. The UI adds no listener, modal, backdrop, sticky panel, or duplicate dialog. Existing completed matchups are intentionally not backfilled.
+
+Verification:
+
+```bash
+npm run verify:batchc1c
+```
+
+The normal owner workflow is one full `verify:batchc1c` gate, a targeted deployment of the new matchup publisher plus RC29 Hosting, and a live-site Internal Test matchup. The scoped `social:inspect-matchup-activity` command and Function logs are fallback diagnostics only when the site result is missing, duplicated, or incorrect. C1C itself requires no Firestore Rules or index deployment. Full commands and rollback guidance are documented in `docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`.
 
 
 ## Social Batch C1B — Transaction and Waiver Privacy

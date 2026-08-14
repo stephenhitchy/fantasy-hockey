@@ -118,6 +118,11 @@
   background: color-mix(in srgb, var(--rr-color-success) 11%, var(--rr-color-surface-raised));
 }
 
+.league-wire-item[data-category='matchup'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-scoreboard) 48%, var(--rr-color-info));
+  background: color-mix(in srgb, var(--rr-scoreboard) 18%, var(--rr-color-surface-raised));
+}
+
 .league-wire-copy {
   min-width: 0;
 }
@@ -146,6 +151,10 @@
 
 .league-wire-item[data-category='roster'] .league-wire-category {
   color: var(--rr-color-success);
+}
+
+.league-wire-item[data-category='matchup'] .league-wire-category {
+  color: color-mix(in srgb, var(--rr-scoreboard) 56%, var(--rr-color-info));
 }
 
 .league-wire-copy > strong,
