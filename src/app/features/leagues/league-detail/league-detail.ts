@@ -57,6 +57,7 @@ import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.serv
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
+import { LeagueWire } from '../league-wire/league-wire';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
   getProfileIconsForCategory,
@@ -80,7 +81,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar, LeagueWire, DialogFocusTrapDirective, ViewportOverlayPortalDirective],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })

@@ -3,6 +3,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -200,12 +201,53 @@ async function seedLeagueFixture() {
       ownerId: manager.uid,
       type: 'add-drop',
     }),
+    seedDocument(`leagues/${LEAGUE_ID}/activity/fixture-activity`, {
+      schemaVersion: 1,
+      category: 'roster',
+      eventType: 'add-drop',
+      ownerId: manager.uid,
+      primaryAsset: { name: 'Fixture Player', position: 'C', assetType: 'skater' },
+      secondaryAsset: null,
+      occurredAt: now,
+      authority: 'league-activity-authority',
+    }),
     seedDocument(`leagues/${LEAGUE_ID}/waivers/fixture-asset`, {
       droppedByOwnerId: manager.uid,
       status: 'active',
       claims: [],
       assetKey: 'fixture-asset',
       asset: { assetKey: 'fixture-asset' },
+    }),
+    seedDocument(`leagues/${LEAGUE_ID}/members/${manager.uid}/transactions/transaction-fixture`, {
+      schemaVersion: 1,
+      ownerId: manager.uid,
+      type: 'add-drop',
+      occurredAt: now,
+      authority: 'transaction-privacy-authority',
+    }),
+    seedDocument(`leagues/${LEAGUE_ID}/members/${manager.uid}/waiverClaims/fixture-asset`, {
+      schemaVersion: 1,
+      waiverId: 'fixture-asset',
+      ownerId: manager.uid,
+      moveType: 'open-slot',
+      rosterArea: 'active',
+      status: 'pending',
+      authority: 'transaction-privacy-authority',
+    }),
+    seedDocument(`leagues/${LEAGUE_ID}/transactionResults/result-fixture`, {
+      schemaVersion: 1,
+      eventType: 'add-drop',
+      ownerId: manager.uid,
+      primaryAsset: { assetType: 'skater', assetKey: 'fixture-added', position: 'C' },
+      authority: 'transaction-privacy-authority',
+    }),
+    seedDocument(`leagues/${LEAGUE_ID}/waiverPool/fixture-asset`, {
+      schemaVersion: 1,
+      assetKey: 'fixture-asset',
+      asset: { assetType: 'skater', assetKey: 'fixture-asset', position: 'C' },
+      droppedByOwnerId: manager.uid,
+      status: 'active',
+      authority: 'transaction-privacy-authority',
     }),
     seedDocument(`leagues/${LEAGUE_ID}/cycles/cycle-1`, {
       id: 'cycle-1',
@@ -1074,82 +1116,178 @@ describe('draft authority hardening', () => {
   });
 });
 
-describe('transactions and waivers authority hardening', () => {
-  test('members can read transaction and waiver records while outsiders cannot', async () => {
+describe('League Wire authority and privacy', () => {
+  test('league members can read and list sanitized activity while outsiders cannot', async () => {
     await expectAllowed(
-      getDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'transactions', 'fixture-transaction')),
-      'Member transaction read',
+      getDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'activity', 'fixture-activity')),
+      'Member League Wire record read',
     );
     await expectAllowed(
-      getDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset')),
-      'Member waiver read',
+      getDocs(collection(opponent.db, 'leagues', LEAGUE_ID, 'activity')),
+      'Member League Wire collection read',
     );
     await expectDenied(
-      getDoc(doc(outsider.db, 'leagues', LEAGUE_ID, 'transactions', 'fixture-transaction')),
-      'Outsider transaction read',
+      getDoc(doc(outsider.db, 'leagues', LEAGUE_ID, 'activity', 'fixture-activity')),
+      'Outsider League Wire record read',
     );
     await expectDenied(
-      getDoc(doc(outsider.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset')),
-      'Outsider waiver read',
+      getDocs(collection(signedOut.db, 'leagues', LEAGUE_ID, 'activity')),
+      'Signed-out League Wire collection read',
     );
   });
 
-  test('ordinary managers cannot create transaction records directly', async () => {
+  test('members and commissioners cannot forge, edit, or delete League Wire entries', async () => {
     await expectDenied(
-      setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'transactions', 'minimal-client-write'), {
+      setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'activity', 'forged-activity'), {
+        schemaVersion: 1,
+        category: 'roster',
+        eventType: 'waiver-award',
+        ownerId: manager.uid,
+        occurredAt: serverTimestamp(),
+      }),
+      'Manager League Wire creation',
+    );
+    await expectDenied(
+      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'activity', 'fixture-activity'), {
+        eventType: 'draft-pick',
+      }),
+      'Commissioner League Wire update',
+    );
+    await expectDenied(
+      deleteDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'activity', 'fixture-activity')),
+      'Manager League Wire deletion',
+    );
+  });
+});
+
+describe('transaction and waiver privacy authority', () => {
+  test('canonical transaction and waiver records are unreadable by every browser role', async () => {
+    for (const client of [manager, opponent, commissioner, outsider, signedOut]) {
+      await expectDenied(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'transactions', 'fixture-transaction')),
+        `${client.uid ?? 'signed-out'} canonical transaction read`,
+      );
+      await expectDenied(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'transactions')),
+        `${client.uid ?? 'signed-out'} canonical transaction list`,
+      );
+      await expectDenied(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset')),
+        `${client.uid ?? 'signed-out'} canonical waiver read`,
+      );
+      await expectDenied(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'waivers')),
+        `${client.uid ?? 'signed-out'} canonical waiver list`,
+      );
+    }
+  });
+
+  test('a manager can read only their own private transaction and waiver-claim projections', async () => {
+    const privateTransactionPath = [
+      'leagues', LEAGUE_ID, 'members', manager.uid, 'transactions', 'transaction-fixture',
+    ];
+    const privateClaimPath = [
+      'leagues', LEAGUE_ID, 'members', manager.uid, 'waiverClaims', 'fixture-asset',
+    ];
+
+    await expectAllowed(getDoc(doc(manager.db, ...privateTransactionPath)), 'Owner private transaction read');
+    await expectAllowed(getDoc(doc(manager.db, ...privateClaimPath)), 'Owner private claim read');
+    await expectAllowed(
+      getDocs(collection(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'transactions')),
+      'Owner private transaction list',
+    );
+    await expectAllowed(
+      getDocs(collection(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'waiverClaims')),
+      'Owner private claim list',
+    );
+
+    for (const client of [opponent, commissioner, outsider, signedOut]) {
+      await expectDenied(
+        getDoc(doc(client.db, ...privateTransactionPath)),
+        `${client.uid ?? 'signed-out'} reading another manager transaction`,
+      );
+      await expectDenied(
+        getDoc(doc(client.db, ...privateClaimPath)),
+        `${client.uid ?? 'signed-out'} reading another manager claim`,
+      );
+      await expectDenied(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'transactions')),
+        `${client.uid ?? 'signed-out'} listing another manager transactions`,
+      );
+      await expectDenied(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'waiverClaims')),
+        `${client.uid ?? 'signed-out'} listing another manager claims`,
+      );
+    }
+  });
+
+  test('league members can read claim-free public projections while outsiders cannot', async () => {
+    for (const client of [manager, opponent, commissioner]) {
+      await expectAllowed(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'transactionResults', 'result-fixture')),
+        `${client.uid} public transaction result read`,
+      );
+      await expectAllowed(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'waiverPool', 'fixture-asset')),
+        `${client.uid} public waiver-pool read`,
+      );
+      await expectAllowed(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'transactionResults')),
+        `${client.uid} public transaction result list`,
+      );
+      await expectAllowed(
+        getDocs(collection(client.db, 'leagues', LEAGUE_ID, 'waiverPool')),
+        `${client.uid} public waiver-pool list`,
+      );
+    }
+
+    for (const client of [outsider, signedOut]) {
+      await expectDenied(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'transactionResults', 'result-fixture')),
+        `${client.uid ?? 'signed-out'} public transaction result read`,
+      );
+      await expectDenied(
+        getDoc(doc(client.db, 'leagues', LEAGUE_ID, 'waiverPool', 'fixture-asset')),
+        `${client.uid ?? 'signed-out'} public waiver-pool read`,
+      );
+    }
+  });
+
+  test('no browser can write canonical or projected transaction and waiver data', async () => {
+    const writeAttempts = [
+      () => setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'transactions', 'minimal-client-write'), {
         ownerId: manager.uid,
         type: 'add-drop',
-        forgedPayload: { arbitrary: true },
       }),
-      'Minimal owner transaction write',
-    );
-  });
-
-  test('ordinary managers cannot create arbitrary waiver assets', async () => {
-    await expectDenied(
-      setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'invented-asset'), {
+      () => setDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'invented-asset'), {
         droppedByOwnerId: manager.uid,
         status: 'active',
         claims: [],
         assetKey: 'invented-asset',
-        asset: {
-          assetKey: 'invented-asset',
-          displayName: 'Invented Client Asset',
-        },
       }),
-      'Arbitrary waiver asset write',
-    );
-  });
-
-
-  test('ordinary managers cannot append waiver claims directly', async () => {
-    await expectDenied(
-      updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
+      () => updateDoc(doc(manager.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
         claims: [{ ownerId: manager.uid, moveType: 'open-slot' }],
       }),
-      'Direct waiver claim update',
-    );
-  });
-
-  test('commissioners cannot bypass the waiver authority function', async () => {
-    await expectDenied(
-      updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'waivers', 'fixture-asset'), {
-        status: 'cleared',
+      () => setDoc(
+        doc(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'transactions', 'forged'),
+        { ownerId: manager.uid, type: 'waiver-claim' },
+      ),
+      () => setDoc(
+        doc(manager.db, 'leagues', LEAGUE_ID, 'members', manager.uid, 'waiverClaims', 'forged'),
+        { ownerId: manager.uid, waiverId: 'forged', status: 'pending' },
+      ),
+      () => setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'transactionResults', 'forged'), {
+        eventType: 'waiver-award',
       }),
-      'Commissioner waiver update',
-    );
-  });
-
-  test('commissioners cannot forge transaction audit records', async () => {
-    await expectDenied(
-      setDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'transactions', 'forged-audit'), {
-        ownerId: manager.uid,
-        type: 'commissioner-forgery',
+      () => updateDoc(doc(commissioner.db, 'leagues', LEAGUE_ID, 'waiverPool', 'fixture-asset'), {
+        status: 'claimed',
       }),
-      'Commissioner transaction creation',
-    );
-  });
+    ];
 
+    for (const [index, writeAttempt] of writeAttempts.entries()) {
+      await expectDenied(writeAttempt(), `Transaction privacy browser write ${index + 1}`);
+    }
+  });
 });
 
 describe('scoring, cycles, and playoff authority baseline', () => {

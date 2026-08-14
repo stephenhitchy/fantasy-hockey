@@ -1,0 +1,262 @@
+:host {
+  display: block;
+  margin-top: var(--rr-space-5);
+}
+
+.league-wire {
+  --rr-card-border-width: 1px;
+  --rr-card-border-color: color-mix(
+    in srgb,
+    var(--rr-color-info) 38%,
+    var(--rr-color-border-strong)
+  );
+  --rr-card-background:
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--rr-color-surface-raised) 92%, var(--rr-color-info) 8%),
+      color-mix(in srgb, var(--rr-color-surface) 94%, var(--rr-scoreboard) 6%)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 18px,
+      color-mix(in srgb, var(--rr-color-text) 2%, transparent) 19px,
+      transparent 20px
+    );
+  --rr-card-shadow: var(--rr-shadow-card);
+  --rr-card-padding: var(--rr-space-5);
+
+  overflow: hidden;
+  border-radius: var(--rr-radius-md);
+  font-family: var(--rr-font-interface);
+}
+
+.league-wire-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+}
+
+.league-wire-eyebrow {
+  display: block;
+  margin-bottom: var(--rr-space-1);
+  color: var(--rr-color-text-secondary);
+  font-family: var(--rr-font-micro);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.league-wire h2 {
+  margin: 0;
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-interface);
+  font-size: clamp(20px, 4vw, 24px);
+  line-height: 1.1;
+}
+
+.league-wire-visibility {
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 42%, var(--rr-color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-color-info) 10%, var(--rr-color-surface-raised));
+  color: color-mix(in srgb, var(--rr-color-info) 58%, var(--rr-color-text));
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.league-wire-intro {
+  max-width: 720px;
+  margin: 9px 0 var(--rr-space-4);
+  color: var(--rr-color-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.league-wire-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.league-wire-item {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  padding: 13px 0;
+  border-top: 1px solid color-mix(in srgb, var(--rr-color-border) 58%, transparent);
+}
+
+.league-wire-item:first-child {
+  border-top: 0;
+}
+
+.league-wire-avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  align-self: start;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 34%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-color-surface-strong) 86%, var(--rr-scoreboard) 14%);
+}
+
+.league-wire-item[data-category='draft'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 58%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-warning) 12%, var(--rr-color-surface-raised));
+}
+
+.league-wire-item[data-category='roster'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-success) 52%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-success) 11%, var(--rr-color-surface-raised));
+}
+
+.league-wire-copy {
+  min-width: 0;
+}
+
+.league-wire-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+  margin-bottom: var(--rr-space-1);
+}
+
+.league-wire-category,
+.league-wire-meta time {
+  color: var(--rr-color-text-muted);
+  font-family: var(--rr-font-micro);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.league-wire-item[data-category='draft'] .league-wire-category {
+  color: var(--rr-color-warning);
+}
+
+.league-wire-item[data-category='roster'] .league-wire-category {
+  color: var(--rr-color-success);
+}
+
+.league-wire-copy > strong,
+.league-wire-detail {
+  display: block;
+}
+
+.league-wire-copy > strong {
+  overflow-wrap: anywhere;
+  color: var(--rr-color-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.league-wire-detail {
+  margin-top: 3px;
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.league-wire-state {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--rr-space-3);
+  align-items: center;
+  padding: 15px;
+  border: 1px dashed color-mix(in srgb, var(--rr-color-info) 38%, var(--rr-color-border));
+  border-radius: calc(var(--rr-radius-md) + 4px);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 78%, transparent);
+}
+
+.league-wire-state strong,
+.league-wire-state span {
+  display: block;
+}
+
+.league-wire-state strong {
+  color: var(--rr-color-text);
+  font-size: 14px;
+}
+
+.league-wire-state div span {
+  margin-top: 3px;
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.league-wire-state-error {
+  border-color: color-mix(in srgb, var(--rr-color-danger) 60%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-danger) 8%, var(--rr-color-surface-raised));
+}
+
+.league-wire-puck {
+  display: block;
+  width: 20px;
+  height: 8px;
+  border: 2px solid color-mix(in srgb, var(--rr-color-info) 54%, var(--rr-color-border-strong));
+  border-radius: 50%;
+  background: var(--rr-scoreboard);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--rr-scoreboard) 32%, transparent);
+}
+
+.league-wire-more {
+  --rr-button-border: color-mix(in srgb, var(--rr-color-info) 32%, var(--rr-color-border-strong));
+  --rr-button-background: color-mix(in srgb, var(--rr-color-surface-raised) 86%, var(--rr-color-info) 6%);
+  --rr-button-color: var(--rr-color-text);
+  --rr-button-radius: var(--rr-radius-md);
+
+  width: 100%;
+  min-height: 42px;
+  margin-top: var(--rr-space-2);
+}
+
+.league-wire-footer {
+  margin-top: 14px;
+  padding-top: var(--rr-space-3);
+  border-top: 1px solid color-mix(in srgb, var(--rr-color-border) 52%, transparent);
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .league-wire {
+    --rr-card-padding: 17px;
+  }
+
+  .league-wire-heading {
+    gap: 10px;
+  }
+
+  .league-wire-intro {
+    margin-bottom: 11px;
+  }
+
+  .league-wire-item {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+    padding: 12px 0;
+  }
+
+  .league-wire-avatar {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .league-wire * {
+    scroll-behavior: auto;
+  }
+}

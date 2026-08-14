@@ -585,6 +585,13 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /activity/{activityId} {
+        // League Wire is a server-sanitized, member-only projection of public
+        // Draft and roster outcomes. Browsers cannot publish or alter entries.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
       match /members/{memberId} {
         allow get: if signedIn() &&
           (
@@ -604,6 +611,25 @@ service cloud.firestore {
         // Removing or changing another manager requires a future audited
         // server workflow. Commissioners have no browser bypass.
         allow delete: if false;
+
+        match /transactions/{transactionId} {
+          // Each manager receives only their own sanitized transaction history.
+          // Filtering a league-wide raw collection in browser code is not a
+          // privacy boundary, so commissioners and other members have no access.
+          allow read: if signedIn() &&
+            memberId == currentUserId() &&
+            isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+
+        match /waiverClaims/{waiverId} {
+          // Pending claim targets, replacement slots, and results are private
+          // to the claimant. Waiver adjudication remains server-authoritative.
+          allow read: if signedIn() &&
+            memberId == currentUserId() &&
+            isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
       }
 
       match /teams/{teamId} {
@@ -666,19 +692,31 @@ service cloud.firestore {
         }
       }
 
-      match /transactions/{transactionId} {
+      match /transactionResults/{transactionId} {
+        // Completed outcomes are a sanitized member-readable projection.
+        // Pending claims, queued plans, request IDs, and slot targets are absent.
         allow read: if isLeagueMember(leagueId);
-
-        // Transaction history is an immutable server audit trail.
         allow create, update, delete: if false;
       }
 
-      match /waivers/{waiverId} {
+      match /waiverPool/{waiverId} {
+        // Members may see which assets are on waivers and completed outcomes,
+        // but never the raw claim array, claimant identities, or roster targets.
         allow read: if isLeagueMember(leagueId);
-
-        // Drops, claims, awards, expiration, and resets are all handled by
-        // roster-authority Functions and trusted cycle automation.
         allow create, update, delete: if false;
+      }
+
+      match /transactions/{transactionId} {
+        // Canonical transaction records can contain pending waiver intent and
+        // operational identifiers. They are server-only after Social Batch C1B.
+        allow read, create, update, delete: if false;
+      }
+
+      match /waivers/{waiverId} {
+        // Canonical waiver documents contain every private claim and are read
+        // only by trusted Functions. Browsers use waiverPool and their own
+        // members/{ownerId}/waiverClaims projection instead.
+        allow read, create, update, delete: if false;
       }
 
 

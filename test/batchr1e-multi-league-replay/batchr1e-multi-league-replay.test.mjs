@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
+
+import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -177,7 +179,7 @@ test('competitive scoring, Projection V11, Firestore rules, and indexes remain u
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a',
+    PROTECTED_SOURCE_HASHES.firestoreRules,
   );
   assert.equal(
     await sha256('firestore.indexes.json'),

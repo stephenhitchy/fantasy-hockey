@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import test from 'node:test';
 
+import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
+
 import {
   buildCompetitiveActionHealthSnapshot,
   COMPETITIVE_ACTION_MAX_AGE_MILLISECONDS,
@@ -267,7 +269,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a',
+    PROTECTED_SOURCE_HASHES.firestoreRules,
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
@@ -327,6 +329,12 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/player/injury-match-quality.util.ts',
         'src/shared/core/player/injury-player-aliases.ts',
         'src/shared/core/player/player-availability.models.ts',
+        // C1A adds isolated server-sanitized League Wire projections.
+        'src/league-activity.ts',
+        'src/shared/core/league/league-activity.util.ts',
+        // C1B adds guarded additive migration and inspection commands.
+        'scripts/transaction-privacy-backfill.cjs',
+        'scripts/transaction-privacy-inspect.cjs',
       ]),
     ),
     '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',

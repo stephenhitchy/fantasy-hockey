@@ -8,7 +8,6 @@ export type FreeAgentOperationExpectation =
   | {
       kind: 'waiver-claim';
       waiverId: string;
-      ownerId: string;
     };
 
 export interface FreeAgentOperationObservedSlot {
@@ -19,7 +18,7 @@ export interface FreeAgentOperationObservedSlot {
 
 export interface FreeAgentOperationObservedWaiver {
   waiverId: string;
-  claimOwnerIds: string[];
+  hasOwnerClaim: boolean;
 }
 
 export interface FreeAgentOperationObservation {
@@ -27,7 +26,6 @@ export interface FreeAgentOperationObservation {
   benchSlots: FreeAgentOperationObservedSlot[];
   waivers: FreeAgentOperationObservedWaiver[];
 }
-
 
 /**
  * Bounds a client-side prerequisite so a stalled NHL/API request cannot keep a
@@ -91,7 +89,7 @@ export function isFreeAgentOperationObserved(
       (candidate) => candidate.waiverId === expectation.waiverId,
     );
 
-    return Boolean(waiver?.claimOwnerIds.includes(expectation.ownerId));
+    return Boolean(waiver?.hasOwnerClaim);
   }
 
   const slots = expectation.rosterArea === 'active'

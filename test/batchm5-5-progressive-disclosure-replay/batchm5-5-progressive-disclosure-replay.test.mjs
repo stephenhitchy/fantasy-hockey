@@ -301,6 +301,12 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/player/injury-match-quality.util.ts',
         'src/shared/core/player/injury-player-aliases.ts',
         'src/shared/core/player/player-availability.models.ts',
+        // C1A adds isolated server-sanitized League Wire projections.
+        'src/league-activity.ts',
+        'src/shared/core/league/league-activity.util.ts',
+        // C1B adds guarded additive migration and inspection commands.
+        'scripts/transaction-privacy-backfill.cjs',
+        'scripts/transaction-privacy-inspect.cjs',
       ]),
     ),
     '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',

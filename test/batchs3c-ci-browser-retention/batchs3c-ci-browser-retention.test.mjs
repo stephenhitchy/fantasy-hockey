@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
+
 import { scanTextForSecrets } from '../../scripts/security/secret-scan.mjs';
 import { auditHostingSecurityHeaders } from '../../scripts/security/security-header-audit.mjs';
 
@@ -265,7 +267,7 @@ test('S3C runbook, commands, release label, and permanent roadmap remain synchro
 });
 
 test('S3C preserves Production Scoring V3, Projection V11, Firestore Rules, and indexes', async () => {
-  const expected = JSON.parse(await read('test/batchs3c-ci-browser-retention/preserved-source-hashes.json'));
+  const expected = PROTECTED_SOURCE_HASHES;
 
   assert.equal(await sha256('src/app/core/scoring/scoring-rules.ts'), expected.scoringRules);
   assert.equal(await sha256('src/app/core/scoring/scoring-engine.ts'), expected.scoringEngine);

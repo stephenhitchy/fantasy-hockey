@@ -1,0 +1,896 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserId() {
+      return request.auth.uid;
+    }
+
+    function leaguePath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId);
+    }
+
+    function memberPath(leagueId, userId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(userId);
+    }
+
+    function teamPath(leagueId, ownerId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/teams/$(ownerId);
+    }
+
+    function draftPath(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/draft/current;
+    }
+
+    function hasExistingOwnedTeam(leagueId) {
+      /*
+       * The team document ID is the authenticated owner's UID. Older test
+       * leagues may predate the ownerId field, so document existence is the
+       * compatibility-safe proof of membership here.
+       */
+      return signedIn() &&
+        exists(teamPath(leagueId, currentUserId()));
+    }
+
+    function isLeagueMember(leagueId) {
+      return signedIn() &&
+        (
+          exists(memberPath(leagueId, currentUserId())) ||
+          hasExistingOwnedTeam(leagueId) ||
+          (
+            exists(leaguePath(leagueId)) &&
+            get(leaguePath(leagueId)).data.commissionerId == currentUserId()
+          )
+        );
+    }
+
+    /*
+     * Shared projection snapshots must support older joined-team records that
+     * may not contain the newer ownerId field. Draft/league pages can still be
+     * visible from cached or broader reads, while the projection asset query
+     * fails unless this read check accepts either a membership document, the
+     * user's team document, or the commissioner.
+     */
+    function canReadSharedLeagueProjection(leagueId) {
+      return signedIn() &&
+        exists(leaguePath(leagueId)) &&
+        (
+          get(leaguePath(leagueId)).data.commissionerId ==
+            currentUserId() ||
+          exists(memberPath(leagueId, currentUserId())) ||
+          exists(teamPath(leagueId, currentUserId()))
+        );
+    }
+
+    function isLeagueCommissioner(leagueId) {
+      return signedIn() &&
+        exists(leaguePath(leagueId)) &&
+        get(leaguePath(leagueId)).data.commissionerId == currentUserId();
+    }
+
+    function validUsername(username) {
+      return username is string &&
+        username.size() >= 1 &&
+        username.size() <= 40;
+    }
+
+    function validProfileIconId(profileIconId) {
+      return profileIconId in [
+          'emerald-visor', 'red-line-rat', 'purple-sniper', 'teal-captain', 'whiteout-goalie',
+          'crease-split', 'blue-line-blaster', 'open-ice-hit', 'masked-veteran', 'water-break',
+          'jersey-neon-diamond', 'jersey-arcade-viper', 'jersey-red-chevron', 'jersey-royal-crest', 'jersey-forest-cross',
+          'jersey-speed-stripes', 'jersey-north-star', 'jersey-emerald-starburst', 'jersey-pine-star', 'jersey-violet-crystal',
+          'jersey-ice-orbit', 'jersey-wing-rush', 'jersey-blue-compass', 'jersey-frost-vortex', 'jersey-teal-tide',
+          'hockey-referee', 'hockey-ice-resurfacer', 'hockey-goalie-mask', 'hockey-skates', 'hockey-crossed-sticks',
+          'hockey-visor-helmet', 'hockey-goal-light', 'hockey-goalie-gear', 'hockey-championship-cup', 'hockey-bench-gear'
+      ];
+    }
+
+    function validTeamName(name) {
+      return name is string &&
+        name.size() >= 1 &&
+        name.size() <= 60;
+    }
+
+    function validMemberDocumentShape(leagueId, memberId) {
+      let data = request.resource.data;
+
+      return data.keys().hasOnly([
+          'schemaVersion',
+          'uid',
+          'leagueId',
+          'username',
+          'profileIconId',
+          'role',
+          'inviteCodeUsed',
+          'joinedAt',
+          'authority',
+          'accountDeleted',
+          'accountDeletedAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasAll(['uid', 'leagueId', 'username', 'role']) &&
+        data.uid == memberId &&
+        data.leagueId == leagueId &&
+        validUsername(data.username) &&
+        data.role in ['commissioner', 'member'] &&
+        (!data.keys().hasAny(['schemaVersion']) || data.schemaVersion == 1) &&
+        (!data.keys().hasAny(['profileIconId']) || validProfileIconId(data.profileIconId)) &&
+        (
+          !data.keys().hasAny(['inviteCodeUsed']) ||
+          data.inviteCodeUsed == null ||
+          (
+            data.inviteCodeUsed is string &&
+            data.inviteCodeUsed.size() <= 6
+          )
+        ) &&
+        (!data.keys().hasAny(['joinedAt']) || data.joinedAt is timestamp) &&
+        (
+          !data.keys().hasAny(['authority']) ||
+          (
+            data.authority is string &&
+            data.authority.size() >= 1 &&
+            data.authority.size() <= 80
+          )
+        ) &&
+        (!data.keys().hasAny(['accountDeleted']) || data.accountDeleted is bool) &&
+        (!data.keys().hasAny(['accountDeletedAt']) || data.accountDeletedAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function validMemberSelfUpdate(leagueId, memberId) {
+      return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['username', 'profileIconId', 'updatedAt']) &&
+        validMemberDocumentShape(leagueId, memberId) &&
+        request.resource.data.username is string &&
+        (!request.resource.data.keys().hasAny(['updatedAt']) ||
+          request.resource.data.updatedAt == request.time);
+    }
+
+    function validTeamDocumentShape(teamId) {
+      let data = request.resource.data;
+
+      return data.keys().hasOnly([
+          'schemaVersion',
+          'id',
+          'ownerId',
+          'teamName',
+          'managerName',
+          'profileIconId',
+          'logo',
+          'wins',
+          'losses',
+          'ties',
+          'pointsFor',
+          'pointsAgainst',
+          'waiverPriority',
+          'draftPosition',
+          'createdAt',
+          'updatedAt',
+          'authority',
+          'accountDeleted',
+          'accountDeletedAt'
+        ]) &&
+        data.keys().hasAll(['id', 'ownerId', 'teamName', 'logo']) &&
+        data.id == teamId &&
+        data.ownerId == teamId &&
+        validTeamName(data.teamName) &&
+        data.logo is string &&
+        data.logo.size() <= 240 &&
+        (!data.keys().hasAny(['schemaVersion']) || data.schemaVersion == 1) &&
+        (!data.keys().hasAny(['managerName']) || validUsername(data.managerName)) &&
+        (!data.keys().hasAny(['profileIconId']) || validProfileIconId(data.profileIconId)) &&
+        (!data.keys().hasAny(['wins']) || (data.wins is int && data.wins >= 0)) &&
+        (!data.keys().hasAny(['losses']) || (data.losses is int && data.losses >= 0)) &&
+        (!data.keys().hasAny(['ties']) || (data.ties is int && data.ties >= 0)) &&
+        (!data.keys().hasAny(['pointsFor']) || (data.pointsFor is number && data.pointsFor >= 0)) &&
+        (!data.keys().hasAny(['pointsAgainst']) || (data.pointsAgainst is number && data.pointsAgainst >= 0)) &&
+        (!data.keys().hasAny(['waiverPriority']) ||
+          (data.waiverPriority is int && data.waiverPriority >= 1 && data.waiverPriority <= 32)) &&
+        (!data.keys().hasAny(['draftPosition']) || data.draftPosition == null ||
+          (data.draftPosition is int && data.draftPosition >= 1 && data.draftPosition <= 32)) &&
+        (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp) &&
+        (
+          !data.keys().hasAny(['authority']) ||
+          (
+            data.authority is string &&
+            data.authority.size() >= 1 &&
+            data.authority.size() <= 80
+          )
+        ) &&
+        (!data.keys().hasAny(['accountDeleted']) || data.accountDeleted is bool) &&
+        (!data.keys().hasAny(['accountDeletedAt']) || data.accountDeletedAt is timestamp);
+    }
+
+    function validOwnerTeamUpdate(teamId) {
+      return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['teamName', 'managerName', 'profileIconId', 'logo', 'updatedAt']) &&
+        validTeamDocumentShape(teamId) &&
+        (!request.resource.data.keys().hasAny(['updatedAt']) ||
+          request.resource.data.updatedAt == request.time);
+    }
+
+    function validDraftQueueWrite(leagueId, ownerId) {
+      let data = request.resource.data;
+      let timeoutStatePresent =
+        'consecutiveClockExpirations' in data ||
+        'autoDraftActivatedByTimeout' in data;
+
+      return get(draftPath(leagueId)).data.status != 'complete' &&
+        data.keys().hasOnly([
+          'ownerId',
+          'assetKeys',
+          'autoDraftEnabled',
+          'consecutiveClockExpirations',
+          'autoDraftActivatedByTimeout',
+          'updatedAt'
+        ]) &&
+        data.ownerId == ownerId &&
+        data.assetKeys is list &&
+        data.assetKeys.size() <= 100 &&
+        data.assetKeys.toSet().size() ==
+          data.assetKeys.size() &&
+        data.autoDraftEnabled is bool &&
+        (
+          !timeoutStatePresent ||
+          (
+            'consecutiveClockExpirations' in data &&
+            'autoDraftActivatedByTimeout' in data &&
+            data.consecutiveClockExpirations is int &&
+            data.consecutiveClockExpirations >= 0 &&
+            data.consecutiveClockExpirations <= 2 &&
+            data.autoDraftActivatedByTimeout is bool &&
+            (
+              data.autoDraftActivatedByTimeout == false ||
+              (
+                data.autoDraftEnabled == true &&
+                data.consecutiveClockExpirations == 2
+              )
+            )
+          )
+        ) &&
+        data.updatedAt == request.time;
+    }
+
+    function validPlayerAvailabilityStatus(status) {
+      return status in [
+        'active',
+        'day-to-day',
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve',
+        'suspended',
+        'personal-leave',
+        'unknown'
+      ];
+    }
+
+    function playerAvailabilityIrEligible(status) {
+      return status in [
+        'out',
+        'injured-reserve',
+        'long-term-injured-reserve'
+      ];
+    }
+
+    function validPlayerAvailabilityBase(leagueId) {
+      let data = request.resource.data;
+
+      return data.keys().hasAll([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.playerId is int &&
+        data.playerId >= 1 &&
+        data.playerName is string &&
+        data.playerName.size() >= 1 &&
+        data.playerName.size() <= 100 &&
+        validPlayerAvailabilityStatus(data.status) &&
+        data.note is string &&
+        data.note.size() <= 500 &&
+        data.irEligible == playerAvailabilityIrEligible(data.status) &&
+        data.updatedAt == request.time &&
+        data.updatedBy == currentUserId() &&
+        data.leagueId == leagueId;
+    }
+
+    function validCommissionerAvailabilityWrite(leagueId) {
+      let data = request.resource.data;
+
+      return validPlayerAvailabilityBase(leagueId) &&
+        data.keys().hasOnly([
+          'playerId',
+          'playerName',
+          'status',
+          'note',
+          'irEligible',
+          'updatedAt',
+          'updatedBy',
+          'source',
+          'leagueId'
+        ]) &&
+        data.source == 'commissioner';
+    }
+
+    match /users/{userId} {
+      function validFavoriteTeam(data) {
+        return !data.keys().hasAny(['favoriteTeamAbbreviation']) ||
+          data.favoriteTeamAbbreviation in [
+            'RR',
+            'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
+            'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
+            'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
+            'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK', 'WSH', 'WPG'
+          ];
+      }
+
+      function validHockeyExperience(data) {
+        return !data.keys().hasAny(['hockeyExperience']) ||
+          data.hockeyExperience in ['new', 'basic', 'experienced'];
+      }
+
+      function validTeamIdentityVariant(data) {
+        return !data.keys().hasAny(['favoriteTeamVariantId']) ||
+          (data.favoriteTeamVariantId is string &&
+            data.favoriteTeamVariantId.size() >= 1 &&
+            data.favoriteTeamVariantId.size() <= 80);
+      }
+
+      function validTeamIdentityUnlocks(data) {
+        return !data.keys().hasAny(['teamIdentityUnlocks']) ||
+          (data.teamIdentityUnlocks is list &&
+            data.teamIdentityUnlocks.size() <= 4 &&
+            data.teamIdentityUnlocks.hasOnly([
+              'first-line-change',
+              'commissioner-mode',
+              'league-explorer',
+              'crowded-schedule'
+            ]));
+      }
+
+      function validProfileIcon(data) {
+        return !data.keys().hasAny(['profileIconId']) ||
+          validProfileIconId(data.profileIconId);
+      }
+
+      function validUserPreferences(data) {
+        return validFavoriteTeam(data) &&
+          validTeamIdentityVariant(data) &&
+          validTeamIdentityUnlocks(data) &&
+          validProfileIcon(data) &&
+          validHockeyExperience(data) &&
+          (!data.keys().hasAny(['reducedMotion']) || data.reducedMotion is bool) &&
+          (!data.keys().hasAny(['defaultLandingPage']) ||
+            data.defaultLandingPage in ['dashboard', 'lastLeague']) &&
+          (!data.keys().hasAny(['backgroundTheme']) ||
+            data.backgroundTheme in ['rink-dark', 'oled-black', 'ice-gray', 'light-ice']) &&
+          (!data.keys().hasAny(['injuryEmailEnabled']) ||
+            data.injuryEmailEnabled is bool) &&
+          (!data.keys().hasAny(['trainingCampVersion']) ||
+            (data.trainingCampVersion is int &&
+              data.trainingCampVersion >= 0 &&
+              data.trainingCampVersion <= 10)) &&
+          (!data.keys().hasAny(['trainingCampCompletedAt']) ||
+            data.trainingCampCompletedAt is timestamp);
+      }
+
+      function validUserProfileUpdate() {
+        let changedFields = request.resource.data
+          .diff(resource.data)
+          .affectedKeys();
+
+        return changedFields.hasOnly([
+            'username',
+            'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'teamIdentityUnlocks',
+            'reducedMotion',
+            'defaultLandingPage',
+            'backgroundTheme',
+            'injuryEmailEnabled',
+            'hockeyExperience',
+            'trainingCampVersion',
+            'trainingCampCompletedAt'
+          ]) &&
+          (!changedFields.hasAny(['username']) ||
+            validUsername(request.resource.data.username)) &&
+          validUserPreferences(request.resource.data);
+      }
+
+      allow create: if signedIn() &&
+        userId == currentUserId() &&
+        request.resource.data.uid == currentUserId() &&
+        request.resource.data.email == request.auth.token.email &&
+        validUsername(request.resource.data.username) &&
+        validUserPreferences(request.resource.data);
+
+      // Private account documents contain email and personal preferences.
+      // Browsers may only read the signed-in user's own private profile.
+      allow get: if signedIn() && userId == currentUserId();
+      allow list: if false;
+
+      allow update: if signedIn() &&
+        userId == currentUserId() &&
+        validUserProfileUpdate();
+
+      allow delete: if false;
+
+      match /matchupScoreViews/{viewId} {
+        function validScoreViewWrite() {
+          let data = request.resource.data;
+
+          return data.keys().hasOnly([
+              'schemaVersion',
+              'userId',
+              'leagueId',
+              'cycleNumber',
+              'scores',
+              'observedAtIso',
+              'updatedAt'
+            ]) &&
+            data.schemaVersion == 1 &&
+            data.userId == currentUserId() &&
+            data.leagueId is string &&
+            data.leagueId.size() > 0 &&
+            data.cycleNumber is int &&
+            data.cycleNumber > 0 &&
+            data.scores is map &&
+            data.observedAtIso is string &&
+            data.updatedAt == request.time;
+        }
+
+        allow get: if signedIn() && userId == currentUserId();
+        allow list: if false;
+        allow create, update: if signedIn() &&
+          userId == currentUserId() &&
+          validScoreViewWrite();
+        allow delete: if signedIn() && userId == currentUserId();
+      }
+    }
+
+    match /publicProfiles/{userId} {
+      function validPublicFavoriteTeam(data) {
+        return data.favoriteTeamAbbreviation in [
+          'RR',
+          'ANA', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ',
+          'DAL', 'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH',
+          'NJD', 'NYI', 'NYR', 'OTT', 'PHI', 'PIT', 'SEA', 'SJS',
+          'STL', 'TBL', 'TOR', 'UTA', 'VAN', 'VGK', 'WSH', 'WPG'
+        ];
+      }
+
+      function validPublicProfile() {
+        let data = request.resource.data;
+
+        return data.keys().hasAll([
+            'uid',
+            'username',
+            'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'updatedAt'
+          ]) &&
+          data.keys().hasOnly([
+            'uid',
+            'username',
+            'favoriteTeamAbbreviation',
+            'favoriteTeamVariantId',
+            'updatedAt'
+          ]) &&
+          data.uid == userId &&
+          validUsername(data.username) &&
+          validPublicFavoriteTeam(data) &&
+          data.favoriteTeamVariantId is string &&
+          data.favoriteTeamVariantId.size() >= 1 &&
+          data.favoriteTeamVariantId.size() <= 80 &&
+          data.updatedAt == request.time;
+      }
+
+      // Public manager identity contains only display-safe fields. Individual
+      // reads are allowed for signed-in users; collection-wide browsing is not.
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create, update: if signedIn() &&
+        userId == currentUserId() &&
+        validPublicProfile();
+
+      allow delete: if false;
+    }
+
+    match /leagueInvites/{inviteCode} {
+      // Invite codes are accepted only by joinLeagueSecure. The callable can
+      // validate expiry, capacity, draft lock, and account quotas atomically.
+      allow read, create, update, delete: if false;
+    }
+
+    match /appData/playerAvailability {
+      allow read: if signedIn();
+
+      // The Admin SDK is the sole authority for the shared ESPN report.
+      // Commissioners request refreshes through an authenticated callable.
+      allow create, update, delete: if false;
+    }
+
+    match /projectionGenerationRequests/{requestId} {
+      // Server-owned progress records let league members follow a queued
+      // Projection V11 refresh without keeping a long callable connection open.
+      allow get: if signedIn() &&
+        resource.data.leagueId is string &&
+        isLeagueMember(resource.data.leagueId);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+
+    match /appData/draftAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/leagueAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/injuryAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/injuryEmailAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /appData/seasonAutomation {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /leagues/{leagueId} {
+      // New leagues are created only by createLeagueSecure through the Admin SDK.
+      allow create: if false;
+
+      allow get: if isLeagueMember(leagueId);
+      allow list: if false;
+
+      // Commissioners may change presentation only. Scoring, six-game windows,
+      // ownership, capacity, invite identity, authority markers, and hidden
+      // competition fields remain server-owned and immutable from browsers.
+      // Every league-document change now passes through audited Cloud Functions.
+      allow update: if false;
+      // League deletion is handled by the authenticated deleteLeague Cloud
+      // Function so every nested document and related invite is removed safely.
+      allow delete: if false;
+
+      match /audit/{auditId} {
+        // Immutable server-owned league lifecycle and commissioner-action history.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /activity/{activityId} {
+        // League Wire is a server-sanitized, member-only projection of public
+        // Draft and roster outcomes. Browsers cannot publish or alter entries.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /members/{memberId} {
+        allow get: if signedIn() &&
+          (
+            memberId == currentUserId() ||
+            isLeagueMember(leagueId)
+          );
+
+        allow list: if false;
+
+        // Membership is created atomically by createLeagueSecure or joinLeagueSecure.
+        allow create: if false;
+
+        allow update: if signedIn() &&
+          memberId == currentUserId() &&
+          validMemberSelfUpdate(leagueId, memberId);
+
+        // Removing or changing another manager requires a future audited
+        // server workflow. Commissioners have no browser bypass.
+        allow delete: if false;
+
+        match /transactions/{transactionId} {
+          // Each manager receives only their own sanitized transaction history.
+          // Filtering a league-wide raw collection in browser code is not a
+          // privacy boundary, so commissioners and other members have no access.
+          allow read: if signedIn() &&
+            memberId == currentUserId() &&
+            isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+
+        match /waiverClaims/{waiverId} {
+          // Pending claim targets, replacement slots, and results are private
+          // to the claimant. Waiver adjudication remains server-authoritative.
+          allow read: if signedIn() &&
+            memberId == currentUserId() &&
+            isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+      }
+
+      match /teams/{teamId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // Team ownership is created atomically by createLeagueSecure or joinLeagueSecure.
+        allow create: if false;
+
+        // Identity fields remain editable, but standings, waiver priority,
+        // draft position, and every other computed competition field are
+        // server-authoritative. Commissioners receive no browser bypass for
+        // score or record manipulation.
+        allow update: if signedIn() &&
+          teamId == currentUserId() &&
+          validOwnerTeamUpdate(teamId);
+
+        // Team removal is server-authoritative so it can update membership,
+        // capacity, Draft state, quotas, and the immutable audit trail.
+        allow delete: if false;
+
+        match /roster/{rosterId} {
+          allow read: if isLeagueMember(leagueId);
+
+          // All roster creation and mutation is server-authoritative. The
+          // Admin SDK performs draft placement, secure roster moves, queued
+          // cycle-boundary activation, and repair of legacy rosters.
+          allow create, update, delete: if false;
+        }
+      }
+
+      match /draft/{draftId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // Draft setup, clock state, pick progression, and deletion are all
+        // server-authoritative. Browser clients use executeDraftCommand and
+        // makeSecureDraftPick instead of writing draft records directly.
+        allow create, update, delete: if false;
+
+        match /picks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+
+        match /queues/{ownerId} {
+          allow read: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            (
+              ownerId == currentUserId() ||
+              isLeagueCommissioner(leagueId)
+            );
+
+          allow create, update: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            ownerId == currentUserId() &&
+            validDraftQueueWrite(leagueId, ownerId);
+
+          allow delete: if draftId == 'current' &&
+            isLeagueMember(leagueId) &&
+            ownerId == currentUserId();
+        }
+      }
+
+      match /transactionResults/{transactionId} {
+        // Completed outcomes are a sanitized member-readable projection.
+        // Pending claims, queued plans, request IDs, and slot targets are absent.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /waiverPool/{waiverId} {
+        // Members may see which assets are on waivers and completed outcomes,
+        // but never the raw claim array, claimant identities, or roster targets.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /transactions/{transactionId} {
+        // Temporary C1B migration bridge: RC27 may still read canonical records
+        // while RC28 is deployed and proven against the private projections.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /waivers/{waiverId} {
+        // Temporary C1B migration bridge: retain the inherited member read only
+        // until RC28 Hosting is verified, then deploy the final server-only rule.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update, delete: if false;
+      }
+
+
+      match /projectionSnapshots/{snapshotId} {
+        // Projection V11 snapshots, pointers, and chunks are generated, sealed,
+        // restored, and migrated only by Cloud Functions. Commissioners and
+        // modified browser clients receive read access but no write path.
+        allow get, list: if canReadSharedLeagueProjection(leagueId);
+        allow create, update, delete: if false;
+
+        match /assets/{assetKey} {
+          allow get, list: if canReadSharedLeagueProjection(leagueId);
+          allow create, update, delete: if false;
+        }
+      }
+
+
+      match /projectionAccuracy/{cycleId} {
+        allow read: if canReadSharedLeagueProjection(leagueId);
+
+        allow create, update: if
+          isLeagueCommissioner(leagueId);
+
+        allow delete: if
+          isLeagueCommissioner(leagueId);
+
+        match /assets/{recordId} {
+          allow read: if canReadSharedLeagueProjection(leagueId);
+
+          allow create, update: if
+            isLeagueCommissioner(leagueId);
+
+          allow delete: if
+            isLeagueCommissioner(leagueId);
+        }
+      }
+
+
+      match /playerAvailability/{playerId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // League documents now contain commissioner overrides only.
+        // Automatic ESPN records live once in /appData/playerAvailability.
+        allow create, update: if isLeagueCommissioner(leagueId) &&
+          validCommissionerAvailabilityWrite(leagueId);
+
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /playerAvailabilitySync/{syncId} {
+        // Legacy per-league sync metadata remains readable for old data,
+        // but new clients cannot recreate the former per-league sync flow.
+        allow read: if isLeagueMember(leagueId);
+        allow create, update: if false;
+        allow delete: if isLeagueCommissioner(leagueId);
+      }
+
+      match /liveScoring/{scoringDocumentId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // Cloud Functions are the sole scoring authority. Admin SDK writes
+        // bypass rules; browsers can only consume the shared results.
+        allow create, update, delete: if false;
+      }
+
+
+      match /historicalReplay/{replayDocumentId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // The replay clock is advanced only by authenticated callable Functions.
+        allow create, update, delete: if false;
+      }
+
+      match /historicalReplayAssets/{assetKey} {
+        // Mapping documents are useful to commissioners when diagnosing a test,
+        // but are never writable from a browser.
+        allow read: if isLeagueCommissioner(leagueId);
+        allow create, update, delete: if false;
+      }
+
+      match /playoffWindowBanks/{ownerId} {
+        allow read: if isLeagueMember(leagueId);
+        // Bank creation, scoring, assignment, and rollover are performed by
+        // trusted league automation only.
+        allow create, update, delete: if false;
+
+        match /windows/{windowId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+      }
+
+      match /playoffs/{playoffId} {
+        allow read: if isLeagueMember(leagueId);
+        // Bracket seeds, advancement, placements, and results are server-owned.
+        allow create, update, delete: if false;
+      }
+
+      match /cycles/{cycleId} {
+        allow read: if isLeagueMember(leagueId);
+
+        // Cycle lifecycle and competition fields are server-authoritative. The
+        // only remaining browser update is the existing projection-accuracy
+        // analytics marker; it cannot change scores, status, standings, windows,
+        // matchup ids, or playoff state.
+        allow create, delete: if false;
+        allow update: if isLeagueCommissioner(leagueId) &&
+          request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'projectionAccuracyStatus',
+              'projectionAccuracyAssetCount',
+              'projectionAccuracyProjectionVersions',
+              'projectionAccuracyUpdatedAt',
+              'updatedAt'
+            ]);
+
+        match /matchups/{matchupId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+
+        match /rosterPicks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+
+        match /teamWindows/{ownerId} {
+          allow read: if isLeagueMember(leagueId);
+          allow create, update, delete: if false;
+        }
+      }
+    }
+
+    // Required for getMyLeagues(), which performs:
+    // collectionGroup('members').where('uid', '==', request.auth.uid)
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() &&
+        resource.data.uid == currentUserId();
+    }
+
+    // Feedback, client diagnostics, and rate-limit records are server-managed.
+    // Callable Functions use the Admin SDK and bypass these browser rules.
+    match /feedbackReports/{feedbackId} {
+      allow read, write: if false;
+    }
+
+    match /clientErrorReports/{reportId} {
+      allow read, write: if false;
+    }
+
+    match /observabilityRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
+    // Platform-administrator access and review records are managed only by
+    // trusted Cloud Functions. Normal league commissioners never receive
+    // platform-wide feedback or diagnostic access.
+    match /platformAdmins/{userId} {
+      allow read, write: if false;
+    }
+
+    match /adminErrorReviews/{fingerprint} {
+      allow read, write: if false;
+    }
+
+    match /adminAuditLogs/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

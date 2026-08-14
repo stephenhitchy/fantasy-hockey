@@ -296,6 +296,7 @@ export class FreeAgents implements OnDestroy {
     const positionFilter = this.positionFilter();
 
     return this.waivers()
+      .map((waiver) => ({ ...waiver, asset: this.resolveWaiverAsset(waiver) }))
       .filter((waiver) => waiver.status === 'active')
       .filter((waiver) => positionFilter === 'ALL' || waiver.asset.position === positionFilter)
       .filter((waiver) => {
@@ -313,11 +314,11 @@ export class FreeAgents implements OnDestroy {
           .includes(search);
       })
       .sort((first, second) => {
-        const firstClaims = first.claims?.length ?? 0;
-        const secondClaims = second.claims?.length ?? 0;
+        const firstOwnClaim = first.myClaim?.status === 'pending' ? 1 : 0;
+        const secondOwnClaim = second.myClaim?.status === 'pending' ? 1 : 0;
 
-        if (secondClaims !== firstClaims) {
-          return secondClaims - firstClaims;
+        if (secondOwnClaim !== firstOwnClaim) {
+          return secondOwnClaim - firstOwnClaim;
         }
 
         return this.getAssetName(first.asset).localeCompare(this.getAssetName(second.asset));
@@ -679,7 +680,7 @@ export class FreeAgents implements OnDestroy {
         this.selectPreferredDropCandidateIfAvailable();
       });
 
-      this.stopWaiversListener = listenToLeagueWaivers(leagueId, (waivers) => {
+      this.stopWaiversListener = listenToLeagueWaivers(leagueId, this.userId, (waivers) => {
         this.hasReceivedWaivers = true;
         this.waivers.set(waivers);
         this.resumeRestoredSelectionIfAvailable();
@@ -783,18 +784,19 @@ export class FreeAgents implements OnDestroy {
     this.capturePlayerPoolScroll();
     this.successMessage.set('');
     this.errorMessage.set('');
-    this.selectedAddAssetKey.set(waiver.asset.assetKey);
+    const asset = this.resolveWaiverAsset(waiver);
+    this.selectedAddAssetKey.set(asset.assetKey);
     this.selectedWaiverId.set(waiver.id);
     this.selectedDropSlotId.set('');
     this.resetTransactionDisclosureState();
     this.flowStep.set('roster-slot');
 
     if (this.positionFilter() === 'ALL') {
-      this.positionFilter.set(waiver.asset.position);
+      this.positionFilter.set(asset.position);
     }
 
     this.persistFreeAgentViewState();
-    void this.loadSelectedAssetEligibility(waiver.asset);
+    void this.loadSelectedAssetEligibility(asset);
   }
 
   returnToPlayerPool(): void {
@@ -970,7 +972,6 @@ export class FreeAgents implements OnDestroy {
         ? {
             kind: 'waiver-claim',
             waiverId: waiver.id,
-            ownerId: this.userId,
           }
         : {
             kind: 'roster-slot',
@@ -1113,9 +1114,10 @@ export class FreeAgents implements OnDestroy {
     this.moving.set(true);
 
     try {
+      const waiverAsset = this.resolveWaiverAsset(waiver);
       const eligibility = await withFreeAgentOperationTimeout(
         resolveRosterMoveAssetCycleEligibility(
-          waiver.asset,
+          waiverAsset,
           this.getRequiredGamesPerCycle(),
           this.getRosterMoveEligibilityOptions(true),
         ),
@@ -1128,7 +1130,7 @@ export class FreeAgents implements OnDestroy {
       );
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
 
-      await withFreeAgentOperationTimeout(
+      const result = await withFreeAgentOperationTimeout(
         processWaiver({
           leagueId: this.leagueId,
           commissionerId: this.userId,
@@ -1141,14 +1143,14 @@ export class FreeAgents implements OnDestroy {
         'RinkRat stopped waiting for the waiver-processing response. The page has been unlocked; refresh the waiver list before processing again because the result may already have saved.',
       );
 
-      const claimCount = waiver.claims?.length ?? 0;
+      const assetName = this.getAssetName(waiverAsset);
 
       this.successMessage.set(
-        claimCount > 0
-          ? this.hasStartedCycleWindows()
-            ? `Processed waivers for ${this.getAssetName(waiver.asset)}. The winner is reserved for the selected slot and will activate when that slot starts its next matchup.`
-            : `Processed waivers for ${this.getAssetName(waiver.asset)}. The winning team was awarded the player and waiver priority was updated.`
-          : `${this.getAssetName(waiver.asset)} cleared waivers and is now a normal free agent.`,
+        /cleared/i.test(result.message)
+          ? `${assetName} cleared waivers and is now a normal free agent.`
+          : result.mode === 'queued'
+            ? `Processed waivers for ${assetName}. The awarded player is reserved for the selected slot and will activate when that slot starts its next matchup.`
+            : `Processed waivers for ${assetName}. The server recorded the award and updated waiver priority.`,
       );
     } catch (error: unknown) {
       this.errorMessage.set(
@@ -2462,18 +2464,22 @@ export class FreeAgents implements OnDestroy {
     return this.selectedWaiverId() === waiver.id;
   }
 
-  getWaiverClaimCount(waiver: FantasyWaiver): number {
-    return waiver.claims?.length ?? 0;
+  private resolveWaiverAsset(waiver: FantasyWaiver): DraftableAsset {
+    return this.playerPool().find((asset) => asset.assetKey === waiver.assetKey) ?? waiver.asset;
   }
 
   getWaiverClaimLabel(waiver: FantasyWaiver): string {
-    const claimCount = this.getWaiverClaimCount(waiver);
+    return waiver.myClaim?.status === 'pending'
+      ? 'Your claim is private'
+      : 'Claim details stay private';
+  }
 
-    if (claimCount === 0) {
-      return 'No claims yet';
+  getWaiverActionLabel(waiver: FantasyWaiver): string {
+    if (waiver.droppedByOwnerId === this.userId) {
+      return 'Your Drop';
     }
 
-    return claimCount === 1 ? '1 claim' : `${claimCount} claims`;
+    return waiver.myClaim?.status === 'pending' ? 'Review Your Claim' : 'Compare & Claim';
   }
 
   getWaiverDroppedByLabel(waiver: FantasyWaiver): string {
@@ -2596,7 +2602,7 @@ export class FreeAgents implements OnDestroy {
       })),
       waivers: this.waivers().map((waiver) => ({
         waiverId: waiver.id,
-        claimOwnerIds: (waiver.claims ?? []).map((claim) => claim.ownerId),
+        hasOwnerClaim: waiver.myClaim?.status === 'pending',
       })),
     };
   }

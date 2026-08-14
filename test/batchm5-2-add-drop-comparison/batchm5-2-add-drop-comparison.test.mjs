@@ -326,11 +326,11 @@ test('live roster confirmation accepts immediate, queued, boundary-activated, an
 
 test('live waiver listener confirmation releases the UI even when the callable response is delayed', () => {
   assert.equal(isFreeAgentOperationObserved({
-    kind: 'waiver-claim', waiverId: 'waiver-1', ownerId: 'owner-a',
+    kind: 'waiver-claim', waiverId: 'waiver-1',
   }, {
     activeSlots: [],
     benchSlots: [],
-    waivers: [{ waiverId: 'waiver-1', claimOwnerIds: ['owner-b', 'owner-a'] }],
+    waivers: [{ waiverId: 'waiver-1', hasOwnerClaim: true }],
   }), true);
 });
 

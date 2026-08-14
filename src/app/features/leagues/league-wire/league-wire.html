@@ -1,0 +1,91 @@
+<section class="league-wire rr-card rr-card--padded" aria-labelledby="league-wire-title">
+  <header class="league-wire-heading">
+    <div>
+      <span class="league-wire-eyebrow">League Wire</span>
+      <h2 id="league-wire-title">What just happened</h2>
+    </div>
+
+    <span class="league-wire-visibility">League only</span>
+  </header>
+
+  <p class="league-wire-intro">
+    Draft picks and completed league moves, delivered rink-side without exposing pending claims.
+  </p>
+
+  @if (loading()) {
+    <div class="league-wire-state" aria-live="polite">
+      <span class="league-wire-puck" aria-hidden="true"></span>
+      <div>
+        <strong>Loading the latest shifts...</strong>
+        <span>League HQ stays usable while the wire checks in.</span>
+      </div>
+    </div>
+  } @else if (errorMessage()) {
+    <div class="league-wire-state league-wire-state-error" role="status">
+      <span class="league-wire-puck" aria-hidden="true"></span>
+      <div>
+        <strong>Wire temporarily quiet</strong>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    </div>
+  } @else if (allItems().length === 0) {
+    <div class="league-wire-state">
+      <span class="league-wire-puck" aria-hidden="true"></span>
+      <div>
+        <strong>The first update is still in the tunnel.</strong>
+        <span>New public Draft and roster outcomes will appear here after this release.</span>
+      </div>
+    </div>
+  } @else {
+    <ol class="league-wire-list" aria-label="Recent league activity">
+      @for (item of visibleItems(); track item.id) {
+        <li class="league-wire-item" [attr.data-category]="item.category">
+          <div class="league-wire-avatar" aria-hidden="true">
+            @if (item.profileIconId) {
+              <app-manager-avatar
+                [profileIconId]="item.profileIconId"
+                [label]="item.actorLabel"
+                size="sm"
+              />
+            } @else {
+              <span class="league-wire-puck"></span>
+            }
+          </div>
+
+          <div class="league-wire-copy">
+            <div class="league-wire-meta">
+              <span class="league-wire-category">{{ item.categoryLabel }}</span>
+              <time
+                [attr.datetime]="item.occurredAt?.toISOString() ?? null"
+                [attr.title]="fullTimeLabel(item.occurredAt)"
+              >
+                {{ formatTime(item.occurredAt) }}
+              </time>
+            </div>
+
+            <strong>{{ item.headline }}</strong>
+
+            @if (item.detail) {
+              <span class="league-wire-detail">{{ item.detail }}</span>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+
+    @if (hiddenActivityCount() > 0) {
+      <button
+        class="league-wire-more rr-button rr-button--quiet"
+        type="button"
+        [attr.aria-expanded]="expanded()"
+        (click)="toggleExpanded()"
+      >
+        {{ expanded() ? 'Show recent only' : 'Show ' + hiddenActivityCount() + ' earlier updates' }}
+      </button>
+    }
+  }
+
+  <footer class="league-wire-footer">
+    Pending waiver claims, queued lineup plans, invite codes, and admin details stay off the wire.
+  </footer>
+</section>

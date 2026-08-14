@@ -345,7 +345,7 @@
                         (click)="selectWaiver(waiver)"
                         [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId || moving()"
                       >
-                        {{ waiver.droppedByOwnerId === userId ? 'Your Drop' : 'Compare & Claim' }}
+                        {{ getWaiverActionLabel(waiver) }}
                       </button>
 
                       @if (isCommissioner()) {

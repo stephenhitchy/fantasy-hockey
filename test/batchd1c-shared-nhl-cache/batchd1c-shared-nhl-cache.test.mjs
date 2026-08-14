@@ -138,7 +138,7 @@ test('shared NHL cache data has TTL plus a scheduled cleanup fallback', async ()
   ));
 });
 
-test('audit, inspection, CI, and release-freeze commands remain synchronized without a new client release', async () => {
+test('D1C audit and retention controls remain synchronized under the later C1A client release', async () => {
   const [packageSource, freezeSource, runtime, productionRuntime] = await Promise.all([
     read('package.json'),
     read('config/release-freeze/beta-freeze-policy.json'),
@@ -152,12 +152,12 @@ test('audit, inspection, CI, and release-freeze commands remain synchronized wit
   assert.equal(packageJson.scripts['data:inspect-nhl-shared-cache'], 'node functions/scripts/nhl-shared-cache-inspect.cjs');
   assert.match(packageJson.scripts['verify:batchd1c:core'], /verify:batchd1b:core/);
   assert.match(packageJson.scripts['verify:batchd1c:core'], /data:audit-nhl-shared-cache/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchd1c:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1b:core/);
   assert.equal(freeze.requiredTtlPolicyCount, 10);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchd1c');
-  assert.equal(freeze.releaseLabel, 'Release Candidate 26');
-  assert.match(runtime, /Release Candidate 26/);
-  assert.match(productionRuntime, /Release Candidate 26/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1b');
+  assert.equal(freeze.releaseLabel, 'Release Candidate 28');
+  assert.match(runtime, /Release Candidate 28/);
+  assert.match(productionRuntime, /Release Candidate 28/);
 
   const auditOutput = execFileSync(
     process.execPath,
@@ -178,7 +178,7 @@ test('D1C documentation and roadmap record a Shadow foundation rather than claim
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.17/);
+  assert.match(roadmap, /Version 1\.19/);
   assert.match(roadmap, /# \[x\] S3\.24/);
   assert.match(roadmap, /# \[x\] D1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.29/);

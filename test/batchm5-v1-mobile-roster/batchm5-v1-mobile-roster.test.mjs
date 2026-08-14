@@ -5,6 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
+
 import {
   buildFreeAgentRosterTargetQuery,
   buildRosterManagementActions,
@@ -277,7 +279,6 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
     'Available Now',
     'Waivers',
     'Compare Player',
-    'Compare & Claim',
     'Why this incoming projection?',
     'Transaction Workbench',
     'Choose Who This Player Replaces',
@@ -289,6 +290,9 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
     assert.match(template, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 
+  assert.match(template, /getWaiverActionLabel\(waiver\)/);
+  assert.match(source, /Review Your Claim/);
+  assert.match(source, /Compare & Claim/);
   assert.match(source, /sessionStorage\.setItem/);
   assert.match(source, /storedValue = sessionStorage\.getItem/);
   assert.match(source, /focusPendingMovesRequested/);
@@ -394,7 +398,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
   );
   assert.equal(
     await sha256('firestore.rules'),
-    '30feadadcd17e001c22e09b05d36f981847dc756131cdc776246f1617090878a',
+    PROTECTED_SOURCE_HASHES.firestoreRules,
   );
   assert.equal(
     await sha256('firestore.indexes.json'),

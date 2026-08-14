@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
+
 const ROOT = new URL('../../', import.meta.url);
 
 async function read(relativePath) {
@@ -13,6 +15,7 @@ async function sha256(relativePath) {
   const content = await readFile(new URL(relativePath, ROOT));
   return createHash('sha256').update(content).digest('hex');
 }
+
 
 test('B1B exports bounded beta evidence, public issue, triage, and operations callables', async () => {
   const [source, index, service] = await Promise.all([
@@ -212,7 +215,7 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(packageJson.scripts['verify:batchb1b'], /verify:batchb1b:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /verify:batchs3c:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /test:batchb1b:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b):core/);
   assert.match(readme, /RINKRAT_BETA_OPERATIONS_RUNBOOK\.md/);
   assert.match(readme, /verify:batchb1b/);
   assert.match(docs, /Beta Operations Batch B1B/);
@@ -227,12 +230,25 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.ok(productionRelease >= 21);
 });
 
-test('B1B preserves Production Scoring V3, Projection V11, Firestore Rules, and indexes', async () => {
-  const expected = JSON.parse(await read('test/batchs3c-ci-browser-retention/preserved-source-hashes.json'));
-
-  assert.equal(await sha256('src/app/core/scoring/scoring-rules.ts'), expected.scoringRules);
-  assert.equal(await sha256('src/app/core/scoring/scoring-engine.ts'), expected.scoringEngine);
-  assert.equal(await sha256('src/app/core/projection/projection-v11.util.ts'), expected.projectionV11);
-  assert.equal(await sha256('firestore.rules'), expected.firestoreRules);
-  assert.equal(await sha256('firestore.indexes.json'), expected.firestoreIndexes);
+test('B1B preserves Production Scoring V3, Projection V11, approved Firestore Rules, and indexes', async () => {
+  assert.equal(
+    await sha256('src/app/core/scoring/scoring-rules.ts'),
+    PROTECTED_SOURCE_HASHES.scoringRules,
+  );
+  assert.equal(
+    await sha256('src/app/core/scoring/scoring-engine.ts'),
+    PROTECTED_SOURCE_HASHES.scoringEngine,
+  );
+  assert.equal(
+    await sha256('src/app/core/projection/projection-v11.util.ts'),
+    PROTECTED_SOURCE_HASHES.projectionV11,
+  );
+  assert.equal(
+    await sha256('firestore.rules'),
+    PROTECTED_SOURCE_HASHES.firestoreRules,
+  );
+  assert.equal(
+    await sha256('firestore.indexes.json'),
+    PROTECTED_SOURCE_HASHES.firestoreIndexes,
+  );
 });

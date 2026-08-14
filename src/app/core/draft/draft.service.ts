@@ -11,6 +11,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  where,
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
@@ -23,7 +24,10 @@ import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
 
 import { applyImmediateRosterMove } from '../transactions/immediate-roster-move.service';
 
-import { executeSecureRosterAction } from '../transactions/roster-authority.service';
+import {
+  executeSecureRosterAction,
+  type SecureRosterActionResult,
+} from '../transactions/roster-authority.service';
 
 import { executeDraftCommand, makeSecureDraftPick } from './draft-authority.service';
 
@@ -155,16 +159,25 @@ export type FantasyWaiverStatus = 'active' | 'claimed' | 'cleared';
 
 export type FantasyWaiverClaimMoveType = 'drop' | 'open-slot';
 
+export type FantasyWaiverClaimStatus =
+  | 'pending'
+  | 'awarded'
+  | 'not-awarded'
+  | 'cleared';
+
 export interface FantasyWaiverClaim {
   ownerId: string;
+  waiverId: string;
   moveType: FantasyWaiverClaimMoveType;
   rosterArea?: 'active' | 'bench';
   dropSlotId?: string | null;
   targetSlotId?: string | null;
-  waiverPriorityAtClaim?: number | null;
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
+  status: FantasyWaiverClaimStatus;
   claimedAt?: unknown;
+  updatedAt?: unknown;
+  processedAt?: unknown;
 }
 
 export interface FantasyWaiver {
@@ -174,12 +187,10 @@ export interface FantasyWaiver {
   droppedAsset?: RosterAsset | null;
   droppedByOwnerId: string;
   status: FantasyWaiverStatus;
-  claims: FantasyWaiverClaim[];
+  myClaim: FantasyWaiverClaim | null;
   awardedToOwnerId?: string | null;
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
-  queuedMoveId?: string | null;
-  rosterSlotId?: string | null;
   createdAt?: unknown;
   updatedAt?: unknown;
   processedAt?: unknown;
@@ -511,20 +522,20 @@ function getDraftQueueRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'draft', DRAFT_DOCUMENT_ID, 'queues', ownerId);
 }
 
-function getTransactionsRef(leagueId: string) {
-  return collection(db, 'leagues', leagueId, 'transactions');
+function getOwnerTransactionsRef(leagueId: string, ownerId: string) {
+  return collection(db, 'leagues', leagueId, 'members', ownerId, 'transactions');
 }
 
 function getTeamRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'teams', ownerId);
 }
 
-function getWaiversRef(leagueId: string) {
-  return collection(db, 'leagues', leagueId, 'waivers');
+function getPublicWaiversRef(leagueId: string) {
+  return collection(db, 'leagues', leagueId, 'waiverPool');
 }
 
-function getWaiverRef(leagueId: string, waiverId: string) {
-  return doc(db, 'leagues', leagueId, 'waivers', waiverId);
+function getOwnerWaiverClaimsRef(leagueId: string, ownerId: string) {
+  return collection(db, 'leagues', leagueId, 'members', ownerId, 'waiverClaims');
 }
 
 export function getDraftPickDocumentId(overallPick: number): string {
@@ -872,67 +883,142 @@ export function listenToOwnerTransactions(
   onError?: (error: Error) => void,
 ): () => void {
   const transactionsQuery = query(
-    getTransactionsRef(leagueId),
-    orderBy('createdAt', 'desc'),
+    getOwnerTransactionsRef(leagueId, ownerId),
+    orderBy('occurredAt', 'desc'),
     limit(50),
   );
 
-  return monitorFirestoreListener('draft:transactions', () => onSnapshot(
+  return monitorFirestoreListener('draft:private-transactions', () => onSnapshot(
     transactionsQuery,
     (snapshot) => {
       callback(
-        snapshot.docs
-          .map((transactionDoc) => ({
+        snapshot.docs.map((transactionDoc) => {
+          const data = transactionDoc.data() as Omit<FantasyTransaction, 'id'> & {
+            occurredAt?: unknown;
+          };
+
+          return {
             id: transactionDoc.id,
-            ...(transactionDoc.data() as Omit<FantasyTransaction, 'id'>),
-          }))
-          .filter((transaction) => transaction.ownerId === ownerId),
+            ...data,
+            createdAt: data.occurredAt ?? data.createdAt,
+          };
+        }),
       );
     },
     (error) => {
-      reportDraftListenerError(error, 'Unable to load roster transactions.', onError);
+      reportDraftListenerError(error, 'Unable to load your private roster transactions.', onError);
     },
   ));
 }
 
 export function listenToLeagueWaivers(
   leagueId: string,
+  ownerId: string,
   callback: (waivers: FantasyWaiver[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  const waiversQuery = query(getWaiversRef(leagueId), orderBy('createdAt', 'desc'), limit(100));
+  const waiversQuery = query(
+    getPublicWaiversRef(leagueId),
+    orderBy('createdAt', 'desc'),
+    limit(100),
+  );
+  const claimsQuery = query(
+    getOwnerWaiverClaimsRef(leagueId, ownerId),
+    where('status', '==', 'pending'),
+    limit(100),
+  );
+  let publicWaivers: FantasyWaiver[] = [];
+  let privateClaims = new Map<string, FantasyWaiverClaim>();
+  let waiversReady = false;
+  let claimsReady = false;
 
-  return monitorFirestoreListener('draft:waivers', () => onSnapshot(
+  const emit = (): void => {
+    if (!waiversReady || !claimsReady) {
+      return;
+    }
+
+    callback(publicWaivers.map((waiver) => ({
+      ...waiver,
+      myClaim: privateClaims.get(waiver.id) ?? null,
+    })));
+  };
+
+  const stopWaivers = monitorFirestoreListener('draft:public-waiver-pool', () => onSnapshot(
     waiversQuery,
     (snapshot) => {
-      callback(
-        snapshot.docs.map((waiverDoc) => {
-          const data = waiverDoc.data() as Partial<FantasyWaiver>;
+      publicWaivers = snapshot.docs.map((waiverDoc) => {
+        const data = waiverDoc.data() as Partial<FantasyWaiver>;
 
-          return {
-            id: waiverDoc.id,
-            assetKey: data.assetKey ?? waiverDoc.id,
-            asset: data.asset as DraftableAsset,
-            droppedAsset: data.droppedAsset ?? null,
-            droppedByOwnerId: data.droppedByOwnerId ?? '',
-            status: data.status ?? 'active',
-            claims: Array.isArray(data.claims) ? data.claims : [],
-            awardedToOwnerId: data.awardedToOwnerId ?? null,
-            effectiveCycleNumber: data.effectiveCycleNumber ?? null,
-            effectiveLabel: data.effectiveLabel ?? null,
-            queuedMoveId: data.queuedMoveId ?? null,
-            rosterSlotId: data.rosterSlotId ?? null,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            processedAt: data.processedAt,
-          };
-        }),
-      );
+        return {
+          id: waiverDoc.id,
+          assetKey: data.assetKey ?? waiverDoc.id,
+          asset: data.asset as DraftableAsset,
+          droppedAsset: data.droppedAsset ?? null,
+          droppedByOwnerId: data.droppedByOwnerId ?? '',
+          status: data.status ?? 'active',
+          myClaim: null,
+          awardedToOwnerId: data.awardedToOwnerId ?? null,
+          effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+          effectiveLabel: data.effectiveLabel ?? null,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          processedAt: data.processedAt,
+        };
+      });
+      waiversReady = true;
+      emit();
     },
     (error) => {
-      reportDraftListenerError(error, 'Unable to load league waivers.', onError);
+      waiversReady = true;
+      publicWaivers = [];
+      emit();
+      reportDraftListenerError(error, 'Unable to load the public waiver pool.', onError);
     },
   ));
+
+  const stopClaims = monitorFirestoreListener('draft:private-waiver-claims', () => onSnapshot(
+    claimsQuery,
+    (snapshot) => {
+      privateClaims = new Map(snapshot.docs.map((claimDoc) => {
+        const data = claimDoc.data() as Partial<FantasyWaiverClaim>;
+        const waiverId = data.waiverId ?? claimDoc.id;
+        const claim: FantasyWaiverClaim = {
+          ownerId: data.ownerId ?? ownerId,
+          waiverId,
+          moveType: data.moveType === 'open-slot' ? 'open-slot' : 'drop',
+          rosterArea: data.rosterArea === 'bench' ? 'bench' : 'active',
+          dropSlotId: data.dropSlotId ?? null,
+          targetSlotId: data.targetSlotId ?? null,
+          effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+          effectiveLabel: data.effectiveLabel ?? null,
+          status:
+            data.status === 'awarded' ||
+            data.status === 'not-awarded' ||
+            data.status === 'cleared'
+              ? data.status
+              : 'pending',
+          claimedAt: data.claimedAt,
+          updatedAt: data.updatedAt,
+          processedAt: data.processedAt,
+        };
+
+        return [waiverId, claim] as const;
+      }));
+      claimsReady = true;
+      emit();
+    },
+    (error) => {
+      claimsReady = true;
+      privateClaims = new Map();
+      emit();
+      reportDraftListenerError(error, 'Unable to load your private waiver claims.', onError);
+    },
+  ));
+
+  return () => {
+    stopWaivers();
+    stopClaims();
+  };
 }
 
 export async function saveFantasyDraft(
@@ -1339,34 +1425,6 @@ function rosterAssetToDraftableAsset(asset: RosterAsset): DraftableAsset {
     teamLogoUrl: asset.teamLogoUrl,
     ...getStoredProjectionFields(asset),
   };
-}
-
-function buildActiveWaiverPayload(
-  droppedAsset: RosterAsset,
-  droppedByOwnerId: string,
-  effectiveCycleNumber: number | null,
-  effectiveLabel: string | null,
-): Omit<FantasyWaiver, 'id'> {
-  const asset = rosterAssetToDraftableAsset(droppedAsset);
-
-  return {
-    assetKey: asset.assetKey,
-    asset,
-    droppedAsset,
-    droppedByOwnerId,
-    status: 'active',
-    claims: [],
-    awardedToOwnerId: null,
-    effectiveCycleNumber,
-    effectiveLabel,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    processedAt: null,
-  };
-}
-
-function getTeamWaiverPriority(team: FantasyTeam | undefined, fallback: number): number {
-  return typeof team?.waiverPriority === 'number' ? team.waiverPriority : fallback;
 }
 
 export async function makeDraftPick(
@@ -1828,12 +1886,12 @@ export async function processWaiver({
   leagueTeams: _leagueTeams,
   effectiveCycleNumber = null,
   effectiveLabel = null,
-}: ProcessWaiverInput): Promise<void> {
+}: ProcessWaiverInput): Promise<SecureRosterActionResult> {
   if (!commissionerId) {
     throw new Error('The commissioner is required.');
   }
 
-  await executeSecureRosterAction({
+  return executeSecureRosterAction({
     leagueId,
     action: 'process-waiver',
     waiverId,

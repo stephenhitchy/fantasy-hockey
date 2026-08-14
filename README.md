@@ -17,17 +17,21 @@ Core project references:
 - [`docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md`](docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md) — strict Angular TypeScript narrowing for Firestore timestamp-like values without changing score-freshness behavior.
 - [`docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md`](docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md) — categorized ESPN-to-NHL identity matching, bounded candidate context, source-controlled aliases, intentionally ignored individual goalies, deployment, and rollback.
 - [`docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md`](docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md) — deterministic shared NHL Shadow cache, hash deduplication, bounded payloads, retention, inspection, deployment, and future cutover gates.
+- [`docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md`](docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md) — member-only League Wire, server-sanitized public outcomes, waiver and queued-action privacy boundaries, bounded mobile UX, deployment, smoke test, and rollback.
+- [`docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`](docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md) — owner-private transaction and claim projections, claim-free waiver pool, guarded backfill, privacy inspection, staged cutover, smoke test, and coordinated rollback.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current browser runtime remains **Release Candidate 26 / Data Quality Batch D1B**. The latest server infrastructure is **Data Infrastructure Batch D1C**, which observes successful server-owned NHL requests into a deterministic Firestore-backed Shadow cache while keeping every direct upstream response and process-local cache authoritative. D1C adds no shared-cache reads, no automatic promotion, and no change to Scoring V3 or Projection V11.
+The current source runtime is **Release Candidate 28 / Social Batch C1B**. C1B completes the P0 privacy follow-up discovered during League Wire: canonical league-wide `transactions` and `waivers` are now server-only, managers read only their own private transaction and claim projections, and league members read a claim-free waiver pool plus allowlisted completed outcomes. Free Agents no longer displays league-wide claim counts or claimant identity.
 
-The same release family retains the compact mobile Matchup injury presentation: an injured player shows a small icon, short status, and expected return date instead of a long injury article. Full injury detail remains available on the player detail page. Global callable and Firestore App Check enforcement remain off. The exact Internal Test league canary also remains disabled until a platform administrator deliberately starts it after the evidence gate passes. Production scoring remains in Shadow.
+League Wire remains compact and server-sanitized. Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. C1B adds no Firestore index or TTL policy and does not promote any safety control.
 
-The competitive models remain **Scoring V3** and **Projection V11**. Draft rankings, six-game windows, roster timing, scoring behavior, Firestore Rules, and indexes are unchanged. The inherited security chains remain available through `npm run verify:batchs3d`, with `npm run verify:batchd1c` as the current verification command.
+The RC28 cutover is staged to avoid a non-atomic Rules/Hosting handoff: deploy Functions first, backfill and inspect the projections, deploy the audited temporary dual-read Rules bridge, deploy and prove RC28 Hosting, and only then deploy the final privacy Rules that remove canonical browser reads. The current verification command is `npm run verify:batchc1b`.
+
+C1B.1 is a verification-only maintenance hotfix. It starts each intentionally denied Firestore emulator write only after its rejection handler is attached, preventing false unhandled-rejection failures while leaving RC28 application code and final privacy Rules unchanged.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -64,6 +68,8 @@ verify:batchd1a
 verify:batchd1a-1
 verify:batchd1b
 verify:batchd1c
+verify:batchc1a
+verify:batchc1b
 ```
 
 RinkRat pins:
@@ -83,7 +89,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchd1c
+npm run verify:batchc1b
 ```
 
 After verification and a clean commit:
@@ -91,6 +97,56 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+
+
+## Social Batch C1B — Transaction and Waiver Privacy
+
+C1B removes the browser from the canonical transaction and waiver collections. New Firestore triggers project each manager's own transaction history and waiver claim to owner-only paths, while members receive only a claim-free waiver pool and allowlisted completed outcomes. Deterministic hashed transaction IDs preserve idempotency without exposing raw source IDs.
+
+The Free Agents surface keeps its existing mobile decision flow but replaces public claim counts with **Your claim is private**, **Review Your Claim**, or **Claim details stay private**. Commissioners still adjudicate through the existing server-authoritative callable and receive outcome text from the server response.
+
+Verification:
+
+```bash
+npm run verify:batchc1b
+```
+
+C1B.1 corrects only the Firestore Rules test harness by making intentionally denied writes lazy; RC28 runtime behavior and the final Rules file are unchanged.
+
+The deployment order is mandatory: Functions only, guarded dry-run/apply backfill, zero-issue inspector, temporary dual-read transition Rules, RC28 Hosting, RC28 smoke proof, and final privacy Rules. No index deployment is required. Full commands, smoke tests, and staged rollback are documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`.
+
+
+## Social Batch C1A — League Wire
+
+C1A adds the first bounded social-retention feature before full chat. League HQ listens to at most 40 server-owned activity projections and shows five recent items by default in one inline card. Managers can see new joins, selected league lifecycle actions, Draft picks, completed add/drop and IR outcomes, adjudicated waivers, and queued roster moves only after activation.
+
+Three create-only Functions sanitize existing audit, Draft-pick, and transaction records into `leagues/{leagueId}/activity/{activityId}`. Deterministic hashed IDs make retries idempotent without exposing raw source IDs. Browsers may read the projection only as league members and cannot create, update, or delete it.
+
+Verification:
+
+```bash
+npm run verify:batchc1a
+```
+
+Before deploying, confirm the D1C tenth TTL policy is active because the prior handoff did not record production proof:
+
+```bash
+npm run security:inspect-ttl -- \
+  --project=nhl-fantasy-app-ab673
+```
+
+Deploy Rules, the complete Functions codebase, and Hosting together for RC27:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy \
+  --only firestore:rules,functions,hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Social C1A League Wire Release Candidate 27"
+```
+
+Do not deploy indexes or promote App Check, the scoring queue, or the shared NHL cache. Existing leagues are not backfilled; create a new public league/Draft/roster event in one Internal Test league for the production smoke test. Full behavior, privacy gates, and rollback steps are documented in `docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md`.
 
 
 
@@ -174,7 +230,7 @@ No Functions, Firestore Rules, indexes, TTL, PITR, or backup deployment is requi
 
 ## Security Batch S3F — Exact Internal Test League App Check Canary
 
-S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC26 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
+S3F installs a server-owned runtime control for the first deliberately bounded App Check enforcement exercise. The control defaults to Monitor and cannot promote itself. After RC27 independently passes the exact-build browser, device, platform, manager-day, and competitive-action evidence gates, a recently authenticated platform administrator may select an exact set of callables and no more than five exact leagues already marked Internal Test.
 
 Only a request matching both an approved callable and an approved Internal Test league may be rejected for missing or mismatched App Check context. Every other callable and league remains monitor-only. The server rechecks readiness, validates the Internal Test allowlist, stores an immutable administrator audit entry, records privacy-limited allowed/blocked proof, and preserves a recently authenticated emergency route back to Monitor that does not depend on App Check.
 
@@ -344,13 +400,13 @@ S4A has **no Angular, Functions, Rules, or Hosting deployment**. Google Cloud ba
 B1C adds:
 
 - exact Node/npm release preflight;
-- live RC26 manifest, HSTS, CSP report-only, App Check, Hosting target, and 10/10 TTL checks;
+- live RC27 manifest, HSTS, CSP report-only, App Check, Hosting target, and 10/10 TTL checks;
 - exact-build Release Readiness JSON validation;
 - explicit GitHub CI, Shadow-mode, and rollback-rehearsal gates;
 - ignored `.beta-release/` baseline and rollback records;
 - annotated-tag verification against the actual deployed source revision.
 
-B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC26 Release Readiness board and full-season simulator, then follow:
+B1C has **no Firebase deployment**. Commit and push the tooling, finish the exact RC27 Release Readiness board and full-season simulator, then follow:
 
 ```text
 docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md
