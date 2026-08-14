@@ -3997,6 +3997,7 @@ export {
   publishLeagueDraftControlActivity,
   publishLeagueDraftPickActivity,
   publishLeagueMatchupResultActivity,
+  publishLeagueRoundRecapActivity,
   publishLeagueTransactionActivity,
   publishLeagueWaiverPrivacy,
   unpinLeagueAnnouncement,

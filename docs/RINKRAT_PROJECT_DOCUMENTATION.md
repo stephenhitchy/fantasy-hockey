@@ -11541,3 +11541,16 @@ C1E adds commissioner-only plain-text announcements to the existing bounded Leag
 The UI remains inline and mobile-first. It adds no modal, backdrop, sticky content, attachment surface, or unbounded query. The existing 40-item feed listener remains unchanged, and one exact-document listener observes only `activity/pinned-announcement`. Firestore Rules, indexes, TTL, scoring, projections, transaction privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow remain unchanged.
 
 The normal owner workflow is one automated gate (`npm run verify:batchc1e`), targeted deployment of `publishLeagueAnnouncement` and `unpinLeagueAnnouncement`, RC31 Hosting, and a short site-first smoke test. Detailed limits, authority behavior, deployment, validation, diagnostics, and rollback are in `docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`.
+
+# Social Batch C1F — Matchup Round Recaps
+
+**Completed:** 2026-08-14
+**Runtime release:** Release Candidate 32
+**Competitive models:** Production Scoring V3 and Projection V11
+
+C1F adds `publishLeagueRoundRecapActivity`, a retry-safe Firestore trigger that observes only the first authoritative regular-season cycle transition to complete. It reads the immutable completed matchup documents, skips byes, requires at least two real games, validates cycle/owner/winner consistency, and publishes one sanitized recap with the top team score and closest finish.
+
+The first eligible post-deployment round establishes a server-only League Wire-era high-score baseline. A strictly higher immediately subsequent observed score may receive new-high wording; out-of-order trigger delivery cannot overclaim a record, and old completed cycles are not backfilled. The recap reuses the existing bounded activity listener and mobile card, preserves C1E announcements and pinning, and adds no Rules, indexes, TTL, live-score listener, modal, overlay, or sticky surface.
+
+Verification and deployment are documented in `docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`. The normal owner path remains one complete `npm run verify:batchc1f` gate, targeted deployment of the single new trigger, RC32 Hosting, and a short live-site smoke test. Logs are fallback diagnostics only when the site result is missing or incorrect.
+

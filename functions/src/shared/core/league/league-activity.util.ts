@@ -12,14 +12,16 @@ export type LeagueActivitySourceKind =
   | 'matchup'
   | 'commissioner-availability'
   | 'draft-control'
-  | 'announcement';
+  | 'announcement'
+  | 'cycle-recap';
 export type LeagueActivityCategory =
   | 'league'
   | 'draft'
   | 'roster'
   | 'matchup'
   | 'commissioner'
-  | 'announcement';
+  | 'announcement'
+  | 'recap';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -44,7 +46,8 @@ export type LeagueActivityEventType =
   | 'commissioner-draft-opened'
   | 'commissioner-draft-clock-paused'
   | 'commissioner-draft-clock-resumed'
-  | 'commissioner-announcement';
+  | 'commissioner-announcement'
+  | 'matchup-round-recap';
 
 export type LeagueActivityAvailabilityStatus =
   | 'active'
@@ -90,6 +93,16 @@ export interface SanitizedLeagueActivity {
   availabilityStatus?: LeagueActivityAvailabilityStatus | null;
   announcementTitle?: string | null;
   announcementBody?: string | null;
+  recapCycleNumber?: number;
+  recapMatchupCount?: number;
+  recapTopScoreOwnerIds?: string[];
+  recapTopScore?: number;
+  recapClosestTeamAOwnerId?: string;
+  recapClosestTeamBOwnerId?: string;
+  recapClosestWinnerOwnerId?: string | null;
+  recapClosestMargin?: number;
+  recapNewLeagueHighScore?: boolean;
+  recapPreviousLeagueHighScore?: number | null;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -631,6 +644,163 @@ export function buildMatchupResultLeagueActivity(
     source['tieBrokenByHigherSeed'] === true;
 
   return activity;
+}
+
+
+export interface LeagueRoundRecapResult {
+  activity: SanitizedLeagueActivity;
+  highestScore: number;
+  highestScoreOwnerIds: string[];
+}
+
+function roundActivityScore(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Builds one compact regular-season recap from immutable completed matchup
+ * results. A scheduled bye is neutral. Any malformed real matchup fails the
+ * whole recap closed so League Wire never summarizes partial competition.
+ */
+export function buildRegularSeasonRoundRecapLeagueActivity(
+  values: readonly unknown[],
+  previousHighScoreValue: unknown = null,
+  allowNewHighScoreClaim = true,
+): LeagueRoundRecapResult | null {
+  const hasPreviousHighScore =
+    previousHighScoreValue !== null && previousHighScoreValue !== undefined;
+  const previousHighScore = asBoundedScore(previousHighScoreValue);
+
+  if (hasPreviousHighScore && previousHighScore === null) {
+    return null;
+  }
+
+  const completedMatchups: SanitizedLeagueActivity[] = [];
+
+  for (const value of values) {
+    const source = asRecord(value);
+    const teamBOwnerId = sanitizeOwnerId(source['teamBOwnerId']);
+
+    if (!teamBOwnerId) {
+      continue;
+    }
+
+    const matchup = buildMatchupResultLeagueActivity(source);
+
+    if (!matchup || matchup.matchupPhase !== 'regular_season') {
+      return null;
+    }
+
+    completedMatchups.push(matchup);
+  }
+
+  if (completedMatchups.length < 2) {
+    // Individual Game Final entries already cover one-game rounds.
+    return null;
+  }
+
+  const cycleNumber = completedMatchups[0].matchupCycleNumber ?? null;
+  const seenOwnerIds = new Set<string>();
+
+  if (!cycleNumber) {
+    return null;
+  }
+
+  for (const matchup of completedMatchups) {
+    const teamAOwnerId = matchup.teamAOwnerId;
+    const teamBOwnerId = matchup.teamBOwnerId;
+
+    if (
+      matchup.matchupCycleNumber !== cycleNumber ||
+      !teamAOwnerId ||
+      !teamBOwnerId ||
+      seenOwnerIds.has(teamAOwnerId) ||
+      seenOwnerIds.has(teamBOwnerId)
+    ) {
+      return null;
+    }
+
+    seenOwnerIds.add(teamAOwnerId);
+    seenOwnerIds.add(teamBOwnerId);
+  }
+
+  let highestScore = Number.NEGATIVE_INFINITY;
+  const highestScoreOwnerIds: string[] = [];
+
+  for (const matchup of completedMatchups) {
+    const scores = [
+      [matchup.teamAOwnerId, matchup.teamAScore],
+      [matchup.teamBOwnerId, matchup.teamBScore],
+    ] as const;
+
+    for (const [ownerId, score] of scores) {
+      if (!ownerId || score === null || score === undefined) {
+        return null;
+      }
+
+      const roundedScore = roundActivityScore(score);
+
+      if (roundedScore > highestScore) {
+        highestScore = roundedScore;
+        highestScoreOwnerIds.length = 0;
+        highestScoreOwnerIds.push(ownerId);
+      } else if (roundedScore === highestScore) {
+        highestScoreOwnerIds.push(ownerId);
+      }
+    }
+  }
+
+  if (!Number.isFinite(highestScore) || highestScoreOwnerIds.length === 0) {
+    return null;
+  }
+
+  highestScoreOwnerIds.sort();
+
+  const closestMatchup = [...completedMatchups]
+    .sort((first, second) => {
+      const firstMargin = Math.abs((first.teamAScore ?? 0) - (first.teamBScore ?? 0));
+      const secondMargin = Math.abs((second.teamAScore ?? 0) - (second.teamBScore ?? 0));
+
+      if (firstMargin !== secondMargin) {
+        return firstMargin - secondMargin;
+      }
+
+      const firstPair = [first.teamAOwnerId, first.teamBOwnerId].sort().join(':');
+      const secondPair = [second.teamAOwnerId, second.teamBOwnerId].sort().join(':');
+      return firstPair.localeCompare(secondPair);
+    })[0];
+
+  if (!closestMatchup?.teamAOwnerId || !closestMatchup.teamBOwnerId) {
+    return null;
+  }
+
+  const closestMargin = roundActivityScore(
+    Math.abs((closestMatchup.teamAScore ?? 0) - (closestMatchup.teamBScore ?? 0)),
+  );
+  const activity = baseActivity(
+    'recap',
+    'matchup-round-recap',
+    highestScoreOwnerIds.length === 1 ? highestScoreOwnerIds[0] : null,
+  );
+
+  activity.recapCycleNumber = cycleNumber;
+  activity.recapMatchupCount = completedMatchups.length;
+  activity.recapTopScoreOwnerIds = highestScoreOwnerIds;
+  activity.recapTopScore = highestScore;
+  activity.recapClosestTeamAOwnerId = closestMatchup.teamAOwnerId;
+  activity.recapClosestTeamBOwnerId = closestMatchup.teamBOwnerId;
+  activity.recapClosestWinnerOwnerId = closestMatchup.winnerOwnerId ?? null;
+  activity.recapClosestMargin = closestMargin;
+  activity.recapNewLeagueHighScore = allowNewHighScoreClaim &&
+    previousHighScore !== null &&
+    highestScore > previousHighScore;
+  activity.recapPreviousLeagueHighScore = previousHighScore;
+
+  return {
+    activity,
+    highestScore,
+    highestScoreOwnerIds,
+  };
 }
 
 export const TRANSACTION_PRIVACY_SCHEMA_VERSION = 1;

@@ -20,6 +20,7 @@ import {
   buildPrivateWaiverClaimProjections,
   buildPublicTransactionResultProjection,
   buildPublicWaiverProjection,
+  buildRegularSeasonRoundRecapLeagueActivity,
   buildTransactionLeagueActivity,
   getLeagueActivityDocumentId,
   LEAGUE_ANNOUNCEMENT_BODY_MAX_LENGTH,
@@ -78,6 +79,12 @@ function resolveSourceDocumentId(
   );
 }
 
+function resolvePositiveInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+}
+
 function resolveOccurredAt(value: unknown, eventTime: string | undefined): Timestamp {
   if (value instanceof Timestamp) {
     return value;
@@ -96,7 +103,12 @@ async function publishLeagueActivity(options: {
   sourceDocumentId: string;
   activity: SanitizedLeagueActivity;
   occurredAt: Timestamp;
-  release?: 'Social Batch C1A' | 'Social Batch C1C' | 'Social Batch C1D' | 'Social Batch C1E';
+  release?:
+    | 'Social Batch C1A'
+    | 'Social Batch C1C'
+    | 'Social Batch C1D'
+    | 'Social Batch C1E'
+    | 'Social Batch C1F';
 }): Promise<void> {
   const fingerprint = getLeagueActivityFingerprint(
     options.sourceKind,
@@ -748,6 +760,155 @@ export const publishLeagueMatchupResultActivity = onDocumentUpdated(
         event.time,
       ),
       release: 'Social Batch C1C',
+    });
+  },
+);
+
+
+export const publishLeagueRoundRecapActivity = onDocumentUpdated(
+  {
+    ...ACTIVITY_TRIGGER_OPTIONS,
+    document: 'leagues/{leagueId}/cycles/{cycleId}',
+  },
+  async (event) => {
+    const leagueId = resolveSafeFirestoreDocumentId(
+      event.params.leagueId,
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const cycleId = resolveSafeFirestoreDocumentId(
+      event.params.cycleId,
+      { maxBytes: 128 },
+    );
+    const beforeSource = event.data?.before.data();
+    const afterSource = event.data?.after.data();
+
+    if (
+      !leagueId ||
+      !cycleId ||
+      !beforeSource ||
+      !afterSource ||
+      beforeSource['status'] === 'complete' ||
+      afterSource['status'] !== 'complete' ||
+      afterSource['phase'] !== 'regular_season'
+    ) {
+      return;
+    }
+
+    const sourceDocumentId = resolveSourceDocumentId(cycleId, 'cycle-recap');
+    const cycleNumber = resolvePositiveInteger(afterSource['cycleNumber']);
+    const totalMatchupCount = resolvePositiveInteger(afterSource['totalMatchupCount']);
+    const completedMatchupCount = resolvePositiveInteger(afterSource['completedMatchupCount']);
+
+    if (
+      !sourceDocumentId ||
+      !cycleNumber ||
+      !totalMatchupCount ||
+      completedMatchupCount !== totalMatchupCount
+    ) {
+      return;
+    }
+
+    const matchupSnapshots = await db
+      .collection(`leagues/${leagueId}/cycles/${cycleId}/matchups`)
+      .get();
+
+    if (matchupSnapshots.size !== totalMatchupCount) {
+      return;
+    }
+
+    const matchupValues = matchupSnapshots.docs.map((snapshot) => snapshot.data());
+    const activityId = getLeagueActivityDocumentId('cycle-recap', sourceDocumentId);
+    const activityReference = db.doc(`leagues/${leagueId}/activity/${activityId}`);
+    const milestoneReference = db.doc(
+      `leagues/${leagueId}/socialMilestones/regular-season-scoring`,
+    );
+    const occurredAt = resolveOccurredAt(
+      afterSource['completedAt'] ?? afterSource['updatedAt'],
+      event.time,
+    );
+
+    await db.runTransaction(async (transaction) => {
+      const [existingActivity, milestoneSnapshot] = await Promise.all([
+        transaction.get(activityReference),
+        transaction.get(milestoneReference),
+      ]);
+
+      if (existingActivity.exists) {
+        return;
+      }
+
+      const milestoneData = milestoneSnapshot.data() ?? {};
+      const previousHighScoreValue = milestoneSnapshot.exists
+        ? milestoneData['highestRegularSeasonTeamScore']
+        : null;
+      const previousHighScore = typeof previousHighScoreValue === 'number' &&
+          Number.isFinite(previousHighScoreValue) &&
+          previousHighScoreValue >= -100_000 &&
+          previousHighScoreValue <= 100_000
+        ? previousHighScoreValue
+        : null;
+      const previousLastRecapCycleNumber = milestoneSnapshot.exists
+        ? resolvePositiveInteger(milestoneData['lastRecapCycleNumber'])
+        : null;
+
+      if (
+        milestoneSnapshot.exists &&
+        (
+          previousHighScore === null ||
+          previousLastRecapCycleNumber === null
+        )
+      ) {
+        throw new Error(
+          `League ${leagueId} has an invalid regular-season scoring milestone.`,
+        );
+      }
+
+      const recap = buildRegularSeasonRoundRecapLeagueActivity(
+        matchupValues,
+        previousHighScore,
+        previousLastRecapCycleNumber === cycleNumber - 1,
+      );
+
+      if (!recap || recap.activity.recapCycleNumber !== cycleNumber) {
+        return;
+      }
+
+      transaction.create(activityReference, {
+        ...recap.activity,
+        sourceKind: 'cycle-recap',
+        sourceFingerprint: getLeagueActivityFingerprint(
+          'cycle-recap',
+          sourceDocumentId,
+        ),
+        occurredAt,
+        publishedAt: FieldValue.serverTimestamp(),
+        authority: 'league-activity-authority',
+        release: 'Social Batch C1F',
+      });
+
+      const milestoneUpdate: Record<string, unknown> = {
+        schemaVersion: 1,
+        updatedAt: FieldValue.serverTimestamp(),
+        authority: 'league-social-milestone-authority',
+        release: 'Social Batch C1F',
+      };
+      const isNewestObservedRecap = previousLastRecapCycleNumber === null ||
+        cycleNumber >= previousLastRecapCycleNumber;
+      const shouldUpdateHighScore = previousHighScore === null ||
+        recap.highestScore > previousHighScore;
+
+      if (isNewestObservedRecap) {
+        milestoneUpdate['lastRecapCycleNumber'] = cycleNumber;
+        milestoneUpdate['lastRecapMatchupCount'] = recap.activity.recapMatchupCount;
+      }
+
+      if (shouldUpdateHighScore) {
+        milestoneUpdate['highestRegularSeasonTeamScore'] = recap.highestScore;
+        milestoneUpdate['highestScoreOwnerIds'] = recap.highestScoreOwnerIds;
+        milestoneUpdate['highestScoreCycleNumber'] = cycleNumber;
+      }
+
+      transaction.set(milestoneReference, milestoneUpdate, { merge: true });
     });
   },
 );

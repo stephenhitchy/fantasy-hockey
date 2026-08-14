@@ -22,17 +22,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`](docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md) — one-event final matchup activity, playoff/championship context, no live-score spam, Functions-first deployment, mobile smoke testing, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md`](docs/RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY.md) — public commissioner Draft controls and player-availability overrides, privacy boundaries, targeted deployment, and live-site proof.
 - [`docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md`](docs/RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS.md) — commissioner-only plain-text announcements, optional pinning, bounded League Wire presentation, targeted deployment, and live-site proof.
+- [`docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`](docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md) — one immutable regular-season round recap, top-score and closest-finish context, League Wire-era scoring high-water, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 31 / Social Batch C1E**. C1E adds commissioner-only plain-text announcements directly inside League Wire, with an optional single pinned announcement that every league member can read. Publishing and unpinning are server-authoritative callables; ordinary managers cannot publish, edit, forge, or unpin announcements.
+The current source runtime is **Release Candidate 32 / Social Batch C1F**. C1F adds exactly one server-created regular-season round recap after an authoritative matchup cycle first becomes complete. The recap highlights the top team score and closest finish while leaving live score changes, byes, playoffs, one-game rounds, and historical backfill off the wire.
 
-The announcement composer stays inline and mobile-first: no dialog, backdrop, sticky panel, image upload, HTML rendering, or extra unbounded query. The normal feed remains limited to 40 activities and five collapsed items. One exact-document listener watches only the current pin, and the pinned snapshot intentionally stays out of the ordered activity query so it does not render twice.
+The recap reuses the existing bounded League Wire listener and mobile card. It adds no modal, backdrop, sticky panel, or additional browser query. Commissioner announcements and optional pinning from C1E remain unchanged. A server-only high-water mark can identify a strictly higher score in a later League Wire-era round without claiming an all-time record from pre-C1F history.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL remain unchanged. The current verification command is `npm run verify:batchc1e`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, shared NHL cache Shadow, Firestore Rules, indexes, and TTL remain unchanged. The current verification command is `npm run verify:batchc1f`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -74,6 +75,7 @@ verify:batchc1b
 verify:batchc1c
 verify:batchc1d
 verify:batchc1e
+verify:batchc1f
 ```
 
 RinkRat pins:
@@ -93,7 +95,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1e
+npm run verify:batchc1f
 ```
 
 After verification and a clean commit:
@@ -102,6 +104,22 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+
+## Social Batch C1F — Matchup Round Recaps
+
+C1F observes the existing server-authoritative cycle document and publishes exactly once when a regular-season round first changes to `complete`. It summarizes only immutable completed matchup records from that round, names the top team score and closest finish, skips scheduled byes, and fails closed when any real matchup is incomplete or malformed.
+
+The first eligible post-deployment round establishes a server-only League Wire-era high-score baseline without being labeled a record. A later strictly higher score may be called a new League Wire scoring high. Ties are deterministic, retries are idempotent, out-of-order trigger delivery cannot overclaim a record, and existing completed rounds are intentionally not backfilled.
+
+Verification:
+
+```bash
+npm run verify:batchc1f
+```
+
+The normal owner workflow is one automated gate, a targeted deployment of `publishLeagueRoundRecapActivity`, RC32 Hosting, and a short site-first smoke test. Firestore Rules, indexes, TTL, scoring, projections, commissioner announcements, transaction privacy, and queue/cache modes are not deployed for C1F. Full guidance is in `docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`.
 
 
 ## Social Batch C1E — Commissioner Announcements

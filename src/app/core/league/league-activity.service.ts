@@ -26,6 +26,7 @@ const CATEGORIES = new Set<LeagueActivityCategory>([
   'matchup',
   'commissioner',
   'announcement',
+  'recap',
 ]);
 const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'league-created',
@@ -51,6 +52,7 @@ const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'commissioner-draft-clock-paused',
   'commissioner-draft-clock-resumed',
   'commissioner-announcement',
+  'matchup-round-recap',
 ]);
 
 const AVAILABILITY_STATUSES = new Set<LeagueActivity['availabilityStatus']>([
@@ -87,6 +89,18 @@ function asBoundedScore(value: unknown): number | null {
       value <= 100_000
     ? value
     : null;
+}
+
+function asBoundedStringArray(value: unknown, maximumItems = 24): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const values = value
+    .map((item) => asString(item))
+    .filter((item) => Boolean(item));
+
+  return [...new Set(values)].slice(0, maximumItems);
 }
 
 function asDate(value: unknown): Date | null {
@@ -171,6 +185,43 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     return null;
   }
 
+  const recapCycleNumber = asPositiveInteger(source['recapCycleNumber']);
+  const recapMatchupCount = asPositiveInteger(source['recapMatchupCount']);
+  const recapTopScoreOwnerIds = asBoundedStringArray(source['recapTopScoreOwnerIds']);
+  const recapTopScore = asBoundedScore(source['recapTopScore']);
+  const recapClosestTeamAOwnerId = asString(source['recapClosestTeamAOwnerId']) || null;
+  const recapClosestTeamBOwnerId = asString(source['recapClosestTeamBOwnerId']) || null;
+  const recapClosestWinnerOwnerId = asString(source['recapClosestWinnerOwnerId']) || null;
+  const recapClosestMargin = asBoundedScore(source['recapClosestMargin']);
+  const recapPreviousLeagueHighScore = asBoundedScore(source['recapPreviousLeagueHighScore']);
+  const recapNewLeagueHighScore = source['recapNewLeagueHighScore'] === true;
+
+  if (
+    eventType === 'matchup-round-recap' &&
+    (
+      category !== 'recap' ||
+      recapCycleNumber === null ||
+      recapMatchupCount === null ||
+      recapMatchupCount < 2 ||
+      recapTopScoreOwnerIds.length === 0 ||
+      recapTopScore === null ||
+      !recapClosestTeamAOwnerId ||
+      !recapClosestTeamBOwnerId ||
+      recapClosestTeamAOwnerId === recapClosestTeamBOwnerId ||
+      recapClosestMargin === null ||
+      recapClosestMargin < 0 ||
+      (recapClosestWinnerOwnerId !== null &&
+        recapClosestWinnerOwnerId !== recapClosestTeamAOwnerId &&
+        recapClosestWinnerOwnerId !== recapClosestTeamBOwnerId) ||
+      (recapClosestMargin === 0 && recapClosestWinnerOwnerId !== null) ||
+      (recapClosestMargin > 0 && recapClosestWinnerOwnerId === null) ||
+      (recapNewLeagueHighScore &&
+        (recapPreviousLeagueHighScore === null || recapTopScore <= recapPreviousLeagueHighScore))
+    )
+  ) {
+    return null;
+  }
+
   return {
     id,
     schemaVersion: typeof source['schemaVersion'] === 'number' ? source['schemaVersion'] : 1,
@@ -208,6 +259,16 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
       : null,
     announcementTitle: announcementTitle || null,
     announcementBody: announcementBody || null,
+    recapCycleNumber,
+    recapMatchupCount,
+    recapTopScoreOwnerIds,
+    recapTopScore,
+    recapClosestTeamAOwnerId,
+    recapClosestTeamBOwnerId,
+    recapClosestWinnerOwnerId,
+    recapClosestMargin,
+    recapNewLeagueHighScore,
+    recapPreviousLeagueHighScore,
     occurredAt: asDate(source['occurredAt']),
   };
 }

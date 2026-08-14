@@ -543,6 +543,15 @@
   color: color-mix(in srgb, var(--rr-color-info) 68%, var(--rr-color-text));
 }
 
+.league-wire-item[data-category='recap'] .league-wire-avatar {
+  border-color: color-mix(in srgb, var(--rr-color-success) 58%, var(--rr-color-info));
+  background: color-mix(in srgb, var(--rr-color-success) 11%, var(--rr-color-surface-raised));
+}
+
+.league-wire-item[data-category='recap'] .league-wire-category {
+  color: color-mix(in srgb, var(--rr-color-success) 72%, var(--rr-color-text));
+}
+
 .league-wire-detail-announcement {
   white-space: pre-line;
 }

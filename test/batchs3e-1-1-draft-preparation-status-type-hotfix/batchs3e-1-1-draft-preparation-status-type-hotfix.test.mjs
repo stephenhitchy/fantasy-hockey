@@ -52,12 +52,12 @@ test('S3E.1.1 verification inherits S3E.1 and preserves the current release, Sco
   const config = JSON.parse(configSource);
 
   assert.match(packageJson.scripts['verify:batchs3e-1-1:core'], /verify:batchs3e-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f):core/);
   assert.match(readme, /Security Batch S3E\.1\.1/);
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
-  assert.match(runtime, /Release Candidate 31/);
-  assert.match(productionRuntime, /Release Candidate 31/);
+  assert.match(runtime, /Release Candidate 32/);
+  assert.match(productionRuntime, /Release Candidate 32/);
   assert.equal(config.mode, 'monitor');
   assert.equal(config.automaticEnforcement, false);
 });

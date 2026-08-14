@@ -4,7 +4,8 @@ export type LeagueActivityCategory =
   | 'roster'
   | 'matchup'
   | 'commissioner'
-  | 'announcement';
+  | 'announcement'
+  | 'recap';
 
 export type LeagueActivityEventType =
   | 'league-created'
@@ -29,7 +30,8 @@ export type LeagueActivityEventType =
   | 'commissioner-draft-opened'
   | 'commissioner-draft-clock-paused'
   | 'commissioner-draft-clock-resumed'
-  | 'commissioner-announcement';
+  | 'commissioner-announcement'
+  | 'matchup-round-recap';
 
 export type LeagueActivityAvailabilityStatus =
   | 'active'
@@ -76,6 +78,16 @@ export interface LeagueActivity {
   availabilityStatus: LeagueActivityAvailabilityStatus | null;
   announcementTitle: string | null;
   announcementBody: string | null;
+  recapCycleNumber: number | null;
+  recapMatchupCount: number | null;
+  recapTopScoreOwnerIds: string[];
+  recapTopScore: number | null;
+  recapClosestTeamAOwnerId: string | null;
+  recapClosestTeamBOwnerId: string | null;
+  recapClosestWinnerOwnerId: string | null;
+  recapClosestMargin: number | null;
+  recapNewLeagueHighScore: boolean;
+  recapPreviousLeagueHighScore: number | null;
   occurredAt: Date | null;
 }
 

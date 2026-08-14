@@ -506,6 +506,50 @@ export class LeagueWire {
         headline = activity.announcementTitle || 'Commissioner announcement';
         detail = activity.announcementBody;
         break;
+      case 'matchup-round-recap': {
+        const cycleNumber = activity.recapCycleNumber;
+        const topScoreOwnerIds = activity.recapTopScoreOwnerIds;
+        const topScoreLabels = topScoreOwnerIds.map((ownerId) =>
+          this.teamByOwnerId().get(ownerId)?.teamName || 'A team',
+        );
+        const topScoreLabel = this.joinLabels(topScoreLabels);
+        const closestTeamA = activity.recapClosestTeamAOwnerId
+          ? this.teamByOwnerId().get(activity.recapClosestTeamAOwnerId) ?? null
+          : null;
+        const closestTeamB = activity.recapClosestTeamBOwnerId
+          ? this.teamByOwnerId().get(activity.recapClosestTeamBOwnerId) ?? null
+          : null;
+        const closestTeamALabel = closestTeamA?.teamName || 'Team A';
+        const closestTeamBLabel = closestTeamB?.teamName || 'Team B';
+        const closestWinnerLabel = activity.recapClosestWinnerOwnerId === activity.recapClosestTeamAOwnerId
+          ? closestTeamALabel
+          : activity.recapClosestWinnerOwnerId === activity.recapClosestTeamBOwnerId
+            ? closestTeamBLabel
+            : null;
+        const closestFinish = closestWinnerLabel
+          ? `${closestWinnerLabel} by ${this.formatScore(activity.recapClosestMargin)}`
+          : `${closestTeamALabel} and ${closestTeamBLabel} tied`;
+
+        actorLabel = topScoreOwnerIds.length === 1
+          ? topScoreLabel
+          : 'Round recap';
+
+        if (activity.recapNewLeagueHighScore) {
+          headline = topScoreOwnerIds.length === 1
+            ? `${topScoreLabel} set a new League Wire scoring high.`
+            : `${topScoreLabel} shared a new League Wire scoring high.`;
+        } else {
+          headline = cycleNumber
+            ? `Matchup ${cycleNumber} is in the books.`
+            : 'The matchup round is complete.';
+        }
+
+        detail = [
+          `Top score: ${topScoreLabel} · ${this.formatScore(activity.recapTopScore)}`,
+          `Closest: ${closestFinish}`,
+        ].join(' · ');
+        break;
+      }
       case 'matchup-result': {
         const teamA = activity.teamAOwnerId
           ? this.teamByOwnerId().get(activity.teamAOwnerId) ?? null
@@ -576,13 +620,31 @@ export class LeagueWire {
               ? 'Commissioner'
               : activity.category === 'announcement'
                 ? 'Announcement'
-                : 'League',
+                : activity.category === 'recap'
+                  ? 'Round Recap'
+                  : 'League',
       actorLabel,
       profileIconId: team?.profileIconId ?? null,
       headline,
       detail,
       occurredAt: activity.occurredAt,
     };
+  }
+
+  private joinLabels(labels: readonly string[]): string {
+    if (labels.length === 0) {
+      return 'A team';
+    }
+
+    if (labels.length === 1) {
+      return labels[0];
+    }
+
+    if (labels.length === 2) {
+      return `${labels[0]} and ${labels[1]}`;
+    }
+
+    return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
   }
 
   private availabilityStatusLabel(
