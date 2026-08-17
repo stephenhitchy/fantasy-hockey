@@ -245,7 +245,7 @@ test('the recap publisher reads bounded team windows and publishes C1H through t
   assert.match(publisher, /teamWindowValues/);
   assert.match(publisher, /recap\.topPerformers\.length === 0/);
   assert.match(publisher, /recap\.topPerformerTieCount < recap\.topPerformers\.length/);
-  assert.match(publisher, /release: 'Social Batch C1H'/);
+  assert.match(publisher, /release: 'Social Batch C1I'/);
   assert.equal((publisher.match(/publishLeagueRoundRecapActivity = onDocumentUpdated/g) ?? []).length, 1);
 });
 
@@ -342,21 +342,21 @@ test('C1H advances to RC34 while preserving competitive models, Rules, indexes, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 34/);
-  assert.match(productionRuntime, /Release Candidate 34/);
+  assert.match(runtime, /Release Candidate 35/);
+  assert.match(productionRuntime, /Release Candidate 35/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1h');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc34-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1i');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc35-invite-beta');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1h:core'], /verify:batchc1g:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1h:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1i:core/);
 });
 
 test('C1H documentation and roadmap record the bounded implementation and site-first workflow', async () => {
@@ -369,7 +369,7 @@ test('C1H documentation and roadmap record the bounded implementation and site-f
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.25/);
+  assert.match(roadmap, /Version 1\.26/);
   assert.match(roadmap, /# \[x\] C1\.20/);
   assert.match(roadmap, /# \[x\] LOG\.43/);
   assert.match(runbook, /Player of the Round/);
@@ -378,9 +378,9 @@ test('C1H documentation and roadmap record the bounded implementation and site-f
   assert.match(runbook, /one verification gate/i);
   assert.match(runbook, /functions:publishLeagueRoundRecapActivity,functions:setLeagueActivityReaction/);
   assert.doesNotMatch(runbook, /--only firestore:rules/);
-  assert.match(readme, /Release Candidate 34 \/ Social Batch C1H/);
+  assert.match(readme, /Release Candidate 35 \/ Social Batch C1I/);
   assert.match(readme, /RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1h/);
-  assert.match(releaseRunbook, /rinkrat-rc34-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc34-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchc1i/);
+  assert.match(releaseRunbook, /rinkrat-rc35-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc35-invite-beta/);
 });

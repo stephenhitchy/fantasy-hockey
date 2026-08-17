@@ -18,6 +18,7 @@ import {
   type LeagueActivityReactionCounts,
   type LeagueActivityReactionRecord,
   type LeagueActivityRecapPerformer,
+  type LeagueActivityRecapPickup,
   type PinnedLeagueAnnouncement,
 } from './league-activity.models';
 import {
@@ -296,6 +297,24 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
   const hasRecapPerformerFields = source['recapTopPerformers'] !== undefined ||
     source['recapTopPerformerScore'] !== undefined ||
     source['recapTopPerformerTieCount'] !== undefined;
+  const recapTopPickups = normalizeRecapPerformers(
+    source['recapTopPickups'],
+  ) as LeagueActivityRecapPickup[] | null;
+  const recapTopPickupScore = asBoundedScore(source['recapTopPickupScore']);
+  const recapTopPickupTieCount = asPositiveInteger(source['recapTopPickupTieCount']);
+  const hasRecapPickupFields = source['recapTopPickups'] !== undefined ||
+    source['recapTopPickupScore'] !== undefined ||
+    source['recapTopPickupTieCount'] !== undefined;
+  const recapUpsetWinnerOwnerId = asString(source['recapUpsetWinnerOwnerId']) || null;
+  const recapUpsetLoserOwnerId = asString(source['recapUpsetLoserOwnerId']) || null;
+  const recapUpsetProjectionGap = asBoundedScore(source['recapUpsetProjectionGap']);
+  const recapUpsetWinnerProjection = asBoundedScore(source['recapUpsetWinnerProjection']);
+  const recapUpsetLoserProjection = asBoundedScore(source['recapUpsetLoserProjection']);
+  const hasRecapUpsetFields = source['recapUpsetWinnerOwnerId'] !== undefined ||
+    source['recapUpsetLoserOwnerId'] !== undefined ||
+    source['recapUpsetProjectionGap'] !== undefined ||
+    source['recapUpsetWinnerProjection'] !== undefined ||
+    source['recapUpsetLoserProjection'] !== undefined;
   const reactionRecords = normalizeReactionRecords(source['reactionRecords']);
 
   if (
@@ -326,6 +345,29 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
           recapTopPerformerScore === null ||
           recapTopPerformerTieCount === null ||
           recapTopPerformerTieCount < recapTopPerformers.length
+        )) ||
+      recapTopPickups === null ||
+      (hasRecapPickupFields &&
+        (
+          recapTopPickups.length === 0 ||
+          recapTopPickupScore === null ||
+          recapTopPickupTieCount === null ||
+          recapTopPickupTieCount < recapTopPickups.length
+        )) ||
+      (hasRecapUpsetFields &&
+        (
+          !recapUpsetWinnerOwnerId ||
+          !recapUpsetLoserOwnerId ||
+          recapUpsetWinnerOwnerId === recapUpsetLoserOwnerId ||
+          recapUpsetProjectionGap === null ||
+          recapUpsetProjectionGap <= 0 ||
+          recapUpsetWinnerProjection === null ||
+          recapUpsetLoserProjection === null ||
+          recapUpsetLoserProjection <= recapUpsetWinnerProjection ||
+          Math.abs(
+            Math.round((recapUpsetLoserProjection - recapUpsetWinnerProjection) * 100) / 100 -
+              recapUpsetProjectionGap,
+          ) > 0.01
         ))
     )
   ) {
@@ -382,6 +424,14 @@ function normalizeLeagueActivity(id: string, value: DocumentData): LeagueActivit
     recapTopPerformers: recapTopPerformers ?? [],
     recapTopPerformerScore,
     recapTopPerformerTieCount: recapTopPerformerTieCount ?? 0,
+    recapTopPickups: recapTopPickups ?? [],
+    recapTopPickupScore,
+    recapTopPickupTieCount: recapTopPickupTieCount ?? 0,
+    recapUpsetWinnerOwnerId,
+    recapUpsetLoserOwnerId,
+    recapUpsetProjectionGap,
+    recapUpsetWinnerProjection,
+    recapUpsetLoserProjection,
     reactionRecords,
     reactionCounts: summarizeReactionRecords(reactionRecords),
     occurredAt: asDate(source['occurredAt']),

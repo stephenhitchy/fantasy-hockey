@@ -76,6 +76,7 @@ const ACTIVITY_CALLABLE_OPTIONS = {
 };
 const PINNED_ANNOUNCEMENT_DOCUMENT_ID = 'pinned-announcement';
 const ANNOUNCEMENT_RATE_LIMIT_MILLISECONDS = 10_000;
+const MAX_ROUND_RECAP_TRANSACTION_DOCUMENTS = 256;
 
 function resolveSourceDocumentId(
   value: unknown,
@@ -1013,9 +1014,13 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
       return;
     }
 
-    const [matchupSnapshots, teamWindowSnapshots] = await Promise.all([
+    const [matchupSnapshots, teamWindowSnapshots, transactionSnapshots] = await Promise.all([
       db.collection(`leagues/${leagueId}/cycles/${cycleId}/matchups`).get(),
       db.collection(`leagues/${leagueId}/cycles/${cycleId}/teamWindows`).get(),
+      db.collection(`leagues/${leagueId}/transactions`)
+        .where('effectiveCycleNumber', '==', cycleNumber)
+        .limit(MAX_ROUND_RECAP_TRANSACTION_DOCUMENTS + 1)
+        .get(),
     ]);
 
     if (matchupSnapshots.size !== totalMatchupCount || teamWindowSnapshots.empty) {
@@ -1024,6 +1029,21 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
 
     const matchupValues = matchupSnapshots.docs.map((snapshot) => snapshot.data());
     const teamWindowValues = teamWindowSnapshots.docs.map((snapshot) => snapshot.data());
+    const transactionValuesComplete =
+      transactionSnapshots.size <= MAX_ROUND_RECAP_TRANSACTION_DOCUMENTS;
+    const transactionValues = transactionSnapshots.docs
+      .slice(0, MAX_ROUND_RECAP_TRANSACTION_DOCUMENTS)
+      .map((snapshot) => snapshot.data());
+
+    if (!transactionValuesComplete) {
+      logger.warn('Pickup of the Round was omitted because the cycle transaction set exceeded its bound.', {
+        leagueId,
+        cycleId,
+        cycleNumber,
+        observedTransactionCount: transactionSnapshots.size,
+        maximumTransactionCount: MAX_ROUND_RECAP_TRANSACTION_DOCUMENTS,
+      });
+    }
     const activityId = getLeagueActivityDocumentId('cycle-recap', sourceDocumentId);
     const activityReference = db.doc(`leagues/${leagueId}/activity/${activityId}`);
     const milestoneReference = db.doc(
@@ -1075,6 +1095,8 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
         previousHighScore,
         previousLastRecapCycleNumber === cycleNumber - 1,
         teamWindowValues,
+        transactionValues,
+        transactionValuesComplete,
       );
 
       if (
@@ -1082,7 +1104,30 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
         recap.activity.recapCycleNumber !== cycleNumber ||
         recap.topPerformers.length === 0 ||
         recap.topPerformerScore === null ||
-        recap.topPerformerTieCount < recap.topPerformers.length
+        recap.topPerformerTieCount < recap.topPerformers.length ||
+        (recap.topPickups.length === 0 &&
+          (recap.topPickupScore !== null || recap.topPickupTieCount !== 0)) ||
+        (recap.topPickups.length > 0 &&
+          (recap.topPickupScore === null ||
+            recap.topPickupTieCount < recap.topPickups.length)) ||
+        ((recap.upsetWinnerOwnerId !== null ||
+          recap.upsetLoserOwnerId !== null ||
+          recap.upsetProjectionGap !== null ||
+          recap.upsetWinnerProjection !== null ||
+          recap.upsetLoserProjection !== null) &&
+          (!recap.upsetWinnerOwnerId ||
+            !recap.upsetLoserOwnerId ||
+            recap.upsetWinnerOwnerId === recap.upsetLoserOwnerId ||
+            recap.upsetProjectionGap === null ||
+            recap.upsetProjectionGap <= 0 ||
+            recap.upsetWinnerProjection === null ||
+            recap.upsetLoserProjection === null ||
+            recap.upsetLoserProjection <= recap.upsetWinnerProjection ||
+            Math.abs(
+              Math.round(
+                (recap.upsetLoserProjection - recap.upsetWinnerProjection) * 100,
+              ) / 100 - recap.upsetProjectionGap,
+            ) > 0.01))
       ) {
         return;
       }
@@ -1097,14 +1142,14 @@ export const publishLeagueRoundRecapActivity = onDocumentUpdated(
         occurredAt,
         publishedAt: FieldValue.serverTimestamp(),
         authority: 'league-activity-authority',
-        release: 'Social Batch C1H',
+        release: 'Social Batch C1I',
       });
 
       const milestoneUpdate: Record<string, unknown> = {
         schemaVersion: 1,
         updatedAt: FieldValue.serverTimestamp(),
         authority: 'league-social-milestone-authority',
-        release: 'Social Batch C1H',
+        release: 'Social Batch C1I',
       };
       const isNewestObservedRecap = previousLastRecapCycleNumber === null ||
         cycleNumber >= previousLastRecapCycleNumber;

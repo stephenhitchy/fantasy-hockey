@@ -70,6 +70,11 @@ export interface LeagueActivityRecapPerformer {
   asset: LeagueActivityAssetSummary;
 }
 
+export interface LeagueActivityRecapPickup {
+  ownerId: string;
+  asset: LeagueActivityAssetSummary;
+}
+
 export interface SanitizedLeagueActivity {
   schemaVersion: typeof LEAGUE_ACTIVITY_SCHEMA_VERSION;
   category: LeagueActivityCategory;
@@ -111,6 +116,14 @@ export interface SanitizedLeagueActivity {
   recapTopPerformers?: LeagueActivityRecapPerformer[];
   recapTopPerformerScore?: number;
   recapTopPerformerTieCount?: number;
+  recapTopPickups?: LeagueActivityRecapPickup[];
+  recapTopPickupScore?: number;
+  recapTopPickupTieCount?: number;
+  recapUpsetWinnerOwnerId?: string;
+  recapUpsetLoserOwnerId?: string;
+  recapUpsetProjectionGap?: number;
+  recapUpsetWinnerProjection?: number;
+  recapUpsetLoserProjection?: number;
 }
 
 const PUBLIC_AUDIT_ACTIONS = new Set<LeagueActivityEventType>([
@@ -662,6 +675,14 @@ export interface LeagueRoundRecapResult {
   topPerformers: LeagueActivityRecapPerformer[];
   topPerformerTieCount: number;
   topPerformerScore: number | null;
+  topPickups: LeagueActivityRecapPickup[];
+  topPickupTieCount: number;
+  topPickupScore: number | null;
+  upsetWinnerOwnerId: string | null;
+  upsetLoserOwnerId: string | null;
+  upsetProjectionGap: number | null;
+  upsetWinnerProjection: number | null;
+  upsetLoserProjection: number | null;
 }
 
 function roundActivityScore(value: number): number {
@@ -669,6 +690,21 @@ function roundActivityScore(value: number): number {
 }
 
 const MAX_RECAP_TOP_PERFORMERS = 3;
+const MAX_RECAP_TOP_PICKUPS = 3;
+
+interface RoundRecapWindowCandidate {
+  ownerId: string;
+  assetKey: string;
+  asset: LeagueActivityAssetSummary;
+  fantasyPoints: number;
+  frozenProjectionPoints: number | null;
+  rosterSlotId: string;
+}
+
+interface RoundRecapWindowValidationResult {
+  candidates: RoundRecapWindowCandidate[];
+  projectionTotalsByOwnerId: ReadonlyMap<string, number> | null;
+}
 
 interface RoundRecapTopPerformerResult {
   performers: LeagueActivityRecapPerformer[];
@@ -676,17 +712,41 @@ interface RoundRecapTopPerformerResult {
   performerScore: number;
 }
 
-function buildRoundRecapTopPerformers(
+interface RoundRecapTopPickupResult {
+  pickups: LeagueActivityRecapPickup[];
+  pickupTieCount: number;
+  pickupScore: number;
+}
+
+interface RoundRecapUpsetResult {
+  winnerOwnerId: string;
+  loserOwnerId: string;
+  projectionGap: number;
+  winnerProjection: number;
+  loserProjection: number;
+  actualMargin: number;
+}
+
+const ROUND_RECAP_PICKUP_TRANSACTION_TYPES = new Set([
+  'add-drop',
+  'add-open-slot',
+  'waiver-award',
+  'slot-move-activated',
+]);
+
+function buildRoundRecapWindowCandidates(
   values: readonly unknown[],
   cycleNumber: number,
   expectedOwnerIds: ReadonlySet<string>,
-): RoundRecapTopPerformerResult | null {
+): RoundRecapWindowValidationResult | null {
   if (values.length === 0 || expectedOwnerIds.size === 0) {
     return null;
   }
 
   const seenOwnerIds = new Set<string>();
-  const candidates: Array<LeagueActivityRecapPerformer & { fantasyPoints: number; rosterSlotId: string }> = [];
+  const candidates: RoundRecapWindowCandidate[] = [];
+  const projectionTotalsByOwnerId = new Map<string, number>();
+  let completeProjectionEvidence = true;
 
   for (const value of values) {
     const source = asRecord(value);
@@ -724,24 +784,30 @@ function buildRoundRecapTopPerformers(
 
     seenOwnerIds.add(ownerId);
     const seenRosterSlotIds = new Set<string>();
+    const seenAssetKeys = new Set<string>();
+    let ownerProjectionTotal = 0;
+    let ownerProjectionComplete = true;
 
     for (const rawWindow of source['windows']) {
       const window = asRecord(rawWindow);
       const rosterSlotId = asBoundedString(window['rosterSlotId'], 80);
 
       if (!rosterSlotId || !expectedRosterSlotIdSet.has(rosterSlotId)) {
-        // Team-window documents may retain a completed historical assignment
-        // after an active slot is removed. Only the source-authoritative
-        // expected slot set participates in the current round award.
+        // Retained historical assignments are not part of the current round.
         continue;
       }
 
       const windowOwnerId = sanitizeOwnerId(window['ownerId']);
       const fantasyPoints = asBoundedScore(window['fantasyPoints']);
-      const asset = sanitizeAsset(window['asset']);
+      const frozenProjectionPoints = asBoundedScore(window['frozenProjectionPoints']);
+      const rawAsset = asRecord(window['asset']);
+      const assetKey = asSafeAssetKey(window['assetKey'] ?? rawAsset['assetKey']);
+      const asset = sanitizeAsset(rawAsset);
 
       if (
         seenRosterSlotIds.has(rosterSlotId) ||
+        !assetKey ||
+        seenAssetKeys.has(assetKey) ||
         windowOwnerId !== ownerId ||
         asPositiveInteger(window['cycleNumber']) !== cycleNumber ||
         window['status'] !== 'complete' ||
@@ -752,19 +818,34 @@ function buildRoundRecapTopPerformers(
       }
 
       seenRosterSlotIds.add(rosterSlotId);
+      seenAssetKeys.add(assetKey);
 
-      if (asset.assetType === 'skater') {
-        candidates.push({
-          ownerId,
-          asset,
-          fantasyPoints: roundActivityScore(fantasyPoints),
-          rosterSlotId,
-        });
+      if (frozenProjectionPoints === null) {
+        ownerProjectionComplete = false;
+      } else {
+        ownerProjectionTotal += frozenProjectionPoints;
       }
+
+      candidates.push({
+        ownerId,
+        assetKey,
+        asset,
+        fantasyPoints: roundActivityScore(fantasyPoints),
+        frozenProjectionPoints: frozenProjectionPoints === null
+          ? null
+          : roundActivityScore(frozenProjectionPoints),
+        rosterSlotId,
+      });
     }
 
     if (seenRosterSlotIds.size !== expectedRosterSlotIdSet.size) {
       return null;
+    }
+
+    if (ownerProjectionComplete) {
+      projectionTotalsByOwnerId.set(ownerId, roundActivityScore(ownerProjectionTotal));
+    } else {
+      completeProjectionEvidence = false;
     }
   }
 
@@ -772,8 +853,30 @@ function buildRoundRecapTopPerformers(
     return null;
   }
 
-  const performerScore = Math.max(...candidates.map((candidate) => candidate.fantasyPoints));
-  const tiedPerformers = candidates
+  return {
+    candidates,
+    projectionTotalsByOwnerId: completeProjectionEvidence &&
+        projectionTotalsByOwnerId.size === expectedOwnerIds.size
+      ? projectionTotalsByOwnerId
+      : null,
+  };
+}
+
+function buildRoundRecapTopPerformers(
+  candidates: readonly RoundRecapWindowCandidate[],
+): RoundRecapTopPerformerResult | null {
+  const skaterCandidates = candidates.filter(
+    (candidate) => candidate.asset.assetType === 'skater',
+  );
+
+  if (skaterCandidates.length === 0) {
+    return null;
+  }
+
+  const performerScore = Math.max(
+    ...skaterCandidates.map((candidate) => candidate.fantasyPoints),
+  );
+  const tiedPerformers = skaterCandidates
     .filter((candidate) => candidate.fantasyPoints === performerScore)
     .sort((left, right) =>
       left.asset.name.localeCompare(right.asset.name) ||
@@ -791,6 +894,151 @@ function buildRoundRecapTopPerformers(
   };
 }
 
+function buildRoundRecapTopPickups(
+  transactionValues: readonly unknown[],
+  cycleNumber: number,
+  expectedOwnerIds: ReadonlySet<string>,
+  windowCandidates: readonly RoundRecapWindowCandidate[],
+  transactionValuesComplete: boolean,
+): RoundRecapTopPickupResult | null {
+  if (!transactionValuesComplete || transactionValues.length === 0) {
+    return null;
+  }
+
+  const acquiredOwnerAssetKeys = new Set<string>();
+
+  for (const value of transactionValues) {
+    const source = asRecord(value);
+    const type = asBoundedString(source['type'], 48);
+
+    if (!ROUND_RECAP_PICKUP_TRANSACTION_TYPES.has(type)) {
+      continue;
+    }
+
+    if (asPositiveInteger(source['effectiveCycleNumber']) !== cycleNumber) {
+      continue;
+    }
+
+    const ownerId = type === 'waiver-award'
+      ? sanitizeOwnerId(source['winningOwnerId'] ?? source['ownerId'])
+      : sanitizeOwnerId(source['ownerId']);
+
+    if (!ownerId) {
+      return null;
+    }
+
+    if (!expectedOwnerIds.has(ownerId)) {
+      continue;
+    }
+
+    const addedAsset = asRecord(source['addedAsset'] ?? source['waiverAsset']);
+    const assetKey = asSafeAssetKey(addedAsset['assetKey']);
+    const asset = sanitizeAsset(addedAsset);
+
+    if (!assetKey || !asset) {
+      return null;
+    }
+
+    acquiredOwnerAssetKeys.add(`${ownerId}::${assetKey}`);
+  }
+
+  const pickupCandidates = windowCandidates.filter((candidate) =>
+    candidate.asset.assetType === 'skater' &&
+    candidate.fantasyPoints > 0 &&
+    acquiredOwnerAssetKeys.has(`${candidate.ownerId}::${candidate.assetKey}`),
+  );
+
+  if (pickupCandidates.length === 0) {
+    return null;
+  }
+
+  const pickupScore = Math.max(
+    ...pickupCandidates.map((candidate) => candidate.fantasyPoints),
+  );
+  const tiedPickups = pickupCandidates
+    .filter((candidate) => candidate.fantasyPoints === pickupScore)
+    .sort((left, right) =>
+      left.asset.name.localeCompare(right.asset.name) ||
+      left.ownerId.localeCompare(right.ownerId) ||
+      left.assetKey.localeCompare(right.assetKey) ||
+      left.rosterSlotId.localeCompare(right.rosterSlotId),
+    );
+
+  return {
+    pickups: tiedPickups.slice(0, MAX_RECAP_TOP_PICKUPS).map((candidate) => ({
+      ownerId: candidate.ownerId,
+      asset: candidate.asset,
+    })),
+    pickupTieCount: tiedPickups.length,
+    pickupScore,
+  };
+}
+
+function buildRoundRecapBiggestUpset(
+  completedMatchups: readonly SanitizedLeagueActivity[],
+  projectionTotalsByOwnerId: ReadonlyMap<string, number> | null,
+): RoundRecapUpsetResult | null {
+  if (!projectionTotalsByOwnerId) {
+    return null;
+  }
+
+  const candidates: RoundRecapUpsetResult[] = [];
+
+  for (const matchup of completedMatchups) {
+    const winnerOwnerId = matchup.winnerOwnerId ?? null;
+    const teamAOwnerId = matchup.teamAOwnerId ?? null;
+    const teamBOwnerId = matchup.teamBOwnerId ?? null;
+
+    if (!winnerOwnerId || !teamAOwnerId || !teamBOwnerId) {
+      continue;
+    }
+
+    const loserOwnerId = winnerOwnerId === teamAOwnerId
+      ? teamBOwnerId
+      : winnerOwnerId === teamBOwnerId
+        ? teamAOwnerId
+        : null;
+
+    if (!loserOwnerId) {
+      return null;
+    }
+
+    const winnerProjection = projectionTotalsByOwnerId.get(winnerOwnerId);
+    const loserProjection = projectionTotalsByOwnerId.get(loserOwnerId);
+
+    if (winnerProjection === undefined || loserProjection === undefined) {
+      return null;
+    }
+
+    const projectionGap = roundActivityScore(loserProjection - winnerProjection);
+
+    if (projectionGap <= 0) {
+      continue;
+    }
+
+    const actualMargin = roundActivityScore(
+      Math.abs((matchup.teamAScore ?? 0) - (matchup.teamBScore ?? 0)),
+    );
+
+    candidates.push({
+      winnerOwnerId,
+      loserOwnerId,
+      projectionGap,
+      winnerProjection,
+      loserProjection,
+      actualMargin,
+    });
+  }
+
+  return candidates
+    .sort((left, right) =>
+      right.projectionGap - left.projectionGap ||
+      right.actualMargin - left.actualMargin ||
+      left.winnerOwnerId.localeCompare(right.winnerOwnerId) ||
+      left.loserOwnerId.localeCompare(right.loserOwnerId),
+    )[0] ?? null;
+}
+
 /**
  * Builds one compact regular-season recap from immutable completed matchup
  * results. A scheduled bye is neutral. Any malformed real matchup fails the
@@ -801,6 +1049,8 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
   previousHighScoreValue: unknown = null,
   allowNewHighScoreClaim = true,
   teamWindowValues: readonly unknown[] = [],
+  transactionValues: readonly unknown[] = [],
+  transactionValuesComplete = true,
 ): LeagueRoundRecapResult | null {
   const hasPreviousHighScore =
     previousHighScoreValue !== null && previousHighScoreValue !== undefined;
@@ -830,7 +1080,6 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
   }
 
   if (completedMatchups.length < 2) {
-    // Individual Game Final entries already cover one-game rounds.
     return null;
   }
 
@@ -859,11 +1108,29 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
     seenOwnerIds.add(teamBOwnerId);
   }
 
-  const topPerformerResult = teamWindowValues.length > 0
-    ? buildRoundRecapTopPerformers(teamWindowValues, cycleNumber, seenOwnerIds)
+  const windowValidation = teamWindowValues.length > 0
+    ? buildRoundRecapWindowCandidates(teamWindowValues, cycleNumber, seenOwnerIds)
+    : null;
+  const topPerformerResult = windowValidation
+    ? buildRoundRecapTopPerformers(windowValidation.candidates)
+    : null;
+  const topPickupResult = windowValidation
+    ? buildRoundRecapTopPickups(
+      transactionValues,
+      cycleNumber,
+      seenOwnerIds,
+      windowValidation.candidates,
+      transactionValuesComplete,
+    )
+    : null;
+  const biggestUpset = windowValidation
+    ? buildRoundRecapBiggestUpset(
+      completedMatchups,
+      windowValidation.projectionTotalsByOwnerId,
+    )
     : null;
 
-  if (teamWindowValues.length > 0 && !topPerformerResult) {
+  if (teamWindowValues.length > 0 && (!windowValidation || !topPerformerResult)) {
     return null;
   }
 
@@ -945,6 +1212,20 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
     activity.recapTopPerformerScore = topPerformerResult.performerScore;
   }
 
+  if (topPickupResult) {
+    activity.recapTopPickups = topPickupResult.pickups;
+    activity.recapTopPickupTieCount = topPickupResult.pickupTieCount;
+    activity.recapTopPickupScore = topPickupResult.pickupScore;
+  }
+
+  if (biggestUpset) {
+    activity.recapUpsetWinnerOwnerId = biggestUpset.winnerOwnerId;
+    activity.recapUpsetLoserOwnerId = biggestUpset.loserOwnerId;
+    activity.recapUpsetProjectionGap = biggestUpset.projectionGap;
+    activity.recapUpsetWinnerProjection = biggestUpset.winnerProjection;
+    activity.recapUpsetLoserProjection = biggestUpset.loserProjection;
+  }
+
   return {
     activity,
     highestScore,
@@ -952,6 +1233,14 @@ export function buildRegularSeasonRoundRecapLeagueActivity(
     topPerformers: topPerformerResult?.performers ?? [],
     topPerformerTieCount: topPerformerResult?.performerTieCount ?? 0,
     topPerformerScore: topPerformerResult?.performerScore ?? null,
+    topPickups: topPickupResult?.pickups ?? [],
+    topPickupTieCount: topPickupResult?.pickupTieCount ?? 0,
+    topPickupScore: topPickupResult?.pickupScore ?? null,
+    upsetWinnerOwnerId: biggestUpset?.winnerOwnerId ?? null,
+    upsetLoserOwnerId: biggestUpset?.loserOwnerId ?? null,
+    upsetProjectionGap: biggestUpset?.projectionGap ?? null,
+    upsetWinnerProjection: biggestUpset?.winnerProjection ?? null,
+    upsetLoserProjection: biggestUpset?.loserProjection ?? null,
   };
 }
 

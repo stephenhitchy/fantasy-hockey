@@ -25,17 +25,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md`](docs/RINKRAT_SOCIAL_C1F_ROUND_RECAPS.md) — one immutable regular-season round recap, top-score and closest-finish context, League Wire-era scoring high-water, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — the full locally bundled Unicode Emoji 17 reaction catalog, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`](docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md) — Player of the Round authority, emoji-only picker cleanup, phone category access, scroll behavior, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`](docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md) — Pickup of the Round, Biggest Upset from frozen team projections, bounded server evidence, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 34 / Social Batch C1H**. C1H adds a server-derived **Player of the Round** line to the existing immutable regular-season Round Recap by validating the completed six-game roster-slot windows for every real matchup owner. It also removes the custom quick-pick row so reactions use only the full **3,944 fully-qualified Unicode Emoji 17.0 sequences** catalog.
+The current source runtime is **Release Candidate 35 / Social Batch C1I**. C1I completes the compact immutable regular-season Round Recap with **Pickup of the Round** from bounded same-cycle completed acquisition transactions and **Biggest Upset** from frozen six-game team projection totals. Top team, Player of the Round, and Closest finish remain unchanged.
 
-On phones, all emoji categories are now exposed through a native selector and results scroll vertically inside a bounded inline region with momentum scrolling. Search, 48-item progressive disclosure, 44-pixel targets, and an eight-type summary cap remain. Existing quick/custom reaction identifiers normalize to standard emoji without a migration.
+The emoji-only mobile picker from C1H remains intact: every category is available through the native phone selector and results scroll inside the bounded inline region. Existing legacy/custom reaction identifiers continue normalizing to standard emoji without a migration.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1h`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1i`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -80,6 +81,7 @@ verify:batchc1e
 verify:batchc1f
 verify:batchc1g
 verify:batchc1h
+verify:batchc1i
 ```
 
 RinkRat pins:
@@ -99,7 +101,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1h
+npm run verify:batchc1i
 ```
 
 After verification and a clean commit:
@@ -110,6 +112,18 @@ npm run beta:preflight
 
 
 
+
+## Social Batch C1I — Round Recap Awards
+
+C1I reuses the existing `publishLeagueRoundRecapActivity` trigger and League Wire card. A qualifying same-cycle completed acquisition may become Pickup of the Round based on final skater-window points. A final winner may become Biggest Upset when its frozen team projection was lower than the opponent's, ranked by the projected gap. Optional awards disappear when evidence is incomplete rather than guessing or blocking a valid recap.
+
+Verification:
+
+```bash
+npm run verify:batchc1i
+```
+
+The release updates only `publishLeagueRoundRecapActivity` and RC35 Hosting. Full guidance is in `docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`.
 
 ## Social Batch C1H — Player of the Round and Mobile Emoji Picker
 
@@ -139,7 +153,7 @@ npm run verify:batchc1g
 
 C1G.1 preserves strict Functions TypeScript compilation in the rate limiter. C1H retains that fix and maps every retired quick/custom identifier back to its standard emoji equivalent.
 
-The current owner workflow is the C1H automated gate, targeted deployment of `setLeagueActivityReaction`, RC34 Hosting, and a short site-first smoke test with two managers. Full authority, limits, mobile behavior, deployment, validation, diagnostics, and rollback guidance are in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`.
+The current owner workflow is the C1I automated gate, targeted deployment of `publishLeagueRoundRecapActivity`, RC35 Hosting, and a short site-first completed-round smoke test. Reaction authority and mobile picker guidance remain in `docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`; current release guidance is in `docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`.
 
 ## Social Batch C1F — Matchup Round Recaps
 

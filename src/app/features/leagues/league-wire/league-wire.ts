@@ -857,12 +857,51 @@ export class LeagueWire {
           ? `${activity.recapTopPerformerTieCount > 1 ? 'Players of the Round' : 'Player of the Round'}: ` +
             `${performerLabel} · ${this.formatScore(activity.recapTopPerformerScore)}`
           : null;
+        const pickupLabels = activity.recapTopPickups.map((pickup) => {
+          const teamName = this.teamByOwnerId().get(pickup.ownerId)?.teamName;
+          return teamName
+            ? `${pickup.asset.name} (${teamName})`
+            : pickup.asset.name;
+        });
+        const omittedPickupCount = Math.max(
+          0,
+          activity.recapTopPickupTieCount - pickupLabels.length,
+        );
+        const pickupLabel = pickupLabels.length > 0
+          ? `${this.joinLabels(pickupLabels)}${
+            omittedPickupCount > 0 ? ` +${omittedPickupCount} tied` : ''
+          }`
+          : '';
+        const pickupDetail = pickupLabel && activity.recapTopPickupScore !== null
+          ? `${activity.recapTopPickupTieCount > 1 ? 'Pickups of the Round' : 'Pickup of the Round'}: ` +
+            `${pickupLabel} · ${this.formatScore(activity.recapTopPickupScore)}`
+          : null;
+        const upsetWinnerLabel = activity.recapUpsetWinnerOwnerId
+          ? this.teamByOwnerId().get(activity.recapUpsetWinnerOwnerId)?.teamName || 'The underdog'
+          : null;
+        const upsetLoserLabel = activity.recapUpsetLoserOwnerId
+          ? this.teamByOwnerId().get(activity.recapUpsetLoserOwnerId)?.teamName || 'the favorite'
+          : null;
+        const upsetDetail = upsetWinnerLabel &&
+            upsetLoserLabel &&
+            activity.recapUpsetProjectionGap !== null
+          ? `Biggest upset: ${upsetWinnerLabel} over ${upsetLoserLabel} · ` +
+            `${this.formatScore(activity.recapUpsetProjectionGap)}-point projected underdog`
+          : null;
         const recapDetails = [
           `Top team: ${topScoreLabel} · ${this.formatScore(activity.recapTopScore)}`,
         ];
 
         if (performerDetail) {
           recapDetails.push(performerDetail);
+        }
+
+        if (pickupDetail) {
+          recapDetails.push(pickupDetail);
+        }
+
+        if (upsetDetail) {
+          recapDetails.push(upsetDetail);
         }
 
         recapDetails.push(`Closest: ${closestFinish}`);

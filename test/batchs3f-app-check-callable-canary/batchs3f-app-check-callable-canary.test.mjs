@@ -211,8 +211,8 @@ test('S3F remains intact under RC34 without changing Scoring V3 or Projection V1
     read('package.json').then(JSON.parse),
   ]);
 
-  assert.match(runtime, /Release Candidate 34/);
-  assert.match(productionRuntime, /Release Candidate 34/);
+  assert.match(runtime, /Release Candidate 35/);
+  assert.match(productionRuntime, /Release Candidate 35/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
   assert.match(roadmap, /S3\.23/);
@@ -220,5 +220,5 @@ test('S3F remains intact under RC34 without changing Scoring V3 or Projection V1
   assert.match(runbook, /exact set of callable Functions/i);
   assert.match(runbook, /exact set of league IDs/i);
   assert.match(packageJson.scripts['verify:batchs3f:core'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1):core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i):core/);
 });

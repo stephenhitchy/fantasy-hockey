@@ -67,6 +67,11 @@ export interface LeagueActivityRecapPerformer {
   asset: LeagueActivityAssetSummary;
 }
 
+export interface LeagueActivityRecapPickup {
+  ownerId: string;
+  asset: LeagueActivityAssetSummary;
+}
+
 export interface LeagueActivity {
   id: string;
   schemaVersion: number;
@@ -109,6 +114,14 @@ export interface LeagueActivity {
   recapTopPerformers: LeagueActivityRecapPerformer[];
   recapTopPerformerScore: number | null;
   recapTopPerformerTieCount: number;
+  recapTopPickups: LeagueActivityRecapPickup[];
+  recapTopPickupScore: number | null;
+  recapTopPickupTieCount: number;
+  recapUpsetWinnerOwnerId: string | null;
+  recapUpsetLoserOwnerId: string | null;
+  recapUpsetProjectionGap: number | null;
+  recapUpsetWinnerProjection: number | null;
+  recapUpsetLoserProjection: number | null;
   reactionRecords: LeagueActivityReactionRecord[];
   reactionCounts: LeagueActivityReactionCounts;
   occurredAt: Date | null;
