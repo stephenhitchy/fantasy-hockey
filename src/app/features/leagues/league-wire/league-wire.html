@@ -23,7 +23,7 @@
   </header>
 
   <p class="league-wire-intro">
-    Commissioner announcements, Draft picks, commissioner controls, final matchup results, completed-round recaps with Player, Pickup, and Biggest Upset honors, completed league moves, and emoji reactions—without live-score noise or exposed claims.
+    Commissioner announcements, Draft picks, commissioner controls, final matchup results with shareable cards, completed-round recaps with Player, Pickup, and Biggest Upset honors, completed league moves, and emoji reactions—without live-score noise or exposed claims.
   </p>
 
 
@@ -233,6 +233,32 @@
               </span>
             }
 
+            @if (canShareMatchupCard(item)) {
+              <div class="league-wire-share-actions">
+                <button
+                  class="league-wire-share-button rr-button rr-button--quiet"
+                  type="button"
+                  [disabled]="isShareCardSaving(item)"
+                  (click)="shareMatchupResult(item)"
+                >
+                  <span class="league-wire-share-mark" aria-hidden="true">↗</span>
+                  {{ shareCardButtonLabel(item) }}
+                </button>
+
+                @if (shareCardStatus(item)) {
+                  <span class="league-wire-share-status" role="status">
+                    {{ shareCardStatus(item) }}
+                  </span>
+                }
+
+                @if (shareCardError(item)) {
+                  <span class="league-wire-share-error" role="alert">
+                    {{ shareCardError(item) }}
+                  </span>
+                }
+              </div>
+            }
+
             @if (supportsReactions(item)) {
               <div class="league-wire-reactions">
                 <div class="league-wire-reaction-summary" aria-label="League reactions">
@@ -402,6 +428,6 @@
   }
 
   <footer class="league-wire-footer">
-    Announcements and reactions are visible only to league members. Reactions use the standard emoji catalog only. Only final matchup outcomes post, plus one compact regular-season recap with the top team, Player of the Round, qualifying Pickup of the Round, Biggest Upset, and closest finish after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
+    Announcements and reactions are visible only to league members. A member-triggered share card intentionally exports only the final team names, scores, matchup context, and league name. Reactions use the standard emoji catalog only. Only final matchup outcomes post, plus one compact regular-season recap with the top team, Player of the Round, qualifying Pickup of the Round, Biggest Upset, and closest finish after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
   </footer>
 </section>

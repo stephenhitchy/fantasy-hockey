@@ -11617,3 +11617,13 @@ The normal owner workflow is one `npm run verify:batchc1h` gate, targeted update
 ## Social Batch C1I — Round Recap Awards (Release Candidate 35)
 
 C1I completes the regular-season League Wire recap with two optional server-derived honors. Pickup of the Round matches bounded same-cycle completed acquisition transactions to final expected skater slot windows. Biggest Upset compares final winners with frozen six-game team projection totals and selects the largest projected underdog gap. Both awards fail closed when evidence is incomplete, while a valid core recap remains publishable. C1I reuses `publishLeagueRoundRecapActivity`, the existing capped activity listener, and the existing mobile card; it changes no Rules, indexes, TTL, scoring, projection, App Check, queue, or shared-cache authority. Full deployment and validation guidance is in `docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`.
+
+## Social Batch C1J — Matchup Share Cards (Release Candidate 36)
+
+C1J begins the shareable-card roadmap with completed League Wire matchup and championship results. The browser receives no new competitive data: it renders a square 1080×1080 PNG only after a league member presses **Share result**, using the existing server-sanitized `matchup-result` activity and current team-name listener.
+
+The card includes the league name, matchup or playoff context, two team names, two final scores, winner/tie presentation, championship treatment, and higher-seed advancement context when applicable. It excludes account identifiers, emails, invite codes, transactions, claims, commissioner notes, roster-slot identifiers, and game ledgers.
+
+The browser prefers native Web Share with the PNG file, falls back to text sharing when file sharing is unavailable, and otherwise downloads the PNG locally with best-effort caption copy. Canceling the native share sheet is not treated as an error. The action remains inline, uses a 44-pixel phone target, and adds no preview modal, overlay, fixed control, or sticky region.
+
+C1J is Hosting-only. It adds no Function, listener, Firestore Rule, index, TTL policy, migration, storage object, or server log. Production Scoring V3, Projection V11, immutable six-game roster-slot windows, seventh-game rollover, transaction and waiver privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow remain unchanged. Detailed verification, deployment, site-first proof, and rollback guidance is maintained in `docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`.

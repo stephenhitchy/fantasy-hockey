@@ -26,17 +26,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md`](docs/RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS.md) — the full locally bundled Unicode Emoji 17 reaction catalog, verified-member server authority, same-listener mobile presentation, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`](docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md) — Player of the Round authority, emoji-only picker cleanup, phone category access, scroll behavior, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`](docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md) — Pickup of the Round, Biggest Upset from frozen team projections, bounded server evidence, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md) — browser-generated matchup and championship PNG cards, native mobile sharing, desktop fallback, privacy boundary, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 35 / Social Batch C1I**. C1I completes the compact immutable regular-season Round Recap with **Pickup of the Round** from bounded same-cycle completed acquisition transactions and **Biggest Upset** from frozen six-game team projection totals. Top team, Player of the Round, and Closest finish remain unchanged.
+The current source runtime is **Release Candidate 36 / Social Batch C1J**. C1J adds mobile-first shareable PNG cards to completed League Wire matchup results and championships. Cards are rendered entirely in the browser from the existing server-sanitized final, use native file sharing when available, and fall back to a local PNG download without creating server state.
 
-The emoji-only mobile picker from C1H remains intact: every category is available through the native phone selector and results scroll inside the bounded inline region. Existing legacy/custom reaction identifiers continue normalizing to standard emoji without a migration.
+The compact Round Recap from C1I remains unchanged, including Top team, Player of the Round, Pickup of the Round, Biggest Upset, and Closest finish. The emoji-only mobile picker from C1H also remains intact.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1i`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1j`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -82,6 +83,7 @@ verify:batchc1f
 verify:batchc1g
 verify:batchc1h
 verify:batchc1i
+verify:batchc1j
 ```
 
 RinkRat pins:
@@ -101,7 +103,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1i
+npm run verify:batchc1j
 ```
 
 After verification and a clean commit:
@@ -111,6 +113,19 @@ npm run beta:preflight
 ```
 
 
+
+
+## Social Batch C1J — Matchup Share Cards
+
+C1J adds one inline **Share result** action to completed League Wire Game Finals. It creates a 1080×1080 RinkRat PNG in the browser from the existing sanitized final, supports native mobile file sharing, falls back to a local download, and gives championships a distinct Champion treatment. It creates no Firestore document, Function, listener, Rule, index, TTL policy, or migration.
+
+Verification:
+
+```bash
+npm run verify:batchc1j
+```
+
+C1J deploys only RC36 Hosting. Full guidance is in `docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`.
 
 
 ## Social Batch C1I — Round Recap Awards

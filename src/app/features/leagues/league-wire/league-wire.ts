@@ -42,6 +42,10 @@ import {
   type SetLeagueActivityReactionResult,
 } from '../../../core/league/league-activity-reaction.service';
 import { type FantasyTeam } from '../../../core/team/team.service';
+import {
+  shareLeagueMatchupCard,
+  type LeagueMatchupShareCardData,
+} from '../../../core/league/league-matchup-share-card.service';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 
 interface LeagueWireItem {
@@ -53,6 +57,7 @@ interface LeagueWireItem {
   profileIconId: string | null;
   headline: string;
   detail: string | null;
+  shareCard: LeagueMatchupShareCardData | null;
   reactionRecords: LeagueActivityReactionRecord[];
   reactionCounts: LeagueActivityReactionCounts;
   occurredAt: Date | null;
@@ -74,6 +79,7 @@ export class LeagueWire {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly leagueId = input.required<string>();
+  readonly leagueName = input('RinkRat League');
   readonly userId = input.required<string>();
   readonly teams = input<readonly FantasyTeam[]>([]);
   readonly isCommissioner = input(false);
@@ -97,6 +103,9 @@ export class LeagueWire {
   readonly reactionSavingActivityId = signal('');
   readonly reactionStatusMessage = signal('');
   readonly reactionErrors = signal<Record<string, string>>({});
+  readonly shareSavingActivityId = signal('');
+  readonly shareStatusMessages = signal<Record<string, string>>({});
+  readonly shareErrors = signal<Record<string, string>>({});
   readonly emojiCatalog = signal<readonly LeagueActivityReactionOption[]>([]);
   readonly emojiCatalogGroups = signal<readonly string[]>([]);
   readonly emojiCatalogVersion = signal('');
@@ -205,6 +214,9 @@ export class LeagueWire {
       this.reactionSavingActivityId.set('');
       this.reactionStatusMessage.set('');
       this.reactionErrors.set({});
+      this.shareSavingActivityId.set('');
+      this.shareStatusMessages.set({});
+      this.shareErrors.set({});
       this.emojiSearch.set('');
       this.emojiGroupIndex.set(0);
       this.emojiVisibleLimit.set(EMOJI_PICKER_PAGE_SIZE);
@@ -502,6 +514,84 @@ export class LeagueWire {
   }
 
 
+  canShareMatchupCard(item: LeagueWireItem): boolean {
+    return item.shareCard !== null;
+  }
+
+  isShareCardSaving(item: LeagueWireItem): boolean {
+    return this.shareSavingActivityId() === item.id;
+  }
+
+  shareCardStatus(item: LeagueWireItem): string {
+    return this.shareStatusMessages()[item.id] ?? '';
+  }
+
+  shareCardError(item: LeagueWireItem): string {
+    return this.shareErrors()[item.id] ?? '';
+  }
+
+  shareCardButtonLabel(item: LeagueWireItem): string {
+    if (this.isShareCardSaving(item)) {
+      return 'Preparing card...';
+    }
+
+    return item.shareCard?.championship
+      ? 'Share championship'
+      : 'Share result';
+  }
+
+  async shareMatchupResult(item: LeagueWireItem): Promise<void> {
+    if (!item.shareCard || this.shareSavingActivityId()) {
+      return;
+    }
+
+    this.shareSavingActivityId.set(item.id);
+    this.clearShareFeedback(item.id);
+
+    try {
+      const result = await shareLeagueMatchupCard(item.shareCard);
+
+      if (result.outcome !== 'cancelled' && result.message) {
+        this.shareStatusMessages.update((messages) => ({
+          ...messages,
+          [item.id]: result.message,
+        }));
+      }
+    } catch (error) {
+      this.shareErrors.update((errors) => ({
+        ...errors,
+        [item.id]: error instanceof Error
+          ? error.message
+          : 'Unable to prepare that share card right now.',
+      }));
+    } finally {
+      this.shareSavingActivityId.set('');
+    }
+  }
+
+  private clearShareFeedback(activityId: string): void {
+    this.shareStatusMessages.update((messages) => {
+      if (!messages[activityId]) {
+        return messages;
+      }
+
+      const nextMessages = { ...messages };
+      delete nextMessages[activityId];
+      return nextMessages;
+    });
+
+    this.shareErrors.update((errors) => {
+      if (!errors[activityId]) {
+        return errors;
+      }
+
+      const nextErrors = { ...errors };
+      delete nextErrors[activityId];
+      return nextErrors;
+    });
+  }
+
+
   toggleAnnouncementComposer(): void {
     if (!this.isCommissioner()) {
       return;
@@ -682,6 +772,7 @@ export class LeagueWire {
 
     let headline = 'League activity was recorded.';
     let detail: string | null = null;
+    let shareCard: LeagueMatchupShareCardData | null = null;
 
     switch (activity.eventType) {
       case 'league-created':
@@ -926,6 +1017,35 @@ export class LeagueWire {
           : activity.matchupCycleNumber
             ? `Matchup ${activity.matchupCycleNumber}`
             : 'Final';
+        const hasShareableScores = Number.isFinite(activity.teamAScore) &&
+          Number.isFinite(activity.teamBScore);
+        const winnerIsTeamA = Boolean(activity.winnerOwnerId) &&
+          activity.winnerOwnerId === activity.teamAOwnerId;
+        const winnerIsTeamB = Boolean(activity.winnerOwnerId) &&
+          activity.winnerOwnerId === activity.teamBOwnerId;
+        const shareWinnerLabel = winnerIsTeamA
+          ? teamALabel
+          : winnerIsTeamB
+            ? teamBLabel
+            : null;
+
+        if (hasShareableScores) {
+          shareCard = {
+            leagueName: this.leagueName(),
+            teamAName: teamALabel,
+            teamBName: teamBLabel,
+            teamAScore: activity.teamAScore ?? 0,
+            teamBScore: activity.teamBScore ?? 0,
+            winnerTeamName: shareWinnerLabel,
+            contextLabel: activity.winnerPlace === 1
+              ? 'RinkRat Championship'
+              : activity.winnerPlace
+                ? `${this.ordinalPlace(activity.winnerPlace)} Place Final`
+                : matchupContext,
+            championship: activity.winnerPlace === 1,
+            tieBrokenByHigherSeed: activity.tieBrokenByHigherSeed,
+          };
+        }
 
         if (!activity.winnerOwnerId) {
           actorLabel = 'Matchup final';
@@ -934,7 +1054,6 @@ export class LeagueWire {
           break;
         }
 
-        const winnerIsTeamA = activity.winnerOwnerId === activity.teamAOwnerId;
         const winnerTeam = winnerIsTeamA ? teamA : teamB;
         const winnerLabel = winnerIsTeamA ? teamALabel : teamBLabel;
         const loserLabel = winnerIsTeamA ? teamBLabel : teamALabel;
@@ -986,6 +1105,7 @@ export class LeagueWire {
       profileIconId: team?.profileIconId ?? null,
       headline,
       detail,
+      shareCard,
       reactionRecords: activity.reactionRecords,
       reactionCounts: activity.reactionCounts,
       occurredAt: activity.occurredAt,
