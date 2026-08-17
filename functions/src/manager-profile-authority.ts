@@ -26,6 +26,7 @@ const SUPPORTED_TEAM_IDENTITY_UNLOCKS = new Set([
   'commissioner-mode',
   'league-explorer',
   'crowded-schedule',
+  'identity-architect',
 ]);
 
 const SUPPORTED_DEFAULT_LANDING_PAGES = new Set([
@@ -132,7 +133,16 @@ function requireFavoriteTeamVariantId(value: unknown): string {
     throw new HttpsError('invalid-argument', 'Choose a valid team color and logo version.');
   }
 
+  if (variantId.startsWith('custom-identity') &&
+      !/^custom-identity~[a-z0-9-]{1,40}~[0-9A-F]{6}~[0-9A-F]{6}~[0-9A-F]{6}$/.test(variantId)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid custom logo and three-color palette.');
+  }
+
   return variantId;
+}
+
+function requiresIdentityArchitectUnlock(variantId: string): boolean {
+  return variantId.startsWith('custom-identity~');
 }
 
 function requireHockeyExperience(value: unknown): string {
@@ -168,7 +178,7 @@ function requireSupportedString(
 }
 
 function requireTeamIdentityUnlocks(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > 4) {
+  if (!Array.isArray(value) || value.length > 5) {
     throw new HttpsError('invalid-argument', 'Your team identity unlock list is invalid.');
   }
 
@@ -206,6 +216,24 @@ export const saveManagerProfile = onCall(
     const favoriteTeamVariantId = requireFavoriteTeamVariantId(
       input.favoriteTeamVariantId,
     );
+
+    if (
+      requiresIdentityArchitectUnlock(favoriteTeamVariantId) &&
+      favoriteTeamAbbreviation === 'RR'
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose an NHL favorite before saving a custom team identity.',
+      );
+    }
+
+    if (action === 'initialize' && requiresIdentityArchitectUnlock(favoriteTeamVariantId)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Complete the Identity Architect challenge before saving a custom team identity.',
+      );
+    }
+
     const userRef = db.doc(`users/${userId}`);
     const publicProfileRef = db.doc(`publicProfiles/${userId}`);
 
@@ -268,6 +296,20 @@ export const saveManagerProfile = onCall(
 
       if (action === 'identity') {
         const existingUsername = requireUsername(existingData['username']);
+        const existingUnlocks = requireTeamIdentityUnlocks(
+          existingData['teamIdentityUnlocks'] ?? [],
+        );
+
+        if (
+          requiresIdentityArchitectUnlock(favoriteTeamVariantId) &&
+          !existingUnlocks.includes('identity-architect')
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Complete the Identity Architect challenge before saving a custom team identity.',
+          );
+        }
+
         transaction.set(
           userRef,
           {
@@ -293,7 +335,20 @@ export const saveManagerProfile = onCall(
       }
 
       const username = requireUsername(input.username);
-      const teamIdentityUnlocks = requireTeamIdentityUnlocks(input.teamIdentityUnlocks);
+      const teamIdentityUnlocks = requireTeamIdentityUnlocks(
+        existingData['teamIdentityUnlocks'] ?? [],
+      );
+
+      if (
+        requiresIdentityArchitectUnlock(favoriteTeamVariantId) &&
+        !teamIdentityUnlocks.includes('identity-architect')
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Complete the Identity Architect challenge before saving a custom team identity.',
+        );
+      }
+
       const reducedMotion = requireBoolean(input.reducedMotion, 'Reduced motion');
       const defaultLandingPage = requireSupportedString(
         input.defaultLandingPage,

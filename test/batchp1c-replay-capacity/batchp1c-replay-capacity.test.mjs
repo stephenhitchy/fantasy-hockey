@@ -239,6 +239,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // C1B adds guarded additive migration and inspection commands.
         'scripts/transaction-privacy-backfill.cjs',
         'scripts/transaction-privacy-inspect.cjs',
+        // C1K adds isolated cosmetic challenge reconciliation authority.
+        'src/team-identity-challenges.ts',
+        'src/shared/core/user/team-identity-challenge.util.ts',
   ]);
 
   assert.equal(

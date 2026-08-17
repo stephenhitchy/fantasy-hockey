@@ -3,7 +3,6 @@ import {
   getDoc,
   serverTimestamp,
   setDoc,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -242,15 +241,24 @@ export async function updateFavoriteTeam(
   });
 }
 
+/**
+ * @deprecated Challenge rewards are reconciled by server authority. The
+ * argument is retained only for older callers while the project migrates.
+ */
 export async function updateTeamIdentityUnlocks(
   uid: string,
-  teamIdentityUnlocks: TeamIdentityUnlockRequirement[],
+  _teamIdentityUnlocks: TeamIdentityUnlockRequirement[],
 ): Promise<void> {
-  const userRef = doc(db, 'users', uid);
+  if (auth.currentUser?.uid !== uid) {
+    throw new Error('You must be logged in to check team-identity challenges.');
+  }
 
-  await updateDoc(userRef, {
-    teamIdentityUnlocks,
-  });
+  const callable = httpsCallable<Record<string, never>, { unlocks: string[] }>(
+    functions,
+    'reconcileTeamIdentityChallenges',
+    { timeout: 35_000 },
+  );
+  await callable({});
 }
 
 export async function updateUserAccountSettings(

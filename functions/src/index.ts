@@ -3973,6 +3973,8 @@ export {
 
 export { saveManagerProfile } from './manager-profile-authority';
 
+export { reconcileTeamIdentityChallenges } from './team-identity-challenges';
+
 export { applyImmediateRosterMove } from './roster-moves';
 
 export {

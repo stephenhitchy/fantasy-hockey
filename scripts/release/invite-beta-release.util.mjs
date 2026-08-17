@@ -95,10 +95,10 @@ export function validateInviteBetaValidationReport(report, liveManifest) {
 }
 
 export function formatRollbackPlan(record) {
-  const tag = record?.git?.tag ?? 'rinkrat-rc36-invite-beta';
+  const tag = record?.git?.tag ?? 'rinkrat-rc37-invite-beta';
   const projectId = record?.firebase?.projectId ?? 'nhl-fantasy-app-ab673';
   const hostingTarget = record?.firebase?.hostingTarget ?? 'app';
-  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 36';
+  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 37';
 
   return `# RinkRat Invite-Beta Rollback Plan\n\n` +
     `**Frozen release:** ${releaseLabel}\n\n` +

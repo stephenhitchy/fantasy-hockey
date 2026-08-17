@@ -5,6 +5,7 @@ import { auth } from '../../../core/firebase';
 import { createLeague } from '../../../core/league/league.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
+import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
 import {
   DEFAULT_LEAGUE_LOGO_ID,
   DEFAULT_LEAGUE_LOGO_PALETTE_ID,
@@ -45,6 +46,7 @@ export class CreateLeague {
   constructor(
     private router: Router,
     private telemetry: TelemetryService,
+    private challengeService: TeamIdentityChallengeService,
   ) {}
 
   async submit(): Promise<void> {
@@ -68,6 +70,7 @@ export class CreateLeague {
         this.selectedPaletteId(),
       );
       this.telemetry.track('league_created', { max_teams: this.maxTeams });
+      void this.challengeService.refresh(user.uid, { force: true });
       await this.router.navigate(['/dashboard']);
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to create the league right now.');

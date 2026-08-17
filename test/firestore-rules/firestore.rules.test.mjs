@@ -40,7 +40,7 @@ function validProfile(client, username) {
     email: client.email,
     username,
     favoriteTeamAbbreviation: 'MIN',
-    favoriteTeamVariantId: 'home',
+    favoriteTeamVariantId: 'current-home',
     teamIdentityUnlocks: [],
     reducedMotion: false,
     defaultLandingPage: 'dashboard',
@@ -57,7 +57,7 @@ function validPublicProfile(client, username) {
     uid: client.uid,
     username,
     favoriteTeamAbbreviation: 'MIN',
-    favoriteTeamVariantId: 'home',
+    favoriteTeamVariantId: 'current-home',
     updatedAt: serverTimestamp(),
   };
 }
@@ -95,21 +95,21 @@ async function seedLeagueFixture() {
       uid: commissioner.uid,
       username: 'Commissioner',
       favoriteTeamAbbreviation: 'MIN',
-      favoriteTeamVariantId: 'home',
+      favoriteTeamVariantId: 'current-home',
       updatedAt: now,
     }),
     seedDocument(`publicProfiles/${manager.uid}`, {
       uid: manager.uid,
       username: 'Manager',
       favoriteTeamAbbreviation: 'MIN',
-      favoriteTeamVariantId: 'home',
+      favoriteTeamVariantId: 'current-home',
       updatedAt: now,
     }),
     seedDocument(`publicProfiles/${opponent.uid}`, {
       uid: opponent.uid,
       username: 'Opponent',
       favoriteTeamAbbreviation: 'MIN',
-      favoriteTeamVariantId: 'home',
+      favoriteTeamVariantId: 'current-home',
       updatedAt: now,
     }),
     seedDocument(`leagues/${LEAGUE_ID}`, {
@@ -349,24 +349,66 @@ describe('account profile boundaries', () => {
     assert.equal('email' in snapshot.data(), false);
   });
 
-  test('a user can create their own display-safe public profile', async () => {
+  test('a user can create their own display-safe public profile only after the private profile exists', async () => {
+    await expectAllowed(
+      setDoc(doc(outsider.db, 'users', outsider.uid), validProfile(outsider, 'Outsider')),
+      'Own private profile creation before public repair',
+    );
     await expectAllowed(
       setDoc(
         doc(outsider.db, 'publicProfiles', outsider.uid),
         validPublicProfile(outsider, 'Outsider'),
       ),
-      'Own public profile creation',
+      'Own matching public profile creation',
     );
   });
 
-  test('an owner can update their private profile to neutral RinkRat colors and a familiarity level', async () => {
+  test('ordinary preferences remain browser-editable but team identity is callable-owned', async () => {
     await expectAllowed(
+      updateDoc(doc(manager.db, 'users', manager.uid), {
+        hockeyExperience: 'new',
+      }),
+      'Hockey familiarity update',
+    );
+
+    await expectDenied(
       updateDoc(doc(manager.db, 'users', manager.uid), {
         favoriteTeamAbbreviation: 'RR',
         favoriteTeamVariantId: 'current-home',
-        hockeyExperience: 'new',
       }),
-      'Neutral identity and hockey familiarity update',
+      'Browser-direct team identity update',
+    );
+  });
+
+  test('team identity challenge rewards are server-owned', async () => {
+    await expectDenied(
+      updateDoc(doc(manager.db, 'users', manager.uid), {
+        teamIdentityUnlocks: [
+          'first-line-change',
+          'commissioner-mode',
+          'league-explorer',
+          'crowded-schedule',
+          'identity-architect',
+        ],
+      }),
+      'Browser-authored team identity challenge unlocks',
+    );
+
+    await expectDenied(
+      setDoc(doc(outsider.db, 'users', outsider.uid), {
+        ...validProfile(outsider, 'Outsider'),
+        teamIdentityUnlocks: ['identity-architect'],
+      }),
+      'Pre-unlocked profile creation',
+    );
+
+
+    await expectDenied(
+      setDoc(doc(outsider.db, 'users', outsider.uid), {
+        ...validProfile(outsider, 'Outsider'),
+        favoriteTeamVariantId: 'custom-identity~current-home~112233~445566~778899',
+      }),
+      'Custom identity during browser profile creation',
     );
   });
 
@@ -379,17 +421,30 @@ describe('account profile boundaries', () => {
     );
   });
 
-  test('an owner can update their own display-safe public profile to the neutral RinkRat identity', async () => {
-    await expectAllowed(
+  test('public profile writes must mirror the post-write private profile', async () => {
+    await expectDenied(
       setDoc(doc(manager.db, 'publicProfiles', manager.uid), {
         uid: manager.uid,
-        username: 'Manager Updated',
+        username: 'Manager',
         favoriteTeamAbbreviation: 'RR',
         favoriteTeamVariantId: 'current-home',
         updatedAt: serverTimestamp(),
       }),
-      'Own neutral public profile update',
+      'Public-only team identity forgery',
     );
+
+    const batch = writeBatch(manager.db);
+    batch.update(doc(manager.db, 'users', manager.uid), {
+      username: 'Manager Updated',
+    });
+    batch.set(doc(manager.db, 'publicProfiles', manager.uid), {
+      uid: manager.uid,
+      username: 'Manager Updated',
+      favoriteTeamAbbreviation: 'MIN',
+      favoriteTeamVariantId: 'current-home',
+      updatedAt: serverTimestamp(),
+    });
+    await expectAllowed(batch.commit(), 'Synchronized private and public username update');
   });
 
   test('users cannot write another manager public profile or add private fields', async () => {

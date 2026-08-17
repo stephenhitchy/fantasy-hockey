@@ -390,6 +390,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'league-activity.ts',
     'shared/core/league/league-activity.util.ts',
     'shared/core/league/league-activity-reaction.util.ts',
+    // C1K adds isolated cosmetic challenge reconciliation authority.
+    'team-identity-challenges.ts',
+    'shared/core/user/team-identity-challenge.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

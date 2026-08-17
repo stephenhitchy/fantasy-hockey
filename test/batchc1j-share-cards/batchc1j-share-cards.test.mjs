@@ -180,10 +180,10 @@ test('C1J adds no backend authority and preserves protected competitive source',
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
   assert.match(functionsPublisher, /release: 'Social Batch C1I'/);
-  assert.doesNotMatch(packageJson.scripts['verify:batchc1j:core'], /firestore:rules|functions:/);
+  assert.doesNotMatch(packageJson.scripts['verify:batchc1k:core'], /firestore:rules|functions:/);
 });
 
-test('C1J advances RC36 release operations while inheriting C1I verification', async () => {
+test('C1J remains intact under RC37 while C1K inherits its verification', async () => {
   const [runtime, productionRuntime, freezeSource, packageSource, releaseScript] = await Promise.all([
     read('src/environments/app-runtime.config.ts'),
     read('src/environments/app-runtime.config.production.ts'),
@@ -194,14 +194,14 @@ test('C1J advances RC36 release operations while inheriting C1I verification', a
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 36/);
-  assert.match(productionRuntime, /Release Candidate 36/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 36');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1j');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc36-invite-beta');
-  assert.match(packageJson.scripts['verify:batchc1j:core'], /verify:batchc1i:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1j:core/);
-  assert.match(releaseScript, /rinkrat-rc36-invite-beta/);
+  assert.match(runtime, /Release Candidate 37/);
+  assert.match(productionRuntime, /Release Candidate 37/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 37');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1k');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc37-invite-beta');
+  assert.match(packageJson.scripts['verify:batchc1k:core'], /verify:batchc1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchc1k:core/);
+  assert.match(releaseScript, /rinkrat-rc37-invite-beta/);
 });
 
 test('documentation and permanent roadmap record the bounded share-card foundation', async () => {
@@ -214,7 +214,7 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.27/);
+  assert.match(roadmap, /Version 1\.28/);
   assert.match(roadmap, /\[~\] C1\.6 Add shareable matchup/);
   assert.match(roadmap, /# \[x\] C1\.23/);
   assert.match(roadmap, /# \[x\] LOG\.45 2026-08-17/);
@@ -223,9 +223,9 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   assert.match(docs, /Canceling the native share sheet is treated as a normal cancellation/);
   assert.match(docs, /before the first asynchronous boundary/);
   assert.doesNotMatch(docs, /--only functions|--only firestore:rules/);
-  assert.match(readme, /Release Candidate 36 \/ Social Batch C1J/);
+  assert.match(readme, /Release Candidate 37 \/ Social Batch C1K/);
   assert.match(readme, /RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1j/);
-  assert.match(releaseRunbook, /rinkrat-rc36-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc36-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchc1k/);
+  assert.match(releaseRunbook, /rinkrat-rc37-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc37-invite-beta/);
 });

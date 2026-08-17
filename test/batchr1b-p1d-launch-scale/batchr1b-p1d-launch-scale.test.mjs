@@ -435,6 +435,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // C1B adds guarded additive migration and inspection commands.
         'scripts/transaction-privacy-backfill.cjs',
         'scripts/transaction-privacy-inspect.cjs',
+        // C1K adds isolated cosmetic challenge reconciliation authority.
+        'src/team-identity-challenges.ts',
+        'src/shared/core/user/team-identity-challenge.util.ts',
       ]),
     ),
     '018ac120e704a23d93ea857c8f6f67c2f62a5cf3fe989239966f3737ecedc1bc',

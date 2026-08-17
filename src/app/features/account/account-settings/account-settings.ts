@@ -1,6 +1,7 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../../../core/firebase';
 import { logoutUser } from '../../../core/auth/auth.service';
@@ -23,18 +24,24 @@ import {
   DefaultLandingPage,
   getUserProfile,
   updateFavoriteTeam,
-  updateTeamIdentityUnlocks,
   updateUserAccountSettings,
   UserProfile,
 } from '../../../core/user/user.service';
 import { applyUserTheme } from '../../../core/user/user-theme.service';
+import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { waitForAuthenticatedUser } from '../../../core/guards/auth.guard';
 import {
+  buildCustomTeamIdentityVariantId,
+  CUSTOM_TEAM_IDENTITY_VARIANT_ID,
   DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+  getCustomTeamIdentityLogoOptions,
   getNhlLogoUrl,
   getPixelTeamTheme,
   getTeamIdentityVariants,
+  isCustomTeamIdentityVariantId,
+  normalizeTeamIdentityHexColor,
+  parseCustomTeamIdentityVariantId,
   PixelTeamTheme,
   RINKRAT_NEUTRAL_ABBREVIATION,
   TEAM_IDENTITY_UNLOCK_DETAILS,
@@ -61,6 +68,7 @@ const IDENTITY_UNLOCK_ORDER: Exclude<TeamIdentityUnlockRequirement, 'default'>[]
   'commissioner-mode',
   'league-explorer',
   'crowded-schedule',
+  'identity-architect',
 ];
 
 
@@ -72,11 +80,13 @@ const IDENTITY_UNLOCK_ORDER: Exclude<TeamIdentityUnlockRequirement, 'default'>[]
   styleUrl: './account-settings.css',
 })
 export class AccountSettings {
+  private readonly destroyRef = inject(DestroyRef);
   readonly profile = signal<UserProfile | null>(null);
   readonly leagueSummaries = signal<LeagueSummary[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly savingFavoriteTeam = signal(false);
+  readonly customIdentityEditorOpen = signal(false);
   readonly sendingVerification = signal(false);
   readonly refreshingVerification = signal(false);
   readonly emailVerified = signal(false);
@@ -99,6 +109,10 @@ export class AccountSettings {
   defaultLandingPage: DefaultLandingPage = 'dashboard';
   injuryEmailEnabled = false;
   backgroundTheme: BackgroundTheme = 'rink-dark';
+  customLogoVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+  customPrimaryColor = '#26384C';
+  customSecondaryColor = '#D6E2EE';
+  customTertiaryColor = '#C94F5D';
   deleteConfirmationUsername = '';
   deletePassword = '';
   deleteAcknowledged = false;
@@ -161,12 +175,29 @@ export class AccountSettings {
     this.buildAchievement('draft', 'commissioner-mode'),
     this.buildAchievement('arena', 'league-explorer'),
     this.buildAchievement('league', 'crowded-schedule'),
+    this.buildAchievement('team', 'identity-architect'),
   ]);
 
   constructor(
     private router: Router,
+    private route: ActivatedRoute,
     private telemetry: TelemetryService,
+    private challengeService: TeamIdentityChallengeService,
   ) {
+    this.route.fragment
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((fragment) => {
+        if (fragment === 'team-identity-customizer' && !this.loading()) {
+          this.focusRequestedIdentitySection(fragment);
+        }
+      });
+
+    this.destroyRef.onDestroy(() => {
+      if (this.customIdentityEditorOpen()) {
+        this.previewPreferenceChanges();
+      }
+    });
+
     void this.loadProfile();
   }
 
@@ -182,9 +213,10 @@ export class AccountSettings {
       await user.reload();
       this.emailVerified.set(user.emailVerified);
 
-      const [profile, summaries] = await Promise.all([
+      const [profile, summaries, reconciledUnlocks] = await Promise.all([
         getUserProfile(user.uid),
         getMyLeagueSummaries(),
+        this.challengeService.refresh(user.uid, { force: true }),
       ]);
 
       this.leagueSummaries.set(summaries);
@@ -199,8 +231,10 @@ export class AccountSettings {
       this.backgroundTheme = profile?.backgroundTheme || 'rink-dark';
 
       const savedUnlocks = this.normalizeIdentityUnlocks(profile?.teamIdentityUnlocks);
-      const earnedUnlocks = this.getEarnedIdentityUnlocks(summaries);
-      const mergedUnlocks = this.mergeIdentityUnlocks(savedUnlocks, earnedUnlocks);
+      const mergedUnlocks = this.mergeIdentityUnlocks(
+        savedUnlocks,
+        this.normalizeIdentityUnlocks(reconciledUnlocks),
+      );
       this.unlockedIdentityRequirements.set(mergedUnlocks);
 
       const requestedVariant = getPixelTeamTheme(
@@ -227,24 +261,15 @@ export class AccountSettings {
         : profile;
       this.profile.set(normalizedProfile);
 
-      const persistenceTasks: Promise<void>[] = [];
-      if (!this.sameIdentityUnlocks(savedUnlocks, mergedUnlocks)) {
-        persistenceTasks.push(updateTeamIdentityUnlocks(user.uid, mergedUnlocks));
-      }
       if (
         profile?.favoriteTeamVariantId &&
         profile.favoriteTeamVariantId !== this.favoriteTeamVariantId
       ) {
-        persistenceTasks.push(
-          updateFavoriteTeam(
-            user.uid,
-            this.favoriteTeamAbbreviation,
-            this.favoriteTeamVariantId,
-          ),
+        await updateFavoriteTeam(
+          user.uid,
+          this.favoriteTeamAbbreviation,
+          this.favoriteTeamVariantId,
         );
-      }
-      if (persistenceTasks.length > 0) {
-        await Promise.all(persistenceTasks);
       }
 
       applyUserTheme({
@@ -262,6 +287,7 @@ export class AccountSettings {
       );
     } finally {
       this.loading.set(false);
+      this.focusRequestedIdentitySection();
     }
   }
 
@@ -273,6 +299,7 @@ export class AccountSettings {
     const previousTeam = this.favoriteTeamAbbreviation;
     const previousVariant = this.favoriteTeamVariantId;
 
+    this.customIdentityEditorOpen.set(false);
     this.favoriteTeamAbbreviation = team.abbreviation;
     this.favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
 
@@ -300,12 +327,21 @@ export class AccountSettings {
 
     if (
       this.savingFavoriteTeam() ||
-      variant.abbreviation !== this.favoriteTeamAbbreviation ||
-      variant.variantId === this.favoriteTeamVariantId
+      variant.abbreviation !== this.favoriteTeamAbbreviation
     ) {
       return;
     }
 
+    if (variant.variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID) {
+      this.openCustomIdentityEditor();
+      return;
+    }
+
+    if (variant.variantId === this.favoriteTeamVariantId) {
+      return;
+    }
+
+    this.customIdentityEditorOpen.set(false);
     const previousTeam = this.favoriteTeamAbbreviation;
     const previousVariant = this.favoriteTeamVariantId;
     this.favoriteTeamVariantId = variant.variantId;
@@ -315,6 +351,150 @@ export class AccountSettings {
       previousVariant,
       `${variant.variantLabel} is now your active ${variant.name} identity.`,
     );
+  }
+
+  isTeamVariantSelected(variant: PixelTeamTheme): boolean {
+    return variant.variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID
+      ? isCustomTeamIdentityVariantId(this.favoriteTeamVariantId)
+      : variant.variantId === this.favoriteTeamVariantId;
+  }
+
+  teamVariantPreview(variant: PixelTeamTheme): PixelTeamTheme {
+    return variant.variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID &&
+      isCustomTeamIdentityVariantId(this.favoriteTeamVariantId)
+      ? this.selectedTeam()
+      : variant;
+  }
+
+  customLogoOptions(): PixelTeamTheme[] {
+    return getCustomTeamIdentityLogoOptions(this.favoriteTeamAbbreviation);
+  }
+
+  customIdentityPreview(): PixelTeamTheme {
+    return getPixelTeamTheme(
+      this.favoriteTeamAbbreviation,
+      this.buildCustomIdentityDraftId(),
+    );
+  }
+
+  openCustomIdentityEditor(): void {
+    if (this.isNeutralIdentity()) {
+      this.errorMessage.set('Choose an NHL favorite before building a custom team identity.');
+      return;
+    }
+
+    if (!this.isUnlockRequirementUnlocked('identity-architect', this.unlockedIdentityRequirements())) {
+      const details = TEAM_IDENTITY_UNLOCK_DETAILS['identity-architect'];
+      this.errorMessage.set(
+        `${details.challengeTitle} is still locked: ${details.description}`,
+      );
+      return;
+    }
+
+    const savedConfiguration = parseCustomTeamIdentityVariantId(this.favoriteTeamVariantId);
+    const sourceTheme = this.selectedTeam();
+    const logoOptions = this.customLogoOptions();
+    const matchingLogo = logoOptions.find((option) =>
+      option.variantId === savedConfiguration?.logoVariantId ||
+      (!savedConfiguration && option.logoUrl === sourceTheme.logoUrl),
+    );
+
+    this.customLogoVariantId = matchingLogo?.variantId ?? DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+    this.customPrimaryColor = savedConfiguration?.primaryColor ?? sourceTheme.primaryColor;
+    this.customSecondaryColor = savedConfiguration?.secondaryColor ?? sourceTheme.secondaryColor;
+    this.customTertiaryColor = savedConfiguration?.tertiaryColor ?? sourceTheme.tertiaryColor;
+    this.customIdentityEditorOpen.set(true);
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.previewCustomIdentityDraft();
+  }
+
+  chooseCustomLogo(variantId: string): void {
+    if (!this.customLogoOptions().some((option) => option.variantId === variantId)) {
+      return;
+    }
+
+    this.customLogoVariantId = variantId;
+    this.previewCustomIdentityDraft();
+  }
+
+  updateCustomIdentityColor(
+    color: 'primary' | 'secondary' | 'tertiary',
+    value: string,
+  ): void {
+    const normalized = normalizeTeamIdentityHexColor(value);
+    if (!normalized) {
+      return;
+    }
+
+    if (color === 'primary') {
+      this.customPrimaryColor = normalized;
+    } else if (color === 'secondary') {
+      this.customSecondaryColor = normalized;
+    } else {
+      this.customTertiaryColor = normalized;
+    }
+
+    this.previewCustomIdentityDraft();
+  }
+
+  resetCustomIdentityDraft(): void {
+    const home = getPixelTeamTheme(
+      this.favoriteTeamAbbreviation,
+      DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+    );
+    this.customLogoVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+    this.customPrimaryColor = home.primaryColor;
+    this.customSecondaryColor = home.secondaryColor;
+    this.customTertiaryColor = home.tertiaryColor;
+    this.previewCustomIdentityDraft();
+  }
+
+  cancelCustomIdentityEditor(): void {
+    this.customIdentityEditorOpen.set(false);
+    this.previewPreferenceChanges();
+  }
+
+  async saveCustomIdentity(): Promise<void> {
+    if (this.savingFavoriteTeam()) {
+      return;
+    }
+
+    const previousTeam = this.favoriteTeamAbbreviation;
+    const previousVariant = this.favoriteTeamVariantId;
+    const customVariantId = this.buildCustomIdentityDraftId();
+    this.favoriteTeamVariantId = customVariantId;
+
+    await this.saveFavoriteTeamIdentity(
+      previousTeam,
+      previousVariant,
+      `Your custom ${this.selectedTeam().name} identity is now active.`,
+    );
+
+    if (this.favoriteTeamVariantId === customVariantId) {
+      this.customIdentityEditorOpen.set(false);
+    }
+  }
+
+  private buildCustomIdentityDraftId(): string {
+    return buildCustomTeamIdentityVariantId({
+      logoVariantId: this.customLogoVariantId,
+      primaryColor: this.customPrimaryColor,
+      secondaryColor: this.customSecondaryColor,
+      tertiaryColor: this.customTertiaryColor,
+    });
+  }
+
+  private previewCustomIdentityDraft(): void {
+    applyUserTheme({
+      favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
+      favoriteTeamVariantId: this.buildCustomIdentityDraftId(),
+      teamIdentityUnlocks: this.unlockedIdentityRequirements(),
+      reducedMotion: this.reducedMotion,
+      defaultLandingPage: this.defaultLandingPage,
+      backgroundTheme: this.backgroundTheme,
+      hockeyExperience: this.hockeyExperience,
+    }, { persist: false });
   }
 
   private async saveFavoriteTeamIdentity(
@@ -412,33 +592,6 @@ export class AccountSettings {
     };
   }
 
-  private getEarnedIdentityUnlocks(
-    summaries: LeagueSummary[],
-  ): Exclude<TeamIdentityUnlockRequirement, 'default'>[] {
-    const leagueCount = summaries.length;
-    const commissionerLeagueCount = summaries.filter((league) => league.isCommissioner).length;
-    const opponentCount = summaries.reduce(
-      (sum, league) => sum + Math.max(0, league.teamCount - 1),
-      0,
-    );
-    const earned: Exclude<TeamIdentityUnlockRequirement, 'default'>[] = [];
-
-    if (leagueCount >= 1) {
-      earned.push('first-line-change');
-    }
-    if (commissionerLeagueCount >= 1) {
-      earned.push('commissioner-mode');
-    }
-    if (leagueCount >= 3) {
-      earned.push('league-explorer');
-    }
-    if (opponentCount >= 10) {
-      earned.push('crowded-schedule');
-    }
-
-    return earned;
-  }
-
   private normalizeIdentityUnlocks(
     unlocks: TeamIdentityUnlockRequirement[] | null | undefined,
   ): Exclude<TeamIdentityUnlockRequirement, 'default'>[] {
@@ -456,18 +609,39 @@ export class AccountSettings {
     return IDENTITY_UNLOCK_ORDER.filter((requirement) => merged.has(requirement));
   }
 
-  private sameIdentityUnlocks(
-    first: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
-    second: Exclude<TeamIdentityUnlockRequirement, 'default'>[],
-  ): boolean {
-    return first.length === second.length && first.every((value, index) => value === second[index]);
-  }
-
   private isUnlockRequirementUnlocked(
     requirement: TeamIdentityUnlockRequirement,
     unlocked: TeamIdentityUnlockRequirement[],
   ): boolean {
     return requirement === 'default' || unlocked.includes(requirement);
+  }
+
+  private focusRequestedIdentitySection(
+    fragment = this.route.snapshot.fragment,
+  ): void {
+    if (
+      fragment !== 'team-identity-customizer' ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      if (
+        !this.isNeutralIdentity() &&
+        this.isUnlockRequirementUnlocked(
+          'identity-architect',
+          this.unlockedIdentityRequirements(),
+        )
+      ) {
+        this.openCustomIdentityEditor();
+      }
+
+      document.getElementById('team-identity-customizer')?.scrollIntoView({
+        behavior: this.reducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    }, 0);
   }
 
   previewPreferenceChanges(): void {

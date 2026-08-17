@@ -355,12 +355,13 @@ service cloud.firestore {
       function validTeamIdentityUnlocks(data) {
         return !data.keys().hasAny(['teamIdentityUnlocks']) ||
           (data.teamIdentityUnlocks is list &&
-            data.teamIdentityUnlocks.size() <= 4 &&
+            data.teamIdentityUnlocks.size() <= 5 &&
             data.teamIdentityUnlocks.hasOnly([
               'first-line-change',
               'commissioner-mode',
               'league-explorer',
-              'crowded-schedule'
+              'crowded-schedule',
+              'identity-architect'
             ]));
       }
 
@@ -397,9 +398,6 @@ service cloud.firestore {
 
         return changedFields.hasOnly([
             'username',
-            'favoriteTeamAbbreviation',
-            'favoriteTeamVariantId',
-            'teamIdentityUnlocks',
             'reducedMotion',
             'defaultLandingPage',
             'backgroundTheme',
@@ -418,6 +416,9 @@ service cloud.firestore {
         request.resource.data.uid == currentUserId() &&
         request.resource.data.email == request.auth.token.email &&
         validUsername(request.resource.data.username) &&
+        request.resource.data.favoriteTeamVariantId == 'current-home' &&
+        (!request.resource.data.keys().hasAny(['teamIdentityUnlocks']) ||
+          request.resource.data.teamIdentityUnlocks.size() == 0) &&
         validUserPreferences(request.resource.data);
 
       // Private account documents contain email and personal preferences.
@@ -501,6 +502,18 @@ service cloud.firestore {
           data.updatedAt == request.time;
       }
 
+      function publicProfileMatchesPrivateProfile() {
+        let privateProfilePath = /databases/$(database)/documents/users/$(userId);
+
+        return existsAfter(privateProfilePath) &&
+          request.resource.data.uid == getAfter(privateProfilePath).data.uid &&
+          request.resource.data.username == getAfter(privateProfilePath).data.username &&
+          request.resource.data.favoriteTeamAbbreviation ==
+            getAfter(privateProfilePath).data.favoriteTeamAbbreviation &&
+          request.resource.data.favoriteTeamVariantId ==
+            getAfter(privateProfilePath).data.favoriteTeamVariantId;
+      }
+
       // Public manager identity contains only display-safe fields. Individual
       // reads are allowed for signed-in users; collection-wide browsing is not.
       allow get: if signedIn();
@@ -508,7 +521,8 @@ service cloud.firestore {
 
       allow create, update: if signedIn() &&
         userId == currentUserId() &&
-        validPublicProfile();
+        validPublicProfile() &&
+        publicProfileMatchesPrivateProfile();
 
       allow delete: if false;
     }

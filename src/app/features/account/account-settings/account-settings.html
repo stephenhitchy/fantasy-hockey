@@ -123,7 +123,7 @@
       </section>
 
       <div class="account-grid">
-        <section class="account-panel favorite-team-panel rr-card rr-card--padded">
+        <section id="team-identity-customizer" class="account-panel favorite-team-panel rr-card rr-card--padded">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Personalize the Arena</span>
@@ -180,7 +180,7 @@
             </div>
 
             <p class="team-identity-description">
-              Every club now has home, away, retro, alternate, and special identities. Challenge
+              Every club now has home, away, retro, alternate, special, and custom identities. Challenge
               rewards unlock the matching identity tier for all NHL teams at once.
             </p>
 
@@ -189,16 +189,16 @@
                 <button
                   type="button"
                   class="team-variant-card rr-choice-card"
-                  [class.selected]="variant.variantId === favoriteTeamVariantId"
+                  [class.selected]="isTeamVariantSelected(variant)"
                   [class.locked]="!isTeamVariantUnlocked(variant)"
-                  [attr.aria-pressed]="variant.variantId === favoriteTeamVariantId"
+                  [attr.aria-pressed]="isTeamVariantSelected(variant)"
                   [attr.aria-disabled]="!isTeamVariantUnlocked(variant)"
                   [disabled]="savingFavoriteTeam()"
                   (click)="selectTeamVariant(variant)"
                 >
                   <span class="variant-logo-stage">
                     <img
-                      [src]="variant.logoUrl"
+                      [src]="teamVariantPreview(variant).logoUrl"
                       [alt]="variant.name + ' ' + variant.variantLabel + ' logo'"
                       (error)="handleTeamLogoError($event, variant.abbreviation)"
                     />
@@ -215,9 +215,9 @@
                     <span class="variant-description">{{ variant.variantDescription }}</span>
                     <span class="variant-card-footer">
                       <span class="variant-color-row" aria-label="Theme color preview">
-                        <span [style.background]="variant.primaryColor"></span>
-                        <span [style.background]="variant.secondaryColor"></span>
-                        <span [style.background]="variant.tertiaryColor"></span>
+                        <span [style.background]="teamVariantPreview(variant).primaryColor"></span>
+                        <span [style.background]="teamVariantPreview(variant).secondaryColor"></span>
+                        <span [style.background]="teamVariantPreview(variant).tertiaryColor"></span>
                       </span>
                       <span class="variant-unlock-status" [class.unlocked]="isTeamVariantUnlocked(variant)">
                         {{ teamVariantUnlockLabel(variant) }}
@@ -227,6 +227,120 @@
                 </button>
               }
             </div>
+
+            @if (customIdentityEditorOpen()) {
+              <section class="custom-identity-editor rr-card rr-card--padded" aria-labelledby="custom-identity-editor-title">
+                <div class="custom-identity-editor-heading">
+                  <div>
+                    <span class="eyebrow">Identity Architect</span>
+                    <h4 id="custom-identity-editor-title">Build Your {{ selectedTeam().name }} Identity</h4>
+                    <p>Choose one of this team’s available logos, then set the three colors used throughout RinkRat.</p>
+                  </div>
+
+                  <div
+                    class="custom-identity-live-preview"
+                    [style.--custom-primary]="customIdentityPreview().primaryColor"
+                    [style.--custom-secondary]="customIdentityPreview().secondaryColor"
+                    [style.--custom-tertiary]="customIdentityPreview().tertiaryColor"
+                    aria-label="Live custom identity preview"
+                  >
+                    <img
+                      [src]="customIdentityPreview().logoUrl"
+                      [alt]="selectedTeam().name + ' custom logo preview'"
+                      (error)="handleTeamLogoError($event, selectedTeam().abbreviation)"
+                    />
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+
+                <fieldset class="custom-logo-picker">
+                  <legend>1. Choose a team logo</legend>
+                  <div class="custom-logo-grid" role="radiogroup" aria-label="Choose the logo for your custom identity">
+                    @for (logoOption of customLogoOptions(); track logoOption.variantId) {
+                      <button
+                        type="button"
+                        role="radio"
+                        class="custom-logo-option rr-choice-card"
+                        [class.selected]="logoOption.variantId === customLogoVariantId"
+                        [attr.aria-checked]="logoOption.variantId === customLogoVariantId"
+                        [title]="logoOption.variantLabel"
+                        (click)="chooseCustomLogo(logoOption.variantId)"
+                      >
+                        <img
+                          [src]="logoOption.logoUrl"
+                          [alt]="logoOption.variantLabel + ' logo'"
+                          (error)="handleTeamLogoError($event, logoOption.abbreviation)"
+                        />
+                        <span>{{ logoOption.variantShortLabel }}</span>
+                      </button>
+                    }
+                  </div>
+                </fieldset>
+
+                <fieldset class="custom-color-picker">
+                  <legend>2. Build your three-color pattern</legend>
+                  <div class="custom-color-grid">
+                    <label>
+                      <span>Primary</span>
+                      <input
+                        type="color"
+                        [ngModel]="customPrimaryColor"
+                        (ngModelChange)="updateCustomIdentityColor('primary', $event)"
+                        aria-label="Custom primary color"
+                      />
+                      <code>{{ customPrimaryColor }}</code>
+                    </label>
+                    <label>
+                      <span>Secondary</span>
+                      <input
+                        type="color"
+                        [ngModel]="customSecondaryColor"
+                        (ngModelChange)="updateCustomIdentityColor('secondary', $event)"
+                        aria-label="Custom secondary color"
+                      />
+                      <code>{{ customSecondaryColor }}</code>
+                    </label>
+                    <label>
+                      <span>Tertiary</span>
+                      <input
+                        type="color"
+                        [ngModel]="customTertiaryColor"
+                        (ngModelChange)="updateCustomIdentityColor('tertiary', $event)"
+                        aria-label="Custom tertiary color"
+                      />
+                      <code>{{ customTertiaryColor }}</code>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <div class="custom-identity-actions">
+                  <button
+                    type="button"
+                    class="rr-button rr-button--primary"
+                    [disabled]="savingFavoriteTeam()"
+                    (click)="saveCustomIdentity()"
+                  >
+                    {{ savingFavoriteTeam() ? 'Saving...' : 'Use Custom Identity' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rr-button rr-button--secondary"
+                    [disabled]="savingFavoriteTeam()"
+                    (click)="resetCustomIdentityDraft()"
+                  >
+                    Reset to Team Colors
+                  </button>
+                  <button
+                    type="button"
+                    class="rr-button rr-button--quiet"
+                    [disabled]="savingFavoriteTeam()"
+                    (click)="cancelCustomIdentityEditor()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </section>
+            }
           </section>
           }
 

@@ -1,5 +1,5 @@
 import { Component, computed, effect, OnDestroy, signal } from '@angular/core';
-import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Subscription } from 'rxjs';
 
@@ -11,6 +11,7 @@ import { CompetitiveActionMonitorService } from './core/observability/competitiv
 import { TelemetryService } from './core/observability/telemetry.service';
 import { shortBuildIdentifier } from './core/release/release-manifest.util';
 import { ReleaseUpdateService } from './core/release/release-update.service';
+import { TeamIdentityChallengeService } from './core/user/team-identity-challenge.service';
 import {
   applyUserTheme,
   initializeStoredUserTheme,
@@ -53,7 +54,7 @@ function scheduleAfterPaint(task: () => void, delayMilliseconds: number): () => 
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterLink, RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -73,6 +74,12 @@ export class App implements OnDestroy {
   private cancelProfileRefresh: (() => void) | null = null;
   private activeLeagueId = '';
   private appliedUpdateNoticeTimer: number | null = null;
+  private readonly refreshChallengesOnFocus = () => {
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      void this.challengeService.refresh(userId);
+    }
+  };
 
   constructor(
     router: Router,
@@ -80,6 +87,7 @@ export class App implements OnDestroy {
     performanceMonitor: ClientPerformanceMonitorService,
     protected readonly releaseUpdate: ReleaseUpdateService,
     protected readonly actionMonitor: CompetitiveActionMonitorService,
+    protected readonly challengeService: TeamIdentityChallengeService,
   ) {
     initializeStoredUserTheme();
     telemetry.start(router);
@@ -107,11 +115,17 @@ export class App implements OnDestroy {
       this.cancelProfileRefresh = null;
 
       if (!user) {
+        this.challengeService.reset();
         return;
       }
 
       this.scheduleProfileRefresh(user.uid);
+      void this.challengeService.refresh(user.uid, { force: true });
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', this.refreshChallengesOnFocus);
+    }
 
     this.routeSubscription = router.events.subscribe((event) => {
       if (!(event instanceof NavigationEnd)) {
@@ -150,6 +164,11 @@ export class App implements OnDestroy {
     }
     this.cancelProfileRefresh?.();
     this.stopAuthThemeListener?.();
+    this.challengeService.reset();
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', this.refreshChallengesOnFocus);
+    }
   }
 
 

@@ -32,4 +32,38 @@
   </p>
 }
 
+
+@if (challengeService.currentCompletion(); as completion) {
+  <aside
+    class="challenge-completion-toast"
+    [class.challenge-completion-toast-below-release]="releaseUpdate.updateAvailable()"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <span class="challenge-completion-icon" aria-hidden="true">★</span>
+    <div class="challenge-completion-copy">
+      <span>Challenge complete</span>
+      <strong>{{ completion.challengeTitle }}</strong>
+      <small>{{ completion.rewardLabel }}</small>
+    </div>
+    <a
+      class="challenge-completion-action"
+      routerLink="/account/settings"
+      fragment="team-identity-customizer"
+      (click)="challengeService.dismissCurrent()"
+    >
+      Open Team Identity
+    </a>
+    <button
+      class="challenge-completion-dismiss"
+      type="button"
+      aria-label="Dismiss challenge completion"
+      (click)="challengeService.dismissCurrent()"
+    >
+      ×
+    </button>
+  </aside>
+}
+
 <router-outlet></router-outlet>

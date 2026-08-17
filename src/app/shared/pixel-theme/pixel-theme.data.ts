@@ -15,14 +15,16 @@ export type TeamIdentityVariantKind =
   | 'away'
   | 'alternate'
   | 'heritage'
-  | 'special';
+  | 'special'
+  | 'custom';
 
 export type TeamIdentityUnlockRequirement =
   | 'default'
   | 'first-line-change'
   | 'commissioner-mode'
   | 'league-explorer'
-  | 'crowded-schedule';
+  | 'crowded-schedule'
+  | 'identity-architect';
 
 export interface TeamIdentityUnlockDetail {
   challengeTitle: string;
@@ -58,6 +60,11 @@ export const TEAM_IDENTITY_UNLOCK_DETAILS: Record<
     challengeTitle: 'Crowded Schedule',
     rewardLabel: 'Every remaining special identity',
     description: 'Face at least ten fantasy opponents.',
+  },
+  'identity-architect': {
+    challengeTitle: 'Identity Architect',
+    rewardLabel: 'Custom logo and three-color identity for every NHL team',
+    description: 'Complete every other team-identity challenge.',
   },
 };
 
@@ -97,7 +104,10 @@ interface TeamIdentityVariantDefinition {
 }
 
 const DARK_APP_SURFACE = '#0d1520';
+const SAFE_CUSTOM_IDENTITY_ACCENT = '#74B9DF';
 export const DEFAULT_TEAM_IDENTITY_VARIANT_ID = 'current-home';
+export const CUSTOM_TEAM_IDENTITY_VARIANT_ID = 'custom-identity';
+const CUSTOM_TEAM_IDENTITY_SEPARATOR = '~';
 export const RINKRAT_NEUTRAL_ABBREVIATION = 'RR';
 
 const RINKRAT_NEUTRAL_PALETTE: PixelTeamPalette = {
@@ -361,6 +371,15 @@ for (const palette of NHL_TEAM_PALETTES) {
     ...(SPECIAL_TEAM_VARIANTS[palette.abbreviation] ?? []).map((variant) =>
       buildTheme(palette, variant),
     ),
+    buildTheme(palette, {
+      id: CUSTOM_TEAM_IDENTITY_VARIANT_ID,
+      label: 'Custom Identity',
+      shortLabel: 'Custom',
+      description: 'Choose one of this club’s unlocked logos and build your own three-color arena palette.',
+      kind: 'custom',
+      unlockRequirement: 'identity-architect',
+      eraLabel: 'Your build',
+    }),
   ]);
 }
 
@@ -607,11 +626,135 @@ export function getTeamIdentityVariants(
   );
 }
 
+export interface CustomTeamIdentityConfiguration {
+  logoVariantId: string;
+  primaryColor: string;
+  secondaryColor: string;
+  tertiaryColor: string;
+}
+
+export function normalizeTeamIdentityHexColor(value: string): string | null {
+  const normalized = value.trim().replace(/^#/, '').toUpperCase();
+  return /^[0-9A-F]{6}$/.test(normalized) ? `#${normalized}` : null;
+}
+
+export function buildCustomTeamIdentityVariantId(
+  configuration: CustomTeamIdentityConfiguration,
+): string {
+  const logoVariantId = /^[a-z0-9-]{1,40}$/.test(configuration.logoVariantId)
+    ? configuration.logoVariantId
+    : DEFAULT_TEAM_IDENTITY_VARIANT_ID;
+  const colors = [
+    configuration.primaryColor,
+    configuration.secondaryColor,
+    configuration.tertiaryColor,
+  ].map((color) => normalizeTeamIdentityHexColor(color)?.slice(1) ?? '000000');
+
+  return [
+    CUSTOM_TEAM_IDENTITY_VARIANT_ID,
+    logoVariantId,
+    ...colors,
+  ].join(CUSTOM_TEAM_IDENTITY_SEPARATOR);
+}
+
+export function parseCustomTeamIdentityVariantId(
+  variantId: string | null | undefined,
+): CustomTeamIdentityConfiguration | null {
+  if (!variantId) {
+    return null;
+  }
+
+  const [prefix, logoVariantId, primary, secondary, tertiary, ...extra] =
+    variantId.split(CUSTOM_TEAM_IDENTITY_SEPARATOR);
+
+  if (
+    prefix !== CUSTOM_TEAM_IDENTITY_VARIANT_ID ||
+    extra.length > 0 ||
+    !/^[a-z0-9-]{1,40}$/.test(logoVariantId ?? '')
+  ) {
+    return null;
+  }
+
+  const colors = [primary, secondary, tertiary].map((color) =>
+    normalizeTeamIdentityHexColor(color ?? ''),
+  );
+
+  if (colors.some((color) => !color)) {
+    return null;
+  }
+
+  return {
+    logoVariantId,
+    primaryColor: colors[0]!,
+    secondaryColor: colors[1]!,
+    tertiaryColor: colors[2]!,
+  };
+}
+
+export function isCustomTeamIdentityVariantId(
+  variantId: string | null | undefined,
+): boolean {
+  return variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID ||
+    parseCustomTeamIdentityVariantId(variantId) !== null;
+}
+
+export function getCustomTeamIdentityLogoOptions(
+  abbreviation: string | null | undefined,
+): PixelTeamTheme[] {
+  const seen = new Set<string>();
+
+  return getTeamIdentityVariants(abbreviation).filter((variant) => {
+    if (variant.variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID || seen.has(variant.logoUrl)) {
+      return false;
+    }
+
+    seen.add(variant.logoUrl);
+    return true;
+  });
+}
+
 export function getPixelTeamTheme(
   abbreviation: string | null | undefined,
   variantId?: string | null,
 ): PixelTeamTheme {
   const variants = getTeamIdentityVariants(abbreviation);
+  const customConfiguration = parseCustomTeamIdentityVariantId(variantId);
+
+  if (customConfiguration) {
+    const baseCustomTheme = variants.find(
+      (teamTheme) => teamTheme.variantId === CUSTOM_TEAM_IDENTITY_VARIANT_ID,
+    );
+    const logoTheme = variants.find(
+      (teamTheme) => teamTheme.variantId === customConfiguration.logoVariantId,
+    ) ?? variants.find(
+      (teamTheme) => teamTheme.variantId === DEFAULT_TEAM_IDENTITY_VARIANT_ID,
+    ) ?? variants[0];
+
+    if (baseCustomTheme) {
+      const preferredAccent = chooseVisibleAccent([
+        customConfiguration.primaryColor,
+        customConfiguration.secondaryColor,
+        customConfiguration.tertiaryColor,
+      ]);
+      const accentColor = getContrastRatio(preferredAccent, DARK_APP_SURFACE) >= 3
+        ? preferredAccent
+        : SAFE_CUSTOM_IDENTITY_ACCENT;
+
+      return {
+        ...baseCustomTheme,
+        variantId: variantId!,
+        logoUrl: logoTheme.logoUrl,
+        primaryColor: customConfiguration.primaryColor,
+        secondaryColor: customConfiguration.secondaryColor,
+        tertiaryColor: customConfiguration.tertiaryColor,
+        accentColor,
+        highlightColor: accentColor,
+        primaryTextColor: getReadableTextColor(customConfiguration.primaryColor),
+        secondaryTextColor: getReadableTextColor(customConfiguration.secondaryColor),
+        tertiaryTextColor: getReadableTextColor(customConfiguration.tertiaryColor),
+      };
+    }
+  }
 
   return (
     variants.find((teamTheme) => teamTheme.variantId === variantId) ??

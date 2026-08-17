@@ -62,7 +62,8 @@ export function applyUserTheme(
           value === 'first-line-change' ||
           value === 'commissioner-mode' ||
           value === 'league-explorer' ||
-          value === 'crowded-schedule',
+          value === 'crowded-schedule' ||
+          value === 'identity-architect',
       )
     : [];
   const requestedTeam = getPixelTeamTheme(favoriteTeamAbbreviation, requestedVariantId);
@@ -145,7 +146,8 @@ export function loadStoredUserTheme(): StoredUserTheme {
             value === 'first-line-change' ||
             value === 'commissioner-mode' ||
             value === 'league-explorer' ||
-            value === 'crowded-schedule',
+            value === 'crowded-schedule' ||
+            value === 'identity-architect',
         )
       : [];
     const unlockedTeam =

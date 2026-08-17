@@ -27,17 +27,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md`](docs/RINKRAT_SOCIAL_C1H_PLAYER_OF_THE_ROUND.md) — Player of the Round authority, emoji-only picker cleanup, phone category access, scroll behavior, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`](docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md) — Pickup of the Round, Biggest Upset from frozen team projections, bounded server evidence, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md) — browser-generated matchup and championship PNG cards, native mobile sharing, desktop fallback, privacy boundary, Hosting-only deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md`](docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md) — server-reconciled identity challenges, a sixth custom logo/three-color scheme for every NHL team, top-right completion notifications, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 36 / Social Batch C1J**. C1J adds mobile-first shareable PNG cards to completed League Wire matchup results and championships. Cards are rendered entirely in the browser from the existing server-sanitized final, use native file sharing when available, and fall back to a local PNG download without creating server state.
+The current source runtime is **Release Candidate 37 / Social Batch C1K**. C1K adds the server-reconciled **Identity Architect** challenge, gives every NHL team a sixth **Custom Identity** scheme, lets managers choose one of their selected team's available logos plus primary, secondary, and tertiary colors, and surfaces newly completed challenges through a small top-right notification that links directly to the inline team identity editor.
 
-The compact Round Recap from C1I remains unchanged, including Top team, Player of the Round, Pickup of the Round, Biggest Upset, and Closest finish. The emoji-only mobile picker from C1H also remains intact.
+The C1J matchup and championship share cards, the complete C1I Round Recap, and the emoji-only mobile picker from C1H remain intact.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1j`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1k`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -84,6 +85,7 @@ verify:batchc1g
 verify:batchc1h
 verify:batchc1i
 verify:batchc1j
+verify:batchc1k
 ```
 
 RinkRat pins:
@@ -103,7 +105,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1j
+npm run verify:batchc1k
 ```
 
 After verification and a clean commit:
@@ -112,6 +114,20 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+
+## Social Batch C1K — Identity Architect
+
+C1K makes team identity progression server-authoritative and adds a sixth **Custom Identity** option to every NHL team. Completing First Line Change, Commissioner Mode, League Explorer, and Crowded Schedule unlocks Identity Architect. The inline editor lets a manager choose among that team's available logos and save a custom primary, secondary, and tertiary site palette. Newly completed challenges appear one at a time in a top-right notification with a direct link to Account Settings. The final Rules lock routes challenge rewards and team-identity changes through server authority while allowing public-profile repair only when it mirrors the private profile.
+
+Verification:
+
+```bash
+npm run verify:batchc1k
+```
+
+C1K deploys `reconcileTeamIdentityChallenges`, the updated `saveManagerProfile`, RC37 Hosting, and the final server-only challenge-reward Rules lock. Full guidance is in `docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md`.
 
 
 
