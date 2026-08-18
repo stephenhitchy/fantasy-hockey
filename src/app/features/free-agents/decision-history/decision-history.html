@@ -1,0 +1,162 @@
+<main class="decision-history-page rr-page-shell">
+  <a class="decision-back-link" [routerLink]="['/leagues', leagueId, 'players']">
+    Back to Add / Drop
+  </a>
+
+  <header class="decision-history-header">
+    <div>
+      <span class="eyebrow">{{ leagueName() }}</span>
+      <h1>Decision History</h1>
+      <p>Completed moves · current player data</p>
+    </div>
+
+    <button
+      class="rr-button rr-button--quiet"
+      type="button"
+      [disabled]="loading() || refreshing()"
+      (click)="refresh()"
+    >
+      {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </header>
+
+  <p class="decision-history-note rr-notice rr-notice--info">
+    Today’s comparison revisits the move with current stats and projections; it is not a frozen grade from the original transaction date.
+  </p>
+
+  <label class="decision-history-search rr-field">
+    <span>Search</span>
+    <input
+      type="search"
+      autocomplete="off"
+      placeholder="Added or dropped player"
+      [value]="searchTerm()"
+      (input)="updateSearch($any($event.target).value)"
+    />
+  </label>
+
+  @if (loading()) {
+    <section class="decision-history-state rr-state" role="status">
+      <span class="rr-spinner" aria-hidden="true"></span>
+      <strong>Loading decisions…</strong>
+    </section>
+  } @else if (errorMessage()) {
+    <section class="decision-history-state rr-state" role="alert">
+      <strong>{{ errorMessage() }}</strong>
+    </section>
+  } @else if (visibleRows().length === 0) {
+    <section class="decision-history-state rr-state">
+      <strong>{{ historyRows().length ? 'No matching decisions.' : 'No completed Add / Drop decisions yet.' }}</strong>
+    </section>
+  } @else {
+    <div class="decision-history-count" role="status">
+      <strong>{{ filteredRows().length }} decisions</strong>
+    </div>
+
+    <section class="decision-history-list" aria-label="Past roster decisions">
+      @for (row of visibleRows(); track row.id) {
+        <article class="decision-history-card rr-card">
+          <header class="decision-card-header">
+            <div>
+              <span class="eyebrow">{{ row.label }}</span>
+              <strong>{{ getEffectiveLabel(row) }}</strong>
+            </div>
+            <time [attr.datetime]="row.occurredAt?.toISOString() ?? null">
+              {{ getDecisionDate(row) }}
+            </time>
+          </header>
+
+          <div class="decision-player-pair">
+            <a
+              class="decision-player decision-player-added"
+              [class.decision-player-disabled]="!row.added.assetKey"
+              [routerLink]="row.added.assetKey ? ['/leagues', leagueId, 'players', row.added.assetKey] : null"
+              [queryParams]="row.added.assetKey ? { from: 'decision-history' } : null"
+            >
+              <span class="decision-player-label">Added</span>
+              <span class="decision-player-main">
+                <span class="decision-player-image" aria-hidden="true">
+                  @if (getImageUrl(row.added); as imageUrl) {
+                    <img [src]="imageUrl" alt="" />
+                  } @else {
+                    <span>{{ row.added.teamAbbreviation }}</span>
+                  }
+                </span>
+                <span>
+                  <strong>{{ row.added.name }}</strong>
+                  <small>{{ row.added.teamAbbreviation }} · {{ row.added.position }}</small>
+                  <em>{{ getStatusLabel(row.added) }}</em>
+                </span>
+              </span>
+              <span class="decision-player-metrics">
+                <span><small>Season</small><strong>{{ formatPoints(row.added.current?.seasonFantasyPoints) }}</strong></span>
+                <span><small>Next 6</small><strong>{{ formatPoints(row.added.current?.nextSixProjection) }}</strong></span>
+                <span><small>{{ row.added.position }} rank</small><strong>{{ formatRank(row.added.current) }}</strong></span>
+              </span>
+            </a>
+
+            @if (row.dropped; as dropped) {
+              <a
+                class="decision-player decision-player-dropped"
+                [class.decision-player-disabled]="!dropped.assetKey"
+                [routerLink]="dropped.assetKey ? ['/leagues', leagueId, 'players', dropped.assetKey] : null"
+                [queryParams]="dropped.assetKey ? { from: 'decision-history' } : null"
+              >
+                <span class="decision-player-label">Dropped</span>
+                <span class="decision-player-main">
+                  <span class="decision-player-image" aria-hidden="true">
+                    @if (getImageUrl(dropped); as imageUrl) {
+                      <img [src]="imageUrl" alt="" />
+                    } @else {
+                      <span>{{ dropped.teamAbbreviation }}</span>
+                    }
+                  </span>
+                  <span>
+                    <strong>{{ dropped.name }}</strong>
+                    <small>{{ dropped.teamAbbreviation }} · {{ dropped.position }}</small>
+                    <em>{{ getStatusLabel(dropped) }}</em>
+                  </span>
+                </span>
+                <span class="decision-player-metrics">
+                  <span><small>Season</small><strong>{{ formatPoints(dropped.current?.seasonFantasyPoints) }}</strong></span>
+                  <span><small>Next 6</small><strong>{{ formatPoints(dropped.current?.nextSixProjection) }}</strong></span>
+                  <span><small>{{ dropped.position }} rank</small><strong>{{ formatRank(dropped.current) }}</strong></span>
+                </span>
+              </a>
+            } @else {
+              <div class="decision-player decision-player-open-slot">
+                <span class="decision-player-label">Dropped</span>
+                <strong>Open roster slot</strong>
+                <small>No player left the roster.</small>
+              </div>
+            }
+          </div>
+
+          @if (row.dropped) {
+            <footer class="decision-current-deltas" aria-label="Current added minus dropped comparison">
+              <span>
+                <small>Season Δ</small>
+                <strong [class]="differenceClass(row.currentSeasonDifference)">
+                  {{ formatDifference(row.currentSeasonDifference) }}
+                </strong>
+              </span>
+              <span>
+                <small>Next 6 Δ</small>
+                <strong [class]="differenceClass(row.currentNextSixDifference)">
+                  {{ formatDifference(row.currentNextSixDifference) }}
+                </strong>
+              </span>
+              <em>Added − dropped today</em>
+            </footer>
+          }
+        </article>
+      }
+    </section>
+
+    @if (hiddenCount() > 0) {
+      <button class="decision-show-more rr-button rr-button--quiet" type="button" (click)="showMore()">
+        Show {{ hiddenCount() > 20 ? 20 : hiddenCount() }} more
+      </button>
+    }
+  }
+</main>

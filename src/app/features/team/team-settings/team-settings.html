@@ -200,6 +200,9 @@
           <span class="eyebrow">Roster Moves</span>
           <h2>Recent Transactions</h2>
         </div>
+        <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'decision-history']">
+          Decision history
+        </a>
       </div>
 
       @if (recentTransactions().length === 0) {

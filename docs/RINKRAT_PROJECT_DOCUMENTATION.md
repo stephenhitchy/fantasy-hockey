@@ -12375,3 +12375,11 @@ firebase functions:log \
 See `docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md` for the complete Release Candidate 43 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
 
 A1E corrects Add / Drop and Player Intel tracker parity by using the exact active fantasy roster-slot window for active rostered players. Free agents, Bench, and IR retain explicitly labeled NHL schedule blocks. The existing Player Intel Schedule tab also gains one bounded Next-six lens using existing Projection V11 availability, schedule, rest, role, and form evidence. No Function, listener, Rule, index, TTL policy, migration, or competitive write is added.
+
+---
+
+# Product Batch A1F — Private Decision History
+
+See `docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md` for the complete Release Candidate 44 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
+
+A1F completes roadmap item A1.7 with a secondary manager-private Decision History route linked from Add / Drop and Team Settings. It reads at most 75 owner-private completed transaction projections once, excludes pending, queued, canceled, and losing outcomes, and pairs recorded added and dropped assets with today’s bounded Player Board data. Season and Next 6 differences are transparent current arithmetic rather than a grade or recommendation. A1F also records A1.16 as work in progress to measure and reduce replay-to-player-data catch-up latency without coupling projection generation to scoring authority. No Function, listener, Rule, index, TTL policy, migration, or competitive write is added.

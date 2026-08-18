@@ -255,7 +255,7 @@ test('A1E preserves Scoring V3, Projection V11, Rules, indexes, and inactive saf
   assert.equal(cache.authoritativeReadsEnabled, false);
 });
 
-test('A1E advances RC43 and permanently records slot-window parity and the opportunity lens', async () => {
+test('A1E remains preserved under RC44 and permanently records slot-window parity and the opportunity lens', async () => {
   const [runtime, productionRuntime, freezeSource, packageSource, roadmap, docsRoadmap, docs, readme, runbook] = await Promise.all([
     read('src/environments/app-runtime.config.ts'),
     read('src/environments/app-runtime.config.production.ts'),
@@ -270,24 +270,24 @@ test('A1E advances RC43 and permanently records slot-window parity and the oppor
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 43/);
-  assert.match(productionRuntime, /Release Candidate 43/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 43');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1e');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc43-invite-beta');
+  assert.match(runtime, /Release Candidate 44/);
+  assert.match(productionRuntime, /Release Candidate 44/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 44');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1f');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc44-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1e:core'], /verify:batcha1d:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1e:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1f:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.34/);
+  assert.match(roadmap, /Version 1\.35/);
   assert.match(roadmap, /# \[x\] A1\.4/);
   assert.match(roadmap, /# \[x\] A1\.15/);
   assert.match(roadmap, /# \[x\] LOG\.52 2026-08-18/);
   assert.match(docs, /authoritative .*roster-slot window/i);
   assert.match(docs, /Next-six lens/);
   assert.match(docs, /site-first/i);
-  assert.match(readme, /Release Candidate 43 \/ Product Batch A1E/);
+  assert.match(readme, /Release Candidate 44 \/ Product Batch A1F/);
   assert.match(readme, /RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY\.md/);
-  assert.match(runbook, /npm run verify:batcha1e/);
-  assert.match(runbook, /rinkrat-rc43-validation\.json/);
-  assert.match(runbook, /rinkrat-rc43-invite-beta/);
+  assert.match(runbook, /npm run verify:batcha1f/);
+  assert.match(runbook, /rinkrat-rc44-validation\.json/);
+  assert.match(runbook, /rinkrat-rc44-invite-beta/);
 });

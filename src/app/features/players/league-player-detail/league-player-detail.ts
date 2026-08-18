@@ -71,6 +71,8 @@ export class LeaguePlayerDetail {
 
   readonly leagueId = this.route.snapshot.paramMap.get('leagueId') ?? '';
   readonly assetKey = this.route.snapshot.paramMap.get('assetKey') ?? '';
+  readonly openedFromDecisionHistory =
+    this.route.snapshot.queryParamMap.get('from') === 'decision-history';
   readonly userId = signal('');
   readonly league = signal<League | null>(null);
   readonly snapshotMetadata = signal<SharedProjectionSnapshotMetadata | null>(null);

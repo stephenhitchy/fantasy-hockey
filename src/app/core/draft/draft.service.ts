@@ -876,6 +876,35 @@ export async function setDraftAutoDraftEnabled(
   );
 }
 
+function normalizePrivateTransactionDocument(
+  transactionId: string,
+  value: Omit<FantasyTransaction, 'id'> & { occurredAt?: unknown },
+): FantasyTransaction {
+  return {
+    id: transactionId,
+    ...value,
+    createdAt: value.occurredAt ?? value.createdAt,
+  };
+}
+
+export async function getOwnerTransactionsOnce(
+  leagueId: string,
+  ownerId: string,
+  maximumResults = 50,
+): Promise<FantasyTransaction[]> {
+  const normalizedLimit = Math.max(1, Math.min(100, Math.trunc(maximumResults)));
+  const snapshot = await getDocs(query(
+    getOwnerTransactionsRef(leagueId, ownerId),
+    orderBy('occurredAt', 'desc'),
+    limit(normalizedLimit),
+  ));
+
+  return snapshot.docs.map((transactionDoc) => normalizePrivateTransactionDocument(
+    transactionDoc.id,
+    transactionDoc.data() as Omit<FantasyTransaction, 'id'> & { occurredAt?: unknown },
+  ));
+}
+
 export function listenToOwnerTransactions(
   leagueId: string,
   ownerId: string,
@@ -892,17 +921,10 @@ export function listenToOwnerTransactions(
     transactionsQuery,
     (snapshot) => {
       callback(
-        snapshot.docs.map((transactionDoc) => {
-          const data = transactionDoc.data() as Omit<FantasyTransaction, 'id'> & {
-            occurredAt?: unknown;
-          };
-
-          return {
-            id: transactionDoc.id,
-            ...data,
-            createdAt: data.occurredAt ?? data.createdAt,
-          };
-        }),
+        snapshot.docs.map((transactionDoc) => normalizePrivateTransactionDocument(
+          transactionDoc.id,
+          transactionDoc.data() as Omit<FantasyTransaction, 'id'> & { occurredAt?: unknown },
+        )),
       );
     },
     (error) => {

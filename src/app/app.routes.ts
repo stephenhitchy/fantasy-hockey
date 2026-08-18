@@ -163,6 +163,15 @@ export const routes: Routes = [
           import('./features/free-agents/free-agents').then((module) => module.FreeAgents),
       },
       {
+        path: 'leagues/:leagueId/decision-history',
+        title: 'Decision History',
+        canActivate: [leagueMemberGuard],
+        loadComponent: () =>
+          import('./features/free-agents/decision-history/decision-history').then(
+            (module) => module.DecisionHistory,
+          ),
+      },
+      {
         path: 'leagues/:leagueId/free-agents',
         redirectTo: 'leagues/:leagueId/players',
         pathMatch: 'full',

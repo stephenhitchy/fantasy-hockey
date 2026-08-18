@@ -1,10 +1,12 @@
 <section class="player-intel-page">
   <a
     class="league-return-link"
-    [routerLink]="['/leagues', leagueId, 'players']"
-    aria-label="Back to Add / Drop"
+    [routerLink]="openedFromDecisionHistory
+      ? ['/leagues', leagueId, 'decision-history']
+      : ['/leagues', leagueId, 'players']"
+    [attr.aria-label]="openedFromDecisionHistory ? 'Back to Decision History' : 'Back to Add / Drop'"
   >
-    Back to Add / Drop
+    {{ openedFromDecisionHistory ? 'Back to Decision History' : 'Back to Add / Drop' }}
   </a>
 
   @if (loading()) {
