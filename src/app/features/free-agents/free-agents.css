@@ -1819,3 +1819,47 @@ button:disabled {
     height: 18px;
   }
 }
+
+/* Product A1A — compact account-wide player watchlist. */
+.watchlist-filter,
+.watchlist-button {
+  min-height: 44px;
+  border-color: color-mix(in srgb, var(--rr-color-warning) 38%, var(--rr-color-border));
+}
+
+.watchlist-filter {
+  align-self: end;
+  white-space: nowrap;
+}
+
+.watchlist-filter-active,
+.watchlist-button-active {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 72%, var(--rr-color-border-strong));
+  background: color-mix(in srgb, var(--rr-color-warning) 16%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text);
+}
+
+.watchlist-button {
+  width: 100%;
+  justify-content: center;
+  gap: 6px;
+}
+
+@media (min-width: 1041px) {
+  .decision-filter-row {
+    grid-template-columns: minmax(240px, 1fr) 150px 210px auto;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1040px) {
+  .decision-filter-row {
+    grid-template-columns: minmax(220px, 1fr) 150px 190px auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .watchlist-filter,
+  .watchlist-button {
+    width: 100%;
+  }
+}

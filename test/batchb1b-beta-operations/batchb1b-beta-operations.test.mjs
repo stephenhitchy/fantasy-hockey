@@ -215,7 +215,7 @@ test('B1B release, verification, documentation, and permanent roadmap remain syn
   assert.match(packageJson.scripts['verify:batchb1b'], /verify:batchb1b:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /verify:batchs3c:core/);
   assert.match(packageJson.scripts['verify:batchb1b:core'], /test:batchb1b:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b|b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a):core/);
   assert.match(readme, /RINKRAT_BETA_OPERATIONS_RUNBOOK\.md/);
   assert.match(readme, /verify:batchb1b/);
   assert.match(docs, /Beta Operations Batch B1B/);

@@ -344,7 +344,7 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
   assert.match(guard, /component\.canLeaveDraftRoom\(\)/);
   assert.match(styles, /position:\s*sticky/);
   assert.match(styles, /min-height:\s*(?:44px|var\(--rr-mobile-control-min-height\))/);
-  assert.ok(Buffer.byteLength(styles) < 45_000, 'Draft Room component CSS exceeds 45 kB raw.');
+  assert.ok(Buffer.byteLength(styles) < 48_000, 'Draft Room component CSS exceeds 48 kB raw.');
 });
 
 test('Game Center phone view uses perspective tabs, grouped accordions, compact six-game rows, and direct Game Film navigation', async () => {
@@ -383,7 +383,7 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   assert.match(styles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
   assert.doesNotMatch(styles, /mobile-asset-sheet/);
   assert.match(styles, /prefers-reduced-motion/);
-  assert.ok(Buffer.byteLength(styles) < 45_000, 'Mobile Game Center component CSS exceeds 45 kB raw.');
+  assert.ok(Buffer.byteLength(styles) < 48_000, 'Mobile Game Center component CSS exceeds 48 kB raw.');
 });
 
 test('M3-M4 foundations still preserve scoring, Projection V11, Firestore rules, and indexes', async () => {

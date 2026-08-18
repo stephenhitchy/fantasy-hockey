@@ -275,7 +275,7 @@ app-cycle-one .single-team-view .window-status-copy {
 
 app-cycle-one .window-game-details,
 app-cycle-one .window-game-detail-list {
-  display: none !important;
+  display: none;
 }
 
 app-cycle-one .cycle-transparency-card {
@@ -518,11 +518,11 @@ app-cycle-one .mobile-head-to-head-roster {
 
 @media (max-width: 780px) {
   app-cycle-one .matchup-view-selector {
-    display: none !important;
+    display: none;
   }
 
   app-cycle-one .matchup-detail-card > .teams-comparison {
-    display: none !important;
+    display: none;
   }
 
   app-cycle-one .mobile-head-to-head-roster {
@@ -2674,3 +2674,12 @@ app-draft-room .draft-share-error {
   }
 }
 
+
+/* Product A1A — optional page guidance follows the saved Hockey Familiarity setting. */
+.rr-guidance-new-only {
+  display: none;
+}
+
+html[data-hockey-experience='new'] .rr-guidance-new-only {
+  display: revert;
+}

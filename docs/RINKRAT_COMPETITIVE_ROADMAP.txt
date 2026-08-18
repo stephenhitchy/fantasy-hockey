@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.29
+Version 1.30
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -49,8 +49,8 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC38 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, final-matchup activity, commissioner transparency/announcements, round recaps, and the full catalog-validated emoji reaction picker are complete; stabilize RC38, finish the exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before full chat, notification fanout, or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC39 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
+[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, final-matchup activity, commissioner transparency/announcements, round recaps, and the full catalog-validated emoji reaction picker are complete; stabilize RC39, finish the exact-build validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before full chat, notification fanout, or trade features. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
 
 ================================================================================
@@ -82,7 +82,7 @@ NON-NEGOTIABLE PRODUCT PRINCIPLES
 # [x] PRINCIPLE.5 Keep mobile as the primary live-game and Draft use case.
 # [x] PRINCIPLE.6 Keep Game Film and transaction timing understandable to beginners.
 [ ] PRINCIPLE.7 Prefer strong defaults and league templates over hundreds of confusing settings. (P1)
-[ ] PRINCIPLE.8 Keep advanced details available without placing them in every default view. (P1)
+# [x] PRINCIPLE.8 Keep advanced details available without placing them in every default view. (P1) — Implemented as a standing product rule and reinforced in Product Batch A1A / Release Candidate 39 through a manager-facing copy-density audit, direct removal of redundant helper text, and Hockey Familiarity-gated optional guidance while preserving timing, privacy, recovery, and irreversible-action warnings.
 [ ] PRINCIPLE.9 Never add a social, commissioner, or monetization feature without abuse controls and an audit trail. (P0)
 [ ] PRINCIPLE.10 Treat live data, projections, and competitive rules as server-owned inputs. (P0)
 
@@ -322,6 +322,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 # [x] B1.27 Preserve a displaced active player during Injured Reserve activation by moving that player to an open bench spot, or requiring the manager to choose the exact bench player or goalie unit to waive when the bench is full. (P0 / M) — Completed 2026-08-12 in Security Batch S3E.1 / Release Candidate 23.
 # [x] B1.28 Narrow persisted Draft projection-preparation states through an explicit server type guard so the optional shared model cannot reintroduce undefined into strict Functions builds. (P0 / S) — Completed 2026-08-12 in Security Batch S3E.1.1 / Release Candidate 23.
 # [x] B1.29 Install a manual App Check canary control that limits rejection to exact chosen callables in exact chosen leagues, proves allowed/blocked outcomes, and preserves an emergency monitor rollback before any broader enforcement. (P0 / L) — Completed 2026-08-12 in Security Batch S3F / Release Candidate 24.
+# [x] B1.30 Audit the manager-facing application for information overload; remove self-explanatory route intros, duplicate tile descriptions, and repeated helper prose while keeping six-game timing, privacy, recovery, eligibility, and irreversible-action guidance visible; retain selected advanced explanations behind Hockey Familiarity. (P1 / M) — Completed 2026-08-17 in Product Batch A1A / Release Candidate 39 with a repeatable copy-density audit.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -476,12 +477,13 @@ Goal: Compete with the expert-content and data advantages of large incumbents wi
 [ ] A1.2 Add player-news ingestion with source attribution and timestamps. (P1 / XL)
 [ ] A1.3 Add role/line/power-play unit context when reliable data is available. (P1 / L)
 [ ] A1.4 Add schedule-strength and opportunity summaries that explain the next six games. (P1 / M)
-[ ] A1.5 Add watchlists independent of Draft queues. (P1 / M)
+# [x] A1.5 Add watchlists independent of Draft queues. (P1 / M) — Completed 2026-08-17 in Product Batch A1A / Release Candidate 39 with one authenticated account-wide server-owned list, a 100-asset bound, separate Watch and Queue actions in Draft Room, shared Free Agent and Waiver controls, watched-only filters, account-deletion cleanup, no persistent listener, and no competitive effect.
 [ ] A1.6 Add custom player notes. (P2 / M)
 [ ] A1.7 Add comparison history so managers can revisit prior add/drop decisions. (P2 / L)
 [ ] A1.8 Add waiver recommendations with an explicit explanation and uncertainty, never an unexplained black-box instruction. (P1 / L)
 [ ] A1.9 Add Draft grades only after ranking accuracy is measured and the grading method is transparent. (P2 / L)
 [ ] A1.10 Add weekly power rankings as entertainment, clearly separated from official standings. (P2 / M)
+# [x] A1.11 Add a familiarity-aware Clear Ice copy-density standard so self-explanatory controls stay concise while six-game timing, eligibility, privacy, and destructive-action guidance remains visible. (P1 / M) — Completed 2026-08-17 in Product Batch A1A / Release Candidate 39 across 17 manager-facing templates with a source-controlled copy-density audit.
 
 ================================================================================
 PHASE SC1 — SCALABILITY AND LARGE-PUBLIC-LOAD READINESS
@@ -825,6 +827,8 @@ Future entries:
 # [x] LOG.46 2026-08-17 — Completed Social Batch C1K / Release Candidate 37: add server-reconciled permanent team-identity challenge rewards, introduce Identity Architect after all four foundational identity challenges are complete, append a sixth Custom Identity scheme to every NHL team, encode one selected team logo plus primary/secondary/tertiary colors within the existing bounded profile variant field, add an inline mobile-safe editor and queued top-right completion notification linking to it, make browser challenge-reward and team-identity writes server-only while requiring public-profile repairs to mirror the private profile, deploy no index or TTL change, and preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, transaction privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
 
 # [x] LOG.47 2026-08-17 — Completed Social Batch C1L / Release Candidate 38: finish roadmap item C1.6 by adding browser-generated 1080×1080 completed-Draft cards scoped to the signed-in manager and current-standings cards capped to eight rows with period, records, points for, point differential, playoff line, and current-manager highlight; centralize native file sharing, text-share, cancellation, local PNG download, and caption-copy fallback in one browser utility; add inline 44-pixel actions to the Draft completion and Standings header; deploy Hosting only; add no Function, Firestore listener, Rule, index, TTL policy, migration, or analytics write; preserve C1K Identity Architect, Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, transaction privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
+
+# [x] LOG.48 2026-08-17 — Completed Product Batch A1A / Release Candidate 39: start the analytics and manager-tools phase with one private account-wide player watchlist independent of Draft queues; expose compact Watch and watched-only controls in Draft Room, Available Players, and Waivers; require verified authenticated callable authority, bounded canonical asset keys, transactional idempotency, a 100-asset cap, and account-deletion cleanup; complete the Clear Ice review across 17 manager-facing templates by removing repeated explanations while preserving six-game fairness, Injured Reserve eligibility, privacy, Draft entry-lock, secure-operation, and permanent-deletion guidance; add no Firestore listener, Rule, index, TTL policy, or competitive mutation; preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

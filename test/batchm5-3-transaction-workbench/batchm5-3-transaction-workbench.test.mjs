@@ -88,7 +88,8 @@ test('the add drop workbench introduces the incoming player first and provides r
 
   assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
   assert.match(template, /Season Point Formula/);
-  assert.match(template, /Every stat behind/);
+  assert.match(template, /Raw NHL totals → RinkRat fantasy points/);
+  assert.match(template, /getStatBreakdown\(addAsset\)/);
   assert.match(template, /getIncomingMatchupNumberLabel\(\)/);
   assert.match(template, /getIncomingGameProgressLabel\(\)/);
   assert.match(template, /getCandidateMatchupNumberLabel\(candidate\)/);

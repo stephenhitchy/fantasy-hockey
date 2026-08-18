@@ -393,6 +393,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // C1K adds isolated cosmetic challenge reconciliation authority.
     'team-identity-challenges.ts',
     'shared/core/user/team-identity-challenge.util.ts',
+    // A1A adds isolated account-wide watchlist authority.
+    'player-watchlist.ts',
+    'shared/core/user/player-watchlist.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

@@ -24,11 +24,6 @@
       <h1>{{ pageTitle() }}</h1>
       <p>{{ pageSubtitle() }}</p>
 
-      <ul class="hero-points">
-        <li>Every starter contributes exactly six scheduled NHL team games.</li>
-        <li>Build a competitive team even while you are learning hockey.</li>
-        <li>Plain-language definitions and Coach Help are available throughout the app.</li>
-      </ul>
     </section>
 
     <section class="pixel-auth-card">
@@ -133,7 +128,6 @@
             <section class="hockey-experience-picker" aria-labelledby="hockey-experience-label">
               <div class="experience-picker-heading">
                 <span id="hockey-experience-label">How familiar are you with hockey?</span>
-                <small>This only changes how much explanation RinkRat shows.</small>
               </div>
 
               <div class="experience-choice-grid" role="radiogroup" aria-label="Choose hockey familiarity">
@@ -241,11 +235,6 @@
                     }
                   </p>
 
-                  @if (!passwordRegistrationReady()) {
-                    <p class="password-policy-action">
-                      The Create Profile button unlocks after every required item is green.
-                    </p>
-                  }
 
                   @if (passwordPolicyEvaluation().warning) {
                     <p class="password-policy-warning">

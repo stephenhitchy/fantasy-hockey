@@ -276,11 +276,11 @@ test('C1K remains intact under RC38 while preserving frozen competitive sources 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 38/);
-  assert.match(productionRuntime, /Release Candidate 38/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 38');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1l');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc38-invite-beta');
+  assert.match(runtime, /Release Candidate 39/);
+  assert.match(productionRuntime, /Release Candidate 39/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 39');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1a');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc39-invite-beta');
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
@@ -290,8 +290,8 @@ test('C1K remains intact under RC38 while preserving frozen competitive sources 
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
-  assert.match(packageJson.scripts['verify:batchc1l:core'], /verify:batchc1k:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1l:core/);
+  assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1a:core/);
 });
 
 test('C1K documentation and permanent roadmap record the cosmetic-only release', async () => {
@@ -304,16 +304,16 @@ test('C1K documentation and permanent roadmap record the cosmetic-only release',
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.29/);
+  assert.match(roadmap, /Version 1\.30/);
   assert.match(roadmap, /# \[x\] X1\.10/);
   assert.match(roadmap, /# \[x\] LOG\.46 2026-08-17/);
   assert.match(runbook, /sixth identity option/);
   assert.match(runbook, /reconcileTeamIdentityChallenges/);
   assert.match(runbook, /top-right notification/);
   assert.match(runbook, /No index, TTL, App Check, scoring queue, or NHL-cache deployment belongs to C1K/);
-  assert.match(readme, /Release Candidate 38 \/ Social Batch C1L/);
+  assert.match(readme, /Release Candidate 39 \/ Product Batch A1A/);
   assert.match(readme, /RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1l/);
-  assert.match(releaseRunbook, /rinkrat-rc38-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc38-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1a/);
+  assert.match(releaseRunbook, /rinkrat-rc39-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc39-invite-beta/);
 });

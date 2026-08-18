@@ -438,6 +438,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // C1K adds isolated cosmetic challenge reconciliation authority.
         'src/team-identity-challenges.ts',
         'src/shared/core/user/team-identity-challenge.util.ts',
+        // A1A adds isolated account-wide watchlist authority.
+        'src/player-watchlist.ts',
+        'src/shared/core/user/player-watchlist.util.ts',
       ]),
     ),
     '018ac120e704a23d93ea857c8f6f67c2f62a5cf3fe989239966f3737ecedc1bc',

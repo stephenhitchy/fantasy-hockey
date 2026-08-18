@@ -3,14 +3,6 @@
     <section class="shell-copy rr-pixel-shell-panel rr-pixel-shell-copy">
       <span class="eyebrow rr-pixel-shell-kicker">Commissioner Setup</span>
       <h1>Create a League</h1>
-      <p>Launch a new competition, invite your friends, and get the season ready before opening night.</p>
-
-      <ul>
-        <li>Set your league name.</li>
-        <li>Choose how many managers will compete.</li>
-        <li>Pick a custom pixel-art league emblem.</li>
-        <li>Share the invite code after the league is created.</li>
-      </ul>
 
       <a routerLink="/dashboard" class="back-link rr-pixel-shell-back-link">← Back to Dashboard</a>
     </section>
@@ -22,7 +14,7 @@
       </div>
 
       <p class="rr-notice rr-notice--info">
-        A verified email is required. RinkRat creates the league and its competition settings on the server, then closes new entry when the draft order is saved.
+        Verified email required. League entry closes when the draft order is saved.
         <a routerLink="/account/settings">Review email verification</a>
       </p>
 
@@ -42,7 +34,6 @@
 
       <fieldset class="logo-picker-fieldset">
         <legend>League Emblem</legend>
-        <p>Choose the shape that will represent this league.</p>
 
         <div class="logo-option-grid">
           @for (option of logoOptions; track option.id) {
@@ -68,7 +59,6 @@
 
       <fieldset class="logo-picker-fieldset palette-fieldset">
         <legend>Color Variant</legend>
-        <p>Every emblem is available in all eight color sets.</p>
 
         <div class="palette-option-grid">
           @for (palette of paletteOptions; track palette.id) {
@@ -117,7 +107,6 @@
         <img [src]="selectedLogoPath()" alt="Selected league emblem" decoding="async" />
       </div>
 
-      <p>{{ selectedLogoOption().description }}</p>
     </section>
   </div>
 

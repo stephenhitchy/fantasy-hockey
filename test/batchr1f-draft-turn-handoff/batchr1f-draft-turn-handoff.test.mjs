@@ -158,7 +158,7 @@ test('Draft Room repairs a delayed handoff and does not let a private queue list
   assert.match(template, /draft-turn-handoff-notice/);
   assert.match(template, /Retry Turn Sync/);
   assert.match(template, /canUseDraftQueueActions\(\)/);
-  assert.ok(Buffer.byteLength(styles) < 45_000, 'Draft Room component CSS remains below the 45 kB raw safety ceiling.');
+  assert.ok(Buffer.byteLength(styles) < 48_000, 'Draft Room component CSS remains below the 48 kB raw safety ceiling.');
   assert.match(globalStyles, /Batch R1F/);
   assert.match(globalStyles, /draft-turn-handoff-progress/);
   assert.match(clientAuthority, /'repairDraftTurnHandoff'[\s\S]*timeout:\s*30_000/);

@@ -200,7 +200,6 @@
           <span class="eyebrow">Roster Moves</span>
           <h2>Recent Transactions</h2>
         </div>
-        <small>Newest first</small>
       </div>
 
       @if (recentTransactions().length === 0) {
@@ -242,7 +241,6 @@
       <div>
         <span class="eyebrow">Team Settings</span>
         <h2>Team Name</h2>
-        <p>Update how your team appears across the league.</p>
       </div>
 
       <div class="team-name-form rr-field-group">
@@ -766,7 +764,7 @@
         <p>{{ benchFilledCount() }} of {{ benchTotalCount() }} bench spots filled</p>
       </div>
 
-      <p class="bench-cycle-guidance">
+      <p class="bench-cycle-guidance rr-guidance-new-only">
         Bench players and goalie units are owned but do not score. Starting a bench player schedules a fair
         lineup swap; already-played NHL games are never backfilled.
       </p>
@@ -807,7 +805,7 @@
               <div class="fantasy-player-main">
                 <strong>{{ getRosterAssetName(asset) }}</strong>
                 <span>{{ getRosterAssetTeamLabel(asset) }} · {{ asset.position }} · Bench {{ slot.slotNumber }}</span>
-                <em>Bench player or goalie unit · does not add points while benched</em>
+                <em>Does not score while benched</em>
                 @if (asset.eligibleFromCycleNumber) {
                   <em>Eligible to start in Matchup {{ asset.eligibleFromCycleNumber }}</em>
                 } @else {
@@ -1548,7 +1546,7 @@
         <span class="roster-action-spinner" aria-hidden="true"></span>
         <div>
           <strong>{{ rosterMoveLoading() ? 'Confirming roster change…' : 'Saving team settings…' }}</strong>
-          <small>The dialog is closed while RinkRat waits for the secure response or the live roster update. Navigation remains protected until one is confirmed. Stay on this page until RinkRat confirms the update.</small>
+          <small>Waiting for the secure response or live roster update.</small>
         </div>
       </aside>
     }

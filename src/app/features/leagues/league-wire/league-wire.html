@@ -22,9 +22,6 @@
     </div>
   </header>
 
-  <p class="league-wire-intro">
-    Commissioner announcements, Draft picks, commissioner controls, final matchup results with shareable cards, completed-round recaps with Player, Pickup, and Biggest Upset honors, completed league moves, and emoji reactions—without live-score noise or exposed claims.
-  </p>
 
 
   <p class="rr-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
@@ -52,7 +49,6 @@
       <div class="league-wire-announcement-form-heading">
         <div>
           <strong>Commissioner announcement</strong>
-          <span>Plain text for every league member. No private notes or attachments.</span>
         </div>
         <span class="league-wire-form-badge">League only</span>
       </div>
@@ -96,7 +92,6 @@
         />
         <span>
           <strong>Pin at the top</strong>
-          <small>Replaces the current pin but keeps every announcement in Wire history.</small>
         </span>
       </label>
 
@@ -175,7 +170,6 @@
       <span class="league-wire-puck" aria-hidden="true"></span>
       <div>
         <strong>Loading the latest shifts...</strong>
-        <span>League HQ stays usable while the wire checks in.</span>
       </div>
     </div>
   } @else if (errorMessage()) {
@@ -191,7 +185,6 @@
       <span class="league-wire-puck" aria-hidden="true"></span>
       <div>
         <strong>The first update is still in the tunnel.</strong>
-        <span>New announcements, final results, and completed-round recaps will appear here.</span>
       </div>
     </div>
   } @else {
@@ -427,7 +420,4 @@
     }
   }
 
-  <footer class="league-wire-footer">
-    Announcements and reactions are visible only to league members. A member-triggered share card intentionally exports only the final team names, scores, matchup context, and league name. Reactions use the standard emoji catalog only. Only final matchup outcomes post, plus one compact regular-season recap with the top team, Player of the Round, qualifying Pickup of the Round, Biggest Upset, and closest finish after the whole round completes. Live score changes never post. Commissioner notes and failed attempts stay off the wire. Pending claims, queued plans, invite codes, and admin details stay off the wire.
-  </footer>
 </section>

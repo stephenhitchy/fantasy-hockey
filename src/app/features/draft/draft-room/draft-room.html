@@ -109,9 +109,7 @@
       <section class="waiting-card complete-card rr-card rr-card--padded">
         <span class="eyebrow">Draft Complete</span>
         <h2>All picks are in.</h2>
-        <p>
-          Every team has completed 14 active selections and 3 bench selections.
-        </p>
+        <p class="rr-guidance-new-only">Every roster is complete.</p>
 
         @if (canShareCompletedDraft()) {
           <div class="draft-complete-share">
@@ -123,9 +121,7 @@
             >
               {{ draftShareInProgress() ? 'Preparing card...' : 'Share my draft' }}
             </button>
-            <small>
-              Creates a private, browser-generated PNG using only your team name and completed picks.
-            </small>
+            <small class="rr-guidance-new-only">Creates a browser-generated PNG using only your team name and picks.</small>
           </div>
         }
 
@@ -471,6 +467,16 @@
         </div>
       </section>
 
+      <p class="rr-visually-hidden" role="status" aria-live="polite">
+        {{ watchlistStatusMessage() }}
+      </p>
+
+      @if (watchlistErrorMessage()) {
+        <div class="draft-watchlist-error rr-notice rr-notice--danger" role="alert">
+          {{ watchlistErrorMessage() }}
+        </div>
+      }
+
       <section class="draft-layout">
         <main
           class="player-pool-panel rr-card rr-card--padded draft-mobile-panel"
@@ -481,7 +487,7 @@
             <div>
               <span class="eyebrow">Available Players</span>
               <h2>Player Pool</h2>
-              <p>{{ availableAssetCount() }} players and goalie units available</p>
+              <p>{{ availableAssets().length }} shown · {{ availableAssetCount() }} available</p>
             </div>
 
             @if (isMyTurn()) {
@@ -527,6 +533,18 @@
 <option value="POSITION">Sort: Position</option>
 <option value="TEAM">Sort: NHL Team</option>
 </select>
+
+<button
+  type="button"
+  class="draft-watchlist-filter rr-button rr-button--quiet"
+  [class.draft-watchlist-filter-active]="watchlistOnly()"
+  [attr.aria-pressed]="watchlistOnly()"
+  [disabled]="!watchlistLoaded()"
+  (click)="toggleWatchlistFilter()"
+>
+  <span aria-hidden="true">★</span>
+  Watched {{ watchedAssetKeys().size }}
+</button>
 </div>
 
           @if (playerPoolLoading()) {
@@ -681,6 +699,19 @@
                   <div class="asset-actions">
                     <button
                       type="button"
+                      class="draft-watchlist-button rr-button rr-button--quiet"
+                      [class.draft-watchlist-button-active]="isAssetWatched(asset)"
+                      [attr.aria-pressed]="isAssetWatched(asset)"
+                      [attr.aria-label]="(isAssetWatched(asset) ? 'Remove ' : 'Add ') + getAssetName(asset) + (isAssetWatched(asset) ? ' from watchlist' : ' to watchlist')"
+                      [disabled]="!watchlistLoaded() || isWatchlistSaving(asset)"
+                      (click)="toggleAssetWatchlist(asset)"
+                    >
+                      <span aria-hidden="true">{{ isAssetWatched(asset) ? '★' : '☆' }}</span>
+                      {{ isAssetWatched(asset) ? 'Watching' : 'Watch' }}
+                    </button>
+
+                    <button
+                      type="button"
                       class="queue-button rr-button rr-button--secondary"
                       [class.queued]="isAssetQueued(asset)"
                       (click)="toggleAssetInQueue(asset)"
@@ -766,13 +797,8 @@
               </div>
             </div>
 
-            <p class="queue-help">
-              Other managers cannot see this list. Auto-draft fills every starting
-              roster spot before selecting any bench player. It then builds balanced
-              bench coverage with one forward, one defenseman, and one goalie unit,
-              while still honoring the first eligible player in your queue. Two
-              consecutive expired turns automatically switch auto-draft on until you
-              turn it off with the button at the top of the page.
+            <p class="queue-help rr-guidance-new-only">
+              Private list. Auto-draft uses the first eligible queued player while filling legal roster needs.
             </p>
 
             @if (queueEntries().length === 0) {

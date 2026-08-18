@@ -65,7 +65,6 @@
 
           <strong>{{ selectedTeam().name }}</strong>
           <span class="hero-variant-label">{{ selectedTeam().variantLabel }}</span>
-          <small>Your locker-room referee follows your saved team identity.</small>
         </div>
       </header>
 
@@ -81,25 +80,21 @@
         <article class="rr-stat-card">
           <span>Leagues</span>
           <strong>{{ leagueCount() }}</strong>
-          <small>Active manager teams</small>
         </article>
 
         <article class="rr-stat-card">
           <span>Commissioner</span>
           <strong>{{ commissionerLeagueCount() }}</strong>
-          <small>Leagues you manage</small>
         </article>
 
         <article class="rr-stat-card">
           <span>Opponents</span>
           <strong>{{ opponentCount() }}</strong>
-          <small>Managers in your leagues</small>
         </article>
 
         <article class="rr-stat-card">
           <span>Team Slots</span>
           <strong>{{ totalTeamSlots() }}</strong>
-          <small>Total league membership</small>
         </article>
       </section>
 
@@ -110,9 +105,6 @@
         <div>
           <span class="eyebrow">Manager Education</span>
           <h2 id="account-training-camp-title">Training Camp</h2>
-          <p>
-            Review six-game matchups, roster moves, player cards, and automatic season flow at any time.
-          </p>
         </div>
         <span class="training-camp-account-status" [class.complete]="trainingCampComplete()">
           {{ trainingCampComplete() ? 'Complete' : 'Not Complete' }}
@@ -135,9 +127,6 @@
             </span>
           </div>
 
-          <p class="panel-description">
-            Choose an NHL favorite, or keep the neutral RinkRat palette until you decide.
-          </p>
 
           <div class="team-selector-grid" role="list" aria-label="Choose an NHL team or neutral RinkRat colors">
             @for (team of teams; track team.abbreviation) {
@@ -165,7 +154,6 @@
               <img src="/assets/branding/rinkrat-headshot.png" alt="" />
               <div>
                 <strong>Neutral RinkRat identity active</strong>
-                <span>Your account uses RinkRat colors without attaching your profile to an NHL team.</span>
               </div>
             </section>
           } @else {
@@ -179,10 +167,7 @@
               <span class="identity-count">{{ availableTeamVariants().length }} options</span>
             </div>
 
-            <p class="team-identity-description">
-              Every club now has home, away, retro, alternate, special, and custom identities. Challenge
-              rewards unlock the matching identity tier for all NHL teams at once.
-            </p>
+            <p class="team-identity-description">Unlocks apply to every NHL team.</p>
 
             <div class="team-variant-grid" role="list" aria-label="Choose a team logo and color version">
               @for (variant of availableTeamVariants(); track variant.variantId) {
@@ -234,7 +219,6 @@
                   <div>
                     <span class="eyebrow">Identity Architect</span>
                     <h4 id="custom-identity-editor-title">Build Your {{ selectedTeam().name }} Identity</h4>
-                    <p>Choose one of this team’s available logos, then set the three colors used throughout RinkRat.</p>
                   </div>
 
                   <div
@@ -369,14 +353,12 @@
           <section class="hockey-experience-settings" aria-labelledby="hockey-experience-settings-title">
             <div class="panel-heading compact">
               <div>
-                <span class="eyebrow">Explanation Level</span>
+                <span class="eyebrow">Page Guidance</span>
                 <h3 id="hockey-experience-settings-title">Hockey Familiarity</h3>
               </div>
             </div>
 
-            <p class="panel-description">
-              This changes label detail and Coach Help explanations only. It never changes scoring or league rules.
-            </p>
+            <p class="panel-description">Display only—never changes scoring or league rules.</p>
 
             <div class="hockey-experience-option-grid" role="radiogroup" aria-label="Choose hockey familiarity">
               @for (option of hockeyExperienceOptions; track option.value) {
@@ -424,9 +406,6 @@
               </div>
             </div>
 
-            <p class="panel-description">
-              Pick the neutral arena backdrop that works best with every NHL accent color.
-            </p>
 
             <div class="background-option-grid" role="list" aria-label="Choose a background theme">
               @for (option of backgroundOptions; track option.value) {
@@ -585,24 +564,24 @@
           <nav class="account-quick-links" aria-label="Account shortcuts">
             <a class="rr-action-tile" routerLink="/dashboard">
               <span class="pixel-icon icon-home icon-sm" aria-hidden="true"></span>
-              <div><strong>My Leagues</strong><small>Return to the arena lobby.</small></div>
+              <div><strong>My Leagues</strong></div>
             </a>
 
             <a class="rr-action-tile" routerLink="/leagues/create">
               <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
-              <div><strong>Create League</strong><small>Open a new commissioner room.</small></div>
+              <div><strong>Create League</strong></div>
             </a>
 
             <a class="rr-action-tile" routerLink="/leagues/join">
               <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
               <div>
-                <strong>Join League</strong><small>Enter a commissioner invite code.</small>
+                <strong>Join League</strong>
               </div>
             </a>
 
             <button type="button" class="sign-out-button rr-action-tile" (click)="signOut()">
               <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
-              <div><strong>Sign Out</strong><small>Leave the locker room safely.</small></div>
+              <div><strong>Sign Out</strong></div>
             </button>
           </nav>
         </section>
@@ -681,7 +660,7 @@
                     <span>Login and account profile</span>
                     <span>Feedback and automatic error reports</span>
                     <span>Injury email queues and settings</span>
-                    <span>Saved appearance and Training Camp progress</span>
+                    <span>Saved watchlist, appearance, and Training Camp progress</span>
                   </article>
 
                   <article>

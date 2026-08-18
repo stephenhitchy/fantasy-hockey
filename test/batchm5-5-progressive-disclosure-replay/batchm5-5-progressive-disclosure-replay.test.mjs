@@ -312,6 +312,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         // C1K adds isolated cosmetic challenge reconciliation authority.
         'src/team-identity-challenges.ts',
         'src/shared/core/user/team-identity-challenge.util.ts',
+        // A1A adds isolated account-wide watchlist authority.
+        'src/player-watchlist.ts',
+        'src/shared/core/user/player-watchlist.util.ts',
       ]),
     ),
     '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',

@@ -38,6 +38,11 @@ import {
 } from '../../core/player/player-availability.service';
 
 import {
+  getPlayerWatchlist,
+  setPlayerWatchlistEntry,
+} from '../../core/player/player-watchlist.service';
+
+import {
   FantasyAssetCycleWindow,
   FantasyCycle,
   FantasyTeamCycleWindows,
@@ -168,6 +173,12 @@ export class FreeAgents implements OnDestroy {
   positionFilter = signal<FreeAgentPositionFilter>('ALL');
   sortMode = signal<FreeAgentSortMode>('NEXT_CYCLE');
   poolTab = signal<FreeAgentPoolTab>('available');
+  watchlistOnly = signal(false);
+  watchedAssetKeys = signal<ReadonlySet<string>>(new Set());
+  watchlistLoaded = signal(false);
+  watchlistSavingAssetKey = signal('');
+  watchlistStatusMessage = signal('');
+  watchlistErrorMessage = signal('');
   preferredSlotId = signal('');
   preferredRosterArea = signal<'active' | 'bench' | ''>('');
   playerPoolScrollY = signal(0);
@@ -294,10 +305,13 @@ export class FreeAgents implements OnDestroy {
   readonly availableWaivers = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
     const positionFilter = this.positionFilter();
+    const watchedAssetKeys = this.watchedAssetKeys();
+    const watchlistOnly = this.watchlistOnly();
 
     return this.waivers()
       .map((waiver) => ({ ...waiver, asset: this.resolveWaiverAsset(waiver) }))
       .filter((waiver) => waiver.status === 'active')
+      .filter((waiver) => !watchlistOnly || watchedAssetKeys.has(waiver.asset.assetKey))
       .filter((waiver) => positionFilter === 'ALL' || waiver.asset.position === positionFilter)
       .filter((waiver) => {
         if (!search) {
@@ -330,10 +344,13 @@ export class FreeAgents implements OnDestroy {
     const positionFilter = this.positionFilter();
     const rosteredAssetKeys = this.rosteredAssetKeys();
     const activeWaiverAssetKeys = this.activeWaiverAssetKeys();
+    const watchedAssetKeys = this.watchedAssetKeys();
+    const watchlistOnly = this.watchlistOnly();
 
     return this.playerPool()
       .filter((asset) => !rosteredAssetKeys.has(asset.assetKey))
       .filter((asset) => !activeWaiverAssetKeys.has(asset.assetKey))
+      .filter((asset) => !watchlistOnly || watchedAssetKeys.has(asset.assetKey))
       .filter((asset) => positionFilter === 'ALL' || asset.position === positionFilter)
       .filter((asset) => {
         if (!search) {
@@ -617,6 +634,7 @@ export class FreeAgents implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
+    void this.loadWatchlist();
     this.restoreFreeAgentViewState();
     const routePreferences = this.applyRoutePreferences();
     this.focusPendingMovesRequested = routePreferences.focusPendingMoves;
@@ -722,6 +740,68 @@ export class FreeAgents implements OnDestroy {
       );
     } finally {
       this.playerPoolLoading.set(false);
+    }
+  }
+
+  async loadWatchlist(): Promise<void> {
+    this.watchlistLoaded.set(false);
+    this.watchlistErrorMessage.set('');
+
+    try {
+      const result = await getPlayerWatchlist();
+      this.watchedAssetKeys.set(new Set(result.assetKeys));
+    } catch (error: unknown) {
+      this.watchlistErrorMessage.set(
+        error instanceof Error ? error.message : 'Unable to load your watchlist right now.',
+      );
+    } finally {
+      this.watchlistLoaded.set(true);
+    }
+  }
+
+  isAssetWatched(asset: DraftableAsset): boolean {
+    return this.watchedAssetKeys().has(asset.assetKey);
+  }
+
+  isWatchlistSaving(asset: DraftableAsset): boolean {
+    return this.watchlistSavingAssetKey() === asset.assetKey;
+  }
+
+  toggleWatchlistFilter(): void {
+    if (!this.watchlistLoaded()) {
+      return;
+    }
+
+    this.watchlistOnly.update((value) => !value);
+  }
+
+  async toggleAssetWatchlist(asset: DraftableAsset): Promise<void> {
+    if (!this.watchlistLoaded() || this.watchlistSavingAssetKey()) {
+      return;
+    }
+
+    const watched = !this.isAssetWatched(asset);
+    this.watchlistSavingAssetKey.set(asset.assetKey);
+    this.watchlistStatusMessage.set('');
+    this.watchlistErrorMessage.set('');
+
+    try {
+      const result = await setPlayerWatchlistEntry({
+        assetKey: asset.assetKey,
+        watched,
+      });
+      this.watchedAssetKeys.set(new Set(result.assetKeys));
+      this.watchlistStatusMessage.set(
+        watched
+          ? `${this.getAssetName(asset)} added to your watchlist.`
+          : `${this.getAssetName(asset)} removed from your watchlist.`,
+      );
+    } catch (error: unknown) {
+      this.watchlistErrorMessage.set(
+        error instanceof Error ? error.message : 'Unable to update your watchlist right now.',
+      );
+    } finally {
+      this.watchlistSavingAssetKey.set('');
     }
   }
 

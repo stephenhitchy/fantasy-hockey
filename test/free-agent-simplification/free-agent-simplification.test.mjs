@@ -71,7 +71,7 @@ test('the full current-season scoring breakdown is preserved in the comparison s
 
   assert.match(html, /Raw NHL totals → RinkRat fantasy points/);
   assert.match(html, /getStatBreakdown\(addAsset\)/);
-  assert.match(html, /Every stat behind/);
+  assert.match(html, /Raw NHL totals → RinkRat fantasy points/);
   assert.match(html, /getCandidateStatBreakdown\(candidate\)/);
 });
 

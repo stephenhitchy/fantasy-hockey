@@ -10,10 +10,6 @@
       <div>
         <span class="eyebrow">Fantasy Postseason</span>
         <h1>{{ league()?.name }} Playoffs</h1>
-        <p>
-          One complete six-game matchup per round. The regular-season standings lock after Matchup
-          {{ regularSeasonCycleCount() }}, and tied playoff matchups advance the higher seed.
-        </p>
       </div>
 
       <div class="hero-stat">
@@ -59,7 +55,6 @@
         <div>
           <span class="eyebrow">League Champion</span>
           <h2>{{ getChampionName() }}</h2>
-          <p>The final six-game championship matchup is complete.</p>
         </div>
       </section>
     }
@@ -73,17 +68,14 @@
           </div>
         </div>
 
-        <p>
-          {{ getFormatSummary() }} Seeding is based on win percentage, then Points For, point
-          differential, wins, and team name. The field shown below remains live until the final
-          regular-season matchup is completed.
+        <p class="rr-guidance-new-only">
+          {{ getFormatSummary() }} Seeding updates until the regular season ends.
         </p>
 
         <div class="seed-subsection">
           <div class="seed-subheading">
             <div>
               <h3>Projected Championship Qualifiers</h3>
-              <p>These teams would enter the championship side of the bracket.</p>
             </div>
           </div>
 
@@ -94,7 +86,7 @@
                 <div>
                   <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                   <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
-                  <small>Would open in the championship bracket.</small>
+                  <small class="rr-guidance-new-only">Championship bracket</small>
                 </div>
                 <span class="seed-badge">Championship Qualifier</span>
               </article>
@@ -107,7 +99,6 @@
             <div class="seed-subheading">
               <div>
                 <h3>Projected Placement Field</h3>
-                <p>These teams would begin in placement or consolation games.</p>
               </div>
             </div>
 
@@ -118,7 +109,7 @@
                   <div>
                     <span class="manager-name-with-avatar"><app-manager-avatar [profileIconId]="getTeamProfileIconId(seed.ownerId)" [label]="getTeamManagerLabel(seed.ownerId)" size="xs" /><strong>{{ seed.teamName }}</strong></span>
                     <span>{{ getRecordLabel(seed) }} · {{ seed.pointsFor.toFixed(1) }} PF</span>
-                    <small>Would open in the placement bracket.</small>
+                    <small class="rr-guidance-new-only">Placement bracket</small>
                   </div>
                   <span class="seed-badge consolation-badge">Placement Seed</span>
                 </article>
@@ -137,7 +128,7 @@
           <a [routerLink]="['/leagues', leagueId, 'standings']"> View Regular-Season Standings </a>
         </div>
 
-        <p class="section-copy">
+        <p class="section-copy rr-guidance-new-only">
           These seeds show where each team started the postseason. Teams can move into the
           championship game, 3rd-place game, 5th-place game, or consolation placements as results
           come in.
@@ -147,7 +138,6 @@
           <div class="seed-subheading">
             <div>
               <h3>{{ getSeedGroupTitle(true) }}</h3>
-              <p>These teams began on the title side of the bracket.</p>
             </div>
           </div>
 
@@ -171,7 +161,6 @@
             <div class="seed-subheading">
               <div>
                 <h3>{{ getSeedGroupTitle(false) }}</h3>
-                <p>These teams began in the placement or consolation side.</p>
               </div>
             </div>
 
@@ -210,7 +199,7 @@
           }
         </div>
 
-        <p class="section-copy bracket-copy">
+        <p class="section-copy bracket-copy rr-guidance-new-only">
           Styled like a traditional sports bracket. Read each round from left to right, and use the
           winner and loser destination lines on each matchup to see exactly where every team goes
           next.

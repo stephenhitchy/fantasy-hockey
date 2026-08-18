@@ -137,7 +137,7 @@ test('League Wire exposes share cards only for final matchup activity with compl
   assert.equal(component.slice(0, matchupStart).includes('shareCard = {'), false);
   assert.match(template, /shareMatchupResult\(item\)/);
   assert.match(template, /shareCardButtonLabel\(item\)/);
-  assert.match(template, /A member-triggered share card intentionally exports only the final team names/);
+  assert.doesNotMatch(template, /A member-triggered share card intentionally exports only the final team names/);
   assert.match(detailTemplate, /\[leagueName\]="league\(\)\?\.name \?\? 'RinkRat League'"/);
 });
 
@@ -180,7 +180,7 @@ test('C1J adds no backend authority and preserves protected competitive source',
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
   assert.match(functionsPublisher, /release: 'Social Batch C1I'/);
-  assert.doesNotMatch(packageJson.scripts['verify:batchc1l:core'], /firestore:rules|functions:/);
+  assert.doesNotMatch(packageJson.scripts['verify:batcha1a:core'], /firestore:rules|functions:/);
 });
 
 test('C1J remains intact under RC38 while C1L inherits the C1K verification chain', async () => {
@@ -194,14 +194,14 @@ test('C1J remains intact under RC38 while C1L inherits the C1K verification chai
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 38/);
-  assert.match(productionRuntime, /Release Candidate 38/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 38');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1l');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc38-invite-beta');
-  assert.match(packageJson.scripts['verify:batchc1l:core'], /verify:batchc1k:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1l:core/);
-  assert.match(releaseScript, /rinkrat-rc38-invite-beta/);
+  assert.match(runtime, /Release Candidate 39/);
+  assert.match(productionRuntime, /Release Candidate 39/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 39');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1a');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc39-invite-beta');
+  assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1a:core/);
+  assert.match(releaseScript, /rinkrat-rc39-invite-beta/);
 });
 
 test('documentation and permanent roadmap record the bounded share-card foundation', async () => {
@@ -214,7 +214,7 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.29/);
+  assert.match(roadmap, /Version 1\.30/);
   assert.match(roadmap, /# \[x\] C1\.6 Add shareable matchup/);
   assert.match(roadmap, /# \[x\] C1\.23/);
   assert.match(roadmap, /# \[x\] LOG\.45 2026-08-17/);
@@ -223,9 +223,9 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   assert.match(docs, /Canceling the native share sheet is treated as a normal cancellation/);
   assert.match(docs, /before the first asynchronous boundary/);
   assert.doesNotMatch(docs, /--only functions|--only firestore:rules/);
-  assert.match(readme, /Release Candidate 38 \/ Social Batch C1L/);
+  assert.match(readme, /Release Candidate 39 \/ Product Batch A1A/);
   assert.match(readme, /RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1l/);
-  assert.match(releaseRunbook, /rinkrat-rc38-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc38-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1a/);
+  assert.match(releaseRunbook, /rinkrat-rc39-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc39-invite-beta/);
 });

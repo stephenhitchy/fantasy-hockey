@@ -160,7 +160,6 @@ test('competition palettes consolidate repeated literals without raising importa
     assert.ok((css.match(/!important\b/g) ?? []).length <= importantBudget, `${file} increased important overrides.`);
     if (aliasMarker) {
       assert.match(css, new RegExp(aliasMarker));
-      assert.match(css, /Transitional aliases preserve the approved page palette during Batch 7C\.3/);
     } else {
       assert.doesNotMatch(css, /--rr-game-center-migration-color-/);
     }

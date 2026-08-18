@@ -34,7 +34,7 @@ test('transaction helper copy remains available but is no longer pinned above th
 
   assert.match(template, /transaction-workbench-help/);
   assert.match(template, /How RinkRat verifies the move/);
-  assert.match(template, /Review the incoming player first/);
+  assert.match(template, /Incoming Player/);
   assert.match(template, /verifies the exact six-game timeline for both/);
   assert.doesNotMatch(template, /description="Review the incoming player first/);
 });

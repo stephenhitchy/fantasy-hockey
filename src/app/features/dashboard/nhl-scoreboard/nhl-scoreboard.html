@@ -3,7 +3,7 @@
     <div>
       <span class="nhl-scoreboard-eyebrow">Around the NHL</span>
       <h2 id="nhl-scoreboard-title">{{ heading() }}</h2>
-      <p>
+      <p class="rr-guidance-new-only">
         @if (hasLiveGames()) {
           Live scores update automatically.
         } @else {
@@ -82,7 +82,7 @@
     </div>
 
     @if (games().length > visibleGames().length) {
-      <p class="nhl-scoreboard-count">
+      <p class="nhl-scoreboard-count rr-guidance-new-only">
         Showing {{ visibleGames().length }} of {{ games().length }} games, with live and favorite-team games first.
       </p>
     }

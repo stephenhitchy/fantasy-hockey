@@ -242,6 +242,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // C1K adds isolated cosmetic challenge reconciliation authority.
         'src/team-identity-challenges.ts',
         'src/shared/core/user/team-identity-challenge.util.ts',
+        // A1A adds isolated account-wide watchlist authority.
+        'src/player-watchlist.ts',
+        'src/shared/core/user/player-watchlist.util.ts',
   ]);
 
   assert.equal(

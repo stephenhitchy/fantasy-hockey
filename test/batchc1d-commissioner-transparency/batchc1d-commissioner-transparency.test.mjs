@@ -226,7 +226,7 @@ test('League Wire renders commissioner outcomes without another listener or bloc
   assert.match(component, /paused the Draft clock/);
   assert.match(component, /resumed the Draft clock/);
   assert.match(component, /Commissioner/);
-  assert.match(template, /Commissioner notes and failed attempts stay off the wire/);
+  assert.doesNotMatch(template, /Commissioner notes and failed attempts stay off the wire/);
   assert.match(styles, /data-category='commissioner'/);
   assert.doesNotMatch(template, /role="dialog"|viewport-overlay|action-sheet/i);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
@@ -272,20 +272,20 @@ test('C1D remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 38/);
-  assert.match(productionRuntime, /Release Candidate 38/);
+  assert.match(runtime, /Release Candidate 39/);
+  assert.match(productionRuntime, /Release Candidate 39/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1l');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1a');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1d:core'], /verify:batchc1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1l:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1a:core/);
 });
 
 test('C1D documentation and roadmap record the bounded transparency slice and simple owner workflow', async () => {
@@ -298,7 +298,7 @@ test('C1D documentation and roadmap record the bounded transparency slice and si
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.29/);
+  assert.match(roadmap, /Version 1\.30/);
   assert.match(roadmap, /# \[x\] C1\.2/);
   assert.match(roadmap, /# \[x\] C1\.16/);
   assert.match(roadmap, /# \[x\] LOG\.36/);
@@ -309,9 +309,9 @@ test('C1D documentation and roadmap record the bounded transparency slice and si
   assert.match(runbook, /functions:publishLeagueAvailabilityOverrideActivity,functions:publishLeagueDraftControlActivity/);
   assert.match(runbook, /Do not deploy Firestore Rules, indexes, TTL configuration/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 38 \/ Social Batch C1L/);
+  assert.match(readme, /Release Candidate 39 \/ Product Batch A1A/);
   assert.match(readme, /RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchc1l/);
-  assert.match(releaseRunbook, /rinkrat-rc38-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc38-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1a/);
+  assert.match(releaseRunbook, /rinkrat-rc39-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc39-invite-beta/);
 });

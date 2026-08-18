@@ -194,16 +194,15 @@ test('Batch M1 mobile readability contracts', async (suite) => {
 
   await suite.test('covers every primary mobile league surface', () => {
     const contracts = [
-      [dashboardCss, /Batch M1: calm, readable mobile league summaries/],
-      [leagueCss, /Batch M1: mobile readability and touch-target pass/],
-      [draftCss, /Batch M1: readable draft state and one-handed controls/],
-      [gameCenterCss, /Batch M1: live-game information stays legible on a phone/],
-      [teamCss, /Batch M1: readable roster cards and dependable one-handed actions/],
-      [freeAgentsCss, /Batch M1: readable player decisions and full-size mobile controls/],
+      dashboardCss,
+      leagueCss,
+      draftCss,
+      gameCenterCss,
+      teamCss,
+      freeAgentsCss,
     ];
 
-    for (const [source, marker] of contracts) {
-      assert.match(source, marker);
+    for (const source of contracts) {
       assert.match(source, /--rr-mobile-text-(?:micro|label|player|score)/);
     }
   });

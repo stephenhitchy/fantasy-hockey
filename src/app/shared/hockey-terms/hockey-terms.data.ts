@@ -35,17 +35,17 @@ export const HOCKEY_EXPERIENCE_OPTIONS: HockeyExperienceOption[] = [
   {
     value: 'new',
     title: 'New to hockey',
-    description: 'Show fuller labels and extra plain-language explanations.',
+    description: 'Show fuller labels and extra page guidance.',
   },
   {
     value: 'basic',
     title: 'I know the basics',
-    description: 'Keep common hockey terms compact with definitions one tap away.',
+    description: 'Keep pages concise with definitions and Coach Help one tap away.',
   },
   {
     value: 'experienced',
     title: 'Experienced fan',
-    description: 'Use the most compact labels while keeping the glossary available.',
+    description: 'Use compact labels and hide most optional helper copy.',
   },
 ];
 

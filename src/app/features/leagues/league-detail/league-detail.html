@@ -33,7 +33,6 @@
               </span>
             </div>
 
-            <p>Share this code with the people joining your league.</p>
 
             <div class="top-invite-code-row">
               <strong class="invite-code">{{ league()?.inviteCode }}</strong>
@@ -111,7 +110,6 @@
           <span class="draft-section-eyebrow">Your Team</span>
           <h2 id="my-league-team-title">Team identity</h2>
         </div>
-        <p>Manage the name and profile picture used only in this league.</p>
       </div>
 
         @if (myTeam(); as currentTeam) {
@@ -151,7 +149,6 @@
                 <div>
                   <span class="eyebrow">This League Only</span>
                   <h2 id="league-profile-icon-title">Choose Your League Profile Picture</h2>
-                  <p>Your selection is unique to {{ league()?.name }} and will not change your other leagues.</p>
                 </div>
 
                 <button
@@ -267,7 +264,6 @@
           <h2 id="league-essentials-title">Most-used league pages</h2>
         </div>
 
-        <p>The top button follows the current phase; these are the pages managers use most.</p>
       </div>
 
       <div class="quick-actions-grid primary-actions-grid">
@@ -276,7 +272,6 @@
             <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
             <span class="hub-action-copy">
               <strong>Draft Room</strong>
-              <span>Enter or review the league draft.</span>
             </span>
           </a>
         }
@@ -285,7 +280,6 @@
           <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>My Team</strong>
-            <span>Roster, Injured Reserve (IR), waivers, and moves.</span>
           </span>
         </a>
 
@@ -293,7 +287,6 @@
           <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Players</strong>
-            <span>Browse free agents and availability.</span>
           </span>
         </a>
 
@@ -301,7 +294,6 @@
           <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Standings</strong>
-            <span>Records, points, and league rank.</span>
           </span>
         </a>
 
@@ -309,7 +301,6 @@
           <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Point Leaders</strong>
-            <span>Top forwards, defensemen, and goalie units.</span>
           </span>
         </a>
 
@@ -318,7 +309,6 @@
             <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
             <span class="hub-action-copy">
               <strong>Playoffs</strong>
-              <span>Seeds, bracket, consolation, and final placements.</span>
             </span>
           </a>
         }
@@ -339,7 +329,6 @@
           <span class="draft-section-eyebrow">League Overview</span>
           <h2 id="league-status-title">Status and settings</h2>
         </div>
-        <p>Draft, season, roster format, and the shared injury report.</p>
       </div>
 
     <section class="league-info-grid rr-stat-grid">
@@ -618,7 +607,6 @@
         <summary>
           <span>
             <strong id="league-tools-title">Schedule and analysis</strong>
-            <small>Less-frequent league pages stay available without crowding the top.</small>
           </span>
           <span class="summary-chevron" aria-hidden="true">⌄</span>
         </summary>
@@ -632,7 +620,6 @@
               <span aria-hidden="true">🗂</span>
               <span>
                 <strong>All Matchups</strong>
-                <small>Every matchup in the current period</small>
               </span>
             </a>
           }
@@ -641,7 +628,6 @@
             <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Full Schedule</strong>
-              <small>Round-robin schedule and history</small>
             </span>
           </a>
 
@@ -649,7 +635,6 @@
             <span class="pixel-icon icon-projections icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Projection Lab</strong>
-              <small>Ratings and reliability checks</small>
             </span>
           </a>
         </div>
@@ -660,7 +645,6 @@
           <summary>
             <span>
               <strong>Commissioner tools</strong>
-              <small>League management, diagnostics, and release testing</small>
             </span>
             <span class="summary-chevron" aria-hidden="true">⌄</span>
           </summary>
@@ -678,7 +662,6 @@
                     <span class="pixel-icon icon-draft icon-sm" aria-hidden="true"></span>
                     <span>
                       <strong>Draft Setup</strong>
-                      <small>Schedule, clock, and draft order</small>
                     </span>
                   </a>
                 }
@@ -687,7 +670,6 @@
                   <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
                   <span>
                     <strong>Player Availability</strong>
-                    <small>Injury statuses and Injured Reserve eligibility</small>
                   </span>
                 </a>
               </div>
@@ -705,7 +687,6 @@
                     <span class="pixel-icon icon-signal icon-sm" aria-hidden="true"></span>
                     <span>
                       <strong>Scoring Diagnostics</strong>
-                      <small>Worker lease, snapshots, and write checks</small>
                     </span>
                   </a>
 
@@ -713,7 +694,6 @@
                     <span class="pixel-icon icon-live icon-sm" aria-hidden="true"></span>
                     <span>
                       <strong>Release Readiness</strong>
-                      <small>Full-season validation and safe recovery</small>
                     </span>
                   </a>
                 </div>
@@ -731,8 +711,7 @@
             <span class="draft-section-eyebrow">Commissioner Only</span>
             <h2 id="delete-league-title">League Danger Zone</h2>
             <p>
-              Permanently remove this league, its teams, draft, rosters, matchups,
-              matchups, transactions, and invite code.
+              Permanently remove this league, its teams, draft, rosters, matchups, transactions, and invite code.
             </p>
           </div>
 

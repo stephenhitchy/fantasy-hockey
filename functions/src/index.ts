@@ -2856,10 +2856,17 @@ export const deleteMyAccount = onCall(
     );
 
     const lifecycleStateRef = db.doc(`leagueLifecycleState/${userId}`);
-    const [rateLimitSnapshot, platformAdminSnapshot, lifecycleStateSnapshot] = await Promise.all([
+    const managerWatchlistRef = db.doc(`managerWatchlists/${userId}`);
+    const [
+      rateLimitSnapshot,
+      platformAdminSnapshot,
+      lifecycleStateSnapshot,
+      managerWatchlistSnapshot,
+    ] = await Promise.all([
       db.doc(`observabilityRateLimits/${userId}`).get(),
       db.doc(`platformAdmins/${userId}`).get(),
       lifecycleStateRef.get(),
+      managerWatchlistRef.get(),
     ]);
 
     if (rateLimitSnapshot.exists) {
@@ -2874,6 +2881,11 @@ export const deleteMyAccount = onCall(
 
     if (lifecycleStateSnapshot.exists) {
       await lifecycleStateRef.delete();
+      deletedDocumentCount += 1;
+    }
+
+    if (managerWatchlistSnapshot.exists) {
+      await managerWatchlistRef.delete();
       deletedDocumentCount += 1;
     }
 
@@ -3974,6 +3986,11 @@ export {
 export { saveManagerProfile } from './manager-profile-authority';
 
 export { reconcileTeamIdentityChallenges } from './team-identity-challenges';
+
+export {
+  getPlayerWatchlist,
+  setPlayerWatchlistEntry,
+} from './player-watchlist';
 
 export { applyImmediateRosterMove } from './roster-moves';
 

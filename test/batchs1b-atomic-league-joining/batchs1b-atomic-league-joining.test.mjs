@@ -261,7 +261,7 @@ test('roadmap and release documentation record S1B without deleting completed wo
 test('create and join pages explain verification and the draft setup explains the entry lock', () => {
   assert.match(createTemplateSource, /verified email/i);
   assert.match(joinTemplateSource, /verified email/i);
-  assert.match(joinTemplateSource, /draft order/i);
+  assert.match(joinTemplateSource, /Entry must still be open/i);
   assert.match(draftSetupTemplateSource, /closes league entry/i);
 });
 

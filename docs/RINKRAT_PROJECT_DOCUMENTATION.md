@@ -12004,3 +12004,19 @@ When those visible flows pass, no routine Function log, TTL, NHL-cache, or globa
 
 C1L stores no server data and needs no migration rollback. Restore the prior known-good Hosting revision to remove the buttons. Existing league, Draft, standings, scoring, projection, transaction, waiver, and League Wire data are unaffected.
 
+
+---
+
+# Product Batch A1A — Player Watchlist and Clear Ice
+
+**Runtime release:** Release Candidate 39
+
+A1A begins the manager decision-tools phase with one private, account-wide player watchlist independent of Draft queues. Draft Room, Available Players, and Waivers share the same watched state and watched-only filters. Watching an asset never queues, drafts, claims, adds, drops, or reserves it.
+
+The watchlist is server-owned at `managerWatchlists/{userId}`, accepts at most 100 canonical asset keys, requires an authenticated verified email, updates transactionally, and is removed during permanent account deletion. The browser uses `getPlayerWatchlist` and `setPlayerWatchlistEntry` callables and adds no persistent Firestore listener.
+
+The accompanying Clear Ice pass reviews 17 manager-facing templates. Repeated route introductions, obvious tile descriptions, and duplicate helper paragraphs are removed. Safety-critical six-game timing, Injured Reserve eligibility, waiver/privacy boundaries, Draft entry lock, secure-operation confirmation, and permanent deletion warnings remain visible. The source-controlled `audit:product-copy-density` command protects the reviewed ceiling.
+
+Verification uses `npm run verify:batcha1a`. Deployment is Functions-first for `getPlayerWatchlist`, `setPlayerWatchlistEntry`, and the updated `deleteMyAccount`, followed by RC39 Hosting. No Firestore Rule, index, TTL, App Check, scoring-queue, or NHL-cache setting changes.
+
+Full implementation, site-first proof, and rollback guidance are maintained in `docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`.

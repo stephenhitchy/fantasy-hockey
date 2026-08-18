@@ -29,17 +29,20 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md) — browser-generated matchup and championship PNG cards, native mobile sharing, desktop fallback, privacy boundary, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md`](docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md) — server-reconciled identity challenges, a sixth custom logo/three-color scheme for every NHL team, top-right completion notifications, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md) — browser-generated Draft result and current-standings PNG cards, native mobile sharing, desktop fallback, Hosting-only deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`](docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md) — account-wide player watchlists independent of Draft queues, watched-only filters, the Clear Ice copy-density pass, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 38 / Social Batch C1L**. C1L completes the first share-card roadmap set with browser-generated **Draft result** and **current standings** PNG cards. Managers can share their own completed Draft from the Draft Room and export the current league table from Standings through native mobile file sharing or a local desktop download.
+The current source runtime is **Release Candidate 39 / Product Batch A1A**. A1A starts the manager decision-tools phase with a private account-wide **Player Watchlist** shared by Draft Room, Available Players, and Waivers while remaining independent of every private Draft queue.
 
-The C1K Identity Architect customization, C1J matchup and championship cards, the complete C1I Round Recap, and the emoji-only mobile picker from C1H remain intact.
+The same release completes the **Clear Ice** interface pass across 17 manager-facing templates. Self-explanatory controls no longer repeat themselves, while six-game timing, Injured Reserve eligibility, privacy, secure-operation, Draft entry-lock, and permanent-deletion guidance remains visible. Optional page guidance continues to follow the saved Hockey Familiarity preference without changing competition rules.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1l`.
+C1L Draft and standings cards, C1K Identity Architect, C1J matchup and championship cards, the complete C1I Round Recap, and the emoji-only mobile picker remain intact.
+
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1a`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -88,6 +91,7 @@ verify:batchc1i
 verify:batchc1j
 verify:batchc1k
 verify:batchc1l
+verify:batcha1a
 ```
 
 RinkRat pins:
@@ -107,7 +111,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1l
+npm run verify:batcha1a
 ```
 
 After verification and a clean commit:
@@ -116,6 +120,19 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Product Batch A1A — Player Watchlist and Clear Ice
+
+A1A adds one server-owned account watchlist with a 100-asset bound and separate **Watch** and **Queue** actions. Draft Room, Available Players, and Waivers share the same watched state and watched-only filters without another persistent listener or any competitive mutation. The Clear Ice pass removes repeated descriptions across 17 manager routes and adds a source-controlled copy-density audit while retaining safety-critical guidance.
+
+Verification:
+
+```bash
+npm run verify:batcha1a
+```
+
+A1A deploys `getPlayerWatchlist`, `setPlayerWatchlistEntry`, `deleteMyAccount`, and RC39 Hosting. It adds no Firestore Rule, index, TTL policy, App Check change, scoring-queue change, or NHL-cache authority change. Full guidance is in `docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`.
 
 
 ## Social Batch C1L — Draft and Standings Share Cards

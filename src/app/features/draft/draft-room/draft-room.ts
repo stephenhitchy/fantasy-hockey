@@ -89,6 +89,11 @@ import {
   syncPlayerAvailabilityFromEspn,
 } from '../../../core/player/player-availability-sync.service';
 
+import {
+  getPlayerWatchlist,
+  setPlayerWatchlistEntry,
+} from '../../../core/player/player-watchlist.service';
+
 import { getLeagueById, League } from '../../../core/league/league.service';
 import { shareLeagueDraftCard } from '../../../core/league/league-draft-share-card.service';
 
@@ -208,6 +213,12 @@ export class DraftRoom implements OnDestroy {
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
+  watchlistOnly = signal(false);
+  watchedAssetKeys = signal<ReadonlySet<string>>(new Set());
+  watchlistLoaded = signal(false);
+  watchlistSavingAssetKey = signal('');
+  watchlistStatusMessage = signal('');
+  watchlistErrorMessage = signal('');
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
@@ -958,13 +969,14 @@ export class DraftRoom implements OnDestroy {
 
   readonly availableAssets = computed(() => {
     const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
-
+    const watchedAssetKeys = this.watchedAssetKeys();
+    const watchlistOnly = this.watchlistOnly();
     const search = this.searchTerm().trim().toLowerCase();
-
     const positionFilter = this.positionFilter();
 
     return this.playerPool()
       .filter((asset) => !draftedAssetKeys.has(asset.assetKey))
+      .filter((asset) => !watchlistOnly || watchedAssetKeys.has(asset.assetKey))
       .filter((asset) => (positionFilter === 'ALL' ? true : asset.position === positionFilter))
       .filter((asset) => {
         if (!search) {
@@ -1118,6 +1130,7 @@ export class DraftRoom implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
+    void this.loadWatchlist();
 
     try {
       const [league, teams, myTeam] = await Promise.all([
@@ -2675,6 +2688,74 @@ export class DraftRoom implements OnDestroy {
         autoDraftActivatedByTimeout: false,
       }
     );
+  }
+
+  isAssetWatched(asset: DraftableAsset): boolean {
+    return this.watchedAssetKeys().has(asset.assetKey);
+  }
+
+  isWatchlistSaving(asset: DraftableAsset): boolean {
+    return this.watchlistSavingAssetKey() === asset.assetKey;
+  }
+
+  toggleWatchlistFilter(): void {
+    if (!this.watchlistLoaded()) {
+      return;
+    }
+
+    this.watchlistOnly.update((value) => !value);
+  }
+
+  async toggleAssetWatchlist(asset: DraftableAsset): Promise<void> {
+    if (!this.watchlistLoaded() || this.watchlistSavingAssetKey()) {
+      return;
+    }
+
+    const watched = !this.isAssetWatched(asset);
+    this.watchlistSavingAssetKey.set(asset.assetKey);
+    this.watchlistStatusMessage.set('');
+    this.watchlistErrorMessage.set('');
+
+    try {
+      const result = await setPlayerWatchlistEntry({
+        assetKey: asset.assetKey,
+        watched,
+      });
+      this.watchedAssetKeys.set(new Set(result.assetKeys));
+      this.watchlistStatusMessage.set(
+        watched
+          ? `${this.getAssetName(asset)} added to your watchlist.`
+          : `${this.getAssetName(asset)} removed from your watchlist.`,
+      );
+    } catch (error: unknown) {
+      this.watchlistErrorMessage.set(
+        error instanceof Error ? error.message : 'Unable to update your watchlist right now.',
+      );
+    } finally {
+      this.watchlistSavingAssetKey.set('');
+    }
+  }
+
+  private async loadWatchlist(): Promise<void> {
+    this.watchlistLoaded.set(false);
+    this.watchlistErrorMessage.set('');
+
+    try {
+      const result = await getPlayerWatchlist();
+      if (!this.destroyed) {
+        this.watchedAssetKeys.set(new Set(result.assetKeys));
+      }
+    } catch (error: unknown) {
+      if (!this.destroyed) {
+        this.watchlistErrorMessage.set(
+          error instanceof Error ? error.message : 'Unable to load your watchlist right now.',
+        );
+      }
+    } finally {
+      if (!this.destroyed) {
+        this.watchlistLoaded.set(true);
+      }
+    }
   }
 
   isAssetQueued(asset: DraftableAsset): boolean {

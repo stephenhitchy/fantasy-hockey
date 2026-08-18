@@ -80,16 +80,15 @@ requireMatch(
 );
 
 const surfaces = [
-  ['Dashboard', dashboardCss, /Batch M1: calm, readable mobile league summaries/],
-  ['League HQ', leagueCss, /Batch M1: mobile readability and touch-target pass/],
-  ['Draft Room', draftCss, /Batch M1: readable draft state and one-handed controls/],
-  ['Game Center', gameCenterCss, /Batch M1: live-game information stays legible on a phone/],
-  ['My Team', teamCss, /Batch M1: readable roster cards and dependable one-handed actions/],
-  ['Free Agents', freeAgentsCss, /Batch M1: readable player decisions and full-size mobile controls/],
+  ['Dashboard', dashboardCss],
+  ['League HQ', leagueCss],
+  ['Draft Room', draftCss],
+  ['Game Center', gameCenterCss],
+  ['My Team', teamCss],
+  ['Free Agents', freeAgentsCss],
 ];
 
-for (const [name, source, marker] of surfaces) {
-  requireMatch(source, marker, `${name} is missing its M1 mobile readability contract.`);
+for (const [name, source] of surfaces) {
   requireMatch(
     source,
     /--rr-mobile-text-(?:micro|label|player|score)/,
@@ -120,7 +119,7 @@ console.log('RinkRat Batch M1 mobile audit');
 console.log(`  Adaptive destination listeners: ${/listenToFantasyDraft/.test(navbarSource) && /listenToEarliestUnfinishedOwnerMatchup/.test(navbarSource) ? 'yes' : 'no'}`);
 console.log(`  Shared 12px mobile floor: ${/--rr-mobile-text-micro:\s*var\(--rr-text-xs\)/.test(tokens) ? 'yes' : 'no'}`);
 console.log(`  Shared 44px action target: ${/--rr-mobile-control-min-height:\s*var\(--rr-touch-target\)/.test(tokens) ? 'yes' : 'no'}`);
-console.log(`  Primary surfaces covered: ${surfaces.filter(([, source, marker]) => marker.test(source)).length}/${surfaces.length}`);
+console.log(`  Primary surfaces covered: ${surfaces.filter(([, source]) => /--rr-mobile-text-(?:micro|label|player|score)/.test(source)).length}/${surfaces.length}`);
 console.log(`  Narrow-phone decoration reduction: ${/Batch M1: quieter decorative ribbon/.test(layoutCss) ? 'yes' : 'no'}`);
 
 if (failures.length > 0) {

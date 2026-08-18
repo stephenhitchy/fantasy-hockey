@@ -278,7 +278,7 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
   for (const required of [
     'Available Now',
     'Waivers',
-    'Compare Player',
+    'Compare',
     'Why this incoming projection?',
     'Transaction Workbench',
     'Choose Who This Player Replaces',
@@ -301,7 +301,7 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
   assert.match(source, /!this\.isBenchCandidateReservedForActiveSwap\(slot\)/);
   assert.match(source, /A direct handoff from My Team represents a new roster task/);
   assert.match(template, /role="group" aria-label="Available player type"/);
-  assert.equal((template.match(/aria-pressed/g) ?? []).length, 2);
+  assert.equal((template.match(/aria-pressed/g) ?? []).length, 5);
   assert.match(template, /id="pending-roster-moves"[\s\S]*tabindex="-1"/);
   assert.match(styles, /position:\s*sticky/);
   assert.match(styles, /\.free-agent-sheet-buttons/);
@@ -352,8 +352,8 @@ test('roster writes block route changes and browser exit until the server operat
   assert.match(freeAgentSource, /@HostListener\('window:beforeunload'/);
   assert.match(teamSource, /return this\.rosterMoveLoading\(\) \|\| this\.saving\(\)/);
   assert.match(freeAgentSource, /return this\.moving\(\)/);
-  assert.match(teamTemplate, /Stay on this page until RinkRat confirms the update/);
-  assert.match(freeAgentTemplate, /waits for the secure response or the live roster update/);
+  assert.match(teamTemplate, /Waiting for the secure response or live roster update/);
+  assert.match(freeAgentTemplate, /Waiting for the secure response or live roster update/);
 });
 
 test('V1 keeps the readable interface font prioritized and loads decorative fonts without inline handlers', async () => {

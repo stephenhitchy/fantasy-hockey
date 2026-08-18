@@ -16,10 +16,6 @@
       <div>
         <span class="eyebrow">Roster Moves</span>
         <h1>Available Players</h1>
-        <p>
-          Find a player, compare the exact roster spot, and review when the move takes effect before
-          confirming it.
-        </p>
       </div>
 
       <div
@@ -34,8 +30,7 @@
 
     <section class="message-card fairness-card rr-notice rr-notice--info">
       <strong>Fair six-game timing:</strong>
-      a move can apply immediately only when the exact roster spot and incoming player are both
-      untouched. Otherwise, RinkRat schedules it at the first legal matchup boundary.
+      untouched players and roster spots can move now; all others wait for the next legal boundary.
     </section>
 
     @if (pendingRosterMoves().length > 0) {
@@ -49,10 +44,7 @@
             <span class="eyebrow">Scheduled Moves</span>
             <h2>Waiting for Fair Activation</h2>
           </div>
-          <p>
-            Each incoming player stays reserved for one roster spot until both sides of the move can
-            change without rewriting counted games.
-          </p>
+          <p>Reserved until the selected roster spot can change fairly.</p>
         </div>
 
         <div class="pending-move-list">
@@ -94,13 +86,22 @@
       </section>
     }
 
+    <p class="rr-visually-hidden" role="status" aria-live="polite">
+      {{ watchlistStatusMessage() }}
+    </p>
+
+    @if (watchlistErrorMessage()) {
+      <section class="message-card error-card rr-notice rr-notice--danger" role="alert">
+        {{ watchlistErrorMessage() }}
+      </section>
+    }
+
     <section class="free-agent-list-card player-pool-step rr-card rr-card--padded">
       <div class="step-heading-row rr-section-heading">
         <div class="step-number">1</div>
         <div>
           <span class="eyebrow">Choose a Player</span>
           <h2>Search the Player Pool</h2>
-          <p>Only the most useful comparison numbers stay visible until you select someone.</p>
         </div>
 
         <button
@@ -118,7 +119,6 @@
           <div>
             <span class="eyebrow">Opened from My Team</span>
             <strong>{{ getPreferredRosterTargetLabel() || preferredSlotId() }}</strong>
-            <small>The matching roster spot will be preselected after you choose a player.</small>
           </div>
           <button
             type="button"
@@ -185,16 +185,25 @@
             }
           </select>
         </label>
+
+        <button
+          type="button"
+          class="watchlist-filter rr-button rr-button--quiet"
+          [class.watchlist-filter-active]="watchlistOnly()"
+          [attr.aria-pressed]="watchlistOnly()"
+          [disabled]="!watchlistLoaded()"
+          (click)="toggleWatchlistFilter()"
+        >
+          <span aria-hidden="true">★</span>
+          Watched {{ watchedAssetKeys().size }}
+        </button>
       </div>
 
       @if (poolTab() === 'available') {
         @if (playerPoolLoading()) {
           <div class="empty-card rr-state">Loading NHL player pool...</div>
         } @else if (availableAssets().length === 0) {
-          <div class="empty-card rr-state">
-            No immediately available players match these filters. Check the Waivers tab or change
-            the search.
-          </div>
+          <div class="empty-card rr-state">No available players match these filters.</div>
         } @else {
           <div class="asset-list compact-player-pool">
             @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
@@ -256,11 +265,23 @@
                   }
                   <button
                     type="button"
+                    class="watchlist-button rr-button rr-button--quiet"
+                    [class.watchlist-button-active]="isAssetWatched(asset)"
+                    [attr.aria-pressed]="isAssetWatched(asset)"
+                    [attr.aria-label]="(isAssetWatched(asset) ? 'Remove ' : 'Add ') + getAssetName(asset) + (isAssetWatched(asset) ? ' from watchlist' : ' to watchlist')"
+                    [disabled]="!watchlistLoaded() || isWatchlistSaving(asset)"
+                    (click)="toggleAssetWatchlist(asset)"
+                  >
+                    <span aria-hidden="true">{{ isAssetWatched(asset) ? '★' : '☆' }}</span>
+                    {{ isAssetWatched(asset) ? 'Watching' : 'Watch' }}
+                  </button>
+                  <button
+                    type="button"
                     class="choose-slot-button rr-button rr-button--primary"
                     (click)="selectAddAsset(asset)"
                     [disabled]="draft()?.status !== 'complete' || moving()"
                   >
-                    Compare Player
+                    Compare
                   </button>
                 </div>
               </article>
@@ -271,8 +292,8 @@
         <section class="waiver-tab-panel waiver-queue-card rr-data-panel">
           <div class="waiver-tab-intro">
             <div>
-              <span class="eyebrow">Waiver Queue</span>
-              <h3>Players requiring a claim</h3>
+              <span class="eyebrow">Waivers</span>
+              <h3>Claim a player</h3>
             </div>
             <p>{{ getWaiverPriorityLabel() }}</p>
           </div>
@@ -338,6 +359,18 @@
                     <span [class]="'performance-pill ' + getPerformanceClass(waiver.asset)">
                       {{ getPerformanceLabel(waiver.asset) }}
                     </span>
+                    <button
+                      type="button"
+                      class="watchlist-button rr-button rr-button--quiet"
+                      [class.watchlist-button-active]="isAssetWatched(waiver.asset)"
+                      [attr.aria-pressed]="isAssetWatched(waiver.asset)"
+                      [attr.aria-label]="(isAssetWatched(waiver.asset) ? 'Remove ' : 'Add ') + getAssetName(waiver.asset) + (isAssetWatched(waiver.asset) ? ' from watchlist' : ' to watchlist')"
+                      [disabled]="!watchlistLoaded() || isWatchlistSaving(waiver.asset)"
+                      (click)="toggleAssetWatchlist(waiver.asset)"
+                    >
+                      <span aria-hidden="true">{{ isAssetWatched(waiver.asset) ? '★' : '☆' }}</span>
+                      {{ isAssetWatched(waiver.asset) ? 'Watching' : 'Watch' }}
+                    </button>
                     <div class="waiver-action-stack">
                       <button
                         type="button"
@@ -419,8 +452,7 @@
           <details class="transaction-workbench-help">
             <summary>How RinkRat verifies the move</summary>
             <div>
-              <p>Review the incoming player first, then compare every legal roster replacement below.</p>
-              <p>RinkRat unlocks confirmation only after it verifies the exact six-game timeline for both the incoming player and the selected roster spot.</p>
+                    <p>RinkRat unlocks confirmation only after it verifies the exact six-game timeline for both the incoming player and the selected roster spot.</p>
             </div>
           </details>
 
@@ -567,8 +599,7 @@
                   <div>
                     <span class="eyebrow">Season Point Formula · Combined scoring-category contribution</span>
                     <h3>Stat totals → fantasy points</h3>
-                    <p>Every stat behind {{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }} current-season points.</p>
-                  </div>
+                        </div>
                   <small>Raw NHL totals → RinkRat fantasy points</small>
                 </div>
 
@@ -969,7 +1000,7 @@
         <span class="roster-action-spinner" aria-hidden="true"></span>
         <div>
           <strong>{{ rosterOperationHeadline() || (selectedWaiver() ? 'Submitting waiver action…' : 'Confirming roster move…') }}</strong>
-          <small>{{ rosterOperationDetail() || 'The comparison has closed while RinkRat waits for the secure response or the live roster update. Stay on this page until RinkRat confirms the update.' }}</small>
+          <small>{{ rosterOperationDetail() || 'Waiting for the secure response or live roster update.' }}</small>
         </div>
       </aside>
     }

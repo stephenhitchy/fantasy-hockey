@@ -109,7 +109,8 @@ test('registration mirrors the live Firebase password policy and makes missing r
   assert.match(authComponentSource, /Update your password before continuing/);
   assert.match(authTemplateSource, /Password requirements/);
   assert.match(authTemplateSource, /complete/);
-  assert.match(authTemplateSource, /every required item is green/);
+  assert.match(authTemplateSource, /passwordRequirementsMetCount\(\)/);
+  assert.match(authTemplateSource, /password-requirement-list/);
   assert.match(authComponentSource, /Complete Password Requirements/);
   assert.match(authStylesSource, /password-policy-card\.needs-attention/);
   assert.match(authStylesSource, /password-requirement\.missing/);
@@ -245,7 +246,7 @@ test('S3B release, documentation, roadmap, and verification commands remain sync
   assert.match(packageJson.scripts['verify:batchs3b'], /verify:batchs3a-2/);
   assert.match(packageJson.scripts['verify:batchs3b'], /test:batchs3b:run/);
   assert.match(packageJson.scripts['verify:batchs3b'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Social Batch C1L)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Product Batch A1A)/);
   assert.match(readmeSource, /verify:batchs3b/);
   assert.match(documentationSource, /Security Batch S3B — Dynamic Password Policy, Document-ID Validation, and NHL Proxy Hardening/);
   assert.equal(roadmapRootSource, roadmapDocsSource);

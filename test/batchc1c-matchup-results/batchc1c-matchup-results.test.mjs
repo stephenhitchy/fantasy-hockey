@@ -203,9 +203,9 @@ test('League Wire renders final results with progressive disclosure and no live-
   assert.match(component, /finished tied/);
   assert.match(component, /Higher seed advanced/);
   assert.match(component, /Game Final/);
-  assert.match(template, /final matchup results/);
-  assert.match(template, /Only final matchup outcomes post/);
-  assert.match(template, /Live score changes/);
+  assert.doesNotMatch(template, /final matchup results/);
+  assert.doesNotMatch(template, /Only final matchup outcomes post/);
+  assert.doesNotMatch(template, /Live score changes/);
   assert.match(styles, /data-category='matchup'/);
   assert.doesNotMatch(template, /role="dialog"|viewport-overlay|action-sheet/i);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
@@ -250,20 +250,20 @@ test('C1C changes no competitive model, Firestore Rule, index, or safety-mode au
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 38/);
-  assert.match(productionRuntime, /Release Candidate 38/);
+  assert.match(runtime, /Release Candidate 39/);
+  assert.match(productionRuntime, /Release Candidate 39/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchc1l');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1a');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1c:core'], /verify:batchc1b:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchc1l:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1a:core/);
 });
 
 test('C1C documentation and permanent roadmap record the bounded matchup-result slice', async () => {
@@ -276,7 +276,7 @@ test('C1C documentation and permanent roadmap record the bounded matchup-result 
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.29/);
+  assert.match(roadmap, /Version 1\.30/);
   assert.match(roadmap, /# \[x\] C1\.15/);
   assert.match(roadmap, /# \[x\] LOG\.35/);
   assert.match(runbook, /active-to-complete/);
@@ -287,8 +287,8 @@ test('C1C documentation and permanent roadmap record the bounded matchup-result 
   assert.match(runbook, /Hosting RC29 only/);
   assert.match(runbook, /No Firestore Rules or index deployment/);
   assert.match(runbook, /live-score spam/i);
-  assert.match(readme, /Release Candidate 38 \/ Social Batch C1L/);
+  assert.match(readme, /Release Candidate 39 \/ Product Batch A1A/);
   assert.match(readme, /RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS\.md/);
-  assert.match(releaseRunbook, /rinkrat-rc38-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc38-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc39-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc39-invite-beta/);
 });
