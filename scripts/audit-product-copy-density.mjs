@@ -14,7 +14,6 @@ const MANAGER_TEMPLATES = [
   'src/app/features/leagues/league-detail/league-detail.html',
   'src/app/features/leagues/league-wire/league-wire.html',
   'src/app/features/onboarding/training-camp/training-camp.html',
-  'src/app/features/players/league-player-board/league-player-board.html',
   'src/app/features/players/league-player-detail/league-player-detail.html',
   'src/app/features/playoffs/playoff-bracket/playoff-bracket.html',
   'src/app/features/scoring/scoring-guide/scoring-guide.html',

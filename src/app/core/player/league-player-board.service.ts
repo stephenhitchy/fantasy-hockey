@@ -7,6 +7,7 @@ import { getLeagueById, type League } from '../league/league.service';
 import {
   loadSharedProjectionSnapshot,
   loadSharedProjectionSnapshotById,
+  loadSharedProjectionSnapshotFresh,
   type SharedProjectionSnapshotMetadata,
 } from '../projection/projection-snapshot.service';
 import {
@@ -43,8 +44,10 @@ export interface LeaguePlayerBoardBaseData {
 }
 
 
-async function loadBestProjectionSnapshot(leagueId: string) {
-  const current = await loadSharedProjectionSnapshot(leagueId);
+async function loadBestProjectionSnapshot(leagueId: string, forceRefresh = false) {
+  const current = await (forceRefresh
+    ? loadSharedProjectionSnapshotFresh(leagueId)
+    : loadSharedProjectionSnapshot(leagueId));
   if (current) {
     return current;
   }
@@ -59,11 +62,12 @@ async function loadBestProjectionSnapshot(leagueId: string) {
 
 async function fetchLeaguePlayerBoardBaseData(
   leagueId: string,
+  forceRefresh = false,
 ): Promise<LeaguePlayerBoardBaseData> {
   const [league, teams, snapshot] = await Promise.all([
     getLeagueById(leagueId),
     getLeagueTeams(leagueId),
-    loadBestProjectionSnapshot(leagueId),
+    loadBestProjectionSnapshot(leagueId, forceRefresh),
   ]);
 
   if (!league) {
@@ -110,7 +114,7 @@ export function loadLeaguePlayerBoardBaseData(
     return cached.promise;
   }
 
-  const promise = fetchLeaguePlayerBoardBaseData(normalizedLeagueId).catch((error) => {
+  const promise = fetchLeaguePlayerBoardBaseData(normalizedLeagueId, options.forceRefresh === true).catch((error) => {
     leaguePlayerBoardCache.delete(normalizedLeagueId);
     throw error;
   });

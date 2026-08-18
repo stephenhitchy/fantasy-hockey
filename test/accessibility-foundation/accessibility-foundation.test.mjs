@@ -121,7 +121,7 @@ test('route changes announce the page, update the document title, and focus the 
     'Game Center',
     'Draft Room',
     'My Team',
-    'Free Agents',
+    'Add / Drop',
     'Account Settings',
   ];
   for (const title of expectedTitles) {

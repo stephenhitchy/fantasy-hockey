@@ -156,20 +156,16 @@ export const routes: Routes = [
       },
       {
         path: 'leagues/:leagueId/players',
-        title: 'Player Board',
-        canActivate: [leagueMemberGuard],
-        loadComponent: () =>
-          import('./features/players/league-player-board/league-player-board').then(
-            (module) => module.LeaguePlayerBoard,
-          ),
-      },
-      {
-        path: 'leagues/:leagueId/free-agents',
-        title: 'Free Agents',
+        title: 'Add / Drop',
         canActivate: [leagueMemberGuard],
         canDeactivate: [pendingRosterActionGuard],
         loadComponent: () =>
           import('./features/free-agents/free-agents').then((module) => module.FreeAgents),
+      },
+      {
+        path: 'leagues/:leagueId/free-agents',
+        redirectTo: 'leagues/:leagueId/players',
+        pathMatch: 'full',
       },
       {
         path: 'leagues/:leagueId/draft/setup',

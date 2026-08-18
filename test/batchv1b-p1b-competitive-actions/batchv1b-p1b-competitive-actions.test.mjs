@@ -142,7 +142,7 @@ test('the final add/drop action uses a theme-independent high-visibility commit 
     read('src/rinkrat-shared-primitives.css'),
     read('src/app/features/free-agents/free-agents.html'),
     read('src/app/features/free-agents/free-agents.ts'),
-    read('src/rinkrat-transaction-workbench.css'),
+    read('src/app/features/free-agents/free-agents.css'),
   ]);
 
   assert.match(tokens, /--rr-commit-face-top:\s*#fff2a8/);
@@ -152,10 +152,11 @@ test('the final add/drop action uses a theme-independent high-visibility commit 
   assert.match(primitives, /data-commit-ready='true'/);
   assert.match(primitives, /rr-commit-ready-sheen/);
   assert.match(primitives, /prefers-reduced-motion:\s*reduce/);
-  assert.equal((template.match(/rr-button--commit confirm-move-button/g) ?? []).length, 2);
-  assert.match(template, /Ready to submit/);
+  assert.equal((template.match(/rr-button--commit/g) ?? []).length, 1);
+  assert.match(template, /Selected move/);
+  assert.match(template, /getConfirmButtonLabel\(\)/);
   assert.match(source, /return this\.selectedWaiver\(\) \? 'Submit Waiver Claim' : 'Confirm Add \/ Drop'/);
-  assert.match(workbenchStyles, /free-agent-confirmation-bar\.transaction-timing-ready/);
+  assert.match(workbenchStyles, /transaction-confirmation-actions/);
   assert.doesNotMatch(primitives, /var\(--user-team-primary\)/);
 });
 

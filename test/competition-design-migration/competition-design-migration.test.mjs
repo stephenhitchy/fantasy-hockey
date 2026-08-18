@@ -51,24 +51,22 @@ test('My Team composes shared page, roster, status, form, and dialog foundations
   }
 });
 
-test('Free Agents composes shared pool, filter, waiver, comparison, and confirmation foundations', async () => {
+test('Add / Drop composes the shared Player Board, filters, roster choices, and confirmation foundations', async () => {
   const html = await source('src/app/features/free-agents/free-agents.html');
   for (const marker of [
-    'free-agents-page rr-page-shell',
-    'free-agent-hero rr-card rr-card--padded',
-    'message-card fairness-card rr-notice rr-notice--info',
-    'filter-row decision-filter-row rr-toolbar',
-    'waiver-tab-panel waiver-queue-card rr-data-panel',
-    'asset-row decision-asset-card rr-list-row',
-    '<app-action-sheet',
-    'incoming-scout-card',
-    'transaction-player-incoming',
-    'replacement-card-list',
-    'selected-final-comparison',
-    'top-confirm-move-button rr-button rr-button--primary',
+    'unified-player-page rr-page-shell',
+    'unified-player-controls rr-card rr-card--padded',
+    'class="rr-field',
+    'class="unified-player-list"',
+    'unified-player-row rr-card',
+    'transaction-incoming-row unified-player-row rr-card',
+    'transaction-roster-list',
+    'transaction-confirmation rr-card rr-card--padded',
+    'rr-button--commit',
   ]) {
     assert.match(html, new RegExp(marker));
   }
+  assert.doesNotMatch(html, /app-action-sheet|rr-dialog-backdrop|viewport-overlay/i);
 });
 
 test('Draft Setup composes shared cards, statistics, controls, notices, and order rows', async () => {
@@ -149,7 +147,7 @@ test('Game Center uses a wider responsive roster and a compact two-row six-game 
 test('competition palettes consolidate repeated literals without raising important debt', async () => {
   const expectations = [
     ['src/app/features/team/team-settings/team-settings.css', 224, 4, '--rr-team-migration-color-'],
-    ['src/app/features/free-agents/free-agents.css', 168, 8, '--rr-free-agents-migration-color-'],
+    ['src/app/features/free-agents/free-agents.css', 168, 8, null],
     ['src/app/features/draft/draft-setup/draft-setup.css', 91, 0, '--rr-draft-setup-migration-color-'],
     ['src/app/features/draft/draft-room/draft-room.css', 189, 1, '--rr-draft-room-migration-color-'],
     ['src/app/features/cycles/cycle-one/cycle-one.css', 392, 1, null],

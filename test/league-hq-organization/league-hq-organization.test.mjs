@@ -99,7 +99,7 @@ test('team identity appears before the most-used pages, followed by status, team
     'id="league-essentials-title"',
     '>Draft Room<',
     '>My Team<',
-    '>Players<',
+    '>Add / Drop<',
     '>Standings<',
     'id="league-status-title"',
     'class="teams-section"',

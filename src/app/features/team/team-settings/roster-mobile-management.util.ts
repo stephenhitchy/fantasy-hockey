@@ -73,8 +73,8 @@ export function buildRosterManagementActions(
         'find-player',
         'Find a Player',
         context.area === 'bench'
-          ? 'Open Available Players and preselect this open bench spot.'
-          : 'Open Available Players already filtered to this position and roster slot.',
+          ? 'Open Add / Drop and preselect this open bench spot.'
+          : 'Open Add / Drop already filtered to this position and roster slot.',
         'primary',
         !locked,
         'Wait for the current roster action to finish.',
@@ -113,7 +113,7 @@ export function buildRosterManagementActions(
       action(
         'find-player',
         'Find a Replacement',
-        'Open Available Players already filtered to this position. This exact roster slot will be preselected.',
+        'Open Add / Drop already filtered to this position. This exact roster slot will be preselected.',
         'primary',
         !locked,
         'Wait for the current roster action to finish.',
@@ -179,7 +179,7 @@ export function buildRosterManagementActions(
       action(
         'find-player',
         'Replace Bench Player',
-        'Open Available Players and preselect this bench spot. Replacing the player sends the outgoing player to waivers.',
+        'Open Add / Drop and preselect this bench spot. Replacing the player sends the outgoing player to waivers.',
         'secondary',
         !locked,
         'Wait for the current roster action to finish.',

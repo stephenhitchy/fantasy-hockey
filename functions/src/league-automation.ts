@@ -14,6 +14,7 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
+import { queueServerProjectionSnapshotRefresh } from './projection-authority';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
@@ -5072,6 +5073,25 @@ async function performHistoricalReplayAdvance(
         'aborted',
         'Another server scoring update kept the league lease through every automatic retry. The simulated date was not skipped; RinkRat will preserve this date so it can be retried safely.',
       );
+    }
+
+    if (releasedGameCount > 0) {
+      try {
+        await queueServerProjectionSnapshotRefresh({
+          leagueId,
+          requestedBy: userId,
+          requestKey: requestId,
+        });
+      } catch (projectionError: unknown) {
+        console.warn('Historical replay completed, but the non-blocking player-stat refresh was not queued.', {
+          leagueId,
+          requestId,
+          simulatedDate: nextDate,
+          message: projectionError instanceof Error
+            ? projectionError.message
+            : 'Unknown projection refresh error.',
+        });
+      }
     }
 
     const message = releasedGameCount > 0

@@ -202,36 +202,35 @@ test('board search, status, position, watched, and sorting remain deterministic'
   );
 });
 
-test('Players becomes the primary league directory while Point Leaders remains a focused scoring-history page', async () => {
-  const [routes, navbar, leagueHq, standings, boardTemplate, detailTemplate] = await Promise.all([
+test('A1B Player Intel remains the shared directory model after A1C unifies Players with Add / Drop', async () => {
+  const [routes, navbar, leagueHq, standings, unifiedTemplate, detailTemplate] = await Promise.all([
     read('src/app/app.routes.ts'),
     read('src/app/shared/navbar/navbar.html'),
     read('src/app/features/leagues/league-detail/league-detail.html'),
     read('src/app/features/leagues/league-standings/league-standings.html'),
-    read('src/app/features/players/league-player-board/league-player-board.html'),
+    read('src/app/features/free-agents/free-agents.html'),
     read('src/app/features/players/league-player-detail/league-player-detail.html'),
   ]);
 
-  assert.match(routes, /path: 'leagues\/:leagueId\/players',[\s\S]*?title: 'Player Board'[\s\S]*?LeaguePlayerBoard/);
+  assert.match(routes, /path: 'leagues\/:leagueId\/players',[\s\S]*?title: 'Add \/ Drop'[\s\S]*?pendingRosterActionGuard[\s\S]*?FreeAgents/);
+  assert.match(routes, /path: 'leagues\/:leagueId\/free-agents',[\s\S]*?redirectTo: 'leagues\/:leagueId\/players'/);
   assert.match(routes, /path: 'leagues\/:leagueId\/players\/:assetKey',[\s\S]*?title: 'Player Intel'[\s\S]*?LeaguePlayerDetail/);
   assert.match(routes, /path: 'leagues\/:leagueId\/leaders',[\s\S]*?title: 'Point Leaders'[\s\S]*?PointLeaders/);
-  assert.match(navbar, /\['\/leagues', activeLeagueId, 'players'\]/);
-  assert.match(navbar, /<strong>Point Leaders<\/strong>/);
-  assert.match(leagueHq, /\['\/leagues', leagueId, 'players'\][\s\S]*?<strong>Players<\/strong>/);
-  assert.doesNotMatch(leagueHq, /\['\/leagues', leagueId, 'leaders'\]/);
-  assert.match(standings, /\['\/leagues', leagueId, 'players'\][\s\S]*?>\s*Players\s*</);
-  assert.match(boardTemplate, /\['\/leagues', leagueId\(\), 'players', row\.assetKey\]/);
-  assert.match(boardTemplate, />Point Leaders<\/a>/);
+  assert.match(navbar, /\['\/leagues', activeLeagueId, 'players'\][\s\S]*?>\s*Add\/Drop\s*</);
+  assert.match(leagueHq, /\['\/leagues', leagueId, 'players'\][\s\S]*?<strong>Add \/ Drop<\/strong>/);
+  assert.match(standings, /\['\/leagues', leagueId, 'players'\][\s\S]*?>\s*Add \/ Drop\s*</);
+  assert.match(unifiedTemplate, /\['\/leagues', leagueId, 'players', row\.assetKey\]/);
+  assert.match(unifiedTemplate, />Point Leaders<\/a>/);
   assert.match(detailTemplate, /\['\/leagues', leagueId, 'players'\]/);
-  assert.match(detailTemplate, /Back to Player Board/);
+  assert.match(detailTemplate, /Back to Add \/ Drop/);
 });
 
-test('Player Board uses bounded one-time sources, a short route cache, and progressive mobile rendering', async () => {
+test('the unified page reuses bounded A1B board sources and progressive mobile rendering', async () => {
   const [service, component, template, styles, draftService] = await Promise.all([
     read('src/app/core/player/league-player-board.service.ts'),
-    read('src/app/features/players/league-player-board/league-player-board.ts'),
-    read('src/app/features/players/league-player-board/league-player-board.html'),
-    read('src/app/features/players/league-player-board/league-player-board.css'),
+    read('src/app/features/free-agents/free-agents.ts'),
+    read('src/app/features/free-agents/free-agents.html'),
+    read('src/app/features/free-agents/free-agents.css'),
     read('src/app/core/draft/draft.service.ts'),
   ]);
 
@@ -242,21 +241,21 @@ test('Player Board uses bounded one-time sources, a short route cache, and progr
   assert.match(service, /forceRefresh/);
   assert.doesNotMatch(service, /\b(?:setDoc|updateDoc|deleteDoc|onSnapshot)\s*\(/);
   assert.match(draftService, /export async function getPublicLeagueWaiversOnce/);
-  assert.match(component, /const PAGE_SIZE = 50/);
+  assert.match(component, /const UNIFIED_PLAYER_PAGE_SIZE = 50/);
   assert.match(component, /getPlayerWatchlist/);
   assert.match(component, /setPlayerWatchlistEntry/);
-  assert.match(component, /status === 'reserved'/);
-  assert.match(component, /try \{[\s\S]*?await this\.loadData\(true\);[\s\S]*?finally \{[\s\S]*?this\.refreshing\.set\(false\)/);
-  assert.match(template, /Show \{\{ hiddenRowCount\(\) > 50 \? 50 : hiddenRowCount\(\) \}\} more/);
+  assert.match(component, /boardStatusFilter = signal<LeaguePlayerBoardStatusFilter>\('free-agent'\)/);
+  assert.match(component, /boardSortMode = signal<LeaguePlayerBoardSortMode>\('next-six'\)/);
+  assert.match(template, /Show \{\{ hiddenBoardRowCount\(\) > 50 \? 50 : hiddenBoardRowCount\(\) \}\} more/);
   assert.match(template, /Overall/);
   assert.match(template, /\{\{ row\.position \}\} rank/);
-  assert.match(template, /Unavailable \(\{\{ reservedCount\(\) \}\}\)/);
-  assert.match(styles, /\.player-watch \{[^}]*min-width:\s*88px/);
-  assert.match(styles, /@media \(max-width: 620px\)/);
-  assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
+  assert.match(template, /Unavailable \(\{\{ unavailableBoardCount\(\) \}\}\)/);
+  assert.match(styles, /unified-watch-button/);
+  assert.match(styles, /@media \(max-width: 560px\)/);
+  assert.doesNotMatch(styles, /backdrop-filter/i);
 });
 
-test('Player Intel uses real Projection V11 fields with progressive sections instead of one dense page', async () => {
+test('Player Intel keeps real Projection V11 fields and returns to the unified Add / Drop surface', async () => {
   const [component, template, styles] = await Promise.all([
     read('src/app/features/players/league-player-detail/league-player-detail.ts'),
     read('src/app/features/players/league-player-detail/league-player-detail.html'),
@@ -280,20 +279,20 @@ test('Player Intel uses real Projection V11 fields with progressive sections ins
   assert.match(template, />Schedule<\/button>/);
   assert.match(template, /Fantasy point breakdown/);
   assert.match(template, /Six-game opportunity/);
-  assert.match(template, /'free-agents'/);
+  assert.match(template, /Back to Add \/ Drop/);
   assert.match(styles, /player-intel-watch[\s\S]*?min-height:\s*44px/);
   assert.match(styles, /player-intel-tabs[\s\S]*?grid-template-columns/);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
 });
 
-test('Available-player and scoring-leader names link directly into league-aware Player Intel', async () => {
+test('unified player rows, roster candidates, and scoring leaders link into league-aware Player Intel', async () => {
   const [freeAgents, leaders] = await Promise.all([
     read('src/app/features/free-agents/free-agents.html'),
     read('src/app/features/leaders/point-leaders/point-leaders.html'),
   ]);
 
-  assert.match(freeAgents, /\['\/leagues', leagueId, 'players', asset\.assetKey\]/);
-  assert.match(freeAgents, /\['\/leagues', leagueId, 'players', waiver\.asset\.assetKey\]/);
+  assert.match(freeAgents, /\['\/leagues', leagueId, 'players', row\.assetKey\]/);
+  assert.match(freeAgents, /\['\/leagues', leagueId, 'players', outgoing\.assetKey\]/);
   assert.match(leaders, /\['\/leagues', leagueId, 'players', row\.assetKey\]/);
 });
 
@@ -340,7 +339,7 @@ test('A1B preserves scoring, Projection V11, Rules, indexes, and inactive safety
   assert.equal(cache.authoritativeReadsEnabled, false);
 });
 
-test('A1B advances release operations to RC40 and permanently records the feature', async () => {
+test('A1B remains permanently recorded while current release operations advance through A1C', async () => {
   const [runtime, productionRuntime, freezeSource, packageSource, roadmap, docsRoadmap, docs, readme, runbook] = await Promise.all([
     read('src/environments/app-runtime.config.ts'),
     read('src/environments/app-runtime.config.production.ts'),
@@ -355,22 +354,22 @@ test('A1B advances release operations to RC40 and permanently records the featur
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 40/);
-  assert.match(productionRuntime, /Release Candidate 40/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 40');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1b');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc40-invite-beta');
+  assert.match(runtime, /Release Candidate 41/);
+  assert.match(productionRuntime, /Release Candidate 41/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 41');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1c');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc41-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1b:core'], /verify:batcha1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1b:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1c:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.31/);
+  assert.match(roadmap, /Version 1\.32/);
   assert.match(roadmap, /# \[x\] A1\.12 Add a league-wide Player Board/);
   assert.match(roadmap, /# \[x\] LOG\.49 2026-08-17/);
   assert.match(docs, /Hosting only/);
   assert.match(docs, /reserved/i);
-  assert.match(readme, /Release Candidate 40 \/ Product Batch A1B/);
+  assert.match(readme, /Release Candidate 41 \/ Product Batch A1C/);
   assert.match(readme, /RINKRAT_PRODUCT_A1B_PLAYER_BOARD\.md/);
-  assert.match(runbook, /npm run verify:batcha1b/);
-  assert.match(runbook, /rinkrat-rc40-validation\.json/);
-  assert.match(runbook, /rinkrat-rc40-invite-beta/);
+  assert.match(runbook, /npm run verify:batcha1c/);
+  assert.match(runbook, /rinkrat-rc41-validation\.json/);
+  assert.match(runbook, /rinkrat-rc41-invite-beta/);
 });

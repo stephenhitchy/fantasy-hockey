@@ -268,29 +268,28 @@ test('My Team uses explicit mobile Manage actions without nested clickable roste
   assert.match(styles, /grid-template-columns:\s*1fr/);
 });
 
-test('Available Players uses a focused compare-and-confirm sheet with exact timing', async () => {
+test('Add / Drop uses a focused player-board flow with exact timing and valid roster choices', async () => {
   const [template, source, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.html'),
     read('src/app/features/free-agents/free-agents.ts'),
-    read('src/rinkrat-mobile-roster-v1.css'),
+    read('src/app/features/free-agents/free-agents.css'),
   ]);
 
   for (const required of [
-    'Available Now',
+    'Add / Drop',
+    'Free agents',
+    'All players',
+    'Rostered',
     'Waivers',
-    'Compare',
-    'Why this incoming projection?',
-    'Transaction Workbench',
-    'Choose Who This Player Replaces',
-    'Final Timing Decision',
-    'Exact First Legal Start',
-    'free-agent-sheet-actions',
+    'Next 6 projection',
+    'Select a player to drop or an open slot',
+    'Selected move',
     'pending-roster-moves',
   ]) {
     assert.match(template, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 
-  assert.match(template, /getWaiverActionLabel\(waiver\)/);
+  assert.match(template, /getBoardActionLabel\(row\)/);
   assert.match(source, /Review Your Claim/);
   assert.match(source, /Compare & Claim/);
   assert.match(source, /sessionStorage\.setItem/);
@@ -300,12 +299,10 @@ test('Available Players uses a focused compare-and-confirm sheet with exact timi
   assert.match(source, /getConfirmationTimingTitle/);
   assert.match(source, /!this\.isBenchCandidateReservedForActiveSwap\(slot\)/);
   assert.match(source, /A direct handoff from My Team represents a new roster task/);
-  assert.match(template, /role="group" aria-label="Available player type"/);
-  assert.equal((template.match(/aria-pressed/g) ?? []).length, 5);
   assert.match(template, /id="pending-roster-moves"[\s\S]*tabindex="-1"/);
-  assert.match(styles, /position:\s*sticky/);
-  assert.match(styles, /\.free-agent-sheet-buttons/);
-  assert.doesNotMatch(template, /View six-game status & full stats/i);
+  assert.match(styles, /@media \(max-width: 560px\)/);
+  assert.match(styles, /min-height:\s*var\(--rr-mobile-control-min-height\)/);
+  assert.doesNotMatch(template, /role="dialog"|appViewportOverlayPortal|View six-game status & full stats/i);
 });
 
 test('shared action sheet is an accessible desktop dialog and mobile bottom sheet', async () => {

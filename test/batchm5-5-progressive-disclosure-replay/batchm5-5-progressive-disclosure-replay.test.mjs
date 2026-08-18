@@ -158,22 +158,17 @@ test('a newly saved replay error releases the local request while preserving the
   assert.equal(failed.state, 'error');
 });
 
-test('the transaction workbench presents the decision summary before optional detail', async () => {
+test('the unified transaction workbench presents the incoming decision before roster choices and optional timing detail', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
-  assert.match(template, /incoming-scout-card/);
-  assert.match(template, /View exact games/);
-  assert.match(template, /View point formula/);
-  assert.match(template, /@if \(incomingScheduleExpanded\(\)\)[\s\S]*incoming-six-game-details/);
-  assert.match(template, /@if \(incomingScoringExpanded\(\)\)[\s\S]*incoming-season-formula/);
-  assert.ok(template.indexOf('candidate-impact-strip') < template.indexOf('candidate-details-toggle'));
-  assert.ok(template.indexOf('candidate-start-card') < template.indexOf('candidate-details-toggle'));
-  assert.match(template, /@if \(isCandidateDetailsExpanded\(candidate\)\)[\s\S]*candidate-expanded-details/);
-  assert.match(template, /Directly Comparable Options/);
-  assert.match(template, /Show other bench options/);
-  assert.match(template, /@if \(showFlexibleBenchOptions\(\)\)/);
-  assert.match(template, /View first six scheduled games/);
-  assert.match(template, /@if \(startWindowScheduleExpanded\(\)\)/);
+  assert.ok(template.indexOf('transaction-incoming-row') < template.indexOf('transaction-roster-heading'));
+  assert.match(template, /getMoveSummary\(\)/);
+  assert.match(template, /getSelectedAssetCycleHeadline\(\)/);
+  assert.match(template, /getSelectedAssetCycleDetail\(\)/);
+  assert.match(template, /@for \(candidate of dropCandidates\(\)/);
+  assert.match(template, /<details class="transaction-timing-details">/);
+  assert.match(template, /getConfirmationTimingTitle\(\)/);
+  assert.match(template, /getConfirmationTimingDetail\(\)/);
 });
 
 test('only one replacement comparison is expanded at a time and disclosure state resets between moves', async () => {
@@ -193,10 +188,11 @@ test('only one replacement comparison is expanded at a time and disclosure state
 test('the final decision is compact and avoids repeating two full player cards', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
-  assert.match(template, /Final Move Summary/);
-  assert.match(template, /selected-final-copy/);
-  assert.match(template, /getMoveProjectionDeltaLabel\('NEXT_CYCLE'\)/);
-  assert.match(template, /getMoveProjectionDeltaLabel\('REST_OF_SEASON'\)/);
+  assert.match(template, /transaction-confirmation/);
+  assert.match(template, /Selected move/);
+  assert.match(template, /getMoveSummary\(\)/);
+  assert.match(template, /getTopConfirmationDetail\(\)/);
+  assert.match(template, /getConfirmButtonLabel\(\)/);
   assert.doesNotMatch(template, /class="transaction-player-pair"/);
   assert.doesNotMatch(template, /class="transaction-player-outgoing selected-final-player"/);
 });
@@ -226,8 +222,8 @@ test('other dense decision surfaces continue using progressive disclosure', asyn
 
   assert.match(gameFilm, /<details class="projection-metadata-card">/);
   assert.match(gameFilm, /<details class="breakdown-details">/);
-  assert.match(freeAgents, /<details class="decision-details selected-decision-details projection-explanation-details">/);
-  assert.match(freeAgents, /<details class="transaction-workbench-help">/);
+  assert.match(freeAgents, /<details class="transaction-timing-details">/);
+  assert.doesNotMatch(freeAgents, /role="dialog"|app-action-sheet|viewport-overlay/i);
 });
 
 test('M5.5 verification and documentation are available', async () => {

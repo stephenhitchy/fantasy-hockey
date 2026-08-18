@@ -86,7 +86,7 @@ test('the account-wide watchlist is server-owned and scoped only by authenticate
   assert.match(deletion, /managerWatchlistSnapshot\.exists/);
 });
 
-test('Free Agents exposes a compact watched filter and watch controls without another explanatory wall', async () => {
+test('the unified Add / Drop board exposes a compact watched filter and watch controls without another explanatory wall', async () => {
   const [component, template, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
@@ -94,14 +94,14 @@ test('Free Agents exposes a compact watched filter and watch controls without an
   ]);
 
   assert.match(component, /void this\.loadWatchlist\(\)/);
-  assert.match(component, /watchlistOnly = signal\(false\)/);
+  assert.match(component, /boardStatusFilter = signal<LeaguePlayerBoardStatusFilter>\('free-agent'\)/);
   assert.match(component, /setPlayerWatchlistEntry/);
-  assert.match(component, /filter\(\(asset\) => !watchlistOnly \|\| watchedAssetKeys\.has\(asset\.assetKey\)\)/);
-  assert.match(template, /Watched \{\{ watchedAssetKeys\(\)\.size \}\}/);
+  assert.match(component, /toggleAssetWatchlist/);
+  assert.match(template, /value="watched">Watched/);
   assert.match(template, /Watching' : 'Watch'/);
-  assert.match(template, /toggleAssetWatchlist\(asset\)/);
+  assert.match(template, /toggleAssetWatchlist\(row\.asset\)/);
   assert.doesNotMatch(template, /Only the most useful comparison numbers stay visible/);
-  assert.match(styles, /\.watchlist-filter,[\s\S]*?min-height:\s*44px/);
+  assert.match(styles, /unified-player-actions[\s\S]*?min-height:\s*var\(--rr-mobile-control-min-height\)/);
 });
 
 test('Draft Room watchlists remain independent from the private auto-draft queue', async () => {
@@ -202,15 +202,15 @@ test('A1A advances release operations to RC39 with one inherited verification ga
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 40/);
-  assert.match(productionRuntime, /Release Candidate 40/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 40');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1b');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc40-invite-beta');
+  assert.match(runtime, /Release Candidate 41/);
+  assert.match(productionRuntime, /Release Candidate 41/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 41');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1c');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc41-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /audit:product-copy-density/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1b:core/);
-  assert.match(releaseScript, /rinkrat-rc40-invite-beta/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1c:core/);
+  assert.match(releaseScript, /rinkrat-rc41-invite-beta/);
   assert.match((await read('functions/package.json')), /getPlayerWatchlist,setPlayerWatchlistEntry,deleteMyAccount/);
 });
 
@@ -224,7 +224,7 @@ test('roadmap and documentation complete A1.5 and record the Clear Ice product p
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.31/);
+  assert.match(roadmap, /Version 1\.32/);
   assert.match(roadmap, /# \[x\] A1\.5 Add watchlists independent of Draft queues/);
   assert.match(roadmap, /# \[x\] A1\.11/);
   assert.match(roadmap, /# \[x\] LOG\.48 2026-08-17/);
@@ -232,9 +232,9 @@ test('roadmap and documentation complete A1.5 and record the Clear Ice product p
   assert.match(docs, /Seventeen manager-facing templates/i);
   assert.match(docs, /Functions-first deployment/);
   assert.match(docs, /functions:getPlayerWatchlist,functions:setPlayerWatchlistEntry,functions:deleteMyAccount/);
-  assert.match(readme, /Release Candidate 40 \/ Product Batch A1B/);
+  assert.match(readme, /Release Candidate 41 \/ Product Batch A1C/);
   assert.match(readme, /RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcha1b/);
-  assert.match(releaseRunbook, /rinkrat-rc40-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc40-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1c/);
+  assert.match(releaseRunbook, /rinkrat-rc41-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc41-invite-beta/);
 });

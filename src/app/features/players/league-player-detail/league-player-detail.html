@@ -2,9 +2,9 @@
   <a
     class="league-return-link"
     [routerLink]="['/leagues', leagueId, 'players']"
-    aria-label="Back to Player Board"
+    aria-label="Back to Add / Drop"
   >
-    Back to Player Board
+    Back to Add / Drop
   </a>
 
   @if (loading()) {
@@ -40,8 +40,8 @@
 
         <div class="player-intel-action-buttons">
           @if (canOpenFreeAgents()) {
-            <a class="player-intel-secondary-action" [routerLink]="['/leagues', leagueId, 'free-agents']">
-              Free Agents
+            <a class="player-intel-secondary-action" [routerLink]="['/leagues', leagueId, 'players']">
+              Add / Drop
             </a>
           }
           <button

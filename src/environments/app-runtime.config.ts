@@ -1,7 +1,7 @@
 import { AppRuntimeConfig } from './app-runtime.types';
 
 export const APP_RUNTIME_CONFIG: AppRuntimeConfig = {
-  releaseLabel: 'Release Candidate 40',
+  releaseLabel: 'Release Candidate 41',
   scoringMode: 'live',
   historicalScoringDateIso: null,
   developerToolsEnabled: true,

@@ -13,69 +13,66 @@ async function sha256(relativePath) {
   return createHash('sha256').update(await read(relativePath)).digest('hex');
 }
 
-test('the transaction workbench uses the scrollable-chrome action-sheet mode', async () => {
-  const [sheetSource, sheetTemplate, sheetStyles, freeAgentTemplate] = await Promise.all([
-    read('src/app/shared/action-sheet/action-sheet.ts'),
-    read('src/app/shared/action-sheet/action-sheet.html'),
-    read('src/app/shared/action-sheet/action-sheet.css'),
+test('the unified transaction workbench is page-native and vertically scrollable', async () => {
+  const [template, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.html'),
+    read('src/app/features/free-agents/free-agents.css'),
   ]);
 
-  assert.match(sheetSource, /@Input\(\) scrollChrome = false/);
-  assert.match(sheetTemplate, /rr-action-sheet--scroll-chrome/);
-  assert.match(sheetTemplate, /data-overlay-scroll-root/);
-  assert.match(sheetStyles, /\.rr-action-sheet--scroll-chrome[\s\S]*overflow-y:\s*auto/);
-  assert.match(sheetStyles, /\.rr-action-sheet--scroll-chrome \.rr-action-sheet__content[\s\S]*overflow:\s*visible/);
-  assert.match(freeAgentTemplate, /\[scrollChrome\]="true"/);
+  assert.match(template, /<main class="unified-player-page rr-page-shell">/);
+  assert.match(template, /flowStep\(\) === 'player-pool'/);
+  assert.match(template, /transaction-incoming-row/);
+  assert.doesNotMatch(template, /app-action-sheet|data-overlay-scroll-root|scrollChrome/);
+  assert.match(styles, /\.unified-player-page[\s\S]*display:\s*grid/);
+  assert.doesNotMatch(styles, /backdrop-filter/);
 });
 
-test('transaction helper copy remains available but is no longer pinned above the content', async () => {
+test('transaction timing guidance remains concise and available beside the decision', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
-  assert.match(template, /transaction-workbench-help/);
-  assert.match(template, /How RinkRat verifies the move/);
-  assert.match(template, /Incoming Player/);
-  assert.match(template, /verifies the exact six-game timeline for both/);
+  assert.match(template, /RinkRat verifies the exact six-game timeline before confirmation/);
+  assert.match(template, /getSelectedAssetCycleHeadline\(\)/);
+  assert.match(template, /getSelectedAssetCycleDetail\(\)/);
+  assert.match(template, /<details class="transaction-timing-details">/);
   assert.doesNotMatch(template, /description="Review the incoming player first/);
 });
 
-test('replacement choices are full-width vertical cards with no carousel controls', async () => {
+test('replacement choices are full-width vertical player rows with no carousel controls', async () => {
   const [source, template, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
-    read('src/rinkrat-transaction-workbench.css'),
+    read('src/app/features/free-agents/free-agents.css'),
   ]);
 
-  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
-  assert.match(template, /Review each legal roster option below/);
-  assert.match(template, /class="replacement-card-list"/);
+  assert.ok(template.indexOf('transaction-incoming-row') < template.indexOf('transaction-roster-list'));
+  assert.match(template, /class="unified-player-row transaction-roster-row rr-card"/);
+  assert.match(template, /@for \(candidate of dropCandidates\(\)/);
   assert.doesNotMatch(template, /replacement-card-rail|replacement-rail-controls|#replacementRail/);
   assert.doesNotMatch(source, /scrollReplacementRail|ViewChild|ElementRef/);
-  assert.match(styles, /\.replacement-card-list\s*\{[\s\S]*display:\s*grid/);
-  assert.match(styles, /\.replacement-player-card\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(styles, /\.transaction-roster-list[\s\S]*display:\s*grid/);
   assert.doesNotMatch(styles, /grid-auto-flow:\s*column|scroll-snap-type:\s*x mandatory/);
 });
 
-test('mobile workbench favors visible content and readable two-column game cards', async () => {
-  const [sheetStyles, styles] = await Promise.all([
-    read('src/app/shared/action-sheet/action-sheet.css'),
-    read('src/rinkrat-transaction-workbench.css'),
-  ]);
+test('mobile workbench favors visible rows, six-game dots, and stacked actions', async () => {
+  const styles = await read('src/app/features/free-agents/free-agents.css');
 
-  assert.match(sheetStyles, /\.rr-action-sheet\.rr-action-sheet--scroll-chrome\s*\{[\s\S]*max-height:\s*96dvh/);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.workbench-game-strip,[\s\S]*\.compact-game-strip[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /\.transaction-player-pair[\s\S]*grid-template-columns:\s*1fr/);
-  assert.match(styles, /\.selected-candidate-action[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(styles, /@media \(max-width: 760px\)/);
+  assert.match(styles, /\.unified-player-row[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(styles, /\.unified-player-actions[\s\S]*grid-template-columns:/);
+  assert.match(styles, /\.unified-cycle-dots[\s\S]*grid-template-columns:\s*repeat\(3, 20px\)/);
+  assert.match(styles, /min-height:\s*var\(--rr-mobile-control-min-height\)/);
 });
 
-test('the selected roster card offers confirmation without forcing a return to the top', async () => {
+test('the selected roster row uses a separate selection control and compact confirmation section', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
-  assert.match(template, /isSelectedDropCandidate\(candidate\)[\s\S]*selected-candidate-action/);
-  assert.match(template, /selected-candidate-action[\s\S]*confirmAddDrop\(\)/);
-  assert.match(template, /selected-candidate-action[\s\S]*getConfirmButtonLabel\(\)/);
+  assert.match(template, /isSelectedDropCandidate\(candidate\)/);
+  assert.match(template, /getDropCandidateActionLabel\(candidate\)/);
+  assert.match(template, /selectDropCandidate\(candidate\)/);
+  assert.match(template, /@if \(selectedDropCandidate\(\); as selectedCandidate\)/);
+  assert.match(template, /transaction-confirmation[\s\S]*confirmAddDrop\(\)/);
+  assert.match(template, /transaction-confirmation[\s\S]*getConfirmButtonLabel\(\)/);
 });
-
 
 test('M5.4 verification and deployment documentation remain available', async () => {
   const [packageJson, docs] = await Promise.all([

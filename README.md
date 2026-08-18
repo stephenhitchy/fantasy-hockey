@@ -31,19 +31,22 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md) — browser-generated Draft result and current-standings PNG cards, native mobile sharing, desktop fallback, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`](docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md) — account-wide player watchlists independent of Draft queues, watched-only filters, the Clear Ice copy-density pass, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`](docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md) — one league-wide Player Board for rostered, available, waiver, reserved, and watched assets plus real Projection V11 Player Intel, Hosting-only deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md`](docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md) — the unified Add / Drop player directory, same-layout roster selection, six-game trackers, injury return context, replay-driven Projection V11 refresh, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 40 / Product Batch A1B**. A1B turns **Players** into a league-wide Player Board for rostered, available, waiver, unavailable, and privately watched assets. **Point Leaders** remains a separate scoring-history page for completed immutable six-game windows.
+The current source runtime is **Release Candidate 41 / Product Batch A1C**. A1C combines the former Player Board and Add / Drop experiences into one league destination. It opens on free agents sorted by next-six Projection V11 value, while All, Rostered, Waivers, Unavailable, Watched, and position-specific views remain available.
 
-Selecting a row opens real **Player Intel** from the current verified Projection V11 snapshot. The compact header shows current-season points, overall rank, position rank, ownership, and next-six outlook; Overview, Stats, Projection, and Schedule sections reveal deeper information only when requested. The old mock player detail is not used by league navigation.
+Every row keeps the Player Board presentation, adds the current Matchup number and six-game tracker, shows injury status and return context, and links to Player Intel. Add or Claim opens an inline second step with only the signed-in manager's valid roster players or open slots, using the same row layout rather than a separate modal or visually unrelated decision page.
 
-A1A's private account-wide Player Watchlist and Clear Ice copy-density pass remain intact, along with C1L share cards, C1K Identity Architect, League Wire, and the emoji-only mobile picker.
+Historical replay now queues a non-blocking Projection V11 rebuild after a released NHL day. The Add / Drop page follows the exact current projection pointer and reloads season points, ranks, injuries, projections, and game markers when the fresh snapshot publishes. Scoring completion remains authoritative even when projection refresh later fails.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1b`.
+Point Leaders remains the focused page for finalized immutable six-game-window scoring history. A1A Watchlists, A1B Player Intel, the Clear Ice copy pass, share cards, Identity Architect, and League Wire remain intact.
+
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1c`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -94,6 +97,7 @@ verify:batchc1k
 verify:batchc1l
 verify:batcha1a
 verify:batcha1b
+verify:batcha1c
 ```
 
 RinkRat pins:
@@ -113,7 +117,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1b
+npm run verify:batcha1c
 ```
 
 After verification and a clean commit:
@@ -622,3 +626,14 @@ The apply command is idempotent but is not required after every ordinary deploym
 ```bash
 npm run security:sync-ttl-index-config -- --check
 ```
+
+
+## Product Batch A1C — Unified Add / Drop and Replay-Fresh Player Data
+
+A1C retires the duplicate Player Board route component and makes **Add / Drop** the single league player directory. Free agents are the default view and next-six projection is the default sort. Managers can still browse every rostered, waiver, unavailable, watched, or position-specific player, open Player Intel, and make a secure roster decision from the same surface.
+
+The incoming player and valid outgoing roster choices use the same mobile-first player-row format. Each player row includes Matchup number, six numbered game markers, season points, ranks or projections, availability status, and a return date when known. The existing server-authoritative transaction and waiver callables remain the only competitive writers.
+
+Historical replay scoring queues an asynchronous Projection V11 refresh after NHL games are released. An exact current-pointer listener reloads the unified page only when a new verified snapshot becomes authoritative. A catch-up check queues a newer snapshot when another replay day moved ahead during an existing projection build. The refresh never rolls back or blocks completed scoring.
+
+Full verification, targeted deployment, site-first proof, and rollback guidance are maintained in `docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md`.

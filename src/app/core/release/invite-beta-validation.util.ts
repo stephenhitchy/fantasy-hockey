@@ -276,7 +276,7 @@ export const INVITE_BETA_VALIDATION_DEFINITIONS: readonly InviteBetaValidationDe
     groupId: 'mobile',
     title: 'Test the core phone-width matrix',
     instruction: 'Run representative flows at 320, 390, and 430 pixels in Mobile Safari and Mobile Chrome.',
-    evidenceHint: 'Draft, Game Center, My Team, Available Players, and dialogs remain readable without unintended horizontal page scrolling.',
+    evidenceHint: 'Draft, Game Center, My Team, Add / Drop, and dialogs remain readable without unintended horizontal page scrolling.',
     required: true,
   },
   {

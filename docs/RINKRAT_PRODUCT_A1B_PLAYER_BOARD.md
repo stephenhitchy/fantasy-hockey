@@ -8,7 +8,7 @@
 
 ## Purpose
 
-A1B gives each league one searchable **Player Board** containing rostered players, free agents, active waivers, privately watched assets, and pending incoming assets shown only as unavailable. **Point Leaders** remains a separate scoring-history surface for completed immutable six-game windows.
+A1B gives each league one searchable **Player Board** containing rostered players, free agents, active waivers, privately watched assets, and pending incoming assets shown only as reserved. Point Leaders remains a separate focused destination for finalized immutable six-game-window scoring history.
 
 League navigation now uses:
 
@@ -31,14 +31,14 @@ Each row can show:
 - player or Team Goalie Unit;
 - NHL team and exact position;
 - rostered fantasy team plus active, bench, or IR area;
-- free-agent, waiver, or unavailable state;
+- free-agent, waiver, or reserved state;
 - current-season fantasy points;
 - overall season rank across every draftable position;
 - exact-position season rank;
 - next-six availability-adjusted projection;
 - private watched state.
 
-Search covers player, NHL team, fantasy team, and manager name. Filters cover position, rostered, available, waivers, unavailable, and watched. Sorts cover season points, next-six projection, overall rank, position rank, rest-of-season projection, reliability, and name.
+Search covers player, NHL team, fantasy team, and manager name. Filters cover position, rostered, available, waivers, reserved, and watched. Sorts cover season points, next-six projection, overall rank, position rank, rest-of-season projection, reliability, and name.
 
 The first 50 rows render initially. **Show more** reveals the next 50 inline. A 30-second route cache lets a manager open Player Intel and return without immediately repeating every bounded roster read. Manual **Refresh** bypasses that cache.
 
@@ -46,7 +46,7 @@ The first 50 rows render initially. **Show more** reveals the next 50 inline. A 
 
 Current roster ownership is already member-readable league information, so the board may show the fantasy team and active, bench, or IR area.
 
-A pending incoming asset is competition-sensitive. The board labels it only as **Unavailable**. It never identifies the destination manager, destination slot, outgoing asset, transaction document, or activation timing.
+A pending incoming asset is competition-sensitive. The board labels it only as **Reserved by pending move**. It never identifies the destination manager, destination slot, outgoing asset, transaction document, or activation timing.
 
 The Watchlist remains private and server-owned through the existing A1A callable authority.
 
@@ -58,7 +58,7 @@ The default header keeps only the highest-value information visible:
 - overall rank across all positions;
 - exact-position rank;
 - next-six projection and likely range;
-- roster, waiver, unavailable, or free-agent status;
+- roster, waiver, reserved, or free-agent status;
 - Watchlist state.
 
 Deeper information is separated into four inline, non-sticky sections.
@@ -97,7 +97,7 @@ Unavailable fields display honestly as `—`; the browser does not invent missin
 
 - League HQ, League Standings, and the mobile bottom navigation open **Players**.
 - Player names in Free Agents and Waivers open Player Intel without another large card action.
-- **Point Leaders** remains available at `/leagues/{leagueId}/leaders` for finalized six-game scoring-window history.
+- Point Leaders remains available as a separate scoring-history page.
 
 ## Data and performance
 
@@ -158,7 +158,7 @@ Do not deploy Functions, Firestore Rules, indexes, TTL, App Check, scoring-queue
 ## Site-first smoke test
 
 1. Open League HQ and select **Players**.
-2. Confirm known active, bench, IR, free-agent, waiver, unavailable, and watched assets show the correct state.
+2. Confirm known active, bench, IR, free-agent, waiver, reserved, and watched assets show the correct state.
 3. Search by player, NHL team, and fantasy-team name.
 4. Sort by season points, overall rank, position rank, and next-six projection.
 5. Open a rostered player and confirm the fantasy team and roster area are correct.
@@ -166,9 +166,9 @@ Do not deploy Functions, Firestore Rules, indexes, TTL, App Check, scoring-queue
 7. Open Overview, Stats, Projection, and Schedule and confirm each section stays compact and uses real data.
 8. Watch or unwatch the player and confirm the state persists in Players, Draft Room, and Free Agents.
 9. Open a player directly from Free Agents or Waivers.
-10. Confirm an unavailable pending incoming asset does not reveal its destination manager or slot.
+10. Confirm a reserved pending incoming asset does not reveal its destination manager or slot.
 11. Check a Team Goalie Unit and confirm it remains clearly labeled as a unit.
-12. Open **Point Leaders** and confirm finalized six-game scoring history remains separate from the current Player Board.
+12. Open Point Leaders and confirm it remains separate finalized six-game-window history rather than duplicating the current Player Board.
 13. On a narrow phone, confirm filters stack, rows remain readable, **Show more** works, and the profile sections do not create a modal, overlay, or sticky obstruction.
 
 When those visible checks pass, no routine Function logs, TTL inspection, NHL-cache inspection, or global deployment listing is required.

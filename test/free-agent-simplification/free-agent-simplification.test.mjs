@@ -26,71 +26,73 @@ test('League HQ places team identity before the most-used page grid', async () =
   assert.ok(html.indexOf('id="invite-code-title"') < identity);
 });
 
-test('free-agent cards lead with three decision metrics instead of every projection value', async () => {
+test('unified player rows lead with the six-game tracker and four compact decision metrics', async () => {
   const html = await source(htmlPath);
-  const card = cardSlice(html, '@for (asset of availableAssets()', '</article>');
-  const details = card.indexOf('<details class="decision-details');
-  const defaultView = card.slice(0, details);
+  const start = html.indexOf('@for (row of visibleBoardRows()');
+  const end = html.indexOf('</article>', start);
+  assert.ok(start >= 0 && end > start);
+  const row = html.slice(start, end);
 
-  assert.match(defaultView, /Season points/);
-  assert.match(defaultView, /Next 6 games/);
-  assert.match(defaultView, /Rest of season/);
-  assert.doesNotMatch(defaultView, /Estimated final/);
-  assert.equal((defaultView.match(/decision-metric-grid--primary/g) ?? []).length, 1);
+  assert.match(row, /unified-cycle-dots/);
+  assert.match(row, />Season<\/small>/);
+  assert.match(row, />Overall<\/small>/);
+  assert.match(row, /rank<\/small>/);
+  assert.match(row, />Next 6<\/small>/);
+  assert.doesNotMatch(row, /Estimated final|Rest of season/);
 });
 
-test('waiver cards use the same compact decision hierarchy', async () => {
-  const html = await source(htmlPath);
-  const card = cardSlice(html, '@for (waiver of availableWaivers()', '</article>');
-  const details = card.indexOf('<details class="decision-details');
-  const defaultView = card.slice(0, details);
-
-  for (const label of ['Season points', 'Next 6 games', 'Rest of season']) {
-    assert.match(defaultView, new RegExp(label));
-  }
-  assert.match(defaultView, /selectWaiver\(waiver\)/);
-  assert.match(defaultView, /processLeagueWaiver\(waiver\)/);
-});
-
-test('exact six-game schedules and estimated final totals remain available after selecting a player', async () => {
-  const html = await source(htmlPath);
-  const listEnd = html.indexOf('<app-action-sheet');
-  const listMarkup = html.slice(0, listEnd);
-  const comparisonMarkup = html.slice(listEnd);
-
-  assert.doesNotMatch(listMarkup, /workbench-game-strip-section/);
-  assert.equal((comparisonMarkup.match(/workbench-game-strip-section/g) ?? []).length, 1);
-  assert.equal((comparisonMarkup.match(/Estimated final total/g) ?? []).length, 1);
-  assert.match(comparisonMarkup, /incomingCurrentComparisonGames\(\)/);
-  assert.match(comparisonMarkup, /incomingStartComparisonGames\(\)/);
-  assert.match(comparisonMarkup, /Why this incoming projection\?/);
-});
-
-test('the full current-season scoring breakdown is preserved in the comparison sheet', async () => {
+test('waiver and free-agent rows use the same compact hierarchy and gated action area', async () => {
   const html = await source(htmlPath);
 
-  assert.match(html, /Raw NHL totals → RinkRat fantasy points/);
-  assert.match(html, /getStatBreakdown\(addAsset\)/);
-  assert.match(html, /Raw NHL totals → RinkRat fantasy points/);
-  assert.match(html, /getCandidateStatBreakdown\(candidate\)/);
+  assert.match(html, /row\.status === 'free-agent' \|\| row\.status === 'waivers'/);
+  assert.match(html, /getBoardActionLabel\(row\)/);
+  assert.match(html, /startBoardTransaction\(row\)/);
+  assert.match(html, /processLeagueWaiver\(waiver\)/);
+  assert.doesNotMatch(html, /claim count|\d+ claims?/i);
 });
 
-test('the compact cards retain the primary add and waiver actions', async () => {
+test('deep schedules, projections, and statistics remain available through Player Intel', async () => {
+  const [html, detail] = await Promise.all([
+    source(htmlPath),
+    source('src/app/features/players/league-player-detail/league-player-detail.html'),
+  ]);
+
+  assert.match(html, /\['\/leagues', leagueId, 'players', row\.assetKey\]/);
+  assert.match(detail, /Overview/);
+  assert.match(detail, /Stats/);
+  assert.match(detail, /Projection/);
+  assert.match(detail, /Schedule/);
+  assert.match(detail, /nextSixProjection/);
+  assert.match(detail, /statBreakdown\(\)/);
+});
+
+test('the transaction step keeps exact timing and valid outgoing choices without duplicating the full intel page', async () => {
   const html = await source(htmlPath);
 
-  assert.match(html, /\(click\)="selectAddAsset\(asset\)"/);
-  assert.match(html, /\(click\)="selectWaiver\(waiver\)"/);
-  assert.match(html, /class="choose-slot-button rr-button rr-button--primary"/);
-  assert.match(html, /class="claim-button rr-button rr-button--primary"/);
+  assert.match(html, /transaction-incoming-row/);
+  assert.match(html, /RinkRat verifies the exact six-game timeline before confirmation/);
+  assert.match(html, /@for \(candidate of dropCandidates\(\)/);
+  assert.match(html, /getCandidateActivationLabel\(candidate\)/);
+  assert.match(html, /<details class="transaction-timing-details">/);
+  assert.doesNotMatch(html, /Raw NHL totals → RinkRat fantasy points/);
 });
 
-test('the simplified layout remains responsive and details expand to one column', async () => {
+test('the compact rows retain the primary Add and Claim actions', async () => {
+  const html = await source(htmlPath);
+
+  assert.match(html, /\(click\)="startBoardTransaction\(row\)"/);
+  assert.match(html, /getBoardActionLabel\(row\)/);
+  assert.match(html, /class="rr-button rr-button--primary unified-add-button"/);
+  assert.match(html, /getDropCandidateActionLabel\(candidate\)/);
+});
+
+test('the unified layout remains responsive and player rows collapse cleanly on phones', async () => {
   const css = await source(cssPath);
 
-  assert.match(css, /\.decision-asset-card\s*\{[\s\S]*grid-template-columns:\s*minmax\(230px, 1\.2fr\)[\s\S]*minmax\(330px, 1\.35fr\)[\s\S]*minmax\(170px, 0\.66fr\)/);
-  assert.match(css, /\.decision-metric-grid--primary\s*\{[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.decision-detail-overview\s*\{[\s\S]*grid-template-columns:/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.decision-detail-overview,[\s\S]*\.decision-detail-grid[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.unified-player-main\s*\{[\s\S]*grid-template-columns:/);
+  assert.match(css, /\.unified-player-metrics\s*\{[\s\S]*repeat\(4, minmax\(58px, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.unified-player-row\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.unified-player-controls\s*\{[\s\S]*grid-template-columns:\s*1fr/);
 });
 
 test('the simplification changes presentation only', async () => {

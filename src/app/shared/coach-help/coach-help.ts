@@ -133,15 +133,27 @@ export class CoachHelp implements OnDestroy {
       };
     }
 
-    if (url.includes('/free-agents')) {
+    if (/\/leagues\/[^/]+\/players\/[^/]+$/.test(url)) {
+      return {
+        id: 'player-intel',
+        title: 'Player Intel',
+        subtitle: 'Current production, ownership, ranks, and next-six outlook.',
+        tips: [
+          'Overall rank compares every draftable asset; position rank compares the player with the same exact position.',
+          'Watching is a private reminder. It does not add, claim, queue, reserve, or draft the player.',
+        ],
+      };
+    }
+
+    if (/\/leagues\/[^/]+\/(?:players|free-agents)$/.test(url)) {
       return {
         id: 'add_drop',
-        title: 'Scouting & Add/Drop',
-        subtitle: 'Compare production, projection, availability, and timing before making a move.',
+        title: 'Add / Drop',
+        subtitle: 'Browse the league player pool and make one secure roster decision.',
         tips: [
-          'Open the season breakdown to see exactly how current fantasy points were earned.',
           'Green, yellow, and red dots show played, upcoming, and missed games in the current six-game count.',
-          'The confirmation screen tells you whether the transaction happens now or after the affected roster spot finishes its six games.',
+          'Open any player for full stats and ranks; use Add or Claim only when you are ready to choose a valid roster move.',
+          'The final step confirms whether the move happens now or after the affected roster spot finishes its six games.',
         ],
       };
     }
@@ -194,30 +206,6 @@ export class CoachHelp implements OnDestroy {
           'Points For and Points Against explain more than record alone.',
           'The playoff line shows the current qualification boundary.',
           'Standings apply only after a matchup has finalized, never from partial live scores.',
-        ],
-      };
-    }
-
-    if (/\/leagues\/[^/]+\/players\/[^/]+$/.test(url)) {
-      return {
-        id: 'player-intel',
-        title: 'Player Intel',
-        subtitle: 'Current production, league ownership, ranks, and next-six outlook.',
-        tips: [
-          'Overall rank compares every draftable asset; position rank compares the player with the same exact position.',
-          'Watching is a private reminder. It does not add, claim, queue, reserve, or draft the player.',
-        ],
-      };
-    }
-
-    if (/\/leagues\/[^/]+\/players$/.test(url)) {
-      return {
-        id: 'player-board',
-        title: 'Players',
-        subtitle: 'Search rostered, available, waiver, unavailable, and watched assets.',
-        tips: [
-          'Open Player Intel for current stats, position and overall ranks, and the next-six outlook.',
-          'Unavailable means the player is involved in a pending league move; the destination stays private until completion.',
         ],
       };
     }

@@ -1,1004 +1,488 @@
 @if (loading()) {
-  <p class="page-loading">Loading available players...</p>
+  <p class="unified-player-loading">Loading players...</p>
 } @else if (!league()) {
-  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+  <p class="unified-player-loading">{{ errorMessage() || 'League not found.' }}</p>
 } @else {
-  <section class="free-agents-page rr-page-shell">
-    <a
-      class="league-return-link"
-      [routerLink]="['/leagues', leagueId, 'team']"
-      aria-label="Back to My Team"
-    >
-      Back to My Team
-    </a>
+  <main class="unified-player-page rr-page-shell">
+    @if (flowStep() === 'player-pool') {
+      <a class="league-return-link" [routerLink]="['/leagues', leagueId]">Back to League</a>
 
-    <header class="free-agent-hero rr-card rr-card--padded">
-      <div>
-        <span class="eyebrow">Roster Moves</span>
-        <h1>Available Players</h1>
-      </div>
-
-      <div
-        class="status-card rr-badge"
-        [class.status-open]="draft()?.status === 'complete'"
-        [class.status-closed]="draft()?.status !== 'complete'"
-      >
-        <span>Free Agency / Waivers</span>
-        <strong>{{ getDraftStatusText() }}</strong>
-      </div>
-    </header>
-
-    <section class="message-card fairness-card rr-notice rr-notice--info">
-      <strong>Fair six-game timing:</strong>
-      untouched players and roster spots can move now; all others wait for the next legal boundary.
-    </section>
-
-    @if (pendingRosterMoves().length > 0) {
-      <section
-        id="pending-roster-moves"
-        class="pending-moves-card rr-card rr-card--padded"
-        tabindex="-1"
-      >
-        <div class="section-heading stacked-heading rr-section-heading">
-          <div>
-            <span class="eyebrow">Scheduled Moves</span>
-            <h2>Waiting for Fair Activation</h2>
-          </div>
-          <p>Reserved until the selected roster spot can change fairly.</p>
-        </div>
-
-        <div class="pending-move-list">
-          @for (entry of pendingRosterMoves(); track entry.move.id; let index = $index) {
-            <article class="pending-move-row rr-list-row">
-              <span class="pending-slot-label">{{ getPendingMoveSlotLabel(index) }}</span>
-              <div>
-                <strong>{{ getPendingMoveIncomingName(index) }}</strong>
-                <span>replaces {{ getPendingMoveOutgoingName(index) }}</span>
-                <small>{{ getPendingMoveActivationText(index) }}</small>
-              </div>
-              @if (canCancelPendingMove(index)) {
-                <button
-                  type="button"
-                  class="cancel-pending-button rr-button rr-button--quiet"
-                  (click)="cancelPendingMove(index)"
-                  [disabled]="moving()"
-                >
-                  Cancel Move
-                </button>
-              } @else {
-                <span class="pending-status">Waiver award locked</span>
-              }
-            </article>
-          }
-        </div>
-      </section>
-    }
-
-    @if (successMessage()) {
-      <section class="message-card success-card rr-notice rr-notice--success" aria-live="polite">
-        {{ successMessage() }}
-      </section>
-    }
-
-    @if (errorMessage()) {
-      <section class="message-card error-card rr-notice rr-notice--danger" aria-live="assertive">
-        {{ errorMessage() }}
-      </section>
-    }
-
-    <p class="rr-visually-hidden" role="status" aria-live="polite">
-      {{ watchlistStatusMessage() }}
-    </p>
-
-    @if (watchlistErrorMessage()) {
-      <section class="message-card error-card rr-notice rr-notice--danger" role="alert">
-        {{ watchlistErrorMessage() }}
-      </section>
-    }
-
-    <section class="free-agent-list-card player-pool-step rr-card rr-card--padded">
-      <div class="step-heading-row rr-section-heading">
-        <div class="step-number">1</div>
+      <header class="unified-player-header">
         <div>
-          <span class="eyebrow">Choose a Player</span>
-          <h2>Search the Player Pool</h2>
+          <span class="eyebrow">{{ league()?.name || 'RinkRat League' }}</span>
+          <h1>Add / Drop</h1>
+          <p>{{ boardRows().length }} players · {{ getBoardSnapshotLabel() }}</p>
         </div>
 
-        <button
-          type="button"
-          class="refresh-button rr-button rr-button--secondary"
-          (click)="loadPlayerPool()"
-          [disabled]="playerPoolLoading() || moving()"
-        >
-          {{ playerPoolLoading() ? 'Reloading...' : 'Reload Pool' }}
-        </button>
-      </div>
-
-      @if (preferredSlotId()) {
-        <div class="preferred-roster-target rr-notice rr-notice--info">
-          <div>
-            <span class="eyebrow">Opened from My Team</span>
-            <strong>{{ getPreferredRosterTargetLabel() || preferredSlotId() }}</strong>
-          </div>
+        <nav class="unified-player-header-actions" aria-label="Player tools">
+          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'leaders']">Point Leaders</a>
+          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'team']">My Team</a>
           <button
-            type="button"
             class="rr-button rr-button--quiet"
-            (click)="clearPreferredRosterTarget()"
+            type="button"
+            [disabled]="boardRefreshing() || playerPoolLoading()"
+            (click)="refreshBoard()"
           >
-            Clear Target
+            {{ boardRefreshing() || playerPoolLoading() ? 'Refreshing...' : 'Refresh' }}
           </button>
-        </div>
+        </nav>
+      </header>
+
+      @if (draft()?.status !== 'complete') {
+        <p class="rr-notice rr-notice--info" role="status">
+          Add / Drop opens after the Draft is complete. Player browsing and Watchlist tools remain available.
+        </p>
       }
 
-      <div class="free-agent-pool-tabs" role="group" aria-label="Available player type">
-        <button
-          type="button"
-          [attr.aria-pressed]="poolTab() === 'available'"
-          [class.active-pool-tab]="poolTab() === 'available'"
-          (click)="setPoolTab('available')"
-        >
-          <span>Available Now</span>
-          <strong>{{ getPoolTabCount('available') }}</strong>
-        </button>
-        <button
-          type="button"
-          [attr.aria-pressed]="poolTab() === 'waivers'"
-          [class.active-pool-tab]="poolTab() === 'waivers'"
-          (click)="setPoolTab('waivers')"
-        >
-          <span>Waivers</span>
-          <strong>{{ getPoolTabCount('waivers') }}</strong>
-        </button>
-      </div>
+      @if (pendingRosterMoves().length > 0) {
+        <section id="pending-roster-moves" class="unified-pending-moves rr-card rr-card--padded" tabindex="-1">
+          <div class="unified-section-heading">
+            <div>
+              <span class="eyebrow">Scheduled Moves</span>
+              <h2>Waiting for activation</h2>
+            </div>
+            <strong>{{ pendingRosterMoves().length }}</strong>
+          </div>
 
-      <div class="filter-row decision-filter-row rr-toolbar">
-        <label>
-          Search
+          <div class="unified-pending-list">
+            @for (entry of pendingRosterMoves(); track entry.move.id; let index = $index) {
+              <article class="unified-pending-row">
+                <div>
+                  <strong>{{ getPendingMoveIncomingName(index) }}</strong>
+                  <span>replaces {{ getPendingMoveOutgoingName(index) }}</span>
+                  <small>{{ getPendingMoveActivationText(index) }}</small>
+                </div>
+                @if (canCancelPendingMove(index)) {
+                  <button
+                    type="button"
+                    class="rr-button rr-button--quiet"
+                    [disabled]="moving()"
+                    (click)="cancelPendingMove(index)"
+                  >
+                    Cancel
+                  </button>
+                } @else {
+                  <span class="unified-pending-locked">Waiver award locked</span>
+                }
+              </article>
+            }
+          </div>
+        </section>
+      }
+
+      @if (successMessage()) {
+        <p class="rr-notice rr-notice--success" aria-live="polite">{{ successMessage() }}</p>
+      }
+
+      @if (errorMessage()) {
+        <p class="rr-notice rr-notice--danger" aria-live="assertive">{{ errorMessage() }}</p>
+      }
+
+      <p class="rr-visually-hidden" role="status" aria-live="polite">
+        {{ watchlistStatusMessage() }}
+      </p>
+
+      @if (watchlistErrorMessage()) {
+        <p class="rr-notice rr-notice--danger" role="alert">{{ watchlistErrorMessage() }}</p>
+      }
+
+      <section class="unified-player-controls rr-card rr-card--padded" aria-label="Player filters">
+        <label class="rr-field unified-player-search">
+          <span>Search</span>
           <input
-            [ngModel]="searchTerm()"
-            (ngModelChange)="setSearchTerm($event)"
-            placeholder="Search name or team"
-            class="rr-field"
+            type="search"
+            autocomplete="off"
+            placeholder="Player, NHL team, or fantasy team"
+            [value]="searchTerm()"
+            (input)="setSearchTerm($any($event.target).value)"
           />
         </label>
 
-        <label>
-          Position
+        <label class="rr-field">
+          <span>Show</span>
           <select
             class="rr-select"
-            [ngModel]="positionFilter()"
-            (ngModelChange)="setPositionFilter($event)"
+            [value]="boardStatusFilter()"
+            (change)="updateBoardStatus($any($event.target).value)"
           >
-            @for (position of positionFilters; track position) {
-              <option [value]="position">
-                {{ position === 'ALL' ? 'All Positions' : position }}
-              </option>
-            }
+            <option value="free-agent">Free agents ({{ freeAgentBoardCount() }})</option>
+            <option value="all">All players ({{ boardRows().length }})</option>
+            <option value="rostered">Rostered ({{ rosteredBoardCount() }})</option>
+            <option value="waivers">Waivers ({{ waiverBoardCount() }})</option>
+            <option value="reserved">Unavailable ({{ unavailableBoardCount() }})</option>
+            <option value="watched">Watched ({{ watchedBoardCount() }})</option>
           </select>
         </label>
 
-        <label>
-          Sort by
-          <select class="rr-select" [ngModel]="sortMode()" (ngModelChange)="setSortMode($event)">
-            @for (option of sortOptions; track option.value) {
-              <option [value]="option.value">{{ option.label }}</option>
-            }
+        <label class="rr-field">
+          <span>Position</span>
+          <select
+            class="rr-select"
+            [value]="boardPositionFilter()"
+            (change)="updateBoardPosition($any($event.target).value)"
+          >
+            <option value="all">All positions</option>
+            <option value="LW">Left wing</option>
+            <option value="C">Center</option>
+            <option value="RW">Right wing</option>
+            <option value="D">Defense</option>
+            <option value="G">Goalie units</option>
           </select>
         </label>
 
-        <button
-          type="button"
-          class="watchlist-filter rr-button rr-button--quiet"
-          [class.watchlist-filter-active]="watchlistOnly()"
-          [attr.aria-pressed]="watchlistOnly()"
-          [disabled]="!watchlistLoaded()"
-          (click)="toggleWatchlistFilter()"
-        >
-          <span aria-hidden="true">★</span>
-          Watched {{ watchedAssetKeys().size }}
-        </button>
+        <label class="rr-field">
+          <span>Sort</span>
+          <select
+            class="rr-select"
+            [value]="boardSortMode()"
+            (change)="updateBoardSort($any($event.target).value)"
+          >
+            <option value="next-six">Next 6 projection</option>
+            <option value="season-points">Season points</option>
+            <option value="overall-rank">Overall rank</option>
+            <option value="position-rank">Position rank</option>
+            <option value="rest-of-season">Rest of season</option>
+            <option value="reliability">Reliability</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </section>
+
+      <div class="unified-player-count" role="status">
+        <strong>{{ filteredBoardRows().length }} results</strong>
       </div>
 
-      @if (poolTab() === 'available') {
-        @if (playerPoolLoading()) {
-          <div class="empty-card rr-state">Loading NHL player pool...</div>
-        } @else if (availableAssets().length === 0) {
-          <div class="empty-card rr-state">No available players match these filters.</div>
-        } @else {
-          <div class="asset-list compact-player-pool">
-            @for (asset of availableAssets().slice(0, 120); track asset.assetKey) {
-              <article
-                class="asset-row decision-asset-card rr-list-row"
-                [class.suspended-asset-row]="isPlayerAvailabilitySuspended(asset)"
-              >
-                <div class="asset-identity-block">
-                  @if (getAssetLogoUrl(asset); as logoUrl) {
-                    <img [src]="logoUrl" [alt]="getAssetTeamLabel(asset) + ' logo'" />
-                  }
-
-                  <div class="asset-main">
-                    <a
-                      class="asset-profile-link"
-                      [routerLink]="['/leagues', leagueId, 'players', asset.assetKey]"
-                    >{{ getAssetName(asset) }}</a>
-                    <span>{{ getAssetTeamLabel(asset) }} · {{ asset.position }}</span>
-
-                    @if (shouldShowPlayerAvailabilityBadge(asset)) {
-                      <div class="player-availability-row">
-                        <span [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)">
-                          <span
-                            class="player-status-tooltip availability-symbol"
-                            role="img"
-                            tabindex="0"
-                            [attr.aria-label]="getPlayerAvailabilityTooltip(asset)"
-                            [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(asset)"
-                            [attr.title]="getPlayerAvailabilityTooltip(asset)"
-                          >{{ getPlayerAvailabilityIcon(asset) }}</span>
-                          {{ getPlayerAvailabilityLabel(asset) }}
-                        </span>
-                        @if (isPlayerAvailabilityIrEligible(asset)) {
-                          <small class="ir-eligible-copy">Injured Reserve eligible</small>
-                        }
-                      </div>
-                    }
-                  </div>
-                </div>
-
-                <div class="decision-metric-grid decision-metric-grid--primary" aria-label="Player decision snapshot">
-                  <div>
-                    <span>Season points</span>
-                    <strong>{{ getDisplayNumber(getCurrentSeasonPoints(asset)) }}</strong>
-                  </div>
-                  <div>
-                    <span>Next 6 games</span>
-                    <strong>{{ getDisplayNumber(getProjectedCyclePoints(asset)) }}</strong>
-                  </div>
-                  <div>
-                    <span>Rest of season</span>
-                    <strong>{{ getDisplayNumber(getRestOfSeasonProjection(asset)) }}</strong>
-                  </div>
-                </div>
-
-                <div class="decision-action-column">
-                  <span [class]="'performance-pill ' + getPerformanceClass(asset)">
-                    {{ getPerformanceLabel(asset) }}
-                  </span>
-                  @if (getCycleRank(asset); as cycleRank) {
-                    <small class="projection-rank-pill">Next-six rank #{{ cycleRank }}</small>
-                  }
-                  <button
-                    type="button"
-                    class="watchlist-button rr-button rr-button--quiet"
-                    [class.watchlist-button-active]="isAssetWatched(asset)"
-                    [attr.aria-pressed]="isAssetWatched(asset)"
-                    [attr.aria-label]="(isAssetWatched(asset) ? 'Remove ' : 'Add ') + getAssetName(asset) + (isAssetWatched(asset) ? ' from watchlist' : ' to watchlist')"
-                    [disabled]="!watchlistLoaded() || isWatchlistSaving(asset)"
-                    (click)="toggleAssetWatchlist(asset)"
-                  >
-                    <span aria-hidden="true">{{ isAssetWatched(asset) ? '★' : '☆' }}</span>
-                    {{ isAssetWatched(asset) ? 'Watching' : 'Watch' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="choose-slot-button rr-button rr-button--primary"
-                    (click)="selectAddAsset(asset)"
-                    [disabled]="draft()?.status !== 'complete' || moving()"
-                  >
-                    Compare
-                  </button>
-                </div>
-              </article>
-            }
-          </div>
-        }
+      @if (playerPoolLoading() && boardRows().length === 0) {
+        <div class="unified-player-state rr-state" role="status">
+          <span class="rr-spinner" aria-hidden="true"></span>
+          <strong>Refreshing players...</strong>
+        </div>
+      } @else if (visibleBoardRows().length === 0) {
+        <div class="unified-player-state rr-state"><strong>No matches.</strong></div>
       } @else {
-        <section class="waiver-tab-panel waiver-queue-card rr-data-panel">
-          <div class="waiver-tab-intro">
-            <div>
-              <span class="eyebrow">Waivers</span>
-              <h3>Claim a player</h3>
-            </div>
-            <p>{{ getWaiverPriorityLabel() }}</p>
-          </div>
+        <section class="unified-player-list" aria-label="League players">
+          @for (row of visibleBoardRows(); track row.assetKey) {
+            <article
+              class="unified-player-row rr-card"
+              [class.unified-player-row-watched]="row.watched"
+              [class.unified-player-row-injured]="shouldShowBoardAvailability(row.asset)"
+            >
+              <a
+                class="unified-player-main"
+                [routerLink]="['/leagues', leagueId, 'players', row.assetKey]"
+                [attr.aria-label]="'Open Player Intel for ' + row.name"
+              >
+                <span class="unified-player-image" aria-hidden="true">
+                  @if (getBoardImageUrl(row); as imageUrl) {
+                    <img [src]="imageUrl" alt="" />
+                  } @else {
+                    <span>{{ row.nhlTeamAbbreviation }}</span>
+                  }
+                </span>
 
-          @if (availableWaivers().length === 0) {
-            <div class="empty-card rr-state">No players on waivers match these filters.</div>
-          } @else {
-            <div class="asset-list compact-player-pool waiver-list">
-              @for (waiver of availableWaivers(); track waiver.id) {
-                <article
-                  class="asset-row decision-asset-card waiver-row rr-list-row"
-                  [class.suspended-asset-row]="isPlayerAvailabilitySuspended(waiver.asset)"
-                >
-                  <div class="asset-identity-block">
-                    @if (getAssetLogoUrl(waiver.asset); as logoUrl) {
-                      <img [src]="logoUrl" [alt]="getAssetTeamLabel(waiver.asset) + ' logo'" />
-                    }
+                <span class="unified-player-identity">
+                  <strong>{{ row.name }}</strong>
+                  <span>{{ row.nhlTeamAbbreviation }} · {{ row.position }}</span>
+                  <small [attr.data-status]="row.status">{{ getBoardStatusLabel(row) }}</small>
 
-                    <div class="asset-main">
-                      <a
-                        class="asset-profile-link"
-                        [routerLink]="['/leagues', leagueId, 'players', waiver.asset.assetKey]"
-                      >{{ getAssetName(waiver.asset) }}</a>
-                      <span>
-                        {{ getAssetTeamLabel(waiver.asset) }} · {{ waiver.asset.position }} ·
-                        {{ getWaiverDroppedByLabel(waiver) }}
-                      </span>
-                      <em>{{ getWaiverClaimLabel(waiver) }}</em>
-
-                      @if (shouldShowPlayerAvailabilityBadge(waiver.asset)) {
-                        <div class="player-availability-row">
-                          <span
-                            [class]="'player-availability-pill ' + getPlayerAvailabilityClass(waiver.asset)"
-                          >
-                            <span
-                              class="player-status-tooltip availability-symbol"
-                              role="img"
-                              tabindex="0"
-                              [attr.aria-label]="getPlayerAvailabilityTooltip(waiver.asset)"
-                              [attr.data-status-tooltip]="getPlayerAvailabilityTooltip(waiver.asset)"
-                              [attr.title]="getPlayerAvailabilityTooltip(waiver.asset)"
-                            >{{ getPlayerAvailabilityIcon(waiver.asset) }}</span>
-                            {{ getPlayerAvailabilityLabel(waiver.asset) }}
-                          </span>
-                        </div>
-                      }
-                    </div>
-                  </div>
-
-                  <div class="decision-metric-grid decision-metric-grid--primary" aria-label="Waiver decision snapshot">
-                    <div>
-                      <span>Season points</span>
-                      <strong>{{ getDisplayNumber(getCurrentSeasonPoints(waiver.asset)) }}</strong>
-                    </div>
-                    <div>
-                      <span>Next 6 games</span>
-                      <strong>{{ getDisplayNumber(getProjectedCyclePoints(waiver.asset)) }}</strong>
-                    </div>
-                    <div>
-                      <span>Rest of season</span>
-                      <strong>{{ getDisplayNumber(getRestOfSeasonProjection(waiver.asset)) }}</strong>
-                    </div>
-                  </div>
-
-                  <div class="decision-action-column">
-                    <span [class]="'performance-pill ' + getPerformanceClass(waiver.asset)">
-                      {{ getPerformanceLabel(waiver.asset) }}
+                  @if (shouldShowBoardAvailability(row.asset)) {
+                    <span [class]="'unified-injury-status ' + getBoardAvailabilityClass(row.asset)">
+                      <strong>{{ getBoardAvailabilityLabel(row.asset) }}</strong>
+                      <small>{{ getBoardAvailabilityReturnLabel(row.asset) }}</small>
                     </span>
-                    <button
-                      type="button"
-                      class="watchlist-button rr-button rr-button--quiet"
-                      [class.watchlist-button-active]="isAssetWatched(waiver.asset)"
-                      [attr.aria-pressed]="isAssetWatched(waiver.asset)"
-                      [attr.aria-label]="(isAssetWatched(waiver.asset) ? 'Remove ' : 'Add ') + getAssetName(waiver.asset) + (isAssetWatched(waiver.asset) ? ' from watchlist' : ' to watchlist')"
-                      [disabled]="!watchlistLoaded() || isWatchlistSaving(waiver.asset)"
-                      (click)="toggleAssetWatchlist(waiver.asset)"
-                    >
-                      <span aria-hidden="true">{{ isAssetWatched(waiver.asset) ? '★' : '☆' }}</span>
-                      {{ isAssetWatched(waiver.asset) ? 'Watching' : 'Watch' }}
-                    </button>
-                    <div class="waiver-action-stack">
-                      <button
-                        type="button"
-                        class="claim-button rr-button rr-button--primary"
-                        (click)="selectWaiver(waiver)"
-                        [disabled]="draft()?.status !== 'complete' || waiver.droppedByOwnerId === userId || moving()"
-                      >
-                        {{ getWaiverActionLabel(waiver) }}
-                      </button>
+                  }
+                </span>
 
-                      @if (isCommissioner()) {
-                        <button
-                          type="button"
-                          class="process-waiver-button rr-button rr-button--secondary"
-                          (click)="processLeagueWaiver(waiver)"
-                          [disabled]="moving()"
-                        >
-                          Process
-                        </button>
+                <span class="unified-cycle-block" [attr.aria-label]="getBoardCycleLabel(row.asset)">
+                  <strong>{{ getBoardCycleLabel(row.asset) }}</strong>
+                  <span class="unified-cycle-dots" aria-hidden="true">
+                    @for (dotIndex of cycleDotSlots; track dotIndex) {
+                      @if (getCurrentCycleMarker(row.asset, dotIndex); as marker) {
+                        <span
+                          [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
+                          [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                        >{{ dotIndex + 1 }}</span>
+                      } @else {
+                        <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
                       }
-                    </div>
-                  </div>
-                </article>
-              }
-            </div>
+                    }
+                  </span>
+                </span>
+
+                <span class="unified-player-metrics">
+                  <span><small>Season</small><strong>{{ formatBoardPoints(row.seasonFantasyPoints) }}</strong></span>
+                  <span><small>Overall</small><strong>{{ formatBoardRank(row.overallRank, row.overallRankCount) }}</strong></span>
+                  <span><small>{{ row.position }} rank</small><strong>{{ formatBoardRank(row.positionRank, row.positionRankCount) }}</strong></span>
+                  <span><small>Next 6</small><strong>{{ formatBoardPoints(row.nextSixProjection) }}</strong></span>
+                </span>
+              </a>
+
+              <div class="unified-player-actions">
+                <button
+                  class="rr-button rr-button--quiet unified-watch-button"
+                  type="button"
+                  [class.unified-watch-button-active]="row.watched"
+                  [disabled]="!watchlistLoaded() || !!watchlistSavingAssetKey()"
+                  [attr.aria-pressed]="row.watched"
+                  (click)="toggleAssetWatchlist(row.asset)"
+                >
+                  {{ watchlistSavingAssetKey() === row.assetKey ? 'Saving...' : row.watched ? 'Watching' : 'Watch' }}
+                </button>
+
+                @if (row.status === 'free-agent' || row.status === 'waivers') {
+                  <button
+                    class="rr-button rr-button--primary unified-add-button"
+                    type="button"
+                    [disabled]="!canStartBoardTransaction(row)"
+                    (click)="startBoardTransaction(row)"
+                  >
+                    {{ getBoardActionLabel(row) }}
+                  </button>
+
+                  @if (getBoardWaiver(row); as waiver) {
+                    @if (isCommissioner()) {
+                      <button
+                        class="rr-button rr-button--secondary unified-process-waiver"
+                        type="button"
+                        [disabled]="moving()"
+                        (click)="processLeagueWaiver(waiver)"
+                      >
+                        Process
+                      </button>
+                    }
+                  }
+                }
+              </div>
+            </article>
           }
         </section>
       }
-    </section>
 
-    @if (selectedAddAsset(); as addAsset) {
-      <app-action-sheet
-        [open]="flowStep() === 'roster-slot'"
-        [title]="(selectedWaiver() ? 'Claim ' : 'Add ') + getAssetName(addAsset)"
-        eyebrow="Step 2 · Transaction Workbench"
-        [busy]="moving()"
-        [wide]="true"
-        [scrollChrome]="true"
-        closeLabel="Return to available players"
-        dialogId="free-agent-roster-sheet-title"
-        (close)="returnToPlayerPool()"
-      >
-        <div
-          action-sheet-top-actions
-          [class]="'free-agent-confirmation-bar ' + getTransactionTimingClass()"
-          aria-live="polite"
-        >
-          <button
-            type="button"
-            class="top-confirm-move-button rr-button rr-button--primary rr-button--commit confirm-move-button"
-            (click)="confirmAddDrop()"
-            [disabled]="!canConfirmMove() || moving()"
-            [attr.data-commit-ready]="canConfirmMove() && !moving() ? 'true' : 'false'"
-          >
-            @if (moving()) {
-              <span class="inline-confirm-spinner" aria-hidden="true"></span>
-            } @else {
-              <span class="rr-commit-mark" aria-hidden="true">✓</span>
-            }
-            <span class="rr-commit-copy">
-              <small>{{ canConfirmMove() ? 'Ready to submit' : 'Final roster action' }}</small>
-              <strong>{{ getConfirmButtonLabel() }}</strong>
-            </span>
-          </button>
-          <div class="top-confirmation-copy">
-            <span>{{ getTransactionDelayLabel() }}</span>
-            <strong>{{ getTopConfirmationDetail() }}</strong>
-          </div>
+      @if (hiddenBoardRowCount() > 0) {
+        <button class="unified-show-more rr-button rr-button--quiet" type="button" (click)="showMoreBoardRows()">
+          Show {{ hiddenBoardRowCount() > 50 ? 50 : hiddenBoardRowCount() }} more
+        </button>
+      }
+    } @else if (selectedAddAsset(); as addAsset) {
+      <button class="unified-back-button rr-button rr-button--quiet" type="button" [disabled]="moving()" (click)="returnToPlayerPool()">
+        Back to Add / Drop
+      </button>
+
+      <header class="transaction-player-header">
+        <div>
+          <span class="eyebrow">{{ selectedWaiver() ? 'Waiver claim' : 'Add player' }}</span>
+          <h1>Choose the roster move</h1>
+          <p>{{ getMoveSummary() }}</p>
         </div>
+      </header>
 
-        <section class="transaction-workbench">
-          @if (!clientHealth.competitiveActionsReady()) {
-            <div class="competitive-action-gate-note" role="status">
-              <span aria-hidden="true">!</span>
-              <p>{{ getCompetitiveActionBlockReason() }}</p>
-            </div>
-          }
+      @if (errorMessage()) {
+        <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+      }
 
-          <details class="transaction-workbench-help">
-            <summary>How RinkRat verifies the move</summary>
-            <div>
-                    <p>RinkRat unlocks confirmation only after it verifies the exact six-game timeline for both the incoming player and the selected roster spot.</p>
-            </div>
-          </details>
-
-          <article class="incoming-scout-card transaction-player-incoming" aria-label="Incoming player report">
-            <header class="workbench-player-header">
-              <div class="workbench-player-identity">
-                @if (getAssetLogoUrl(addAsset); as selectedLogoUrl) {
-                  <img [src]="selectedLogoUrl" [alt]="getAssetTeamLabel(addAsset) + ' logo'" />
-                }
-                <div>
-                  <span class="eyebrow">{{ selectedWaiver() ? 'Waiver Target' : 'Incoming Player' }}</span>
-                  <h2>{{ getAssetName(addAsset) }}</h2>
-                  <p>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</p>
-                </div>
-              </div>
-              <span [class]="'performance-pill ' + getPerformanceClass(addAsset)">
-                {{ getPerformanceLabel(addAsset) }}
-              </span>
-            </header>
-
-            <div class="workbench-metric-grid incoming-metric-grid">
-              <article>
-                <span>Current matchup</span>
-                <strong>{{ getIncomingMatchupNumberLabel() }}</strong>
-                <small>{{ getIncomingGameProgressLabel() }}</small>
-              </article>
-              <article>
-                <span>Season points</span>
-                <strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong>
-                <small>{{ getSeasonGamesLabel(addAsset) }}</small>
-              </article>
-              <article>
-                <span>Recent form</span>
-                <strong>{{ getRecentFormLabel(addAsset) }}</strong>
-                <small>{{ getRecentPaceLabel(addAsset, 10) }} pts/game over last 10</small>
-              </article>
-              <article>
-                <span>Next 6 games</span>
-                <strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong>
-                <small>{{ getExpectedAvailabilityLabel(addAsset) }}</small>
-              </article>
-            </div>
-
-            <section [class]="'eligibility-card incoming-eligibility-card ' + getSelectedAssetCycleClass()">
-              <div class="eligibility-icon">
-                @if (eligibilityLoading()) {
-                  …
-                } @else if (eligibilityError()) {
-                  !
-                } @else if (selectedAssetEligibility()?.currentCycleHasStarted) {
-                  ⏳
-                } @else {
-                  ✓
-                }
-              </div>
-              <div>
-                <span class="eyebrow">Incoming Six-Game Timeline</span>
-                <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
-                <p>{{ getSelectedAssetCycleDetail() }}</p>
-              </div>
-              @if (eligibilityError()) {
-                <button
-                  type="button"
-                  class="retry-button rr-button rr-button--secondary"
-                  (click)="retryEligibilityCheck()"
-                  [disabled]="moving()"
-                >
-                  Retry Check
-                </button>
-              }
-            </section>
-
-            @if (getEligibilityEvaluationLabel(); as evaluationLabel) {
-              <p class="transaction-replay-evaluation-note">{{ evaluationLabel }}</p>
-            }
-
-            <div class="workbench-disclosure-toolbar" aria-label="Incoming player details">
-              <button
-                type="button"
-                class="workbench-disclosure-button"
-                [attr.aria-expanded]="incomingScheduleExpanded()"
-                aria-controls="incoming-six-game-details"
-                (click)="toggleIncomingSchedule()"
-              >
-                <span>Six-game timeline</span>
-                <strong>{{ incomingScheduleExpanded() ? 'Hide exact games' : 'View exact games' }}</strong>
-              </button>
-              <button
-                type="button"
-                class="workbench-disclosure-button"
-                [attr.aria-expanded]="incomingScoringExpanded()"
-                aria-controls="incoming-season-formula"
-                (click)="toggleIncomingScoring()"
-              >
-                <span>Season scoring</span>
-                <strong>{{ incomingScoringExpanded() ? 'Hide full formula' : 'View point formula' }}</strong>
-              </button>
-            </div>
-
-            @if (incomingScheduleExpanded()) {
-              <section
-                id="incoming-six-game-details"
-                class="workbench-collapsible-panel workbench-game-strip-section cycle-decision-block cycle-decision-block--details"
-              >
-                <div class="workbench-section-heading">
-                  <div>
-                    <span class="eyebrow">Exact Current Block</span>
-                    <h3>{{ getIncomingComparisonMatchupLabel() }}</h3>
-                  </div>
-                  <span>{{ getCycleProgressLabel(addAsset) }}</span>
-                </div>
-                <div class="cycle-marker-row workbench-cycle-marker-row" aria-label="Incoming player six-game markers">
-                  @for (dotIndex of cycleDotSlots; track dotIndex) {
-                    @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
-                      <span
-                        [class]="'cycle-game-marker ' + getCycleMarkerClass(marker)"
-                        [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                      >{{ dotIndex + 1 }}</span>
-                    } @else {
-                      <span class="cycle-game-marker cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
-                    }
-                  }
-                </div>
-
-                <ol class="workbench-game-strip" aria-label="Incoming player's exact current six-game block">
-                  @for (game of incomingCurrentComparisonGames(); track game.gameNumber) {
-                    <li [class]="getComparisonGameClass(game)">
-                      <span>Game {{ game.gameNumber }}</span>
-                      <strong>{{ getComparisonGameDate(game) }}</strong>
-                      <small>{{ game.opponentLabel }}</small>
-                      <em>{{ getComparisonGameStatusLabel(game, 'incoming') }}</em>
-                    </li>
-                  }
-                </ol>
-              </section>
-            }
-
-            @if (incomingScoringExpanded()) {
-              <section
-                id="incoming-season-formula"
-                class="workbench-collapsible-panel workbench-stat-section incoming-stat-section"
-              >
-                <div class="workbench-section-heading">
-                  <div>
-                    <span class="eyebrow">Season Point Formula · Combined scoring-category contribution</span>
-                    <h3>Stat totals → fantasy points</h3>
-                        </div>
-                  <small>Raw NHL totals → RinkRat fantasy points</small>
-                </div>
-
-                @if (getStatBreakdown(addAsset).length > 0) {
-                  <div class="season-breakdown-grid">
-                    @for (item of getStatBreakdown(addAsset); track item.key) {
-                      <article>
-                        <span>{{ item.label }}</span>
-                        <strong>{{ getBreakdownStatLabel(item) }}</strong>
-                        <small>{{ getStatComparisonPointsLabel(item) }}</small>
-                      </article>
-                    }
-                  </div>
-                } @else {
-                  <p class="transaction-game-empty">{{ getStatBreakdownNote(addAsset) }}</p>
-                }
-              </section>
-            }
-          </article>
-
-          @if (preferredSlotId()) {
-            <div class="preferred-sheet-target">
-              <span>Preferred roster spot</span>
-              <strong>{{ getPreferredRosterTargetLabel() || preferredSlotId() }}</strong>
-              <button
-                type="button"
-                class="rr-button rr-button--quiet"
-                (click)="clearPreferredRosterTarget()"
-                [disabled]="moving()"
-              >
-                Choose Another
-              </button>
-            </div>
-          }
-
-          <ng-template #replacementCandidate let-candidate>
-            <article
-              class="replacement-player-card transaction-player-outgoing"
-              [class.selected-replacement-card]="isSelectedDropCandidate(candidate)"
-              [class.open-replacement-card]="candidate.moveType === 'open-slot'"
-              [class.flex-bench-replacement-card]="candidate.rosterArea === 'bench' && candidate.asset?.position !== addAsset.position"
-              role="listitem"
-            >
-              <header class="replacement-card-header">
-                <span class="replacement-roster-badge">{{ getCandidateRosterLabel(candidate) }}</span>
-                <button
-                  type="button"
-                  class="replacement-select-button rr-button"
-                  [class.rr-button--primary]="isSelectedDropCandidate(candidate)"
-                  [class.rr-button--secondary]="!isSelectedDropCandidate(candidate)"
-                  (click)="selectDropCandidate(candidate)"
-                  [disabled]="moving()"
-                >
-                  {{ getCandidateSelectionLabel(candidate) }}
-                </button>
-              </header>
-
-              <div class="workbench-player-identity replacement-player-identity">
-                @if (candidate.asset) {
-                  @if (getRosterAssetLogoUrl(candidate.asset); as candidateLogoUrl) {
-                    <img [src]="candidateLogoUrl" [alt]="getRosterAssetTeamLabel(candidate.asset) + ' logo'" />
-                  } @else {
-                    <span class="open-slot-icon">{{ getRosterAssetTeamLabel(candidate.asset) }}</span>
-                  }
-                  <div>
-                    <span class="eyebrow">Current Roster Player</span>
-                    <h3>{{ getRosterAssetName(candidate.asset) }}</h3>
-                    <p>{{ getRosterAssetTeamLabel(candidate.asset) }} · {{ candidate.asset.position }}</p>
-                  </div>
-                } @else {
-                  <span class="open-slot-icon">+</span>
-                  <div>
-                    <span class="eyebrow">Open Roster Spot</span>
-                    <h3>No player removed</h3>
-                    <p>{{ getCandidateRosterLabel(candidate) }}</p>
-                  </div>
-                }
-              </div>
-
-              @if (getDropCandidateProjectionAsset(candidate); as candidateProjection) {
-                <div class="workbench-metric-grid replacement-metric-grid">
-                  <article>
-                    <span>Current block</span>
-                    <strong>{{ getCandidateMatchupNumberLabel(candidate) }}</strong>
-                    <small>{{ getCandidateGameProgressLabel(candidate) }}</small>
-                  </article>
-                  <article>
-                    <span>Season points</span>
-                    <strong>{{ getDisplayNumber(getCurrentSeasonPoints(candidateProjection)) }}</strong>
-                    <small>{{ getSeasonGamesLabel(candidateProjection) }}</small>
-                  </article>
-                  <article>
-                    <span>Form</span>
-                    <strong>{{ getCandidateFormLabel(candidate) }}</strong>
-                    <small>{{ getRecentPaceLabel(candidateProjection, 10) }} pts/game over last 10</small>
-                  </article>
-                  <article>
-                    <span>Next 6</span>
-                    <strong>{{ getDisplayNumber(getProjectedCyclePoints(candidateProjection)) }}</strong>
-                    <small>{{ getExpectedAvailabilityLabel(candidateProjection) }}</small>
-                  </article>
-                </div>
-              } @else {
-                <div class="open-roster-metric-message">This empty spot has no outgoing score or projection.</div>
-              }
-
-              <div class="candidate-impact-strip" aria-label="Projected transaction impact">
-                <span [class]="getCandidateProjectionDeltaClass(candidate, 'NEXT_CYCLE')">
-                  <small>Next 6 change</small>
-                  <strong>{{ getCandidateProjectionDeltaLabel(candidate, 'NEXT_CYCLE') }}</strong>
-                </span>
-                <span [class]="getCandidateProjectionDeltaClass(candidate, 'REST_OF_SEASON')">
-                  <small>Season outlook</small>
-                  <strong>{{ getCandidateProjectionDeltaLabel(candidate, 'REST_OF_SEASON') }}</strong>
-                </span>
-              </div>
-
-              @if (getCandidateTransactionTiming(candidate); as candidateTiming) {
-                <section [class]="'candidate-start-card transaction-timing-' + candidateTiming.tone">
-                  <span>{{ candidateTiming.startLabel }}</span>
-                  <strong>{{ candidateTiming.headline }}</strong>
-                  <p>{{ candidateTiming.detail }}</p>
-                </section>
-              }
-
-              <button
-                type="button"
-                class="candidate-details-toggle"
-                [attr.aria-expanded]="isCandidateDetailsExpanded(candidate)"
-                [attr.aria-controls]="'candidate-details-' + candidate.slotId"
-                (click)="toggleCandidateDetails(candidate)"
-              >
-                <span>{{ isCandidateDetailsExpanded(candidate) ? 'Hide full comparison' : 'View full comparison' }}</span>
-                <small>Exact games{{ shouldShowCandidatePointBreakdown(candidate) ? ' and scoring formula' : '' }}</small>
-              </button>
-
-              @if (isCandidateDetailsExpanded(candidate)) {
-                <div [id]="'candidate-details-' + candidate.slotId" class="candidate-expanded-details">
-                  <section class="replacement-game-section">
-                    <div class="replacement-subheading">
-                      <strong>{{ getOutgoingComparisonMatchupLabel(candidate) }}</strong>
-                      <small>{{ getCandidateWindowAssetLabel(candidate) }}</small>
-                    </div>
-                    <ol class="workbench-game-strip compact-game-strip" [attr.aria-label]="getRosterSpotCandidateName(candidate) + ' exact six-game status'">
-                      @for (game of getCandidateComparisonGames(candidate); track game.gameNumber) {
-                        <li [class]="getComparisonGameClass(game)">
-                          <span>#{{ game.gameNumber }}</span>
-                          <strong>{{ getComparisonGameDate(game) }}</strong>
-                          <small>{{ game.opponentLabel }}</small>
-                          <em>{{ getComparisonGameStatusLabel(game, 'outgoing') }}</em>
-                        </li>
-                      }
-                    </ol>
-                  </section>
-
-                  @if (shouldShowCandidatePointBreakdown(candidate)) {
-                    <section class="workbench-stat-section replacement-stat-section">
-                      <div class="replacement-subheading">
-                        <strong>Season point formula</strong>
-                        <small>Same-position comparison</small>
-                      </div>
-                      @if (getCandidateStatBreakdown(candidate).length > 0) {
-                        <div class="season-breakdown-grid compact-breakdown-grid">
-                          @for (item of getCandidateStatBreakdown(candidate); track item.key) {
-                            <article>
-                              <span>{{ item.label }}</span>
-                              <strong>{{ getBreakdownStatLabel(item) }}</strong>
-                              <small>{{ getStatComparisonPointsLabel(item) }}</small>
-                            </article>
-                          }
-                        </div>
-                      } @else {
-                        <p class="transaction-game-empty">{{ getCandidateStatBreakdownNote(candidate) }}</p>
-                      }
-                    </section>
-                  } @else {
-                    <p class="cross-position-breakdown-note">{{ getCandidateStatBreakdownNote(candidate) }}</p>
-                  }
-                </div>
-              }
-
-              @if (isSelectedDropCandidate(candidate)) {
-                <div class="selected-candidate-action" aria-live="polite">
-                  <div>
-                    <span class="eyebrow">Selected Roster Spot</span>
-                    <strong>{{ getTopConfirmationDetail() }}</strong>
-                  </div>
-                  <button
-                    type="button"
-                    class="rr-button rr-button--commit confirm-move-button"
-                    (click)="confirmAddDrop()"
-                    [disabled]="!canConfirmMove() || moving()"
-                    [attr.data-commit-ready]="canConfirmMove() && !moving() ? 'true' : 'false'"
-                  >
-                    @if (moving()) {
-                      <span class="inline-confirm-spinner" aria-hidden="true"></span>
-                    } @else {
-                      <span class="rr-commit-mark" aria-hidden="true">✓</span>
-                    }
-                    <span class="rr-commit-copy">
-                      <small>{{ canConfirmMove() ? 'Ready to submit' : 'Final roster action' }}</small>
-                      <strong>{{ getConfirmButtonLabel() }}</strong>
-                    </span>
-                  </button>
-                </div>
-              }
-            </article>
-          </ng-template>
-
-          <section class="replacement-workbench" aria-labelledby="replacement-workbench-title">
-            <div class="replacement-workbench-heading">
-              <div>
-                <span class="eyebrow">Compatible Roster Spots</span>
-                <h2 id="replacement-workbench-title">Choose Who This Player Replaces</h2>
-                <strong class="replacement-workbench-instruction">Review each legal roster option below. Timing and projected impact stay visible; exact games and full formulas open only when needed.</strong>
-              </div>
-            </div>
-
-            @if (!areRosterWindowsReady()) {
-              <div class="empty-card roster-window-loading rr-state">
-                Loading your exact six-game roster windows before calculating legal start matchups…
-              </div>
-            } @else if (dropCandidates().length === 0) {
-              <div class="empty-card rr-state">No compatible active or bench roster spot is currently available.</div>
+      <section class="transaction-incoming-row unified-player-row rr-card" aria-label="Incoming player">
+        <a
+          class="unified-player-main"
+          [routerLink]="['/leagues', leagueId, 'players', addAsset.assetKey]"
+          [attr.aria-label]="'Open Player Intel for ' + getAssetName(addAsset)"
+        >
+          <span class="unified-player-image" aria-hidden="true">
+            @if (getAssetLogoUrl(addAsset); as imageUrl) {
+              <img [src]="imageUrl" alt="" />
             } @else {
-              @if (primaryDropCandidates().length > 0) {
-                <section class="replacement-option-group" aria-labelledby="primary-replacement-options-title">
-                  <div class="replacement-option-group-heading">
-                    <div>
-                      <span class="eyebrow">Directly Comparable Options</span>
-                      <h3 id="primary-replacement-options-title">Active slots, open spots, and same-position bench players</h3>
-                    </div>
-                    <strong>{{ primaryDropCandidates().length }}</strong>
-                  </div>
-
-                  <div class="replacement-card-list" role="list" aria-label="Directly comparable roster replacement choices">
-                    @for (candidate of primaryDropCandidates(); track candidate.slotId) {
-                      <ng-container
-                        [ngTemplateOutlet]="replacementCandidate"
-                        [ngTemplateOutletContext]="{ $implicit: candidate }"
-                      ></ng-container>
-                    }
-                  </div>
-                </section>
-              }
-
-              @if (flexibleBenchDropCandidates().length > 0) {
-                <section class="replacement-option-group additional-bench-options">
-                  <button
-                    type="button"
-                    class="additional-options-toggle"
-                    [attr.aria-expanded]="showFlexibleBenchOptions()"
-                    aria-controls="flexible-bench-options"
-                    (click)="toggleFlexibleBenchOptions()"
-                  >
-                    <span>
-                      <strong>{{ showFlexibleBenchOptions() ? 'Hide other bench options' : 'Show other bench options' }}</strong>
-                      <small>Different-position bench players are legal ownership choices, but they are less useful for category-by-category comparison.</small>
-                    </span>
-                    <b>{{ flexibleBenchDropCandidates().length }}</b>
-                  </button>
-
-                  @if (showFlexibleBenchOptions()) {
-                    <div id="flexible-bench-options" class="replacement-card-list" role="list" aria-label="Flexible bench replacement choices">
-                      @for (candidate of flexibleBenchDropCandidates(); track candidate.slotId) {
-                        <ng-container
-                          [ngTemplateOutlet]="replacementCandidate"
-                          [ngTemplateOutletContext]="{ $implicit: candidate }"
-                        ></ng-container>
-                      }
-                    </div>
-                  }
-                </section>
-              }
+              <span>{{ getAssetTeamLabel(addAsset) }}</span>
             }
-          </section>
+          </span>
 
-          @if (selectedDropCandidate(); as selectedCandidate) {
-            <section [class]="'transaction-timing-decision ' + getTransactionTimingClass()">
-              @if (transactionTiming(); as timing) {
-                <span class="eyebrow">Final Timing Decision · When this takes effect</span>
-                <div class="transaction-timing-heading">
-                  <span class="transaction-delay-badge">{{ getTransactionDelayLabel() }}</span>
-                  <strong>{{ timing.startLabel }}</strong>
-                </div>
-                <h3>{{ timing.headline }}</h3>
-                <p>{{ timing.detail }}</p>
-                <small>{{ timing.relationshipLabel }}</small>
+          <span class="unified-player-identity">
+            <strong>{{ getAssetName(addAsset) }}</strong>
+            <span>{{ getAssetTeamLabel(addAsset) }} · {{ addAsset.position }}</span>
+            <small>{{ selectedWaiver() ? 'Waiver target' : 'Incoming player' }}</small>
+            @if (shouldShowBoardAvailability(addAsset)) {
+              <span [class]="'unified-injury-status ' + getBoardAvailabilityClass(addAsset)">
+                <strong>{{ getBoardAvailabilityLabel(addAsset) }}</strong>
+                <small>{{ getBoardAvailabilityReturnLabel(addAsset) }}</small>
+              </span>
+            }
+          </span>
+
+          <span class="unified-cycle-block" [attr.aria-label]="getBoardCycleLabel(addAsset)">
+            <strong>{{ getBoardCycleLabel(addAsset) }}</strong>
+            <span class="unified-cycle-dots" aria-hidden="true">
+              @for (dotIndex of cycleDotSlots; track dotIndex) {
+                @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
+                  <span [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)">{{ dotIndex + 1 }}</span>
+                } @else {
+                  <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                }
               }
-            </section>
+            </span>
+          </span>
 
-            <section class="selected-final-comparison move-comparison-panel rr-data-panel" aria-label="Selected move summary">
-              <div class="selected-final-heading">
-                <div class="selected-final-copy">
-                  <span class="eyebrow">Final Move Summary</span>
-                  <h3>
-                    {{ selectedCandidate.asset ? getRosterAssetName(selectedCandidate.asset) : 'Open roster spot' }}
-                    <span aria-hidden="true">→</span>
-                    {{ getAssetName(addAsset) }}
-                  </h3>
-                  <p>
-                    {{ getCandidateRosterLabel(selectedCandidate) }} ·
-                    {{ transactionTiming()?.startLabel || 'Timing is being verified' }}
-                  </p>
-                </div>
-                <div class="move-delta-summary">
-                  <strong>{{ getMoveProjectionDeltaLabel('NEXT_CYCLE') }}</strong>
-                  <span>{{ getMoveProjectionDeltaLabel('REST_OF_SEASON') }}</span>
-                </div>
-              </div>
-            </section>
+          <span class="unified-player-metrics">
+            <span><small>Season</small><strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></span>
+            <span><small>Next 6</small><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></span>
+            <span><small>Rest of season</small><strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></span>
+            <span><small>Next 6 rank</small><strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong></span>
+          </span>
+        </a>
+      </section>
 
-            <section class="incoming-start-window">
-              <div class="incoming-start-window-heading">
-                <div>
-                  <span class="eyebrow">Exact First Legal Start</span>
-                  <h3>{{ getIncomingStartWindowTitle() }}</h3>
-                </div>
-                <strong>{{ transactionTiming()?.startLabel }}</strong>
-              </div>
-              <p>{{ getIncomingStartWindowDetail() }}</p>
-              <button
-                type="button"
-                class="start-window-schedule-toggle"
-                [attr.aria-expanded]="startWindowScheduleExpanded()"
-                aria-controls="incoming-first-legal-schedule"
-                (click)="toggleStartWindowSchedule()"
-              >
-                {{ startWindowScheduleExpanded() ? 'Hide first six scheduled games' : 'View first six scheduled games' }}
-              </button>
-              @if (startWindowScheduleExpanded()) {
-                <ol
-                  id="incoming-first-legal-schedule"
-                  class="incoming-start-game-grid"
-                  aria-label="Incoming player's first legal six-game schedule"
+      <section [class]="'transaction-eligibility rr-notice ' + getSelectedAssetCycleClass()" aria-live="polite">
+        @if (eligibilityLoading()) {
+          <strong>Checking matchup timing...</strong>
+        } @else if (eligibilityError()) {
+          <div>
+            <strong>{{ eligibilityError() }}</strong>
+            <button class="rr-button rr-button--quiet" type="button" (click)="retryEligibilityCheck()">Retry</button>
+          </div>
+        } @else {
+          <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
+          <span>{{ getSelectedAssetCycleDetail() }}</span>
+          <small>RinkRat verifies the exact six-game timeline before confirmation.</small>
+        }
+      </section>
+
+      <div class="transaction-roster-heading">
+        <div>
+          <span class="eyebrow">Your valid roster options</span>
+          <h2>Select a player to drop or an open slot</h2>
+        </div>
+        <strong>{{ dropCandidates().length }}</strong>
+      </div>
+
+      @if (!areRosterWindowsReady()) {
+        <div class="unified-player-state rr-state"><strong>Loading roster progress...</strong></div>
+      } @else if (dropCandidates().length === 0) {
+        <div class="unified-player-state rr-state"><strong>No valid roster move is available.</strong></div>
+      } @else {
+        <section class="unified-player-list transaction-roster-list" aria-label="Valid roster move options">
+          @for (candidate of dropCandidates(); track candidate.slotId) {
+            <article
+              class="unified-player-row transaction-roster-row rr-card"
+              [class.transaction-roster-row-selected]="isSelectedDropCandidate(candidate)"
+            >
+              @if (getDropCandidateProjectionAsset(candidate); as outgoing) {
+                <a
+                  class="unified-player-main"
+                  [routerLink]="['/leagues', leagueId, 'players', outgoing.assetKey]"
+                  [attr.aria-label]="'Open Player Intel for ' + getAssetName(outgoing)"
                 >
-                  @for (game of incomingStartComparisonGames(); track game.gameNumber) {
-                    <li [class]="getComparisonGameClass(game)">
-                      <span>#{{ game.gameNumber }}</span>
-                      <strong>{{ getComparisonGameDate(game) }}</strong>
-                      <small>{{ game.opponentLabel }}</small>
-                      <em>{{ getComparisonGameStatusLabel(game, 'start') }}</em>
-                    </li>
-                  }
-                </ol>
-              }
-            </section>
-          }
+                  <span class="unified-player-image" aria-hidden="true">
+                    @if (getDropCandidateImageUrl(candidate); as imageUrl) {
+                      <img [src]="imageUrl" alt="" />
+                    } @else {
+                      <span>{{ getAssetTeamLabel(outgoing) }}</span>
+                    }
+                  </span>
 
-          <details class="decision-details selected-decision-details projection-explanation-details">
-            <summary>Why this incoming projection?</summary>
-            <div class="projection-explanation-grid">
-              <section>
-                <span>Reliability</span>
-                <strong>{{ getReliabilityLabel(addAsset) }}</strong>
-                <small>{{ getPerformanceDetail(addAsset) }}</small>
-              </section>
-              <section>
-                <span>Schedule</span>
-                <strong>{{ getScheduleOutlookLabel(addAsset) }}</strong>
-                <small>{{ getExpectedAvailabilityLabel(addAsset) }}</small>
-              </section>
-              <section>
-                <span>Recent form</span>
-                <strong>{{ getRecentFormLabel(addAsset) }}</strong>
-                <small>{{ getRecentPaceLabel(addAsset, 10) }} points per game over the last 10 appearances</small>
-              </section>
-              <section>
-                <span>Projection source</span>
-                <strong>{{ getProjectionSourceLabel(addAsset) }}</strong>
-                <small>Estimated final total: {{ getDisplayNumber(getProjectedFinalSeasonPoints(addAsset)) }}</small>
-              </section>
+                  <span class="unified-player-identity">
+                    <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
+                    @if (candidate.asset; as rosterAsset) {
+                      <span>{{ getRosterAssetTeamLabel(rosterAsset) }} · {{ rosterAsset.position }}</span>
+                    }
+                    <small>{{ getDropCandidateStatusLabel(candidate) }}</small>
+                    @if (shouldShowBoardAvailability(outgoing)) {
+                      <span [class]="'unified-injury-status ' + getBoardAvailabilityClass(outgoing)">
+                        <strong>{{ getBoardAvailabilityLabel(outgoing) }}</strong>
+                        <small>{{ getBoardAvailabilityReturnLabel(outgoing) }}</small>
+                      </span>
+                    }
+                  </span>
+
+                  <span class="unified-cycle-block" [attr.aria-label]="getCandidateMatchupNumberLabel(candidate)">
+                    <strong>{{ getCandidateMatchupNumberLabel(candidate) }}</strong>
+                    <span class="unified-cycle-dots" aria-hidden="true">
+                      @for (dotIndex of cycleDotSlots; track dotIndex) {
+                        @if (getCurrentCycleMarker(outgoing, dotIndex); as marker) {
+                          <span [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)">{{ dotIndex + 1 }}</span>
+                        } @else {
+                          <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                        }
+                      }
+                    </span>
+                  </span>
+
+                  <span class="unified-player-metrics">
+                    <span><small>Season</small><strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoing)) }}</strong></span>
+                    <span><small>Next 6</small><strong>{{ getDisplayNumber(getProjectedCyclePoints(outgoing)) }}</strong></span>
+                    <span><small>Rest of season</small><strong>{{ getDisplayNumber(getRestOfSeasonProjection(outgoing)) }}</strong></span>
+                    <span><small>Starts</small><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span>
+                  </span>
+                </a>
+              } @else {
+                <div class="unified-player-main transaction-open-slot-main">
+                  <span class="unified-player-image unified-open-slot-icon" aria-hidden="true">+</span>
+                  <span class="unified-player-identity">
+                    <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
+                    <span>{{ getDropCandidateStatusLabel(candidate) }}</span>
+                    <small>No player needs to be dropped</small>
+                  </span>
+                  <span class="unified-cycle-block">
+                    <strong>Matchup {{ candidate.effectiveCycleNumber }}</strong>
+                    <span class="unified-cycle-dots" aria-hidden="true">
+                      @for (dotIndex of cycleDotSlots; track dotIndex) {
+                        <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                      }
+                    </span>
+                  </span>
+                  <span class="unified-player-metrics">
+                    <span><small>Roster area</small><strong>{{ candidate.rosterArea === 'bench' ? 'Bench' : 'Active' }}</strong></span>
+                    <span><small>Position</small><strong>{{ candidate.position }}</strong></span>
+                    <span><small>Outgoing</small><strong>None</strong></span>
+                    <span><small>Starts</small><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span>
+                  </span>
+                </div>
+              }
+
+              <div class="unified-player-actions">
+                <button
+                  class="rr-button rr-button--primary unified-drop-select"
+                  type="button"
+                  [class.unified-drop-select-active]="isSelectedDropCandidate(candidate)"
+                  [attr.aria-pressed]="isSelectedDropCandidate(candidate)"
+                  [disabled]="moving()"
+                  (click)="selectDropCandidate(candidate)"
+                >
+                  {{ getDropCandidateActionLabel(candidate) }}
+                </button>
+              </div>
+            </article>
+          }
+        </section>
+      }
+
+      @if (selectedDropCandidate(); as selectedCandidate) {
+        <section class="transaction-confirmation rr-card rr-card--padded" aria-live="polite">
+          <div class="transaction-confirmation-copy">
+            <span class="eyebrow">Selected move</span>
+            <h2>{{ getMoveSummary() }}</h2>
+            <p>{{ getTopConfirmationDetail() }}</p>
+          </div>
+
+          <div class="transaction-confirmation-actions">
+            <button
+              class="rr-button rr-button--primary rr-button--commit"
+              type="button"
+              [disabled]="!canConfirmMove() || moving()"
+              (click)="confirmAddDrop()"
+            >
+              {{ getConfirmButtonLabel() }}
+            </button>
+            <button class="rr-button rr-button--quiet" type="button" [disabled]="moving()" (click)="clearSelectedDropCandidate()">
+              Change selection
+            </button>
+          </div>
+
+          <details class="transaction-timing-details">
+            <summary>Timing details</summary>
+            <div>
+              <strong>{{ getConfirmationTimingTitle() }}</strong>
+              <p>{{ getConfirmationTimingDetail() }}</p>
             </div>
           </details>
         </section>
-
-        <div action-sheet-actions class="free-agent-sheet-actions">
-          <div class="free-agent-sheet-summary">
-            <span class="eyebrow">Move Summary</span>
-            <strong>{{ getMoveSummary() }}</strong>
-          </div>
-          <div class="free-agent-sheet-buttons">
-            <button
-              type="button"
-              class="rr-button rr-button--secondary"
-              (click)="returnToPlayerPool()"
-              [disabled]="moving()"
-            >
-              Change Player
-            </button>
-          </div>
-        </div>
-      </app-action-sheet>
+      }
     }
 
     @if (shouldShowRosterActionShield()) {
@@ -1010,5 +494,5 @@
         </div>
       </aside>
     }
-  </section>
+  </main>
 }

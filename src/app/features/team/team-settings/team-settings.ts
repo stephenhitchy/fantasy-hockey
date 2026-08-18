@@ -758,7 +758,7 @@ export class TeamSettings implements OnDestroy {
     if (!asset) {
       return area === 'bench'
         ? 'This bench spot is open. Choose a player without changing an active six-game count.'
-        : 'This starting slot is open. Available Players will keep the exact position and slot selected.';
+        : 'This starting slot is open. Add / Drop will keep the exact position and slot selected.';
     }
 
     if (area === 'bench') {
@@ -846,7 +846,7 @@ export class TeamSettings implements OnDestroy {
 
       case 'review-scheduled':
         this.closeRosterManager();
-        void this.router.navigate(['/leagues', this.leagueId, 'free-agents'], {
+        void this.router.navigate(['/leagues', this.leagueId, 'players'], {
           queryParams: { focus: 'pending-moves' },
           fragment: 'pending-roster-moves',
         });
@@ -906,7 +906,7 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    await this.router.navigate(['/leagues', this.leagueId, 'free-agents'], {
+    await this.router.navigate(['/leagues', this.leagueId, 'players'], {
       queryParams: {
         ...query,
         tab: 'available',

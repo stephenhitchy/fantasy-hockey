@@ -398,7 +398,7 @@ export class LeaguePlayerDetail {
 
     try {
       const [baseData, watchlist, waiverAssetKeys] = await Promise.all([
-        loadLeaguePlayerBoardBaseData(this.leagueId),
+        loadLeaguePlayerBoardBaseData(this.leagueId, { forceRefresh: true }),
         getPlayerWatchlist().catch(() => ({
           assetKeys: [] as string[],
           maximumCount: 100,

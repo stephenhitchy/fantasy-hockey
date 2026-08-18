@@ -8,6 +8,7 @@ export type LeaguePlayerBoardRosterArea = 'active' | 'bench' | 'ir';
 export type LeaguePlayerBoardPositionFilter = 'all' | 'LW' | 'C' | 'RW' | 'D' | 'G';
 export type LeaguePlayerBoardStatusFilter =
   | 'all'
+  | 'free-agent'
   | 'available'
   | 'rostered'
   | 'waivers'
@@ -519,6 +520,8 @@ function statusMatches(
   status: LeaguePlayerBoardStatusFilter,
 ): boolean {
   switch (status) {
+    case 'free-agent':
+      return row.status === 'free-agent';
     case 'available':
       return row.status === 'free-agent' || row.status === 'waivers';
     case 'rostered':

@@ -22,6 +22,7 @@ import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   generateSharedProjectionSnapshot,
+  getExpectedProjectionSnapshotContext,
   loadSharedProjectionSnapshotById,
   sealSharedProjectionSnapshotIntegrity,
   SHARED_PROJECTION_VERSION,
@@ -495,6 +496,235 @@ async function findReusableProjection(
   }
 
   return normalizePointerMetadata(data) as SharedProjectionSnapshotMetadata;
+}
+
+
+export interface ServerProjectionRefreshQueueResult {
+  requestId: string;
+  status: 'queued' | 'ready' | 'already-queued';
+  targetCycleNumber: number;
+}
+
+
+async function queueHistoricalReplayProjectionCatchUp(input: {
+  leagueId: string;
+  requestedBy: string;
+  completedRequestId: string;
+  snapshot: SharedProjectionSnapshot;
+}): Promise<void> {
+  if (!input.completedRequestId.startsWith('projection-replay-')) {
+    return;
+  }
+
+  const expectedContext = await getExpectedProjectionSnapshotContext(input.leagueId);
+
+  if (expectedContext.projectionContext !== 'historical-replay') {
+    return;
+  }
+
+  const completedAsOfDate = input.snapshot.metadata.projectionAsOfDate ?? '';
+
+  if (completedAsOfDate >= expectedContext.projectionAsOfDate) {
+    return;
+  }
+
+  const requestKey = `replay-catchup-${createHash('sha256')
+    .update(`${input.leagueId}:${expectedContext.projectionAsOfDate}:${input.completedRequestId}`)
+    .digest('hex')
+    .slice(0, 32)}`;
+  const queueResult = await queueServerProjectionSnapshotRefresh({
+    leagueId: input.leagueId,
+    requestedBy: input.requestedBy,
+    requestKey,
+  });
+
+  console.info('Historical replay projection catch-up evaluated.', {
+    leagueId: input.leagueId,
+    completedRequestId: input.completedRequestId,
+    completedAsOfDate,
+    expectedAsOfDate: expectedContext.projectionAsOfDate,
+    followUpRequestId: queueResult.requestId,
+    followUpStatus: queueResult.status,
+  });
+}
+
+/**
+ * Queues a fresh Projection V11 rebuild from an already-authorized server
+ * workflow. This writes only the existing projection request/control records
+ * and dispatches the existing projection task; it never waits for the rebuild
+ * and therefore cannot block scoring or historical replay completion.
+ */
+export async function queueServerProjectionSnapshotRefresh(input: {
+  leagueId: string;
+  requestedBy: string;
+  requestKey: string;
+  targetCycleNumber?: number | null;
+}): Promise<ServerProjectionRefreshQueueResult> {
+  const leagueId = requireServerFirestoreDocumentId(
+    input.leagueId,
+    'server projection league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const requestedBy = requireServerFirestoreDocumentId(
+    input.requestedBy,
+    'server projection requester identifier',
+    FIRESTORE_AUTH_USER_ID_OPTIONS,
+  );
+  const requestKey = requireServerFirestoreDocumentId(
+    input.requestKey,
+    'server projection request key',
+    FIRESTORE_REQUEST_ID_OPTIONS,
+  );
+  const generationReason: SharedProjectionGenerationReason = 'manual';
+  const context = await resolveProjectionRequestContext(
+    leagueId,
+    requestedBy,
+    { platformAdmin: true },
+    generationReason,
+    normalizePositiveInteger(input.targetCycleNumber),
+  );
+  const requestId = `projection-replay-${createHash('sha256')
+    .update(`${leagueId}:${requestKey}:${context.targetCycleNumber}`)
+    .digest('hex')
+    .slice(0, 32)}`;
+  const payloadHash = requestPayloadHash({
+    requestId,
+    leagueId,
+    generationReason,
+    targetCycleNumber: context.targetCycleNumber,
+  }, requestedBy);
+  const requestRef = getRequestRef(requestId);
+  const controlRef = getControlRef(leagueId, context.targetCycleNumber);
+  const now = Date.now();
+  const leaseExpiresAt = Timestamp.fromMillis(
+    now + PROJECTION_REQUEST_LEASE_MILLISECONDS,
+  );
+
+  const queueState = await db.runTransaction(async (transaction) => {
+    const [existingRequest, existingControl] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(controlRef),
+    ]);
+    const requestData = existingRequest.data() ?? {};
+
+    if (
+      existingRequest.exists &&
+      requestData['requestedBy'] === requestedBy &&
+      requestData['payloadHash'] === payloadHash &&
+      requestData['status'] === 'ready'
+    ) {
+      return 'ready' as const;
+    }
+
+    const control = existingControl.data() ?? {};
+    const activeRequestId = asString(control['activeRequestId']);
+    const activeStatus = asString(control['status']);
+    const activeLeaseExpiresAt = toMilliseconds(control['leaseExpiresAt']);
+
+    if (
+      activeRequestId &&
+      activeRequestId !== requestId &&
+      (activeStatus === 'queued' || activeStatus === 'processing') &&
+      activeLeaseExpiresAt > now
+    ) {
+      return 'already-queued' as const;
+    }
+
+    const requestDocument: ProjectionRequestDocument = {
+      schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
+      requestId,
+      leagueId,
+      requestedBy,
+      generationReason,
+      targetCycleNumber: context.targetCycleNumber,
+      teamCount: context.teamCount,
+      requiredGamesPerCycle: context.requiredGamesPerCycle,
+      status: 'queued',
+      payloadHash,
+      snapshotId: null,
+      message: 'Historical replay player-stat refresh is queued.',
+      lastError: '',
+    };
+
+    transaction.set(requestRef, {
+      ...requestDocument,
+      createdAt: existingRequest.exists
+        ? requestData['createdAt'] ?? FieldValue.serverTimestamp()
+        : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      leaseExpiresAt,
+      expiresAt: Timestamp.fromMillis(now + PROJECTION_REQUEST_RETENTION_MILLISECONDS),
+    }, { merge: true });
+    transaction.set(controlRef, {
+      schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
+      leagueId,
+      targetCycleNumber: context.targetCycleNumber,
+      activeRequestId: requestId,
+      status: 'queued',
+      requestedBy,
+      generationReason,
+      leaseExpiresAt,
+      createdAt: existingControl.exists
+        ? control['createdAt'] ?? FieldValue.serverTimestamp()
+        : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return 'queued' as const;
+  });
+
+  if (queueState !== 'queued') {
+    return {
+      requestId,
+      status: queueState,
+      targetCycleNumber: context.targetCycleNumber,
+    };
+  }
+
+  const payload: ProjectionGenerationTaskPayload = {
+    requestId,
+    leagueId,
+    requestedBy,
+    targetCycleNumber: context.targetCycleNumber,
+  };
+
+  try {
+    await getProjectionTaskQueue().enqueue(payload, {
+      id: buildProjectionTaskId(payload),
+      scheduleTime: new Date(Date.now() + 250),
+      dispatchDeadlineSeconds: PROJECTION_TASK_TIMEOUT_SECONDS,
+    });
+  } catch (error: unknown) {
+    if (!isTaskAlreadyExistsError(error)) {
+      const message = error instanceof Error
+        ? error.message
+        : 'The replay player-stat refresh queue could not accept this request.';
+
+      await Promise.all([
+        requestRef.set({
+          status: 'error',
+          message,
+          lastError: message.slice(0, 500),
+          failedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true }),
+        controlRef.set({
+          status: 'error',
+          lastError: message.slice(0, 500),
+          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true }),
+      ]).catch(() => undefined);
+
+      throw error;
+    }
+  }
+
+  return {
+    requestId,
+    status: 'queued',
+    targetCycleNumber: context.targetCycleNumber,
+  };
 }
 
 
@@ -1166,6 +1396,25 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true }),
       ]);
+
+
+      try {
+        await queueHistoricalReplayProjectionCatchUp({
+          leagueId,
+          requestedBy,
+          completedRequestId: requestId,
+          snapshot,
+        });
+      } catch (catchUpError: unknown) {
+        console.warn('Projection V11 completed, but a newer replay date could not be queued for catch-up.', {
+          leagueId,
+          requestId,
+          completedAsOfDate: snapshot.metadata.projectionAsOfDate ?? null,
+          message: catchUpError instanceof Error
+            ? catchUpError.message
+            : 'Unknown replay projection catch-up error.',
+        });
+      }
     } catch (error: unknown) {
       const message = error instanceof Error
         ? error.message

@@ -79,28 +79,23 @@ test('goalie and player drops close the modal and accept the authoritative roste
   assert.doesNotMatch(template, /roster-action-shield" appViewportOverlayPortal/);
 });
 
-test('the add drop workbench introduces the incoming player first and provides readable replacement cards', async () => {
+test('the unified add/drop workbench introduces the incoming player first and provides readable roster rows', async () => {
   const [source, template, styles] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
-    read('src/rinkrat-transaction-workbench.css'),
+    read('src/app/features/free-agents/free-agents.css'),
   ]);
 
-  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
-  assert.match(template, /Season Point Formula/);
-  assert.match(template, /Raw NHL totals → RinkRat fantasy points/);
-  assert.match(template, /getStatBreakdown\(addAsset\)/);
-  assert.match(template, /getIncomingMatchupNumberLabel\(\)/);
-  assert.match(template, /getIncomingGameProgressLabel\(\)/);
+  assert.ok(template.indexOf('transaction-incoming-row') < template.indexOf('transaction-roster-list'));
+  assert.match(template, /@for \(candidate of dropCandidates\(\)/);
   assert.match(template, /getCandidateMatchupNumberLabel\(candidate\)/);
-  assert.match(template, /getCandidateGameProgressLabel\(candidate\)/);
-  assert.match(template, /getCandidateComparisonGames\(candidate\)/);
-  assert.match(template, /getCandidateTransactionTiming\(candidate\)/);
-  assert.match(template, /shouldShowCandidatePointBreakdown\(candidate\)/);
+  assert.match(template, /getCandidateActivationLabel\(candidate\)/);
+  assert.match(template, /getDropCandidateActionLabel\(candidate\)/);
+  assert.match(template, /\['\/leagues', leagueId, 'players', outgoing\.assetKey\]/);
   assert.match(source, /candidate\.rosterArea === 'active' \|\| candidate\.asset\.position === incoming\.position/);
   assert.doesNotMatch(source, /scrollReplacementRail/);
-  assert.match(styles, /\.replacement-card-list[\s\S]*display:\s*grid/);
-  assert.match(styles, /\.replacement-player-card[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(styles, /\.transaction-roster-list[\s\S]*display:\s*grid/);
+  assert.match(styles, /\.transaction-roster-row/);
 });
 
 test('add drop submission releases the action sheet before waiting and uses a compact non-blurred status dock', async () => {

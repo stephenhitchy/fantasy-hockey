@@ -334,21 +334,21 @@ test('live waiver listener confirmation releases the UI even when the callable r
   }), true);
 });
 
-test('the transaction workbench keeps confirmation at the top, introduces the incoming player first, and preserves exact timelines', async () => {
+test('the unified transaction step introduces the incoming player first and preserves exact timelines', async () => {
   const template = await read('src/app/features/free-agents/free-agents.html');
 
-  assert.match(template, /action-sheet-top-actions[\s\S]*top-confirm-move-button/);
-  assert.match(template, /\[wide\]="true"/);
-  assert.ok(template.indexOf('incoming-scout-card') < template.indexOf('replacement-card-list'));
-  assert.match(template, /selected-final-copy[\s\S]*Final Move Summary/);
-  assert.match(template, /getCandidateComparisonGames\(candidate\)/);
-  assert.match(template, /incomingCurrentComparisonGames\(\)/);
-  assert.match(template, /incomingStartComparisonGames\(\)/);
-  assert.match(template, /Season Point Formula/);
-  assert.match(template, /getTransactionDelayLabel\(\)/);
+  assert.ok(template.indexOf('transaction-incoming-row') < template.indexOf('transaction-roster-list'));
+  assert.match(template, /RinkRat verifies the exact six-game timeline before confirmation/);
+  assert.match(template, /@for \(candidate of dropCandidates\(\)/);
+  assert.match(template, /getCandidateMatchupNumberLabel\(candidate\)/);
+  assert.match(template, /getCandidateActivationLabel\(candidate\)/);
+  assert.match(template, /transaction-confirmation[\s\S]*getMoveSummary\(\)/);
+  assert.match(template, /getConfirmationTimingTitle\(\)/);
+  assert.match(template, /getConfirmationTimingDetail\(\)/);
+  assert.doesNotMatch(template, /role="dialog"|app-action-sheet|viewport-overlay/i);
 });
 
-test('the add/drop page refreshes exact eligibility from the historical replay control', async () => {
+test('the unified add/drop page refreshes exact eligibility from the historical replay control', async () => {
   const [source, template, replayContext] = await Promise.all([
     read('src/app/features/free-agents/free-agents.ts'),
     read('src/app/features/free-agents/free-agents.html'),
@@ -358,15 +358,15 @@ test('the add/drop page refreshes exact eligibility from the historical replay c
   assert.match(source, /listenToHistoricalReplayControl/);
   assert.match(source, /historicalReplayControl = signal<HistoricalReplayControl \| null>/);
   assert.match(source, /historicalReplayControlLoaded = signal\(false\)/);
-  assert.match(source, /checking whether historical replay is active/i);
   assert.match(source, /resolveRosterMoveReplayContext/);
   assert.match(source, /seasonOverride:\s*replayContext\.seasonOverride/);
   assert.match(source, /completedThroughDate:\s*replayContext\.completedThroughDate/);
   assert.match(replayContext, /Historical replay is advancing to the next day/);
   assert.match(replayContext, /safePregameRecovery/);
   assert.match(source, /evaluationMode === 'historical-replay'/);
-  assert.match(template, /getEligibilityEvaluationLabel\(\)/);
-  assert.match(template, /transaction-replay-evaluation-note/);
+  assert.match(template, /RinkRat verifies the exact six-game timeline before confirmation/);
+  assert.match(template, /getSelectedAssetCycleHeadline\(\)/);
+  assert.match(template, /getSelectedAssetCycleDetail\(\)/);
 });
 
 test('the add/drop operation no longer hides its sheet behind a fuzzy full-screen shield', async () => {

@@ -467,6 +467,14 @@ export function loadSharedProjectionSnapshot(
   return loadProjectionSnapshotAtPointer(leagueId, SNAPSHOT_POINTER_ID);
 }
 
+export function loadSharedProjectionSnapshotFresh(
+  leagueId: string,
+): Promise<SharedProjectionSnapshot | null> {
+  const normalizedLeagueId = leagueId.trim();
+  invalidateSharedProjectionReadCache(normalizedLeagueId);
+  return loadProjectionSnapshotAtPointer(normalizedLeagueId, SNAPSHOT_POINTER_ID);
+}
+
 export function loadSharedProjectionSnapshotById(
   leagueId: string,
   snapshotId: string,
@@ -479,6 +487,74 @@ export function loadSharedProjectionSnapshotForCycle(
   cycleNumber: number,
 ): Promise<SharedProjectionSnapshot | null> {
   return loadProjectionSnapshotAtPointer(leagueId, getTargetCycleProjectionPointerId(cycleNumber));
+}
+
+export function listenToSharedProjectionSnapshot(
+  leagueId: string,
+  callback: (snapshot: SharedProjectionSnapshot | null) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const normalizedLeagueId = leagueId.trim();
+
+  if (!normalizedLeagueId) {
+    queueMicrotask(() => callback(null));
+    return () => undefined;
+  }
+
+  let requestGeneration = 0;
+  let lastSnapshotId = '';
+
+  return onSnapshot(
+    getProjectionSnapshotRef(normalizedLeagueId, SNAPSHOT_POINTER_ID),
+    (pointerSnapshot) => {
+      const metadata = pointerSnapshot.exists()
+        ? normalizeMetadata(
+            pointerSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>,
+          )
+        : null;
+
+      if (!metadata) {
+        lastSnapshotId = '';
+        callback(null);
+        return;
+      }
+
+      if (metadata.activeSnapshotId === lastSnapshotId) {
+        return;
+      }
+
+      lastSnapshotId = metadata.activeSnapshotId;
+      const generation = ++requestGeneration;
+      invalidateSharedProjectionReadCache(normalizedLeagueId);
+
+      void loadSharedProjectionSnapshotById(
+        normalizedLeagueId,
+        metadata.activeSnapshotId,
+      )
+        .then((snapshot) => {
+          if (generation === requestGeneration) {
+            callback(snapshot);
+          }
+        })
+        .catch((error: unknown) => {
+          if (generation !== requestGeneration) {
+            return;
+          }
+
+          const normalizedError = error instanceof Error
+            ? error
+            : new Error('Unable to load the latest Projection V11 snapshot.');
+          onError?.(normalizedError);
+        });
+    },
+    (error) => {
+      onError?.(
+        error instanceof Error
+          ? error
+          : new Error('Unable to follow Projection V11 updates.'),
+      );
+    },
+  );
 }
 
 interface ProjectionGenerationCallableRequest {

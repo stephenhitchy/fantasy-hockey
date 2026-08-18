@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -27,7 +26,12 @@ import {
   processWaiver,
 } from '../../core/draft/draft.service';
 
-import { loadSharedProjectionSnapshot } from '../../core/projection/projection-snapshot.service';
+import {
+  listenToSharedProjectionSnapshot,
+  loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotFresh,
+  type SharedProjectionSnapshotMetadata,
+} from '../../core/projection/projection-snapshot.service';
 
 import { PlayerAvailability } from '../../core/player/player-availability.models';
 
@@ -41,6 +45,17 @@ import {
   getPlayerWatchlist,
   setPlayerWatchlistEntry,
 } from '../../core/player/player-watchlist.service';
+
+import {
+  buildLeaguePlayerBoardRows,
+  buildLeaguePlayerOwnership,
+  buildLeaguePlayerReservedAssetKeys,
+  filterLeaguePlayerBoardRows,
+  type LeaguePlayerBoardPositionFilter,
+  type LeaguePlayerBoardRow,
+  type LeaguePlayerBoardSortMode,
+  type LeaguePlayerBoardStatusFilter,
+} from '../../core/player/league-player-board.util';
 
 import {
   FantasyAssetCycleWindow,
@@ -74,7 +89,6 @@ import {
   type HistoricalReplayControl,
 } from '../../core/replay/historical-replay.service';
 
-import { ActionSheet } from '../../shared/action-sheet/action-sheet';
 import { ClientHealthService } from '../../core/observability/client-health.service';
 import {
   CompetitiveActionMonitorService,
@@ -113,6 +127,8 @@ type FreeAgentSortMode =
   | 'RELIABILITY';
 type FreeAgentFlowStep = 'player-pool' | 'roster-slot';
 
+const UNIFIED_PLAYER_PAGE_SIZE = 50;
+
 interface DropCandidate {
   slotId: string;
   slotNumber: number;
@@ -126,6 +142,7 @@ interface DropCandidate {
   currentWindowUntouched: boolean;
   canApplyImmediately: boolean;
 }
+
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
@@ -142,7 +159,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink, ActionSheet, NgTemplateOutlet],
+  imports: [FormsModule, RouterLink],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })
@@ -160,6 +177,13 @@ export class FreeAgents implements OnDestroy {
   teamWindowLoadedByCycle = signal<Record<number, boolean>>({});
   waivers = signal<FantasyWaiver[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
+  snapshotMetadata = signal<SharedProjectionSnapshotMetadata | null>(null);
+
+  boardStatusFilter = signal<LeaguePlayerBoardStatusFilter>('free-agent');
+  boardPositionFilter = signal<LeaguePlayerBoardPositionFilter>('all');
+  boardSortMode = signal<LeaguePlayerBoardSortMode>('next-six');
+  boardVisibleLimit = signal(UNIFIED_PLAYER_PAGE_SIZE);
+  boardRefreshing = signal(false);
 
   loading = signal(true);
   playerPoolLoading = signal(false);
@@ -215,6 +239,7 @@ export class FreeAgents implements OnDestroy {
   private stopLeagueCyclesListener: (() => void) | null = null;
   private stopWaiversListener: (() => void) | null = null;
   private stopHistoricalReplayListener: (() => void) | null = null;
+  private stopProjectionListener: (() => void) | null = null;
   private rosterListeners: Record<string, () => void> = {};
   private teamWindowListeners: Record<number, () => void> = {};
   private eligibilityRequestKey = '';
@@ -301,6 +326,82 @@ export class FreeAgents implements OnDestroy {
 
     return assetKeys;
   });
+
+
+  readonly waiverByAssetKey = computed(() => {
+    const waiversByAssetKey = new Map<string, FantasyWaiver>();
+
+    for (const waiver of this.waivers()) {
+      if (waiver.status === 'active') {
+        waiversByAssetKey.set(waiver.assetKey, waiver);
+      }
+    }
+
+    return waiversByAssetKey;
+  });
+
+  readonly boardOwnershipByAssetKey = computed(() => {
+    const rostersByOwnerId = new Map<string, FantasyRoster | null>(
+      Object.entries(this.rosters()),
+    );
+
+    return buildLeaguePlayerOwnership(this.teams(), rostersByOwnerId);
+  });
+
+  readonly boardReservedAssetKeys = computed(() => {
+    const rostersByOwnerId = new Map<string, FantasyRoster | null>(
+      Object.entries(this.rosters()),
+    );
+
+    return buildLeaguePlayerReservedAssetKeys(rostersByOwnerId);
+  });
+
+  readonly boardRows = computed<LeaguePlayerBoardRow[]>(() =>
+    buildLeaguePlayerBoardRows({
+      assets: this.playerPool(),
+      ownershipByAssetKey: this.boardOwnershipByAssetKey(),
+      waiverAssetKeys: this.activeWaiverAssetKeys(),
+      watchedAssetKeys: this.watchedAssetKeys(),
+      reservedAssetKeys: this.boardReservedAssetKeys(),
+    }),
+  );
+
+  readonly filteredBoardRows = computed(() =>
+    filterLeaguePlayerBoardRows(this.boardRows(), {
+      searchTerm: this.searchTerm(),
+      position: this.boardPositionFilter(),
+      status: this.boardStatusFilter(),
+      sortMode: this.boardSortMode(),
+    }),
+  );
+
+  readonly visibleBoardRows = computed(() =>
+    this.filteredBoardRows().slice(0, this.boardVisibleLimit()),
+  );
+
+  readonly hiddenBoardRowCount = computed(() =>
+    Math.max(0, this.filteredBoardRows().length - this.visibleBoardRows().length),
+  );
+
+  readonly freeAgentBoardCount = computed(() =>
+    this.boardRows().filter((row) => row.status === 'free-agent').length,
+  );
+
+  readonly rosteredBoardCount = computed(() =>
+    this.boardRows().filter((row) => row.status === 'rostered').length,
+  );
+
+  readonly waiverBoardCount = computed(() =>
+    this.boardRows().filter((row) => row.status === 'waivers').length,
+  );
+
+  readonly unavailableBoardCount = computed(() =>
+    this.boardRows().filter((row) => row.status === 'reserved').length,
+  );
+
+  readonly watchedBoardCount = computed(() =>
+    this.boardRows().filter((row) => row.watched).length,
+  );
 
   readonly availableWaivers = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
@@ -597,6 +698,7 @@ export class FreeAgents implements OnDestroy {
     this.stopLeagueCyclesListener?.();
     this.stopWaiversListener?.();
     this.stopHistoricalReplayListener?.();
+    this.stopProjectionListener?.();
     this.clearRosterListeners();
     this.clearTeamWindowListeners();
   }
@@ -687,6 +789,33 @@ export class FreeAgents implements OnDestroy {
         },
       );
 
+      this.stopProjectionListener = listenToSharedProjectionSnapshot(
+        leagueId,
+        (snapshot) => {
+          if (!snapshot) {
+            return;
+          }
+
+          this.playerPool.set(snapshot.assets);
+          this.snapshotMetadata.set(snapshot.metadata);
+          this.playerPoolLoading.set(false);
+          this.resumeRestoredSelectionIfAvailable();
+
+          const selectedAsset = this.selectedAddAsset();
+          if (selectedAsset) {
+            void this.loadSelectedAssetEligibility(selectedAsset, true);
+          }
+        },
+        (error) => {
+          console.warn('Unable to follow live Player Board projections.', error);
+          if (this.playerPool().length === 0) {
+            this.errorMessage.set(
+              'The latest player data could not be loaded. Try Refresh.',
+            );
+          }
+        },
+      );
+
       this.stopDraftListener = listenToFantasyDraft(leagueId, (draft) => {
         this.draft.set(draft);
       });
@@ -718,25 +847,29 @@ export class FreeAgents implements OnDestroy {
     }
   }
 
-  async loadPlayerPool(): Promise<void> {
+  async loadPlayerPool(forceRefresh = false): Promise<void> {
     this.playerPoolLoading.set(true);
     this.errorMessage.set('');
 
     try {
-      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
+      const snapshot = forceRefresh
+        ? await loadSharedProjectionSnapshotFresh(this.leagueId)
+        : await loadSharedProjectionSnapshot(this.leagueId);
 
       if (!snapshot) {
         this.playerPool.set([]);
+        this.snapshotMetadata.set(null);
         throw new Error(
           'Shared projections are not ready. The commissioner must refresh them in Projection Lab.',
         );
       }
 
       this.playerPool.set(snapshot.assets);
+      this.snapshotMetadata.set(snapshot.metadata);
       this.resumeRestoredSelectionIfAvailable();
     } catch (error: unknown) {
       this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to load the shared free agent pool.',
+        error instanceof Error ? error.message : 'Unable to load the shared player pool.',
       );
     } finally {
       this.playerPoolLoading.set(false);
@@ -807,6 +940,7 @@ export class FreeAgents implements OnDestroy {
 
   setSearchTerm(value: string): void {
     this.searchTerm.set(value);
+    this.resetBoardVisibleLimit();
     this.persistFreeAgentViewState();
   }
 
@@ -819,6 +953,261 @@ export class FreeAgents implements OnDestroy {
     }
   }
 
+
+
+  updateBoardStatus(value: string): void {
+    const allowed = new Set<LeaguePlayerBoardStatusFilter>([
+      'free-agent',
+      'all',
+      'rostered',
+      'waivers',
+      'reserved',
+      'watched',
+    ]);
+    this.boardStatusFilter.set(
+      allowed.has(value as LeaguePlayerBoardStatusFilter)
+        ? value as LeaguePlayerBoardStatusFilter
+        : 'free-agent',
+    );
+    this.resetBoardVisibleLimit();
+  }
+
+  updateBoardPosition(value: string): void {
+    const allowed = new Set<LeaguePlayerBoardPositionFilter>([
+      'all', 'LW', 'C', 'RW', 'D', 'G',
+    ]);
+    this.boardPositionFilter.set(
+      allowed.has(value as LeaguePlayerBoardPositionFilter)
+        ? value as LeaguePlayerBoardPositionFilter
+        : 'all',
+    );
+    this.resetBoardVisibleLimit();
+  }
+
+  updateBoardSort(value: string): void {
+    const allowed = new Set<LeaguePlayerBoardSortMode>([
+      'next-six',
+      'season-points',
+      'overall-rank',
+      'position-rank',
+      'rest-of-season',
+      'reliability',
+      'name',
+    ]);
+    this.boardSortMode.set(
+      allowed.has(value as LeaguePlayerBoardSortMode)
+        ? value as LeaguePlayerBoardSortMode
+        : 'next-six',
+    );
+    this.resetBoardVisibleLimit();
+  }
+
+  showMoreBoardRows(): void {
+    this.boardVisibleLimit.update((current) => current + UNIFIED_PLAYER_PAGE_SIZE);
+  }
+
+  async refreshBoard(): Promise<void> {
+    if (this.boardRefreshing()) {
+      return;
+    }
+
+    this.boardRefreshing.set(true);
+    try {
+      await this.loadPlayerPool(true);
+    } finally {
+      this.boardRefreshing.set(false);
+    }
+  }
+
+  getBoardStatusLabel(row: LeaguePlayerBoardRow): string {
+    if (row.ownership) {
+      const area = row.ownership.area === 'active'
+        ? 'Active'
+        : row.ownership.area === 'bench'
+          ? 'Bench'
+          : 'IR';
+      return `${area} · ${row.ownership.teamName}`;
+    }
+
+    switch (row.status) {
+      case 'waivers':
+        return 'On waivers';
+      case 'reserved':
+        return 'Unavailable';
+      default:
+        return 'Free agent';
+    }
+  }
+
+  getBoardWaiver(row: LeaguePlayerBoardRow): FantasyWaiver | null {
+    return row.status === 'waivers'
+      ? this.waiverByAssetKey().get(row.assetKey) ?? null
+      : null;
+  }
+
+  getBoardActionLabel(row: LeaguePlayerBoardRow): string {
+    const waiver = this.getBoardWaiver(row);
+
+    if (waiver) {
+      return this.getWaiverActionLabel(waiver);
+    }
+
+    return 'Add';
+  }
+
+  canStartBoardTransaction(row: LeaguePlayerBoardRow): boolean {
+    if (this.draft()?.status !== 'complete' || this.moving()) {
+      return false;
+    }
+
+    if (row.status === 'free-agent') {
+      return true;
+    }
+
+    const waiver = this.getBoardWaiver(row);
+    return Boolean(waiver && waiver.droppedByOwnerId !== this.userId);
+  }
+
+  startBoardTransaction(row: LeaguePlayerBoardRow): void {
+    if (!this.canStartBoardTransaction(row)) {
+      return;
+    }
+
+    const waiver = this.getBoardWaiver(row);
+    if (waiver) {
+      this.selectWaiver(waiver);
+      return;
+    }
+
+    this.selectAddAsset(row.asset);
+  }
+
+  getBoardImageUrl(row: LeaguePlayerBoardRow): string | null {
+    return row.headshotUrl ?? row.logoUrl;
+  }
+
+  formatBoardPoints(value: number | null, digits = 1): string {
+    return value === null
+      ? '—'
+      : value.toFixed(digits).replace(/\.0+$/, '');
+  }
+
+  formatBoardRank(rank: number | null, total: number): string {
+    return rank === null || total <= 0 ? '—' : `#${rank}`;
+  }
+
+  getBoardSnapshotLabel(): string {
+    const metadata = this.snapshotMetadata();
+
+    if (!metadata) {
+      return 'Projection V11';
+    }
+
+    const asOf = metadata.projectionAsOfDate
+      ? ` · ${this.formatCompactDate(metadata.projectionAsOfDate)}`
+      : '';
+    return `Matchup ${metadata.targetCycleNumber} · Projection V${metadata.projectionVersion}${asOf}`;
+  }
+
+  getBoardAvailabilityLabel(asset: DraftableAsset): string {
+    const liveAvailability = this.getPlayerAvailability(asset);
+    return liveAvailability?.shortLabel || asset.availabilityLabel || '';
+  }
+
+  getBoardAvailabilityReturnLabel(asset: DraftableAsset): string {
+    const liveAvailability = this.getPlayerAvailability(asset);
+    const returnDate = liveAvailability?.externalReturnDate || asset.availabilityReturnDate || '';
+
+    if (returnDate) {
+      return `Return ${this.formatCompactDate(returnDate)}`;
+    }
+
+    const status = liveAvailability?.status || asset.availabilityStatus;
+    return status && status !== 'active' && status !== 'unknown'
+      ? 'Return date TBD'
+      : '';
+  }
+
+  shouldShowBoardAvailability(asset: DraftableAsset): boolean {
+    const status = this.getPlayerAvailability(asset)?.status || asset.availabilityStatus;
+    return Boolean(status && status !== 'active' && status !== 'unknown');
+  }
+
+  getBoardAvailabilityClass(asset: DraftableAsset): string {
+    const availability = this.getPlayerAvailability(asset);
+    if (availability) {
+      return getPlayerAvailabilityStatusClass(availability.status);
+    }
+
+    return asset.availabilityStatus
+      ? getPlayerAvailabilityStatusClass(asset.availabilityStatus)
+      : '';
+  }
+
+  getBoardCycleLabel(asset: DraftableAsset): string {
+    const cycleNumber = this.getCurrentTeamCycleNumber(asset);
+    return cycleNumber ? `Matchup ${cycleNumber}` : 'Matchup —';
+  }
+
+  getDropCandidateAssetKey(candidate: DropCandidate): string | null {
+    return this.getRosterAssetKey(candidate.asset);
+  }
+
+  getDropCandidateImageUrl(candidate: DropCandidate): string | null {
+    const asset = this.getDropCandidateProjectionAsset(candidate);
+    if (asset) {
+      return asset.assetType === 'skater'
+        ? asset.player.headshotUrl || asset.player.teamLogoUrl || null
+        : asset.teamLogoUrl || null;
+    }
+
+    return candidate.asset ? this.getRosterAssetLogoUrl(candidate.asset) ?? null : null;
+  }
+
+  getDropCandidateActionLabel(candidate: DropCandidate): string {
+    if (this.isSelectedDropCandidate(candidate)) {
+      return candidate.moveType === 'open-slot' ? 'Slot selected' : 'Drop selected';
+    }
+
+    return candidate.moveType === 'open-slot' ? 'Use slot' : 'Select to drop';
+  }
+
+  getDropCandidateStatusLabel(candidate: DropCandidate): string {
+    if (!candidate.asset) {
+      return candidate.rosterArea === 'bench'
+        ? `Open Bench ${candidate.slotNumber}`
+        : `Open ${candidate.position} ${candidate.slotNumber}`;
+    }
+
+    return candidate.rosterArea === 'bench'
+      ? `Bench ${candidate.slotNumber}`
+      : `${candidate.position} ${candidate.slotNumber}`;
+  }
+
+  private formatCompactDate(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) {
+      return 'TBD';
+    }
+
+    const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(normalized)
+      ? `${normalized}T12:00:00Z`
+      : normalized);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return normalized;
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(parsed);
+  }
+
+  private resetBoardVisibleLimit(): void {
+    this.boardVisibleLimit.set(UNIFIED_PLAYER_PAGE_SIZE);
+  }
 
   setSortMode(value: string): void {
     const validModes = this.sortOptions.map((option) => option.value);

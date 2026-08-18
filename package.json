@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run toolchain:verify && npm run verify:batcha1b:core && node -e \"console.log('Inherited CI coverage through Product Batch A1B')\" && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batcha1c:core && node -e \"console.log('Inherited CI coverage through Product Batch A1C')\" && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -347,7 +347,12 @@
     "test:batcha1b:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcha1b-player-board/*.test.mjs",
     "preverify:batcha1b": "npm run security:sync-repository-automation",
     "verify:batcha1b:core": "npm run verify:batcha1a:core && npm run test:batcha1b:run && npm run validate:release-manifest",
-    "verify:batcha1b": "npm run toolchain:verify && npm run verify:batcha1b:core && npm run security:dependency-audit"
+    "verify:batcha1b": "npm run toolchain:verify && npm run verify:batcha1b:core && npm run security:dependency-audit",
+    "pretest:batcha1c:run": "npm run generate:release-manifest",
+    "test:batcha1c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcha1c-unified-add-drop/*.test.mjs",
+    "preverify:batcha1c": "npm run security:sync-repository-automation",
+    "verify:batcha1c:core": "npm run verify:batcha1b:core && npm run audit:product-copy-density && npm run test:batcha1c:run && npm run validate:release-manifest",
+    "verify:batcha1c": "npm run toolchain:verify && npm run verify:batcha1c:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
