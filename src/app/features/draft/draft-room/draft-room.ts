@@ -90,6 +90,7 @@ import {
 } from '../../../core/player/player-availability-sync.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
+import { shareLeagueDraftCard } from '../../../core/league/league-draft-share-card.service';
 
 import { FantasyTeam, getFantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
@@ -199,6 +200,10 @@ export class DraftRoom implements OnDestroy {
   playerPoolError = signal('');
   draftInjurySyncMessage = signal('');
   draftInjurySyncWarning = signal('');
+
+  draftShareInProgress = signal(false);
+  draftShareStatusMessage = signal('');
+  draftShareErrorMessage = signal('');
 
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
@@ -851,6 +856,18 @@ export class DraftRoom implements OnDestroy {
   readonly isMyTurn = computed(() => this.currentPick()?.ownerId === this.userId);
 
   readonly totalPickCount = computed(() => getDraftTotalPickCount(this.draft()));
+
+  readonly myCompletedDraftPicks = computed(() =>
+    [...this.picks()]
+      .filter((pick) => pick.ownerId === this.userId)
+      .sort((first, second) => first.overallPick - second.overallPick),
+  );
+
+  readonly canShareCompletedDraft = computed(() =>
+    this.draft()?.status === 'complete' &&
+    this.myCompletedDraftPicks().length > 0 &&
+    Boolean(this.teams().find((team) => team.ownerId === this.userId)),
+  );
 
   readonly draftProgressText = computed(() => {
     const draft = this.draft();
@@ -3021,6 +3038,54 @@ export class DraftRoom implements OnDestroy {
         behavior: 'smooth',
       });
     });
+  }
+
+  async shareMyDraft(): Promise<void> {
+    if (!this.canShareCompletedDraft() || this.draftShareInProgress()) {
+      return;
+    }
+
+    const draft = this.draft();
+    const league = this.league();
+    const team = this.teams().find((candidate) => candidate.ownerId === this.userId);
+
+    if (!draft || !league || !team) {
+      this.draftShareErrorMessage.set('Your completed Draft card is not ready yet.');
+      return;
+    }
+
+    this.draftShareInProgress.set(true);
+    this.draftShareStatusMessage.set('');
+    this.draftShareErrorMessage.set('');
+
+    try {
+      const draftSlotIndex = draft.roundOneOrder.indexOf(this.userId);
+      const result = await shareLeagueDraftCard({
+        leagueName: league.name,
+        teamName: team.teamName,
+        draftSlot: draftSlotIndex >= 0 ? draftSlotIndex + 1 : 1,
+        totalTeams: Math.max(2, this.teams().length, draft.roundOneOrder.length),
+        totalPicks: this.myCompletedDraftPicks().length,
+        picks: this.myCompletedDraftPicks().map((pick) => ({
+          name: this.getAssetName(pick.asset),
+          position: pick.asset.position,
+          round: pick.round,
+          overallPick: pick.overallPick,
+        })),
+      });
+
+      if (result.outcome !== 'cancelled') {
+        this.draftShareStatusMessage.set(result.message);
+      }
+    } catch (error) {
+      this.draftShareErrorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to prepare your Draft card right now.',
+      );
+    } finally {
+      this.draftShareInProgress.set(false);
+    }
   }
 
   getPickSelectionLabel(pick: DraftPick): string {

@@ -112,6 +112,34 @@
         <p>
           Every team has completed 14 active selections and 3 bench selections.
         </p>
+
+        @if (canShareCompletedDraft()) {
+          <div class="draft-complete-share">
+            <button
+              type="button"
+              class="draft-share-button rr-button rr-button--secondary"
+              [disabled]="draftShareInProgress()"
+              (click)="shareMyDraft()"
+            >
+              {{ draftShareInProgress() ? 'Preparing card...' : 'Share my draft' }}
+            </button>
+            <small>
+              Creates a private, browser-generated PNG using only your team name and completed picks.
+            </small>
+          </div>
+        }
+
+        @if (draftShareStatusMessage()) {
+          <p class="draft-share-message draft-share-success" role="status">
+            {{ draftShareStatusMessage() }}
+          </p>
+        }
+
+        @if (draftShareErrorMessage()) {
+          <p class="draft-share-message draft-share-error" role="alert">
+            {{ draftShareErrorMessage() }}
+          </p>
+        }
       </section>
     } @else {
       <section

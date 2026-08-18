@@ -11,6 +11,7 @@ import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth, db } from '../../../core/firebase';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
+import { shareLeagueStandingsCard } from '../../../core/league/league-standings-share-card.service';
 
 import { buildFantasyStandings } from '../../../core/league/standings.util';
 
@@ -108,6 +109,10 @@ export class LeagueStandings {
   refreshing = signal(false);
   errorMessage = signal('');
 
+  standingsShareInProgress = signal(false);
+  standingsShareStatusMessage = signal('');
+  standingsShareErrorMessage = signal('');
+
   readonly completedMatchups = computed(() =>
     this.matchups().filter((matchup) => matchup.status === 'complete'),
   );
@@ -146,6 +151,11 @@ export class LeagueStandings {
       rank: index + 1,
     })),
   );
+
+  readonly canShareStandings = computed(() =>
+    Boolean(this.league()) && this.standingsRows().length >= 2,
+  );
+
 
   constructor(
     private route: ActivatedRoute,
@@ -189,6 +199,53 @@ export class LeagueStandings {
       );
     } finally {
       this.refreshing.set(false);
+    }
+  }
+
+  async shareCurrentStandings(): Promise<void> {
+    if (!this.canShareStandings() || this.standingsShareInProgress()) {
+      return;
+    }
+
+    const league = this.league();
+    if (!league) {
+      this.standingsShareErrorMessage.set('The standings card is not ready yet.');
+      return;
+    }
+
+    this.standingsShareInProgress.set(true);
+    this.standingsShareStatusMessage.set('');
+    this.standingsShareErrorMessage.set('');
+
+    try {
+      const rows = this.standingsRows();
+      const result = await shareLeagueStandingsCard({
+        leagueName: league.name,
+        periodLabel: this.getCurrentPeriodLabel(),
+        totalTeams: Math.max(2, this.teams().length),
+        playoffTeamCount: this.playoffTeamCount(),
+        rows: rows.map((row) => ({
+          rank: row.rank,
+          teamName: row.teamName,
+          record: this.getRecordLabel(row),
+          pointsFor: row.pointsFor,
+          pointDifferential: row.pointDifferential,
+          playoffQualifier: this.isPlayoffQualifier(row),
+          currentManager: row.ownerId === this.userId,
+        })),
+      });
+
+      if (result.outcome !== 'cancelled') {
+        this.standingsShareStatusMessage.set(result.message);
+      }
+    } catch (error) {
+      this.standingsShareErrorMessage.set(
+        error instanceof Error
+          ? error.message
+          : 'Unable to prepare the standings card right now.',
+      );
+    } finally {
+      this.standingsShareInProgress.set(false);
     }
   }
 

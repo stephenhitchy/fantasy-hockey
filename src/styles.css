@@ -2627,3 +2627,50 @@ html[data-background-theme='light-ice'] app-league-detail .status-scheduled {
     border-color: var(--rr-phase3-gold);
   }
 }
+
+/* C1L browser-only Draft share action stays global to preserve the reviewed Draft Room CSS budget. */
+app-draft-room .draft-complete-share {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+app-draft-room .draft-share-button {
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
+app-draft-room .draft-complete-share small {
+  max-width: 520px;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+app-draft-room .draft-share-message {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+app-draft-room .draft-share-success {
+  color: var(--rr-color-success);
+}
+
+app-draft-room .draft-share-error {
+  color: var(--rr-color-danger);
+}
+
+@media (max-width: 680px) {
+  app-draft-room .draft-complete-share {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  app-draft-room .draft-share-button {
+    width: 100%;
+  }
+}
+

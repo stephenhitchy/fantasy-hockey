@@ -18,18 +18,42 @@
         <p>{{ getLeagueStatusText() }}</p>
       </div>
 
-      <button
-        type="button"
-        class="refresh-button"
-        (click)="refreshStandings()"
-        [disabled]="refreshing()"
-      >
-        {{ refreshing() ? 'Refreshing...' : 'Refresh' }}
-      </button>
+      <div class="standings-header-actions">
+        <button
+          type="button"
+          class="standings-share-button"
+          (click)="shareCurrentStandings()"
+          [disabled]="!canShareStandings() || standingsShareInProgress()"
+        >
+          {{ standingsShareInProgress() ? 'Preparing card...' : 'Share standings' }}
+        </button>
+
+        <button
+          type="button"
+          class="refresh-button"
+          (click)="refreshStandings()"
+          [disabled]="refreshing()"
+        >
+          {{ refreshing() ? 'Refreshing...' : 'Refresh' }}
+        </button>
+      </div>
     </header>
 
     @if (errorMessage()) {
       <p class="status-card error-card">{{ errorMessage() }}</p>
+    }
+
+
+    @if (standingsShareStatusMessage()) {
+      <p class="standings-share-message standings-share-success" role="status">
+        {{ standingsShareStatusMessage() }}
+      </p>
+    }
+
+    @if (standingsShareErrorMessage()) {
+      <p class="standings-share-message standings-share-error" role="alert">
+        {{ standingsShareErrorMessage() }}
+      </p>
     }
 
     <section class="league-actions-card">

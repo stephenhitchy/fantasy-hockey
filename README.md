@@ -28,17 +28,18 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md`](docs/RINKRAT_SOCIAL_C1I_ROUND_AWARDS.md) — Pickup of the Round, Biggest Upset from frozen team projections, bounded server evidence, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS.md) — browser-generated matchup and championship PNG cards, native mobile sharing, desktop fallback, privacy boundary, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md`](docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md) — server-reconciled identity challenges, a sixth custom logo/three-color scheme for every NHL team, top-right completion notifications, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md) — browser-generated Draft result and current-standings PNG cards, native mobile sharing, desktop fallback, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 37 / Social Batch C1K**. C1K adds the server-reconciled **Identity Architect** challenge, gives every NHL team a sixth **Custom Identity** scheme, lets managers choose one of their selected team's available logos plus primary, secondary, and tertiary colors, and surfaces newly completed challenges through a small top-right notification that links directly to the inline team identity editor.
+The current source runtime is **Release Candidate 38 / Social Batch C1L**. C1L completes the first share-card roadmap set with browser-generated **Draft result** and **current standings** PNG cards. Managers can share their own completed Draft from the Draft Room and export the current league table from Standings through native mobile file sharing or a local desktop download.
 
-The C1J matchup and championship share cards, the complete C1I Round Recap, and the emoji-only mobile picker from C1H remain intact.
+The C1K Identity Architect customization, C1J matchup and championship cards, the complete C1I Round Recap, and the emoji-only mobile picker from C1H remain intact.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1k`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchc1l`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -86,6 +87,7 @@ verify:batchc1h
 verify:batchc1i
 verify:batchc1j
 verify:batchc1k
+verify:batchc1l
 ```
 
 RinkRat pins:
@@ -105,7 +107,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchc1k
+npm run verify:batchc1l
 ```
 
 After verification and a clean commit:
@@ -114,6 +116,19 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Social Batch C1L — Draft and Standings Share Cards
+
+C1L completes the first share-card set with two browser-only 1080×1080 PNG exports. **Share my draft** appears only after the Draft is complete and uses the signed-in manager's team, Draft slot, total picks, and up to six completed picks. **Share standings** exports the current period and up to the top eight ranked teams with records, points for, point differential, and the playoff cut line. Both use native mobile file sharing first and a local PNG download fallback. No Function, listener, Rule, index, TTL policy, or migration is added.
+
+Verification:
+
+```bash
+npm run verify:batchc1l
+```
+
+C1L deploys only RC38 Hosting. Full guidance is in `docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md`.
 
 
 

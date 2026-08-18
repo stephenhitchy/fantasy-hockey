@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run toolchain:verify && npm run verify:batchc1k:core && node -e \"console.log('Inherited CI coverage through Social Batch C1K')\" && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batchc1l:core && node -e \"console.log('Inherited CI coverage through Social Batch C1L')\" && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -331,7 +331,12 @@
     "test:batchc1k:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchc1k-identity-architect/*.test.mjs",
     "preverify:batchc1k": "npm run security:sync-repository-automation",
     "verify:batchc1k:core": "npm run verify:batchc1j:core && npm run test:batchc1k:run && npm run validate:release-manifest",
-    "verify:batchc1k": "npm run toolchain:verify && npm run verify:batchc1k:core && npm run security:dependency-audit"
+    "verify:batchc1k": "npm run toolchain:verify && npm run verify:batchc1k:core && npm run security:dependency-audit",
+    "pretest:batchc1l:run": "npm run generate:release-manifest",
+    "test:batchc1l:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchc1l-draft-standings-share-cards/*.test.mjs",
+    "preverify:batchc1l": "npm run security:sync-repository-automation",
+    "verify:batchc1l:core": "npm run verify:batchc1k:core && npm run test:batchc1l:run && npm run validate:release-manifest",
+    "verify:batchc1l": "npm run toolchain:verify && npm run verify:batchc1l:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

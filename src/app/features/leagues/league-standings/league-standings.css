@@ -77,6 +77,41 @@
   color: #a7b7c8;
 }
 
+.standings-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.standings-share-button,
+.refresh-button {
+  min-height: 44px;
+}
+
+.standings-share-button {
+  border: 1px solid rgba(184, 212, 239, 0.34);
+  border-radius: 12px;
+  background: rgba(184, 212, 239, 0.08);
+  color: #dff3ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 950;
+  padding: 10px 14px;
+}
+
+.standings-share-button:hover:not(:disabled) {
+  border-color: rgba(184, 212, 239, 0.7);
+  background: rgba(184, 212, 239, 0.16);
+}
+
+.standings-share-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .refresh-button {
   border: 0;
   border-radius: 12px;
@@ -107,6 +142,25 @@
 }
 
 .error-card {
+  color: #ffb4b4;
+}
+
+.standings-share-message {
+  margin: 0 0 14px;
+  padding: 11px 14px;
+  border: 1px solid rgba(198, 213, 228, 0.16);
+  border-radius: 12px;
+  background: rgba(25, 39, 57, 0.88);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.standings-share-success {
+  color: #98f5bd;
+}
+
+.standings-share-error {
   color: #ffb4b4;
 }
 
@@ -296,12 +350,28 @@
     justify-self: start;
   }
 
+
+  .standings-header-actions {
+    justify-content: flex-start;
+  }
+
   .league-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
+  .standings-header-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .standings-share-button,
+  .refresh-button {
+    width: 100%;
+  }
+
   .league-summary-grid {
     grid-template-columns: 1fr;
   }
