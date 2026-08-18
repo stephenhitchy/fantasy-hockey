@@ -116,7 +116,7 @@ test('S3A.2 verification, documentation, release label, and permanent roadmap st
   assert.match(packageJson.scripts['verify:batchs3a-2'], /verify:batchs3a-1/);
   assert.match(packageJson.scripts['verify:batchs3a-2'], /test:batchs3a-2:run/);
   assert.match(packageJson.scripts['verify:batchs3a-2'], /validate:release-manifest/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3A\.2|Security S3B(?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Product Batch A1A)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3A\.2|Security S3B(?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Product Batch A1A|Product Batch A1B)/);
   assert.match(documentationSource, /Security Batch S3A\.2 — Roster Overlay Teardown and Readiness Recovery/);
   assert.equal(roadmapRootSource, roadmapDocsSource);
   assert.match(roadmapRootSource, /Version 1\.\d+(?:\.\d+)?/);

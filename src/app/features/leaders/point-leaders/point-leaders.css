@@ -273,6 +273,8 @@
 
 .leader-player {
   display: grid;
+  color: inherit;
+  text-decoration: none;
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 10px;

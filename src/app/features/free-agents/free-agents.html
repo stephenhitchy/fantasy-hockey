@@ -217,7 +217,10 @@
                   }
 
                   <div class="asset-main">
-                    <strong>{{ getAssetName(asset) }}</strong>
+                    <a
+                      class="asset-profile-link"
+                      [routerLink]="['/leagues', leagueId, 'players', asset.assetKey]"
+                    >{{ getAssetName(asset) }}</a>
                     <span>{{ getAssetTeamLabel(asset) }} · {{ asset.position }}</span>
 
                     @if (shouldShowPlayerAvailabilityBadge(asset)) {
@@ -313,7 +316,10 @@
                     }
 
                     <div class="asset-main">
-                      <strong>{{ getAssetName(waiver.asset) }}</strong>
+                      <a
+                        class="asset-profile-link"
+                        [routerLink]="['/leagues', leagueId, 'players', waiver.asset.assetKey]"
+                      >{{ getAssetName(waiver.asset) }}</a>
                       <span>
                         {{ getAssetTeamLabel(waiver.asset) }} · {{ waiver.asset.position }} ·
                         {{ getWaiverDroppedByLabel(waiver) }}

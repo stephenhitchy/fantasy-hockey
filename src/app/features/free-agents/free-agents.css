@@ -1863,3 +1863,26 @@ button:disabled {
     width: 100%;
   }
 }
+
+.asset-profile-link {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--rr-color-text);
+  font-size: inherit;
+  font-weight: 900;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-profile-link:hover {
+  color: color-mix(in srgb, var(--user-team-tertiary) 76%, var(--rr-color-text));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.asset-profile-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--rr-color-info) 45%, transparent);
+  outline-offset: 2px;
+}

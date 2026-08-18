@@ -1,0 +1,305 @@
+<section class="player-intel-page">
+  <a
+    class="league-return-link"
+    [routerLink]="['/leagues', leagueId, 'players']"
+    aria-label="Back to Player Board"
+  >
+    Back to Player Board
+  </a>
+
+  @if (loading()) {
+    <div class="player-intel-state" role="status">
+      <strong>Loading…</strong>
+    </div>
+  } @else if (row(); as currentRow) {
+    <header class="player-intel-header">
+      <div class="player-intel-identity">
+        <span class="player-intel-image">
+          @if (getPrimaryImage(currentRow); as imageUrl) {
+            <img [src]="imageUrl" [alt]="getPrimaryImageAlt(currentRow)" />
+          } @else {
+            <span>{{ currentRow.nhlTeamAbbreviation }}</span>
+          }
+        </span>
+
+        <div>
+          <span class="eyebrow">Player Intel</span>
+          <h1>{{ currentRow.name }}</h1>
+          <p>{{ currentRow.nhlTeamAbbreviation }} · {{ currentRow.position }}</p>
+          <span class="player-intel-snapshot">{{ getSnapshotLabel() }}</span>
+        </div>
+      </div>
+
+      <div class="player-intel-actions">
+        <span class="player-intel-owner" [attr.data-status]="currentRow.status">
+          <strong>{{ getStatusLabel(currentRow) }}</strong>
+          @if (getStatusDetail(currentRow); as detail) {
+            <small>{{ detail }}</small>
+          }
+        </span>
+
+        <div class="player-intel-action-buttons">
+          @if (canOpenFreeAgents()) {
+            <a class="player-intel-secondary-action" [routerLink]="['/leagues', leagueId, 'free-agents']">
+              Free Agents
+            </a>
+          }
+          <button
+            class="player-intel-watch"
+            type="button"
+            [class.player-intel-watching]="currentRow.watched"
+            [attr.aria-pressed]="currentRow.watched"
+            [disabled]="watchSaving()"
+            (click)="toggleWatchlist()"
+          >
+            {{ watchSaving() ? 'Saving…' : currentRow.watched ? 'Watching' : 'Watch' }}
+          </button>
+        </div>
+      </div>
+    </header>
+
+    @if (watchError()) {
+      <p class="player-intel-error" role="alert">{{ watchError() }}</p>
+    }
+
+    <section class="player-intel-rank-strip" aria-label="Current fantasy ranks">
+      <div>
+        <span>Season fantasy points</span>
+        <strong>{{ formatPoints(currentRow.seasonFantasyPoints) }}</strong>
+        <small>{{ formatPoints(currentRow.seasonFantasyPointsPerGame, 2) }} FP/game</small>
+      </div>
+      <div>
+        <span>Overall rank</span>
+        <strong>{{ formatRank(currentRow.overallRank, currentRow.overallRankCount) }}</strong>
+      </div>
+      <div>
+        <span>{{ currentRow.position }} rank</span>
+        <strong>{{ formatRank(currentRow.positionRank, currentRow.positionRankCount) }}</strong>
+      </div>
+      <div>
+        <span>Next-six projection</span>
+        <strong>{{ formatPoints(currentRow.nextSixProjection) }}</strong>
+        <small>{{ getProjectionRange() }} range</small>
+      </div>
+    </section>
+
+    <nav class="player-intel-tabs" role="tablist" aria-label="Player information">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeSection() === 'overview'"
+        [class.active]="activeSection() === 'overview'"
+        (click)="setSection('overview')"
+      >Overview</button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeSection() === 'stats'"
+        [class.active]="activeSection() === 'stats'"
+        (click)="setSection('stats')"
+      >Stats</button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeSection() === 'projection'"
+        [class.active]="activeSection() === 'projection'"
+        (click)="setSection('projection')"
+      >Projection</button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeSection() === 'schedule'"
+        [class.active]="activeSection() === 'schedule'"
+        (click)="setSection('schedule')"
+      >Schedule</button>
+    </nav>
+
+    <section class="player-intel-card player-intel-section" role="tabpanel">
+      @switch (activeSection()) {
+        @case ('overview') {
+          <div class="player-intel-card-heading">
+            <h2>At a glance</h2>
+            <span>{{ currentRow.seasonGamesPlayed ?? '—' }} appearances</span>
+          </div>
+
+          <div class="player-intel-facts">
+            <div>
+              <span>Current pace</span>
+              <strong>{{ getPerformanceLabel() }}</strong>
+            </div>
+            <div>
+              <span>Rest-of-season</span>
+              <strong>{{ formatPoints(currentRow.restOfSeasonProjection) }}</strong>
+            </div>
+            <div>
+              <span>Projected finish</span>
+              <strong>{{ formatPoints(currentRow.projectedFinalSeasonPoints) }}</strong>
+            </div>
+            @if (currentRow.asset.assetType === 'skater') {
+              <div>
+                <span>Age</span>
+                <strong>{{ getAgeLabel() }}</strong>
+              </div>
+              <div>
+                <span>Recent / season TOI</span>
+                <strong>{{ getToiLabel() }}</strong>
+              </div>
+            }
+            <div>
+              <span>Availability</span>
+              <strong>{{ getAvailabilityLabel() }}</strong>
+            </div>
+          </div>
+
+          <div class="player-intel-pace" aria-label="Recent fantasy point pace">
+            @for (pace of recentPace(); track pace.label) {
+              <div>
+                <span>{{ pace.label }}</span>
+                <strong>{{ formatPoints(pace.value, 2) }}</strong>
+                <small>FP/game</small>
+              </div>
+            }
+          </div>
+        }
+
+        @case ('stats') {
+          <div class="player-intel-card-heading">
+            <h2>Fantasy point breakdown</h2>
+          </div>
+
+          @if (statBreakdown().length > 0) {
+            <div class="player-intel-stat-list" aria-label="Fantasy point breakdown">
+              @for (item of statBreakdown(); track item.key) {
+                <div>
+                  <span>
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ getBreakdownStatLabel(item) }}</small>
+                  </span>
+                  <strong>{{ getBreakdownPointsLabel(item) }}</strong>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="player-intel-empty">Stat detail unavailable.</p>
+          }
+
+          <div class="player-intel-facts player-intel-facts-two">
+            <div>
+              <span>Season FP/game</span>
+              <strong>{{ formatPoints(currentRow.seasonFantasyPointsPerGame, 2) }}</strong>
+            </div>
+            <div>
+              <span>Games / appearances</span>
+              <strong>{{ currentRow.seasonGamesPlayed ?? '—' }}</strong>
+            </div>
+            @if (currentRow.asset.assetType === 'skater') {
+              <div>
+                <span>Recent / season TOI</span>
+                <strong>{{ getToiLabel() }}</strong>
+              </div>
+            }
+          </div>
+        }
+
+        @case ('projection') {
+          <div class="player-intel-card-heading">
+            <h2>Projection V11 outlook</h2>
+            <span>{{ currentRow.asset.scheduleDifficultyLabel || 'Schedule pending' }}</span>
+          </div>
+
+          <div class="player-intel-facts player-intel-facts-two">
+            <div>
+              <span>Next-six points</span>
+              <strong>{{ formatPoints(currentRow.nextSixProjection) }}</strong>
+            </div>
+            <div>
+              <span>Likely range</span>
+              <strong>{{ getProjectionRange() }}</strong>
+            </div>
+            <div>
+              <span>Next-six overall rank</span>
+              <strong>{{ formatRank(currentRow.nextSixOverallRank, currentRow.nextSixOverallRankCount) }}</strong>
+            </div>
+            <div>
+              <span>Next-six {{ currentRow.position }} rank</span>
+              <strong>{{ formatRank(currentRow.nextSixPositionRank, currentRow.nextSixPositionRankCount) }}</strong>
+            </div>
+            <div>
+              <span>Reliability</span>
+              <strong>{{ getReliabilityLabel() }}</strong>
+            </div>
+            <div>
+              <span>Model confidence</span>
+              <strong>{{ getModelConfidenceLabel() }}</strong>
+            </div>
+            <div>
+              <span>Rest-of-season</span>
+              <strong>{{ formatPoints(currentRow.restOfSeasonProjection) }}</strong>
+            </div>
+            <div>
+              <span>Projected finish</span>
+              <strong>{{ formatPoints(currentRow.projectedFinalSeasonPoints) }}</strong>
+            </div>
+          </div>
+        }
+
+        @case ('schedule') {
+          <div class="player-intel-card-heading">
+            <h2>Six-game opportunity</h2>
+            <span>{{ getScheduleSummary() }}</span>
+          </div>
+
+          <div class="player-intel-facts player-intel-facts-two">
+            <div>
+              <span>Expected availability</span>
+              <strong>{{ getAvailabilityLabel() }}</strong>
+            </div>
+            <div>
+              <span>Schedule adjustment</span>
+              <strong>{{ formatPoints(currentRow.asset.scheduleStrengthAdjustment) }} FP</strong>
+            </div>
+            <div>
+              <span>Back-to-backs</span>
+              <strong>{{ currentRow.asset.projectionBackToBackGames ?? '—' }}</strong>
+            </div>
+            <div>
+              <span>Rest advantage</span>
+              <strong>{{ currentRow.asset.projectionRestAdvantageGames ?? '—' }}</strong>
+            </div>
+            @if (currentRow.asset.availabilityReturnDate) {
+              <div>
+                <span>Expected return</span>
+                <strong>{{ formatDate(currentRow.asset.availabilityReturnDate) }}</strong>
+              </div>
+            }
+          </div>
+
+          @if (currentTeamCycleGames().length > 0) {
+            <div class="player-intel-game-list" aria-label="Current six-game block">
+              @for (game of currentTeamCycleGames(); track game.gameId) {
+                <div [attr.data-status]="game.status">
+                  <span>{{ formatShortDate(game.gameDate) }}</span>
+                  <strong>{{ getGameMarkerLabel(game) }}</strong>
+                  <small>{{ game.status }}</small>
+                </div>
+              }
+            </div>
+          } @else if (scheduleOpponents().length > 0) {
+            <div class="player-intel-opponents" aria-label="Projected opponents">
+              @for (opponent of scheduleOpponents(); track $index) {
+                <span>{{ opponent }}</span>
+              }
+            </div>
+          } @else {
+            <p class="player-intel-empty">Schedule unavailable.</p>
+          }
+        }
+      }
+    </section>
+  } @else {
+    <div class="player-intel-state player-intel-state-error" role="alert">
+      <strong>Player unavailable</strong>
+      <span>{{ errorMessage() || 'This player could not be found.' }}</span>
+    </div>
+  }
+</section>

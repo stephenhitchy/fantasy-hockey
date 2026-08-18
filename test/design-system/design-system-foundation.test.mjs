@@ -153,6 +153,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/dashboard/nhl-scoreboard/nhl-scoreboard.html',
     'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/leagues/league-wire/league-wire.html',
+    'src/app/features/players/league-player-board/league-player-board.html',
     'src/app/features/errors/access-denied/access-denied.html',
     'src/app/features/leagues/create-league/create-league.html',
     'src/app/features/leagues/join-league/join-league.html',

@@ -146,6 +146,24 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'leagues/:leagueId/players/:assetKey',
+        title: 'Player Intel',
+        canActivate: [leagueMemberGuard],
+        loadComponent: () =>
+          import('./features/players/league-player-detail/league-player-detail').then(
+            (module) => module.LeaguePlayerDetail,
+          ),
+      },
+      {
+        path: 'leagues/:leagueId/players',
+        title: 'Player Board',
+        canActivate: [leagueMemberGuard],
+        loadComponent: () =>
+          import('./features/players/league-player-board/league-player-board').then(
+            (module) => module.LeaguePlayerBoard,
+          ),
+      },
+      {
         path: 'leagues/:leagueId/free-agents',
         title: 'Free Agents',
         canActivate: [leagueMemberGuard],

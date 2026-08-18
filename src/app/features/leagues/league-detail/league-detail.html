@@ -283,7 +283,7 @@
           </span>
         </a>
 
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'free-agents']">
+        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'players']">
           <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
           <span class="hub-action-copy">
             <strong>Players</strong>
@@ -297,12 +297,7 @@
           </span>
         </a>
 
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'leaders']">
-          <span class="hub-action-icon pixel-icon icon-leaders icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Point Leaders</strong>
-          </span>
-        </a>
+
 
         @if (draft()?.status === 'complete') {
           <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">

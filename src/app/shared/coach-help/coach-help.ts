@@ -198,15 +198,38 @@ export class CoachHelp implements OnDestroy {
       };
     }
 
+    if (/\/leagues\/[^/]+\/players\/[^/]+$/.test(url)) {
+      return {
+        id: 'player-intel',
+        title: 'Player Intel',
+        subtitle: 'Current production, league ownership, ranks, and next-six outlook.',
+        tips: [
+          'Overall rank compares every draftable asset; position rank compares the player with the same exact position.',
+          'Watching is a private reminder. It does not add, claim, queue, reserve, or draft the player.',
+        ],
+      };
+    }
+
+    if (/\/leagues\/[^/]+\/players$/.test(url)) {
+      return {
+        id: 'player-board',
+        title: 'Players',
+        subtitle: 'Search rostered, available, waiver, unavailable, and watched assets.',
+        tips: [
+          'Open Player Intel for current stats, position and overall ranks, and the next-six outlook.',
+          'Unavailable means the player is involved in a pending league move; the destination stays private until completion.',
+        ],
+      };
+    }
+
     if (url.includes('/leaders')) {
       return {
-        id: 'leaders',
+        id: 'point-leaders',
         title: 'Point Leaders',
-        subtitle: 'Compare forwards, defensemen, and goalie units in separate leaderboards.',
+        subtitle: 'Completed six-game scoring windows ranked by fantasy points.',
         tips: [
-          'Positions are separated because goalie units and skaters have different scoring profiles.',
-          'Use player details to inspect game-by-game production.',
-          'Leaderboards reflect completed fantasy scoring rather than projected value.',
+          'Point Leaders uses finalized window totals rather than projections or partial live scores.',
+          'Open a player for current-season context, ownership, and next-six ranks.',
         ],
       };
     }

@@ -101,12 +101,17 @@ test('team identity appears before the most-used pages, followed by status, team
     '>My Team<',
     '>Players<',
     '>Standings<',
-    '>Point Leaders<',
     'id="league-status-title"',
     'class="teams-section"',
     'class="league-secondary-tools"',
     'class="commissioner-danger-zone',
   ]);
+
+  assert.doesNotMatch(
+    html,
+    /\['\/leagues', leagueId, 'leaders'\]/,
+    'Point Leaders remains available from Players and More rather than duplicating the essential grid.',
+  );
 });
 
 test('less-frequent and commissioner tools are separated from essential navigation', async () => {

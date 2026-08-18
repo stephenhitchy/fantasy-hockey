@@ -12020,3 +12020,21 @@ The accompanying Clear Ice pass reviews 17 manager-facing templates. Repeated ro
 Verification uses `npm run verify:batcha1a`. Deployment is Functions-first for `getPlayerWatchlist`, `setPlayerWatchlistEntry`, and the updated `deleteMyAccount`, followed by RC39 Hosting. No Firestore Rule, index, TTL, App Check, scoring-queue, or NHL-cache setting changes.
 
 Full implementation, site-first proof, and rollback guidance are maintained in `docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`.
+
+---
+
+# Product Batch A1B — League Player Board and Player Intel
+
+**Runtime release:** Release Candidate 40
+
+A1B adds one primary league-wide **Players** destination for rostered, available, waiver, unavailable, and privately watched assets. It derives current-season overall and exact-position ranks from the current verified shared Projection V11 snapshot and combines them with bounded roster ownership, public waiver status, and the existing private account Watchlist.
+
+The Player Board renders 50 rows initially, supports inline progressive disclosure, and uses a short route cache so opening Player Intel does not immediately repeat every roster read. Point Leaders is removed from visible navigation; the old `/leaders` URL opens the same Player Board for backward compatibility.
+
+League-aware Player Intel replaces mock data for league navigation. Its compact header keeps season points, overall rank, position rank, ownership, and next-six projection visible; Overview, Stats, Projection, and Schedule sections reveal current category contribution, recent pace, age and ice time when available, reliability, confidence, availability, exact six-game schedule context, and frozen Projection V11 opportunity only when requested.
+
+Player names in Free Agents and Waivers link to the same profile. Pending incoming assets are labeled only as reserved and never disclose their destination manager or slot.
+
+A1B is a Hosting-only presentation release. It adds no Cloud Function, permanent Firestore listener, Rule, index, TTL policy, migration, storage write, or competitive mutation. Scoring V3, Projection V11, immutable six-game roster-slot windows, seventh-game rollover, transaction/waiver privacy, App Check Monitor, scoring queue Shadow, and shared NHL cache Shadow remain unchanged.
+
+Full implementation, verification, deployment, site-first proof, and rollback guidance are maintained in `docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`.

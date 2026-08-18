@@ -911,6 +911,36 @@ export function listenToOwnerTransactions(
   ));
 }
 
+export async function getPublicLeagueWaiversOnce(
+  leagueId: string,
+): Promise<FantasyWaiver[]> {
+  const snapshot = await getDocs(query(
+    getPublicWaiversRef(leagueId),
+    orderBy('createdAt', 'desc'),
+    limit(100),
+  ));
+
+  return snapshot.docs.map((waiverDoc) => {
+    const data = waiverDoc.data() as Partial<FantasyWaiver>;
+
+    return {
+      id: waiverDoc.id,
+      assetKey: data.assetKey ?? waiverDoc.id,
+      asset: data.asset as DraftableAsset,
+      droppedAsset: data.droppedAsset ?? null,
+      droppedByOwnerId: data.droppedByOwnerId ?? '',
+      status: data.status ?? 'active',
+      myClaim: null,
+      awardedToOwnerId: data.awardedToOwnerId ?? null,
+      effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+      effectiveLabel: data.effectiveLabel ?? null,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      processedAt: data.processedAt,
+    };
+  });
+}
+
 export function listenToLeagueWaivers(
   leagueId: string,
   ownerId: string,

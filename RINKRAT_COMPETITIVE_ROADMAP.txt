@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.30
+Version 1.31
 Created: 2026-08-07
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -484,6 +484,7 @@ Goal: Compete with the expert-content and data advantages of large incumbents wi
 [ ] A1.9 Add Draft grades only after ranking accuracy is measured and the grading method is transparent. (P2 / L)
 [ ] A1.10 Add weekly power rankings as entertainment, clearly separated from official standings. (P2 / M)
 # [x] A1.11 Add a familiarity-aware Clear Ice copy-density standard so self-explanatory controls stay concise while six-game timing, eligibility, privacy, and destructive-action guidance remains visible. (P1 / M) — Completed 2026-08-17 in Product Batch A1A / Release Candidate 39 across 17 manager-facing templates with a source-controlled copy-density audit.
+# [x] A1.12 Add a league-wide Player Board and real-data Player Intel so managers can search rostered, available, waiver, unavailable, and watched assets; compare current-season fantasy points, overall rank, position rank, ownership, and next-six outlook; and open a compact Projection V11 detail through the existing Players navigation destination. (P1 / L) — Completed 2026-08-17 in Product Batch A1B / Release Candidate 40 with bounded one-time reads, a 30-second shared-data cache, private pending-move handling, Watchlist reuse, 50-row progressive disclosure, a dedicated Players route, the preserved Point Leaders scoring-history page, no new listener, and Hosting-only deployment.
 
 ================================================================================
 PHASE SC1 — SCALABILITY AND LARGE-PUBLIC-LOAD READINESS
@@ -829,6 +830,8 @@ Future entries:
 # [x] LOG.47 2026-08-17 — Completed Social Batch C1L / Release Candidate 38: finish roadmap item C1.6 by adding browser-generated 1080×1080 completed-Draft cards scoped to the signed-in manager and current-standings cards capped to eight rows with period, records, points for, point differential, playoff line, and current-manager highlight; centralize native file sharing, text-share, cancellation, local PNG download, and caption-copy fallback in one browser utility; add inline 44-pixel actions to the Draft completion and Standings header; deploy Hosting only; add no Function, Firestore listener, Rule, index, TTL policy, migration, or analytics write; preserve C1K Identity Architect, Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, transaction privacy, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
 
 # [x] LOG.48 2026-08-17 — Completed Product Batch A1A / Release Candidate 39: start the analytics and manager-tools phase with one private account-wide player watchlist independent of Draft queues; expose compact Watch and watched-only controls in Draft Room, Available Players, and Waivers; require verified authenticated callable authority, bounded canonical asset keys, transactional idempotency, a 100-asset cap, and account-deletion cleanup; complete the Clear Ice review across 17 manager-facing templates by removing repeated explanations while preserving six-game fairness, Injured Reserve eligibility, privacy, Draft entry-lock, secure-operation, and permanent-deletion guidance; add no Firestore listener, Rule, index, TTL policy, or competitive mutation; preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
+
+# [x] LOG.49 2026-08-17 — Completed Product Batch A1B / Release Candidate 40: add a dedicated league-wide Players route while preserving Point Leaders as focused completed-window history; include rostered, active-waiver, free-agent, unavailable, and privately watched assets; derive current-season overall and position ranks from the verified shared Projection V11 snapshot; show public fantasy-team ownership and active/bench/IR area while concealing pending-move destinations; add progressive league-aware Player Intel with stat contribution, recent pace, availability, schedule, reliability, and next-six range; reuse the existing A1A Watchlist authority; share bounded base reads through a 30-second in-memory cache; cap initial rendering at 50 rows with inline progressive disclosure; deploy Hosting only; add no Function, permanent listener, Rule, index, TTL policy, migration, or competitive mutation; preserve Scoring V3, Projection V11, immutable six-game windows, seventh-game rollover, App Check Monitor, scoring Shadow, and shared NHL cache Shadow.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

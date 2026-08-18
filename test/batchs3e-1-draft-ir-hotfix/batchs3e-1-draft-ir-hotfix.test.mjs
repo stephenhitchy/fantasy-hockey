@@ -106,8 +106,8 @@ test('S3E.1 stays monitor-only and preserves Scoring V3, Projection V11, Shadow,
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
   assert.match(readme, /Shadow/);
-  assert.match(runtime, /Release Candidate 39/);
-  assert.match(productionRuntime, /Release Candidate 39/);
+  assert.match(runtime, /Release Candidate 40/);
+  assert.match(productionRuntime, /Release Candidate 40/);
 });
 
 test('S3E.1 verification, runbook, and permanent roadmap stay synchronized', async () => {
@@ -127,7 +127,7 @@ test('S3E.1 verification, runbook, and permanent roadmap stay synchronized', asy
   assert.match(roadmap, /# \[x\] LOG\.23/);
   assert.match(packageJson.scripts['test:batchs3e-1:run'], /batchs3e-1-draft-ir-hotfix/);
   assert.match(packageJson.scripts['verify:batchs3e-1:core'], /verify:batchs3e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b):core/);
   assert.match(readme, /Security Batch S3E\.1/);
   assert.match(runbook, /Draft scheduling/i);
   assert.match(runbook, /displaced starter/i);

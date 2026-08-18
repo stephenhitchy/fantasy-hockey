@@ -102,7 +102,7 @@
             <article class="leader-row" [class.top-three-row]="row.rank <= 3">
               <strong class="leader-rank">#{{ row.rank }}</strong>
 
-              <div class="leader-player">
+              <a class="leader-player" [routerLink]="['/leagues', leagueId, 'players', row.assetKey]">
                 @if (getAssetLogoUrl(row.asset); as logoUrl) {
                   <img [src]="logoUrl" [alt]="getAssetTeamLabel(row.asset) + ' logo'" />
                 } @else {
@@ -117,7 +117,7 @@
                   </span>
                   <small>{{ row.cycleCount }} completed {{ row.cycleCount === 1 ? 'matchup' : 'matchups' }}</small>
                 </div>
-              </div>
+              </a>
 
               <span class="leader-owner manager-name-with-avatar">
                 <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="xs" />
@@ -131,6 +131,9 @@
         </div>
       }
 
+      <p class="games-note">
+        Skater games display appearances/team games when a player missed one of their NHL team’s counted games.
+      </p>
     </section>
   </section>
 }

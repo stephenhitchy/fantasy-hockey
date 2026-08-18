@@ -174,9 +174,9 @@
     </a>
 
     <a
-      [routerLink]="['/leagues', activeLeagueId, 'free-agents']"
+      [routerLink]="['/leagues', activeLeagueId, 'players']"
       class="rr-nav-item rr-nav-item--stacked"
-      [class.active]="isLeagueSectionActive('free-agents')"
+      [class.active]="isLeagueSectionActive('players') || isLeagueSectionActive('free-agents')"
     >
       <span class="nav-icon pixel-icon icon-players" aria-hidden="true"></span>
       <span>Players</span>
@@ -295,10 +295,10 @@
             [routerLink]="['/leagues', activeLeagueId, 'leaders']"
             (click)="closeMore()"
           >
-            <span class="pixel-icon icon-leaders icon-sm" aria-hidden="true"></span>
+            <span class="pixel-icon icon-players icon-sm" aria-hidden="true"></span>
             <span>
               <strong>Point Leaders</strong>
-              <small>Forwards, defensemen, and goalie units</small>
+              <small>Completed six-game scoring</small>
             </span>
           </a>
 

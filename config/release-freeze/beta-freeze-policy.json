@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseLabel": "Release Candidate 39",
+  "releaseLabel": "Release Candidate 40",
   "publicUrl": "https://rinkratfantasy.com",
   "firebaseProjectId": "nhl-fantasy-app-ab673",
   "hostingTarget": "app",
@@ -14,6 +14,6 @@
   "queueMode": "shadow",
   "appCheckMode": "monitor",
   "cspMode": "report-only",
-  "verificationCommand": "npm run verify:batcha1a",
-  "defaultTag": "rinkrat-rc39-invite-beta"
+  "verificationCommand": "npm run verify:batcha1b",
+  "defaultTag": "rinkrat-rc40-invite-beta"
 }

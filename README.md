@@ -30,19 +30,20 @@ Core project references:
 - [`docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md`](docs/RINKRAT_SOCIAL_C1K_IDENTITY_ARCHITECT.md) — server-reconciled identity challenges, a sixth custom logo/three-color scheme for every NHL team, top-right completion notifications, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md`](docs/RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS.md) — browser-generated Draft result and current-standings PNG cards, native mobile sharing, desktop fallback, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`](docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md) — account-wide player watchlists independent of Draft queues, watched-only filters, the Clear Ice copy-density pass, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`](docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md) — one league-wide Player Board for rostered, available, waiver, reserved, and watched assets plus real Projection V11 Player Intel, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 39 / Product Batch A1A**. A1A starts the manager decision-tools phase with a private account-wide **Player Watchlist** shared by Draft Room, Available Players, and Waivers while remaining independent of every private Draft queue.
+The current source runtime is **Release Candidate 40 / Product Batch A1B**. A1B turns **Players** into a league-wide Player Board for rostered, available, waiver, unavailable, and privately watched assets. **Point Leaders** remains a separate scoring-history page for completed immutable six-game windows.
 
-The same release completes the **Clear Ice** interface pass across 17 manager-facing templates. Self-explanatory controls no longer repeat themselves, while six-game timing, Injured Reserve eligibility, privacy, secure-operation, Draft entry-lock, and permanent-deletion guidance remains visible. Optional page guidance continues to follow the saved Hockey Familiarity preference without changing competition rules.
+Selecting a row opens real **Player Intel** from the current verified Projection V11 snapshot. The compact header shows current-season points, overall rank, position rank, ownership, and next-six outlook; Overview, Stats, Projection, and Schedule sections reveal deeper information only when requested. The old mock player detail is not used by league navigation.
 
-C1L Draft and standings cards, C1K Identity Architect, C1J matchup and championship cards, the complete C1I Round Recap, and the emoji-only mobile picker remain intact.
+A1A's private account-wide Player Watchlist and Clear Ice copy-density pass remain intact, along with C1L share cards, C1K Identity Architect, League Wire, and the emoji-only mobile picker.
 
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1a`.
+Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1b`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -92,6 +93,7 @@ verify:batchc1j
 verify:batchc1k
 verify:batchc1l
 verify:batcha1a
+verify:batcha1b
 ```
 
 RinkRat pins:
@@ -111,7 +113,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1a
+npm run verify:batcha1b
 ```
 
 After verification and a clean commit:
@@ -120,6 +122,15 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Product Batch A1B — League Player Board and Player Intel
+
+A1B uses `/leagues/:leagueId/players` for the league-wide **Player Board** and `/leagues/:leagueId/players/:assetKey` for **Player Intel**. `/leagues/:leagueId/leaders` remains the focused **Point Leaders** history page. The board reads the verified shared Projection V11 snapshot plus bounded league roster, public waiver, and private Watchlist state to show every draftable asset in one searchable surface.
+
+Rows include current-season fantasy points, all-position rank, position rank, next-six projection, ownership status, and Watchlist state. Selecting a row opens `/leagues/:leagueId/players/:assetKey`; Overview, Stats, Projection, and Schedule sections keep deeper data out of the default view. Pending incoming assets are labeled only as unavailable; their destination manager and slot stay private. Free Agent and Waiver names also link to Player Intel.
+
+A1B deploys RC40 Hosting only. It adds no Function, permanent listener, Firestore Rule, index, TTL policy, migration, or competitive mutation. Full guidance is in `docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`.
 
 
 ## Product Batch A1A — Player Watchlist and Clear Ice

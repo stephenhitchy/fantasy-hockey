@@ -430,22 +430,22 @@ test('C1G.4 remains intact under RC34 and preserves competitive models, Rules, i
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 39/);
-  assert.match(productionRuntime, /Release Candidate 39/);
+  assert.match(runtime, /Release Candidate 40/);
+  assert.match(productionRuntime, /Release Candidate 40/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1a');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc39-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1b');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc40-invite-beta');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1g:core'], /verify:batchc1f:core/);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1b:core/);
 });
 
 test('C1G.4 documentation records the emoji-only catalog and mobile picker repair', async () => {
@@ -458,7 +458,7 @@ test('C1G.4 documentation records the emoji-only catalog and mobile picker repai
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.30/);
+  assert.match(roadmap, /Version 1\.31/);
   assert.match(roadmap, /# \[x\] C1\.4/);
   assert.match(roadmap, /# \[x\] C1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.39/);
@@ -472,10 +472,10 @@ test('C1G.4 documentation records the emoji-only catalog and mobile picker repai
   assert.match(runbook, /functions:setLeagueActivityReaction/);
   assert.doesNotMatch(runbook, /--only firestore:rules/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 39 \/ Product Batch A1A/);
+  assert.match(readme, /Release Candidate 40 \/ Product Batch A1B/);
   assert.match(readme, /RINKRAT_SOCIAL_C1G_LEAGUE_WIRE_REACTIONS\.md/);
   assert.match(releaseRunbook, /C1H/);
-  assert.match(releaseRunbook, /npm run verify:batcha1a/);
-  assert.match(releaseRunbook, /rinkrat-rc39-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc39-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1b/);
+  assert.match(releaseRunbook, /rinkrat-rc40-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc40-invite-beta/);
 });
