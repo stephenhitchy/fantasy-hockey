@@ -716,3 +716,93 @@
     grid-column: 1 / -1;
   }
 }
+
+.player-intel-opportunity-lens {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 30%, var(--rr-color-border));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 92%, var(--rr-color-info) 8%);
+}
+
+.player-intel-opportunity-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.player-intel-opportunity-heading span {
+  color: var(--rr-color-info);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.player-intel-opportunity-heading strong {
+  color: var(--rr-color-text);
+  font-size: 0.84rem;
+  text-align: right;
+}
+
+.player-intel-opportunity-lens > p {
+  margin: 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.player-intel-opportunity-factors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.player-intel-opportunity-factors > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface);
+}
+
+.player-intel-opportunity-factors span {
+  color: var(--rr-color-text-muted);
+  font-size: 0.6rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.player-intel-opportunity-factors strong {
+  color: var(--rr-color-text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.player-intel-opportunity-factors > div[data-impact='positive'] {
+  border-color: color-mix(in srgb, var(--rr-color-success) 42%, var(--rr-color-border));
+}
+
+.player-intel-opportunity-factors > div[data-impact='negative'] {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 44%, var(--rr-color-border));
+}
+
+@media (max-width: 560px) {
+  .player-intel-opportunity-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .player-intel-opportunity-heading strong {
+    text-align: left;
+  }
+
+  .player-intel-opportunity-factors {
+    grid-template-columns: 1fr;
+  }
+}

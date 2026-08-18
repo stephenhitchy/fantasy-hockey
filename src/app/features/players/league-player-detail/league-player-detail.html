@@ -321,8 +321,26 @@
         @case ('schedule') {
           <div class="player-intel-card-heading">
             <h2>Six-game opportunity</h2>
-            <span>{{ getScheduleSummary() }}</span>
+            <span>{{ currentScheduleContextLabel() }} · {{ getScheduleSummary() }}</span>
           </div>
+
+          @if (opportunityLens(); as lens) {
+            <section class="player-intel-opportunity-lens" aria-label="Next-six explanation">
+              <div class="player-intel-opportunity-heading">
+                <span>Next-six lens</span>
+                <strong>{{ lens.headline }}</strong>
+              </div>
+              <p>{{ lens.summary }}</p>
+              <div class="player-intel-opportunity-factors">
+                @for (factor of lens.factors; track factor.key) {
+                  <div [attr.data-impact]="factor.impact">
+                    <span>{{ factor.label }}</span>
+                    <strong>{{ factor.value }}</strong>
+                  </div>
+                }
+              </div>
+            </section>
+          }
 
           <div class="player-intel-facts player-intel-facts-two">
             <div>
@@ -351,11 +369,11 @@
 
           @if (currentTeamCycleGames().length > 0) {
             <div class="player-intel-game-list" aria-label="Current six-game block">
-              @for (game of currentTeamCycleGames(); track game.gameId) {
+              @for (game of currentTeamCycleGames(); track game.index) {
                 <div [attr.data-status]="game.status">
                   <span>{{ formatShortDate(game.gameDate) }}</span>
                   <strong>{{ getGameMarkerLabel(game) }}</strong>
-                  <small>{{ game.status }}</small>
+                  <small>{{ game.statusLabel }}</small>
                 </div>
               }
             </div>

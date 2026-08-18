@@ -10,7 +10,6 @@ import {
   DraftableAsset,
   DraftPosition,
   FantasyDraft,
-  ProjectionCycleGameMarker,
   ProjectionStatBreakdownItem,
 } from '../../core/draft/draft.models';
 
@@ -56,6 +55,13 @@ import {
   type LeaguePlayerBoardSortMode,
   type LeaguePlayerBoardStatusFilter,
 } from '../../core/player/league-player-board.util';
+
+import {
+  buildCurrentRosterWindowByAssetKey,
+  buildProjectionProgressMarkers,
+  buildRosterWindowProgressMarkers,
+  type LeaguePlayerProgressMarker,
+} from '../../core/player/league-player-window-progress.util';
 
 import {
   FantasyAssetCycleWindow,
@@ -174,6 +180,7 @@ export class FreeAgents implements OnDestroy {
   latestCycle = signal<FantasyCycle | null>(null);
   leagueCycles = signal<FantasyCycle[]>([]);
   myTeamWindowsByCycle = signal<Record<number, FantasyTeamCycleWindows | null>>({});
+  teamWindowsByCycle = signal<Record<number, FantasyTeamCycleWindows[]>>({});
   teamWindowLoadedByCycle = signal<Record<number, boolean>>({});
   waivers = signal<FantasyWaiver[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
@@ -371,6 +378,25 @@ export class FreeAgents implements OnDestroy {
 
     return buildLeaguePlayerReservedAssetKeys(rostersByOwnerId);
   });
+
+  readonly teamWindowSnapshotReady = computed(() => {
+    const activeCycleNumbers = this.leagueCycles()
+      .filter((cycle) => cycle.status === 'active')
+      .map((cycle) => cycle.cycleNumber);
+    const loadedByCycle = this.teamWindowLoadedByCycle();
+
+    return activeCycleNumbers.length === 0 ||
+      activeCycleNumbers.every((cycleNumber) => loadedByCycle[cycleNumber] === true);
+  });
+
+  readonly boardCurrentWindowByAssetKey = computed(() =>
+    this.teamWindowSnapshotReady()
+      ? buildCurrentRosterWindowByAssetKey(
+        this.boardOwnershipByAssetKey(),
+        this.teamWindowsByCycle(),
+      )
+      : new Map<string, FantasyAssetCycleWindow>(),
+  );
 
   readonly boardRows = computed<LeaguePlayerBoardRow[]>(() =>
     buildLeaguePlayerBoardRows({
@@ -1160,9 +1186,52 @@ export class FreeAgents implements OnDestroy {
       : '';
   }
 
-  getBoardCycleLabel(asset: DraftableAsset): string {
+  getBoardCycleLabel(row: LeaguePlayerBoardRow): string {
+    const window = this.boardCurrentWindowByAssetKey().get(row.assetKey);
+    if (window) {
+      return `Matchup ${window.cycleNumber}`;
+    }
+
+    const blockNumber = this.getCurrentTeamCycleNumber(row.asset);
+    if (row.ownership?.area === 'active') {
+      return 'Matchup pending';
+    }
+    if (row.ownership?.area === 'bench') {
+      return blockNumber ? `Bench · NHL Block ${blockNumber}` : 'Bench';
+    }
+    if (row.ownership?.area === 'ir') {
+      return blockNumber ? `IR · NHL Block ${blockNumber}` : 'IR';
+    }
+
+    return blockNumber ? `NHL Block ${blockNumber}` : 'NHL Block —';
+  }
+
+  getBoardCycleMarker(row: LeaguePlayerBoardRow, index: number): LeaguePlayerProgressMarker {
+    const requiredGames = this.getRequiredGamesPerCycle();
+    const window = this.boardCurrentWindowByAssetKey().get(row.assetKey);
+
+    if (window) {
+      return buildRosterWindowProgressMarkers(window, requiredGames)[index];
+    }
+
+    return buildProjectionProgressMarkers(
+      row.ownership?.area === 'active'
+        ? undefined
+        : this.getProjectionAsset(row.asset).currentTeamCycleGames,
+      requiredGames,
+    )[index];
+  }
+
+  getIncomingCycleLabel(asset: DraftableAsset): string {
     const cycleNumber = this.getCurrentTeamCycleNumber(asset);
-    return cycleNumber ? `Matchup ${cycleNumber}` : 'Matchup —';
+    return cycleNumber ? `NHL Block ${cycleNumber}` : 'NHL Block —';
+  }
+
+  getIncomingCycleMarker(asset: DraftableAsset, index: number): LeaguePlayerProgressMarker {
+    return buildProjectionProgressMarkers(
+      this.getProjectionAsset(asset).currentTeamCycleGames,
+      this.getRequiredGamesPerCycle(),
+    )[index];
   }
 
   getDropCandidateAssetKey(candidate: DropCandidate): string | null {
@@ -1932,38 +2001,34 @@ export class FreeAgents implements OnDestroy {
     );
   }
 
-  getCurrentCycleMarker(
-    asset: DraftableAsset,
-    index: number,
-  ): ProjectionCycleGameMarker | null {
-    return this.getProjectionAsset(asset).currentTeamCycleGames?.[index] ?? null;
-  }
-
-  getCycleMarkerClass(marker: ProjectionCycleGameMarker | null): string {
-    if (!marker) {
-      return 'cycle-marker-unavailable';
-    }
-
-    return `cycle-marker-${marker.status}`;
+  getCycleMarkerClass(marker: LeaguePlayerProgressMarker | null | undefined): string {
+    return marker ? `cycle-marker-${marker.status}` : 'cycle-marker-unavailable';
   }
 
   getCycleMarkerTooltip(
-    marker: ProjectionCycleGameMarker | null,
+    marker: LeaguePlayerProgressMarker | null | undefined,
     index: number,
   ): string {
-    if (!marker) {
-      return `Game ${index + 1}: refresh shared projections for live six-game status.`;
+    return marker?.title ?? `Game ${index + 1}: schedule unavailable.`;
+  }
+
+  getCandidateCycleMarker(
+    candidate: DropCandidate,
+    index: number,
+  ): LeaguePlayerProgressMarker {
+    const requiredGames = this.getRequiredGamesPerCycle();
+
+    if (candidate.rosterArea === 'active') {
+      return candidate.currentWindow
+        ? buildRosterWindowProgressMarkers(candidate.currentWindow, requiredGames)[index]
+        : buildProjectionProgressMarkers(undefined, requiredGames)[index];
     }
 
-    const venue = marker.venue === 'home' ? 'vs' : '@';
-    const status =
-      marker.status === 'played'
-        ? 'played and counted'
-        : marker.status === 'missed'
-          ? 'team played; player missed'
-          : 'upcoming';
-
-    return `Game ${index + 1}: ${marker.gameDate} ${venue} ${marker.opponentAbbreviation} — ${status}.`;
+    const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
+    return buildProjectionProgressMarkers(
+      projectionAsset?.currentTeamCycleGames,
+      requiredGames,
+    )[index];
   }
 
   getCycleProgressLabel(asset: DraftableAsset): string {
@@ -3529,8 +3594,14 @@ export class FreeAgents implements OnDestroy {
         activeCycleNumbers.has(Number(cycleNumberText)),
       ),
     );
+    const nextAllWindowsByCycle = Object.fromEntries(
+      Object.entries(this.teamWindowsByCycle()).filter(([cycleNumberText]) =>
+        activeCycleNumbers.has(Number(cycleNumberText)),
+      ),
+    );
 
     this.myTeamWindowsByCycle.set(nextWindowsByCycle);
+    this.teamWindowsByCycle.set(nextAllWindowsByCycle);
     this.teamWindowLoadedByCycle.set(nextLoadedByCycle);
 
     activeCycleNumbers.forEach((cycleNumber) => {
@@ -3548,6 +3619,10 @@ export class FreeAgents implements OnDestroy {
         (teamWindows) => {
           const myWindows = teamWindows.find((entry) => entry.ownerId === this.userId) ?? null;
 
+          this.teamWindowsByCycle.set({
+            ...this.teamWindowsByCycle(),
+            [cycleNumber]: teamWindows,
+          });
           this.myTeamWindowsByCycle.set({
             ...this.myTeamWindowsByCycle(),
             [cycleNumber]: myWindows,
@@ -3573,6 +3648,7 @@ export class FreeAgents implements OnDestroy {
     Object.values(this.teamWindowListeners).forEach((unsubscribe) => unsubscribe());
     this.teamWindowListeners = {};
     this.myTeamWindowsByCycle.set({});
+    this.teamWindowsByCycle.set({});
     this.teamWindowLoadedByCycle.set({});
   }
 

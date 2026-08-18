@@ -29,6 +29,7 @@ export interface LeaguePlayerOwnership {
   teamName: string;
   managerName: string;
   area: LeaguePlayerBoardRosterArea;
+  rosterSlotId: string | null;
   slotLabel: string;
 }
 
@@ -150,6 +151,7 @@ export function buildLeaguePlayerOwnership(
           teamName: team.teamName,
           managerName,
           area: 'active',
+          rosterSlotId: slot.slotId,
           slotLabel: `${slot.position}${slot.slotNumber}`,
         });
       }
@@ -167,6 +169,7 @@ export function buildLeaguePlayerOwnership(
         teamName: team.teamName,
         managerName,
         area: 'bench',
+        rosterSlotId: slot.slotId,
         slotLabel: `Bench ${slot.slotNumber}`,
       });
     }
@@ -183,6 +186,7 @@ export function buildLeaguePlayerOwnership(
         teamName: team.teamName,
         managerName,
         area: 'ir',
+        rosterSlotId: slot.slotId,
         slotLabel: `IR ${slot.slotNumber}`,
       });
     }

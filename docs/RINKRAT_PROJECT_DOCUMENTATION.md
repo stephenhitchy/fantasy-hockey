@@ -12367,3 +12367,11 @@ firebase functions:log \
   --project=nhl-fantasy-app-ab673 \
   --only getPlayerNote,setPlayerNote,deleteMyAccount
 ```
+
+---
+
+# Product Batch A1E — Authoritative Window Sync and Next-Six Opportunity Lens
+
+See `docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md` for the complete Release Candidate 43 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
+
+A1E corrects Add / Drop and Player Intel tracker parity by using the exact active fantasy roster-slot window for active rostered players. Free agents, Bench, and IR retain explicitly labeled NHL schedule blocks. The existing Player Intel Schedule tab also gains one bounded Next-six lens using existing Projection V11 availability, schedule, rest, role, and form evidence. No Function, listener, Rule, index, TTL policy, migration, or competitive write is added.

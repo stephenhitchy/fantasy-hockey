@@ -198,11 +198,11 @@
                   }
                 </span>
 
-                <span class="unified-cycle-block" [attr.aria-label]="getBoardCycleLabel(row.asset)">
-                  <strong>{{ getBoardCycleLabel(row.asset) }}</strong>
+                <span class="unified-cycle-block" [attr.aria-label]="getBoardCycleLabel(row)">
+                  <strong>{{ getBoardCycleLabel(row) }}</strong>
                   <span class="unified-cycle-dots" aria-hidden="true">
                     @for (dotIndex of cycleDotSlots; track dotIndex) {
-                      @if (getCurrentCycleMarker(row.asset, dotIndex); as marker) {
+                      @if (getBoardCycleMarker(row, dotIndex); as marker) {
                         <span
                           [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
                           [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
@@ -311,12 +311,15 @@
             }
           </span>
 
-          <span class="unified-cycle-block" [attr.aria-label]="getBoardCycleLabel(addAsset)">
-            <strong>{{ getBoardCycleLabel(addAsset) }}</strong>
+          <span class="unified-cycle-block" [attr.aria-label]="getIncomingCycleLabel(addAsset)">
+            <strong>{{ getIncomingCycleLabel(addAsset) }}</strong>
             <span class="unified-cycle-dots" aria-hidden="true">
               @for (dotIndex of cycleDotSlots; track dotIndex) {
-                @if (getCurrentCycleMarker(addAsset, dotIndex); as marker) {
-                  <span [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)">{{ dotIndex + 1 }}</span>
+                @if (getIncomingCycleMarker(addAsset, dotIndex); as marker) {
+                  <span
+                    [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
+                    [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                  >{{ dotIndex + 1 }}</span>
                 } @else {
                   <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
                 }
@@ -399,8 +402,11 @@
                     <strong>{{ getCandidateMatchupNumberLabel(candidate) }}</strong>
                     <span class="unified-cycle-dots" aria-hidden="true">
                       @for (dotIndex of cycleDotSlots; track dotIndex) {
-                        @if (getCurrentCycleMarker(outgoing, dotIndex); as marker) {
-                          <span [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)">{{ dotIndex + 1 }}</span>
+                        @if (getCandidateCycleMarker(candidate, dotIndex); as marker) {
+                          <span
+                            [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
+                            [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
+                          >{{ dotIndex + 1 }}</span>
                         } @else {
                           <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
                         }

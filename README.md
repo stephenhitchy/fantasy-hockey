@@ -33,19 +33,20 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`](docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md) — one league-wide Player Board for rostered, available, waiver, reserved, and watched assets plus real Projection V11 Player Intel, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md`](docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md) — the unified Add / Drop player directory, same-layout roster selection, six-game trackers, injury return context, replay-driven Projection V11 refresh, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md`](docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md) — replay-aligned source-season player statistics, target-season six-game markers, quiet snapshot freshness, private Player Intel notes, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md`](docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md) — authoritative Game Center/Add / Drop roster-slot tracker parity, honest NHL-block fallbacks, compact next-six opportunity explanation, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 42 / Product Batch A1D**. A1D corrects the historical-replay player-data alignment found during RC41 site testing. Replay still uses target-season dates, but Season Points, stat rows, ranks, recent form, and game markers are now rebuilt from only the source-season NHL game rows released through the simulated target date.
+The current source runtime is **Release Candidate 43 / Product Batch A1E**. A1E fixes the tracker mismatch found during RC42 site testing by using the exact authoritative fantasy roster-slot window for every active rostered player in Add / Drop and Player Intel—the same owner, slot, asset, Matchup number, and six-marker source used by Game Center.
 
-The unified Add / Drop page continues following the exact current Projection V11 pointer. A compact **Updating player data…** state appears only while the replay date is ahead of the loaded snapshot. Future schedule opportunities remain in the six-game tracker, so played, missed, and upcoming dots advance together instead of disappearing from a past-games-only slice.
+Free agents, Bench players, and IR players keep their useful Projection V11 schedule context, but it is now labeled **NHL Block N** rather than a fantasy Matchup. This makes the independent-window architecture honest without adding more explanation to the player rows.
 
-A1D also completes private custom player notes. Player Intel exposes one compact inline **My note** section with 500-character/eight-line and 100-player account bounds. Notes are authenticated-user-owned, never enter public player data, add no listener, and are removed during permanent account deletion.
+A1E also completes the roadmap’s schedule-opportunity summary with one compact **Next-six lens** inside Player Intel. It surfaces no more than three existing Projection V11 factors—expected games, schedule adjustment, rest pattern, recent role, and recent form—and does not create a new projection model or another default-visible panel.
 
-Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1d`.
+Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1e`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -98,6 +99,7 @@ verify:batcha1a
 verify:batcha1b
 verify:batcha1c
 verify:batcha1d
+verify:batcha1e
 ```
 
 RinkRat pins:
@@ -117,7 +119,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1d
+npm run verify:batcha1e
 ```
 
 After verification and a clean commit:
@@ -126,6 +128,13 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+
+
+## Product Batch A1E — Window Sync and Next-Six Opportunity Lens
+
+A1E makes active rostered-player progress in Add / Drop and Player Intel come from the same authoritative fantasy roster-slot window used by Game Center. General Projection V11 schedules remain available for free agents, Bench, and IR, but are labeled as NHL blocks rather than fantasy Matchups. Player Intel’s existing Schedule tab also includes one bounded Next-six lens showing at most three transparent availability, schedule, rest, role, or form factors.
+
+A1E deploys RC43 Hosting only. It adds no Function, listener, Firestore Rule, index, TTL policy, migration, or competitive mutation. Full guidance is in `docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md`.
 
 
 ## Product Batch A1B — League Player Board and Player Intel

@@ -85,6 +85,7 @@ test('ownership maps active, bench, and IR assets without changing the roster', 
     teamName: 'Rink Raiders',
     managerName: 'Alex',
     area: 'active',
+    rosterSlotId: 'C-1',
     slotLabel: 'C1',
   });
   assert.equal(ownership.get('skater-2')?.area, 'bench');
@@ -354,22 +355,22 @@ test('A1B remains permanently recorded while current release operations advance 
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 42/);
-  assert.match(productionRuntime, /Release Candidate 42/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 42');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1d');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc42-invite-beta');
+  assert.match(runtime, /Release Candidate 43/);
+  assert.match(productionRuntime, /Release Candidate 43/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 43');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1e');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc43-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1b:core'], /verify:batcha1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1d:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1e:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.33/);
+  assert.match(roadmap, /Version 1\.34/);
   assert.match(roadmap, /# \[x\] A1\.12 Add a league-wide Player Board/);
   assert.match(roadmap, /# \[x\] LOG\.49 2026-08-17/);
   assert.match(docs, /Hosting only/);
   assert.match(docs, /reserved/i);
-  assert.match(readme, /Release Candidate 42 \/ Product Batch A1D/);
+  assert.match(readme, /Release Candidate 43 \/ Product Batch A1E/);
   assert.match(readme, /RINKRAT_PRODUCT_A1B_PLAYER_BOARD\.md/);
-  assert.match(runbook, /npm run verify:batcha1d/);
-  assert.match(runbook, /rinkrat-rc42-validation\.json/);
-  assert.match(runbook, /rinkrat-rc42-invite-beta/);
+  assert.match(runbook, /npm run verify:batcha1e/);
+  assert.match(runbook, /rinkrat-rc43-validation\.json/);
+  assert.match(runbook, /rinkrat-rc43-invite-beta/);
 });

@@ -1,10 +1,10 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
 **Batch:** B1C
-**Runtime release being frozen:** Release Candidate 42
+**Runtime release being frozen:** Release Candidate 43
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 42 / Product Batch A1D runtime; Scoring V3 and Projection V11 remain unchanged.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 43 / Product Batch A1E runtime; Scoring V3 and Projection V11 remain unchanged.
 
 A1C unifies Player Board and Add / Drop, adds same-layout roster selection, and queues replay-fresh Projection V11 snapshots after historical scoring. It deploys only `processHistoricalReplayAdvance`, `processProjectionGenerationTask`, and Hosting. It changes no Rule, index, TTL policy, App Check setting, scoring formula, projection algorithm, scoring-queue mode, or NHL-cache authority.
 
@@ -83,7 +83,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1d
+npm run verify:batcha1e
 ```
 
 Commit and push the verified RC42 source:
@@ -95,7 +95,7 @@ git commit -m "Fix replay player data and add private notes"
 git push
 ```
 
-Do not run the freeze command until Product Batch A1D has been deployed and the live manifest identifies Release Candidate 42. The freeze tooling itself never deploys or mutates production.
+Do not run the freeze command until Product Batch A1E has been deployed and the live manifest identifies Release Candidate 43. The freeze tooling itself never deploys or mutates production.
 
 ## C1B privacy-cutover prerequisite
 
@@ -113,7 +113,7 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 42, Scoring V3, and Projection V11.
+- The live domain serves Release Candidate 43, Scoring V3, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
@@ -123,7 +123,7 @@ Preflight verifies:
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 42 Release Readiness page:
+On the deployed Release Candidate 43 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -133,14 +133,14 @@ On the deployed Release Candidate 42 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc42-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc43-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc42-validation.json"
+  "$HOME/Downloads/rinkrat-rc43-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -177,8 +177,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc42-validation.json" \
-  --tag=rinkrat-rc42-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc43-validation.json" \
+  --tag=rinkrat-rc43-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -197,27 +197,27 @@ Review the generated JSON and rollback Markdown, then create the annotated tag e
 Example:
 
 ```bash
-git tag -a rinkrat-rc42-invite-beta LIVE_SOURCE_REVISION \
+git tag -a rinkrat-rc43-invite-beta LIVE_SOURCE_REVISION \
   -m "RinkRat RC42 invite beta baseline"
-git push origin rinkrat-rc42-invite-beta
+git push origin rinkrat-rc43-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc42-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc43-invite-beta
 ```
 
 Verify the complete frozen state while RC42 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc42-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc43-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc42-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc43-invite-beta
 ```
 
 ## After the freeze

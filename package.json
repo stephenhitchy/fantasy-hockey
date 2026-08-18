@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run toolchain:verify && npm run verify:batcha1d:core && node -e \"console.log('Inherited CI coverage through Product Batch A1D')\" && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batcha1e:core && node -e \"console.log('Inherited CI coverage through Product Batch A1E')\" && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -357,7 +357,12 @@
     "test:batcha1d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcha1d-replay-player-notes/*.test.mjs",
     "preverify:batcha1d": "npm run security:sync-repository-automation",
     "verify:batcha1d:core": "npm run verify:batcha1c:core && npm run audit:product-copy-density && npm run test:batcha1d:run && npm run validate:release-manifest",
-    "verify:batcha1d": "npm run toolchain:verify && npm run verify:batcha1d:core && npm run security:dependency-audit"
+    "verify:batcha1d": "npm run toolchain:verify && npm run verify:batcha1d:core && npm run security:dependency-audit",
+    "pretest:batcha1e:run": "npm run generate:release-manifest",
+    "test:batcha1e:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcha1e-window-sync-opportunity/*.test.mjs",
+    "preverify:batcha1e": "npm run security:sync-repository-automation",
+    "verify:batcha1e:core": "npm run verify:batcha1d:core && npm run audit:product-copy-density && npm run test:batcha1e:run && npm run validate:release-manifest",
+    "verify:batcha1e": "npm run toolchain:verify && npm run verify:batcha1e:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

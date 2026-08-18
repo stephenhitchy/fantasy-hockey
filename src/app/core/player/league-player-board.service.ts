@@ -1,3 +1,6 @@
+import { getCycleTeamWindows } from '../cycle/asset-cycle-window.service';
+import { getActiveLeagueCycles } from '../cycle/cycle.service';
+import { type FantasyAssetCycleWindow, type FantasyTeamCycleWindows } from '../cycle/cycle.models';
 import { type DraftableAsset } from '../draft/draft.models';
 import {
   getFantasyDraft,
@@ -20,6 +23,7 @@ import {
   buildLeaguePlayerReservedAssetKeys,
   type LeaguePlayerOwnership,
 } from './league-player-board.util';
+import { buildCurrentRosterWindowByAssetKey } from './league-player-window-progress.util';
 
 const LEAGUE_PLAYER_BOARD_CACHE_MILLISECONDS = 30_000;
 
@@ -41,6 +45,7 @@ export interface LeaguePlayerBoardBaseData {
   snapshotMetadata: SharedProjectionSnapshotMetadata;
   ownershipByAssetKey: Map<string, LeaguePlayerOwnership>;
   reservedAssetKeys: Set<string>;
+  currentWindowByAssetKey: Map<string, FantasyAssetCycleWindow>;
 }
 
 
@@ -78,21 +83,39 @@ async function fetchLeaguePlayerBoardBaseData(
     throw new Error('Player rankings are not ready for this league yet.');
   }
 
-  const rosterEntries = await Promise.all(
-    teams.map(async (team) => [
-      team.ownerId,
-      await getFantasyRosterOnce(leagueId, team.ownerId),
+  const [rosterEntries, activeCycles] = await Promise.all([
+    Promise.all(
+      teams.map(async (team) => [
+        team.ownerId,
+        await getFantasyRosterOnce(leagueId, team.ownerId),
+      ] as const),
+    ),
+    getActiveLeagueCycles(leagueId),
+  ]);
+  const rostersByOwnerId = new Map<string, FantasyRoster | null>(rosterEntries);
+  const ownershipByAssetKey = buildLeaguePlayerOwnership(teams, rostersByOwnerId);
+  const teamWindowEntries = await Promise.all(
+    activeCycles.map(async (cycle) => [
+      cycle.cycleNumber,
+      await getCycleTeamWindows(leagueId, cycle.cycleNumber),
     ] as const),
   );
-  const rostersByOwnerId = new Map<string, FantasyRoster | null>(rosterEntries);
+  const teamWindowsByCycle = Object.fromEntries(teamWindowEntries) as Record<
+    number,
+    FantasyTeamCycleWindows[]
+  >;
 
   return {
     league,
     teams,
     assets: snapshot.assets,
     snapshotMetadata: snapshot.metadata,
-    ownershipByAssetKey: buildLeaguePlayerOwnership(teams, rostersByOwnerId),
+    ownershipByAssetKey,
     reservedAssetKeys: buildLeaguePlayerReservedAssetKeys(rostersByOwnerId),
+    currentWindowByAssetKey: buildCurrentRosterWindowByAssetKey(
+      ownershipByAssetKey,
+      teamWindowsByCycle,
+    ),
   };
 }
 

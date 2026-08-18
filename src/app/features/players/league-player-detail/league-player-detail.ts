@@ -10,10 +10,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
 import { auth } from '../../../core/firebase';
-import {
-  type ProjectionCycleGameMarker,
-  type ProjectionStatBreakdownItem,
-} from '../../../core/draft/draft.models';
+import { type ProjectionStatBreakdownItem } from '../../../core/draft/draft.models';
+import { type FantasyAssetCycleWindow } from '../../../core/cycle/cycle.models';
 import {
   buildLeaguePlayerBoardRows,
   type LeaguePlayerBoardRow,
@@ -26,6 +24,12 @@ import {
   getPlayerWatchlist,
   setPlayerWatchlistEntry,
 } from '../../../core/player/player-watchlist.service';
+import {
+  buildProjectionProgressMarkers,
+  buildRosterWindowProgressMarkers,
+  type LeaguePlayerProgressMarker,
+} from '../../../core/player/league-player-window-progress.util';
+import { buildPlayerOpportunityLens } from '../../../core/player/player-opportunity-lens.util';
 import {
   getPlayerNote,
   normalizePlayerNoteText,
@@ -71,6 +75,7 @@ export class LeaguePlayerDetail {
   readonly league = signal<League | null>(null);
   readonly snapshotMetadata = signal<SharedProjectionSnapshotMetadata | null>(null);
   readonly row = signal<LeaguePlayerBoardRow | null>(null);
+  readonly currentRosterWindow = signal<FantasyAssetCycleWindow | null>(null);
   readonly loading = signal(true);
   readonly errorMessage = signal('');
   readonly watchSaving = signal(false);
@@ -125,9 +130,50 @@ export class LeaguePlayerDetail {
       .slice(0, 6),
   );
 
-  readonly currentTeamCycleGames = computed<readonly ProjectionCycleGameMarker[]>(() =>
-    (this.asset()?.currentTeamCycleGames ?? []).slice(0, 6),
-  );
+  readonly currentTeamCycleGames = computed<readonly LeaguePlayerProgressMarker[]>(() => {
+    const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+    const window = this.currentRosterWindow();
+
+    if (window) {
+      return buildRosterWindowProgressMarkers(window, requiredGames);
+    }
+
+    return buildProjectionProgressMarkers(
+      this.row()?.ownership?.area === 'active'
+        ? undefined
+        : this.asset()?.currentTeamCycleGames,
+      requiredGames,
+    );
+  });
+
+  readonly opportunityLens = computed(() => {
+    const asset = this.asset();
+    return asset ? buildPlayerOpportunityLens(asset) : null;
+  });
+
+  readonly currentScheduleContextLabel = computed(() => {
+    const row = this.row();
+    const window = this.currentRosterWindow();
+
+    if (window) {
+      return `Matchup ${window.cycleNumber}`;
+    }
+
+    if (row?.ownership?.area === 'active') {
+      return 'Matchup pending';
+    }
+
+    const blockNumber = this.asset()?.currentTeamCycleNumber ??
+      this.asset()?.targetProjectionCycleNumber ??
+      null;
+    const prefix = row?.ownership?.area === 'bench'
+      ? 'Bench · NHL Block'
+      : row?.ownership?.area === 'ir'
+        ? 'IR · NHL Block'
+        : 'NHL Block';
+
+    return blockNumber ? `${prefix} ${blockNumber}` : `${prefix} —`;
+  });
 
   readonly birthDate = computed(() => {
     const asset = this.asset();
@@ -474,9 +520,8 @@ export class LeaguePlayerDetail {
     return `${home ?? 0} home · ${road ?? 0} away`;
   }
 
-  getGameMarkerLabel(game: ProjectionCycleGameMarker): string {
-    const venue = game.venue === 'home' ? 'vs' : '@';
-    return `${venue} ${game.opponentAbbreviation}`;
+  getGameMarkerLabel(game: LeaguePlayerProgressMarker): string {
+    return game.displayLabel;
   }
 
   private async initialize(): Promise<void> {
@@ -519,6 +564,9 @@ export class LeaguePlayerDetail {
       this.league.set(baseData.league);
       this.snapshotMetadata.set(baseData.snapshotMetadata);
       this.row.set(selectedRow);
+      this.currentRosterWindow.set(
+        selectedRow ? baseData.currentWindowByAssetKey.get(selectedRow.assetKey) ?? null : null,
+      );
       this.savedNote.set(playerNote?.note ?? '');
       this.noteDraft.set(playerNote?.note ?? '');
       this.noteUpdatedAt.set(playerNote?.updatedAt ?? null);
