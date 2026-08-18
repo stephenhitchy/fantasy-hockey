@@ -265,7 +265,7 @@ test('A1C preserves scoring, Projection V11, Rules, indexes, and inactive safety
   assert.equal(cache.authoritativeReadsEnabled, false);
 });
 
-test('A1C advances release operations to RC41 and permanently records the unified page and freshness fix', async () => {
+test('the current release retains A1C while A1D advances release operations to RC42', async () => {
   const [runtime, productionRuntime, freezeSource, packageSource, roadmap, docsRoadmap, docs, readme, runbook] = await Promise.all([
     read('src/environments/app-runtime.config.ts'),
     read('src/environments/app-runtime.config.production.ts'),
@@ -280,22 +280,22 @@ test('A1C advances release operations to RC41 and permanently records the unifie
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 41/);
-  assert.match(productionRuntime, /Release Candidate 41/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 41');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1c');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc41-invite-beta');
-  assert.match(packageJson.scripts['verify:batcha1c:core'], /verify:batcha1b:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1c:core/);
+  assert.match(runtime, /Release Candidate 42/);
+  assert.match(productionRuntime, /Release Candidate 42/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 42');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1d');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc42-invite-beta');
+  assert.match(packageJson.scripts['verify:batcha1d:core'], /verify:batcha1c:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1d:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.32/);
+  assert.match(roadmap, /Version 1\.33/);
   assert.match(roadmap, /# \[x\] A1\.13 Unify Player Board and Add \/ Drop/);
   assert.match(roadmap, /# \[x\] LOG\.50 2026-08-18/);
   assert.match(docs, /processHistoricalReplayAdvance,functions:processProjectionGenerationTask/);
   assert.match(docs, /site-first/i);
-  assert.match(readme, /Release Candidate 41 \/ Product Batch A1C/);
+  assert.match(readme, /Release Candidate 42 \/ Product Batch A1D/);
   assert.match(readme, /RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP\.md/);
-  assert.match(runbook, /npm run verify:batcha1c/);
-  assert.match(runbook, /rinkrat-rc41-validation\.json/);
-  assert.match(runbook, /rinkrat-rc41-invite-beta/);
+  assert.match(runbook, /npm run verify:batcha1d/);
+  assert.match(runbook, /rinkrat-rc42-validation\.json/);
+  assert.match(runbook, /rinkrat-rc42-invite-beta/);
 });

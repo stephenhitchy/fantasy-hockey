@@ -739,6 +739,8 @@ interface ProjectionGenerationContext {
   currentSeasonOverride?: string;
   previousSeasonOverride?: string;
   secondPreviousSeasonOverride?: string;
+  scheduleSeasonOverride?: string;
+  historicalReplayAlignment: boolean;
   ignoreAvailability: boolean;
   availabilityByPlayerId: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
 }
@@ -971,20 +973,23 @@ async function getProjectionGenerationContext(
     const projectionDate = new Date(`${replay.simulatedDate}T12:00:00Z`);
 
     /*
-     * Replay projections deliberately use the replay target as the empty/current
-     * season and the source season as the latest completed season. This prevents
-     * future source-season games from leaking into a simulated date while still
-     * letting Projection V11 recognize supported completed-season breakouts.
-     * Live 2026 injury records are ignored during a historical replay.
+     * Historical replay uses target-season dates/schedules but source-season
+     * NHL game rows. The player-pool loader aligns those source games by team
+     * schedule position and releases only the rows whose target date has passed.
+     * Projection V11 itself is unchanged; it receives a progressively revealed
+     * current season, followed by the two seasons before the replay source.
+     * Live injury records are ignored because they belong to real-world time.
      */
     return {
       projectionDate,
       projectionAsOfDate: replay.simulatedDate,
       projectionContext: 'historical-replay',
       projectionSeason: replay.targetSeason,
-      currentSeasonOverride: replay.targetSeason,
-      previousSeasonOverride: replay.sourceSeason,
-      secondPreviousSeasonOverride: previousSeason(replay.sourceSeason),
+      currentSeasonOverride: replay.sourceSeason,
+      previousSeasonOverride: previousSeason(replay.sourceSeason),
+      secondPreviousSeasonOverride: previousSeason(previousSeason(replay.sourceSeason)),
+      scheduleSeasonOverride: replay.targetSeason,
+      historicalReplayAlignment: true,
       ignoreAvailability: true,
       availabilityByPlayerId: new Map(),
     };
@@ -997,6 +1002,7 @@ async function getProjectionGenerationContext(
     projectionAsOfDate: projectionDate.toISOString().slice(0, 10),
     projectionContext: 'live',
     projectionSeason: seasonForDate(projectionDate),
+    historicalReplayAlignment: false,
     ignoreAvailability: false,
     availabilityByPlayerId: await loadAvailabilityRecords(leagueId),
   };
@@ -1072,7 +1078,9 @@ async function generateSnapshotInternal(
       currentSeasonOverride: context.currentSeasonOverride,
       previousSeasonOverride: context.previousSeasonOverride,
       secondPreviousSeasonOverride: context.secondPreviousSeasonOverride,
+      scheduleSeasonOverride: context.scheduleSeasonOverride,
       projectionAsOfDate: context.projectionDate,
+      historicalReplayAlignment: context.historicalReplayAlignment,
       ignoreAvailability: context.ignoreAvailability,
     });
 

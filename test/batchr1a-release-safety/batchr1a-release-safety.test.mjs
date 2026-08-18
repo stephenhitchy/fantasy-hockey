@@ -388,8 +388,12 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // A1A adds isolated account-wide watchlist authority.
         'src/player-watchlist.ts',
         'src/shared/core/user/player-watchlist.util.ts',
+        // A1D adds isolated replay alignment and private player-note authority.
+        'src/shared/core/draft/historical-replay-player-data.util.ts',
+        'src/player-note.ts',
+        'src/shared/core/user/player-note.util.ts',
       ]),
     ),
-    '89e8d3f9cd7d87fcf8c8e5c05493faa494dbba52ba0248612356bfafcea7778f',
+    'd7be9c2d7a9dfc3547efac32953eaed440cc7a6b9b420dc45d583b15f8d417f0',
   );
 });

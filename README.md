@@ -32,21 +32,20 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md`](docs/RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE.md) — account-wide player watchlists independent of Draft queues, watched-only filters, the Clear Ice copy-density pass, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`](docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md) — one league-wide Player Board for rostered, available, waiver, reserved, and watched assets plus real Projection V11 Player Intel, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md`](docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md) — the unified Add / Drop player directory, same-layout roster selection, six-game trackers, injury return context, replay-driven Projection V11 refresh, targeted deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md`](docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md) — replay-aligned source-season player statistics, target-season six-game markers, quiet snapshot freshness, private Player Intel notes, targeted deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 41 / Product Batch A1C**. A1C combines the former Player Board and Add / Drop experiences into one league destination. It opens on free agents sorted by next-six Projection V11 value, while All, Rostered, Waivers, Unavailable, Watched, and position-specific views remain available.
+The current source runtime is **Release Candidate 42 / Product Batch A1D**. A1D corrects the historical-replay player-data alignment found during RC41 site testing. Replay still uses target-season dates, but Season Points, stat rows, ranks, recent form, and game markers are now rebuilt from only the source-season NHL game rows released through the simulated target date.
 
-Every row keeps the Player Board presentation, adds the current Matchup number and six-game tracker, shows injury status and return context, and links to Player Intel. Add or Claim opens an inline second step with only the signed-in manager's valid roster players or open slots, using the same row layout rather than a separate modal or visually unrelated decision page.
+The unified Add / Drop page continues following the exact current Projection V11 pointer. A compact **Updating player data…** state appears only while the replay date is ahead of the loaded snapshot. Future schedule opportunities remain in the six-game tracker, so played, missed, and upcoming dots advance together instead of disappearing from a past-games-only slice.
 
-Historical replay now queues a non-blocking Projection V11 rebuild after a released NHL day. The Add / Drop page follows the exact current projection pointer and reloads season points, ranks, injuries, projections, and game markers when the fresh snapshot publishes. Scoring completion remains authoritative even when projection refresh later fails.
+A1D also completes private custom player notes. Player Intel exposes one compact inline **My note** section with 500-character/eight-line and 100-player account bounds. Notes are authenticated-user-owned, never enter public player data, add no listener, and are removed during permanent account deletion.
 
-Point Leaders remains the focused page for finalized immutable six-game-window scoring history. A1A Watchlists, A1B Player Intel, the Clear Ice copy pass, share cards, Identity Architect, and League Wire remain intact.
-
-Production Scoring V3, Projection V11, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1c`.
+Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1d`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -98,6 +97,7 @@ verify:batchc1l
 verify:batcha1a
 verify:batcha1b
 verify:batcha1c
+verify:batcha1d
 ```
 
 RinkRat pins:
@@ -117,7 +117,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1c
+npm run verify:batcha1d
 ```
 
 After verification and a clean commit:
@@ -637,3 +637,12 @@ The incoming player and valid outgoing roster choices use the same mobile-first 
 Historical replay scoring queues an asynchronous Projection V11 refresh after NHL games are released. An exact current-pointer listener reloads the unified page only when a new verified snapshot becomes authoritative. A catch-up check queues a newer snapshot when another replay day moved ahead during an existing projection build. The refresh never rolls back or blocks completed scoring.
 
 Full verification, targeted deployment, site-first proof, and rollback guidance are maintained in `docs/RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP.md`.
+
+## Product Batch A1D — Replay-Accurate Player Data and Private Notes
+
+A1D keeps the RC41 unified Add / Drop flow while correcting its historical-replay inputs. The server projection worker maps source-season player and goalie game rows onto target-season schedule positions, releases only rows whose simulated target date has passed, retains future games in the current six-game block, and publishes refreshed Season Points, stats, ranks, recent form, and markers through the existing current pointer. Projection V11 math and authoritative scoring do not change.
+
+Player Intel now includes one private inline note per player. The authenticated server callables enforce plain text, 500 characters, eight lines, and a 100-player account cap; the browser never chooses the owner identity, and account deletion removes the note document.
+
+Full verification, targeted deployment, site-first proof, and fallback diagnostics are maintained in `docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md`.
+

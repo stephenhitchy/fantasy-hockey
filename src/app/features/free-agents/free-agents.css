@@ -678,3 +678,18 @@
     animation-duration: 1.4s;
   }
 }
+
+.unified-player-refresh-status {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 38%, var(--rr-color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-color-info) 12%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 850;
+  white-space: nowrap;
+}

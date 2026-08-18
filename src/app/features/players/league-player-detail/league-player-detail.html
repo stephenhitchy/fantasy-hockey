@@ -62,6 +62,81 @@
       <p class="player-intel-error" role="alert">{{ watchError() }}</p>
     }
 
+    @if (!noteLoading()) {
+      <section class="player-intel-note" aria-labelledby="player-intel-note-title">
+        <div class="player-intel-note-heading">
+          <div>
+            <span class="eyebrow">Private</span>
+            <h2 id="player-intel-note-title">My note</h2>
+          </div>
+
+          @if (!noteEditorOpen()) {
+            <button type="button" (click)="openNoteEditor()">
+              {{ savedNote() ? 'Edit' : 'Add note' }}
+            </button>
+          }
+        </div>
+
+        @if (noteEditorOpen()) {
+          <label class="player-intel-note-field">
+            <span>Player note</span>
+            <textarea
+              name="playerNote"
+              rows="4"
+              maxlength="500"
+              placeholder="Role changes, trade ideas, or what you want to watch next."
+              [ngModel]="noteDraft()"
+              (ngModelChange)="updateNoteDraft($event)"
+            ></textarea>
+            <small>
+              {{ noteCharactersRemaining() }} characters remaining ·
+              {{ noteLineCount() }}/8 lines
+            </small>
+          </label>
+
+          <div class="player-intel-note-actions">
+            <button
+              class="player-intel-note-save"
+              type="button"
+              [disabled]="!canSaveNote()"
+              (click)="saveNote()"
+            >
+              {{ noteSaving() ? 'Saving…' : 'Save note' }}
+            </button>
+            <button
+              type="button"
+              [disabled]="noteSaving()"
+              (click)="cancelNoteEditor()"
+            >
+              Cancel
+            </button>
+            @if (savedNote()) {
+              <button
+                class="player-intel-note-remove"
+                type="button"
+                [disabled]="noteSaving()"
+                (click)="removeNote()"
+              >
+                Remove
+              </button>
+            }
+          </div>
+        } @else if (savedNote()) {
+          <p class="player-intel-note-copy">{{ savedNote() }}</p>
+          @if (formatNoteUpdatedAt(); as updatedAt) {
+            <small class="player-intel-note-updated">Updated {{ updatedAt }}</small>
+          }
+        }
+
+        @if (noteStatus()) {
+          <p class="player-intel-note-status" role="status">{{ noteStatus() }}</p>
+        }
+        @if (noteError()) {
+          <p class="player-intel-note-error" role="alert">{{ noteError() }}</p>
+        }
+      </section>
+    }
+
     <section class="player-intel-rank-strip" aria-label="Current fantasy ranks">
       <div>
         <span>Season fantasy points</span>

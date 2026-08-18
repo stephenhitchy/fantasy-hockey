@@ -249,6 +249,22 @@ export class FreeAgents implements OnDestroy {
   private focusPendingMovesRequested = false;
   private operationWatchGeneration = 0;
 
+  readonly playerDataRefreshing = computed(() => {
+    const replay = this.historicalReplayControl();
+    const metadata = this.snapshotMetadata();
+    const replayDate = replay?.enabled ? replay.simulatedDate?.trim() ?? '' : '';
+    const snapshotDate = metadata?.projectionAsOfDate?.trim() ?? '';
+
+    return Boolean(
+      replayDate &&
+      (
+        metadata?.projectionContext !== 'historical-replay' ||
+        !snapshotDate ||
+        snapshotDate < replayDate
+      ),
+    );
+  });
+
   readonly selectedAddAsset = computed(
     () =>
       this.playerPool().find((asset) => asset.assetKey === this.selectedAddAssetKey()) ??

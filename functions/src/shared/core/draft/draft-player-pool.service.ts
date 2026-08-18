@@ -53,6 +53,11 @@ import {
   PROJECTION_MODEL_VERSION
 } from '../projection/projection-v11.util';
 
+import {
+  alignHistoricalReplaySkaterData,
+  alignHistoricalReplayTeamData,
+} from './historical-replay-player-data.util';
+
 let cachedPlayerPool: DraftableAsset[] | null = null;
 
 export interface DraftPlayerPoolProjectionOptions {
@@ -68,7 +73,9 @@ export interface DraftPlayerPoolProjectionOptions {
   currentSeasonOverride?: string;
   previousSeasonOverride?: string;
   secondPreviousSeasonOverride?: string;
+  scheduleSeasonOverride?: string;
   projectionAsOfDate?: Date;
+  historicalReplayAlignment?: boolean;
   ignoreAvailability?: boolean;
 }
 
@@ -99,6 +106,7 @@ interface GoalieProjectionStats {
 interface SkaterGameProjectionStats {
   gameId: number;
   gameDate: string;
+  teamAbbreviation: string | null;
   goals: number;
   assists: number;
   shotsOnGoal: number;
@@ -348,7 +356,9 @@ function normalizeProjectionOptions(
       currentSeasonOverride: undefined,
       previousSeasonOverride: undefined,
       secondPreviousSeasonOverride: undefined,
+      scheduleSeasonOverride: undefined,
       projectionAsOfDate: undefined,
+      historicalReplayAlignment: false,
       ignoreAvailability: false
     };
   }
@@ -373,7 +383,9 @@ function normalizeProjectionOptions(
     currentSeasonOverride: normalizeSeasonOverride(input.currentSeasonOverride),
     previousSeasonOverride: normalizeSeasonOverride(input.previousSeasonOverride),
     secondPreviousSeasonOverride: normalizeSeasonOverride(input.secondPreviousSeasonOverride),
+    scheduleSeasonOverride: normalizeSeasonOverride(input.scheduleSeasonOverride),
     projectionAsOfDate,
+    historicalReplayAlignment: input.historicalReplayAlignment === true,
     ignoreAvailability: input.ignoreAvailability === true
   };
 }
@@ -1206,11 +1218,16 @@ async function loadSkaterGameProjectionStats(
     const stats = gamesByKey.get(key) ?? {
       playerId,
       gameId,
-      gameDate
+      gameDate,
+      teamAbbreviation: getTeamAbbreviationFromRecord(record)
     };
 
     stats.gameId = gameId;
     stats.gameDate = gameDate;
+    stats.teamAbbreviation =
+      getTeamAbbreviationFromRecord(record) ??
+      stats.teamAbbreviation ??
+      null;
 
     if (includeSummary) {
       mergeNumberField(stats, 'goals', record, ['goals']);
@@ -1289,6 +1306,7 @@ async function loadSkaterGameProjectionStats(
     const game: SkaterGameProjectionStats = {
       gameId: partialGame.gameId ?? 0,
       gameDate: partialGame.gameDate ?? '',
+      teamAbbreviation: partialGame.teamAbbreviation ?? null,
       goals: partialGame.goals ?? 0,
       assists: partialGame.assists ?? 0,
       shotsOnGoal: partialGame.shotsOnGoal ?? 0,
@@ -1759,7 +1777,7 @@ function getRegularSeasonGames(
     );
 }
 
-function getCurrentTeamCycleDecisionData(input: {
+export function getCurrentTeamCycleDecisionData(input: {
   teamAbbreviation: string;
   schedule: NhlTeamSeasonGame[];
   requiredGamesPerCycle: number;
@@ -4475,7 +4493,9 @@ export async function loadDraftPlayerPool(
     options.currentSeasonOverride ||
     options.previousSeasonOverride ||
     options.secondPreviousSeasonOverride ||
+    options.scheduleSeasonOverride ||
     options.projectionAsOfDate ||
+    options.historicalReplayAlignment ||
     options.ignoreAvailability
   );
 
@@ -4494,6 +4514,8 @@ export async function loadDraftPlayerPool(
     options.previousSeasonOverride ?? getPreviousSeason(currentSeason);
   const secondPreviousSeason =
     options.secondPreviousSeasonOverride ?? getPreviousSeason(previousSeason);
+  const scheduleSeason =
+    options.scheduleSeasonOverride ?? currentSeason;
 
   if (options.forceRefresh) {
     clearNhlProjectionApiCache();
@@ -4532,21 +4554,21 @@ export async function loadDraftPlayerPool(
     loadGoalieGameProjectionStats(currentSeason)
   ]);
 
-  const currentSkaterGamesForProjection =
+  let currentSkaterGamesForProjection =
     filterGameMapByProjectionDate(
       currentSkaterGameStats,
       options.projectionAsOfDate
     );
-  const currentGoalieGamesForProjection =
+  let currentGoalieGamesForProjection =
     filterGameMapByProjectionDate(
       currentGoalieGameStats,
       options.projectionAsOfDate
     );
-  const currentSkaterStatsForProjection =
+  let currentSkaterStatsForProjection =
     options.projectionAsOfDate
       ? summarizeSkaterGameMap(currentSkaterGamesForProjection)
       : currentSkaterProjectionStats;
-  const currentGoalieStatsForProjection =
+  let currentGoalieStatsForProjection =
     options.projectionAsOfDate
       ? summarizeGoalieGameMap(currentGoalieGamesForProjection)
       : currentGoalieProjectionStats;
@@ -4566,6 +4588,76 @@ export async function loadDraftPlayerPool(
     loadSkaterProjectionStats(secondPreviousSeason),
     loadGoalieProjectionStats(secondPreviousSeason)
   ]);
+
+  const shouldLoadSchedules = Boolean(
+    options.targetCycleNumber ||
+    options.availabilityByPlayerId ||
+    options.historicalReplayAlignment
+  );
+
+  let currentTeamSchedules = shouldLoadSchedules
+    ? await loadTeamProjectionSchedules(scheduleSeason)
+    : new Map<string, NhlTeamSeasonGame[]>();
+  const sourceTeamSchedules =
+    options.historicalReplayAlignment && scheduleSeason !== currentSeason
+      ? await loadTeamProjectionSchedules(currentSeason)
+      : currentTeamSchedules;
+
+  // Previous-season team strength remains useful early in a new season,
+  // even when current player game logs already exist. Current results take
+  // progressively more weight as the sample grows.
+  const previousTeamSchedules = shouldLoadSchedules
+    ? await loadTeamProjectionSchedules(previousSeason)
+    : new Map<string, NhlTeamSeasonGame[]>();
+  const replaySkaterSchedulesByPlayerId =
+    new Map<number, NhlTeamSeasonGame[]>();
+
+  if (options.historicalReplayAlignment && options.projectionAsOfDate) {
+    const simulatedDate = getProjectionDateKey(options.projectionAsOfDate);
+    const replayTeamSchedules = new Map<string, NhlTeamSeasonGame[]>();
+    const alignedGoalieGames = new Map<string, GoalieGameProjectionStats[]>();
+    const alignedSkaterGames = new Map<number, SkaterGameProjectionStats[]>();
+
+    for (const club of NHL_DRAFT_CLUBS) {
+      const aligned = alignHistoricalReplayTeamData({
+        games: currentGoalieGameStats.get(club.abbreviation) ?? [],
+        targetSchedule: currentTeamSchedules.get(club.abbreviation) ?? [],
+        sourceSchedule: sourceTeamSchedules.get(club.abbreviation) ?? [],
+        simulatedDate
+      });
+
+      replayTeamSchedules.set(club.abbreviation, aligned.schedule);
+
+      if (aligned.games.length > 0) {
+        alignedGoalieGames.set(club.abbreviation, aligned.games);
+      }
+    }
+
+    for (const skater of skaters) {
+      const aligned = alignHistoricalReplaySkaterData({
+        games: currentSkaterGameStats.get(skater.id) ?? [],
+        fallbackTeamAbbreviation: skater.nhlTeamAbbreviation,
+        targetSchedule:
+          currentTeamSchedules.get(skater.nhlTeamAbbreviation) ?? [],
+        sourceSchedules: sourceTeamSchedules,
+        simulatedDate
+      });
+
+      replaySkaterSchedulesByPlayerId.set(skater.id, aligned.schedule);
+
+      if (aligned.games.length > 0) {
+        alignedSkaterGames.set(skater.id, aligned.games);
+      }
+    }
+
+    currentTeamSchedules = replayTeamSchedules;
+    currentSkaterGamesForProjection = alignedSkaterGames;
+    currentGoalieGamesForProjection = alignedGoalieGames;
+    currentSkaterStatsForProjection =
+      summarizeSkaterGameMap(currentSkaterGamesForProjection);
+    currentGoalieStatsForProjection =
+      summarizeGoalieGameMap(currentGoalieGamesForProjection);
+  }
 
   const hasCurrentGameData =
     currentSkaterGamesForProjection.size > 0 ||
@@ -4611,22 +4703,6 @@ export async function loadDraftPlayerPool(
         loadGoalieGameProjectionStats(previousSeason)
       ]);
 
-  const shouldLoadSchedules = Boolean(
-    options.targetCycleNumber ||
-    options.availabilityByPlayerId
-  );
-
-  const currentTeamSchedules = shouldLoadSchedules
-    ? await loadTeamProjectionSchedules(currentSeason)
-    : new Map<string, NhlTeamSeasonGame[]>();
-
-  // Previous-season team strength remains useful early in a new season,
-  // even when current player game logs already exist. Current results take
-  // progressively more weight as the sample grows.
-  const previousTeamSchedules = shouldLoadSchedules
-    ? await loadTeamProjectionSchedules(previousSeason)
-    : new Map<string, NhlTeamSeasonGame[]>();
-
   const currentTeamSchedulesAsOf =
     filterScheduleMapByProjectionDate(
       currentTeamSchedules,
@@ -4642,8 +4718,8 @@ export async function loadDraftPlayerPool(
     (skater) => {
       const currentTeamSchedule =
         currentTeamSchedules.get(skater.nhlTeamAbbreviation) ?? [];
-      const currentTeamScheduleAsOf =
-        currentTeamSchedulesAsOf.get(skater.nhlTeamAbbreviation) ?? [];
+      const currentPlayerSchedule =
+        replaySkaterSchedulesByPlayerId.get(skater.id) ?? currentTeamSchedule;
       const targetGames = getTargetCycleGames(
         currentTeamSchedule,
         options.targetCycleNumber,
@@ -4677,7 +4753,7 @@ export async function loadDraftPlayerPool(
         currentSeason,
         previousSeason,
         secondPreviousSeason,
-        currentTeamSchedule: currentTeamScheduleAsOf,
+        currentTeamSchedule: currentPlayerSchedule,
         previousTeamSchedule:
           previousTeamSchedules.get(
             skater.nhlTeamAbbreviation
@@ -4733,7 +4809,7 @@ export async function loadDraftPlayerPool(
             projection.projectedSeasonPoints,
           draftProjectedSeasonPoints:
             projection.draftProjectedSeasonPoints,
-          teamSchedule: currentTeamScheduleAsOf,
+          teamSchedule: currentPlayerSchedule,
           fallbackGamesPlayed:
             currentStats?.gamesPlayed ?? null
         });
@@ -4741,7 +4817,7 @@ export async function loadDraftPlayerPool(
         getCurrentTeamCycleDecisionData({
           teamAbbreviation:
             skater.nhlTeamAbbreviation,
-          schedule: currentTeamScheduleAsOf,
+          schedule: currentPlayerSchedule,
           requiredGamesPerCycle:
             options.requiredGamesPerCycle,
           appearedGameIds: new Set(
@@ -4938,8 +5014,6 @@ export async function loadDraftPlayerPool(
     NHL_DRAFT_CLUBS.map((club) => {
       const currentTeamSchedule =
         currentTeamSchedules.get(club.abbreviation) ?? [];
-      const currentTeamScheduleAsOf =
-        currentTeamSchedulesAsOf.get(club.abbreviation) ?? [];
       const targetGames = getTargetCycleGames(
         currentTeamSchedule,
         options.targetCycleNumber,
@@ -5018,14 +5092,14 @@ export async function loadDraftPlayerPool(
             projection.projectedSeasonPoints,
           draftProjectedSeasonPoints:
             projection.draftProjectedSeasonPoints,
-          teamSchedule: currentTeamScheduleAsOf,
+          teamSchedule: currentTeamSchedule,
           fallbackGamesPlayed:
             currentStats?.gamesPlayed ?? null
         });
       const currentCycleDecision =
         getCurrentTeamCycleDecisionData({
           teamAbbreviation: club.abbreviation,
-          schedule: currentTeamScheduleAsOf,
+          schedule: currentTeamSchedule,
           requiredGamesPerCycle:
             options.requiredGamesPerCycle,
           goalieUnit: true

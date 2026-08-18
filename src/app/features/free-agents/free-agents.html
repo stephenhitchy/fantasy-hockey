@@ -11,7 +11,12 @@
         <div>
           <span class="eyebrow">{{ league()?.name || 'RinkRat League' }}</span>
           <h1>Add / Drop</h1>
-          <p>{{ boardRows().length }} players · {{ getBoardSnapshotLabel() }}</p>
+          <p>
+            {{ boardRows().length }} players · {{ getBoardSnapshotLabel() }}
+            @if (playerDataRefreshing()) {
+              <span class="unified-player-refresh-status" role="status">Updating player data…</span>
+            }
+          </p>
         </div>
 
         <nav class="unified-player-header-actions" aria-label="Player tools">

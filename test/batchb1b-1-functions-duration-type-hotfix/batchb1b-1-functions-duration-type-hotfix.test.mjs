@@ -58,7 +58,7 @@ test('B1B.1 verification, CI, documentation, and permanent roadmap remain synchr
   assert.match(packageJson.scripts['verify:batchb1b-1:core'], /test:batchb1b-1:run/);
   assert.match(packageJson.scripts['verify:batchb1b-1:core'], /validate:release-manifest/);
   assert.match(packageJson.scripts['verify:batchb1b-1'], /security:dependency-audit/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1b-1|b1c|s4a|b1d|s3d|s3e|s3e-1|s3e-1-1|s3f|d1a|d1a-1|d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d):core/);
   assert.match(documentationSource, /Beta Operations Batch B1B\.1 — Server Scoring Trigger Type Hotfix/);
   assert.match(readmeSource, /verify:batchb1b-1/);
   assert.equal(roadmapRootSource, roadmapDocsSource);

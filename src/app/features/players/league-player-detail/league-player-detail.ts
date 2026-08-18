@@ -5,6 +5,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
@@ -25,6 +26,13 @@ import {
   getPlayerWatchlist,
   setPlayerWatchlistEntry,
 } from '../../../core/player/player-watchlist.service';
+import {
+  getPlayerNote,
+  normalizePlayerNoteText,
+  PLAYER_NOTE_MAX_CHARACTERS,
+  PLAYER_NOTE_MAX_LINES,
+  setPlayerNote,
+} from '../../../core/player/player-note.service';
 import { type League } from '../../../core/league/league.service';
 import { type SharedProjectionSnapshotMetadata } from '../../../core/projection/projection-snapshot.service';
 
@@ -49,7 +57,7 @@ function finiteNumber(value: unknown): number | null {
 
 @Component({
   selector: 'app-league-player-detail',
-  imports: [RouterLink],
+  imports: [FormsModule, RouterLink],
   templateUrl: './league-player-detail.html',
   styleUrl: './league-player-detail.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -67,7 +75,30 @@ export class LeaguePlayerDetail {
   readonly errorMessage = signal('');
   readonly watchSaving = signal(false);
   readonly watchError = signal('');
+  readonly noteLoading = signal(true);
+  readonly noteEditorOpen = signal(false);
+  readonly savedNote = signal('');
+  readonly noteDraft = signal('');
+  readonly noteUpdatedAt = signal<Date | null>(null);
+  readonly noteSaving = signal(false);
+  readonly noteStatus = signal('');
+  readonly noteError = signal('');
   readonly activeSection = signal<PlayerIntelSection>('overview');
+
+  readonly noteCharactersRemaining = computed(() =>
+    Math.max(0, PLAYER_NOTE_MAX_CHARACTERS - this.noteDraft().length),
+  );
+  readonly noteLineCount = computed(() => {
+    const normalized = this.noteDraft().replace(/\r\n?/g, '\n');
+    return normalized ? normalized.split('\n').length : 0;
+  });
+  readonly canSaveNote = computed(() => {
+    const normalized = normalizePlayerNoteText(this.noteDraft());
+    return !this.noteSaving() &&
+      normalized !== null &&
+      normalized !== this.savedNote() &&
+      this.noteLineCount() <= PLAYER_NOTE_MAX_LINES;
+  });
 
   readonly asset = computed(() => this.row()?.asset ?? null);
   readonly statBreakdown = computed<readonly ProjectionStatBreakdownItem[]>(() =>
@@ -162,6 +193,74 @@ export class LeaguePlayerDetail {
     } finally {
       this.watchSaving.set(false);
     }
+  }
+
+  openNoteEditor(): void {
+    this.noteDraft.set(this.savedNote());
+    this.noteEditorOpen.set(true);
+    this.noteStatus.set('');
+    this.noteError.set('');
+  }
+
+  cancelNoteEditor(): void {
+    this.noteDraft.set(this.savedNote());
+    this.noteEditorOpen.set(false);
+    this.noteError.set('');
+  }
+
+  updateNoteDraft(value: string): void {
+    this.noteDraft.set(value.slice(0, PLAYER_NOTE_MAX_CHARACTERS));
+    this.noteStatus.set('');
+  }
+
+  async saveNote(): Promise<void> {
+    const normalized = normalizePlayerNoteText(this.noteDraft());
+
+    if (normalized === null || this.noteSaving()) {
+      this.noteError.set(
+        `Use at most ${PLAYER_NOTE_MAX_CHARACTERS} characters and ${PLAYER_NOTE_MAX_LINES} lines.`,
+      );
+      return;
+    }
+
+    this.noteSaving.set(true);
+    this.noteError.set('');
+    this.noteStatus.set('');
+
+    try {
+      const result = await setPlayerNote({
+        assetKey: this.assetKey,
+        note: normalized,
+      });
+      this.savedNote.set(result.note);
+      this.noteDraft.set(result.note);
+      this.noteUpdatedAt.set(result.updatedAt);
+      this.noteEditorOpen.set(false);
+      this.noteStatus.set(result.note ? 'Private note saved.' : 'Private note removed.');
+    } catch (error) {
+      this.noteError.set(
+        error instanceof Error ? error.message : 'Unable to save your player note.',
+      );
+    } finally {
+      this.noteSaving.set(false);
+    }
+  }
+
+  async removeNote(): Promise<void> {
+    this.noteDraft.set('');
+    await this.saveNote();
+  }
+
+  formatNoteUpdatedAt(): string {
+    const updatedAt = this.noteUpdatedAt();
+    return updatedAt
+      ? new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(updatedAt)
+      : '';
   }
 
   getStatusLabel(row: LeaguePlayerBoardRow): string {
@@ -397,7 +496,7 @@ export class LeaguePlayerDetail {
     this.userId.set(user.uid);
 
     try {
-      const [baseData, watchlist, waiverAssetKeys] = await Promise.all([
+      const [baseData, watchlist, waiverAssetKeys, playerNote] = await Promise.all([
         loadLeaguePlayerBoardBaseData(this.leagueId, { forceRefresh: true }),
         getPlayerWatchlist().catch(() => ({
           assetKeys: [] as string[],
@@ -405,6 +504,7 @@ export class LeaguePlayerDetail {
           changed: false,
         })),
         loadLeagueWaiverAssetKeysOnce(this.leagueId),
+        getPlayerNote(this.assetKey).catch(() => null),
       ]);
 
       const rows = buildLeaguePlayerBoardRows({
@@ -419,6 +519,10 @@ export class LeaguePlayerDetail {
       this.league.set(baseData.league);
       this.snapshotMetadata.set(baseData.snapshotMetadata);
       this.row.set(selectedRow);
+      this.savedNote.set(playerNote?.note ?? '');
+      this.noteDraft.set(playerNote?.note ?? '');
+      this.noteUpdatedAt.set(playerNote?.updatedAt ?? null);
+      this.noteLoading.set(false);
 
       if (!selectedRow) {
         this.errorMessage.set('This player is not in the current league projection snapshot.');
@@ -429,6 +533,7 @@ export class LeaguePlayerDetail {
       );
     } finally {
       this.loading.set(false);
+      this.noteLoading.set(false);
     }
   }
 }
