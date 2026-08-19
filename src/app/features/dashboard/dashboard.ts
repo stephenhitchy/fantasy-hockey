@@ -1,6 +1,10 @@
 import { Component, computed, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
+import {
+  buildManagerBriefing,
+  type ManagerBriefingItem,
+} from '../../core/league/manager-briefing.util';
 import { waitForAuthenticatedUser } from '../../core/guards/auth.guard';
 import { CURRENT_TRAINING_CAMP_VERSION } from '../../core/onboarding/training-camp.service';
 import { getUserProfile, UserProfile } from '../../core/user/user.service';
@@ -16,7 +20,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 5;
+const DASHBOARD_CACHE_VERSION = 6;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
@@ -91,6 +95,11 @@ export class Dashboard {
   readonly trainingCampComplete = computed(
     () => (this.profile()?.trainingCampVersion ?? 0) >= CURRENT_TRAINING_CAMP_VERSION,
   );
+
+  readonly managerBriefing = computed(() => buildManagerBriefing(
+    this.leagueSummaries(),
+    { maximumItems: 3 },
+  ));
 
   readonly displayName = computed(() => {
     const profile = this.profile();
@@ -260,5 +269,10 @@ export class Dashboard {
 
   getLeagueLogoPath(league: LeagueSummary): string {
     return getLeagueLogoAssetPath(league.leagueLogoId, league.leagueLogoPaletteId);
+  }
+
+  getBriefingLeagueLogoPath(item: ManagerBriefingItem): string {
+    const league = this.leagueSummaries().find((entry) => entry.leagueId === item.leagueId);
+    return league ? this.getLeagueLogoPath(league) : '/assets/branding/rinkrat-headshot.png';
   }
 }

@@ -97,6 +97,44 @@
 
       <app-nhl-scoreboard [favoriteTeamAbbreviation]="favoriteTeam().abbreviation" />
 
+      @if (managerBriefing().length > 0) {
+        <section class="manager-briefing rr-card rr-card--padded" aria-labelledby="manager-briefing-title">
+          <header class="manager-briefing-header">
+            <div>
+              <span class="eyebrow">Coach's Briefing</span>
+              <h2 id="manager-briefing-title">Your next decisions</h2>
+            </div>
+            <span class="manager-briefing-count rr-badge">{{ managerBriefing().length }}</span>
+          </header>
+
+          <ol class="manager-briefing-list">
+            @for (item of managerBriefing(); track item.id) {
+              <li class="manager-briefing-item" [attr.data-tone]="item.tone">
+                <img
+                  class="manager-briefing-logo"
+                  [src]="getBriefingLeagueLogoPath(item)"
+                  alt=""
+                  decoding="async"
+                />
+
+                <div class="manager-briefing-copy">
+                  <span>{{ item.leagueName }}</span>
+                  <strong>{{ item.headline }}</strong>
+                  @if (item.detail) {
+                    <small>{{ item.detail }}</small>
+                  }
+                </div>
+
+                <a class="manager-briefing-action" [routerLink]="item.actionRoute">
+                  {{ item.actionLabel }}
+                  <span aria-hidden="true">→</span>
+                </a>
+              </li>
+            }
+          </ol>
+        </section>
+      }
+
       <section class="leagues-section">
         <div class="section-heading rr-section-heading">
           <div>

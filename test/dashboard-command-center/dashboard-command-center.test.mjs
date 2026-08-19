@@ -73,6 +73,7 @@ function makeBaseInput(overrides = {}) {
     myWindows: null,
     opponentWindows: null,
     roster: null,
+    waiverClaims: [],
     ...overrides,
   };
 }

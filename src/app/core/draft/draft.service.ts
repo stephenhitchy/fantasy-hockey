@@ -168,6 +168,7 @@ export type FantasyWaiverClaimStatus =
 export interface FantasyWaiverClaim {
   ownerId: string;
   waiverId: string;
+  waiverAsset?: DraftableAsset | null;
   moveType: FantasyWaiverClaimMoveType;
   rosterArea?: 'active' | 'bench';
   dropSlotId?: string | null;
@@ -933,6 +934,52 @@ export function listenToOwnerTransactions(
   ));
 }
 
+function normalizePrivateWaiverClaimDocument(
+  claimDocumentId: string,
+  ownerId: string,
+  data: Partial<FantasyWaiverClaim>,
+): FantasyWaiverClaim {
+  return {
+    ownerId: data.ownerId ?? ownerId,
+    waiverId: data.waiverId ?? claimDocumentId,
+    waiverAsset: data.waiverAsset ?? null,
+    moveType: data.moveType === 'open-slot' ? 'open-slot' : 'drop',
+    rosterArea: data.rosterArea === 'bench' ? 'bench' : 'active',
+    dropSlotId: data.dropSlotId ?? null,
+    targetSlotId: data.targetSlotId ?? null,
+    effectiveCycleNumber: data.effectiveCycleNumber ?? null,
+    effectiveLabel: data.effectiveLabel ?? null,
+    status:
+      data.status === 'awarded' ||
+      data.status === 'not-awarded' ||
+      data.status === 'cleared'
+        ? data.status
+        : 'pending',
+    claimedAt: data.claimedAt,
+    updatedAt: data.updatedAt,
+    processedAt: data.processedAt,
+  };
+}
+
+export async function getOwnerWaiverClaimsOnce(
+  leagueId: string,
+  ownerId: string,
+  maximumResults = 12,
+): Promise<FantasyWaiverClaim[]> {
+  const normalizedLimit = Math.min(25, Math.max(1, Math.trunc(maximumResults)));
+  const snapshot = await getDocs(query(
+    getOwnerWaiverClaimsRef(leagueId, ownerId),
+    orderBy('updatedAt', 'desc'),
+    limit(normalizedLimit),
+  ));
+
+  return snapshot.docs.map((claimDoc) => normalizePrivateWaiverClaimDocument(
+    claimDoc.id,
+    ownerId,
+    claimDoc.data() as Partial<FantasyWaiverClaim>,
+  ));
+}
+
 export async function getPublicLeagueWaiversOnce(
   leagueId: string,
 ): Promise<FantasyWaiver[]> {
@@ -1032,29 +1079,13 @@ export function listenToLeagueWaivers(
     claimsQuery,
     (snapshot) => {
       privateClaims = new Map(snapshot.docs.map((claimDoc) => {
-        const data = claimDoc.data() as Partial<FantasyWaiverClaim>;
-        const waiverId = data.waiverId ?? claimDoc.id;
-        const claim: FantasyWaiverClaim = {
-          ownerId: data.ownerId ?? ownerId,
-          waiverId,
-          moveType: data.moveType === 'open-slot' ? 'open-slot' : 'drop',
-          rosterArea: data.rosterArea === 'bench' ? 'bench' : 'active',
-          dropSlotId: data.dropSlotId ?? null,
-          targetSlotId: data.targetSlotId ?? null,
-          effectiveCycleNumber: data.effectiveCycleNumber ?? null,
-          effectiveLabel: data.effectiveLabel ?? null,
-          status:
-            data.status === 'awarded' ||
-            data.status === 'not-awarded' ||
-            data.status === 'cleared'
-              ? data.status
-              : 'pending',
-          claimedAt: data.claimedAt,
-          updatedAt: data.updatedAt,
-          processedAt: data.processedAt,
-        };
+        const claim = normalizePrivateWaiverClaimDocument(
+          claimDoc.id,
+          ownerId,
+          claimDoc.data() as Partial<FantasyWaiverClaim>,
+        );
 
-        return [waiverId, claim] as const;
+        return [claim.waiverId, claim] as const;
       }));
       claimsReady = true;
       emit();

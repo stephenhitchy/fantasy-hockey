@@ -1,4 +1,5 @@
 import type { FantasyDraft } from '../draft/draft.models';
+import type { FantasyWaiverClaim } from '../draft/draft.service';
 import type {
   FantasyCycle,
   FantasyMatchup,
@@ -6,7 +7,10 @@ import type {
 } from '../cycle/cycle.models';
 import type { FantasyRoster } from '../team/roster.models';
 import type { FantasyTeam } from '../team/team.service';
-import type { DashboardLeagueActivity } from './dashboard-league-activity.models';
+import type {
+  DashboardLeagueActivity,
+  DashboardRecentWaiverOutcome,
+} from './dashboard-league-activity.models';
 
 export interface DashboardLeagueActivityInput {
   leagueId: string;
@@ -21,6 +25,7 @@ export interface DashboardLeagueActivityInput {
   myWindows: FantasyTeamCycleWindows | null;
   opponentWindows: FantasyTeamCycleWindows | null;
   roster: FantasyRoster | null;
+  waiverClaims: FantasyWaiverClaim[];
 }
 
 function toDate(value: unknown): Date | null {
@@ -99,6 +104,74 @@ function countRosterAttention(roster: FantasyRoster | null): {
   );
 }
 
+function getAssetName(claim: FantasyWaiverClaim): string {
+  const asset = claim.waiverAsset;
+
+  if (!asset) {
+    return 'Waiver player';
+  }
+
+  if (asset.assetType === 'team-goalie-unit') {
+    return `${asset.teamName} Goalie Unit`;
+  }
+
+  const player = asset.player as {
+    fullName?: unknown;
+    firstName?: unknown;
+    lastName?: unknown;
+  };
+  const fullName = typeof player.fullName === 'string' ? player.fullName.trim() : '';
+
+  if (fullName) {
+    return fullName;
+  }
+
+  const firstName = typeof player.firstName === 'string' ? player.firstName.trim() : '';
+  const lastName = typeof player.lastName === 'string' ? player.lastName.trim() : '';
+  return [firstName, lastName].filter(Boolean).join(' ') || 'Waiver player';
+}
+
+function getMostRecentWaiverOutcome(
+  waiverClaims: readonly FantasyWaiverClaim[],
+): DashboardRecentWaiverOutcome | null {
+  const outcomes = waiverClaims
+    .filter((claim): claim is FantasyWaiverClaim & {
+      status: DashboardRecentWaiverOutcome['status'];
+    } => claim.status !== 'pending')
+    .map((claim) => ({
+      claim,
+      occurredAt: toDate(claim.processedAt ?? claim.updatedAt ?? claim.claimedAt),
+    }))
+    .filter((entry): entry is {
+      claim: FantasyWaiverClaim & { status: DashboardRecentWaiverOutcome['status'] };
+      occurredAt: Date;
+    } => entry.occurredAt instanceof Date)
+    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+
+  const latest = outcomes[0];
+
+  if (!latest) {
+    return null;
+  }
+
+  return {
+    waiverId: latest.claim.waiverId,
+    status: latest.claim.status,
+    assetName: getAssetName(latest.claim),
+    effectiveLabel: latest.claim.effectiveLabel?.trim() || null,
+    occurredAt: latest.occurredAt,
+  };
+}
+
+function countBoundarySlots(windows: FantasyTeamCycleWindows | null): number {
+  if (!windows) {
+    return 0;
+  }
+
+  return windows.windows.filter((window) =>
+    window.status === 'active' && window.gamesLeft === 1).length;
+}
+
 function summarizeWindows(
   first: FantasyTeamCycleWindows | null,
   second: FantasyTeamCycleWindows | null,
@@ -132,7 +205,11 @@ function matchupScoreStatus(myScore: number, opponentScore: number, complete: bo
 export function buildDashboardLeagueActivity(
   input: DashboardLeagueActivityInput,
 ): DashboardLeagueActivity {
-  const attention = countRosterAttention(input.roster);
+  const attention = {
+    ...countRosterAttention(input.roster),
+    boundarySlotCount: countBoundarySlots(input.myWindows),
+    recentWaiverOutcome: getMostRecentWaiverOutcome(input.waiverClaims),
+  };
   const leagueRoute: Array<string | number> = ['/leagues', input.leagueId];
   const draft = input.draft;
 

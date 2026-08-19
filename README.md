@@ -37,19 +37,20 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md`](docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md) — manager-private completed Add / Drop history, current side-by-side player comparisons, the replay-refresh latency follow-up, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md`](docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md) — opt-in roster-fit ordering and an explainable selected-move lens with visible factors, uncertainty, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md`](docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md) — exact-position default Roster Fit, entertainment-only weekly Power Rankings, Hosting-only deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md`](docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md) — a bounded personalized Coach's Briefing for injuries, recent waiver outcomes, close matchups, roster-slot boundaries, scheduled moves, and live Drafts.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 46 / Product Batch A1H**. A1H makes **Roster fit (for you)** the default Add / Drop ordering and corrects replacement comparisons so candidates are evaluated only against legal exact-position active or Bench players—or a compatible open slot.
+The current source runtime is **Release Candidate 47 / Product Batch A1I**. A1I adds a deliberately bounded **Coach's Briefing** to the manager Dashboard. It appears only when action is useful and shows at most three high-priority items across different leagues, covering unavailable starters, recent private waiver outcomes, live Drafts, close late matchups, roster-slot boundaries, and scheduled moves.
 
-League Standings also gains an optional **Weekly Power Rankings** view for entertainment. It transparently combines official record, points per matchup, point differential, and last-three regular-season form. Official Standings remains the default and remains the only table used for playoff qualification and seeding.
+The existing league cards remain the complete status surface below the briefing. A single busy league cannot fill the entire briefing, no third-party feed or background listener is added, and the section disappears entirely when there is nothing actionable.
 
-A1G's explainable Move lens, A1F's private Decision History, and RC43's authoritative roster-window alignment remain intact. Roadmap item A1.16 also remains in progress because replay-triggered player-data catch-up is correct but can be slower than desired; that future optimization may not couple projection generation to scoring authority.
+A1H's exact-position default Roster Fit and entertainment-only Weekly Power Rankings remain intact. Roadmap item A1.16 also remains in progress because replay-triggered player-data catch-up is correct but can be slower than desired; that future optimization may not couple projection generation to scoring authority.
 
-Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1h`.
+Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1i`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -106,6 +107,7 @@ verify:batcha1e
 verify:batcha1f
 verify:batcha1g
 verify:batcha1h
+verify:batcha1i
 ```
 
 RinkRat pins:
@@ -125,7 +127,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1h
+npm run verify:batcha1i
 ```
 
 After verification and a clean commit:
@@ -135,6 +137,20 @@ npm run beta:preflight
 ```
 
 
+
+## Product Batch A1I — Manager Briefing
+
+A1I completes the first personalized manager-home feed with one compact **Coach's Briefing** above the league grid. The browser prioritizes at most one item per league and at most three total, using only the existing bounded Dashboard activity reads plus one owner-private, twelve-record waiver-outcome read for post-Draft leagues. It can surface unavailable starters, recent waiver awards/misses/clears, a live Draft, a close late matchup, roster slots one NHL team game from rollover, or scheduled moves.
+
+The briefing has no empty state, description paragraph, permanent listener, new Firestore Rule, index, TTL policy, Function, migration, or competitive write. It disappears when nothing needs attention and leaves the full league cards as the lower-priority status surface.
+
+Verification:
+
+```bash
+npm run verify:batcha1i
+```
+
+A1I deploys only RC47 Hosting. Full guidance is in `docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md`.
 
 ## Product Batch A1H — Exact-Position Roster Fit and Weekly Power Rankings
 

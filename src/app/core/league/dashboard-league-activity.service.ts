@@ -1,6 +1,9 @@
 import { getDoc } from 'firebase/firestore';
 
-import { getFantasyDraft } from '../draft/draft.service';
+import {
+  getFantasyDraft,
+  getOwnerWaiverClaimsOnce,
+} from '../draft/draft.service';
 import {
   getActiveLeagueCycles,
   getCycleMatchupsOnce,
@@ -97,13 +100,15 @@ export async function getDashboardLeagueActivity(
         myWindows: null,
         opponentWindows: null,
         roster: null,
+        waiverClaims: [],
       });
     }
 
-    const [activeCycles, latestCycle, roster] = await Promise.all([
+    const [activeCycles, latestCycle, roster, waiverClaims] = await Promise.all([
       getActiveLeagueCycles(request.leagueId),
       getLatestCycle(request.leagueId),
       getFantasyRosterOnce(request.leagueId, request.ownerId),
+      getOwnerWaiverClaimsOnce(request.leagueId, request.ownerId, 12).catch(() => []),
     ]);
     const matchup = await getOwnerMatchupAcrossActiveCycles(
       request.leagueId,
@@ -133,6 +138,7 @@ export async function getDashboardLeagueActivity(
       myWindows,
       opponentWindows,
       roster,
+      waiverClaims,
     });
   } catch {
     return {
@@ -145,6 +151,8 @@ export async function getDashboardLeagueActivity(
       primaryActionRoute: ['/leagues', request.leagueId],
       injuredStarterCount: 0,
       queuedMoveCount: 0,
+      boundarySlotCount: 0,
+      recentWaiverOutcome: null,
       matchup: null,
     };
   }

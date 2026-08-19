@@ -12405,3 +12405,19 @@ League Standings also receives an optional Weekly Power Rankings view for entert
 A1H is Hosting-only and adds no Cloud Function, Firestore listener, Rule, index, TTL policy, migration, or competitive write. Roadmap item A1.16 remains in progress for historical-replay player-data catch-up latency.
 
 See `docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md` for verification, deployment, site-first proof, and rollback boundaries.
+
+---
+
+# Product Batch A1I — Manager Briefing
+
+**Runtime release:** Release Candidate 47
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+A1I completes roadmap item A1.1 with one compact, conditional **Coach's Briefing** above the Dashboard league grid. It selects at most one highest-priority item per league and at most three total from unavailable starters, recent owner-private waiver outcomes, a live Draft, a close late matchup, an active roster slot one NHL team game from rollover, and scheduled moves.
+
+The implementation reuses the existing opt-in Dashboard activity reads and adds one bounded read of at most twelve signed-in-owner waiver-claim projections per post-Draft league. That optional read fails quietly, adds no permanent listener, and does not expose canonical transactions, competing claims, waiver priority, destination slots, or another manager's private information.
+
+The section has no empty state, descriptive paragraph, modal, fuzzy backdrop, fixed panel, or sticky content. It disappears when nothing qualifies. A1I is Hosting-only and adds no Function, Firestore Rule, index, TTL policy, migration, scheduled job, or competitive write. Roadmap item A1.16 remains in progress.
+
+See `docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md` for priority rules, privacy boundaries, verification, deployment, and site-first proof.
