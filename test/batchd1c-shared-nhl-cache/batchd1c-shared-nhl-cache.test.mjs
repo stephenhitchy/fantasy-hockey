@@ -152,12 +152,12 @@ test('D1C audit and retention controls remain synchronized under the later C1A c
   assert.equal(packageJson.scripts['data:inspect-nhl-shared-cache'], 'node functions/scripts/nhl-shared-cache-inspect.cjs');
   assert.match(packageJson.scripts['verify:batchd1c:core'], /verify:batchd1b:core/);
   assert.match(packageJson.scripts['verify:batchd1c:core'], /data:audit-nhl-shared-cache/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1g:core/);
   assert.equal(freeze.requiredTtlPolicyCount, 10);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1f');
-  assert.equal(freeze.releaseLabel, 'Release Candidate 44');
-  assert.match(runtime, /Release Candidate 44/);
-  assert.match(productionRuntime, /Release Candidate 44/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1g');
+  assert.equal(freeze.releaseLabel, 'Release Candidate 45');
+  assert.match(runtime, /Release Candidate 45/);
+  assert.match(productionRuntime, /Release Candidate 45/);
 
   const auditOutput = execFileSync(
     process.execPath,
@@ -178,7 +178,7 @@ test('D1C documentation and roadmap record a Shadow foundation rather than claim
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.35/);
+  assert.match(roadmap, /Version 1\.36/);
   assert.match(roadmap, /# \[x\] S3\.24/);
   assert.match(roadmap, /# \[x\] D1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.29/);

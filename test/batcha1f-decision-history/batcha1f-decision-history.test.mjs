@@ -242,25 +242,25 @@ test('A1F advances RC44, completes A1.7, and records replay refresh latency as w
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 44/);
-  assert.match(productionRuntime, /Release Candidate 44/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 44');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc44-invite-beta');
+  assert.match(runtime, /Release Candidate 45/);
+  assert.match(productionRuntime, /Release Candidate 45/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 45');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc45-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1f:core'], /verify:batcha1e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1g:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.35/);
+  assert.match(roadmap, /Version 1\.36/);
   assert.match(roadmap, /# \[x\] A1\.7/);
   assert.match(roadmap, /\[~\] A1\.16 Reduce historical-replay player-data catch-up latency/);
   assert.match(roadmap, /# \[x\] LOG\.53 2026-08-18/);
   assert.match(docs, /owner-private transaction projection/);
   assert.match(docs, /current comparison/i);
   assert.match(docs, /A1\.16/);
-  assert.match(readme, /Release Candidate 44 \/ Product Batch A1F/);
-  assert.match(runbook, /npm run verify:batcha1f/);
-  assert.match(runbook, /rinkrat-rc44-validation\.json/);
-  assert.match(runbook, /rinkrat-rc44-invite-beta/);
+  assert.match(readme, /Release Candidate 45 \/ Product Batch A1G/);
+  assert.match(runbook, /npm run verify:batcha1g/);
+  assert.match(runbook, /rinkrat-rc45-validation\.json/);
+  assert.match(runbook, /rinkrat-rc45-invite-beta/);
 });
 
 test('A1F is Hosting-only and introduces no Function, Rule, index, TTL, or migration surface', async () => {

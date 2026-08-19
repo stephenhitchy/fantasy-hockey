@@ -57,6 +57,14 @@ import {
 } from '../../core/player/league-player-board.util';
 
 import {
+  buildLeaguePlayerRosterFitRecommendations,
+  compareLeaguePlayerRosterFitRecommendations,
+  leaguePlayerRosterFitConfidenceLabel,
+  leaguePlayerRosterFitTierLabel,
+  type LeaguePlayerRosterFitRecommendation,
+} from '../../core/player/league-player-roster-fit.util';
+
+import {
   buildCurrentRosterWindowByAssetKey,
   buildProjectionProgressMarkers,
   buildRosterWindowProgressMarkers,
@@ -116,6 +124,10 @@ import {
   type FreeAgentComparisonGame,
   type FreeAgentTransactionTimingDecision,
 } from './free-agent-transaction-comparison.util';
+import {
+  buildFreeAgentMoveLens,
+  type FreeAgentMoveLensResult,
+} from './free-agent-move-lens.util';
 import {
   isFreeAgentOperationObserved,
   withFreeAgentOperationTimeout,
@@ -191,6 +203,8 @@ export class FreeAgents implements OnDestroy {
   boardSortMode = signal<LeaguePlayerBoardSortMode>('next-six');
   boardVisibleLimit = signal(UNIFIED_PLAYER_PAGE_SIZE);
   boardRefreshing = signal(false);
+  expandedRosterFitAssetKey = signal('');
+  suggestedRosterFitComparisonAssetKey = signal('');
 
   loading = signal(true);
   playerPoolLoading = signal(false);
@@ -408,14 +422,38 @@ export class FreeAgents implements OnDestroy {
     }),
   );
 
-  readonly filteredBoardRows = computed(() =>
-    filterLeaguePlayerBoardRows(this.boardRows(), {
+  readonly boardRosterFitByAssetKey = computed(() =>
+    buildLeaguePlayerRosterFitRecommendations({
+      rows: this.boardRows(),
+      roster: this.myRoster(),
+      requiredGames: this.getRequiredGamesPerCycle(),
+    }),
+  );
+
+  readonly filteredBoardRows = computed(() => {
+    const sortMode = this.boardSortMode();
+    const rows = filterLeaguePlayerBoardRows(this.boardRows(), {
       searchTerm: this.searchTerm(),
       position: this.boardPositionFilter(),
       status: this.boardStatusFilter(),
-      sortMode: this.boardSortMode(),
-    }),
-  );
+      sortMode: sortMode === 'roster-fit' ? 'next-six' : sortMode,
+    });
+
+    if (sortMode !== 'roster-fit') {
+      return rows;
+    }
+
+    const recommendations = this.boardRosterFitByAssetKey();
+    return rows.sort((first, second) =>
+      compareLeaguePlayerRosterFitRecommendations(
+        recommendations.get(first.assetKey),
+        recommendations.get(second.assetKey),
+      ) ||
+      (second.nextSixProjection ?? Number.NEGATIVE_INFINITY) -
+        (first.nextSixProjection ?? Number.NEGATIVE_INFINITY) ||
+      first.name.localeCompare(second.name),
+    );
+  });
 
   readonly visibleBoardRows = computed(() =>
     this.filteredBoardRows().slice(0, this.boardVisibleLimit()),
@@ -673,6 +711,22 @@ export class FreeAgents implements OnDestroy {
     const candidate = this.selectedDropCandidate();
 
     return candidate ? this.resolveCandidateTransactionTiming(candidate) : null;
+  });
+
+  readonly moveLens = computed((): FreeAgentMoveLensResult | null => {
+    const incoming = this.selectedAddAsset();
+    const candidate = this.selectedDropCandidate();
+
+    if (!incoming || !candidate) {
+      return null;
+    }
+
+    return buildFreeAgentMoveLens({
+      incoming: this.getProjectionAsset(incoming),
+      outgoing: this.getSelectedOutgoingProjectionAsset(),
+      transactionType: this.selectedWaiver() ? 'waiver' : 'free-agent',
+      openSlot: candidate.moveType === 'open-slot',
+    });
   });
 
   readonly outgoingComparisonGames = computed(() =>
@@ -1000,12 +1054,14 @@ export class FreeAgents implements OnDestroy {
   updateBoardStatus(value: string): void {
     const allowed = new Set<LeaguePlayerBoardStatusFilter>([
       'free-agent',
+      'available',
       'all',
       'rostered',
       'waivers',
       'reserved',
       'watched',
     ]);
+    this.expandedRosterFitAssetKey.set('');
     this.boardStatusFilter.set(
       allowed.has(value as LeaguePlayerBoardStatusFilter)
         ? value as LeaguePlayerBoardStatusFilter
@@ -1023,12 +1079,14 @@ export class FreeAgents implements OnDestroy {
         ? value as LeaguePlayerBoardPositionFilter
         : 'all',
     );
+    this.expandedRosterFitAssetKey.set('');
     this.resetBoardVisibleLimit();
   }
 
   updateBoardSort(value: string): void {
     const allowed = new Set<LeaguePlayerBoardSortMode>([
       'next-six',
+      'roster-fit',
       'season-points',
       'overall-rank',
       'position-rank',
@@ -1036,12 +1094,61 @@ export class FreeAgents implements OnDestroy {
       'reliability',
       'name',
     ]);
-    this.boardSortMode.set(
-      allowed.has(value as LeaguePlayerBoardSortMode)
-        ? value as LeaguePlayerBoardSortMode
-        : 'next-six',
-    );
+    const nextSort = allowed.has(value as LeaguePlayerBoardSortMode)
+      ? value as LeaguePlayerBoardSortMode
+      : 'next-six';
+
+    this.boardSortMode.set(nextSort);
+    this.expandedRosterFitAssetKey.set('');
+
+    if (
+      nextSort === 'roster-fit' &&
+      !['free-agent', 'available', 'waivers'].includes(this.boardStatusFilter())
+    ) {
+      this.boardStatusFilter.set('available');
+    }
+
     this.resetBoardVisibleLimit();
+  }
+
+  getBoardRosterFit(
+    row: LeaguePlayerBoardRow,
+  ): LeaguePlayerRosterFitRecommendation | null {
+    return this.boardRosterFitByAssetKey().get(row.assetKey) ?? null;
+  }
+
+  shouldShowBoardRosterFit(row: LeaguePlayerBoardRow): boolean {
+    return this.boardSortMode() === 'roster-fit' &&
+      (row.status === 'free-agent' || row.status === 'waivers') &&
+      Boolean(this.getBoardRosterFit(row));
+  }
+
+  getBoardRosterFitTierLabel(row: LeaguePlayerBoardRow): string {
+    const recommendation = this.getBoardRosterFit(row);
+    return recommendation
+      ? leaguePlayerRosterFitTierLabel(recommendation.tier)
+      : 'More data needed';
+  }
+
+  getBoardRosterFitConfidenceLabel(row: LeaguePlayerBoardRow): string {
+    const recommendation = this.getBoardRosterFit(row);
+    return recommendation
+      ? leaguePlayerRosterFitConfidenceLabel(recommendation.confidence)
+      : 'Low confidence';
+  }
+
+  isBoardRosterFitExpanded(row: LeaguePlayerBoardRow): boolean {
+    return this.expandedRosterFitAssetKey() === row.assetKey;
+  }
+
+  toggleBoardRosterFit(row: LeaguePlayerBoardRow): void {
+    if (!this.shouldShowBoardRosterFit(row)) {
+      return;
+    }
+
+    this.expandedRosterFitAssetKey.update((assetKey) =>
+      assetKey === row.assetKey ? '' : row.assetKey,
+    );
   }
 
   showMoreBoardRows(): void {
@@ -1114,6 +1221,13 @@ export class FreeAgents implements OnDestroy {
     if (!this.canStartBoardTransaction(row)) {
       return;
     }
+
+    const rosterFit = this.getBoardRosterFit(row);
+    this.suggestedRosterFitComparisonAssetKey.set(
+      rosterFit && (rosterFit.tier === 'strong' || rosterFit.tier === 'possible')
+        ? rosterFit.comparisonAssetKey ?? ''
+        : '',
+    );
 
     const waiver = this.getBoardWaiver(row);
     if (waiver) {
@@ -1236,6 +1350,15 @@ export class FreeAgents implements OnDestroy {
 
   getDropCandidateAssetKey(candidate: DropCandidate): string | null {
     return this.getRosterAssetKey(candidate.asset);
+  }
+
+  isSuggestedRosterFitCandidate(candidate: DropCandidate): boolean {
+    const suggestedAssetKey = this.suggestedRosterFitComparisonAssetKey();
+    return Boolean(
+      suggestedAssetKey &&
+      candidate.moveType === 'drop' &&
+      this.getDropCandidateAssetKey(candidate) === suggestedAssetKey,
+    );
   }
 
   getDropCandidateImageUrl(candidate: DropCandidate): string | null {
@@ -1362,6 +1485,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedAddAssetKey.set('');
     this.selectedWaiverId.set('');
     this.selectedDropSlotId.set('');
+    this.suggestedRosterFitComparisonAssetKey.set('');
     this.resetTransactionDisclosureState();
     this.selectedAssetEligibility.set(null);
     this.eligibilityError.set('');

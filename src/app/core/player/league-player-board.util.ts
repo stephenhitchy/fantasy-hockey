@@ -17,6 +17,7 @@ export type LeaguePlayerBoardStatusFilter =
 export type LeaguePlayerBoardSortMode =
   | 'season-points'
   | 'next-six'
+  | 'roster-fit'
   | 'overall-rank'
   | 'position-rank'
   | 'rest-of-season'
@@ -609,6 +610,7 @@ export function filterLeaguePlayerBoardRows(
 
     switch (sortMode) {
       case 'next-six':
+      case 'roster-fit':
         result = compareNullableDescending(first.nextSixProjection, second.nextSixProjection);
         break;
       case 'overall-rank':

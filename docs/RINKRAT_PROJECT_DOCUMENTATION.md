@@ -12383,3 +12383,11 @@ A1E corrects Add / Drop and Player Intel tracker parity by using the exact activ
 See `docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md` for the complete Release Candidate 44 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
 
 A1F completes roadmap item A1.7 with a secondary manager-private Decision History route linked from Add / Drop and Team Settings. It reads at most 75 owner-private completed transaction projections once, excludes pending, queued, canceled, and losing outcomes, and pairs recorded added and dropped assets with today’s bounded Player Board data. Season and Next 6 differences are transparent current arithmetic rather than a grade or recommendation. A1F also records A1.16 as work in progress to measure and reduce replay-to-player-data catch-up latency without coupling projection generation to scoring authority. No Function, listener, Rule, index, TTL policy, migration, or competitive write is added.
+
+---
+
+# Product Batch A1G — Transparent Roster Fit and Move Lens
+
+See `docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md` for the complete Release Candidate 45 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
+
+A1G completes roadmap item A1.8 without adding another default-visible page. Add / Drop retains its free-agent, Next 6 default; managers may explicitly choose **Roster fit (for you)** to order available players against legal open slots or a deterministic lowest-projected legal roster comparison. After an incoming player and valid roster choice are selected, one compact Move lens exposes simple directional factors, confidence, and uncertainty. Waiver priority, competing claims, injury timing, and exact activation timing remain disclosed limitations rather than hidden assumptions. A1G adds no Function, listener, Rule, index, TTL policy, migration, runtime recommendation service, or competitive write. A1.16 remains in progress because replay player-data catch-up is correct but can be slower than desired.

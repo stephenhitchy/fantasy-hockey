@@ -112,6 +112,7 @@
             (change)="updateBoardStatus($any($event.target).value)"
           >
             <option value="free-agent">Free agents ({{ freeAgentBoardCount() }})</option>
+            <option value="available">Available ({{ freeAgentBoardCount() + waiverBoardCount() }})</option>
             <option value="all">All players ({{ boardRows().length }})</option>
             <option value="rostered">Rostered ({{ rosteredBoardCount() }})</option>
             <option value="waivers">Waivers ({{ waiverBoardCount() }})</option>
@@ -144,6 +145,7 @@
             (change)="updateBoardSort($any($event.target).value)"
           >
             <option value="next-six">Next 6 projection</option>
+            <option value="roster-fit">Roster fit (for you)</option>
             <option value="season-points">Season points</option>
             <option value="overall-rank">Overall rank</option>
             <option value="position-rank">Position rank</option>
@@ -153,6 +155,12 @@
           </select>
         </label>
       </section>
+
+      @if (boardSortMode() === 'roster-fit') {
+        <p class="unified-fit-method rr-notice rr-notice--info" role="status">
+          Roster fit uses legal roster paths, Next 6 and rest-of-season edges, expected games, and projection reliability. Open <strong>Why</strong> for the exact comparison.
+        </p>
+      }
 
       <div class="unified-player-count" role="status">
         <strong>{{ filteredBoardRows().length }} results</strong>
@@ -259,6 +267,52 @@
                   }
                 }
               </div>
+
+              @if (shouldShowBoardRosterFit(row)) {
+                @if (getBoardRosterFit(row); as fit) {
+                  <section
+                    class="unified-fit-lens"
+                    [attr.data-tier]="fit.tier"
+                    [attr.aria-label]="getBoardRosterFitTierLabel(row) + ' for ' + row.name"
+                  >
+                    <div class="unified-fit-summary">
+                      <span class="unified-fit-tier">{{ getBoardRosterFitTierLabel(row) }}</span>
+                      <span>{{ fit.summary }}</span>
+                      <button
+                        class="unified-fit-why"
+                        type="button"
+                        [attr.aria-expanded]="isBoardRosterFitExpanded(row)"
+                        [attr.aria-controls]="'roster-fit-' + row.assetKey"
+                        (click)="toggleBoardRosterFit(row)"
+                      >
+                        {{ isBoardRosterFitExpanded(row) ? 'Hide' : 'Why' }}
+                      </button>
+                    </div>
+
+                    @if (fit.factors.length > 0 || fit.risks.length > 0) {
+                      <div class="unified-fit-signals" aria-label="Roster fit signals">
+                        @for (factor of fit.factors; track factor) {
+                          <span class="unified-fit-signal unified-fit-signal-positive">{{ factor }}</span>
+                        }
+                        @for (risk of fit.risks; track risk) {
+                          <span class="unified-fit-signal unified-fit-signal-risk">{{ risk }}</span>
+                        }
+                      </div>
+                    }
+
+                    @if (isBoardRosterFitExpanded(row)) {
+                      <div class="unified-fit-details" [id]="'roster-fit-' + row.assetKey">
+                        <strong>{{ getBoardRosterFitConfidenceLabel(row) }}</strong>
+                        <ul>
+                          @for (line of fit.detailLines; track line) {
+                            <li>{{ line }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                  </section>
+                }
+              }
             </article>
           }
         </section>
@@ -370,6 +424,7 @@
             <article
               class="unified-player-row transaction-roster-row rr-card"
               [class.transaction-roster-row-selected]="isSelectedDropCandidate(candidate)"
+              [class.transaction-roster-row-suggested]="isSuggestedRosterFitCandidate(candidate)"
             >
               @if (getDropCandidateProjectionAsset(candidate); as outgoing) {
                 <a
@@ -391,6 +446,9 @@
                       <span>{{ getRosterAssetTeamLabel(rosterAsset) }} · {{ rosterAsset.position }}</span>
                     }
                     <small>{{ getDropCandidateStatusLabel(candidate) }}</small>
+                    @if (isSuggestedRosterFitCandidate(candidate)) {
+                      <span class="transaction-roster-fit-badge">Suggested comparison</span>
+                    }
                     @if (shouldShowBoardAvailability(outgoing)) {
                       <span [class]="'unified-injury-status ' + getBoardAvailabilityClass(outgoing)">
                         <strong>{{ getBoardAvailabilityLabel(outgoing) }}</strong>
@@ -485,6 +543,33 @@
               Change selection
             </button>
           </div>
+
+          @if (moveLens(); as lens) {
+            <section class="transaction-move-lens" [attr.data-verdict]="lens.verdict" aria-label="Move recommendation">
+              <div class="transaction-move-lens-heading">
+                <div>
+                  <span class="eyebrow">Move lens</span>
+                  <h3>{{ lens.headline }}</h3>
+                </div>
+                <span class="transaction-move-lens-confidence">{{ lens.confidenceLabel }}</span>
+              </div>
+
+              <p>{{ lens.summary }}</p>
+
+              <details>
+                <summary>Why?</summary>
+                <ul>
+                  @for (factor of lens.factors; track factor.key) {
+                    <li [attr.data-direction]="factor.direction">
+                      <strong>{{ factor.label }}</strong>
+                      <span>{{ factor.detail }}</span>
+                    </li>
+                  }
+                </ul>
+                <small>{{ lens.uncertainty }} Uses the current Projection V11 snapshot; it is guidance, not a guarantee.</small>
+              </details>
+            </section>
+          }
 
           <details class="transaction-timing-details">
             <summary>Timing details</summary>

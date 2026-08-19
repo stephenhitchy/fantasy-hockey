@@ -351,21 +351,21 @@ test('C1I remains compatible with the RC36 release while preserving competitive 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 44/);
-  assert.match(productionRuntime, /Release Candidate 44/);
+  assert.match(runtime, /Release Candidate 45/);
+  assert.match(productionRuntime, /Release Candidate 45/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc44-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc45-invite-beta');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1g:core/);
 });
 
 test('C1I documentation and roadmap complete the bounded recap and site-first workflow', async () => {
@@ -378,7 +378,7 @@ test('C1I documentation and roadmap complete the bounded recap and site-first wo
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.35/);
+  assert.match(roadmap, /Version 1\.36/);
   assert.match(roadmap, /# \[x\] C1\.21/);
   assert.match(roadmap, /# \[x\] C1\.22/);
   assert.match(roadmap, /# \[x\] LOG\.44/);
@@ -387,9 +387,9 @@ test('C1I documentation and roadmap complete the bounded recap and site-first wo
   assert.match(runbook, /256-document bound/);
   assert.match(runbook, /functions:publishLeagueRoundRecapActivity/);
   assert.doesNotMatch(runbook, /--only firestore:rules/);
-  assert.match(readme, /Release Candidate 44 \/ Product Batch A1F/);
+  assert.match(readme, /Release Candidate 45 \/ Product Batch A1G/);
   assert.match(readme, /RINKRAT_SOCIAL_C1I_ROUND_AWARDS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcha1f/);
-  assert.match(releaseRunbook, /rinkrat-rc44-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc44-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1g/);
+  assert.match(releaseRunbook, /rinkrat-rc45-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc45-invite-beta/);
 });
