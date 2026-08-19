@@ -652,6 +652,13 @@
               </div>
 
               <div class="league-tools-grid">
+                <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'commissioner']">
+                  <span aria-hidden="true">📋</span>
+                  <span>
+                    <strong>Commissioner Playbook</strong>
+                  </span>
+                </a>
+
                 @if (draft()?.status !== 'complete') {
                   <a class="tool-link rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
                     <span class="pixel-icon icon-draft icon-sm" aria-hidden="true"></span>

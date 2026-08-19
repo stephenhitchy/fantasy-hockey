@@ -108,7 +108,7 @@ test('the service worker handles only same-origin GET shell and stable assets', 
   assert.match(source, /precacheBuiltShellAssets/);
   assert.match(source, /extractBuiltShellAssetUrls/);
   assert.match(source, /\\.\(\?:js\|css\)\$/);
-  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc50-v1'/);
+  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc51-v1'/);
   assert.doesNotMatch(source, /addEventListener\(['"]sync['"]/);
   assert.doesNotMatch(source, /background\s*sync/i);
   assert.doesNotMatch(source, /indexedDB|postMessage\([^)]*transaction|queue.*(?:write|mutation)/i);
@@ -266,10 +266,10 @@ test('the N1A foundation remains intact under RC49 and preserves competitive mod
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(sha256(firestoreRules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(firestoreIndexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 50/);
-  assert.match(productionRuntime, /Release Candidate 50/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 50');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchv4a');
+  assert.match(runtime, /Release Candidate 51/);
+  assert.match(productionRuntime, /Release Candidate 51/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 51');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1a');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
@@ -281,7 +281,7 @@ test('the N1A foundation remains intact under RC49 and preserves competitive mod
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchn1a:core'], /verify:batcha1i:core/);
   assert.match(packageJson.scripts['verify:batchn1b:core'], /verify:batchn1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchv4a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1a:core/);
 });
 
 test('documentation and roadmap record the bounded PWA foundation and site-first proof', async () => {
@@ -294,7 +294,7 @@ test('documentation and roadmap record the bounded PWA foundation and site-first
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.41/);
+  assert.match(roadmap, /Version 1\.42/);
   assert.match(roadmap, /# \[x\] N1\.1/);
   assert.match(roadmap, /# \[x\] N1\.2/);
   assert.match(roadmap, /# \[x\] N1\.3/);
@@ -304,9 +304,9 @@ test('documentation and roadmap record the bounded PWA foundation and site-first
   assert.match(runbook, /Mobile Batch N1A/);
   assert.match(runbook, /no Background Sync listener/i);
   assert.match(runbook, /Site-first proof/);
-  assert.match(readme, /Release Candidate 50 \/ Scoring Batch V4A/);
+  assert.match(readme, /Release Candidate 51 \/ Operations Batch O1A/);
   assert.match(readme, /RINKRAT_MOBILE_N1A_PWA_FOUNDATION\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchv4a/);
-  assert.match(releaseRunbook, /rinkrat-rc50-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc50-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcho1a/);
+  assert.match(releaseRunbook, /rinkrat-rc51-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc51-invite-beta/);
 });

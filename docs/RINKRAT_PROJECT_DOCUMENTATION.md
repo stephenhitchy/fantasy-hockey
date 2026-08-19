@@ -12522,3 +12522,31 @@ V4A requires a deliberate Functions deployment, guarded league migration, Projec
 The first RC50 package used `CURRENT_SCORING_RULES_VERSION` while validating the last verified Draft projection snapshot in `league-detail.ts`, but omitted the canonical scoring-rules import. Angular reported TS2304 and correctly blocked the build. V4A.1 restores that import and adds a focused regression test.
 
 No runtime scoring, projection, migration, Firestore, six-game-window, rollover, App Check, queue, cache, Rule, index, or TTL behavior changed.
+
+# Operations Batch O1A.1 — Commissioner Playbook
+
+**Runtime release:** Release Candidate 51
+
+**Competitive models:** Production Scoring V4 and Projection V11
+
+O1A advances commissioner self-service before the tester season. It adds the public `/commissioner-guide` route and the commissioner-only `/leagues/{leagueId}/commissioner` route.
+
+The league-specific playbook reads existing account, league, team, Draft, and projection metadata to report five preparation checks: verified commissioner account, intended manager count, saved Round 1 order, scheduled Draft time, and a verified Projection V11 board matching the league’s scoring version. It does not write or approve competition state.
+
+The page also provides opt-in plain-text invitation and Draft-reminder copy, direct setup links, a six-item device-local Draft-night checklist, print support, and evidence-first recovery guidance. Checklist state is convenience-only browser storage and cannot affect the Draft.
+
+The public Commissioner Guide contains the six-game rule, setup sequence, printable checklist, weekly operations, recovery rules, and FAQ. It contains no private league data and requires no account.
+
+O1A adds no Cloud Function, Firestore Rule, index, TTL policy, migration, permanent data record, or competitive write. Production Scoring V4, legacy V3 reconstruction, Projection V11, immutable six-game windows, seventh-game rollover, server authority, App Check Monitor, scoring Shadow, and shared NHL-cache Shadow remain unchanged.
+
+The first O1A package inferred the checklist ID allowlist as a narrow literal-union `Set`, while `Object.entries()` exposes persisted object keys as general strings. Angular strict compilation reported TS2345 at the membership check. O1A.1 declares that membership-only allowlist as `ReadonlySet<string>`, preserving the same six supported IDs and fail-closed runtime behavior.
+
+O1.5 remains in progress until RinkRat also has a public demo league or matchup and observed evidence that a non-founder commissioner can create, fill, Draft, and operate a real league without founder-only intervention.
+
+Verification:
+
+```bash
+npm run verify:batcho1a
+```
+
+Deployment is Hosting-only. Full operating and proof guidance is maintained in `docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md`.

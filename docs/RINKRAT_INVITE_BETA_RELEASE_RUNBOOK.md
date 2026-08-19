@@ -1,10 +1,12 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
 **Batch:** B1C
-**Runtime release being frozen:** Release Candidate 50
+**Runtime release being frozen:** Release Candidate 51
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 50 / Scoring Batch V4A.1 runtime; Production Scoring V4 and Projection V11 are the frozen competition models after the guarded preseason migration.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 51 / Operations Batch O1A.1 runtime; Production Scoring V4 and Projection V11 are the frozen competition models after the guarded preseason migration.
+
+O1A.1 is a compiler-only correction for the Commissioner Playbook checklist normalizer. It widens the local membership allowlist to accept general string keys from `Object.entries()` while preserving the same six supported checklist IDs and all RC51 runtime behavior.
 
 V4A changes only Team Goalie Unit scoring: 2 points per completed NHL team game, 0.20 per save, 5 for a win, 5 for a shutout, and save quality `3 + ((SV% - .900) × 100 × 1.8)` bounded from -6 to +14 with no per-game cap. Every skater value, the six-game boundary, seventh-game rollover, server authority, frozen-window projections, App Check Monitor, scoring Shadow, and shared NHL-cache Shadow remain unchanged. Legacy V3 reconstruction remains available for deliberately unmigrated or rollback-only records.
 
@@ -95,7 +97,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchv4a
+npm run verify:batcho1a
 ```
 
 Commit and push the verified RC50 source:
@@ -107,7 +109,7 @@ git commit -m "Rebalance Team Goalie Unit scoring"
 git push
 ```
 
-Do not run the freeze command until V4A Functions and Hosting are deployed, every intended preseason league is migrated and inspected, each migrated league has a fresh Scoring V4 Projection V11 snapshot, and the live manifest identifies Release Candidate 50. The freeze tooling itself never deploys or mutates production.
+Do not run the freeze command until V4A Functions and Hosting are deployed, every intended preseason league is migrated and inspected, each migrated league has a fresh Scoring V4 Projection V11 snapshot, and the live manifest identifies Release Candidate 51. The freeze tooling itself never deploys or mutates production.
 
 ## Production Scoring V4 preseason cutover prerequisite
 
@@ -187,7 +189,7 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 50, Scoring V4, and Projection V11.
+- The live domain serves Release Candidate 51, Scoring V4, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
@@ -197,7 +199,7 @@ Preflight verifies:
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 50 Release Readiness page:
+On the deployed Release Candidate 51 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -207,14 +209,14 @@ On the deployed Release Candidate 50 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc50-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc51-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc50-validation.json"
+  "$HOME/Downloads/rinkrat-rc51-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -251,8 +253,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc50-validation.json" \
-  --tag=rinkrat-rc50-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc51-validation.json" \
+  --tag=rinkrat-rc51-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -271,27 +273,27 @@ Review the generated JSON and rollback Markdown, then create the annotated tag e
 Example:
 
 ```bash
-git tag -a rinkrat-rc50-invite-beta LIVE_SOURCE_REVISION \
+git tag -a rinkrat-rc51-invite-beta LIVE_SOURCE_REVISION \
   -m "RinkRat RC50 invite beta baseline"
-git push origin rinkrat-rc50-invite-beta
+git push origin rinkrat-rc51-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc50-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc51-invite-beta
 ```
 
 Verify the complete frozen state while RC50 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc50-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc51-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc50-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc51-invite-beta
 ```
 
 ## After the freeze

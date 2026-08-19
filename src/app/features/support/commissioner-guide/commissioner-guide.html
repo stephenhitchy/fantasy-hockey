@@ -1,0 +1,124 @@
+<main class="commissioner-guide-shell">
+  <a routerLink="/support" class="commissioner-guide-back">← Back to Support</a>
+
+  <header class="commissioner-guide-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Commissioner School</span>
+      <h1>Run a RinkRat league</h1>
+      <p>Set up the league, finish the Draft, and protect the competition when something looks wrong.</p>
+    </div>
+
+    <div class="commissioner-guide-hero-actions">
+      <a class="rr-button rr-button--primary" routerLink="/leagues/create">Create League</a>
+      <a class="rr-button rr-button--secondary" routerLink="/support/known-issues">Known Issues</a>
+    </div>
+  </header>
+
+  <nav class="commissioner-guide-jump rr-card rr-card--padded" aria-label="Commissioner guide sections">
+    <a href="#six-game-rule">Six-game rule</a>
+    <a href="#setup">Setup</a>
+    <a href="#draft-night">Draft night</a>
+    <a href="#weekly-operations">Weekly operations</a>
+    <a href="#recovery">Recovery</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+
+  <section class="commissioner-guide-grid">
+    <article id="six-game-rule" class="commissioner-guide-card rr-card rr-card--padded">
+      <span class="eyebrow">30-second rule</span>
+      <h2>Six NHL games per active roster slot</h2>
+      <ol>
+        <li>Each active roster slot counts six scheduled NHL team games.</li>
+        <li>The seventh team game starts that slot’s next window.</li>
+        <li>Different roster slots can be on different Matchup numbers.</li>
+        <li>Completed windows stay completed.</li>
+      </ol>
+    </article>
+
+    <article id="setup" class="commissioner-guide-card rr-card rr-card--padded">
+      <span class="eyebrow">Before scheduling</span>
+      <h2>League setup</h2>
+      <ol>
+        <li>Invite every intended manager before locking the Draft order.</li>
+        <li>Confirm each manager can sign in and sees the correct team.</li>
+        <li>Save the Round 1 order, Draft time, and pick clock.</li>
+        <li>Generate a verified Projection V11 board that matches the league’s scoring version.</li>
+        <li>Run one complete rehearsal before the real Draft.</li>
+      </ol>
+    </article>
+
+    <article id="draft-night" class="commissioner-guide-card commissioner-guide-card-wide rr-card rr-card--padded">
+      <span class="eyebrow">Commissioner checklist</span>
+      <h2>Draft night</h2>
+      <div class="commissioner-guide-checklist">
+        @for (item of draftNightChecklist; track item.id) {
+          <label>
+            <input type="checkbox" />
+            <span>{{ item.label }}</span>
+          </label>
+        }
+      </div>
+      <p class="commissioner-guide-note">This printable checklist is not saved. Signed-in commissioners get a league-specific checklist in League HQ.</p>
+    </article>
+
+    <article id="weekly-operations" class="commissioner-guide-card rr-card rr-card--padded">
+      <span class="eyebrow">During the season</span>
+      <h2>Weekly operations</h2>
+      <ul>
+        <li>Use normal server-confirmed actions instead of editing competition data manually.</li>
+        <li>Check unavailable starters, scheduled moves, and roster-slot boundaries.</li>
+        <li>Share Known Issues when a problem affects more than one manager.</li>
+        <li>Record support questions that the product should answer more clearly.</li>
+        <li>Do not change scoring merely because one matchup had an unusual result.</li>
+      </ul>
+    </article>
+
+    <article id="recovery" class="commissioner-guide-card rr-card rr-card--padded">
+      <span class="eyebrow">Protect the competition first</span>
+      <h2>When something looks wrong</h2>
+      <ol>
+        @for (step of recoverySteps; track step) {
+          <li>{{ step }}</li>
+        }
+      </ol>
+      <a class="rr-button rr-button--secondary" routerLink="/support">Open Support</a>
+    </article>
+  </section>
+
+  <section id="faq" class="commissioner-guide-faq rr-card rr-card--raised rr-card--padded" aria-labelledby="commissioner-faq-title">
+    <span class="eyebrow">Quick answers</span>
+    <h2 id="commissioner-faq-title">Commissioner FAQ</h2>
+
+    <details>
+      <summary>Can I add a manager after the Draft order is locked?</summary>
+      <p>No. Finish filling the league first. Late membership changes can invalidate the saved Draft order.</p>
+    </details>
+
+    <details>
+      <summary>What happens when a manager’s pick timer expires?</summary>
+      <p>RinkRat may use that manager’s Queue or the best legal automatic selection. Repeated timeouts can enable Auto-Draft.</p>
+    </details>
+
+    <details>
+      <summary>Why are two players on different Matchup numbers?</summary>
+      <p>Each active roster slot owns an independent six-game window. Their NHL teams can reach the next boundary on different dates.</p>
+    </details>
+
+    <details>
+      <summary>Should I repeat an action when the page looks slow?</summary>
+      <p>No. Wait for the current confirmation or failure state. Repeating a Draft, roster, or waiver action can make recovery harder.</p>
+    </details>
+
+    <details>
+      <summary>Can I manually correct a score or waiver result?</summary>
+      <p>Do not alter competition data outside the approved server tools. Preserve the evidence and report the exact expected and observed result.</p>
+    </details>
+  </section>
+
+  <footer class="commissioner-guide-footer">
+    <a routerLink="/support">Support</a>
+    <a routerLink="/support/known-issues">Known Issues</a>
+    <a routerLink="/privacy">Privacy</a>
+    <a routerLink="/terms">Terms</a>
+  </footer>
+</main>

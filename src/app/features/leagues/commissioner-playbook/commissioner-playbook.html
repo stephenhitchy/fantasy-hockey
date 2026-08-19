@@ -1,0 +1,202 @@
+<section class="commissioner-playbook rr-page-shell">
+  <a class="league-return-link" [routerLink]="['/leagues', leagueId]" aria-label="Back to league home">Back to League</a>
+
+  @if (loading()) {
+    <section class="playbook-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="rr-spinner" aria-hidden="true"></span>
+      <strong>Loading commissioner readiness…</strong>
+    </section>
+  } @else if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  } @else if (league(); as currentLeague) {
+    <header class="playbook-hero rr-card rr-card--raised rr-card--padded">
+      <div>
+        <span class="eyebrow">Commissioner Tools</span>
+        <h1>Commissioner Playbook</h1>
+        <p>{{ currentLeague.name }}</p>
+      </div>
+
+      <div class="playbook-hero-actions">
+        <button type="button" class="rr-button rr-button--secondary" (click)="printPlaybook()">
+          Print Checklist
+        </button>
+        <a class="rr-button rr-button--secondary" routerLink="/commissioner-guide">
+          Full Guide
+        </a>
+      </div>
+    </header>
+
+    @if (copyMessage()) {
+      <p class="rr-notice rr-notice--info" role="status">{{ copyMessage() }}</p>
+    }
+
+    <section
+      class="readiness-summary rr-card rr-card--padded"
+      [attr.data-status]="readiness().status"
+      aria-labelledby="commissioner-readiness-title"
+    >
+      <div class="readiness-score" aria-hidden="true">
+        <strong>{{ readiness().readyCount }}/{{ readiness().totalCount }}</strong>
+        <span>ready</span>
+      </div>
+      <div>
+        <span class="eyebrow">League readiness</span>
+        <h2 id="commissioner-readiness-title">{{ readiness().headline }}</h2>
+        <p>{{ readiness().detail }}</p>
+      </div>
+      <button
+        type="button"
+        class="rr-button rr-button--quiet"
+        [disabled]="refreshingProjection()"
+        (click)="refreshProjection()"
+      >
+        {{ refreshingProjection() ? 'Refreshing…' : 'Refresh checks' }}
+      </button>
+    </section>
+
+    <section class="readiness-grid" aria-label="Commissioner readiness checks">
+      @for (check of readiness().checks; track check.id) {
+        <article class="readiness-card rr-card rr-card--padded" [attr.data-status]="check.status">
+          <div class="readiness-card-heading">
+            <span class="readiness-status" aria-hidden="true">
+              {{ check.status === 'ready' ? '✓' : check.status === 'attention' ? '!' : '×' }}
+            </span>
+            <div>
+              <h3>{{ check.title }}</h3>
+              <p>{{ check.detail }}</p>
+            </div>
+          </div>
+
+          @if (check.status !== 'ready') {
+            <a class="rr-button rr-button--secondary" [routerLink]="check.actionPath">
+              {{ check.actionLabel }}
+            </a>
+          }
+        </article>
+      }
+    </section>
+
+    <section class="playbook-two-column">
+      <article class="message-card rr-card rr-card--padded" aria-labelledby="invite-managers-title">
+        <span class="eyebrow">League filling</span>
+        <h2 id="invite-managers-title">Invite managers</h2>
+        <dl class="playbook-facts">
+          <div>
+            <dt>Teams</dt>
+            <dd>{{ teams().length }} / {{ currentLeague.maxTeams }}</dd>
+          </div>
+          <div>
+            <dt>Invite code</dt>
+            <dd><code>{{ currentLeague.inviteCode }}</code></dd>
+          </div>
+          <div>
+            <dt>Draft</dt>
+            <dd>{{ draftTimeLabel() || 'Not scheduled' }}</dd>
+          </div>
+        </dl>
+
+        <div class="message-actions">
+          <button type="button" class="rr-button rr-button--primary" (click)="copyInviteMessage()">
+            Copy Invite Message
+          </button>
+          <button type="button" class="rr-button rr-button--secondary" (click)="copyDraftNightMessage()">
+            Copy Draft Reminder
+          </button>
+        </div>
+      </article>
+
+      <article class="quick-actions-card rr-card rr-card--padded" aria-labelledby="commissioner-actions-title">
+        <span class="eyebrow">Direct actions</span>
+        <h2 id="commissioner-actions-title">Run the league</h2>
+        <div class="quick-action-grid">
+          <a class="rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
+            Draft Setup
+          </a>
+          <a class="rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'draft']">
+            Draft Room
+          </a>
+          <a class="rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'projections']">
+            Projection Lab
+          </a>
+          <a class="rr-button rr-button--secondary" [routerLink]="['/leagues', leagueId, 'scoring']">
+            Scoring Guide
+          </a>
+          <a class="rr-button rr-button--secondary" routerLink="/support/known-issues">
+            Known Issues
+          </a>
+          <a class="rr-button rr-button--secondary" routerLink="/support/feedback">
+            Send Feedback
+          </a>
+        </div>
+      </article>
+    </section>
+
+    <section class="draft-night-card rr-card rr-card--raised rr-card--padded" aria-labelledby="draft-night-checklist-title">
+      <header class="checklist-heading">
+        <div>
+          <span class="eyebrow">This device only</span>
+          <h2 id="draft-night-checklist-title">Draft-night checklist</h2>
+        </div>
+        <div class="checklist-progress">
+          <strong>{{ checklistProgress().complete }}/{{ checklistProgress().total }}</strong>
+          <span>checked</span>
+        </div>
+      </header>
+
+      <div
+        class="checklist-progress-track"
+        role="progressbar"
+        aria-label="Draft-night checklist progress"
+        [attr.aria-valuemin]="0"
+        [attr.aria-valuemax]="checklistProgress().total"
+        [attr.aria-valuenow]="checklistProgress().complete"
+      >
+        <span [style.width.%]="checklistProgress().percent"></span>
+      </div>
+
+      <div class="draft-night-checklist">
+        @for (item of checklistItems; track item.id) {
+          <label class="checklist-item">
+            <input
+              type="checkbox"
+              [checked]="isChecklistItemComplete(item.id)"
+              (change)="setChecklistItem(item.id, $any($event.target).checked)"
+            />
+            <span>{{ item.label }}</span>
+          </label>
+        }
+      </div>
+
+      <button type="button" class="rr-button rr-button--quiet" (click)="resetChecklist()">
+        Reset Checklist
+      </button>
+    </section>
+
+    <section class="playbook-two-column">
+      <article class="rules-card rr-card rr-card--padded" aria-labelledby="rules-at-a-glance-title">
+        <span class="eyebrow">Rules at a glance</span>
+        <h2 id="rules-at-a-glance-title">What every manager should know</h2>
+        <ul>
+          <li>Each active roster slot counts six NHL team games.</li>
+          <li>The seventh team game starts that slot’s next window.</li>
+          <li>Different roster slots may be on different Matchup numbers.</li>
+          <li>Queued moves activate only at the stated roster-slot boundary.</li>
+          <li>Draft, roster, waiver, and scoring results are confirmed by the server.</li>
+        </ul>
+      </article>
+
+      <article class="recovery-card rr-card rr-card--padded" aria-labelledby="recovery-title">
+        <span class="eyebrow">When something looks wrong</span>
+        <h2 id="recovery-title">Protect the competition first</h2>
+        <ol>
+          @for (step of recoverySteps; track step) {
+            <li>{{ step }}</li>
+          }
+        </ol>
+        <a class="rr-button rr-button--secondary" routerLink="/support">
+          Open Support
+        </a>
+      </article>
+    </section>
+  }
+</section>

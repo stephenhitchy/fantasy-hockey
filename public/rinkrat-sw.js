@@ -1,5 +1,5 @@
 /* RinkRat Mobile Batch N1B — installable shell plus saved read-only matchup access. */
-const RINKRAT_CACHE_VERSION = 'rc50-v1';
+const RINKRAT_CACHE_VERSION = 'rc51-v1';
 const RINKRAT_CACHE_PREFIX = 'rinkrat-pwa-';
 const SHELL_CACHE = `${RINKRAT_CACHE_PREFIX}shell-${RINKRAT_CACHE_VERSION}`;
 const ASSET_CACHE = `${RINKRAT_CACHE_PREFIX}assets-${RINKRAT_CACHE_VERSION}`;

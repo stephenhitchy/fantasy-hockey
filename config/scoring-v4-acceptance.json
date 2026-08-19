@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseLabel": "Release Candidate 50",
+  "releaseLabel": "Release Candidate 51",
   "scoringRulesVersion": 4,
   "projectionVersion": 11,
   "evidenceBasis": "Five complete 2013-14 through 2017-18 regular seasons plus repeated 12-team six-game-window draft and matchup simulations; modern-season exact-data replication remains required.",
@@ -19,27 +19,60 @@
   },
   "historicalDistributionTargets": {
     "targetType": "evidence-informed-design-target",
-    "goalieCoefficientOfVariation": { "minimum": 0.2, "maximum": 0.28 },
-    "eliteGoalieSixGameMean": { "minimum": 100, "maximum": 112 },
-    "goodGoalieSixGameMean": { "minimum": 92, "maximum": 102 },
+    "goalieCoefficientOfVariation": {
+      "minimum": 0.2,
+      "maximum": 0.28
+    },
+    "eliteGoalieSixGameMean": {
+      "minimum": 100,
+      "maximum": 112
+    },
+    "goodGoalieSixGameMean": {
+      "minimum": 92,
+      "maximum": 102
+    },
     "poorGoalieSixGameMeanMaximum": 88,
-    "eliteGoalieHundredPlusPercent": { "minimum": 50, "maximum": 70 },
-    "goodGoalieHundredPlusPercent": { "minimum": 35, "maximum": 60 },
+    "eliteGoalieHundredPlusPercent": {
+      "minimum": 50,
+      "maximum": 70
+    },
+    "goodGoalieHundredPlusPercent": {
+      "minimum": 35,
+      "maximum": 60
+    },
     "poorGoalieHundredPlusPercentMaximum": 25,
-    "eliteSkaterHundredPlusPercent": { "minimum": 0.5, "maximum": 5 }
+    "eliteSkaterHundredPlusPercent": {
+      "minimum": 0.5,
+      "maximum": 5
+    }
   },
   "leagueSimulationTargets": {
     "targetType": "evidence-backed-range-around-v3-behavior",
-    "projectedUnderdogWinPercent": { "minimum": 30, "maximum": 45 },
-    "closeMatchupPercentWithin25": { "minimum": 18, "maximum": 30 },
+    "projectedUnderdogWinPercent": {
+      "minimum": 30,
+      "maximum": 45
+    },
+    "closeMatchupPercentWithin25": {
+      "minimum": 18,
+      "maximum": 30
+    },
     "blowoutPercentAtLeast150Maximum": 10,
-    "topProjectedRosterTopFourPercent": { "minimum": 70, "maximum": 90 },
+    "topProjectedRosterTopFourPercent": {
+      "minimum": 70,
+      "maximum": 90
+    },
     "bottomProjectedRosterTopFourPercentMaximum": 10
   },
   "positionAndDraftTargets": {
     "targetType": "initial-product-design-target",
     "maximumOnePositionFirstRoundSharePercent": 50,
-    "corePositionGroupsMustAppearAcrossRepeatedFirstRounds": ["C", "LW", "RW", "D", "G"],
+    "corePositionGroupsMustAppearAcrossRepeatedFirstRounds": [
+      "C",
+      "LW",
+      "RW",
+      "D",
+      "G"
+    ],
     "prohibitedDominantStrategies": [
       "goalie-first-every-time",
       "goalie-last-every-time",

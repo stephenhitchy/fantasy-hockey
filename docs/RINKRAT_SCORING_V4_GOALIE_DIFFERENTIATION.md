@@ -1,6 +1,6 @@
 # Scoring Batch V4A — Team Goalie Differentiation
 
-**Runtime release:** Release Candidate 50
+**Runtime release:** Release Candidate 51
 **Competitive models:** Production Scoring V4 and Projection V11
 **Migration authority:** guarded administrator script
 **Primary change:** Team Goalie Unit only

@@ -60,7 +60,7 @@ function snapshot(overrides = {}) {
     readinessLabel: 'Waiting on 4 roster games',
     finishLabel: 'Ends Aug 23',
     savedAt: '2026-08-19T03:00:00.000Z',
-    sourceReleaseLabel: 'Release Candidate 50',
+    sourceReleaseLabel: 'Release Candidate 51',
     sourceScoringVersion: 3,
     sourceProjectionVersion: 11,
     teamA: {
@@ -221,9 +221,9 @@ test('the saved matchup interface is visibly stale, read-only, mobile-safe, and 
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*?width:\s*100%/);
 });
 
-test('the service worker remains GET-only under the current RC50 shell version', async () => {
+test('the service worker remains GET-only under the current RC51 shell version', async () => {
   const worker = await read('public/rinkrat-sw.js');
-  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc50-v1'/);
+  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc51-v1'/);
   assert.match(worker, /request\.method !== 'GET'/);
   assert.doesNotMatch(worker, /addEventListener\(['"]sync['"]/);
   assert.doesNotMatch(worker, /indexedDB|competitive.*queue/i);
@@ -254,9 +254,9 @@ test('N1B remains Hosting-only and preserves protected systems', async () => {
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(sha256(rules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(indexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 50/);
-  assert.match(productionRuntime, /Release Candidate 50/);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchv4a');
+  assert.match(runtime, /Release Candidate 51/);
+  assert.match(productionRuntime, /Release Candidate 51/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1a');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.queueMode, 'shadow');
@@ -266,7 +266,7 @@ test('N1B remains Hosting-only and preserves protected systems', async () => {
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchn1b:core'], /verify:batchn1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchv4a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1a:core/);
 });
 
 test('documentation and roadmap record exact-route stale access and site-first proof', async () => {
@@ -278,7 +278,7 @@ test('documentation and roadmap record exact-route stale access and site-first p
     read('docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md'),
   ]);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.41/);
+  assert.match(roadmap, /Version 1\.42/);
   assert.match(roadmap, /# \[x\] N1\.3/);
   assert.match(roadmap, /# \[x\] LOG\.58/);
   assert.match(runbook, /Maximum snapshots per account: 12/);
@@ -287,8 +287,8 @@ test('documentation and roadmap record exact-route stale access and site-first p
   assert.match(runbook, /Hosting only/i);
   assert.doesNotMatch(runbook, /--only functions|--only firestore:rules/);
   assert.match(readme, /Mobile Batch N1B — Saved Read-Only Matchups/);
-  assert.match(releaseRunbook, /Release Candidate 50 \/ Scoring Batch V4A/);
-  assert.match(releaseRunbook, /npm run verify:batchv4a/);
-  assert.match(releaseRunbook, /rinkrat-rc50-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc50-invite-beta/);
+  assert.match(releaseRunbook, /Release Candidate 51 \/ Operations Batch O1A/);
+  assert.match(releaseRunbook, /npm run verify:batcho1a/);
+  assert.match(releaseRunbook, /rinkrat-rc51-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc51-invite-beta/);
 });

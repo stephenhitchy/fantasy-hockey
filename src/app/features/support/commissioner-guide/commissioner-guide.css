@@ -1,0 +1,211 @@
+.commissioner-guide-shell {
+  min-height: 100vh;
+  padding: 28px 16px 64px;
+  background: var(--page-bg);
+  color: var(--text-main);
+}
+
+.commissioner-guide-back,
+.commissioner-guide-hero,
+.commissioner-guide-jump,
+.commissioner-guide-grid,
+.commissioner-guide-faq,
+.commissioner-guide-footer {
+  width: min(1040px, 100%);
+  margin-inline: auto;
+}
+
+.commissioner-guide-back {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--text-main);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.commissioner-guide-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-info) 38%, transparent);
+}
+
+.commissioner-guide-hero h1,
+.commissioner-guide-card h2,
+.commissioner-guide-faq h2 {
+  margin: 6px 0 0;
+  color: var(--text-strong);
+}
+
+.commissioner-guide-hero p,
+.commissioner-guide-note,
+.commissioner-guide-faq p {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.commissioner-guide-hero-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.commissioner-guide-jump {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.commissioner-guide-jump a {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-main);
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.commissioner-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.commissioner-guide-card {
+  scroll-margin-top: 16px;
+  --rr-card-border-width: 2px;
+  --rr-card-border-color: var(--border-soft);
+  --rr-card-background: var(--surface-raised);
+}
+
+.commissioner-guide-card-wide {
+  grid-column: 1 / -1;
+}
+
+.commissioner-guide-card li,
+.commissioner-guide-faq p {
+  line-height: 1.55;
+}
+
+.commissioner-guide-card li + li {
+  margin-top: 8px;
+}
+
+.commissioner-guide-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.commissioner-guide-checklist label {
+  display: flex;
+  min-height: 48px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--rr-radius-md);
+  background: var(--surface-panel);
+  line-height: 1.4;
+}
+
+.commissioner-guide-checklist input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.commissioner-guide-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+
+.commissioner-guide-faq {
+  margin-top: 18px;
+  scroll-margin-top: 16px;
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+}
+
+.commissioner-guide-faq details {
+  border-top: 1px solid var(--border-soft);
+}
+
+.commissioner-guide-faq details:first-of-type {
+  margin-top: 16px;
+}
+
+.commissioner-guide-faq summary {
+  min-height: 48px;
+  padding: 13px 2px;
+  color: var(--text-strong);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.commissioner-guide-faq p {
+  margin: 0 0 14px;
+}
+
+.commissioner-guide-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.commissioner-guide-footer a {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .commissioner-guide-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .commissioner-guide-hero-actions,
+  .commissioner-guide-hero-actions .rr-button {
+    width: 100%;
+  }
+
+  .commissioner-guide-grid,
+  .commissioner-guide-checklist {
+    grid-template-columns: 1fr;
+  }
+
+  .commissioner-guide-card-wide {
+    grid-column: auto;
+  }
+}
+
+@media print {
+  .commissioner-guide-back,
+  .commissioner-guide-hero-actions,
+  .commissioner-guide-jump,
+  .commissioner-guide-footer {
+    display: none;
+  }
+
+  .commissioner-guide-shell {
+    padding: 0;
+    background: white;
+  }
+}

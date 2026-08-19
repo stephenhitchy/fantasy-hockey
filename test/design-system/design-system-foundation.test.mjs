@@ -154,6 +154,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/dashboard/dashboard.html',
     'src/app/features/dashboard/nhl-scoreboard/nhl-scoreboard.html',
     'src/app/features/leagues/league-detail/league-detail.html',
+    'src/app/features/leagues/commissioner-playbook/commissioner-playbook.html',
     'src/app/features/leagues/league-wire/league-wire.html',
     'src/app/features/players/league-player-board/league-player-board.html',
     'src/app/features/errors/access-denied/access-denied.html',
@@ -163,6 +164,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/legal/terms/terms.html',
     'src/app/features/release/invite-beta-validation/invite-beta-validation.html',
     'src/app/features/support/feedback/feedback.html',
+    'src/app/features/support/commissioner-guide/commissioner-guide.html',
     'src/app/features/support/support-home/support-home.html',
     'src/app/shared/admin-session-step-up/admin-session-step-up.html',
   ]);

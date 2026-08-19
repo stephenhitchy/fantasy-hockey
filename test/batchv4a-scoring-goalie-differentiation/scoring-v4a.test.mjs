@@ -417,7 +417,7 @@ test('the six-game window and seventh-game rollover sources remain frozen', asyn
   assert.equal(sha256(serverScoring), '51d31dd230c2b853407faf6bcc4cfbf5a58f29ff572b4d3b9e3d228cc4e4a8fc');
 });
 
-test('RC50 release identity and inherited safety controls are preserved', async () => {
+test('RC51 release identity and inherited safety controls are preserved', async () => {
   const [rules, indexes, runtime, productionRuntime, freezeSource, manifestSource, appCheckSource, canarySource, cacheSource, worker] = await Promise.all([
     read('firestore.rules'),
     read('firestore.indexes.json'),
@@ -438,22 +438,22 @@ test('RC50 release identity and inherited safety controls are preserved', async 
 
   assert.equal(sha256(rules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(indexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 50/);
-  assert.match(productionRuntime, /Release Candidate 50/);
+  assert.match(runtime, /Release Candidate 51/);
+  assert.match(productionRuntime, /Release Candidate 51/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchv4a');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc50-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1a');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc51-invite-beta');
   assert.equal(manifest.scoringRulesVersion, 4);
   assert.equal(manifest.projectionVersion, 11);
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
-  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc50-v1'/);
+  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc51-v1'/);
 });
 
 test('the permanent roadmap converts the launch gameplan into explicit product and operating gates', async () => {
@@ -467,7 +467,7 @@ test('the permanent roadmap converts the launch gameplan into explicit product a
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.41/);
+  assert.match(roadmap, /Version 1\.42/);
   assert.match(roadmap, /# \[x\] D1\.20/);
   assert.match(roadmap, /\[~\] D1\.23/);
   assert.match(roadmap, /\[ \] D1\.24/);

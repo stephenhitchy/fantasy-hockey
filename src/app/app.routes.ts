@@ -45,6 +45,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'commissioner-guide',
+    title: 'Commissioner Guide',
+    loadComponent: () =>
+      import('./features/support/commissioner-guide/commissioner-guide').then(
+        (module) => module.CommissionerGuide,
+      ),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authChildGuard],
@@ -175,6 +183,15 @@ export const routes: Routes = [
         path: 'leagues/:leagueId/free-agents',
         redirectTo: 'leagues/:leagueId/players',
         pathMatch: 'full',
+      },
+      {
+        path: 'leagues/:leagueId/commissioner',
+        title: 'Commissioner Playbook',
+        canActivate: [leagueMemberGuard, commissionerGuard],
+        loadComponent: () =>
+          import('./features/leagues/commissioner-playbook/commissioner-playbook').then(
+            (module) => module.CommissionerPlaybook,
+          ),
       },
       {
         path: 'leagues/:leagueId/draft/setup',

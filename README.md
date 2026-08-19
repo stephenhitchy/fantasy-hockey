@@ -42,21 +42,22 @@ Core project references:
 - [`docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md`](docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md) — account-scoped saved Game Center snapshots, explicit stale/read-only presentation, exact-route privacy, Hosting-only deployment, and offline site proof.
 - [`docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md`](docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md) — Production Scoring V4 formula, goalie differentiation evidence, guarded league migration, projection refresh, verification, cutover, and rollback boundaries.
 - [`docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md`](docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md) — product and operations backlog derived from the 2026–27 tester-season/public-launch gameplan, including integrity, support, legal, funnel, commissioner, moderation, capacity, and launch-wave gates.
+- [`docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md`](docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md) — public commissioner guide, league-specific readiness checks, Draft-night checklist, copy tools, recovery guidance, Hosting-only deployment, and non-founder commissioner proof boundary.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 50 / Scoring Batch V4A.1**. V4A keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. The result preserves goalies as RinkRat's highest-scoring and most stable position while creating more separation between elite, average, and poor units.
+The current source runtime is **Release Candidate 51 / Operations Batch O1A.1**. O1A adds one public Commissioner Guide and one guarded league-specific Commissioner Playbook with readiness checks, invitation and Draft-reminder copy, a device-local Draft-night checklist, direct setup actions, and competition-safe recovery guidance. O1A.1 is a compiler-only hotfix that widens the checklist allowlist for string keys returned by `Object.entries()` without changing checklist behavior or the RC51 release identity.
 
-RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact. Saved matchup snapshots record the active release's scoring version so a V4 snapshot cannot be presented as V3.
+Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
 Existing leagues do not switch scoring merely because Functions were deployed. V4A includes a guarded dry-run/apply migration, a read-only inspector, a projection hash-schema bump that includes the scoring version, and a hard projection-generation guard until the league is explicitly on Scoring V4. Completed cycle/window documents are never rewritten by the migration.
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batchv4a`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1a`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -117,6 +118,7 @@ verify:batcha1i
 verify:batchn1a
 verify:batchn1b
 verify:batchv4a
+verify:batcho1a
 ```
 
 RinkRat pins:
@@ -136,7 +138,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchv4a
+npm run verify:batcho1a
 ```
 
 After verification and a clean commit:
@@ -144,6 +146,22 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+## Operations Batch O1A — Commissioner Playbook
+
+O1A advances the tester-season commissioner-independence work without adding competition authority. The public `/commissioner-guide` route explains the six-game format, setup order, Draft-night checklist, weekly operations, recovery rules, and common commissioner questions. Current league commissioners can open `/leagues/{leagueId}/commissioner` from League HQ to see existing account, manager-count, Draft-order, Draft-time, and Projection V11/Scoring-version readiness evidence.
+
+Checklist state is device-local convenience data. Copy tools never send messages automatically. O1A adds no Function, Rule, index, TTL policy, migration, or competitive write. Demo-league work and observed proof that a non-founder commissioner can operate a complete league remain open.
+
+O1A.1 corrects strict Angular compilation for the device-local checklist normalizer by declaring its membership-only allowlist as `ReadonlySet<string>`. The six supported checklist IDs remain the same, unknown keys still fail closed, and no persisted or competitive behavior changes.
+
+Verification:
+
+```bash
+npm run verify:batcho1a
+```
+
+Full guidance is in `docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md`.
 
 ## Scoring Batch V4A — Team Goalie Differentiation
 
