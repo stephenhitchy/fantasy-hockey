@@ -114,6 +114,57 @@
         </a>
       </section>
 
+      @if (pwa.showInstallCard()) {
+        <section class="account-install-card rr-card rr-card--padded" aria-labelledby="install-rinkrat-title">
+          <span class="account-install-mark" aria-hidden="true">
+            <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+          </span>
+
+          <div class="account-install-copy">
+            <span class="eyebrow">RinkRat App</span>
+            <h2 id="install-rinkrat-title">Install RinkRat</h2>
+
+            @switch (pwa.installState()) {
+              @case ('installed') {
+                <p>Installed on this device.</p>
+              }
+              @case ('installable') {
+                <p>Install RinkRat for a home-screen app experience.</p>
+              }
+              @case ('manual') {
+                <p>Use your browser’s Install App or Add to Home Screen option.</p>
+              }
+              @default {
+                <p>App installation is not available in this browser.</p>
+              }
+            }
+          </div>
+
+          @if (pwa.canInstall()) {
+            <button
+              type="button"
+              class="rr-button rr-button--primary account-install-action"
+              [disabled]="pwa.installing()"
+              (click)="pwa.install()"
+            >
+              {{ pwa.installing() ? 'Opening…' : 'Install' }}
+            </button>
+          } @else if (pwa.installed()) {
+            <span class="rr-badge rr-badge--success account-install-status">Installed</span>
+          }
+
+          @if (pwa.statusMessage()) {
+            <small class="account-install-message" role="status">{{ pwa.statusMessage() }}</small>
+          }
+
+          @if (pwa.errorMessage()) {
+            <small class="account-install-message account-install-error" role="alert">
+              {{ pwa.errorMessage() }}
+            </small>
+          }
+        </section>
+      }
+
       <div class="account-grid">
         <section id="team-identity-customizer" class="account-panel favorite-team-panel rr-card rr-card--padded">
           <div class="panel-heading">

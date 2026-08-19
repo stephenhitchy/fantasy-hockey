@@ -373,15 +373,15 @@ test('A1H advances RC46, completes A1.10, and retains replay latency as work in 
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 47/);
-  assert.match(productionRuntime, /Release Candidate 47/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 47');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1i');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc47-invite-beta');
+  assert.match(runtime, /Release Candidate 48/);
+  assert.match(productionRuntime, /Release Candidate 48/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 48');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchn1a');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc48-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1h:core'], /verify:batcha1g:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchn1a:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.38/);
+  assert.match(roadmap, /Version 1\.39/);
   assert.match(roadmap, /# \[x\] A1\.10/);
   assert.match(roadmap, /# \[x\] A1\.17/);
   assert.match(roadmap, /\[~\] A1\.16 Reduce historical-replay player-data catch-up latency/);
@@ -389,8 +389,8 @@ test('A1H advances RC46, completes A1.10, and retains replay latency as work in 
   assert.match(docs, /exact-position/i);
   assert.match(docs, /entertainment only/i);
   assert.match(docs, /Hosting-only/i);
-  assert.match(readme, /Release Candidate 47 \/ Product Batch A1I/);
-  assert.match(runbook, /npm run verify:batcha1i/);
-  assert.match(runbook, /rinkrat-rc47-validation\.json/);
-  assert.match(runbook, /rinkrat-rc47-invite-beta/);
+  assert.match(readme, /Release Candidate 48 \/ Mobile Batch N1A/);
+  assert.match(runbook, /npm run verify:batchn1a/);
+  assert.match(runbook, /rinkrat-rc48-validation\.json/);
+  assert.match(runbook, /rinkrat-rc48-invite-beta/);
 });

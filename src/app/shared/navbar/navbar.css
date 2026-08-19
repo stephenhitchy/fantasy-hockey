@@ -281,7 +281,8 @@
     padding: 0 4px;
   }
 
-  .mobile-menu-group a {
+  .mobile-menu-group a,
+  .mobile-menu-install-button {
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr);
     gap: 10px;
@@ -296,11 +297,14 @@
   }
 
   .mobile-menu-group a:hover,
-  .mobile-menu-group a:focus-visible {
+  .mobile-menu-group a:focus-visible,
+  .mobile-menu-install-button:hover,
+  .mobile-menu-install-button:focus-visible {
     border-color: var(--user-team-accent);
   }
 
-  .mobile-menu-group a > span:first-child {
+  .mobile-menu-group a > span:first-child,
+  .mobile-menu-install-button > span:first-child {
     display: grid;
     width: 36px;
     height: 36px;
@@ -312,20 +316,37 @@
   }
 
   .mobile-menu-group a strong,
-  .mobile-menu-group a small {
+  .mobile-menu-group a small,
+  .mobile-menu-install-button strong,
+  .mobile-menu-install-button small {
     display: block;
   }
 
-  .mobile-menu-group a strong {
+  .mobile-menu-group a strong,
+  .mobile-menu-install-button strong {
     color: var(--rr-nav-text);
     font-size: 14px;
   }
 
-  .mobile-menu-group a small {
+  .mobile-menu-group a small,
+  .mobile-menu-install-button small {
     margin-top: 3px;
     color: var(--rr-nav-text-detail);
     font-size: var(--rr-mobile-text-micro);
     line-height: 1.35;
+  }
+
+  .mobile-menu-install-button {
+    width: 100%;
+    min-height: 58px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .mobile-menu-install-button:disabled {
+    cursor: wait;
+    opacity: 0.68;
   }
 
   .mobile-logout-button {

@@ -8,6 +8,7 @@ import { repairViewportOverlayLock } from './shared/accessibility/viewport-overl
 import { auth } from './core/firebase-auth';
 import { ClientPerformanceMonitorService } from './core/observability/client-performance-monitor.service';
 import { CompetitiveActionMonitorService } from './core/observability/competitive-action-monitor.service';
+import { RinkRatPwaService } from './core/pwa/rinkrat-pwa.service';
 import { TelemetryService } from './core/observability/telemetry.service';
 import { shortBuildIdentifier } from './core/release/release-manifest.util';
 import { ReleaseUpdateService } from './core/release/release-update.service';
@@ -88,16 +89,22 @@ export class App implements OnDestroy {
     protected readonly releaseUpdate: ReleaseUpdateService,
     protected readonly actionMonitor: CompetitiveActionMonitorService,
     protected readonly challengeService: TeamIdentityChallengeService,
+    protected readonly pwa: RinkRatPwaService,
   ) {
     initializeStoredUserTheme();
     telemetry.start(router);
     performanceMonitor.start(router);
     releaseUpdate.start();
+    pwa.start();
     this.showAppliedUpdateNotice(releaseUpdate.consumeAppliedUpdateNotice());
 
     effect((onCleanup) => {
       const updateAvailable = releaseUpdate.updateAvailable();
       const activeCount = actionMonitor.activeCount();
+
+      if (updateAvailable) {
+        void pwa.checkForWorkerUpdate();
+      }
       this.forceReleaseReloadAllowed.set(false);
 
       if (!updateAvailable || activeCount === 0 || typeof window === 'undefined') {
@@ -228,7 +235,7 @@ export class App implements OnDestroy {
       return;
     }
 
-    if (!this.releaseUpdate.requestReload()) {
+    if (!this.releaseUpdate.requestReload(() => this.pwa.reloadWithLatestWorker())) {
       this.releaseMessage.set('RinkRat could not start the reload. Refresh the page once manually.');
     }
   }

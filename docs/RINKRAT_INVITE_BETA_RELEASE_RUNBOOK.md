@@ -1,10 +1,14 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
 **Batch:** B1C
-**Runtime release being frozen:** Release Candidate 47
+**Runtime release being frozen:** Release Candidate 48
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 47 / Product Batch A1I runtime; Scoring V3 and Projection V11 remain unchanged.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 48 / Mobile Batch N1A runtime; Scoring V3 and Projection V11 remain unchanged.
+
+N1A is a Hosting-only mobile-platform release. It adds a standalone manifest, a production-only root-scoped service worker, concise install guidance, versioned same-origin shell/asset caches, network-first navigation, and an honest offline fallback. It adds no Background Sync, offline mutation queue, push subscription, Function, Firestore Rule, index, TTL policy, migration, or competitive write.
+
+A1I's bounded Coach's Briefing remains intact: at most three timely items, no more than one from each league, and no empty briefing card.
 
 A1H makes Roster Fit the default Add / Drop ordering, limits replacement comparisons to legal exact-position roster options, and adds entertainment-only Weekly Power Rankings beside Official Standings. Official Standings remains the default and remains the sole playoff authority. A1H deploys Hosting only and adds no Function, listener, Rule, index, TTL policy, migration, runtime recommendation service, or competitive write.
 
@@ -89,23 +93,23 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1i
+npm run verify:batchn1a
 ```
 
-Commit and push the verified RC46 source:
+Commit and push the verified RC48 source:
 
 ```bash
 git status
 git add .
-git commit -m "Add exact-position roster fit and power rankings"
+git commit -m "Add installable RinkRat PWA foundation"
 git push
 ```
 
-Do not run the freeze command until Product Batch A1I has been deployed and the live manifest identifies Release Candidate 47. The freeze tooling itself never deploys or mutates production.
+Do not run the freeze command until Mobile Batch N1A has been deployed and the live manifest identifies Release Candidate 48. The freeze tooling itself never deploys or mutates production.
 
 ## C1B privacy-cutover prerequisite
 
-The C1B transaction and waiver privacy cutover must already be complete before RC46 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. A1H reads only data already available to Add / Drop and Standings, deploys Hosting only, and changes no Firestore Rule, index, TTL policy, App Check setting, scoring formula, Projection V11 algorithm, scoring-queue mode, or NHL-cache authority.
+The C1B transaction and waiver privacy cutover must already be complete before RC48 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. N1A caches only the public application shell and stable same-origin assets, deploys Hosting only, and changes no Firestore Rule, index, TTL policy, App Check setting, scoring formula, Projection V11 algorithm, scoring-queue mode, or NHL-cache authority.
 
 ## Preflight
 
@@ -119,17 +123,17 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 47, Scoring V3, and Projection V11.
+- The live domain serves Release Candidate 48, Scoring V3, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
 - The `app` Hosting target still maps to `cycle-puck`.
 - All 10 production TTL policies are active.
-- The runtime release label remains RC46.
+- The runtime release label remains RC48.
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 47 Release Readiness page:
+On the deployed Release Candidate 48 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -139,14 +143,14 @@ On the deployed Release Candidate 47 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc47-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc48-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc47-validation.json"
+  "$HOME/Downloads/rinkrat-rc48-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -170,7 +174,7 @@ Before freezing, rehearse rather than improvise:
 git cat-file -e "$(curl -fsSL https://rinkratfantasy.com/release-manifest.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).sourceRevision")^{commit}"
 ```
 
-4. Review the RC46 rollback selectors: Firestore Rules, complete Functions, and Hosting from the same known-good revision.
+4. Review the RC48 rollback selectors: Firestore Rules, complete Functions, and Hosting from the same known-good revision.
 5. Confirm Firestore indexes are deployed only when an incident or known-good revision specifically requires them; C1B adds no index.
 6. Confirm Release Readiness, action evidence, Function logs, and the known-issues workflow are available after rollback.
 
@@ -183,8 +187,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc47-validation.json" \
-  --tag=rinkrat-rc47-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc48-validation.json" \
+  --tag=rinkrat-rc48-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -198,32 +202,32 @@ The command creates ignored local records under:
 
 It never deploys, creates a Git tag, changes queue mode, or writes competitive Firebase data.
 
-Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC46 manifest, not automatically to a newer release-tooling commit.
+Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC48 manifest, not automatically to a newer release-tooling commit.
 
 Example:
 
 ```bash
-git tag -a rinkrat-rc47-invite-beta LIVE_SOURCE_REVISION \
-  -m "RinkRat RC46 invite beta baseline"
-git push origin rinkrat-rc47-invite-beta
+git tag -a rinkrat-rc48-invite-beta LIVE_SOURCE_REVISION \
+  -m "RinkRat RC48 invite beta baseline"
+git push origin rinkrat-rc48-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc47-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc48-invite-beta
 ```
 
-Verify the complete frozen state while RC46 remains live:
+Verify the complete frozen state while RC48 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc47-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc48-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc47-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc48-invite-beta
 ```
 
 ## After the freeze

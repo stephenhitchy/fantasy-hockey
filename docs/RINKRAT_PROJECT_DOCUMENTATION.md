@@ -12421,3 +12421,21 @@ The implementation reuses the existing opt-in Dashboard activity reads and adds 
 The section has no empty state, descriptive paragraph, modal, fuzzy backdrop, fixed panel, or sticky content. It disappears when nothing qualifies. A1I is Hosting-only and adds no Function, Firestore Rule, index, TTL policy, migration, scheduled job, or competitive write. Roadmap item A1.16 remains in progress.
 
 See `docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md` for priority rules, privacy boundaries, verification, deployment, and site-first proof.
+
+---
+
+# Mobile Batch N1A — Installable PWA Foundation
+
+**Runtime release:** Release Candidate 48
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+N1A makes the existing RinkRat website installable without creating a native-code fork. Production builds register one root-scoped service worker, while local developer builds deliberately do not register it. Supported browsers can use the native installation prompt; browsers that require manual installation receive concise **Add to Home Screen** guidance in Account Settings. The install card disappears once installed or unsupported, and the mobile More menu shows **Install RinkRat** only while a native prompt is actually available.
+
+The worker caches only a versioned public application shell, the current same-origin JavaScript/CSS discovered from the deployed index, and later stable same-origin assets. Navigation is network-first and falls back to the previously loaded application shell or an honest static offline page. The release manifest, service worker, web manifest, NHL proxy routes, and security-report paths remain network-only, and cross-origin Firebase/NHL requests are never intercepted.
+
+The worker handles GET requests only. It has no Background Sync listener, mutation queue, push subscription, competitive write, Cloud Function, Firestore Rule, index, TTL policy, migration, or scheduled job. Existing online guards continue blocking Draft, roster, waiver, commissioner, and testing requests while offline and explicitly state that no request was queued. Roadmap item N1.3 remains open for a future intentionally timestamped stale read-only matchup experience.
+
+Waiting workers do not activate during ordinary play. The existing manager-approved release-update action asks the waiting worker to activate, waits for controller change, and then reloads. This preserves the visible release authority instead of silently swapping the running application.
+
+N1A deploys RC48 Hosting only. See `docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md` for the complete install states, cache boundaries, verification, deployment, site-first proof, and rollback procedure.

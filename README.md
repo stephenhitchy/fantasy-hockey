@@ -38,19 +38,20 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md`](docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md) — opt-in roster-fit ordering and an explainable selected-move lens with visible factors, uncertainty, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md`](docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md) — exact-position default Roster Fit, entertainment-only weekly Power Rankings, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md`](docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md) — a bounded personalized Coach's Briefing for injuries, recent waiver outcomes, close matchups, roster-slot boundaries, scheduled moves, and live Drafts.
+- [`docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md`](docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md) — installable PWA shell, safe versioned caching, offline boundaries, release-worker coordination, Hosting deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 47 / Product Batch A1I**. A1I adds a deliberately bounded **Coach's Briefing** to the manager Dashboard. It appears only when action is useful and shows at most three high-priority items across different leagues, covering unavailable starters, recent private waiver outcomes, live Drafts, close late matchups, roster-slot boundaries, and scheduled moves.
+The current source runtime is **Release Candidate 48 / Mobile Batch N1A**. N1A makes RinkRat installable on supported phones and desktop browsers through a standalone web manifest and a production-only service worker. It caches only the public application shell and stable same-origin assets, uses network-first navigation with an honest offline fallback, and keeps release identity, NHL proxy paths, security reports, Firebase traffic, and every competitive write outside service-worker cache authority.
 
-The existing league cards remain the complete status surface below the briefing. A single busy league cannot fill the entire briefing, no third-party feed or background listener is added, and the section disappears entirely when there is nothing actionable.
+The A1I **Coach's Briefing** remains intact beneath this mobile-platform foundation. It still appears only when useful, shows at most three timely items across different leagues, and disappears when nothing requires attention. A1H exact-position default Roster Fit and entertainment-only Power Rankings also remain unchanged.
 
-A1H's exact-position default Roster Fit and entertainment-only Weekly Power Rankings remain intact. Roadmap item A1.16 also remains in progress because replay-triggered player-data catch-up is correct but can be slower than desired; that future optimization may not couple projection generation to scoring authority.
+N1A does not create offline Draft, roster, waiver, commissioner, or testing mutations. It adds no Background Sync, offline mutation queue, push subscription, Function, Firestore Rule, index, TTL policy, migration, or competitive write. N1.3 remains open for a future intentionally timestamped stale read-only matchup experience.
 
-Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1i`.
+Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchn1a`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -108,6 +109,7 @@ verify:batcha1f
 verify:batcha1g
 verify:batcha1h
 verify:batcha1i
+verify:batchn1a
 ```
 
 RinkRat pins:
@@ -127,7 +129,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1i
+npm run verify:batchn1a
 ```
 
 After verification and a clean commit:
@@ -137,6 +139,20 @@ npm run beta:preflight
 ```
 
 
+
+## Mobile Batch N1A — Installable PWA Foundation
+
+N1A makes the existing website installable without creating a separate native-code fork. Supported browsers receive the native installation prompt; browsers that require **Add to Home Screen** receive concise manual guidance in Account Settings. The mobile More menu shows an install action only while a native prompt is actually available.
+
+A root-scoped production service worker caches a versioned public application shell, the current built JavaScript/CSS discovered from the deployed index, and later stable same-origin assets. Navigation is network-first, release identity and proxy/security routes remain network-only, and cross-origin Firebase/NHL traffic is never intercepted. The worker handles GET requests only and never queues a competitive action while offline. Waiting workers activate only when the manager approves the existing release reload.
+
+Verification:
+
+```bash
+npm run verify:batchn1a
+```
+
+N1A deploys RC48 Hosting only. Full guidance is in `docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md`.
 
 ## Product Batch A1I — Manager Briefing
 

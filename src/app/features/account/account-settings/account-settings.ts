@@ -30,6 +30,7 @@ import {
 import { applyUserTheme } from '../../../core/user/user-theme.service';
 import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
+import { RinkRatPwaService } from '../../../core/pwa/rinkrat-pwa.service';
 import { waitForAuthenticatedUser } from '../../../core/guards/auth.guard';
 import {
   buildCustomTeamIdentityVariantId,
@@ -183,6 +184,7 @@ export class AccountSettings {
     private route: ActivatedRoute,
     private telemetry: TelemetryService,
     private challengeService: TeamIdentityChallengeService,
+    protected readonly pwa: RinkRatPwaService,
   ) {
     this.route.fragment
       .pipe(takeUntilDestroyed(this.destroyRef))

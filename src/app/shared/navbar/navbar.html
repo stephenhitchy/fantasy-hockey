@@ -384,6 +384,21 @@
           </span>
         </a>
 
+        @if (pwa.canInstall()) {
+          <button
+            type="button"
+            class="mobile-menu-install-button"
+            [disabled]="pwa.installing()"
+            (click)="installRinkRat()"
+          >
+            <span class="pixel-icon icon-home icon-sm" aria-hidden="true"></span>
+            <span>
+              <strong>{{ pwa.installing() ? 'Opening install…' : 'Install RinkRat' }}</strong>
+              <small>Add RinkRat to this device</small>
+            </span>
+          </button>
+        }
+
         <a
           routerLink="/training-camp"
           (click)="closeMore()"

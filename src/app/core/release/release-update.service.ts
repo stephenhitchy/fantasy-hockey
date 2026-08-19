@@ -187,7 +187,7 @@ export class ReleaseUpdateService implements OnDestroy {
     }
   }
 
-  requestReload(): boolean {
+  requestReload(reloadAction: () => void = () => window.location.reload()): boolean {
     if (
       typeof window === 'undefined' ||
       !this.updateAvailable() ||
@@ -209,7 +209,11 @@ export class ReleaseUpdateService implements OnDestroy {
       to_release: latest.releaseLabel,
       direction: this.direction(),
     });
-    window.location.reload();
+    try {
+      reloadAction();
+    } catch {
+      window.location.reload();
+    }
     return true;
   }
 

@@ -16,6 +16,7 @@ import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 
 import { PlatformAdminService } from '../../core/admin/platform-admin.service';
+import { RinkRatPwaService } from '../../core/pwa/rinkrat-pwa.service';
 import { listenToAuthState, logoutUser } from '../../core/auth/auth.service';
 import {
   listenToEarliestUnfinishedOwnerMatchup,
@@ -69,6 +70,7 @@ export class Navbar implements OnDestroy {
   constructor(
     private router: Router,
     private platformAdmin: PlatformAdminService,
+    protected readonly pwa: RinkRatPwaService,
   ) {
     this.currentUrl.set(this.router.url);
     void this.platformAdmin.refreshAccess();
@@ -162,6 +164,11 @@ export class Navbar implements OnDestroy {
     }
 
     return this.isLeagueHomeActive();
+  }
+
+  async installRinkRat(): Promise<void> {
+    await this.pwa.install();
+    this.closeMore();
   }
 
   async logout(): Promise<void> {
