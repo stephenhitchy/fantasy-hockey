@@ -272,20 +272,20 @@ test('C1D remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 45/);
-  assert.match(productionRuntime, /Release Candidate 45/);
+  assert.match(runtime, /Release Candidate 46/);
+  assert.match(productionRuntime, /Release Candidate 46/);
   assert.equal(freeze.scoringRulesVersion, 3);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1g');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1h');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1d:core'], /verify:batchc1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1g:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1h:core/);
 });
 
 test('C1D documentation and roadmap record the bounded transparency slice and simple owner workflow', async () => {
@@ -298,7 +298,7 @@ test('C1D documentation and roadmap record the bounded transparency slice and si
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.36/);
+  assert.match(roadmap, /Version 1\.37/);
   assert.match(roadmap, /# \[x\] C1\.2/);
   assert.match(roadmap, /# \[x\] C1\.16/);
   assert.match(roadmap, /# \[x\] LOG\.36/);
@@ -309,9 +309,9 @@ test('C1D documentation and roadmap record the bounded transparency slice and si
   assert.match(runbook, /functions:publishLeagueAvailabilityOverrideActivity,functions:publishLeagueDraftControlActivity/);
   assert.match(runbook, /Do not deploy Firestore Rules, indexes, TTL configuration/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 45 \/ Product Batch A1G/);
+  assert.match(readme, /Release Candidate 46 \/ Product Batch A1H/);
   assert.match(readme, /RINKRAT_SOCIAL_C1D_COMMISSIONER_TRANSPARENCY\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcha1g/);
-  assert.match(releaseRunbook, /rinkrat-rc45-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc45-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcha1h/);
+  assert.match(releaseRunbook, /rinkrat-rc46-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc46-invite-beta/);
 });

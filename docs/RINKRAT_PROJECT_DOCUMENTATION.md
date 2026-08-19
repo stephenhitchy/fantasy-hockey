@@ -12391,3 +12391,17 @@ A1F completes roadmap item A1.7 with a secondary manager-private Decision Histor
 See `docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md` for the complete Release Candidate 45 implementation, verification, Hosting-only deployment, site-first proof, and rollback procedure.
 
 A1G completes roadmap item A1.8 without adding another default-visible page. Add / Drop retains its free-agent, Next 6 default; managers may explicitly choose **Roster fit (for you)** to order available players against legal open slots or a deterministic lowest-projected legal roster comparison. After an incoming player and valid roster choice are selected, one compact Move lens exposes simple directional factors, confidence, and uncertainty. Waiver priority, competing claims, injury timing, and exact activation timing remain disclosed limitations rather than hidden assumptions. A1G adds no Function, listener, Rule, index, TTL policy, migration, runtime recommendation service, or competitive write. A1.16 remains in progress because replay player-data catch-up is correct but can be slower than desired.
+
+## Product Batch A1H — Exact-Position Roster Fit and Weekly Power Rankings
+
+**Runtime release:** Release Candidate 46
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+A1H refines A1G's explainable Roster Fit so every incoming asset is compared only with legal exact-position active or Bench players, unless a compatible open slot means no drop is required. Roster Fit becomes the default Add / Drop ordering while all previous sort choices remain available.
+
+League Standings also receives an optional Weekly Power Rankings view for entertainment. Official Standings remains the default and sole playoff authority. The browser-only ranking uses completed regular-season evidence with a transparent 35% official-record, 25% points-per-matchup, 20% point-differential, and 20% last-three-form formula. Each row exposes movement versus official rank and an optional factor breakdown.
+
+A1H is Hosting-only and adds no Cloud Function, Firestore listener, Rule, index, TTL policy, migration, or competitive write. Roadmap item A1.16 remains in progress for historical-replay player-data catch-up latency.
+
+See `docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md` for verification, deployment, site-first proof, and rollback boundaries.

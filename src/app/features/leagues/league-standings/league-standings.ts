@@ -14,6 +14,10 @@ import { getLeagueById, League } from '../../../core/league/league.service';
 import { shareLeagueStandingsCard } from '../../../core/league/league-standings-share-card.service';
 
 import { buildFantasyStandings } from '../../../core/league/standings.util';
+import {
+  buildLeaguePowerRankings,
+  type LeaguePowerRankingRow,
+} from '../../../core/league/league-power-rankings.util';
 
 import { getStandardPlayoffTeamCount } from '../../../core/playoffs/playoff-format';
 
@@ -112,6 +116,7 @@ export class LeagueStandings {
   standingsShareInProgress = signal(false);
   standingsShareStatusMessage = signal('');
   standingsShareErrorMessage = signal('');
+  viewMode = signal<'official' | 'power'>('official');
 
   readonly completedMatchups = computed(() =>
     this.matchups().filter((matchup) => matchup.status === 'complete'),
@@ -150,6 +155,17 @@ export class LeagueStandings {
       ...row,
       rank: index + 1,
     })),
+  );
+
+  readonly powerRankings = computed(() =>
+    buildLeaguePowerRankings({
+      teams: this.teams(),
+      matchups: this.matchups(),
+    }),
+  );
+
+  readonly powerRankingRows = computed<LeaguePowerRankingRow[]>(() =>
+    this.powerRankings().rows,
   );
 
   readonly canShareStandings = computed(() =>
@@ -200,6 +216,55 @@ export class LeagueStandings {
     } finally {
       this.refreshing.set(false);
     }
+  }
+
+  selectView(mode: 'official' | 'power'): void {
+    this.viewMode.set(mode);
+    this.standingsShareStatusMessage.set('');
+    this.standingsShareErrorMessage.set('');
+  }
+
+  isOfficialView(): boolean {
+    return this.viewMode() === 'official';
+  }
+
+  isPowerView(): boolean {
+    return this.viewMode() === 'power';
+  }
+
+  getPowerRankingsPeriodLabel(): string {
+    const cycleNumber = this.powerRankings().asOfCycleNumber;
+    return cycleNumber ? `Through Matchup ${cycleNumber}` : 'Waiting for the first final';
+  }
+
+  getPowerMovementLabel(row: LeaguePowerRankingRow): string {
+    if (row.movement > 0) {
+      return `↑${row.movement} vs official`;
+    }
+
+    if (row.movement < 0) {
+      return `↓${Math.abs(row.movement)} vs official`;
+    }
+
+    return 'Same as official';
+  }
+
+  getPowerRecentRecord(row: LeaguePowerRankingRow): string {
+    return row.recentGamesPlayed > 0
+      ? `${row.recentWins}-${row.recentLosses}-${row.recentTies}`
+      : '—';
+  }
+
+  getPowerScoreLabel(row: LeaguePowerRankingRow): string {
+    return row.powerScore.toFixed(1);
+  }
+
+  getPowerFactorWeight(weight: number): string {
+    return `${Math.round(weight * 100)}%`;
+  }
+
+  getPowerFactorContribution(value: number): string {
+    return `${value.toFixed(1)} pts`;
   }
 
   async shareCurrentStandings(): Promise<void> {

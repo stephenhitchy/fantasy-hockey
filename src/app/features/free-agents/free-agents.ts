@@ -200,7 +200,7 @@ export class FreeAgents implements OnDestroy {
 
   boardStatusFilter = signal<LeaguePlayerBoardStatusFilter>('free-agent');
   boardPositionFilter = signal<LeaguePlayerBoardPositionFilter>('all');
-  boardSortMode = signal<LeaguePlayerBoardSortMode>('next-six');
+  boardSortMode = signal<LeaguePlayerBoardSortMode>('roster-fit');
   boardVisibleLimit = signal(UNIFIED_PLAYER_PAGE_SIZE);
   boardRefreshing = signal(false);
   expandedRosterFitAssetKey = signal('');
@@ -1096,7 +1096,7 @@ export class FreeAgents implements OnDestroy {
     ]);
     const nextSort = allowed.has(value as LeaguePlayerBoardSortMode)
       ? value as LeaguePlayerBoardSortMode
-      : 'next-six';
+      : 'roster-fit';
 
     this.boardSortMode.set(nextSort);
     this.expandedRosterFitAssetKey.set('');

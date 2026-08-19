@@ -415,7 +415,7 @@ function buildRecommendation(options: {
     options.hasOpenSlot
       ? 'Comparison: an open legal roster slot; no player has to be dropped.'
       : comparison
-        ? `Comparison: ${comparison.name}, the lowest-projected legal ${options.comparisonArea === 'active' ? 'same-position active' : 'bench'} option currently available.`
+        ? `Comparison: ${comparison.name}, the lowest-projected legal same-position ${options.comparisonArea === 'active' ? 'active' : 'bench'} option currently available.`
         : 'Comparison: no complete legal outgoing-player comparison was available.',
   );
   detailLines.push(
@@ -493,19 +493,24 @@ export function buildLeaguePlayerRosterFitRecommendations(
       })
       .filter((row): row is LeaguePlayerBoardRow => row !== null);
 
-    const benchRows = roster.benchSlots
-      .filter((slot) => slot.asset !== null && !reservedBenchSlotIds.has(slot.slotId))
+    const benchSamePosition = roster.benchSlots
+      .filter(
+        (slot) =>
+          slot.asset !== null &&
+          slot.asset.position === candidate.position &&
+          !reservedBenchSlotIds.has(slot.slotId),
+      )
       .map((slot) => {
         const key = rosterAssetKey(slot.asset);
         return key ? rowByAssetKey.get(key) ?? null : null;
       })
       .filter((row): row is LeaguePlayerBoardRow => row !== null);
 
-    // Active slots must match position, while any unreserved bench asset is a
-    // legal outgoing comparison. Keep the pool honest instead of silently
-    // preferring a same-position bench player when a weaker flexible bench
-    // option is also available.
-    const comparisonPool = [...activeSamePosition, ...benchRows];
+    // Roster fit is replacement-value guidance, so every player is compared
+    // only with legal roster options at the exact same position. Managers may
+    // still choose a flexible cross-position bench drop in the transaction
+    // workflow, but that separate choice must not inflate this position fit.
+    const comparisonPool = [...activeSamePosition, ...benchSamePosition];
     const comparison = hasOpenSlot
       ? null
       : [...comparisonPool].sort(metricAscending)[0] ?? null;

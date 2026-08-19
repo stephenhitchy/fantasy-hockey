@@ -385,3 +385,272 @@
 .playoff-cut-line td {
   border-bottom: 2px solid rgba(45, 212, 191, 0.65);
 }
+
+.standings-view-tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 5px;
+  border: 1px solid rgba(198, 213, 228, 0.16);
+  border-radius: 14px;
+  background: rgba(25, 39, 57, 0.86);
+}
+
+.standings-view-tabs button {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #a7b7c8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.standings-view-tabs button:hover,
+.standings-view-tabs button:focus-visible {
+  color: white;
+}
+
+.standings-view-tabs button:focus-visible {
+  outline: 3px solid rgba(184, 212, 239, 0.45);
+  outline-offset: 2px;
+}
+
+.standings-view-tabs .standings-view-tab-active {
+  border-color: rgba(184, 212, 239, 0.34);
+  background: rgba(184, 212, 239, 0.14);
+  color: white;
+}
+
+.power-rankings-heading {
+  align-items: flex-start;
+}
+
+.power-rankings-heading p {
+  margin: 5px 0 0;
+  color: #90a7bf;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.power-rankings-official-note {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid rgba(152, 245, 189, 0.24);
+  border-radius: 999px;
+  background: rgba(152, 245, 189, 0.07);
+  color: #98f5bd;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.power-rankings-method {
+  margin-bottom: 14px;
+  border: 1px solid rgba(198, 213, 228, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 20, 34, 0.34);
+  color: #a7b7c8;
+}
+
+.power-rankings-method summary,
+.power-ranking-breakdown summary {
+  min-height: 44px;
+  cursor: pointer;
+  color: #dff3ff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.power-rankings-method summary {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.power-rankings-method p {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.power-rankings-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.power-ranking-row {
+  display: grid;
+  grid-template-columns: minmax(92px, auto) minmax(190px, 1.2fr) minmax(92px, auto) minmax(320px, 2fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(198, 213, 228, 0.13);
+  border-radius: 14px;
+  background: rgba(13, 20, 34, 0.38);
+}
+
+.power-ranking-row:first-child {
+  border-color: rgba(152, 245, 189, 0.28);
+  background: rgba(152, 245, 189, 0.055);
+}
+
+.power-ranking-current {
+  box-shadow: inset 3px 0 0 #b8d4ef;
+}
+
+.power-ranking-position,
+.power-ranking-score {
+  display: grid;
+  gap: 4px;
+}
+
+.power-ranking-position strong {
+  color: white;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.power-ranking-position span,
+.power-ranking-team span,
+.power-ranking-score span {
+  color: #90a7bf;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.power-ranking-position .power-movement-up {
+  color: #98f5bd;
+}
+
+.power-ranking-position .power-movement-down {
+  color: #ffb4b4;
+}
+
+.power-ranking-team strong {
+  color: white;
+  font-size: 14px;
+}
+
+.power-ranking-score {
+  justify-items: end;
+}
+
+.power-ranking-score strong {
+  color: white;
+  font-size: 22px;
+}
+
+.power-ranking-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.power-ranking-metrics span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: #90a7bf;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.power-ranking-metrics strong {
+  color: #dbe7f2;
+  font-size: 13px;
+}
+
+.power-ranking-breakdown {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(198, 213, 228, 0.11);
+}
+
+.power-ranking-breakdown summary {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.power-ranking-factor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.power-ranking-factor-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.power-ranking-factor-grid span,
+.power-ranking-factor-grid small {
+  color: #90a7bf;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.power-ranking-factor-grid strong {
+  color: #dbe7f2;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .power-ranking-row {
+    grid-template-columns: minmax(80px, auto) minmax(180px, 1fr) minmax(86px, auto);
+  }
+
+  .power-ranking-metrics {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .standings-view-tabs {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .standings-view-tabs button {
+    padding-inline: 8px;
+  }
+
+  .power-rankings-heading {
+    display: grid;
+  }
+
+  .power-rankings-official-note {
+    justify-self: start;
+  }
+
+  .power-ranking-row {
+    grid-template-columns: 70px minmax(0, 1fr) 76px;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .power-ranking-position strong,
+  .power-ranking-score strong {
+    font-size: 19px;
+  }
+
+  .power-ranking-metrics,
+  .power-ranking-factor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

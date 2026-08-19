@@ -14,19 +14,21 @@
     <header class="standings-header">
       <div>
         <span class="eyebrow">League Hub</span>
-        <h1>{{ league()?.name }} Standings</h1>
-        <p>{{ getLeagueStatusText() }}</p>
+        <h1>{{ league()?.name }} {{ isPowerView() ? 'Power Rankings' : 'Standings' }}</h1>
+        <p>{{ isPowerView() ? getPowerRankingsPeriodLabel() + ' · Entertainment only' : getLeagueStatusText() }}</p>
       </div>
 
       <div class="standings-header-actions">
-        <button
-          type="button"
-          class="standings-share-button"
-          (click)="shareCurrentStandings()"
-          [disabled]="!canShareStandings() || standingsShareInProgress()"
-        >
-          {{ standingsShareInProgress() ? 'Preparing card...' : 'Share standings' }}
-        </button>
+        @if (isOfficialView()) {
+          <button
+            type="button"
+            class="standings-share-button"
+            (click)="shareCurrentStandings()"
+            [disabled]="!canShareStandings() || standingsShareInProgress()"
+          >
+            {{ standingsShareInProgress() ? 'Preparing card...' : 'Share standings' }}
+          </button>
+        }
 
         <button
           type="button"
@@ -55,6 +57,25 @@
         {{ standingsShareErrorMessage() }}
       </p>
     }
+
+    <nav class="standings-view-tabs" aria-label="Standings views">
+      <button
+        type="button"
+        [class.standings-view-tab-active]="isOfficialView()"
+        [attr.aria-pressed]="isOfficialView()"
+        (click)="selectView('official')"
+      >
+        Official Standings
+      </button>
+      <button
+        type="button"
+        [class.standings-view-tab-active]="isPowerView()"
+        [attr.aria-pressed]="isPowerView()"
+        (click)="selectView('power')"
+      >
+        Power Rankings
+      </button>
+    </nav>
 
     <section class="league-actions-card">
       <a
@@ -122,98 +143,168 @@
       </article>
     </section>
 
-    <section class="standings-card">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">Standings</span>
-          <h2>League Table</h2>
+    @if (isOfficialView()) {
+      <section class="standings-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Standings</span>
+            <h2>League Table</h2>
+          </div>
         </div>
-      </div>
 
-      @if (standingsRows().length === 0) {
-        <p class="empty-copy">No teams were found for this league.</p>
-      } @else {
-        <div class="standings-table-wrap">
-          <table class="standings-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Team</th>
-                <th>Record</th>
-                <th>Win %</th>
-                <th>PF</th>
-                <th>PA</th>
-                <th>Diff</th>
-                <th>Active Matchup</th>
-                <th>Last Result</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              @for (row of standingsRows(); track row.ownerId) {
-                <tr
-                  [class.first-place-row]="row.rank === 1"
-                  [class.playoff-qualifier-row]="isPlayoffQualifier(row)"
-                  [class.playoff-cut-line]="isPlayoffCutLine(row)"
-                >
-                  <td>
-                    <strong class="rank-pill">#{{ row.rank }}</strong>
-                  </td>
-
-                  <td>
-                    <div class="team-cell manager-name-stack">
-                      <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="sm" />
-                      <div>
-                        <strong>{{ row.teamName }}</strong>
-                      @if (row.ownerId === userId) {
-                        <span>Your Team</span>
-                      } @else if (isPlayoffQualifier(row)) {
-                        <span>Playoff Position</span>
-                      }
-                      </div>
-                    </div>
-                  </td>
-
-                  <td>{{ getRecordLabel(row) }}</td>
-                  <td>{{ getWinPercentageLabel(row) }}</td>
-                  <td>{{ getPointDisplay(row.pointsFor) }}</td>
-                  <td>{{ getPointDisplay(row.pointsAgainst) }}</td>
-                  <td
-                    [class.positive-diff]="row.pointDifferential > 0"
-                    [class.negative-diff]="row.pointDifferential < 0"
-                  >
-                    {{ getPointDifferentialDisplay(row.pointDifferential) }}
-                  </td>
-
-                  <td>
-                    @if (getActiveMatchupLink(row); as matchupLink) {
-                      <a
-                        class="matchup-link"
-                        [routerLink]="matchupLink"
-                      >
-                        {{ getActiveMatchupOpponentLabel(row.ownerId) }}
-                        @if (getActiveMatchupScoreLabel(row.ownerId)) {
-                          <span>{{ getActiveMatchupScoreLabel(row.ownerId) }}</span>
-                        }
-                      </a>
-                    } @else {
-                      <span class="muted-copy">
-                        {{ getActiveMatchupOpponentLabel(row.ownerId) }}
-                      </span>
-                    }
-                  </td>
-
-                  <td>
-                    <span class="last-result-pill">
-                      {{ getLastResultLabel(row.ownerId) }}
-                    </span>
-                  </td>
+        @if (standingsRows().length === 0) {
+          <p class="empty-copy">No teams were found for this league.</p>
+        } @else {
+          <div class="standings-table-wrap">
+            <table class="standings-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Team</th>
+                  <th>Record</th>
+                  <th>Win %</th>
+                  <th>PF</th>
+                  <th>PA</th>
+                  <th>Diff</th>
+                  <th>Active Matchup</th>
+                  <th>Last Result</th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                @for (row of standingsRows(); track row.ownerId) {
+                  <tr
+                    [class.first-place-row]="row.rank === 1"
+                    [class.playoff-qualifier-row]="isPlayoffQualifier(row)"
+                    [class.playoff-cut-line]="isPlayoffCutLine(row)"
+                  >
+                    <td>
+                      <strong class="rank-pill">#{{ row.rank }}</strong>
+                    </td>
+
+                    <td>
+                      <div class="team-cell manager-name-stack">
+                        <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="sm" />
+                        <div>
+                          <strong>{{ row.teamName }}</strong>
+                        @if (row.ownerId === userId) {
+                          <span>Your Team</span>
+                        } @else if (isPlayoffQualifier(row)) {
+                          <span>Playoff Position</span>
+                        }
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>{{ getRecordLabel(row) }}</td>
+                    <td>{{ getWinPercentageLabel(row) }}</td>
+                    <td>{{ getPointDisplay(row.pointsFor) }}</td>
+                    <td>{{ getPointDisplay(row.pointsAgainst) }}</td>
+                    <td
+                      [class.positive-diff]="row.pointDifferential > 0"
+                      [class.negative-diff]="row.pointDifferential < 0"
+                    >
+                      {{ getPointDifferentialDisplay(row.pointDifferential) }}
+                    </td>
+
+                    <td>
+                      @if (getActiveMatchupLink(row); as matchupLink) {
+                        <a
+                          class="matchup-link"
+                          [routerLink]="matchupLink"
+                        >
+                          {{ getActiveMatchupOpponentLabel(row.ownerId) }}
+                          @if (getActiveMatchupScoreLabel(row.ownerId)) {
+                            <span>{{ getActiveMatchupScoreLabel(row.ownerId) }}</span>
+                          }
+                        </a>
+                      } @else {
+                        <span class="muted-copy">
+                          {{ getActiveMatchupOpponentLabel(row.ownerId) }}
+                        </span>
+                      }
+                    </td>
+
+                    <td>
+                      <span class="last-result-pill">
+                        {{ getLastResultLabel(row.ownerId) }}
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="standings-card power-rankings-card">
+        <div class="section-heading power-rankings-heading">
+          <div>
+            <span class="eyebrow">Entertainment</span>
+            <h2>Weekly Power Rankings</h2>
+            <p>{{ getPowerRankingsPeriodLabel() }}</p>
+          </div>
+          <span class="power-rankings-official-note">Official standings decide playoffs</span>
         </div>
-      }
-    </section>
+
+        <details class="power-rankings-method">
+          <summary>How the ranking works</summary>
+          <p>
+            35% official record · 25% points per matchup · 20% point differential · 20% last-three form. Last-three form blends 60% result rate and 40% recent differential. Scores compare teams only within this league and never affect official standings.
+          </p>
+        </details>
+
+        @if (powerRankings().completedMatchupCount === 0) {
+          <p class="empty-copy">Power Rankings begin after the first regular-season matchup is final.</p>
+        } @else {
+          <ol class="power-rankings-list" aria-label="League power rankings">
+            @for (row of powerRankingRows(); track row.ownerId) {
+              <li class="power-ranking-row" [class.power-ranking-current]="row.ownerId === userId">
+                <div class="power-ranking-position">
+                  <strong>#{{ row.rank }}</strong>
+                  <span [class.power-movement-up]="row.movement > 0" [class.power-movement-down]="row.movement < 0">
+                    {{ getPowerMovementLabel(row) }}
+                  </span>
+                </div>
+
+                <div class="power-ranking-team manager-name-stack">
+                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="sm" />
+                  <div>
+                    <strong>{{ row.teamName }}</strong>
+                    <span>Official #{{ row.officialRank }}{{ row.ownerId === userId ? ' · Your Team' : '' }}</span>
+                  </div>
+                </div>
+
+                <div class="power-ranking-score">
+                  <span>Power Score</span>
+                  <strong>{{ getPowerScoreLabel(row) }}</strong>
+                </div>
+
+                <div class="power-ranking-metrics">
+                  <span><strong>{{ row.wins }}-{{ row.losses }}-{{ row.ties }}</strong> Record</span>
+                  <span><strong>{{ getPointDisplay(row.pointsPerGame) }}</strong> PF / matchup</span>
+                  <span><strong>{{ getPointDifferentialDisplay(row.pointDifferentialPerGame) }}</strong> Diff / matchup</span>
+                  <span><strong>{{ getPowerRecentRecord(row) }}</strong> Last 3</span>
+                </div>
+
+                <details class="power-ranking-breakdown">
+                  <summary>Score breakdown</summary>
+                  <div class="power-ranking-factor-grid">
+                    @for (factor of row.factors; track factor.key) {
+                      <article>
+                        <span>{{ factor.label }} · {{ getPowerFactorWeight(factor.weight) }}</span>
+                        <strong>{{ factor.metricLabel }}</strong>
+                        <small>{{ getPowerFactorContribution(factor.contribution) }}</small>
+                      </article>
+                    }
+                  </div>
+                </details>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+    }
   </section>
 }

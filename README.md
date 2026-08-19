@@ -36,19 +36,20 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md`](docs/RINKRAT_PRODUCT_A1E_WINDOW_SYNC_OPPORTUNITY.md) — authoritative Game Center/Add / Drop roster-slot tracker parity, honest NHL-block fallbacks, compact next-six opportunity explanation, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md`](docs/RINKRAT_PRODUCT_A1F_DECISION_HISTORY.md) — manager-private completed Add / Drop history, current side-by-side player comparisons, the replay-refresh latency follow-up, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md`](docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md) — opt-in roster-fit ordering and an explainable selected-move lens with visible factors, uncertainty, Hosting-only deployment, and site-first proof.
+- [`docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md`](docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md) — exact-position default Roster Fit, entertainment-only weekly Power Rankings, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 45 / Product Batch A1G**. A1G completes the explainable waiver-recommendation roadmap item with two optional Add / Drop tools: **Roster fit (for you)** ordering and one compact **Move lens** after a manager selects an incoming player and a legal roster choice.
+The current source runtime is **Release Candidate 46 / Product Batch A1H**. A1H makes **Roster fit (for you)** the default Add / Drop ordering and corrects replacement comparisons so candidates are evaluated only against legal exact-position active or Bench players—or a compatible open slot.
 
-The guidance uses simple directional signals from the current verified Projection V11 snapshot and the manager's existing roster: Next 6, rest-of-season outlook, expected games, projection floor, season pace, reliability, availability, and open-slot replacement value. Every conclusion exposes **Why**, names the exact comparison player or open slot, and states relevant uncertainty such as waiver priority cost, competing claims, injury timing, wide ranges, or missing evidence. It never hides a composite grade or becomes transaction authority.
+League Standings also gains an optional **Weekly Power Rankings** view for entertainment. It transparently combines official record, points per matchup, point differential, and last-three regular-season form. Official Standings remains the default and remains the only table used for playoff qualification and seeding.
 
-A1F's private Decision History and RC43's authoritative roster-window alignment remain intact. Roadmap item A1.16 also remains in progress because replay-triggered player-data catch-up is correct but can be slower than desired; that future optimization may not couple projection generation to scoring authority.
+A1G's explainable Move lens, A1F's private Decision History, and RC43's authoritative roster-window alignment remain intact. Roadmap item A1.16 also remains in progress because replay-triggered player-data catch-up is correct but can be slower than desired; that future optimization may not couple projection generation to scoring authority.
 
-Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1g`.
+Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batcha1h`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -104,6 +105,7 @@ verify:batcha1d
 verify:batcha1e
 verify:batcha1f
 verify:batcha1g
+verify:batcha1h
 ```
 
 RinkRat pins:
@@ -123,7 +125,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcha1g
+npm run verify:batcha1h
 ```
 
 After verification and a clean commit:
@@ -134,11 +136,17 @@ npm run beta:preflight
 
 
 
+## Product Batch A1H — Exact-Position Roster Fit and Weekly Power Rankings
+
+A1H makes **Roster fit (for you)** the default Add / Drop ordering and restricts every replacement comparison to the candidate's exact position. A center is compared only with legal centers, a defenseman only with legal defensemen, and a Team Goalie Unit only with another Team Goalie Unit. A compatible open slot remains valid; otherwise RinkRat says there is not enough comparison evidence rather than using an unrelated weak player.
+
+League Standings adds an optional **Weekly Power Rankings** tab. The transparent entertainment-only score uses 35% official record, 25% points per completed matchup, 20% point differential, and 20% last-three regular-season form. Official Standings remains the default and decides playoff qualification and seeding. A1H deploys Hosting only. Full guidance is in `docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md`.
+
 ## Product Batch A1G — Transparent Roster Fit and Move Lens
 
 A1G adds an opt-in **Roster fit (for you)** sort to Add / Drop and one compact **Move lens** after the manager chooses a legal incoming/outgoing combination. The feature uses only existing Projection V11 and roster evidence, presents simple directional factors, lowers confidence when data is weak, and explicitly excludes waiver priority, competing claims, future injuries, and exact activation timing.
 
-The default Add / Drop view remains Free agents sorted by Next 6. Explanations expand inline only when requested, and no Function, listener, Rule, index, TTL policy, migration, runtime recommendation service, or competitive write is added. RC45 deploys Hosting only. Full guidance is in `docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md`.
+A1H later makes Roster Fit the default and restricts comparisons to exact-position legal options; managers may still choose Next 6 or any other sort. Explanations expand inline only when requested, and no Function, listener, Rule, index, TTL policy, migration, runtime recommendation service, or competitive write is added. RC45 deploys Hosting only. Full guidance is in `docs/RINKRAT_PRODUCT_A1G_TRANSPARENT_MOVE_LENS.md`.
 
 
 ## Product Batch A1F — Decision History

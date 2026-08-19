@@ -1,6 +1,8 @@
 # Product Batch A1G — Transparent Roster Fit and Move Lens
 
-**Runtime release:** Release Candidate 45
+**Original runtime release:** Release Candidate 45
+
+**Current follow-up:** A1H / Release Candidate 46
 
 **Competitive models:** Production Scoring V3 and Projection V11
 
@@ -10,7 +12,7 @@
 
 ## Purpose
 
-A1G completes roadmap item A1.8 with optional waiver and free-agent guidance that explains its evidence instead of issuing a hidden grade. The default Add / Drop view remains unchanged: Free agents ordered by Next 6 projection. Managers see guidance only when they choose **Roster fit (for you)** or after they select a legal transaction comparison.
+A1G completes roadmap item A1.8 with waiver and free-agent guidance that explains its evidence instead of issuing a hidden grade. A1H subsequently makes **Roster fit (for you)** the default Add / Drop sort and limits replacement comparisons to legal exact-position roster options. Managers may still choose Next 6 or another ordering at any time.
 
 The feature is decision support, not transaction authority. It never selects an outgoing player, submits a move, changes waiver priority, or bypasses the existing six-game timing and roster-validity checks.
 
@@ -35,7 +37,7 @@ More data needed
 The tier is derived from visible, current evidence:
 
 - a legal open active or Bench slot;
-- the lowest-projected legal same-position active or flexible Bench comparison;
+- the lowest-projected legal exact-position active or Bench comparison;
 - Next 6 Projection V11 points;
 - rest-of-season Projection V11 points;
 - expected games available in the six-game block;
@@ -97,7 +99,7 @@ A1G cannot write or alter any of those outcomes.
 
 ## Mobile and information density
 
-The default player rows remain unchanged unless **Roster fit (for you)** is selected. Roster-fit summaries are one compact inline strip, factors wrap as small chips, and details expand inside the row. The selected-move lens stays inside the existing confirmation card.
+Roster Fit is now the default ordering under A1H, but the player rows stay compact until a manager expands **Why?**. Roster-fit summaries are one compact inline strip, factors wrap as small chips, and details expand inside the row. The selected-move lens stays inside the existing confirmation card.
 
 A1G adds no modal, fuzzy backdrop, fixed panel, sticky recommendation, or additional default-visible page section.
 
@@ -161,8 +163,8 @@ Do not deploy Functions, Rules, indexes, TTL policies, App Check configuration, 
 
 Use a disposable league with a complete Draft and a mix of free agents, waivers, open slots, and occupied roster slots.
 
-1. Open Add / Drop and confirm the default remains **Free agents** sorted by **Next 6 projection**.
-2. Change Sort to **Roster fit (for you)**.
+1. Open Add / Drop and confirm the default remains **Free agents** sorted by **Roster fit (for you)**.
+2. Confirm a candidate is compared only with legal players at the same exact position or a compatible open slot.
 3. Confirm the strongest evidence appears first and every visible fit has an inline **Why** action.
 4. Open **Why** and confirm the named comparison, Next 6 difference, rest-of-season difference, expected games, and confidence are understandable.
 5. Confirm a weak or injured candidate is downgraded rather than presented with false certainty.

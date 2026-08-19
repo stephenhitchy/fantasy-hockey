@@ -144,8 +144,8 @@
             [value]="boardSortMode()"
             (change)="updateBoardSort($any($event.target).value)"
           >
-            <option value="next-six">Next 6 projection</option>
             <option value="roster-fit">Roster fit (for you)</option>
+            <option value="next-six">Next 6 projection</option>
             <option value="season-points">Season points</option>
             <option value="overall-rank">Overall rank</option>
             <option value="position-rank">Position rank</option>
@@ -158,7 +158,7 @@
 
       @if (boardSortMode() === 'roster-fit') {
         <p class="unified-fit-method rr-notice rr-notice--info" role="status">
-          Roster fit uses legal roster paths, Next 6 and rest-of-season edges, expected games, and projection reliability. Open <strong>Why</strong> for the exact comparison.
+          Roster fit compares every player only with your legal options at that exact position. Open <strong>Why</strong> for the Next 6, rest-of-season, availability, and reliability evidence.
         </p>
       }
 

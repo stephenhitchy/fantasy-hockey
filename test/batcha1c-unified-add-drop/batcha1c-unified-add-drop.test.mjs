@@ -60,18 +60,19 @@ test('the former Player Board and Add / Drop routes are one guarded Add / Drop s
   );
 });
 
-test('free agents and next-six Projection V11 value are the default directory choices', async () => {
+test('free agents and exact-position Roster Fit are the default directory choices', async () => {
   const component = await read('src/app/features/free-agents/free-agents.ts');
   const template = await read('src/app/features/free-agents/free-agents.html');
 
   assert.match(component, /boardStatusFilter = signal<LeaguePlayerBoardStatusFilter>\('free-agent'\)/);
-  assert.match(component, /boardSortMode = signal<LeaguePlayerBoardSortMode>\('next-six'\)/);
+  assert.match(component, /boardSortMode = signal<LeaguePlayerBoardSortMode>\('roster-fit'\)/);
   assert.match(component, /const UNIFIED_PLAYER_PAGE_SIZE = 50/);
   assert.match(template, /<option value="free-agent">Free agents/);
   assert.match(template, /<option value="all">All players/);
   assert.match(template, /<option value="rostered">Rostered/);
   assert.match(template, /<option value="waivers">Waivers/);
   assert.match(template, /<option value="watched">Watched/);
+  assert.match(template, /<option value="roster-fit">Roster fit \(for you\)<\/option>/);
   assert.match(template, /<option value="next-six">Next 6 projection<\/option>/);
 });
 
@@ -281,22 +282,22 @@ test('the current release retains A1C while A1D advances release operations to R
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 45/);
-  assert.match(productionRuntime, /Release Candidate 45/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 45');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1g');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc45-invite-beta');
+  assert.match(runtime, /Release Candidate 46/);
+  assert.match(productionRuntime, /Release Candidate 46/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 46');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcha1h');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc46-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1d:core'], /verify:batcha1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcha1g:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcha1h:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.36/);
+  assert.match(roadmap, /Version 1\.37/);
   assert.match(roadmap, /# \[x\] A1\.13 Unify Player Board and Add \/ Drop/);
   assert.match(roadmap, /# \[x\] LOG\.50 2026-08-18/);
   assert.match(docs, /processHistoricalReplayAdvance,functions:processProjectionGenerationTask/);
   assert.match(docs, /site-first/i);
-  assert.match(readme, /Release Candidate 45 \/ Product Batch A1G/);
+  assert.match(readme, /Release Candidate 46 \/ Product Batch A1H/);
   assert.match(readme, /RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP\.md/);
-  assert.match(runbook, /npm run verify:batcha1g/);
-  assert.match(runbook, /rinkrat-rc45-validation\.json/);
-  assert.match(runbook, /rinkrat-rc45-invite-beta/);
+  assert.match(runbook, /npm run verify:batcha1h/);
+  assert.match(runbook, /rinkrat-rc46-validation\.json/);
+  assert.match(runbook, /rinkrat-rc46-invite-beta/);
 });
