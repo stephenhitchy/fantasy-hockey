@@ -206,11 +206,11 @@ The verifier compares privacy-limited totals and samples critical league contrac
 - duplicate sampled member identities;
 - duplicate sampled team owners;
 - preserved six-game contracts;
-- preserved Scoring V3 contracts;
+- preserved supported Scoring V4 or legacy V3 contracts;
 - member/team/roster relationship summaries;
 - selected `appData` sentinel documents.
 
-Count differences may be advisory because production can change after the selected backup snapshot. Empty restored critical data, duplicate ownership signals, or lost six-game/Scoring V3 contracts are failures.
+Count differences may be advisory because production can change after the selected backup snapshot. Empty restored critical data, duplicate ownership signals, or lost six-game or supported versioned scoring contracts are failures.
 
 The report is stored under:
 

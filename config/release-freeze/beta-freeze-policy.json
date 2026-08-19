@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseLabel": "Release Candidate 48",
+  "releaseLabel": "Release Candidate 50",
   "publicUrl": "https://rinkratfantasy.com",
   "firebaseProjectId": "nhl-fantasy-app-ab673",
   "hostingTarget": "app",
@@ -8,12 +8,12 @@
   "requiredNodeVersion": "22.23.1",
   "requiredNpmVersion": "11.17.0",
   "requiredTtlPolicyCount": 10,
-  "scoringRulesVersion": 3,
+  "scoringRulesVersion": 4,
   "projectionVersion": 11,
   "requiredGamesPerRosterSlot": 6,
   "queueMode": "shadow",
   "appCheckMode": "monitor",
   "cspMode": "report-only",
-  "verificationCommand": "npm run verify:batchn1a",
-  "defaultTag": "rinkrat-rc48-invite-beta"
+  "verificationCommand": "npm run verify:batchv4a",
+  "defaultTag": "rinkrat-rc50-invite-beta"
 }

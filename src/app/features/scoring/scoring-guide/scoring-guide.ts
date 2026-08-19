@@ -59,9 +59,6 @@ export class ScoringGuide {
   );
 
   readonly cycleGameCount = computed(() => this.rules().requiredGamesPerCycle);
-  readonly goalieCycleMaximum = computed(
-    () => this.rules().goalieGameMaximum * this.rules().requiredGamesPerCycle,
-  );
 
   readonly forwardRows = computed<ScoringRow[]>(() => {
     const rules = this.rules().forward;
@@ -113,8 +110,12 @@ export class ScoringGuide {
     bonusRow('Shutout', this.rules().goalieShutout, 'Stacks with the win and all other goalie scoring'),
     {
       label: 'Maximum per NHL game',
-      value: `${formatPoints(this.rules().goalieGameMaximum)} pts`,
-      note: `The team goalie unit cannot score more than this in one game. Across ${this.rules().requiredGamesPerCycle} games, the absolute ceiling is ${formatPoints(this.rules().goalieGameMaximum * this.rules().requiredGamesPerCycle)}.`,
+      value: this.rules().goalieGameMaximum > 0
+        ? `${formatPoints(this.rules().goalieGameMaximum)} pts`
+        : 'No cap',
+      note: this.rules().goalieGameMaximum > 0
+        ? 'This older league keeps its saved per-game maximum.'
+        : 'Production Scoring V4 keeps the full result. Poor efficiency can score negatively, while an exceptional win or shutout is not flattened.',
     },
   ]);
 
@@ -177,6 +178,30 @@ export class ScoringGuide {
       {
         saves: 30,
         shotsAgainst: 32,
+        won: true,
+        shutout: false,
+      },
+      this.rules(),
+    ),
+  );
+
+  readonly goaliePoorEfficiencyExample = computed<GamePointBreakdown>(() =>
+    calculateGoalieGameBreakdown(
+      {
+        saves: 34,
+        shotsAgainst: 40,
+        won: false,
+        shutout: false,
+      },
+      this.rules(),
+    ),
+  );
+
+  readonly goalieEliteEfficiencyExample = computed<GamePointBreakdown>(() =>
+    calculateGoalieGameBreakdown(
+      {
+        saves: 19,
+        shotsAgainst: 20,
         won: true,
         shutout: false,
       },

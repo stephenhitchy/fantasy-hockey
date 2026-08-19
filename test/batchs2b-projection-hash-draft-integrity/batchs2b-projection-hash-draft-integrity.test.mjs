@@ -55,6 +55,7 @@ function buildHashFixture() {
   const metadataInput = {
     snapshotId,
     projectionVersion: 11,
+    scoringRulesVersion: 4,
     projectionAsOfDate: '2026-10-07',
     projectionContext: 'live',
     projectionSeason: '20262027',
@@ -207,7 +208,8 @@ test('projection snapshot verification rejects asset, chunk, catalog, and matchu
 });
 
 test('normal and emergency server projection generation writes versioned chunk and root hashes', () => {
-  assert.match(hashSource, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 1/);
+  assert.match(hashSource, /PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1/);
+  assert.match(hashSource, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2/);
   assert.match(hashSource, /PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2/);
   assert.match(hashSource, /stableProjectionSnapshotJson/);
   assert.match(hashSource, /createProjectionSnapshotChunkHash/);
@@ -327,10 +329,10 @@ test('S2B verification, RC14, documentation, and permanent roadmap stay synchron
   assert.match(functionsPackage.scripts.logs, /manageProjectionSnapshotIntegrity/);
 });
 
-test('Production Scoring V3 and Projection V11 math remain byte-for-byte unchanged', () => {
+test('Production Scoring V4 and Projection V11 math remain byte-for-byte controlled', () => {
   assert.equal(
     sha256(scoringRulesSource),
-    'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
+    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
   );
   assert.equal(
     sha256(projectionV11Source),

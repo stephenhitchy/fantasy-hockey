@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 
 import type { DraftableAsset } from '../draft/draft.models';
 
-export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 1;
+export const PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1;
+export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
 export const PROJECTION_SNAPSHOT_HASH_ALGORITHM = 'sha256' as const;
 
@@ -17,6 +18,7 @@ export interface ProjectionSnapshotChunkInput {
 export interface ProjectionSnapshotHashMetadataInput {
   snapshotId: string;
   projectionVersion: number;
+  scoringRulesVersion: number;
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
@@ -50,7 +52,11 @@ export interface StoredProjectionSnapshotChunk {
 }
 
 export interface StoredProjectionSnapshotHashMetadata
-  extends Omit<ProjectionSnapshotHashMetadataInput, 'chunkHashes'> {
+  extends Omit<
+    ProjectionSnapshotHashMetadataInput,
+    'chunkHashes' | 'scoringRulesVersion'
+  > {
+  scoringRulesVersion?: number;
   activeSnapshotId: string;
   generatedByAuthority?: 'server';
   authoritySchemaVersion?: number;
@@ -114,12 +120,22 @@ export function isProjectionSha256(value: unknown): value is string {
   return typeof value === 'string' && SHA256_PATTERN.test(value);
 }
 
+function isSupportedHashSchema(value: unknown): value is 1 | 2 {
+  return value === PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION ||
+    value === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION;
+}
+
 export function createProjectionSnapshotChunkHash(
   snapshotId: string,
   chunk: ProjectionSnapshotChunkInput,
+  hashSchemaVersion = PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
 ): string {
+  if (!isSupportedHashSchema(hashSchemaVersion)) {
+    throw new Error(`Unsupported projection snapshot hash schema ${hashSchemaVersion}.`);
+  }
+
   return sha256(stableProjectionSnapshotJson({
-    hashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    hashSchemaVersion,
     snapshotId,
     chunkId: chunk.chunkId,
     chunkIndex: chunk.chunkIndex,
@@ -130,9 +146,14 @@ export function createProjectionSnapshotChunkHash(
 
 export function createProjectionSnapshotContentHash(
   input: ProjectionSnapshotHashMetadataInput,
+  hashSchemaVersion = PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
 ): string {
-  return sha256(stableProjectionSnapshotJson({
-    hashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  if (!isSupportedHashSchema(hashSchemaVersion)) {
+    throw new Error(`Unsupported projection snapshot hash schema ${hashSchemaVersion}.`);
+  }
+
+  const canonical: Record<string, unknown> = {
+    hashSchemaVersion,
     authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
     generatedByAuthority: 'server',
     snapshotId: input.snapshotId,
@@ -148,7 +169,13 @@ export function createProjectionSnapshotContentHash(
     catalogSnapshotId: input.catalogSnapshotId,
     catalogHash: input.catalogHash,
     chunkHashes: input.chunkHashes,
-  }));
+  };
+
+  if (hashSchemaVersion >= PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION) {
+    canonical['scoringRulesVersion'] = input.scoringRulesVersion;
+  }
+
+  return sha256(stableProjectionSnapshotJson(canonical));
 }
 
 export function createProjectionSnapshotHashBundle(
@@ -163,17 +190,24 @@ export function createProjectionSnapshotHashBundle(
     return first.chunkId.localeCompare(second.chunkId);
   });
   const chunkHashes = orderedChunks.map((chunk) =>
-    createProjectionSnapshotChunkHash(metadata.snapshotId, chunk),
+    createProjectionSnapshotChunkHash(
+      metadata.snapshotId,
+      chunk,
+      PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    ),
   );
 
   return {
     hashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
     hashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
     chunkHashes,
-    snapshotContentHash: createProjectionSnapshotContentHash({
-      ...metadata,
-      chunkHashes,
-    }),
+    snapshotContentHash: createProjectionSnapshotContentHash(
+      {
+        ...metadata,
+        chunkHashes,
+      },
+      PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    ),
   };
 }
 
@@ -210,12 +244,27 @@ export function verifyProjectionSnapshotHashChain(
     throw new Error('Projection snapshot is not sealed by the current server authority.');
   }
 
+  const hashSchemaVersion = metadata.snapshotHashSchemaVersion;
+
   if (
-    metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    !isSupportedHashSchema(hashSchemaVersion) ||
     metadata.snapshotHashAlgorithm !== PROJECTION_SNAPSHOT_HASH_ALGORITHM ||
     !isProjectionSha256(metadata.snapshotContentHash)
   ) {
     throw new Error('Projection snapshot is missing its deterministic content hash.');
+  }
+
+  const scoringRulesVersion =
+    hashSchemaVersion === PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION
+      ? 3
+      : metadata.scoringRulesVersion;
+
+  if (
+    typeof scoringRulesVersion !== 'number' ||
+    !Number.isInteger(scoringRulesVersion) ||
+    scoringRulesVersion < 3
+  ) {
+    throw new Error('Projection snapshot is missing its scoring-rules identity.');
   }
 
   if (
@@ -249,7 +298,7 @@ export function verifyProjectionSnapshotHashChain(
   const actualChunkHashes = orderedChunks.map((chunk, index) => {
     if (
       chunk.sharedProjectionSnapshotId !== metadata.snapshotId ||
-      chunk.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+      chunk.snapshotHashSchemaVersion !== hashSchemaVersion ||
       chunk.snapshotHashAlgorithm !== PROJECTION_SNAPSHOT_HASH_ALGORITHM ||
       chunk.snapshotContentHash !== metadata.snapshotContentHash ||
       !isProjectionSha256(chunk.chunkHash)
@@ -257,7 +306,11 @@ export function verifyProjectionSnapshotHashChain(
       throw new Error(`Projection snapshot chunk ${chunk.chunkId} is missing authority metadata.`);
     }
 
-    const actualHash = createProjectionSnapshotChunkHash(metadata.snapshotId, chunk);
+    const actualHash = createProjectionSnapshotChunkHash(
+      metadata.snapshotId,
+      chunk,
+      hashSchemaVersion,
+    );
 
     if (
       actualHash !== chunk.chunkHash ||
@@ -276,21 +329,25 @@ export function verifyProjectionSnapshotHashChain(
     );
   }
 
-  const actualRootHash = createProjectionSnapshotContentHash({
-    snapshotId: metadata.snapshotId,
-    projectionVersion: metadata.projectionVersion,
-    projectionAsOfDate: metadata.projectionAsOfDate,
-    projectionContext: metadata.projectionContext,
-    projectionSeason: metadata.projectionSeason,
-    teamCount: metadata.teamCount,
-    targetCycleNumber: metadata.targetCycleNumber,
-    requiredGamesPerCycle: metadata.requiredGamesPerCycle,
-    assetCount: metadata.assetCount,
-    assetDocumentCount: metadata.assetDocumentCount,
-    catalogSnapshotId: metadata.catalogSnapshotId,
-    catalogHash: metadata.catalogHash,
-    chunkHashes: actualChunkHashes,
-  });
+  const actualRootHash = createProjectionSnapshotContentHash(
+    {
+      snapshotId: metadata.snapshotId,
+      projectionVersion: metadata.projectionVersion,
+      scoringRulesVersion,
+      projectionAsOfDate: metadata.projectionAsOfDate,
+      projectionContext: metadata.projectionContext,
+      projectionSeason: metadata.projectionSeason,
+      teamCount: metadata.teamCount,
+      targetCycleNumber: metadata.targetCycleNumber,
+      requiredGamesPerCycle: metadata.requiredGamesPerCycle,
+      assetCount: metadata.assetCount,
+      assetDocumentCount: metadata.assetDocumentCount,
+      catalogSnapshotId: metadata.catalogSnapshotId,
+      catalogHash: metadata.catalogHash,
+      chunkHashes: actualChunkHashes,
+    },
+    hashSchemaVersion,
+  );
 
   if (actualRootHash !== metadata.snapshotContentHash) {
     throw new Error('Projection snapshot root hash failed integrity verification.');

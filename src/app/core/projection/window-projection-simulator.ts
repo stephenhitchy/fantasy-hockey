@@ -1,4 +1,5 @@
 import { DraftableAsset } from '../draft/draft.models';
+import { CURRENT_SCORING_RULES_VERSION } from '../scoring/scoring-rules';
 import {
   isSharedProjectionSnapshotFreshForWindow,
   SHARED_PROJECTION_VERSION,
@@ -54,6 +55,7 @@ function createMetadata(
     activeSnapshotId: `snapshot-${targetCycleNumber}`,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     generatedAt,
     generatedBy: 'commissioner',
     assetCount: 300,

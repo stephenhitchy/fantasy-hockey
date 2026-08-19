@@ -15,6 +15,7 @@ import {
 import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-terms.data';
 import { RINKRAT_NEUTRAL_ABBREVIATION } from '../../shared/pixel-theme/pixel-theme.data';
 import { initializeManagerProfile } from '../user/manager-profile-authority.service';
+import { clearOfflineMatchupSnapshotsForAccount } from '../pwa/offline-matchup-snapshot.service';
 
 export async function registerUser(
   email: string,
@@ -137,7 +138,15 @@ export async function loginUser(email: string, password: string): Promise<User> 
 }
 
 export async function logoutUser(): Promise<void> {
-  await signOut(auth);
+  const accountId = auth.currentUser?.uid ?? '';
+
+  try {
+    await signOut(auth);
+  } finally {
+    if (accountId) {
+      await clearOfflineMatchupSnapshotsForAccount(accountId);
+    }
+  }
 }
 
 export function listenToAuthState(callback: (user: User | null) => void): () => void {

@@ -166,7 +166,7 @@ test('current documentation continues recording the secure S1A deployment and ro
 test('Production Scoring V3 and Projection V11 remain unchanged from RC9', () => {
   assert.equal(
     sha256(scoringRulesSource),
-    'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
+    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
   );
   assert.equal(
     sha256(projectionV11Source),

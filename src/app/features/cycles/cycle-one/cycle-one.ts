@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnDestroy, signal, ViewEncapsulation } from '@angular/core';
+import { Component, computed, effect, inject, OnDestroy, signal, ViewEncapsulation } from '@angular/core';
 
 import {
   CycleAssetScoreSummary,
@@ -108,12 +108,23 @@ import {
   type CompetitiveActionHandle,
 } from '../../../core/observability/competitive-action-monitor.service';
 
+import {
+  type OfflineMatchupMarkerSnapshot,
+  type OfflineMatchupPlayerSnapshot,
+  type OfflineMatchupPositionGroupSnapshot,
+  type OfflineMatchupTeamSnapshot,
+  type RinkRatOfflineMatchupSnapshot,
+} from '../../../core/pwa/offline-matchup-snapshot.models';
+import { OfflineMatchupSnapshotService } from '../../../core/pwa/offline-matchup-snapshot.service';
+import { BUNDLED_RELEASE_MANIFEST } from '../../../../environments/generated-release-manifest';
+
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
 import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
 import { CycleMobileScorebar } from './components/cycle-mobile-scorebar/cycle-mobile-scorebar';
 import { CycleMatchupFinishCard } from './components/cycle-matchup-finish-card/cycle-matchup-finish-card';
 import { CyclePageHeader } from './components/cycle-page-header/cycle-page-header';
 import { CycleStatusBanners } from './components/cycle-status-banners/cycle-status-banners';
+import { OfflineMatchupSnapshot } from './components/offline-matchup-snapshot/offline-matchup-snapshot';
 
 import { waitForAuthUser } from './cycle-one-auth.util';
 import {
@@ -164,6 +175,7 @@ import {
     CycleStatusBanners,
     CycleMatchupToolbar,
     CycleMatchupCard,
+    OfflineMatchupSnapshot,
   ],
   templateUrl: './cycle-one.html',
   styleUrl: './cycle-one.css',
@@ -173,6 +185,9 @@ export class CycleOne implements OnDestroy {
   private readonly platformAdminService = inject(PlatformAdminService);
   private readonly clientHealth = inject(ClientHealthService);
   private readonly actionMonitor = inject(CompetitiveActionMonitorService);
+  private readonly offlineMatchupSnapshots = inject(OfflineMatchupSnapshotService);
+
+  readonly browserOnline = this.clientHealth.online;
 
   readonly presenter = this;
   readonly developerToolsEnabled = areDeveloperToolsEnabled();
@@ -213,6 +228,8 @@ export class CycleOne implements OnDestroy {
 
   loading = signal(true);
   errorMessage = signal('');
+  offlineSnapshot = signal<RinkRatOfflineMatchupSnapshot | null>(null);
+  offlineSnapshotReason = signal<'offline' | 'live-unavailable'>('offline');
   scheduleProjectionLoading = signal(false);
   scheduleProjectionError = signal('');
   syncingScores = signal(false);
@@ -1754,6 +1771,166 @@ export class CycleOne implements OnDestroy {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
       void this.loadCyclePageFromParams(params);
     });
+
+    effect((onCleanup) => {
+      if (
+        !this.clientHealth.online() ||
+        this.loading() ||
+        this.offlineSnapshot() ||
+        !this.userId ||
+        !this.leagueId
+      ) {
+        return;
+      }
+
+      const snapshot = this.buildOfflineMatchupSnapshot();
+
+      if (!snapshot) {
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        void this.offlineMatchupSnapshots.save(snapshot);
+      }, 1_200);
+
+      onCleanup(() => clearTimeout(timer));
+    });
+  }
+
+  reloadLiveMatchup(): void {
+    if (!this.clientHealth.online()) {
+      return;
+    }
+
+    void this.loadCyclePageFromParams(this.route.snapshot.paramMap);
+  }
+
+  private buildOfflineMatchupSnapshot(): RinkRatOfflineMatchupSnapshot | null {
+    const league = this.league();
+    const matchup = this.getCurrentDisplayedMatchup();
+
+    if (!league || !matchup || !this.cycle() || !this.cycleScoring()) {
+      return null;
+    }
+
+    const positionGroups = this.getMobileMatchupPositionGroups(matchup)
+      .map((group): OfflineMatchupPositionGroupSnapshot | null => {
+        const rows = group.rows
+          .map((row) => ({
+            slotLabel: `${row.position} ${row.slotIndex + 1}`,
+            teamAPlayer: row.teamAPick ? this.buildOfflinePlayerSnapshot(row.teamAPick) : null,
+            teamBPlayer: row.teamBPick ? this.buildOfflinePlayerSnapshot(row.teamBPick) : null,
+          }))
+          .filter((row) => Boolean(row.teamAPlayer || row.teamBPlayer));
+
+        return rows.length > 0
+          ? {
+            position: group.position,
+            label: group.label,
+            rows,
+          }
+          : null;
+      })
+      .filter((group): group is OfflineMatchupPositionGroupSnapshot => Boolean(group));
+
+    if (positionGroups.length === 0) {
+      return null;
+    }
+
+    return {
+      schemaVersion: 1,
+      accountId: this.userId,
+      leagueId: this.leagueId,
+      leagueName: league.name,
+      cycleNumber: this.cycleNumber,
+      cycleLabel: this.getCycleLabel(),
+      matchupId: matchup.id,
+      matchupLabel: this.getMatchupNavigationTitle(matchup),
+      matchupStatus: matchup.status,
+      readinessLabel: this.getMatchupReadinessLabel(matchup),
+      finishLabel: this.getMobileMatchupFinishLabel(),
+      savedAt: new Date().toISOString(),
+      sourceReleaseLabel: BUNDLED_RELEASE_MANIFEST.releaseLabel,
+      sourceScoringVersion: BUNDLED_RELEASE_MANIFEST.scoringRulesVersion,
+      sourceProjectionVersion: BUNDLED_RELEASE_MANIFEST.projectionVersion,
+      teamA: this.buildOfflineTeamSnapshot(matchup, matchup.teamAOwnerId),
+      teamB: matchup.teamBOwnerId
+        ? this.buildOfflineTeamSnapshot(matchup, matchup.teamBOwnerId)
+        : null,
+      positionGroups,
+    };
+  }
+
+  private buildOfflineTeamSnapshot(
+    matchup: FantasyMatchup,
+    ownerId: string,
+  ): OfflineMatchupTeamSnapshot {
+    const gamesPlayed = this.getTeamRosterGamesPlayed(ownerId);
+    const gamesTotal = Math.max(gamesPlayed, this.getTeamRosterGameTotal(ownerId));
+
+    return {
+      teamName: this.getTeamName(ownerId),
+      record: this.getTeamRecord(ownerId) || '0-0-0',
+      currentScore: this.getMatchupTeamCurrentScore(matchup, ownerId),
+      projectedScore: this.getProjectedCycleForTeam(ownerId),
+      gamesPlayed,
+      gamesTotal,
+      resultLabel: this.getTeamResultLabel(matchup, ownerId) || null,
+      viewerTeam: ownerId === this.userId,
+    };
+  }
+
+  private buildOfflinePlayerSnapshot(pick: DraftPick): OfflineMatchupPlayerSnapshot {
+    const availability = this.getAssetMobileStatus(pick.asset);
+    const scoreSummary = this.getAssetScoreSummary(pick.asset);
+    const markers: OfflineMatchupMarkerSnapshot[] = this.getWindowGameMarkers(pick).map((marker) => {
+      const runtimeState = marker.gameId
+        ? scoreSummary?.gameStates[String(marker.gameId)] ?? null
+        : null;
+
+      return {
+        index: marker.index,
+        status: runtimeState === 'live' ? 'live' : marker.status,
+        label: runtimeState === 'live' ? `${marker.gameLabel} · Live` : marker.title,
+      };
+    });
+
+    return {
+      playerName: this.getAssetName(pick.asset),
+      teamLabel: this.getAssetTeamLabel(pick.asset),
+      position: pick.asset.position,
+      currentPoints: this.getAssetCurrentCycleScore(pick.asset),
+      projectedPoints: this.getBestCycleProjection(pick.asset),
+      availabilityLabel: availability
+        ? [availability.shortLabel, availability.returnDateLabel].filter(Boolean).join(' · ')
+        : null,
+      markers,
+    };
+  }
+
+  private async loadSavedOfflineMatchup(
+    reason: 'offline' | 'live-unavailable',
+  ): Promise<boolean> {
+    if (!this.userId || !this.leagueId) {
+      return false;
+    }
+
+    const snapshot = await this.offlineMatchupSnapshots.load({
+      accountId: this.userId,
+      leagueId: this.leagueId,
+      cycleNumber: this.cycleNumber,
+      matchupId: this.matchupId,
+    });
+
+    if (!snapshot) {
+      return false;
+    }
+
+    this.offlineSnapshot.set(snapshot);
+    this.offlineSnapshotReason.set(reason);
+    this.errorMessage.set('');
+    this.loading.set(false);
+    return true;
   }
 
   ngOnDestroy(): void {
@@ -1909,6 +2086,8 @@ export class CycleOne implements OnDestroy {
     this.scoringError.set('');
     this.loading.set(true);
     this.errorMessage.set('');
+    this.offlineSnapshot.set(null);
+    this.offlineSnapshotReason.set('offline');
     this.scheduleProjectionLoading.set(false);
     this.scheduleProjectionError.set('');
     this.syncingScores.set(false);
@@ -1964,6 +2143,20 @@ export class CycleOne implements OnDestroy {
     this.cycleNumber = cycleNumber;
     this.matchupId = matchupId;
     this.userId = user.uid;
+
+    if (!this.clientHealth.online()) {
+      const loadedSavedMatchup = await this.loadSavedOfflineMatchup('offline');
+
+      if (!loadedSavedMatchup) {
+        this.errorMessage.set(
+          'No saved matchup is available for this league and matchup on this device. Reconnect and open Game Center once to save a read-only copy.',
+        );
+        this.loading.set(false);
+      }
+
+      return;
+    }
+
     void this.platformAdminService.refreshAccess(true);
     startPlayerAvailabilityListenerForLeague(leagueId);
 
@@ -2091,9 +2284,13 @@ export class CycleOne implements OnDestroy {
 
       void this.loadPlayerPoolForProjectionFallback();
     } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error ? error.message : `Unable to load ${this.getCycleLabel()}.`,
-      );
+      const loadedSavedMatchup = await this.loadSavedOfflineMatchup('live-unavailable');
+
+      if (!loadedSavedMatchup) {
+        this.errorMessage.set(
+          error instanceof Error ? error.message : `Unable to load ${this.getCycleLabel()}.`,
+        );
+      }
     } finally {
       if (requestId === this.pageLoadRequestId) {
         this.loading.set(false);

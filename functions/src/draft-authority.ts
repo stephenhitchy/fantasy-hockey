@@ -18,6 +18,10 @@ import {
   isProjectionSha256,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
+import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
+} from './shared/core/scoring/scoring-rules';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
@@ -170,9 +174,20 @@ function getOptionalProjectionPreparationRequestId(value: unknown): string | nul
   );
 }
 
-function isDraftReadyProjectionPointer(data: Record<string, unknown>): boolean {
+function normalizeLeagueScoringRulesVersion(value: unknown): number {
+  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
+    ? CURRENT_SCORING_RULES_VERSION
+    : SCORING_RULES_V3_VERSION;
+}
+
+function isDraftReadyProjectionPointer(
+  data: Record<string, unknown>,
+  expectedScoringRulesVersion: number,
+): boolean {
   return data['status'] === 'ready' &&
     data['projectionVersion'] === SHARED_PROJECTION_VERSION &&
+    normalizeLeagueScoringRulesVersion(data['scoringRulesVersion']) ===
+      expectedScoringRulesVersion &&
     data['generationReason'] !== 'server-emergency' &&
     typeof data['activeSnapshotId'] === 'string' &&
     Boolean(data['activeSnapshotId']) &&
@@ -228,12 +243,16 @@ async function resolveDraftProjectionPreparation(
   leagueId: string,
   requestId: string | null,
 ): Promise<DraftProjectionPreparationState> {
+  const leagueSnapshot = await db.doc(`leagues/${leagueId}`).get();
+  const expectedScoringRulesVersion = normalizeLeagueScoringRulesVersion(
+    leagueSnapshot.exists ? leagueSnapshot.data()?.['scoringRulesVersion'] : null,
+  );
   const pointerSnapshot = await db
     .doc(`leagues/${leagueId}/projectionSnapshots/current`)
     .get();
   const pointerData = pointerSnapshot.exists ? pointerSnapshot.data() ?? {} : {};
 
-  if (isDraftReadyProjectionPointer(pointerData)) {
+  if (isDraftReadyProjectionPointer(pointerData, expectedScoringRulesVersion)) {
     return { requestId, status: 'ready' };
   }
 

@@ -1,5 +1,4 @@
-import {
-  DEFAULT_GOALIE_GAME_MAXIMUM,
+import type {
   DiminishingReturnValues,
   ScoringRules
 } from './scoring-rules';
@@ -283,9 +282,9 @@ export function calculateGoalieGameBreakdown(
     typeof rules.goalieGameMaximum === 'number' &&
     rules.goalieGameMaximum > 0
       ? rules.goalieGameMaximum
-      : DEFAULT_GOALIE_GAME_MAXIMUM;
+      : null;
 
-  if (total > goalieGameMaximum) {
+  if (goalieGameMaximum !== null && total > goalieGameMaximum) {
     addLine(
       `Goalie Game Maximum (${goalieGameMaximum})`,
       goalieGameMaximum - total

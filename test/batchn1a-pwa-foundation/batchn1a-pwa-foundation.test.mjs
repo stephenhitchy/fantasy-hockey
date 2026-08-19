@@ -108,7 +108,7 @@ test('the service worker handles only same-origin GET shell and stable assets', 
   assert.match(source, /precacheBuiltShellAssets/);
   assert.match(source, /extractBuiltShellAssetUrls/);
   assert.match(source, /\\.\(\?:js\|css\)\$/);
-  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc48-v1'/);
+  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc50-v1'/);
   assert.doesNotMatch(source, /addEventListener\(['"]sync['"]/);
   assert.doesNotMatch(source, /background\s*sync/i);
   assert.doesNotMatch(source, /indexedDB|postMessage\([^)]*transaction|queue.*(?:write|mutation)/i);
@@ -138,7 +138,7 @@ test('navigation falls back honestly without claiming offline competitive data i
   assert.match(worker, /shellCache\.match\('\/offline\.html'\)/);
   assert.match(offlinePage, /RinkRat is offline/);
   assert.match(offlinePage, /No Draft, roster, waiver, commissioner, or testing action was queued/);
-  assert.match(roadmap, /\[ \] N1\.3 Add clearly labeled stale read-only matchup access when offline/);
+  assert.match(roadmap, /# \[x\] N1\.3 Add clearly labeled stale read-only matchup access when offline/);
 });
 
 test('the browser install service defers the native prompt and registers with update-safe options', async () => {
@@ -227,7 +227,7 @@ test('Hosting prevents stale worker and manifest delivery and N1A stays Hosting-
   assert.doesNotMatch(runbook, /--only functions|--only firestore:rules|--only firestore:indexes/);
 });
 
-test('N1A remains RC48 and preserves competitive models, Rules, indexes, and safety modes', async () => {
+test('the N1A foundation remains intact under RC49 and preserves competitive models, Rules, indexes, and safety modes', async () => {
   const [
     scoringRules,
     scoringEngine,
@@ -266,11 +266,11 @@ test('N1A remains RC48 and preserves competitive models, Rules, indexes, and saf
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(sha256(firestoreRules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(firestoreIndexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 48/);
-  assert.match(productionRuntime, /Release Candidate 48/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 48');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchn1a');
-  assert.equal(freeze.scoringRulesVersion, 3);
+  assert.match(runtime, /Release Candidate 50/);
+  assert.match(productionRuntime, /Release Candidate 50/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 50');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchv4a');
+  assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
@@ -280,7 +280,8 @@ test('N1A remains RC48 and preserves competitive models, Rules, indexes, and saf
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchn1a:core'], /verify:batcha1i:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchn1a:core/);
+  assert.match(packageJson.scripts['verify:batchn1b:core'], /verify:batchn1a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchv4a:core/);
 });
 
 test('documentation and roadmap record the bounded PWA foundation and site-first proof', async () => {
@@ -293,18 +294,19 @@ test('documentation and roadmap record the bounded PWA foundation and site-first
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.39/);
+  assert.match(roadmap, /Version 1\.41/);
   assert.match(roadmap, /# \[x\] N1\.1/);
   assert.match(roadmap, /# \[x\] N1\.2/);
-  assert.match(roadmap, /\[ \] N1\.3/);
+  assert.match(roadmap, /# \[x\] N1\.3/);
   assert.match(roadmap, /# \[x\] N1\.4/);
   assert.match(roadmap, /# \[x\] LOG\.57/);
+  assert.match(roadmap, /# \[x\] LOG\.58/);
   assert.match(runbook, /Mobile Batch N1A/);
   assert.match(runbook, /no Background Sync listener/i);
   assert.match(runbook, /Site-first proof/);
-  assert.match(readme, /Release Candidate 48 \/ Mobile Batch N1A/);
+  assert.match(readme, /Release Candidate 50 \/ Scoring Batch V4A/);
   assert.match(readme, /RINKRAT_MOBILE_N1A_PWA_FOUNDATION\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchn1a/);
-  assert.match(releaseRunbook, /rinkrat-rc48-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc48-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchv4a/);
+  assert.match(releaseRunbook, /rinkrat-rc50-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc50-invite-beta/);
 });

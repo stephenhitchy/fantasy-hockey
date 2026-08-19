@@ -281,8 +281,8 @@ test('Projection Lab exposes model confidence, luck regression, and likely range
 
 test('production scoring rules and scoring engine remain unchanged', async () => {
   const expected = new Map([
-    ['../../src/app/core/scoring/scoring-rules.ts', 'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901'],
-    ['../../src/app/core/scoring/scoring-engine.ts', 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15'],
+    ['../../src/app/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
+    ['../../src/app/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
   ]);
 
   for (const [relativePath, expectedHash] of expected) {

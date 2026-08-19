@@ -1,0 +1,319 @@
+:host {
+  display: block;
+}
+
+.offline-matchup {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 32px;
+}
+
+.offline-matchup-header {
+  display: grid;
+  gap: 14px;
+}
+
+.offline-matchup-badges,
+.offline-matchup-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.offline-matchup-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.offline-matchup-eyebrow,
+.offline-matchup-team-label {
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.offline-matchup-title-row h1,
+.offline-matchup-title-row p,
+.offline-matchup-team-score h2,
+.offline-matchup-group h3 {
+  margin: 0;
+}
+
+.offline-matchup-title-row h1 {
+  margin-top: 3px;
+}
+
+.offline-matchup-title-row p {
+  margin-top: 5px;
+  color: var(--rr-color-text-secondary);
+}
+
+.offline-matchup-time {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  text-align: right;
+}
+
+.offline-matchup-time time,
+.offline-matchup-context,
+.offline-matchup-progress-label,
+.offline-matchup-player-identity span,
+.offline-matchup-footer {
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+}
+
+.offline-matchup-warning {
+  margin: 0;
+}
+
+.offline-matchup-reload {
+  justify-self: start;
+  min-height: 44px;
+}
+
+.offline-matchup-scoreboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.offline-matchup-versus {
+  align-self: center;
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.offline-matchup-team-score {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface);
+}
+
+.offline-matchup-team-score-mine {
+  border-color: color-mix(in srgb, var(--rr-color-info) 55%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-surface) 90%, var(--rr-color-info) 10%);
+}
+
+.offline-matchup-score-pair {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.offline-matchup-score-pair > strong {
+  font-size: clamp(26px, 5vw, 40px);
+  line-height: 1;
+}
+
+.offline-matchup-score-pair > span,
+.offline-matchup-score-pair > small {
+  color: var(--rr-color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.offline-matchup-progress {
+  min-height: 7px;
+}
+
+.offline-matchup-lineups {
+  display: grid;
+  gap: 12px;
+}
+
+.offline-matchup-lineup {
+  overflow: clip;
+}
+
+.offline-matchup-lineup summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.offline-matchup-lineup summary > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.offline-matchup-lineup summary small {
+  color: var(--rr-color-text-muted);
+}
+
+.offline-matchup-groups {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.offline-matchup-group {
+  display: grid;
+  gap: 8px;
+}
+
+.offline-matchup-group h3 {
+  color: var(--rr-color-text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.offline-matchup-player-list {
+  display: grid;
+  gap: 8px;
+}
+
+.offline-matchup-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(132px, 0.55fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.offline-matchup-player-identity {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.offline-matchup-player-identity strong,
+.offline-matchup-player-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offline-matchup-player-points {
+  display: flex;
+  gap: 10px;
+}
+
+.offline-matchup-player-points > div {
+  display: grid;
+  min-width: 42px;
+  gap: 1px;
+  text-align: right;
+}
+
+.offline-matchup-player-points span {
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.offline-matchup-markers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(28px, 1fr));
+  gap: 5px;
+}
+
+.offline-matchup-markers span {
+  display: grid;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid var(--rr-color-border);
+  border-radius: 999px;
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.offline-marker-played {
+  border-color: color-mix(in srgb, var(--rr-color-success) 62%, var(--rr-color-border)) !important;
+  background: color-mix(in srgb, var(--rr-color-success) 18%, var(--rr-color-surface-raised)) !important;
+  color: var(--rr-color-text) !important;
+}
+
+.offline-marker-missed {
+  border-color: color-mix(in srgb, var(--rr-color-danger) 52%, var(--rr-color-border)) !important;
+  background: color-mix(in srgb, var(--rr-color-danger) 14%, var(--rr-color-surface-raised)) !important;
+  color: var(--rr-color-text) !important;
+}
+
+.offline-marker-live {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 68%, var(--rr-color-border)) !important;
+  background: color-mix(in srgb, var(--rr-color-warning) 22%, var(--rr-color-surface-raised)) !important;
+  color: var(--rr-color-text) !important;
+}
+
+.offline-marker-upcoming {
+  color: var(--rr-color-text-secondary) !important;
+}
+
+.offline-marker-unavailable {
+  opacity: 0.6;
+}
+
+.offline-matchup-footer {
+  padding: 0 4px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .offline-matchup-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .offline-matchup-time {
+    text-align: left;
+  }
+
+  .offline-matchup-scoreboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offline-matchup-versus {
+    justify-self: center;
+  }
+
+  .offline-matchup-player {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .offline-matchup-markers {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .offline-matchup {
+    gap: 12px;
+  }
+
+  .offline-matchup-reload {
+    width: 100%;
+  }
+
+  .offline-matchup-player {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offline-matchup-player-points {
+    justify-content: flex-start;
+  }
+
+  .offline-matchup-player-points > div {
+    text-align: left;
+  }
+}

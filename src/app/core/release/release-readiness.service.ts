@@ -702,7 +702,8 @@ export async function loadReleaseReadinessSnapshot(
     projection?.snapshotHashAlgorithm === 'sha256' &&
     projection?.snapshotIntegrityStatus === 'verified' &&
     /^[a-f0-9]{64}$/.test(projection?.snapshotContentHash ?? '') &&
-    projection?.snapshotChunkHashes?.length === projection?.assetDocumentCount,
+    projection?.snapshotChunkHashes?.length === projection?.assetDocumentCount &&
+    projection?.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION,
   );
 
   checks.push(
@@ -712,7 +713,7 @@ export async function loadReleaseReadinessSnapshot(
       'Shared projection snapshot is server hashed and Draft ready',
       !projection
         ? 'No shared projection metadata is available.'
-        : `Status ${projection.status}; version ${projection.projectionVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}; ` +
+        : `Status ${projection.status}; Projection V${projection.projectionVersion}; Scoring V${projection.scoringRulesVersion}; target Cycle ${projection.targetCycleNumber}; source ${projection.generationReason}; ` +
           (projectionServerValidated
             ? `server catalog ${projection.catalogSnapshotId} validated ${projection.canonicalAssetCount} assets; root hash ${(projection.snapshotContentHash ?? '').slice(0, 12)}… is verified.`
             : draft?.status === 'complete'
@@ -720,6 +721,7 @@ export async function loadReleaseReadinessSnapshot(
               : 'this snapshot is missing the current server authority marker, canonical catalog validation, or deterministic root hash. Verify the current server snapshot or regenerate this target before the Draft begins.'),
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
+        projection.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION &&
         projection.assetCount > 0
         ? projectionServerValidated
           ? projection.generationReason === 'server-emergency'

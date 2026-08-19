@@ -12439,3 +12439,86 @@ The worker handles GET requests only. It has no Background Sync listener, mutati
 Waiting workers do not activate during ordinary play. The existing manager-approved release-update action asks the waiting worker to activate, waits for controller change, and then reloads. This preserves the visible release authority instead of silently swapping the running application.
 
 N1A deploys RC48 Hosting only. See `docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md` for the complete install states, cache boundaries, verification, deployment, site-first proof, and rollback procedure.
+
+---
+
+# Mobile Batch N1B — Saved Read-Only Matchups
+
+**Runtime release:** Release Candidate 49
+
+**Competitive models:** Production Scoring V3 and Projection V11
+
+N1B completes roadmap item N1.3 with one bounded, account-scoped, clearly stale Game Center snapshot saved only after an authenticated online matchup view is ready. The browser stores the presentation in IndexedDB for at most seven days and twelve matchups per account, and loads only the matching account, league, cycle, and matchup while offline or after a live-load failure.
+
+The saved page includes scores, projections, team progress, starter identity/availability, and six-game marker states. It excludes claims, transactions, private notes, Draft queues, invite codes, email addresses, request identities, raw ledgers, and competitive write payloads. Logout clears the account's saved copies on the shared device.
+
+The interface is explicitly marked **Saved matchup** and **Read only**, shows the exact saved time and source release/scoring/projection versions, and contains no competitive action. It states that no Draft, roster, waiver, commissioner, or testing action was queued. The N1A service worker remains GET-only and does not read IndexedDB or add Background Sync.
+
+N1B deploys RC49 Hosting only and adds no Function, Firestore Rule, index, TTL policy, migration, permanent listener, or competitive write. See `docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md` for the full storage contract, exact-route privacy, verification, site-first proof, and rollback procedure.
+
+
+---
+
+# Scoring Batch V4A — Team Goalie Differentiation
+
+**Runtime release:** Release Candidate 50
+
+**Competitive models:** Production Scoring V4 and Projection V11
+
+V4A preserves every Production Scoring V3 skater value and changes only Team Goalie Unit scoring: 2 points per completed NHL team game, 0.20 per save, 5 for a win, 5 for a shutout, and save quality `3 + ((SV% - .900) × 100 × 1.8)` bounded from -6 to +14 with no per-game cap. Exact legacy V3 reconstruction remains available for deliberately unmigrated or preseason-rollback records.
+
+New leagues use V4. Existing leagues move only through the guarded pre-Draft migration. Applying V4 invalidates mutable projection pointers and Draft projection-preparation fields, retains immutable snapshot documents, and never rewrites Draft picks, scores, cycles, six-game windows, standings, rosters, transactions, waivers, or playoffs. Projection V11 hash schema 2 includes the scoring version, so every migrated league must regenerate and inspect a verified V4 snapshot before Draft.
+
+The browser and Functions scoring sources remain synchronized. The Scoring Guide, scoring test lab, historical calibration, goalie projections, Draft board, Player Intel, Add / Drop, Release Readiness, backup/restore verification, and release manifest all understand V4 while retaining honest V3 reconstruction. Firestore Rules, indexes, TTL, App Check Monitor, scoring queue Shadow, shared NHL cache Shadow, immutable six-game windows, seventh-game rollover, and server authority are unchanged.
+
+See `docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md` for formula evidence, migration, rollback, acceptance gates, deployment, and site-first proof.
+
+---
+
+# Operations Phase O1 — Tester Season and Public-Launch Foundation
+
+Phase O1 converts the Public Launch & Growth Gameplan into permanent product, legal, support, analytics, commissioner, moderation, capacity, accessibility, and controlled-growth work. It defines the 2–4 league / 10–30 manager proof cohort, league-level activation and retention metrics, explicit launch thresholds, five formal go/no-go dates, commissioner-first acquisition, and controlled 5 → 10 → 25 → 50 → 100 activated-league waves.
+
+The roadmap now requires zero unresolved P0 integrity defects, at least 99.5% confirmed core-action reliability, at least 75% Draft completion among six-member leagues, at least 60% league filling, at least 70% four-week retention, median support below 20 minutes per active league/week, at least 70% next-season intent, staged 5,000-client proof, legal/IP/data clearance, public policies, founder-independent support, human accessibility testing, App Check/abuse proof, and activated-league attribution before unrestricted acquisition.
+
+See `docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md` and `config/private-season-launch-gates.json` for the permanent operational requirements.
+
+---
+
+# Scoring Batch V4A — Goalie Differentiation and Tester-Season Launch Gates
+
+**Runtime release:** Release Candidate 50
+
+**Competitive models:** Production Scoring V4 and Projection V11
+
+V4A preserves every forward and defenseman scoring value from Production Scoring V3 and changes only the Team Goalie Unit formula. The completed-game base becomes 2 points, saves become 0.20, wins become 5, shutouts become 5, and save quality becomes `3 + ((SV% - .900) × 100 × 1.8)` bounded from -6 to +14. The former 28-point NHL-game cap is removed. The change is designed to retain goalie units as RinkRat's highest-scoring and most stable position while separating elite, good, and poor units more clearly.
+
+Scoring is now explicitly versioned. Legacy V3 leagues retain the exact frozen V3 rules and 28-point goalie cap. New leagues use V4. Projection V11 mathematics remain unchanged, but authoritative snapshot metadata and deterministic root hashes now include the scoring-rules version through hash schema 2 so a V3 snapshot cannot satisfy a V4 Draft or window.
+
+The guarded preseason migration is dry-run-only by default. `--eligible-only` migrates only leagues with no cycle history, no Draft picks, and no live or complete Draft while leaving historical leagues unchanged. One exact disposable historical test league may use the separately named mixed-history override. Applying V4 invalidates only mutable projection pointers and Draft preparation fields, retains immutable snapshot assets, and never rewrites scores, cycles, windows, standings, rosters, Draft picks, transactions, waivers, or playoffs. A read-only inspector verifies canonical rules and projection identity; `--allow-legacy-history` accepts V3 only where immutable competition history already exists. Preseason rollback is blocked after any Draft pick or competition cycle exists.
+
+V4A also converts the attached Public Launch & Growth Gameplan into permanent roadmap Phase O1 and source-controlled operator gates. These include the 2–4 league / 10–30 manager tester cohort, 99.5% core-action reliability, league activation and four-week retention, commissioner independence, support burden, legal/IP/data clearance, public policies, App Check and abuse proof, a staged 5,000-client test, accessibility, moderation, attribution, Founding Commissioner operations, controlled 5 → 10 → 25 → 50 → 100 league waves, and formal go/no-go records.
+
+See:
+
+```text
+docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md
+docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md
+```
+
+Verification:
+
+```bash
+npm run verify:batchv4a
+```
+
+V4A requires a deliberate Functions deployment, guarded league migration, Projection V11 regeneration, scoring-version inspection, and RC50 Hosting deployment. It changes no Firestore Rule, index, TTL policy, App Check mode, scoring-queue mode, NHL-cache authority, six-game boundary, seventh-game rollover, completed-window immutability, or server-authoritative competition write.
+
+# Scoring Batch V4A.1 — League HQ Scoring-Version Import Hotfix
+
+**Runtime release:** Release Candidate 50
+**Competitive models:** Production Scoring V4 and Projection V11
+
+The first RC50 package used `CURRENT_SCORING_RULES_VERSION` while validating the last verified Draft projection snapshot in `league-detail.ts`, but omitted the canonical scoring-rules import. Angular reported TS2304 and correctly blocked the build. V4A.1 restores that import and adds a focused regression test.
+
+No runtime scoring, projection, migration, Firestore, six-game-window, rollover, App Check, queue, cache, Rule, index, or TTL behavior changed.

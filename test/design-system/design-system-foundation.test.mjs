@@ -143,6 +143,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
     'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html',
     'src/app/features/cycles/cycle-one/components/cycle-page-header/cycle-page-header.html',
+    'src/app/features/cycles/cycle-one/components/offline-matchup-snapshot/offline-matchup-snapshot.html',
     'src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.html',
     'src/app/features/cycles/cycle-one/cycle-one.html',
     'src/app/features/draft/draft-room/draft-room.html',

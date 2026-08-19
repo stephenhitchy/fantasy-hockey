@@ -39,19 +39,24 @@ Core project references:
 - [`docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md`](docs/RINKRAT_PRODUCT_A1H_POSITION_FIT_POWER_RANKINGS.md) — exact-position default Roster Fit, entertainment-only weekly Power Rankings, Hosting-only deployment, and site-first proof.
 - [`docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md`](docs/RINKRAT_PRODUCT_A1I_MANAGER_BRIEFING.md) — a bounded personalized Coach's Briefing for injuries, recent waiver outcomes, close matchups, roster-slot boundaries, scheduled moves, and live Drafts.
 - [`docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md`](docs/RINKRAT_MOBILE_N1A_PWA_FOUNDATION.md) — installable PWA shell, safe versioned caching, offline boundaries, release-worker coordination, Hosting deployment, and site-first proof.
+- [`docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md`](docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md) — account-scoped saved Game Center snapshots, explicit stale/read-only presentation, exact-route privacy, Hosting-only deployment, and offline site proof.
+- [`docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md`](docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md) — Production Scoring V4 formula, goalie differentiation evidence, guarded league migration, projection refresh, verification, cutover, and rollback boundaries.
+- [`docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md`](docs/RINKRAT_OPERATIONS_O1_TESTER_SEASON_PUBLIC_LAUNCH.md) — product and operations backlog derived from the 2026–27 tester-season/public-launch gameplan, including integrity, support, legal, funnel, commissioner, moderation, capacity, and launch-wave gates.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 48 / Mobile Batch N1A**. N1A makes RinkRat installable on supported phones and desktop browsers through a standalone web manifest and a production-only service worker. It caches only the public application shell and stable same-origin assets, uses network-first navigation with an honest offline fallback, and keeps release identity, NHL proxy paths, security reports, Firebase traffic, and every competitive write outside service-worker cache authority.
+The current source runtime is **Release Candidate 50 / Scoring Batch V4A.1**. V4A keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. The result preserves goalies as RinkRat's highest-scoring and most stable position while creating more separation between elite, average, and poor units.
 
-The A1I **Coach's Briefing** remains intact beneath this mobile-platform foundation. It still appears only when useful, shows at most three timely items across different leagues, and disappears when nothing requires attention. A1H exact-position default Roster Fit and entertainment-only Power Rankings also remain unchanged.
+RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact. Saved matchup snapshots record the active release's scoring version so a V4 snapshot cannot be presented as V3.
 
-N1A does not create offline Draft, roster, waiver, commissioner, or testing mutations. It adds no Background Sync, offline mutation queue, push subscription, Function, Firestore Rule, index, TTL policy, migration, or competitive write. N1.3 remains open for a future intentionally timestamped stale read-only matchup experience.
+Existing leagues do not switch scoring merely because Functions were deployed. V4A includes a guarded dry-run/apply migration, a read-only inspector, a projection hash-schema bump that includes the scoring version, and a hard projection-generation guard until the league is explicitly on Scoring V4. Completed cycle/window documents are never rewritten by the migration.
 
-Production Scoring V3, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow remain unchanged. The current verification command is `npm run verify:batchn1a`.
+V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
+
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batchv4a`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -110,6 +115,8 @@ verify:batcha1g
 verify:batcha1h
 verify:batcha1i
 verify:batchn1a
+verify:batchn1b
+verify:batchv4a
 ```
 
 RinkRat pins:
@@ -129,7 +136,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batchn1a
+npm run verify:batchv4a
 ```
 
 After verification and a clean commit:
@@ -138,7 +145,43 @@ After verification and a clean commit:
 npm run beta:preflight
 ```
 
+## Scoring Batch V4A — Team Goalie Differentiation
 
+V4A retains the complete Production Scoring V3 skater model unchanged and replaces only the Team Goalie Unit values. Production V4 uses a 2-point completed-game base, 0.20 per save, 5 for a win, 5 for a shutout, and a continuous save-quality formula of `3 + ((SV% - .900) × 100 × 1.8)` bounded from -6 to +14. The former 28-point game cap is removed.
+
+The guarded migration is dry-run-only unless `RINKRAT_APPLY_SCORING_V4=APPLY` is present. Leagues with cycle or Draft-pick history are blocked by default. The global `--eligible-only` option safely migrates only pre-competition leagues and skips every blocked/history league. One exact disposable historical test league may use the separately named mixed-history override. Applying V4 invalidates only mutable projection pointers and Draft projection-preparation fields while retaining immutable snapshot documents. Projection V11 must then be regenerated and inspected because its deterministic hash now includes Scoring V4. The global inspector may use `--allow-legacy-history` to accept V3 only for leagues that already have competition history; a no-history league left on V3 remains an incomplete cutover issue.
+
+Verification:
+
+```bash
+npm run verify:batchv4a
+```
+
+Migration sequence:
+
+```bash
+npm run scoring:v4:migrate -- --project=nhl-fantasy-app-ab673 --eligible-only
+# Apply one exact eligible league first, regenerate Projection V11 in the site, then inspect it.
+npm run scoring:v4:inspect -- --project=nhl-fantasy-app-ab673 --league=EXACT_LEAGUE_ID
+# After all eligible leagues are migrated/regenerated, inspect globally while preserving historical V3 leagues.
+npm run scoring:v4:inspect -- --project=nhl-fantasy-app-ab673 --allow-legacy-history
+```
+
+Full guidance is in `docs/RINKRAT_SCORING_V4_GOALIE_DIFFERENTIATION.md`.
+
+## Mobile Batch N1B — Saved Read-Only Matchups
+
+N1B completes the roadmap's clearly labeled stale matchup access. After an online Game Center view fully loads, RinkRat stores a sanitized copy in account-scoped browser IndexedDB. Offline navigation loads only the matching league, cycle, and matchup, shows its exact saved time and source release, and removes every competitive control. The store is limited to 12 matchups per account, seven days, and 350 KB per snapshot; logout clears that account's copies.
+
+N1B adds no Function, Firestore record, Rule, index, TTL policy, Background Sync, offline mutation queue, or competitive write.
+
+Verification:
+
+```bash
+npm run verify:batchn1b
+```
+
+N1B deploys RC49 Hosting only. Full guidance is in `docs/RINKRAT_MOBILE_N1B_OFFLINE_MATCHUPS.md`.
 
 ## Mobile Batch N1A — Installable PWA Foundation
 

@@ -210,9 +210,9 @@ test('D1A remains intact under RC34 while preserving Scoring V3 and Projection V
     read('package.json').then(JSON.parse),
   ]);
 
-  assert.match(runtime, /Release Candidate 48/);
-  assert.match(productionRuntime, /Release Candidate 48/);
-  assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*3/);
+  assert.match(runtime, /Release Candidate 50/);
+  assert.match(productionRuntime, /Release Candidate 50/);
+  assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*4/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
   assert.match(roadmap, /Version 1\.\d+(?:\.\d+)?/);
   assert.match(roadmap, /D1\.16 .*visible score-freshness indicator/i);

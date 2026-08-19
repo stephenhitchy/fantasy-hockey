@@ -315,18 +315,19 @@ test('F1 historical scoring calibration is read-only and uses the production sco
   assert.match(source, /calculateSkaterGamePoints/);
   assert.match(source, /calculateGoalieGamePoints/);
   assert.match(source, /requiredGamesPerMatchup/);
-  assert.match(source, /current-v3/);
+  assert.match(source, /current-v4/);
+  assert.match(source, /legacy-v3/);
   assert.match(source, /star-separation/);
-  assert.match(source, /lower-goalie-ceiling/);
+  assert.doesNotMatch(source, /lower-goalie-ceiling/);
   assert.match(source, /productionRulesChanged:\s*false/);
   assert.doesNotMatch(source, /firebase\/firestore/);
   assert.doesNotMatch(source, /setDoc\(|updateDoc\(|writeBatch\(/);
 });
 
-test('the production scoring engine and V3 rules remain byte-for-byte unchanged from Batch M2.3', async () => {
+test('the versioned production scoring engine and rules remain pinned to the approved V4A baseline', async () => {
   const expected = new Map([
-    ['../../src/app/core/scoring/scoring-rules.ts', 'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901'],
-    ['../../src/app/core/scoring/scoring-engine.ts', 'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15'],
+    ['../../src/app/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
+    ['../../src/app/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
   ]);
 
   for (const [relativePath, expectedHash] of expected) {

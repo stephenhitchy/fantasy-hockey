@@ -41,6 +41,9 @@ async function sampleLeagueIntegrity(db, maximumSamples) {
     rosters: 0,
     sixGameContracts: 0,
     scoringV3Contracts: 0,
+    scoringV4Contracts: 0,
+    versionedScoringContracts: 0,
+    unsupportedScoringContracts: 0,
     authorityV2Contracts: 0,
     completeIdentitySets: 0,
     duplicateMemberIdentifiers: 0,
@@ -50,7 +53,14 @@ async function sampleLeagueIntegrity(db, maximumSamples) {
   for (const league of snapshot.docs) {
     const data = league.data() || {};
     if (Number(data.requiredGamesPerCycle) === 6) totals.sixGameContracts += 1;
-    if (Number(data.scoringRulesVersion) === 3) totals.scoringV3Contracts += 1;
+    const scoringVersion = Number(data.scoringRulesVersion);
+    if (scoringVersion === 3) totals.scoringV3Contracts += 1;
+    if (scoringVersion === 4) totals.scoringV4Contracts += 1;
+    if (scoringVersion === 3 || scoringVersion === 4) {
+      totals.versionedScoringContracts += 1;
+    } else {
+      totals.unsupportedScoringContracts += 1;
+    }
     if (Number(data.authoritySchemaVersion) >= 2) totals.authorityV2Contracts += 1;
 
     const [members, teams, rosters] = await Promise.all([
@@ -164,8 +174,11 @@ async function main() {
     if (destinationLeagueIntegrity.sampledLeagues > 0 && destinationLeagueIntegrity.sixGameContracts === 0) {
       hardFailures.push('No sampled restored league preserved the six-game contract.');
     }
-    if (destinationLeagueIntegrity.sampledLeagues > 0 && destinationLeagueIntegrity.scoringV3Contracts === 0) {
-      hardFailures.push('No sampled restored league preserved Scoring V3.');
+    if (destinationLeagueIntegrity.sampledLeagues > 0 && destinationLeagueIntegrity.versionedScoringContracts === 0) {
+      hardFailures.push('No sampled restored league preserved a supported versioned scoring contract.');
+    }
+    if (destinationLeagueIntegrity.unsupportedScoringContracts > 0) {
+      hardFailures.push(`${destinationLeagueIntegrity.unsupportedScoringContracts} sampled restored league(s) use an unsupported scoring version.`);
     }
 
     const report = {
@@ -195,7 +208,9 @@ async function main() {
     console.log(`- Collection groups checked: ${groups.length}`);
     console.log(`- Sampled restored leagues: ${destinationLeagueIntegrity.sampledLeagues}`);
     console.log(`- Six-game contracts preserved: ${destinationLeagueIntegrity.sixGameContracts}`);
-    console.log(`- Scoring V3 contracts preserved: ${destinationLeagueIntegrity.scoringV3Contracts}`);
+    console.log(`- Supported scoring contracts preserved: ${destinationLeagueIntegrity.versionedScoringContracts}`);
+    console.log(`  - Scoring V4: ${destinationLeagueIntegrity.scoringV4Contracts}`);
+    console.log(`  - Legacy Scoring V3: ${destinationLeagueIntegrity.scoringV3Contracts}`);
     console.log(`- Privacy-limited report: ${path.relative(projectRoot, reportPath)}`);
     warnings.forEach((warning) => console.log(`- Advisory: ${warning}`));
     hardFailures.forEach((failure) => console.error(`- Failure: ${failure}`));

@@ -206,20 +206,20 @@ test('C1E remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 48/);
-  assert.match(productionRuntime, /Release Candidate 48/);
-  assert.equal(freeze.scoringRulesVersion, 3);
+  assert.match(runtime, /Release Candidate 50/);
+  assert.match(productionRuntime, /Release Candidate 50/);
+  assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batchn1a');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchv4a');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1e:core'], /verify:batchc1d:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchn1a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchv4a:core/);
 });
 
 test('C1E documentation and roadmap record announcements, pinning, and the site-first workflow', async () => {
@@ -232,7 +232,7 @@ test('C1E documentation and roadmap record announcements, pinning, and the site-
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.39/);
+  assert.match(roadmap, /Version 1\.41/);
   assert.match(roadmap, /# \[x\] C1\.3/);
   assert.match(roadmap, /# \[x\] C1\.17/);
   assert.match(roadmap, /# \[x\] LOG\.37/);
@@ -243,11 +243,11 @@ test('C1E documentation and roadmap record announcements, pinning, and the site-
   assert.match(runbook, /functions:publishLeagueAnnouncement,functions:unpinLeagueAnnouncement/);
   assert.match(runbook, /Do not deploy Firestore Rules, indexes, TTL configuration/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 48 \/ Mobile Batch N1A/);
+  assert.match(readme, /Release Candidate 50 \/ Scoring Batch V4A/);
   assert.match(readme, /RINKRAT_SOCIAL_C1E_COMMISSIONER_ANNOUNCEMENTS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batchn1a/);
-  assert.match(releaseRunbook, /rinkrat-rc48-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc48-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchv4a/);
+  assert.match(releaseRunbook, /rinkrat-rc50-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc50-invite-beta/);
 });
 
 test('the clean C1E package contains no abandoned record-milestone batch', async () => {

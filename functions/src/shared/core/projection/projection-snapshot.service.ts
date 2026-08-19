@@ -27,6 +27,10 @@ import {
   rankSharedProjectionAssets,
 } from './projection-ranking.util';
 import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
+} from '../scoring/scoring-rules';
+import {
   ensureCanonicalProjectionAssetCatalog,
   loadCanonicalProjectionAssetCatalog,
   validateProjectionAssetsAgainstCatalog,
@@ -59,6 +63,7 @@ export interface SharedProjectionSnapshotMetadata {
   activeSnapshotId: string;
   status: SharedProjectionSnapshotStatus;
   projectionVersion: number;
+  scoringRulesVersion: number;
   generatedAt: string;
   generatedBy: string;
   assetCount: number;
@@ -107,6 +112,7 @@ export interface GenerateSharedProjectionSnapshotInput {
 export interface WindowSnapshotFreshnessInput {
   teamCount: number;
   requiredGamesPerCycle: number;
+  scoringRulesVersion?: number;
   targetCycleNumber: number;
   now?: Date;
   expectedProjectionAsOfDate?: string;
@@ -141,12 +147,33 @@ function getAssetsRef(leagueId: string, snapshotId: string) {
   return collection(db, 'leagues', safeLeagueId, 'projectionSnapshots', safeSnapshotId, 'assets');
 }
 
+function normalizeProjectionScoringRulesVersion(value: unknown): number | null {
+  if (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= SCORING_RULES_V3_VERSION &&
+    value <= CURRENT_SCORING_RULES_VERSION
+  ) {
+    return value;
+  }
+
+  // Projection snapshots created before Scoring V4 did not store this field.
+  return value === undefined || value === null
+    ? SCORING_RULES_V3_VERSION
+    : null;
+}
+
 function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): SharedProjectionSnapshotMetadata | null {
+  const scoringRulesVersion = normalizeProjectionScoringRulesVersion(
+    value.scoringRulesVersion,
+  );
+
   if (
     typeof value.activeSnapshotId !== 'string' ||
     !value.activeSnapshotId ||
     value.status !== 'ready' ||
-    value.projectionVersion !== SHARED_PROJECTION_VERSION
+    value.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    scoringRulesVersion === null
   ) {
     return null;
   }
@@ -159,6 +186,7 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     activeSnapshotId: value.activeSnapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion,
     generatedAt: typeof value.generatedAt === 'string' ? value.generatedAt : '',
     generatedBy: typeof value.generatedBy === 'string' ? value.generatedBy : 'server',
     assetCount: typeof value.assetCount === 'number' ? value.assetCount : 0,
@@ -404,6 +432,8 @@ export function isSharedProjectionSnapshotFreshForWindow(
   if (
     !metadata ||
     metadata.status !== 'ready' ||
+    metadata.scoringRulesVersion !==
+      (input.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) ||
     metadata.teamCount !== input.teamCount ||
     metadata.requiredGamesPerCycle !== input.requiredGamesPerCycle ||
     metadata.targetCycleNumber !== input.targetCycleNumber ||
@@ -542,6 +572,7 @@ export async function sealSharedProjectionSnapshotIntegrity(
     {
       snapshotId: normalizedSnapshotId,
       projectionVersion: metadata.projectionVersion,
+      scoringRulesVersion: metadata.scoringRulesVersion,
       projectionAsOfDate: metadata.projectionAsOfDate,
       projectionContext: metadata.projectionContext,
       projectionSeason: metadata.projectionSeason,
@@ -679,6 +710,7 @@ function prepareProjectionSnapshotIntegrity(input: {
   snapshotId: string;
   assets: DraftableAsset[];
   projectionVersion: number;
+  scoringRulesVersion: number;
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
@@ -702,6 +734,7 @@ function prepareProjectionSnapshotIntegrity(input: {
   const hashBundle = createProjectionSnapshotHashBundle({
     snapshotId: input.snapshotId,
     projectionVersion: input.projectionVersion,
+    scoringRulesVersion: input.scoringRulesVersion,
     projectionAsOfDate: input.projectionAsOfDate,
     projectionContext: input.projectionContext,
     projectionSeason: input.projectionSeason,
@@ -1017,6 +1050,17 @@ async function generateSnapshotInternal(
     throw new Error('A league is required to refresh shared projections.');
   }
 
+  const leagueSnapshot = await getDoc(doc(db, 'leagues', leagueId));
+  const leagueScoringVersion = leagueSnapshot.exists()
+    ? leagueSnapshot.data()?.['scoringRulesVersion']
+    : null;
+
+  if (leagueScoringVersion !== CURRENT_SCORING_RULES_VERSION) {
+    throw new Error(
+      `This league must be migrated to Production Scoring V${CURRENT_SCORING_RULES_VERSION} before a new Projection V${SHARED_PROJECTION_VERSION} snapshot can be generated.`,
+    );
+  }
+
   const teamCount = Math.max(2, Math.floor(input.teamCount));
   const requiredGamesPerCycle = Math.max(
     1,
@@ -1045,6 +1089,7 @@ async function generateSnapshotInternal(
     activeSnapshotId: snapshotId,
     status: 'building' as const,
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     generatedAt,
     generatedAtServer: serverTimestamp(),
     generatedBy: input.requestedBy
@@ -1103,6 +1148,7 @@ async function generateSnapshotInternal(
       snapshotId,
       assets: rankedAssets,
       projectionVersion: SHARED_PROJECTION_VERSION,
+      scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
       projectionAsOfDate: context.projectionAsOfDate,
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
@@ -1158,6 +1204,7 @@ async function generateSnapshotInternal(
       activeSnapshotId: snapshotId,
       status: 'ready',
       projectionVersion: SHARED_PROJECTION_VERSION,
+      scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
       generatedAt,
       generatedBy: input.requestedBy
         ? `server:projection-authority:${input.requestedBy}`
@@ -1499,6 +1546,17 @@ export async function createEmergencyDraftProjectionSnapshot(
     throw new Error('A league is required to create emergency draft rankings.');
   }
 
+  const leagueSnapshot = await getDoc(doc(db, 'leagues', leagueId));
+  const leagueScoringVersion = leagueSnapshot.exists()
+    ? leagueSnapshot.data()?.['scoringRulesVersion']
+    : null;
+
+  if (leagueScoringVersion !== CURRENT_SCORING_RULES_VERSION) {
+    throw new Error(
+      `This league must be migrated to Production Scoring V${CURRENT_SCORING_RULES_VERSION} before emergency Projection V${SHARED_PROJECTION_VERSION} rankings can be generated.`,
+    );
+  }
+
   const teamCount = Math.max(2, Math.floor(input.teamCount));
   const requiredGamesPerCycle = Math.max(1, Math.floor(input.requiredGamesPerCycle));
   const targetCycleNumber = Math.max(1, Math.floor(input.targetCycleNumber ?? 1));
@@ -1620,6 +1678,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     snapshotId,
     assets: rankedAssets,
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     teamCount,
     targetCycleNumber,
     requiredGamesPerCycle,
@@ -1657,6 +1716,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     activeSnapshotId: snapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     generatedAt,
     generatedBy: 'server:draft-automation',
     assetCount: rankedAssets.length,

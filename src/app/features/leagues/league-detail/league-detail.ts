@@ -8,6 +8,7 @@ import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 import { reauthenticateCurrentUserWithPassword } from '../../../core/auth/account-deletion.service';
+import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rules';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
@@ -826,6 +827,7 @@ export class LeagueDetail implements OnDestroy {
     const isFresh = isSharedProjectionSnapshotFreshForDraft(metadata, {
       teamCount: this.getProjectionTeamCount(),
       requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
+      scoringRulesVersion: this.league()?.scoringRulesVersion,
       now: new Date(this.now()),
     });
 
@@ -862,6 +864,8 @@ export class LeagueDetail implements OnDestroy {
       const isCompatible =
         metadata.status === 'ready' &&
         metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+        metadata.scoringRulesVersion ===
+          (this.league()?.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) &&
         metadata.assetCount > 0 &&
         metadata.teamCount === this.getProjectionTeamCount() &&
         metadata.requiredGamesPerCycle === this.getRequiredGamesPerCycle() &&

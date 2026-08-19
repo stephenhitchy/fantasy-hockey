@@ -241,11 +241,11 @@ test('M5.5 verification and documentation are available', async () => {
 test('competitive scoring, Projection V11, and Functions unrelated to later replay or draft recovery remain unchanged', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
-    'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
+    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
   );
   assert.equal(
     await sha256('src/app/core/scoring/scoring-engine.ts'),
-    'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15',
+    '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3',
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
@@ -317,6 +317,6 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/user/player-note.util.ts',
       ]),
     ),
-    'd7be9c2d7a9dfc3547efac32953eaed440cc7a6b9b420dc45d583b15f8d417f0',
+    '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',
   );
 });

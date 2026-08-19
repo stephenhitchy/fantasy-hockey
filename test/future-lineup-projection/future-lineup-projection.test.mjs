@@ -428,7 +428,7 @@ test('the batch does not alter scoring rules or the projection engine', async ()
     readFile(new URL('src/app/core/projection/cycle-projection.util.ts', packageRoot), 'utf8'),
   ]);
 
-  assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION = 3/);
+  assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION = 4/);
   assert.match(scoringRules, /goal:\s*\{\s*first: 6,/);
   assert.match(scoringRules, /DEFAULT_GOALIE_GAME_MAXIMUM = 28/);
   assert.match(projectionUtility, /LW: 0\.98/);

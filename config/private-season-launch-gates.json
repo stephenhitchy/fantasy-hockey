@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "planningSource": "RinkRat Public Launch & Growth Gameplan, August 18, 2026",
+  "testerSeason": "2026-27",
+  "publicGrowthSeason": "2027-28",
+  "initialPublicAudience": "United States adults 18+ unless counsel approves another scope",
+  "cohort": {
+    "minimumLeagues": 2,
+    "maximumLeagues": 4,
+    "minimumManagers": 10,
+    "maximumManagers": 30,
+    "requiresNonFounderCommissioner": true,
+    "requiredExperienceAndDeviceCoverage": [
+      "hockey-expert",
+      "casual-fan",
+      "fantasy-beginner",
+      "iphone",
+      "android",
+      "desktop"
+    ]
+  },
+  "greenThresholds": {
+    "unresolvedP0IntegrityDefectsMaximum": 0,
+    "confirmedCoreActionReliabilityPercentMinimum": 99.5,
+    "sixMemberLeagueDraftCompletionPercentMinimum": 75,
+    "createdLeagueSixVerifiedMemberPercentMinimum": 60,
+    "fourWeekLeagueRetentionPercentMinimum": 70,
+    "paidAcquisitionHardPauseRetentionPercentBelow": 60,
+    "medianSupportMinutesPerActiveLeagueWeekMaximum": 20,
+    "nextSeasonCommissionerIntentPercentMinimum": 70,
+    "stagedClientLoadTestMinimum": 5000,
+    "foundingCommissionersCommittedBeforePublicAcquisitionMinimum": 10
+  },
+  "formalGoNoGoDates": [
+    { "date": "2026-09-27", "gate": "private-season" },
+    { "date": "2026-10-31", "gate": "first-month-integrity" },
+    { "date": "2027-04-30", "gate": "public-product" },
+    { "date": "2027-07-15", "gate": "public-beta" },
+    { "date": "2027-09-21", "gate": "controlled-scale" }
+  ],
+  "controlledActivatedLeagueWaves": [5, 10, 25, 50, 100],
+  "stopTheLineRequirements": [
+    "written-name-and-sports-ip-clearance",
+    "sports-data-commercial-rights-and-fallback",
+    "terms-privacy-acceptable-use-community-age-deletion-export",
+    "app-check-canary-quotas-abuse-and-emergency-rollback",
+    "support-incident-status-deputy-and-rehearsed-rollback",
+    "human-accessibility-test",
+    "moderation-before-public-discovery-or-chat",
+    "capacity-cost-and-provider-failure-proof"
+  ],
+  "operatingPolicies": {
+    "commissionerFirst": true,
+    "optimizeForActivatedAndRetainedLeagues": true,
+    "initialCoreProductFree": true,
+    "noPaidEntryOrPooledLeagueMoney": true,
+    "noPayToWinCompetitiveAdvantage": true,
+    "noFakeFollowersReviewsOrEngagement": true,
+    "noScrapedOrPurchasedContactLists": true,
+    "materialRelationshipsMustBeDisclosed": true,
+    "nativeAppsOnlyAfterPwaRetentionEvidence": true
+  }
+}

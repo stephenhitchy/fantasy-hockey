@@ -94,6 +94,7 @@ import {
   setPlayerWatchlistEntry,
 } from '../../../core/player/player-watchlist.service';
 
+import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rules';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import { shareLeagueDraftCard } from '../../../core/league/league-draft-share-card.service';
 
@@ -2289,6 +2290,7 @@ export class DraftRoom implements OnDestroy {
     const isFresh = isSharedProjectionSnapshotFreshForDraft(metadata, {
       teamCount: this.getProjectionTeamCount(),
       requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
+      scoringRulesVersion: this.league()?.scoringRulesVersion,
       now: new Date(this.now()),
     });
 
@@ -2328,6 +2330,8 @@ export class DraftRoom implements OnDestroy {
       const isCompatible =
         metadata.status === 'ready' &&
         metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+        metadata.scoringRulesVersion ===
+          (this.league()?.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) &&
         metadata.assetCount > 0 &&
         metadata.teamCount === this.getProjectionTeamCount() &&
         metadata.requiredGamesPerCycle === this.getRequiredGamesPerCycle() &&

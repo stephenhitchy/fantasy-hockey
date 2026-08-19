@@ -11,10 +11,14 @@ import { httpsCallable } from 'firebase/functions';
 import { db } from '../firebase';
 import { functions } from '../firebase-functions';
 import { DraftableAsset } from '../draft/draft.models';
+import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
+} from '../scoring/scoring-rules';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
-export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 1;
+export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -55,6 +59,7 @@ export interface SharedProjectionSnapshotMetadata {
   activeSnapshotId: string;
   status: SharedProjectionSnapshotStatus;
   projectionVersion: number;
+  scoringRulesVersion: number;
   generatedAt: string;
   generatedBy: string;
   assetCount: number;
@@ -107,6 +112,7 @@ export interface GenerateSharedProjectionSnapshotInput {
 export interface DraftSnapshotFreshnessInput {
   teamCount: number;
   requiredGamesPerCycle: number;
+  scoringRulesVersion?: number;
   now?: Date;
 }
 
@@ -143,14 +149,35 @@ function compareSnapshotAssetOrder(
   );
 }
 
+function normalizeProjectionScoringRulesVersion(value: unknown): number | null {
+  if (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= SCORING_RULES_V3_VERSION &&
+    value <= CURRENT_SCORING_RULES_VERSION
+  ) {
+    return value;
+  }
+
+  // Projection snapshots created before Scoring V4 did not store this field.
+  return value === undefined || value === null
+    ? SCORING_RULES_V3_VERSION
+    : null;
+}
+
 function normalizeMetadata(
   data: Partial<SharedProjectionSnapshotMetadata>,
 ): SharedProjectionSnapshotMetadata | null {
+  const scoringRulesVersion = normalizeProjectionScoringRulesVersion(
+    data.scoringRulesVersion,
+  );
+
   if (
     data.status !== 'ready' ||
     typeof data.activeSnapshotId !== 'string' ||
     !data.activeSnapshotId ||
-    data.projectionVersion !== SHARED_PROJECTION_VERSION
+    data.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    scoringRulesVersion === null
   ) {
     return null;
   }
@@ -168,6 +195,7 @@ function normalizeMetadata(
     activeSnapshotId: data.activeSnapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    scoringRulesVersion,
     generatedAt,
     generatedBy: typeof data.generatedBy === 'string' ? data.generatedBy : '',
     assetCount: typeof data.assetCount === 'number' ? data.assetCount : 0,
@@ -401,6 +429,8 @@ export function isSharedProjectionSnapshotFreshForDraft(
     !metadata ||
     metadata.status !== 'ready' ||
     metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    metadata.scoringRulesVersion !==
+      (input.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) ||
     metadata.assetCount <= 0 ||
     metadata.teamCount !== Math.max(2, Math.floor(input.teamCount)) ||
     metadata.requiredGamesPerCycle !== Math.max(1, Math.floor(input.requiredGamesPerCycle)) ||
@@ -439,6 +469,8 @@ export function isSharedProjectionSnapshotFreshForWindow(
     !metadata ||
     metadata.status !== 'ready' ||
     metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    metadata.scoringRulesVersion !==
+      (input.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) ||
     metadata.assetCount <= 0 ||
     metadata.teamCount !== Math.max(2, Math.floor(input.teamCount)) ||
     metadata.requiredGamesPerCycle !== Math.max(1, Math.floor(input.requiredGamesPerCycle)) ||
@@ -710,6 +742,7 @@ async function loadServerGeneratedSnapshot(
   }
 
   if (
+    snapshot.metadata.scoringRulesVersion !== CURRENT_SCORING_RULES_VERSION ||
     snapshot.metadata.generatedByAuthority !== 'server' ||
     snapshot.metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     snapshot.metadata.catalogValidationStatus !== 'validated' ||

@@ -379,11 +379,11 @@ test('V1 keeps the readable interface font prioritized and loads decorative font
 test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules, and indexes', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
-    'd0ba8838c17737b00cdc5f0dea5e24ffb4e1af2154c2575baf28c3aa83de4901',
+    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
   );
   assert.equal(
     await sha256('src/app/core/scoring/scoring-engine.ts'),
-    'f9cdb69372437c4cf4e70e678d98227d8777ccc13d37b7ef000ac71ba36d4e15',
+    '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3',
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
@@ -391,7 +391,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
   );
   assert.equal(
     await sha256('src/app/core/draft/draft-player-pool.service.ts'),
-    'b5ddafa0e2898550c9ac69ab3a491477b362633278213e63f2aab29fcad4c6fe',
+    'ab6ee7c4ea5e92966b80f928897b3c2b01b1fcc8bafe7738e67a2651cd048300',
   );
   assert.equal(
     await sha256('firestore.rules'),

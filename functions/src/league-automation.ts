@@ -71,7 +71,9 @@ import {
 } from './shared/core/playoffs/playoff-window-bank.service';
 import {
   CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
   defaultScoringRules,
+  scoringRulesForVersion,
   ScoringRules,
 } from './shared/core/scoring/scoring-rules';
 import {
@@ -1726,39 +1728,40 @@ function normalizeScoringRules(value: unknown, version: unknown): ScoringRules {
   const stored = value && typeof value === 'object'
     ? value as Partial<ScoringRules>
     : {};
+  const base = scoringRulesForVersion(version);
 
   const normalized: ScoringRules = {
-    ...defaultScoringRules,
+    ...base,
     ...stored,
     forward: {
-      ...defaultScoringRules.forward,
+      ...base.forward,
       ...(stored.forward ?? {}),
       goal: {
-        ...defaultScoringRules.forward.goal,
+        ...base.forward.goal,
         ...(stored.forward?.goal ?? {}),
       },
       primaryAssist: {
-        ...defaultScoringRules.forward.primaryAssist,
+        ...base.forward.primaryAssist,
         ...(stored.forward?.primaryAssist ?? {}),
       },
       secondaryAssist: {
-        ...defaultScoringRules.forward.secondaryAssist,
+        ...base.forward.secondaryAssist,
         ...(stored.forward?.secondaryAssist ?? {}),
       },
     },
     defense: {
-      ...defaultScoringRules.defense,
+      ...base.defense,
       ...(stored.defense ?? {}),
       goal: {
-        ...defaultScoringRules.defense.goal,
+        ...base.defense.goal,
         ...(stored.defense?.goal ?? {}),
       },
       primaryAssist: {
-        ...defaultScoringRules.defense.primaryAssist,
+        ...base.defense.primaryAssist,
         ...(stored.defense?.primaryAssist ?? {}),
       },
       secondaryAssist: {
-        ...defaultScoringRules.defense.secondaryAssist,
+        ...base.defense.secondaryAssist,
         ...(stored.defense?.secondaryAssist ?? {}),
       },
     },
@@ -1766,36 +1769,33 @@ function normalizeScoringRules(value: unknown, version: unknown): ScoringRules {
       Array.isArray(stored.goalieSavePercentageTiers) &&
       stored.goalieSavePercentageTiers.length > 0
         ? stored.goalieSavePercentageTiers
-        : defaultScoringRules.goalieSavePercentageTiers,
+        : base.goalieSavePercentageTiers,
   };
 
-  if (typeof version !== 'number' || version < CURRENT_SCORING_RULES_VERSION) {
-    normalized.defense = {
-      ...defaultScoringRules.defense,
-      goal: { ...defaultScoringRules.defense.goal },
-      primaryAssist: { ...defaultScoringRules.defense.primaryAssist },
-      secondaryAssist: { ...defaultScoringRules.defense.secondaryAssist },
-    };
-    normalized.defenseToiBaseMultiplier = defaultScoringRules.defenseToiBaseMultiplier;
-    normalized.defenseToiPlusMinusModifier = defaultScoringRules.defenseToiPlusMinusModifier;
-    normalized.defenseToiFloor = defaultScoringRules.defenseToiFloor;
-    normalized.defenseToiCeiling = defaultScoringRules.defenseToiCeiling;
-
-    normalized.goalieGameBase = defaultScoringRules.goalieGameBase;
-    normalized.goalieSave = defaultScoringRules.goalieSave;
-    normalized.goalieWin = defaultScoringRules.goalieWin;
-    normalized.goalieShutout = defaultScoringRules.goalieShutout;
-    normalized.goalieSavePercentageBaseline =
-      defaultScoringRules.goalieSavePercentageBaseline;
-    normalized.goalieSavePercentageBasePoints =
-      defaultScoringRules.goalieSavePercentageBasePoints;
+  /*
+   * Pre-V3 documents are upgraded only to the frozen V3 defense/goalie model.
+   * V3 leagues remain V3 until the guarded preseason V4 migration runs; this
+   * prevents a source deployment from silently changing an active league.
+   */
+  if (typeof version !== 'number' || version < SCORING_RULES_V3_VERSION) {
+    const v3 = scoringRulesForVersion(SCORING_RULES_V3_VERSION);
+    normalized.defense = v3.defense;
+    normalized.defenseToiBaseMultiplier = v3.defenseToiBaseMultiplier;
+    normalized.defenseToiPlusMinusModifier = v3.defenseToiPlusMinusModifier;
+    normalized.defenseToiFloor = v3.defenseToiFloor;
+    normalized.defenseToiCeiling = v3.defenseToiCeiling;
+    normalized.goalieGameBase = v3.goalieGameBase;
+    normalized.goalieSave = v3.goalieSave;
+    normalized.goalieWin = v3.goalieWin;
+    normalized.goalieShutout = v3.goalieShutout;
+    normalized.goalieSavePercentageBaseline = v3.goalieSavePercentageBaseline;
+    normalized.goalieSavePercentageBasePoints = v3.goalieSavePercentageBasePoints;
     normalized.goalieSavePercentagePointsPerPercentagePoint =
-      defaultScoringRules.goalieSavePercentagePointsPerPercentagePoint;
-    normalized.goalieSavePercentageMinimum =
-      defaultScoringRules.goalieSavePercentageMinimum;
-    normalized.goalieSavePercentageMaximum =
-      defaultScoringRules.goalieSavePercentageMaximum;
-    normalized.goalieGameMaximum = defaultScoringRules.goalieGameMaximum;
+      v3.goalieSavePercentagePointsPerPercentagePoint;
+    normalized.goalieSavePercentageMinimum = v3.goalieSavePercentageMinimum;
+    normalized.goalieSavePercentageMaximum = v3.goalieSavePercentageMaximum;
+    normalized.goalieSavePercentageTiers = v3.goalieSavePercentageTiers;
+    normalized.goalieGameMaximum = v3.goalieGameMaximum;
   }
 
   return normalized;
@@ -1818,9 +1818,10 @@ async function getServerLeague(leagueId: string): Promise<ServerLeague | null> {
         : '',
     scoringRules: normalizeScoringRules(data['scoringRules'], data['scoringRulesVersion']),
     scoringRulesVersion:
-      typeof data['scoringRulesVersion'] === 'number'
+      typeof data['scoringRulesVersion'] === 'number' &&
+      data['scoringRulesVersion'] >= CURRENT_SCORING_RULES_VERSION
         ? data['scoringRulesVersion']
-        : 0,
+        : SCORING_RULES_V3_VERSION,
   };
 }
 

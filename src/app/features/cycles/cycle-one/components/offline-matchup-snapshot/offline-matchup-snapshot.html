@@ -1,0 +1,162 @@
+<section class="offline-matchup rr-page-shell" aria-labelledby="offline-matchup-title">
+  <header class="offline-matchup-header rr-card rr-card--padded">
+    <div class="offline-matchup-badges" aria-label="Saved matchup status">
+      <span class="rr-badge rr-badge--warning">Saved matchup</span>
+      <span class="rr-badge">Read only</span>
+      @if (snapshot().matchupStatus === 'complete') {
+        <span class="rr-badge">Final</span>
+      }
+    </div>
+
+    <div class="offline-matchup-title-row">
+      <div>
+        <span class="offline-matchup-eyebrow">{{ snapshot().leagueName }}</span>
+        <h1 id="offline-matchup-title">{{ snapshot().cycleLabel }}</h1>
+        <p>{{ snapshot().matchupLabel }}</p>
+      </div>
+
+      <div class="offline-matchup-time">
+        <strong>{{ ageLabel() }}</strong>
+        <time [attr.datetime]="snapshot().savedAt">{{ fullSavedAtLabel() }}</time>
+      </div>
+    </div>
+
+    <div class="offline-matchup-context">
+      <span>{{ statusLabel() }}</span>
+      <span>{{ snapshot().readinessLabel }}</span>
+      <span>{{ snapshot().finishLabel }}</span>
+    </div>
+
+    <p class="offline-matchup-warning rr-notice rr-notice--warning" role="status">
+      @if (fallbackReason() === 'live-unavailable') {
+        Live matchup data could not load, so RinkRat opened the last saved copy on this device.
+      } @else {
+        You are offline. This is the last saved copy on this device.
+      }
+      Reconnect for current scores. No Draft, roster, waiver, commissioner, or testing action was queued.
+    </p>
+
+    @if (browserOnline()) {
+      <button
+        class="offline-matchup-reload rr-button rr-button--primary"
+        type="button"
+        (click)="reloadLiveMatchup()"
+      >
+        Reload live matchup
+      </button>
+    }
+  </header>
+
+  <section class="offline-matchup-scoreboard rr-card rr-card--padded" aria-label="Saved matchup score">
+    @for (team of teams(); track team.teamName; let teamIndex = $index) {
+      @if (teamIndex > 0) {
+        <span class="offline-matchup-versus" aria-hidden="true">vs</span>
+      }
+
+      <article
+        class="offline-matchup-team-score"
+        [class.offline-matchup-team-score-mine]="team.viewerTeam"
+      >
+        <div>
+          <span class="offline-matchup-team-label">
+            {{ team.viewerTeam ? 'Your team' : 'Opponent' }}
+          </span>
+          <h2>{{ team.teamName }}</h2>
+          <small>{{ team.record }}</small>
+        </div>
+
+        <div class="offline-matchup-score-pair">
+          <strong>{{ points(team.currentScore) }}</strong>
+          <span>{{ team.resultLabel || statusLabel() }}</span>
+          <small>Proj {{ points(team.projectedScore) }}</small>
+        </div>
+
+        <div
+          class="offline-matchup-progress rr-progress"
+          role="progressbar"
+          [attr.aria-label]="team.teamName + ' saved roster-game progress'"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="team.gamesTotal"
+          [attr.aria-valuenow]="team.gamesPlayed"
+        >
+          <span class="rr-progress__value" [style.width.%]="teamProgressPercent(team)"></span>
+        </div>
+
+        <small class="offline-matchup-progress-label">
+          {{ team.gamesPlayed }} of {{ team.gamesTotal }} roster games played
+        </small>
+      </article>
+    } @empty {
+      <p>Saved score unavailable.</p>
+    }
+  </section>
+
+  <section class="offline-matchup-lineups" aria-label="Saved matchup lineups">
+    @for (team of teams(); track team.teamName; let teamIndex = $index) {
+      <details class="offline-matchup-lineup rr-card" [open]="team.viewerTeam">
+        <summary>
+          <span>
+            <strong>{{ team.teamName }}</strong>
+            <small>Saved starters</small>
+          </span>
+          <span aria-hidden="true">⌄</span>
+        </summary>
+
+        <div class="offline-matchup-groups">
+          @for (group of groupsForTeam(teamIndex); track group.label) {
+            <section class="offline-matchup-group" [attr.aria-label]="group.label">
+              <h3>{{ group.label }}</h3>
+
+              <div class="offline-matchup-player-list">
+                @for (player of group.players; track player.playerName + player.position) {
+                  <article class="offline-matchup-player rr-data-panel">
+                    <div class="offline-matchup-player-identity">
+                      <strong>{{ player.playerName }}</strong>
+                      <span>
+                        {{ player.teamLabel }} · {{ player.position }}
+                        @if (player.availabilityLabel) {
+                          · {{ player.availabilityLabel }}
+                        }
+                      </span>
+                    </div>
+
+                    <div class="offline-matchup-player-points">
+                      <div>
+                        <strong>{{ points(player.currentPoints) }}</strong>
+                        <span>Cur</span>
+                      </div>
+                      <div>
+                        <strong>{{ points(player.projectedPoints) }}</strong>
+                        <span>Proj</span>
+                      </div>
+                    </div>
+
+                    <div class="offline-matchup-markers" aria-label="Saved six-game progress">
+                      @for (marker of player.markers; track marker.index) {
+                        <span
+                          [class.offline-marker-played]="marker.status === 'played'"
+                          [class.offline-marker-missed]="marker.status === 'missed'"
+                          [class.offline-marker-live]="marker.status === 'live'"
+                          [class.offline-marker-upcoming]="marker.status === 'upcoming'"
+                          [class.offline-marker-unavailable]="marker.status === 'unavailable'"
+                          [title]="marker.label"
+                        >
+                          {{ marker.index }}
+                        </span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+        </div>
+      </details>
+    }
+  </section>
+
+  <footer class="offline-matchup-footer">
+    Saved by {{ snapshot().sourceReleaseLabel }} · Scoring V{{ snapshot().sourceScoringVersion }} ·
+    Projection V{{ snapshot().sourceProjectionVersion }}
+  </footer>
+</section>

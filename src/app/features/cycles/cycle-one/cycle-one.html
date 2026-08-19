@@ -1,4 +1,11 @@
-@if (loading()) {
+@if (offlineSnapshot(); as savedMatchup) {
+  <app-offline-matchup-snapshot
+    [snapshot]="savedMatchup"
+    [browserOnline]="browserOnline()"
+    [fallbackReason]="offlineSnapshotReason()"
+    (reloadRequested)="reloadLiveMatchup()"
+  ></app-offline-matchup-snapshot>
+} @else if (loading()) {
   <p class="page-loading">Loading {{ getCycleLabel() }}...</p>
 } @else if (!league()) {
   <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>

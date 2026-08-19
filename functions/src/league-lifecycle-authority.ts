@@ -7,7 +7,9 @@ import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
   defaultScoringRules,
+  scoringRulesForVersion,
 } from './shared/core/scoring/scoring-rules';
 import { createEmptyFantasyRoster } from './shared/core/team/roster.service';
 import {
@@ -1694,6 +1696,21 @@ function buildCanonicalLeagueDocument(input: {
       ? getOptionalString(input.data['joinLockedReason'], 80) ?? 'authority-migration-draft-lock'
       : null;
 
+  /*
+   * Authority-schema repair must never double as a scoring migration. Existing
+   * Scoring V3 leagues remain on the exact frozen V3 contract until the guarded
+   * V4 preseason migration runs. Legacy pre-V3 leagues are normalized only to
+   * V3 so a generic security repair cannot rewrite competition economics.
+   */
+  const storedScoringVersion = getNonNegativeInteger(
+    input.data['scoringRulesVersion'],
+    0,
+  );
+  const scoringRulesVersion = storedScoringVersion >= CURRENT_SCORING_RULES_VERSION
+    ? CURRENT_SCORING_RULES_VERSION
+    : SCORING_RULES_V3_VERSION;
+  const scoringRules = scoringRulesForVersion(scoringRulesVersion);
+
   return {
     id: input.leagueId,
     name: getBoundedDisplayText(input.data['name'], 'RinkRat League', 80),
@@ -1707,9 +1724,9 @@ function buildCanonicalLeagueDocument(input: {
     joinLockedAt,
     joinLockedReason,
     matchupFormat: 'cycle_matchup',
-    requiredGamesPerCycle: defaultScoringRules.requiredGamesPerCycle,
-    scoringRules: defaultScoringRules,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    requiredGamesPerCycle: scoringRules.requiredGamesPerCycle,
+    scoringRules,
+    scoringRulesVersion,
     authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
     documentSchemaVersion: LEAGUE_DOCUMENT_SCHEMA_VERSION,
     createdByAuthority: getOptionalString(input.data['createdByAuthority'], 80) ?? 'migrateLeagueAuthoritySchema',
@@ -2124,8 +2141,8 @@ export const migrateLeagueAuthoritySchema = onCall(
               newValues: {
                 authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
                 documentSchemaVersion: LEAGUE_DOCUMENT_SCHEMA_VERSION,
-                scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
-                requiredGamesPerCycle: defaultScoringRules.requiredGamesPerCycle,
+                scoringRulesVersion: canonicalLeague['scoringRulesVersion'],
+                requiredGamesPerCycle: canonicalLeague['requiredGamesPerCycle'],
                 matchupFormat: 'cycle_matchup',
                 teamCount: ownerIds.length,
                 inviteCode,

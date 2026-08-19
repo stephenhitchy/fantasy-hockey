@@ -14,7 +14,9 @@ import { auth, db } from '../firebase';
 import { functions } from '../firebase-functions';
 import {
   CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
   defaultScoringRules,
+  scoringRulesForVersion,
   ScoringRules,
 } from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
@@ -213,84 +215,76 @@ export interface LeagueSummary {
 
 function normalizeLeagueScoringRules(league: Partial<League>): League {
   const storedRules = league.scoringRules;
+  const base = scoringRulesForVersion(league.scoringRulesVersion);
 
   const normalizedRules: ScoringRules = {
-    ...defaultScoringRules,
+    ...base,
     ...(storedRules ?? {}),
     forward: {
-      ...defaultScoringRules.forward,
+      ...base.forward,
       ...(storedRules?.forward ?? {}),
       goal: {
-        ...defaultScoringRules.forward.goal,
+        ...base.forward.goal,
         ...(storedRules?.forward?.goal ?? {}),
       },
       primaryAssist: {
-        ...defaultScoringRules.forward.primaryAssist,
+        ...base.forward.primaryAssist,
         ...(storedRules?.forward?.primaryAssist ?? {}),
       },
       secondaryAssist: {
-        ...defaultScoringRules.forward.secondaryAssist,
+        ...base.forward.secondaryAssist,
         ...(storedRules?.forward?.secondaryAssist ?? {}),
       },
     },
     defense: {
-      ...defaultScoringRules.defense,
+      ...base.defense,
       ...(storedRules?.defense ?? {}),
       goal: {
-        ...defaultScoringRules.defense.goal,
+        ...base.defense.goal,
         ...(storedRules?.defense?.goal ?? {}),
       },
       primaryAssist: {
-        ...defaultScoringRules.defense.primaryAssist,
+        ...base.defense.primaryAssist,
         ...(storedRules?.defense?.primaryAssist ?? {}),
       },
       secondaryAssist: {
-        ...defaultScoringRules.defense.secondaryAssist,
+        ...base.defense.secondaryAssist,
         ...(storedRules?.defense?.secondaryAssist ?? {}),
       },
     },
+    goalieSavePercentageTiers:
+      Array.isArray(storedRules?.goalieSavePercentageTiers) &&
+      storedRules.goalieSavePercentageTiers.length > 0
+        ? storedRules.goalieSavePercentageTiers
+        : base.goalieSavePercentageTiers,
   };
 
   /*
-   * Scoring V3 preserves the forward identity while giving defensemen a more
-   * dependable floor and replacing goalie save-percentage cliffs with a
-   * continuous scoring-environment-relative quality curve. Upgrade older
-   * league documents in memory so existing leagues and new leagues calculate
-   * points identically without rewriting historical cycle-window data.
+   * Pre-V3 documents continue receiving the frozen V3 defense/goalie upgrade.
+   * V3 leagues are not silently converted to V4 by a browser deployment.
    */
   if (
     typeof league.scoringRulesVersion !== 'number' ||
-    league.scoringRulesVersion < CURRENT_SCORING_RULES_VERSION
+    league.scoringRulesVersion < SCORING_RULES_V3_VERSION
   ) {
-    normalizedRules.defense = {
-      ...defaultScoringRules.defense,
-      goal: { ...defaultScoringRules.defense.goal },
-      primaryAssist: { ...defaultScoringRules.defense.primaryAssist },
-      secondaryAssist: { ...defaultScoringRules.defense.secondaryAssist },
-    };
-    normalizedRules.defenseToiBaseMultiplier = defaultScoringRules.defenseToiBaseMultiplier;
-    normalizedRules.defenseToiPlusMinusModifier = defaultScoringRules.defenseToiPlusMinusModifier;
-    normalizedRules.defenseToiFloor = defaultScoringRules.defenseToiFloor;
-    normalizedRules.defenseToiCeiling = defaultScoringRules.defenseToiCeiling;
-
-    normalizedRules.goalieGameBase = defaultScoringRules.goalieGameBase;
-    normalizedRules.goalieSave = defaultScoringRules.goalieSave;
-    normalizedRules.goalieWin = defaultScoringRules.goalieWin;
-    normalizedRules.goalieShutout = defaultScoringRules.goalieShutout;
-    normalizedRules.goalieSavePercentageBaseline =
-      defaultScoringRules.goalieSavePercentageBaseline;
-    normalizedRules.goalieSavePercentageBasePoints =
-      defaultScoringRules.goalieSavePercentageBasePoints;
+    const v3 = scoringRulesForVersion(SCORING_RULES_V3_VERSION);
+    normalizedRules.defense = v3.defense;
+    normalizedRules.defenseToiBaseMultiplier = v3.defenseToiBaseMultiplier;
+    normalizedRules.defenseToiPlusMinusModifier = v3.defenseToiPlusMinusModifier;
+    normalizedRules.defenseToiFloor = v3.defenseToiFloor;
+    normalizedRules.defenseToiCeiling = v3.defenseToiCeiling;
+    normalizedRules.goalieGameBase = v3.goalieGameBase;
+    normalizedRules.goalieSave = v3.goalieSave;
+    normalizedRules.goalieWin = v3.goalieWin;
+    normalizedRules.goalieShutout = v3.goalieShutout;
+    normalizedRules.goalieSavePercentageBaseline = v3.goalieSavePercentageBaseline;
+    normalizedRules.goalieSavePercentageBasePoints = v3.goalieSavePercentageBasePoints;
     normalizedRules.goalieSavePercentagePointsPerPercentagePoint =
-      defaultScoringRules.goalieSavePercentagePointsPerPercentagePoint;
-    normalizedRules.goalieSavePercentageMinimum =
-      defaultScoringRules.goalieSavePercentageMinimum;
-    normalizedRules.goalieSavePercentageMaximum =
-      defaultScoringRules.goalieSavePercentageMaximum;
-    normalizedRules.goalieSavePercentageTiers = defaultScoringRules.goalieSavePercentageTiers.map(
-      (tier) => ({ ...tier }),
-    );
-    normalizedRules.goalieGameMaximum = defaultScoringRules.goalieGameMaximum;
+      v3.goalieSavePercentagePointsPerPercentagePoint;
+    normalizedRules.goalieSavePercentageMinimum = v3.goalieSavePercentageMinimum;
+    normalizedRules.goalieSavePercentageMaximum = v3.goalieSavePercentageMaximum;
+    normalizedRules.goalieSavePercentageTiers = v3.goalieSavePercentageTiers;
+    normalizedRules.goalieGameMaximum = v3.goalieGameMaximum;
   }
 
   return {
@@ -315,7 +309,11 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
         : undefined,
     matchupFormat: league.matchupFormat ?? 'cycle_matchup',
     scoringRules: normalizedRules,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    scoringRulesVersion:
+      typeof league.scoringRulesVersion === 'number' &&
+      league.scoringRulesVersion >= CURRENT_SCORING_RULES_VERSION
+        ? league.scoringRulesVersion
+        : SCORING_RULES_V3_VERSION,
     authoritySchemaVersion:
       typeof league.authoritySchemaVersion === 'number'
         ? league.authoritySchemaVersion

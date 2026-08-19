@@ -2306,7 +2306,6 @@ function buildGoalieSeasonBreakdown(
   let qualityFantasyPoints = 0;
   let winFantasyPoints = 0;
   let shutoutFantasyPoints = 0;
-  let capAdjustment = 0;
 
   if (games.length > 0) {
     for (const game of games) {
@@ -2332,19 +2331,12 @@ function buildGoalieSeasonBreakdown(
       const gameShutout = game.shutout
         ? defaultScoringRules.goalieShutout
         : 0;
-      const uncapped = gameBase + gameSaves +
-        gameQuality + gameWin + gameShutout;
-      const capped = Math.min(
-        defaultScoringRules.goalieGameMaximum,
-        uncapped
-      );
 
       baseFantasyPoints += gameBase;
       saveFantasyPoints += gameSaves;
       qualityFantasyPoints += gameQuality;
       winFantasyPoints += gameWin;
       shutoutFantasyPoints += gameShutout;
-      capAdjustment += capped - uncapped;
     }
   } else if (stats && (stats.gamesPlayed ?? 0) > 0) {
     gamesPlayed = stats.gamesPlayed ?? 0;
@@ -2368,14 +2360,6 @@ function buildGoalieSeasonBreakdown(
       wins * defaultScoringRules.goalieWin;
     shutoutFantasyPoints =
       shutouts * defaultScoringRules.goalieShutout;
-    const uncapped = baseFantasyPoints +
-      saveFantasyPoints + qualityFantasyPoints +
-      winFantasyPoints + shutoutFantasyPoints;
-    capAdjustment = Math.min(
-      uncapped,
-      gamesPlayed *
-        defaultScoringRules.goalieGameMaximum
-    ) - uncapped;
   }
 
   const items = [
@@ -2417,18 +2401,6 @@ function buildGoalieSeasonBreakdown(
     )
   ];
 
-  if (Math.abs(capAdjustment) >= 0.05) {
-    items.push(
-      createBreakdownItem(
-        'game-cap',
-        'Per-game scoring cap',
-        gamesPlayed,
-        'games checked',
-        capAdjustment,
-        'Negative adjustment applied when an individual goalie game exceeds the league maximum.'
-      )
-    );
-  }
 
   return items.filter((item) =>
     item.statValue > 0 ||
@@ -3052,7 +3024,7 @@ function calculateGoalieRawFantasyPoints(
     stats.gamesPlayed ?? 82
   );
 
-  const uncappedTotal =
+  const total =
     gamesPlayed * defaultScoringRules.goalieGameBase +
     saves * defaultScoringRules.goalieSave +
     wins * defaultScoringRules.goalieWin +
@@ -3063,11 +3035,7 @@ function calculateGoalieRawFantasyPoints(
         defaultScoringRules
       );
 
-  return Math.min(
-    uncappedTotal,
-    gamesPlayed *
-      defaultScoringRules.goalieGameMaximum
-  );
+  return total;
 }
 
 function calculateGoalieGameFantasyPoints(
@@ -3078,7 +3046,7 @@ function calculateGoalieGameFantasyPoints(
       ? game.saves / game.shotsAgainst
       : 0;
 
-  const uncappedPoints =
+  const total =
     defaultScoringRules.goalieGameBase +
     game.saves * defaultScoringRules.goalieSave +
     (game.won ? defaultScoringRules.goalieWin : 0) +
@@ -3090,10 +3058,7 @@ function calculateGoalieGameFantasyPoints(
       defaultScoringRules
     );
 
-  return Math.min(
-    defaultScoringRules.goalieGameMaximum,
-    uncappedPoints
-  );
+  return total;
 }
 
 function calculateGoalieFantasyPointsFromGames(
@@ -4333,12 +4298,10 @@ function calculateGoalieUnitProjection(input: {
         )
       : 0;
 
-  const draftProjectedCyclePoints = clamp(
-    draftBaselineCyclePoints +
-      draftRecentTrendAdjustment,
+  const draftProjectedCyclePoints = Math.max(
     0,
-    defaultScoringRules.goalieGameMaximum *
-      defaultScoringRules.requiredGamesPerCycle
+    draftBaselineCyclePoints +
+      draftRecentTrendAdjustment
   );
 
   const draftProjectedSeasonPoints =
@@ -4379,11 +4342,9 @@ function calculateGoalieUnitProjection(input: {
     preScheduleCyclePoints *
     (input.scheduleContext.multiplier - 1);
 
-  const projectedCyclePoints = clamp(
-    preScheduleCyclePoints + scheduleStrengthAdjustment,
+  const projectedCyclePoints = Math.max(
     0,
-    defaultScoringRules.goalieGameMaximum *
-      defaultScoringRules.requiredGamesPerCycle
+    preScheduleCyclePoints + scheduleStrengthAdjustment
   );
 
   const baseReliability =
@@ -5137,7 +5098,7 @@ export async function loadDraftPlayerPool(
         seasonStatBreakdown,
         seasonStatBreakdownNote:
           currentGames.length > 0
-            ? 'Goalie-unit points are rebuilt game by game, including save quality and any per-game cap adjustment.'
+            ? 'Goalie-unit points are rebuilt game by game using uncapped Production Scoring V4 save quality, wins, and shutouts.'
             : currentStats && (currentStats.gamesPlayed ?? 0) > 0
               ? 'Goalie-unit points are estimated from current-season aggregate NHL statistics because game-by-game rows were unavailable.'
               : null,

@@ -142,9 +142,9 @@
         </article>
 
         <article>
-          <span>Goalie Cap Hit Rate</span>
+          <span>Legacy V3 Cap Rate</span>
           <strong>{{ result.goalieCapHitPercent.toFixed(2) }}%</strong>
-          <small>{{ result.goalieCapHitCount }} of {{ result.goalieGameCount }} team-goalie games</small>
+          <small>{{ result.goalieCapHitCount }} of {{ result.goalieGameCount }} games V3 would have clipped</small>
         </article>
 
         <article>
@@ -267,12 +267,12 @@
                 <th>Goalie Median</th>
                 <th>Goalie Share</th>
                 <th>Starter Advantage</th>
-                <th>Goalie Cap Hits</th>
+                <th>Cap-Adjusted Games</th>
               </tr>
             </thead>
             <tbody>
               @for (candidate of result.candidateSummaries; track candidate.id) {
-                <tr [class.current-rule-row]="candidate.id === 'current-v3'">
+                <tr [class.current-rule-row]="candidate.id === 'current-v4'">
                   <th scope="row">
                     <strong>{{ candidate.label }}</strong>
                     <small>{{ candidate.description }}</small>

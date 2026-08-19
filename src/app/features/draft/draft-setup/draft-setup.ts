@@ -451,6 +451,7 @@ export class DraftSetup implements OnDestroy {
             isSharedProjectionSnapshotFreshForDraft(existingMetadata, {
               teamCount: projectionInput.teamCount,
               requiredGamesPerCycle: projectionInput.requiredGamesPerCycle,
+              scoringRulesVersion: this.league()?.scoringRulesVersion,
               now: new Date(),
             })
           ) {

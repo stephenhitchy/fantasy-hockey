@@ -23,15 +23,16 @@ import {
 import {
   CURRENT_SCORING_RULES_VERSION,
   defaultScoringRules,
+  scoringRulesV3,
   ScoringRules,
 } from './scoring-rules';
 
 export type CalibrationPosition = DraftPosition;
 export type CalibrationAssistMode = 'estimated' | 'exact' | 'hybrid';
 export type CalibrationCandidateId =
-  | 'current-v3'
-  | 'star-separation'
-  | 'lower-goalie-ceiling';
+  | 'current-v4'
+  | 'legacy-v3'
+  | 'star-separation';
 
 export interface HistoricalCalibrationProgress {
   stage:
@@ -425,17 +426,21 @@ function createCandidateRuleSets(): CandidateRuleSet[] {
   starSeparation.forward.blockedShot *= 0.94;
   starSeparation.forwardToiMultiplier *= 0.94;
 
-  const lowerGoalieCeiling = cloneRules(defaultScoringRules);
-  lowerGoalieCeiling.goalieGameMaximum = 26;
-  lowerGoalieCeiling.goalieSave = 0.25;
-  lowerGoalieCeiling.goalieWin = 3.25;
+  const legacyV3 = cloneRules(scoringRulesV3);
 
   return [
     {
-      id: 'current-v3',
-      label: 'Current V3',
-      description: 'The production scoring rules currently used by RinkRat.',
+      id: 'current-v4',
+      label: 'Production V4',
+      description: 'Uncapped goalie scoring with a wider efficiency curve, stronger win/shutout rewards, and skater scoring unchanged.',
       rules: currentRules,
+    },
+    {
+      id: 'legacy-v3',
+      label: 'Legacy V3',
+      description:
+        'The former 28-point goalie cap and more compressed participation/save model, retained for before-and-after calibration.',
+      rules: legacyV3,
     },
     {
       id: 'star-separation',
@@ -443,13 +448,6 @@ function createCandidateRuleSets(): CandidateRuleSet[] {
       description:
         'Raises forward goals and primary assists by 8% while trimming repeatable floor categories by 6%.',
       rules: starSeparation,
-    },
-    {
-      id: 'lower-goalie-ceiling',
-      label: 'Lower Goalie Ceiling',
-      description:
-        'Keeps skater scoring unchanged while lowering the goalie game cap, saves, and win value slightly.',
-      rules: lowerGoalieCeiling,
     },
   ];
 }
@@ -972,7 +970,7 @@ function buildCalibrationWindows(input: {
               won: game.won,
               shutout: game.shutout,
             },
-            defaultScoringRules,
+            scoringRulesV3,
           );
 
           if (breakdown.lines.some((line) => line.label.startsWith('Goalie Game Maximum'))) {
@@ -1083,7 +1081,7 @@ function buildAssetSummaries(
         round(average(rows.map((row) => row.pointsByCandidate[candidate.id])), 2),
       ]),
     ) as Record<CalibrationCandidateId, number>,
-    currentWindowPoints: rows.map((row) => row.pointsByCandidate['current-v3']),
+    currentWindowPoints: rows.map((row) => row.pointsByCandidate['current-v4']),
   }));
 }
 
@@ -1094,23 +1092,23 @@ function getPositionSummary(input: {
   leagueTeamCount: number;
 }): HistoricalCalibrationPositionSummary {
   const positionWindows = input.windows.filter((window) => window.position === input.position);
-  const points = positionWindows.map((window) => window.pointsByCandidate['current-v3']);
+  const points = positionWindows.map((window) => window.pointsByCandidate['current-v4']);
   const assets = input.assetSummaries
     .filter((asset) => asset.position === input.position)
     .sort(
       (first, second) =>
-        second.averageByCandidate['current-v3'] - first.averageByCandidate['current-v3'],
+        second.averageByCandidate['current-v4'] - first.averageByCandidate['current-v4'],
     );
   const starterSlots = input.leagueTeamCount * POSITION_REQUIREMENTS[input.position];
   const starters = assets.slice(0, starterSlots);
   const replacementAsset = assets[Math.max(0, starterSlots - 1)];
   const replacementPool = assets.slice(starterSlots, starterSlots + input.leagueTeamCount);
-  const replacementThreshold = replacementAsset?.averageByCandidate['current-v3'] ?? 0;
+  const replacementThreshold = replacementAsset?.averageByCandidate['current-v4'] ?? 0;
   const replacementAverage = replacementPool.length > 0
-    ? average(replacementPool.map((asset) => asset.averageByCandidate['current-v3']))
+    ? average(replacementPool.map((asset) => asset.averageByCandidate['current-v4']))
     : replacementThreshold;
   const starterAverage = average(
-    starters.map((asset) => asset.averageByCandidate['current-v3']),
+    starters.map((asset) => asset.averageByCandidate['current-v4']),
   );
   const assetVolatility = assets.map((asset) => standardDeviation(asset.currentWindowPoints));
   const mean = average(points);
@@ -1257,13 +1255,13 @@ function getDefenseVsComparableForwardGap(
     .filter((asset) => asset.position === 'D')
     .sort(
       (first, second) =>
-        second.averageByCandidate['current-v3'] - first.averageByCandidate['current-v3'],
+        second.averageByCandidate['current-v4'] - first.averageByCandidate['current-v4'],
     );
   const forwards = assetSummaries
     .filter((asset) => ['LW', 'C', 'RW'].includes(asset.position))
     .sort(
       (first, second) =>
-        second.averageByCandidate['current-v3'] - first.averageByCandidate['current-v3'],
+        second.averageByCandidate['current-v4'] - first.averageByCandidate['current-v4'],
     );
   const comparisonCount = Math.min(40, defense.length, forwards.length);
 
@@ -1277,8 +1275,8 @@ function getDefenseVsComparableForwardGap(
     const defensePercentile = comparisonCount <= 1 ? 0 : index / (comparisonCount - 1);
     const forwardIndex = Math.round(defensePercentile * Math.max(0, forwards.length - 1));
     gaps.push(
-      defense[index].averageByCandidate['current-v3'] -
-        forwards[forwardIndex].averageByCandidate['current-v3'],
+      defense[index].averageByCandidate['current-v4'] -
+        forwards[forwardIndex].averageByCandidate['current-v4'],
     );
   }
 
@@ -1353,7 +1351,7 @@ function buildDraftComparison(
     .filter((entry) => Number.isFinite(entry.value));
   const actualRankValues = assetSummaries.map((asset) => ({
     key: asset.assetKey,
-    value: asset.averageByCandidate['current-v3'],
+    value: asset.averageByCandidate['current-v4'],
   }));
   const projectionRanks = rank(projectionRankValues);
   const actualRanks = rank(actualRankValues);
@@ -1404,9 +1402,11 @@ function buildFindings(input: {
   });
 
   findings.push({
-    level: input.goalieCapHitPercent <= 8 ? 'good' : input.goalieCapHitPercent <= 15 ? 'watch' : 'review',
-    title: 'Goalie per-game cap',
-    detail: `The current goalie cap was reached in ${round(input.goalieCapHitPercent, 2)}% of recorded team-goalie games.`,
+    level: 'good',
+    title: 'Legacy goalie-cap removal',
+    detail: input.goalieCapHitPercent === 0
+      ? 'The recorded season did not contain a team-goalie game that would have crossed the legacy V3 maximum.'
+      : `Legacy Scoring V3 would have clipped ${round(input.goalieCapHitPercent, 2)}% of recorded team-goalie games. Production V4 preserves those exceptional totals.`,
   });
 
   findings.push({
@@ -1573,13 +1573,13 @@ export async function runHistoricalScoringCalibration(
   const modeledGoalieSharePercent = getModeledGoalieShare(
     assetSummaries,
     leagueTeamCount,
-    'current-v3',
+    'current-v4',
   );
   const forwardWindows = windows.filter((window) =>
     ['LW', 'C', 'RW'].includes(window.position),
   );
   const exceptionalForwardWindowCount = forwardWindows.filter(
-    (window) => window.pointsByCandidate['current-v3'] >= EXCEPTIONAL_FORWARD_THRESHOLD,
+    (window) => window.pointsByCandidate['current-v4'] >= EXCEPTIONAL_FORWARD_THRESHOLD,
   ).length;
   const exceptionalForwardWindowPercent = forwardWindows.length > 0
     ? (exceptionalForwardWindowCount / forwardWindows.length) * 100

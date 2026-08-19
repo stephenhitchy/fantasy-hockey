@@ -17,6 +17,10 @@ import {
   FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
+} from './shared/core/scoring/scoring-rules';
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
@@ -35,6 +39,7 @@ import {
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
 
 const FUNCTION_REGION = 'us-central1';
@@ -182,8 +187,15 @@ function requireProjectionIntegrityReason(value: unknown): string {
   return reason;
 }
 
+function normalizeLeagueScoringRulesVersion(value: unknown): number {
+  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
+    ? CURRENT_SCORING_RULES_VERSION
+    : SCORING_RULES_V3_VERSION;
+}
+
 function isIntegrityVerifiedSnapshot(
   snapshot: SharedProjectionSnapshot | null,
+  expectedScoringRulesVersion: number,
 ): snapshot is SharedProjectionSnapshot {
   const metadata = snapshot?.metadata;
 
@@ -192,10 +204,16 @@ function isIntegrityVerifiedSnapshot(
     snapshot.assets.length > 0 &&
     metadata?.status === 'ready' &&
     metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.scoringRulesVersion === expectedScoringRulesVersion &&
     metadata.generatedByAuthority === 'server' &&
     metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
     metadata.catalogValidationStatus === 'validated' &&
-    metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+    (
+      metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+      (expectedScoringRulesVersion === SCORING_RULES_V3_VERSION &&
+        metadata.snapshotHashSchemaVersion ===
+          PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION)
+    ) &&
     metadata.snapshotHashAlgorithm === PROJECTION_SNAPSHOT_HASH_ALGORITHM &&
     metadata.snapshotIntegrityStatus === 'verified' &&
     isProjectionSha256(metadata.catalogHash) &&
@@ -435,6 +453,7 @@ function isReusableProjectionPointer(
   if (
     data['status'] !== 'ready' ||
     data['projectionVersion'] !== SHARED_PROJECTION_VERSION ||
+    data['scoringRulesVersion'] !== CURRENT_SCORING_RULES_VERSION ||
     data['generatedByAuthority'] !== 'server' ||
     data['authoritySchemaVersion'] !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     data['catalogValidationStatus'] !== 'validated' ||
@@ -824,6 +843,9 @@ export const manageProjectionSnapshotIntegrity = onCall(
       throw new HttpsError('not-found', 'That league no longer exists.');
     }
 
+    const expectedScoringRulesVersion = normalizeLeagueScoringRulesVersion(
+      leagueSnapshot.data()?.['scoringRulesVersion'],
+    );
     const currentPointer = currentPointerSnapshot.data() ?? {};
     const currentSnapshotId = asString(currentPointer['activeSnapshotId']);
     let selectedSnapshotId = currentSnapshotId;
@@ -857,6 +879,8 @@ export const manageProjectionSnapshotIntegrity = onCall(
           id !== currentSnapshotId &&
           data['status'] === 'ready' &&
           data['projectionVersion'] === SHARED_PROJECTION_VERSION &&
+          normalizeLeagueScoringRulesVersion(data['scoringRulesVersion']) ===
+            expectedScoringRulesVersion &&
           data['generationReason'] !== 'server-emergency' &&
           data['generatedByAuthority'] === 'server' &&
           data['catalogValidationStatus'] === 'validated' &&
@@ -897,7 +921,7 @@ export const manageProjectionSnapshotIntegrity = onCall(
       );
     }
 
-    if (!isIntegrityVerifiedSnapshot(snapshot)) {
+    if (!isIntegrityVerifiedSnapshot(snapshot, expectedScoringRulesVersion)) {
       try {
         const sealed = await sealSharedProjectionSnapshotIntegrity(leagueId, selectedSnapshotId);
         snapshot = sealed.snapshot;
@@ -914,7 +938,7 @@ export const manageProjectionSnapshotIntegrity = onCall(
       alreadySealed = true;
     }
 
-    if (!isIntegrityVerifiedSnapshot(snapshot)) {
+    if (!isIntegrityVerifiedSnapshot(snapshot, expectedScoringRulesVersion)) {
       throw new HttpsError(
         'data-loss',
         'The projection snapshot did not pass its final server hash verification.',

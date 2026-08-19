@@ -33,7 +33,12 @@ import {
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
+import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V3_VERSION,
+} from './shared/core/scoring/scoring-rules';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
@@ -337,8 +342,22 @@ interface VerifiedDraftProjectionSnapshot extends SharedProjectionSnapshot {
   metadata: VerifiedDraftProjectionMetadata;
 }
 
+function normalizeLeagueScoringRulesVersion(value: unknown): number {
+  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
+    ? CURRENT_SCORING_RULES_VERSION
+    : SCORING_RULES_V3_VERSION;
+}
+
+async function getLeagueScoringRulesVersion(leagueId: string): Promise<number> {
+  const snapshot = await db.doc(`leagues/${leagueId}`).get();
+  return normalizeLeagueScoringRulesVersion(
+    snapshot.exists ? snapshot.data()?.['scoringRulesVersion'] : null,
+  );
+}
+
 function isVerifiedDraftProjection(
   snapshot: SharedProjectionSnapshot | null,
+  expectedScoringRulesVersion: number,
 ): snapshot is VerifiedDraftProjectionSnapshot {
   const metadata = snapshot?.metadata;
 
@@ -347,6 +366,7 @@ function isVerifiedDraftProjection(
     snapshot.assets.length > 0 &&
     metadata?.status === 'ready' &&
     metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.scoringRulesVersion === expectedScoringRulesVersion &&
     metadata.generationReason !== 'server-emergency' &&
     metadata.generatedByAuthority === 'server' &&
     metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
@@ -354,7 +374,12 @@ function isVerifiedDraftProjection(
     typeof metadata.catalogSnapshotId === 'string' &&
     metadata.catalogSnapshotId.length > 0 &&
     isProjectionSha256(metadata.catalogHash) &&
-    metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+    (
+      metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+      (expectedScoringRulesVersion === SCORING_RULES_V3_VERSION &&
+        metadata.snapshotHashSchemaVersion ===
+          PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION)
+    ) &&
     metadata.snapshotHashAlgorithm === PROJECTION_SNAPSHOT_HASH_ALGORITHM &&
     metadata.snapshotIntegrityStatus === 'verified' &&
     isProjectionSha256(metadata.snapshotContentHash) &&
@@ -374,6 +399,7 @@ function hasPositiveProjectionAssetCount(
 async function sealProjectionSnapshotForDraft(
   leagueId: string,
   snapshotId: string,
+  expectedScoringRulesVersion: number,
 ): Promise<SharedProjectionSnapshot | null> {
   const key = `${leagueId}:${snapshotId}`;
   const existing = projectionSealInFlight.get(key);
@@ -383,7 +409,11 @@ async function sealProjectionSnapshotForDraft(
   }
 
   const request = sealSharedProjectionSnapshotIntegrity(leagueId, snapshotId)
-    .then(({ snapshot }) => isVerifiedDraftProjection(snapshot) ? snapshot : null)
+    .then(({ snapshot }) =>
+      isVerifiedDraftProjection(snapshot, expectedScoringRulesVersion)
+        ? snapshot
+        : null,
+    )
     .catch((error: unknown) => {
       console.warn('Unable to seal a legacy Projection V11 snapshot for Draft compatibility.', {
         leagueId,
@@ -436,6 +466,7 @@ async function restoreProjectionPointers(
 async function loadVerifiedProjectionSnapshotById(
   leagueId: string,
   snapshotId: string,
+  expectedScoringRulesVersion: number,
 ): Promise<SharedProjectionSnapshot | null> {
   let snapshot: SharedProjectionSnapshot | null = null;
 
@@ -456,7 +487,7 @@ async function loadVerifiedProjectionSnapshotById(
     return null;
   }
 
-  if (isVerifiedDraftProjection(snapshot)) {
+  if (isVerifiedDraftProjection(snapshot, expectedScoringRulesVersion)) {
     return snapshot;
   }
 
@@ -469,11 +500,16 @@ async function loadVerifiedProjectionSnapshotById(
     return null;
   }
 
-  return sealProjectionSnapshotForDraft(leagueId, snapshotId);
+  return sealProjectionSnapshotForDraft(
+    leagueId,
+    snapshotId,
+    expectedScoringRulesVersion,
+  );
 }
 
 async function loadVerifiedDraftProjectionSnapshot(
   leagueId: string,
+  expectedScoringRulesVersion: number,
 ): Promise<SharedProjectionSnapshot | null> {
   const current = await loadSharedProjectionSnapshot(leagueId).catch((error: unknown) => {
     console.warn('The current projection pointer could not be verified for Draft use.', {
@@ -484,7 +520,7 @@ async function loadVerifiedDraftProjectionSnapshot(
   });
   const previousGenerationReason = current?.metadata.generationReason ?? 'missing';
 
-  if (isVerifiedDraftProjection(current)) {
+  if (isVerifiedDraftProjection(current, expectedScoringRulesVersion)) {
     return current;
   }
 
@@ -492,6 +528,7 @@ async function loadVerifiedDraftProjectionSnapshot(
     const sealedCurrent = await loadVerifiedProjectionSnapshotById(
       leagueId,
       current.metadata.activeSnapshotId,
+      expectedScoringRulesVersion,
     );
 
     if (sealedCurrent) {
@@ -511,6 +548,8 @@ async function loadVerifiedDraftProjectionSnapshot(
     .filter(({ document, data }) =>
       data.status === 'ready' &&
       data.projectionVersion === SHARED_PROJECTION_VERSION &&
+      normalizeLeagueScoringRulesVersion(data.scoringRulesVersion) ===
+        expectedScoringRulesVersion &&
       data.generationReason !== 'server-emergency' &&
       typeof data.activeSnapshotId === 'string' &&
       data.activeSnapshotId === document.id &&
@@ -530,7 +569,11 @@ async function loadVerifiedDraftProjectionSnapshot(
 
   for (const candidate of candidates) {
     const snapshotId = candidate.document.id;
-    const verified = await loadVerifiedProjectionSnapshotById(leagueId, snapshotId);
+    const verified = await loadVerifiedProjectionSnapshotById(
+      leagueId,
+      snapshotId,
+      expectedScoringRulesVersion,
+    );
 
     if (!verified) {
       continue;
@@ -555,6 +598,7 @@ export async function loadProjectionSnapshotForDraft(
   leagueId: string,
   draft: FantasyDraft,
 ): Promise<SharedProjectionSnapshot | null> {
+  const expectedScoringRulesVersion = await getLeagueScoringRulesVersion(leagueId);
   const pinnedSnapshotId = draft.serverDraftProjectionSnapshotId;
   const pinnedSnapshotHash = draft.serverDraftProjectionSnapshotHash;
 
@@ -562,13 +606,17 @@ export async function loadProjectionSnapshotForDraft(
     const cached = getCachedDraftProjection(leagueId, pinnedSnapshotId);
 
     if (
-      isVerifiedDraftProjection(cached) &&
+      isVerifiedDraftProjection(cached, expectedScoringRulesVersion) &&
       (!pinnedSnapshotHash || cached.metadata.snapshotContentHash === pinnedSnapshotHash)
     ) {
       return cached;
     }
 
-    const loaded = await loadVerifiedProjectionSnapshotById(leagueId, pinnedSnapshotId);
+    const loaded = await loadVerifiedProjectionSnapshotById(
+      leagueId,
+      pinnedSnapshotId,
+      expectedScoringRulesVersion,
+    );
 
     if (
       !loaded ||
@@ -600,7 +648,10 @@ export async function loadProjectionSnapshotForDraft(
     return cacheDraftProjection(leagueId, loaded);
   }
 
-  const projection = await loadVerifiedDraftProjectionSnapshot(leagueId);
+  const projection = await loadVerifiedDraftProjectionSnapshot(
+    leagueId,
+    expectedScoringRulesVersion,
+  );
 
   if (projection && draft.status === 'live') {
     await db.doc(`leagues/${leagueId}/draft/current`).set(
@@ -1075,7 +1126,11 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
     return false;
   }
 
-  const projection = await loadVerifiedDraftProjectionSnapshot(leagueId);
+  const expectedScoringRulesVersion = await getLeagueScoringRulesVersion(leagueId);
+  const projection = await loadVerifiedDraftProjectionSnapshot(
+    leagueId,
+    expectedScoringRulesVersion,
+  );
 
   if (!projection) {
     const preparationRequestId = resolveSafeFirestoreDocumentId(
