@@ -445,6 +445,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/draft/historical-replay-player-data.util.ts',
         'src/player-note.ts',
         'src/shared/core/user/player-note.util.ts',
+        // O1B adds isolated platform-admin tester-season planning authority.
+        'src/private-season-authority.ts',
+        'src/shared/core/operations/private-season.util.ts',
       ]),
     ),
     '476753579e580d7d15275d139e327ea2dbebcf742e8531ad37241d5e15cd3d2a',

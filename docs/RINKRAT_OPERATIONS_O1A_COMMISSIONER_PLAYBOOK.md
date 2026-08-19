@@ -1,4 +1,4 @@
-# Operations Batch O1A.1 — Commissioner Playbook
+# Operations Batch O1A.2 — Commissioner Playbook and League-Card Timing
 
 **Runtime release:** Release Candidate 51
 
@@ -143,7 +143,7 @@ The six supported checklist IDs remain unchanged. Unknown local-storage keys sti
 ## Verification
 
 ```bash
-npm run verify:batcho1a
+npm run verify:batcho1a-2
 ```
 
 The O1A verification chain preserves the complete V4A scoring and operational checks, then adds commissioner-readiness, route, access-boundary, mobile-surface, documentation, and release-identity tests.
@@ -175,3 +175,8 @@ Use one pre-Draft tester league and a non-founder commissioner account:
 8. Have the non-founder commissioner explain and rehearse the Draft without Stephen coaching each step.
 
 The eighth step is product evidence, not an automated completion claim.
+
+
+## O1A.2 league-card timing clarification
+
+O1A.2 keeps Release Candidate 51 and replaces the generic League Dashboard matchup status badge with the date the matchup is expected to finalize. The date comes from the latest remaining scheduled starter game across both teams, or the recorded completion time once the matchup is complete.

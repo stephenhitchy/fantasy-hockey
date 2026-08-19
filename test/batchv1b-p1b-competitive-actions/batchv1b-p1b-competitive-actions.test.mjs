@@ -348,6 +348,9 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/draft/historical-replay-player-data.util.ts',
         'src/player-note.ts',
         'src/shared/core/user/player-note.util.ts',
+        // O1B adds isolated platform-admin tester-season planning authority.
+        'src/private-season-authority.ts',
+        'src/shared/core/operations/private-season.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

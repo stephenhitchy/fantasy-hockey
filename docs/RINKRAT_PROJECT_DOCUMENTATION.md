@@ -12523,7 +12523,7 @@ The first RC50 package used `CURRENT_SCORING_RULES_VERSION` while validating the
 
 No runtime scoring, projection, migration, Firestore, six-game-window, rollover, App Check, queue, cache, Rule, index, or TTL behavior changed.
 
-# Operations Batch O1A.1 — Commissioner Playbook
+# Operations Batch O1A.2 — Commissioner Playbook and League-Card Timing
 
 **Runtime release:** Release Candidate 51
 
@@ -12539,14 +12539,20 @@ The public Commissioner Guide contains the six-game rule, setup sequence, printa
 
 O1A adds no Cloud Function, Firestore Rule, index, TTL policy, migration, permanent data record, or competitive write. Production Scoring V4, legacy V3 reconstruction, Projection V11, immutable six-game windows, seventh-game rollover, server authority, App Check Monitor, scoring Shadow, and shared NHL-cache Shadow remain unchanged.
 
-The first O1A package inferred the checklist ID allowlist as a narrow literal-union `Set`, while `Object.entries()` exposes persisted object keys as general strings. Angular strict compilation reported TS2345 at the membership check. O1A.1 declares that membership-only allowlist as `ReadonlySet<string>`, preserving the same six supported IDs and fail-closed runtime behavior.
+The first O1A package inferred the checklist ID allowlist as a narrow literal-union `Set`, while `Object.entries()` exposes persisted object keys as general strings. Angular strict compilation reported TS2345 at the membership check. O1A.1 declares that membership-only allowlist as `ReadonlySet<string>`, preserving the same six supported IDs and fail-closed runtime behavior. O1A.2 then keeps the same RC51 competitive baseline while replacing the generic League Dashboard matchup status badge with a finalization-date label derived from the current matchup timing evidence.
 
 O1.5 remains in progress until RinkRat also has a public demo league or matchup and observed evidence that a non-founder commissioner can create, fill, Draft, and operate a real league without founder-only intervention.
 
 Verification:
 
 ```bash
-npm run verify:batcho1a
+npm run verify:batcho1a-2
 ```
 
 Deployment is Hosting-only. Full operating and proof guidance is maintained in `docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md`.
+
+# Operations Batch O1B — Private Season Control Center
+
+Release Candidate 52 adds a platform-admin, server-owned control center for the 2026–27 tester-season scope. It tracks 2–4 exact leagues with at least six tracked managers each and 10–30 unique privacy-limited aliases, rejects duplicate league IDs or aliases, verifies complete league assignment, required experience/device and non-founder commissioner coverage, reads live team/Draft evidence, freezes the exact RC52 / Scoring V4 / Projection V11 build, records non-goals and support/rollback/deputy readiness, and writes immutable approved/delayed go/no-go audits with a plan hash. It stores no tester email address or phone number and introduces no browser Firestore write, Rule, index, TTL policy, competitive write, App Check promotion, scoring-queue promotion, or NHL-cache promotion.
+
+See `docs/RINKRAT_OPERATIONS_O1B_PRIVATE_SEASON_CONTROL_CENTER.md`.

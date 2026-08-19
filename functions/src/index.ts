@@ -3984,6 +3984,12 @@ export {
   updateBetaFeedbackTriage,
 } from './beta-operations';
 
+export {
+  getPrivateSeasonControlCenter,
+  recordPrivateSeasonGateDecision,
+  updatePrivateSeasonPlan,
+} from './private-season-authority';
+
 export { getSecurityControlReadiness } from './security-authority';
 
 export {

@@ -321,17 +321,17 @@ test('A1I remains browser-only and preserves competitive, security, and data bou
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 51/);
-  assert.match(productionRuntime, /Release Candidate 51/);
+  assert.match(runtime, /Release Candidate 52/);
+  assert.match(productionRuntime, /Release Candidate 52/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1a');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc51-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1b');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc52-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1i:core'], /verify:batcha1h:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1b:core/);
 });
 
 test('A1I documentation completes the home feed while retaining replay latency as work in progress', async () => {
@@ -344,16 +344,16 @@ test('A1I documentation completes the home feed while retaining replay latency a
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.42/);
+  assert.match(roadmap, /Version 1\.43/);
   assert.match(roadmap, /# \[x\] A1\.1 Add a personalized manager home feed/);
   assert.match(roadmap, /\[~\] A1\.16 Reduce historical-replay player-data catch-up latency/);
   assert.match(roadmap, /# \[x\] LOG\.56/);
-  assert.match(readme, /Release Candidate 51 \/ Operations Batch O1A/);
-  assert.match(readme, /npm run verify:batcho1a/);
+  assert.match(readme, /Release Candidate 52 \/ Operations Batch O1B/);
+  assert.match(readme, /npm run verify:batcho1b/);
   assert.match(runbook, /Maximum items: 3/);
   assert.match(runbook, /Maximum items from one league: 1/i);
   assert.match(runbook, /Maximum documents: 12/i);
   assert.match(runbook, /Hosting only/i);
-  assert.match(releaseRunbook, /rinkrat-rc51-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc51-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc52-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc52-invite-beta/);
 });

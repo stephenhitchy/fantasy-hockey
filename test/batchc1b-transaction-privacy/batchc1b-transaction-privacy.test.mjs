@@ -511,20 +511,20 @@ test('RC33 preserves the frozen competitive models, six-game contract, and Shado
   assert.equal(createHash('sha256').update(projectionSource).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(rulesSource).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(indexesSource).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 51/);
-  assert.match(productionRuntime, /Release Candidate 51/);
+  assert.match(runtime, /Release Candidate 52/);
+  assert.match(productionRuntime, /Release Candidate 52/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1a');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1b');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cachePolicy.mode, 'shadow');
   assert.equal(cachePolicy.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1b:core'], /verify:batchc1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1a:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1b:core/);
 });
 
 test('C1B documentation records the staged privacy cutover, rollback unit, and permanent roadmap completion', async () => {
@@ -537,7 +537,7 @@ test('C1B documentation records the staged privacy cutover, rollback unit, and p
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.42/);
+  assert.match(roadmap, /Version 1\.43/);
   assert.match(roadmap, /# \[x\] C1\.14/);
   assert.match(roadmap, /# \[x\] LOG\.33/);
   assert.match(roadmap, /# \[x\] LOG\.34/);
@@ -559,8 +559,8 @@ test('C1B documentation records the staged privacy cutover, rollback unit, and p
   );
   assert.match(runbook, /Your claim is private/);
   assert.match(runbook, /C1B\.1 verification-harness hotfix/);
-  assert.match(readme, /Release Candidate 51 \/ Operations Batch O1A/);
+  assert.match(readme, /Release Candidate 52 \/ Operations Batch O1B/);
   assert.match(readme, /RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY\.md/);
-  assert.match(releaseRunbook, /rinkrat-rc51-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc51-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc52-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc52-invite-beta/);
 });

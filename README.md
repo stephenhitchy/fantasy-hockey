@@ -49,7 +49,7 @@ Core project references:
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 51 / Operations Batch O1A.1**. O1A adds one public Commissioner Guide and one guarded league-specific Commissioner Playbook with readiness checks, invitation and Draft-reminder copy, a device-local Draft-night checklist, direct setup actions, and competition-safe recovery guidance. O1A.1 is a compiler-only hotfix that widens the checklist allowlist for string keys returned by `Object.entries()` without changing checklist behavior or the RC51 release identity.
+The current source runtime is **Release Candidate 52 / Operations Batch O1B**. O1B adds a platform-admin Private Season Control Center for the exact 2026–27 proof cohort: 2–4 verified leagues with at least six tracked managers each, 10–30 unique privacy-limited tester aliases, required experience/device coverage, one non-founder commissioner, exact-build freeze, support/rollback/deputy readiness, live league evidence, revision history, and an immutable approved/delayed go/no-go decision. O1A.2 remains included and shows the expected matchup finalization date on each active League Dashboard card.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -57,7 +57,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1a`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1b`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -119,6 +119,7 @@ verify:batchn1a
 verify:batchn1b
 verify:batchv4a
 verify:batcho1a
+verify:batcho1b
 ```
 
 RinkRat pins:
@@ -138,7 +139,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1a
+npm run verify:batcho1b
 ```
 
 After verification and a clean commit:
@@ -155,10 +156,12 @@ Checklist state is device-local convenience data. Copy tools never send messages
 
 O1A.1 corrects strict Angular compilation for the device-local checklist normalizer by declaring its membership-only allowlist as `ReadonlySet<string>`. The six supported checklist IDs remain the same, unknown keys still fail closed, and no persisted or competitive behavior changes.
 
+O1A.2 improves League Dashboard timing clarity by replacing the generic matchup status badge with the expected finalization date of the current matchup.
+
 Verification:
 
 ```bash
-npm run verify:batcho1a
+npm run verify:batcho1b
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK.md`.

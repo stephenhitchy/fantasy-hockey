@@ -138,6 +138,13 @@
         "FIRESTORE_LEAGUE_ID_OPTIONS",
         "normalizeAppCheckCallableCanaryLeagueIds"
       ]
+    },
+    {
+      "file": "functions/src/private-season-authority.ts",
+      "kind": "Private-season administrator and exact tester-league identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId"
+      ]
     }
   ],
   "forbiddenDirectPathSources": [

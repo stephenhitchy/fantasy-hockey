@@ -1,0 +1,243 @@
+<section class="private-season-page rr-page-shell">
+  <header class="private-season-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Platform Operations · 2026–27</span>
+      <h1>Private Season Control Center</h1>
+      <p>Freeze the exact cohort, verify diverse coverage, and record the go/no-go decision without storing tester contact details.</p>
+    </div>
+    <div class="hero-actions no-print">
+      <a routerLink="/admin" class="rr-button rr-button--secondary">Beta Operations</a>
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh evidence' }}
+      </button>
+      <button type="button" class="rr-button rr-button--secondary" (click)="copySummary()">Copy summary</button>
+      <button type="button" class="rr-button rr-button--secondary" (click)="print()">Print</button>
+    </div>
+  </header>
+
+  <app-admin-session-step-up class="no-print"></app-admin-session-step-up>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="loading-card rr-card rr-card--padded" aria-live="polite">
+      <span class="rr-spinner" aria-hidden="true"></span>
+      <strong>Loading the private-season plan…</strong>
+    </section>
+  } @else if (snapshot(); as data) {
+    <section class="gate-overview rr-card rr-card--padded" [attr.data-status]="data.readiness.status">
+      <div class="gate-heading">
+        <div>
+          <span class="eyebrow">Private-season gate</span>
+          <h2>{{ data.readiness.headline }}</h2>
+          <p>{{ data.build.releaseLabel }} · Scoring V{{ data.build.scoringRulesVersion }} · Projection V{{ data.build.projectionVersion }}</p>
+        </div>
+        <span class="rr-badge" [attr.data-tone]="data.readiness.status">
+          {{ label(data.readiness.status) }}
+        </span>
+      </div>
+
+      <div class="gate-metrics" aria-label="Private-season cohort summary">
+        <article><span>Leagues</span><strong>{{ data.readiness.leagueCount }}</strong><small>{{ data.policy.minimumLeagues }}–{{ data.policy.maximumLeagues }} required</small></article>
+        <article><span>Tester aliases</span><strong>{{ data.readiness.testerCount }}</strong><small>{{ data.policy.minimumTesters }}–{{ data.policy.maximumTesters }} required</small></article>
+        <article><span>Non-founder commissioners</span><strong>{{ data.readiness.nonFounderCommissionerCount }}</strong><small>At least one required</small></article>
+        <article><span>Exact build</span><strong>{{ data.readiness.exactBuildFrozen ? 'Frozen' : 'Open' }}</strong><small>Revision {{ data.plan.revision }}</small></article>
+      </div>
+
+      @if (data.readiness.blockers.length > 0) {
+        <div class="gate-list blockers">
+          <h3>Stop-the-line items</h3>
+          <ul>
+            @for (item of data.readiness.blockers; track item) { <li>{{ item }}</li> }
+          </ul>
+        </div>
+      }
+      @if (data.readiness.advisories.length > 0) {
+        <div class="gate-list advisories">
+          <h3>Advisories</h3>
+          <ul>
+            @for (item of data.readiness.advisories; track item) { <li>{{ item }}</li> }
+          </ul>
+        </div>
+      }
+    </section>
+
+    <section class="control-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div><span class="eyebrow">1 · Scope</span><h2>Exact release and non-goals</h2></div>
+        <span class="privacy-note">No email addresses or phone numbers</span>
+      </header>
+
+      <div class="field-grid">
+        <label class="rr-field">
+          <span>Planning stage</span>
+          <select class="rr-select" [(ngModel)]="draftPlan.status">
+            <option value="planning">Planning</option>
+            <option value="rehearsal">Rehearsal</option>
+            <option value="approved" disabled>Approved · choose Planning or Rehearsal before editing</option>
+            <option value="delayed" disabled>Delayed · choose Planning or Rehearsal before editing</option>
+            <option value="live" disabled>Live season</option>
+            <option value="complete" disabled>Season complete</option>
+          </select>
+        </label>
+        <label class="rr-field">
+          <span>Approved release</span>
+          <input [(ngModel)]="draftPlan.freeze.approvedReleaseLabel" maxlength="80" placeholder="Release Candidate 52" />
+        </label>
+        <label class="rr-field wide-field">
+          <span>Approved build ID</span>
+          <input [(ngModel)]="draftPlan.freeze.approvedBuildId" maxlength="180" placeholder="Exact generated build ID" />
+        </label>
+      </div>
+      <div class="inline-actions no-print">
+        <button type="button" class="rr-button rr-button--secondary" (click)="useCurrentBuild()">Use this exact build</button>
+        <label class="check-row compact-check">
+          <input type="checkbox" [(ngModel)]="draftPlan.freeze.featureFreezeConfirmed" />
+          <span>Noncritical feature freeze confirmed</span>
+        </label>
+      </div>
+      <label class="rr-field">
+        <span>Tester-season non-goals · one per line</span>
+        <textarea class="rr-textarea" rows="4" [ngModel]="nonGoalsText()" (ngModelChange)="updateNonGoals($event)" placeholder="No public paid acquisition&#10;No scoring changes except objective defects"></textarea>
+      </label>
+    </section>
+
+    <section class="control-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div><span class="eyebrow">2 · Leagues</span><h2>Observed tester leagues</h2></div>
+        <button type="button" class="rr-button rr-button--secondary no-print" [disabled]="draftPlan.leagueSlots.length >= data.policy.maximumLeagues" (click)="addLeague()">Add league</button>
+      </header>
+
+      @if (draftPlan.leagueSlots.length === 0) {
+        <p class="empty-state">Add the exact 2–4 leagues intended for the private season.</p>
+      }
+      <div class="league-grid">
+        @for (slot of draftPlan.leagueSlots; track slot.slotId) {
+          <article class="league-plan-card">
+            <div class="card-title-row">
+              <label class="check-row compact-check"><input type="checkbox" [(ngModel)]="slot.active" /><span>Active slot</span></label>
+              <button type="button" class="text-button danger-text no-print" (click)="removeLeague(slot)">Remove</button>
+            </div>
+            <label class="rr-field"><span>Internal label</span><input [(ngModel)]="slot.label" maxlength="60" /></label>
+            <label class="rr-field"><span>Exact league ID</span><input [(ngModel)]="slot.leagueId" maxlength="128" placeholder="Paste the production league ID" /></label>
+            <label class="rr-field"><span>Expected managers</span><input type="number" [min]="data.policy.minimumManagersPerLeague" max="12" [(ngModel)]="slot.expectedManagerCount" /></label>
+            <label class="check-row"><input type="checkbox" [(ngModel)]="slot.draftRehearsalComplete" /><span>Full mixed-device Draft rehearsal completed</span></label>
+
+            @if (liveEvidence(slot.slotId); as evidence) {
+              <dl class="live-evidence" [attr.data-found]="evidence.exists">
+                <div><dt>Live league</dt><dd>{{ evidence.exists ? evidence.name : 'Not verified' }}</dd></div>
+                <div><dt>Managers</dt><dd>{{ evidence.teamCount }} / {{ slot.expectedManagerCount }}</dd></div>
+                <div><dt>Draft</dt><dd>{{ label(evidence.draftStatus) }}</dd></div>
+                <div><dt>Draft order</dt><dd>{{ evidence.draftOrderCount }}</dd></div>
+              </dl>
+            }
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="control-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div><span class="eyebrow">3 · Tester matrix</span><h2>Diverse coverage</h2><p>Use nicknames or initials only. Keep actual contact details outside RinkRat.</p></div>
+        <button type="button" class="rr-button rr-button--secondary no-print" [disabled]="draftPlan.testers.length >= data.policy.maximumTesters" (click)="addTester()">Add tester</button>
+      </header>
+
+      <div class="coverage-strip">
+        @for (option of experienceOptions; track option.value) {
+          <span [class.covered]="data.readiness.experienceCoverage[option.value]">{{ option.label }}</span>
+        }
+        @for (option of deviceOptions; track option.value) {
+          <span [class.covered]="data.readiness.deviceCoverage[option.value]">{{ option.label }}</span>
+        }
+      </div>
+
+      @if (draftPlan.testers.length === 0) {
+        <p class="empty-state">Add 10–30 privacy-limited tester aliases and assign each person to a league.</p>
+      }
+      <div class="tester-list">
+        @for (tester of draftPlan.testers; track tester.testerId; let index = $index) {
+          <article class="tester-card">
+            <div class="card-title-row"><strong>Tester {{ index + 1 }}</strong><button type="button" class="text-button danger-text no-print" (click)="removeTester(tester)">Remove</button></div>
+            <div class="field-grid tester-fields">
+              <label class="rr-field"><span>Alias</span><input [(ngModel)]="tester.alias" maxlength="40" /></label>
+              <fieldset class="tester-league-assignments">
+                <legend>League assignments</legend>
+                @for (slot of draftPlan.leagueSlots; track slot.slotId) {
+                  @if (slot.active) {
+                    <label class="check-row compact-check">
+                      <input
+                        type="checkbox"
+                        [checked]="leagueAssigned(tester, slot.slotId)"
+                        (change)="setLeagueAssignment(tester, slot.slotId, $any($event.target).checked)"
+                      />
+                      <span>{{ slot.label }}</span>
+                    </label>
+                  }
+                }
+              </fieldset>
+              <label class="rr-field"><span>Role</span><select class="rr-select" [(ngModel)]="tester.role"><option value="manager">Manager</option><option value="commissioner">Commissioner</option></select></label>
+              <label class="rr-field"><span>Experience</span><select class="rr-select" [(ngModel)]="tester.experience">@for (option of experienceOptions; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+            </div>
+            <div class="device-row" aria-label="Tester devices">
+              @for (device of deviceOptions; track device.value) {
+                <label class="check-row compact-check"><input type="checkbox" [checked]="deviceChecked(tester, device.value)" (change)="setDevice(tester, device.value, $any($event.target).checked)" /><span>{{ device.label }}</span></label>
+              }
+            </div>
+            <div class="tester-checks">
+              <label class="check-row"><input type="checkbox" [(ngModel)]="tester.isFounder" /><span>Founder</span></label>
+              <label class="check-row"><input type="checkbox" [(ngModel)]="tester.contactConfirmed" /><span>Contact path confirmed</span></label>
+              <label class="check-row"><input type="checkbox" [(ngModel)]="tester.consentConfirmed" /><span>Beta consent confirmed</span></label>
+              <label class="check-row"><input type="checkbox" [(ngModel)]="tester.accountReady" /><span>Account ready</span></label>
+              <label class="check-row"><input type="checkbox" [(ngModel)]="tester.draftRehearsalComplete" /><span>Draft rehearsal completed</span></label>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="control-section rr-card rr-card--padded">
+      <header class="section-heading"><div><span class="eyebrow">4 · Operations</span><h2>Support and rollback readiness</h2></div></header>
+      <div class="field-grid">
+        <label class="rr-field"><span>Primary owner</span><input [(ngModel)]="draftPlan.support.primaryOwner" maxlength="60" /></label>
+        <label class="rr-field"><span>Deputy communicator alias</span><input [(ngModel)]="draftPlan.support.deputyAlias" maxlength="60" /></label>
+      </div>
+      <div class="operations-checks">
+        <label class="check-row"><input type="checkbox" [(ngModel)]="draftPlan.support.supportChannelReady" /><span>Tester support channel is ready</span></label>
+        <label class="check-row"><input type="checkbox" [(ngModel)]="draftPlan.support.knownIssuesReady" /><span>Known Issues path is confirmed</span></label>
+        <label class="check-row"><input type="checkbox" [(ngModel)]="draftPlan.support.rollbackRehearsed" /><span>Exact-release rollback rehearsal passed</span></label>
+        <label class="check-row"><input type="checkbox" [(ngModel)]="draftPlan.support.deputyConfirmed" /><span>Deputy accepted the communication role</span></label>
+        <label class="check-row"><input type="checkbox" [(ngModel)]="draftPlan.support.coverageConfirmed" /><span>Draft-week and first-week coverage is scheduled</span></label>
+      </div>
+    </section>
+
+    <section class="control-section save-section rr-card rr-card--padded no-print">
+      <header class="section-heading"><div><span class="eyebrow">5 · Save</span><h2>Audit this plan revision</h2></div></header>
+      <label class="rr-field"><span>Change reason</span><textarea class="rr-textarea" rows="3" maxlength="600" [(ngModel)]="saveReason" placeholder="Describe what changed and why."></textarea></label>
+      <button type="button" class="rr-button rr-button--primary" [disabled]="saving() || saveReason.trim().length < data.policy.decisionReasonMinimumLength" (click)="savePlan()">{{ saving() ? 'Saving…' : 'Save and audit plan' }}</button>
+    </section>
+
+    <section class="control-section decision-section rr-card rr-card--raised rr-card--padded">
+      <header class="section-heading"><div><span class="eyebrow">Formal gate</span><h2>Record the go/no-go decision</h2><p>Approval is blocked until every stop-the-line item is green for this exact build.</p></div></header>
+      @if (data.plan.latestDecision; as decision) {
+        <div class="latest-decision" [attr.data-outcome]="decision.outcome">
+          <strong>{{ label(decision.outcome) }} · revision {{ decision.planRevision }}</strong>
+          <span>{{ formatDate(decision.recordedAt) }}</span>
+          <p>{{ decision.reason }}</p>
+          <code>{{ decision.planHash.slice(0, 16) }}…</code>
+        </div>
+      }
+      <div class="decision-controls no-print">
+        <label class="rr-field"><span>Decision</span><select class="rr-select" [(ngModel)]="decisionOutcome"><option value="approved">Approve private season</option><option value="delayed">Delay private season</option></select></label>
+        <label class="rr-field"><span>Decision reason</span><textarea class="rr-textarea" rows="4" maxlength="600" [(ngModel)]="decisionReason" placeholder="Record the evidence and rationale."></textarea></label>
+        <button type="button" class="rr-button" [class.rr-button--primary]="decisionOutcome === 'approved'" [class.rr-button--danger]="decisionOutcome === 'delayed'" [disabled]="deciding() || decisionReason.trim().length < data.policy.decisionReasonMinimumLength || (decisionOutcome === 'approved' && !data.readiness.readyForApproval)" (click)="recordDecision()">
+          {{ deciding() ? 'Recording…' : decisionOutcome === 'approved' ? 'Approve exact release' : 'Record delay' }}
+        </button>
+      </div>
+    </section>
+  }
+</section>

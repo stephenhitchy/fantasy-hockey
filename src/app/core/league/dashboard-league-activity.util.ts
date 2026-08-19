@@ -65,6 +65,80 @@ function formatScheduledDraft(value: unknown): string {
   }).format(date)}.`;
 }
 
+function formatMonthDay(value: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(value);
+}
+
+function getLatestWindowDate(windows: FantasyTeamCycleWindows | null, pendingOnly: boolean): Date | null {
+  if (!windows) {
+    return null;
+  }
+
+  const candidates = windows.windows
+    .filter((window) => !pendingOnly || window.gamesLeft > 0)
+    .flatMap((window) => [
+      window.lastScheduledGameDate,
+      ...(Array.isArray(window.scheduledGameDates) ? window.scheduledGameDates : []),
+    ])
+    .map((value) => toDate(value))
+    .filter((value): value is Date => value instanceof Date);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates.reduce((latest, candidate) =>
+    candidate.getTime() > latest.getTime() ? candidate : latest,
+  );
+}
+
+function getLatestMatchupDate(
+  matchup: FantasyMatchup,
+  myWindows: FantasyTeamCycleWindows | null,
+  opponentWindows: FantasyTeamCycleWindows | null,
+): Date | null {
+  if (matchup.status === 'complete') {
+    return toDate(matchup.completedAt)
+      ?? getLatestWindowDate(myWindows, false)
+      ?? getLatestWindowDate(opponentWindows, false);
+  }
+
+  const activeDates = [
+    getLatestWindowDate(myWindows, true),
+    getLatestWindowDate(opponentWindows, true),
+  ].filter((value): value is Date => value instanceof Date);
+
+  if (activeDates.length > 0) {
+    return activeDates.reduce((latest, candidate) =>
+      candidate.getTime() > latest.getTime() ? candidate : latest,
+    );
+  }
+
+  return getLatestWindowDate(myWindows, false)
+    ?? getLatestWindowDate(opponentWindows, false)
+    ?? toDate(matchup.updatedAt)
+    ?? null;
+}
+
+function buildMatchupStatusLabel(
+  matchup: FantasyMatchup,
+  myWindows: FantasyTeamCycleWindows | null,
+  opponentWindows: FantasyTeamCycleWindows | null,
+): string {
+  const latestDate = getLatestMatchupDate(matchup, myWindows, opponentWindows);
+
+  if (!latestDate) {
+    return matchup.status === 'complete' ? 'Matchup Complete' : 'Matchup Active';
+  }
+
+  return matchup.status === 'complete'
+    ? `Finalized ${formatMonthDay(latestDate)}`
+    : `Finalizes ${formatMonthDay(latestDate)}`;
+}
+
 function countRosterAttention(roster: FantasyRoster | null): {
   injuredStarterCount: number;
   queuedMoveCount: number;
@@ -295,7 +369,7 @@ export function buildDashboardLeagueActivity(
 
     return {
       stage: complete ? 'matchup-complete' : 'matchup-active',
-      statusLabel: complete ? 'Matchup Complete' : 'Matchup Active',
+      statusLabel: buildMatchupStatusLabel(matchup, input.myWindows, input.opponentWindows),
       tone: complete ? 'success' : 'info',
       headline: opponentOwnerId ? `vs ${opponentTeamName}` : 'Bye matchup',
       detail,

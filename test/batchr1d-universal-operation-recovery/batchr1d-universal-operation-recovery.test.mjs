@@ -400,6 +400,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/draft/historical-replay-player-data.util.ts',
     'player-note.ts',
     'shared/core/user/player-note.util.ts',
+    // O1B adds isolated platform-admin tester-season planning authority.
+    'private-season-authority.ts',
+    'shared/core/operations/private-season.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

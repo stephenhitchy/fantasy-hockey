@@ -121,6 +121,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'admin/private-season',
+        title: 'Private Season Control Center',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/private-season-center/private-season-center').then(
+            (module) => module.PrivateSeasonCenter,
+          ),
+      },
+      {
         path: 'access-denied',
         title: 'Access Denied',
         loadComponent: () =>
