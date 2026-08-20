@@ -630,6 +630,11 @@
               </div>
             </a>
 
+            <a class="rr-action-tile" routerLink="/privacy-center">
+              <span class="pixel-icon icon-shield icon-sm" aria-hidden="true"></span>
+              <div><strong>Privacy Center</strong></div>
+            </a>
+
             <button type="button" class="sign-out-button rr-action-tile" (click)="signOut()">
               <span class="pixel-icon icon-account icon-sm" aria-hidden="true"></span>
               <div><strong>Sign Out</strong></div>
@@ -710,6 +715,7 @@
                     <strong>Deleted completely</strong>
                     <span>Login and account profile</span>
                     <span>Feedback and automatic error reports</span>
+                    <span>Privacy-request text and direct account linkage</span>
                     <span>Injury email queues and settings</span>
                     <span>Saved watchlist, appearance, and Training Camp progress</span>
                   </article>
@@ -718,6 +724,7 @@
                     <strong>Kept anonymously</strong>
                     <span>{{ readiness.anonymizedLeagueCount }} league team record(s)</span>
                     <span>Past scores, draft picks, and standings</span>
+                    <span>Limited pseudonymous privacy-operation audit metadata until expiration</span>
                     <span>Your manager name becomes “Deleted Manager”</span>
                     <span>Your team becomes “Vacant Team”</span>
                   </article>

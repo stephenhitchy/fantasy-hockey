@@ -61,6 +61,18 @@
       "retentionDays": 30,
       "cleanupOwner": "cleanupExpiredSecurityData",
       "purpose": "Best-effort shared NHL response cache with shorter per-route expiration dates"
+    },
+    {
+      "collection": "privacyRequestOperations",
+      "retentionDays": 730,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Pseudonymizable privacy request status, manager-visible responses, and immutable operations evidence"
+    },
+    {
+      "collection": "privacyExportAudits",
+      "retentionDays": 365,
+      "cleanupOwner": "cleanupExpiredSecurityData",
+      "purpose": "Data-export metadata and package hashes without storing the exported package"
     }
   ]
 }

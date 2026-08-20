@@ -90,10 +90,11 @@ test('O1E.2 is included in RC55 verification and the permanent roadmap', async (
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.46\.2/);
+  assert.match(roadmap, /Version 1\.47/);
   assert.match(roadmap, /LOG\.69 2026-08-20 — Completed Operations Batch O1E\.2/);
-  assert.match(readme, /Operations Batch O1E\.2/);
+  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
   assert.match(runbook, /America\/Los_Angeles/);
+  assert.match(packageJson.scripts['verify:batcho1f:core'], /verify:batcho1e:core/);
   assert.match(packageJson.scripts['verify:batcho1e:core'], /test:batcho1e-2:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1e:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
 });

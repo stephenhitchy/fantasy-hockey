@@ -1,0 +1,221 @@
+:host {
+  display: block;
+}
+
+.privacy-center {
+  display: grid;
+  gap: var(--rr-space-5);
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.privacy-hero,
+.panel-heading,
+.privacy-request-card > header,
+.secure-session {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+}
+
+.privacy-hero h1,
+.panel-heading h2,
+.secure-session h2,
+.privacy-request-card h3 {
+  margin: 0;
+}
+
+.privacy-hero p,
+.secure-session p,
+.privacy-panel > p,
+.retention-panel > p {
+  color: var(--rr-color-text-secondary);
+  margin: var(--rr-space-2) 0 0;
+}
+
+.privacy-hero-actions,
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rr-space-2);
+}
+
+.privacy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-4);
+}
+
+.privacy-panel,
+.request-history,
+.retention-panel,
+.secure-session {
+  min-width: 0;
+}
+
+.secure-session {
+  align-items: center;
+}
+
+.secure-session-form {
+  display: flex;
+  align-items: end;
+  gap: var(--rr-space-3);
+  min-width: min(100%, 470px);
+}
+
+.secure-session-form .rr-field {
+  flex: 1;
+}
+
+.privacy-request-form,
+.follow-up-form {
+  display: grid;
+  gap: var(--rr-space-3);
+  margin-top: var(--rr-space-4);
+}
+
+.rr-field {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+.rr-field > span {
+  font-weight: 800;
+}
+
+.rr-field small,
+.privacy-panel small,
+.privacy-request-card small,
+.response-target-note {
+  color: var(--rr-color-text-muted);
+}
+
+.rr-field input,
+.rr-field select,
+.rr-field textarea {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.rr-field textarea {
+  resize: vertical;
+}
+
+.export-history,
+.request-list,
+.retention-list {
+  display: grid;
+  gap: var(--rr-space-3);
+  margin-top: var(--rr-space-4);
+}
+
+.export-history article {
+  display: grid;
+  gap: var(--rr-space-1);
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 72%, transparent);
+}
+
+.export-history article > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+}
+
+.privacy-request-card {
+  display: grid;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-4);
+  border: 1px solid var(--rr-color-border-strong);
+  background: var(--rr-color-surface-raised);
+}
+
+.privacy-request-card[data-status='waiting-for-manager'] {
+  border-color: var(--rr-color-warning);
+}
+
+.privacy-request-card > p,
+.manager-response p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.privacy-request-card details,
+.retention-list details {
+  border-top: 1px solid var(--rr-color-border);
+  padding-top: var(--rr-space-3);
+}
+
+.privacy-request-card summary,
+.retention-list summary {
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.request-timeline {
+  display: grid;
+  gap: var(--rr-space-3);
+  padding-left: var(--rr-space-5);
+}
+
+.request-timeline li {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+.retention-list summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+}
+
+.retention-list summary span {
+  color: var(--rr-color-text-secondary);
+  text-align: right;
+}
+
+.retention-list p {
+  color: var(--rr-color-text-secondary);
+}
+
+.response-target-note {
+  margin-top: var(--rr-space-4);
+}
+
+@media (max-width: 780px) {
+  .privacy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-hero,
+  .panel-heading,
+  .privacy-request-card > header,
+  .secure-session,
+  .secure-session-form,
+  .export-history article > div,
+  .retention-list summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .privacy-hero-actions,
+  .inline-actions {
+    display: grid;
+  }
+
+  .privacy-hero-actions > *,
+  .inline-actions > *,
+  .panel-heading > button,
+  .secure-session-form > button {
+    width: 100%;
+  }
+
+  .retention-list summary span {
+    text-align: left;
+  }
+}

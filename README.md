@@ -49,13 +49,14 @@ Core project references:
 - [`docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`](docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md) — seven server-gated tester milestones, privacy-limited manager responses, administrator coverage and qualitative evidence, targeted deployment, and live-interview boundary.
 - [`docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md`](docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md) — stale Batch 7C.3 audit diagnosis, current Unified Add / Drop design contract, tightened debt budget, GitHub verification repair, and no-deployment boundary.
 - [`docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md`](docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md) — deterministic League Dashboard finalization dates across Pacific, UTC, CI, and production environments, with no competitive-authority change.
+- [`docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`](docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md) — signed-in data export, privacy request lifecycle, platform-admin response operations, scheduled cleanup, and account-deletion pseudonymization.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 55 / Operations Batch O1E.2**. O1B defines the exact 2026–27 proof cohort, O1C measures activation and retention health, O1D provides incident command and public service status, and O1E adds seven server-gated milestone surveys plus one platform-admin research dashboard. Responses use league-specific pseudonymous manager references, bounded free text, exact-build authority, and no raw account ID, email address, or phone number. O1E.1 is a source-only verification hotfix that aligns the repeatable Batch 7C.3 competition audit with the intentional unified Add / Drop and Player Board successor. O1E.2 fixes the League Dashboard finalization-date formatter so NHL calendar dates remain identical in UTC, Pacific, and other host time zones instead of shifting backward by one day.
+The current source runtime is **Release Candidate 56 / Operations Batch O1F**. O1F adds one signed-in Privacy Center for immediate bounded JSON exports including linked diagnostic context and prior export-audit metadata, retention details, and recent-auth privacy requests, plus one platform-administrator request-operations dashboard with separate manager-visible responses and private notes. Export files are prepared on demand and downloaded by the browser; the server retains only audit metadata and a SHA-256 package hash. Privacy-request text and account linkage are pseudonymized through paginated cleanup during permanent account deletion, and expired request audit subcollections are removed recursively, while the approved production TTL field-override count remains unchanged.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -63,7 +64,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1e`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1f`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -130,6 +131,7 @@ verify:batcho1b
 verify:batcho1c
 verify:batcho1d
 verify:batcho1e
+verify:batcho1f
 ```
 
 RinkRat pins:
@@ -143,7 +145,7 @@ Do not automatically follow npm major-version notices. Restore the pinned versio
 
 ## Current verification
 
-The current deployment gate explicitly reruns `audit:competition-design-migration` after the latest O1E tests. GitHub uses the same chain through `npm run security:ci`.
+The current deployment gate retains the corrected competition-design audit and adds privacy authority, retention, account-deletion, route, mobile, and protected-model checks. GitHub uses the same chain through `npm run security:ci`.
 
 
 ```bash
@@ -152,7 +154,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1e
+npm run verify:batcho1f
 ```
 
 After verification and a clean commit:
@@ -160,6 +162,20 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+## Operations Batch O1F — Privacy Center and Request Operations
+
+O1F adds `/privacy-center` for verified managers and `/admin/privacy-requests` for the platform administrator. Managers can download a bounded JSON package, inspect retention, submit and follow up on privacy requests, and retain permanent account deletion in Account Settings. Administrators receive privacy-limited owner references, valid request transitions, separate public/private text, optimistic revision checks, and immutable change records.
+
+The immediate export excludes passwords, tokens, secrets, other managers’ private data, and raw server logs. RinkRat stores export metadata and a SHA-256 package hash, not a server copy of the downloaded package. Request operations expire through the maintained scheduled cleanup fallback; no new Firestore TTL field override is added.
+
+Verification:
+
+```bash
+npm run verify:batcho1f
+```
+
+Full guidance is in `docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`.
 
 ## Operations Batch O1A — Commissioner Playbook
 
@@ -219,6 +235,7 @@ Verification:
 
 ```bash
 npm run verify:batcho1e
+verify:batcho1f
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`.

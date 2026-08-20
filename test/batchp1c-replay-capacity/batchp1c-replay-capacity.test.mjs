@@ -261,6 +261,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // O1E adds isolated tester-research authority.
         'src/private-season-research.ts',
         'src/shared/core/operations/private-season-research.util.ts',
+        // O1F adds isolated privacy-request and export authority.
+        'src/privacy-request-authority.ts',
+        'src/shared/core/privacy/privacy-request.util.ts',
   ]);
 
   assert.equal(

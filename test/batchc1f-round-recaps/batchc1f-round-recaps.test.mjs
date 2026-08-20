@@ -294,20 +294,20 @@ test('C1F remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 55/);
-  assert.match(productionRuntime, /Release Candidate 55/);
+  assert.match(runtime, /Release Candidate 56/);
+  assert.match(productionRuntime, /Release Candidate 56/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1e');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1f:core'], /verify:batchc1e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1e:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
 });
 
 test('C1F documentation and roadmap record the bounded recap and site-first workflow', async () => {
@@ -320,7 +320,7 @@ test('C1F documentation and roadmap record the bounded recap and site-first work
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.46/);
+  assert.match(roadmap, /Version 1\.47/);
   assert.match(roadmap, /# \[x\] C1\.18/);
   assert.match(roadmap, /# \[x\] LOG\.38/);
   assert.match(runbook, /League Wire-era/);
@@ -328,9 +328,9 @@ test('C1F documentation and roadmap record the bounded recap and site-first work
   assert.match(runbook, /functions:publishLeagueRoundRecapActivity/);
   assert.match(runbook, /Do not deploy Rules, indexes, TTL/);
   assert.match(runbook, /Site-first smoke test/);
-  assert.match(readme, /Release Candidate 55 \/ Operations Batch O1E/);
+  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
   assert.match(readme, /RINKRAT_SOCIAL_C1F_ROUND_RECAPS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcho1e/);
-  assert.match(releaseRunbook, /rinkrat-rc55-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc55-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcho1f/);
+  assert.match(releaseRunbook, /rinkrat-rc56-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc56-invite-beta/);
 });

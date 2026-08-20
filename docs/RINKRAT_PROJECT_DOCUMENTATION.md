@@ -12657,3 +12657,32 @@ npm run verify:batcho1e
 ```
 
 This hotfix requires no Functions, Firestore, TTL, App Check, scoring-queue, or shared-cache deployment. Deploy Hosting only when the RC55 browser release was not already completed.
+
+# Operations Batch O1F — Privacy Center and Request Operations
+
+**Runtime release:** Release Candidate 56
+**Competitive models:** Production Scoring V4 · Projection V11
+
+O1F adds a signed-in manager Privacy Center at `/privacy-center` and a platform-administrator operations page at `/admin/privacy-requests`. The manager surface provides a recent-auth JSON export, request/follow-up/cancellation history, a retention catalog, Privacy notice access, and the existing Account Settings deletion route. The administrator surface maintains a separate manager-visible response and private operations note, enforces valid transitions and optimistic revisions, and writes immutable audits.
+
+The export package is created on demand and returned directly to the authenticated manager. RinkRat stores only file metadata, bounded record counts, and a SHA-256 package hash. The package excludes passwords, tokens, secrets, raw server logs, and other managers’ private information.
+
+`privacyRequestOperations` and `privacyExportAudits` carry `expiresAt` and are registered in `cleanupExpiredSecurityData`. This is scheduled-cleanup-only retention and does not change the ten approved Firestore TTL field overrides. Permanent account deletion removes manager text/direct linkage, pseudonymizes manager-owned audit changes and export metadata, and preserves only a bounded pseudonymous operations record until expiration.
+
+The current private-beta Privacy notice and workflows remain subject to professional jurisdiction-specific review before unrestricted public launch.
+
+Verification:
+
+```bash
+npm run verify:batcho1f
+```
+
+Deployment order:
+
+1. Manager privacy callables.
+2. Administrator privacy callables.
+3. Cleanup and account deletion.
+4. Maintained O1B–O1E exact-build callables updated to RC56.
+5. RC56 Hosting.
+
+No Firestore Rule, index, TTL-field override, scoring, Projection V11, six-game window, App Check mode, scoring queue, or shared NHL-cache authority change belongs in O1F.

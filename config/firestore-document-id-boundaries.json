@@ -169,6 +169,15 @@
         "privateSeasonManagerHash",
         "privateSeasonResearchResponseId"
       ]
+    },
+    {
+      "file": "functions/src/privacy-request-authority.ts",
+      "kind": "Privacy request, export audit, account, administrator, and tracked-league identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "requireAuthenticatedUserId",
+        "privateSeasonManagerHash"
+      ]
     }
   ],
   "forbiddenDirectPathSources": [

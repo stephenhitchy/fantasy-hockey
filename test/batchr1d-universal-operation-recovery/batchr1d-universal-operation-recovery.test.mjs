@@ -412,6 +412,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // O1E adds isolated tester-research authority.
     'private-season-research.ts',
     'shared/core/operations/private-season-research.util.ts',
+    // O1F adds isolated privacy-request and export authority.
+    'privacy-request-authority.ts',
+    'shared/core/privacy/privacy-request.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

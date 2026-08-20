@@ -135,10 +135,12 @@ test('keeps shared primitives free of hard-coded colors and important overrides'
 test('keeps primitive adoption limited to deliberately reviewed templates', async () => {
   const approved = new Set([
     'src/app/features/account/account-settings/account-settings.html',
+    'src/app/features/account/privacy-center/privacy-center.html',
     'src/app/features/admin/admin-center/admin-center.html',
     'src/app/features/admin/private-season-center/private-season-center.html',
     'src/app/features/admin/private-season-health/private-season-health.html',
     'src/app/features/admin/private-season-research/private-season-research.html',
+    'src/app/features/admin/privacy-requests/privacy-requests.html',
     'src/app/features/admin/service-incidents/service-incidents.html',
     'src/app/features/support/known-issues/known-issues.html',
     'src/app/features/support/service-status/service-status.html',

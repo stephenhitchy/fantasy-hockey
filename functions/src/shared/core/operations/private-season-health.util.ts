@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const PRIVATE_SEASON_HEALTH_SCHEMA_VERSION = 1;
-export const PRIVATE_SEASON_HEALTH_RELEASE_LABEL = 'Release Candidate 55';
+export const PRIVATE_SEASON_HEALTH_RELEASE_LABEL = 'Release Candidate 56';
 export const PRIVATE_SEASON_HEALTH_SCORING_VERSION = 4;
 export const PRIVATE_SEASON_HEALTH_PROJECTION_VERSION = 11;
 export const PRIVATE_SEASON_HEALTH_WEEKLY_REASON_MINIMUM_LENGTH = 12;

@@ -45,6 +45,7 @@ import { ESPN_INJURY_PLAYER_ALIASES } from './shared/core/player/injury-player-a
 import { matchInjuryEntriesToCurrentPlayers } from './shared/core/player/injury-match-quality.util';
 import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
 import { privateSeasonManagerHash } from './shared/core/operations/private-season-health.util';
+import { pseudonymizePrivacyOperationsForDeletedAccount } from './privacy-request-authority';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -2939,6 +2940,7 @@ export const deleteMyAccount = onCall(
     );
 
     deletedDocumentCount += await deletePrivateSeasonEngagementForAccount(userId, leagueIds);
+    deletedDocumentCount += await pseudonymizePrivacyOperationsForDeletedAccount(userId);
 
     const lifecycleStateRef = db.doc(`leagueLifecycleState/${userId}`);
     const managerWatchlistRef = db.doc(`managerWatchlists/${userId}`);
@@ -4094,6 +4096,14 @@ export {
   getPrivateSeasonResearchDashboard,
   submitPrivateSeasonResearch,
 } from './private-season-research';
+
+export {
+  getMyPrivacyCenter,
+  getMyPrivacyExport,
+  getPrivacyRequestOperations,
+  manageMyPrivacyRequest,
+  updatePrivacyRequestOperation,
+} from './privacy-request-authority';
 
 export { getSecurityControlReadiness } from './security-authority';
 

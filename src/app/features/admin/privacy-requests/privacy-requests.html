@@ -1,0 +1,202 @@
+<section class="privacy-operations rr-page-shell">
+  <header class="operations-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Platform Administrator</span>
+      <h1>Privacy Request Operations</h1>
+      <p>Review privacy-limited requests, publish manager-visible responses, and retain a separate private audit trail.</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+      <a routerLink="/admin" class="rr-button rr-button--secondary">Admin Center</a>
+      <a routerLink="/privacy" class="rr-button rr-button--secondary">Public Privacy</a>
+    </div>
+  </header>
+
+  <app-admin-session-step-up></app-admin-session-step-up>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="rr-card rr-card--padded rr-state" aria-live="polite">
+      <span class="pixel-icon icon-loading icon-md" aria-hidden="true"></span>
+      <strong>Loading privacy operations…</strong>
+    </section>
+  } @else if (snapshot(); as operations) {
+    <section class="operations-summary rr-stat-grid" aria-label="Privacy operations summary">
+      <article class="rr-stat-card">
+        <span>Open</span>
+        <strong>{{ operations.summary.openRequests }}</strong>
+      </article>
+      <article class="rr-stat-card">
+        <span>Waiting</span>
+        <strong>{{ operations.summary.waitingForManager }}</strong>
+      </article>
+      <article class="rr-stat-card">
+        <span>Overdue</span>
+        <strong>{{ operations.summary.overdueRequests }}</strong>
+      </article>
+      <article class="rr-stat-card">
+        <span>Completed</span>
+        <strong>{{ operations.summary.completedRequests }}</strong>
+      </article>
+      <article class="rr-stat-card">
+        <span>Exports</span>
+        <strong>{{ operations.summary.exportCount }}</strong>
+      </article>
+    </section>
+
+    <section class="operations-filter-panel rr-card rr-card--padded" aria-label="Privacy request filters">
+      <label class="rr-field">
+        <span>Status</span>
+        <select [(ngModel)]="statusFilter" class="rr-select">
+          <option value="open">Open requests</option>
+          <option value="all">All statuses</option>
+          @for (option of statusOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="rr-field">
+        <span>Type</span>
+        <select [(ngModel)]="typeFilter" class="rr-select">
+          <option value="all">All request types</option>
+          @for (option of typeOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="rr-field search-field">
+        <span>Search</span>
+        <input [(ngModel)]="search" placeholder="Subject, text, owner ref, or request ref" />
+      </label>
+    </section>
+
+    <p class="result-count">Showing {{ filteredRequests().length }} of {{ operations.requests.length }} requests.</p>
+
+    <section class="request-list" aria-label="Privacy requests">
+      @for (request of filteredRequests(); track request.requestId) {
+        <article class="request-card rr-card rr-card--padded" [attr.data-overdue]="request.overdue">
+          <header>
+            <div>
+              <div class="request-badges">
+                <span class="rr-badge rr-badge--info">{{ typeLabel(request) }}</span>
+                <span class="rr-badge" [class.rr-badge--warning]="request.status === 'waiting-for-manager'" [class.rr-badge--success]="request.status === 'completed'">
+                  {{ statusLabel(request.status) }}
+                </span>
+                @if (request.overdue) {
+                  <span class="rr-badge rr-badge--danger">Overdue</span>
+                }
+              </div>
+              <h2>{{ request.subject }}</h2>
+              <p>{{ request.details }}</p>
+            </div>
+            <button type="button" class="rr-button rr-button--quiet" (click)="toggleRequest(request.requestId)">
+              {{ expandedRequestId() === request.requestId ? 'Hide Review' : 'Review' }}
+            </button>
+          </header>
+
+          <dl class="request-meta">
+            <div><dt>Request</dt><dd>{{ request.requestId.slice(0, 8).toUpperCase() }}</dd></div>
+            <div><dt>Owner ref</dt><dd>{{ request.ownerReference }}</dd></div>
+            <div><dt>Revision</dt><dd>{{ request.revision }}</dd></div>
+            <div><dt>Submitted</dt><dd>{{ formatDate(request.createdAt) }}</dd></div>
+            <div><dt>Target</dt><dd>{{ formatDate(request.targetResponseAt) }}</dd></div>
+            <div><dt>Last editor</dt><dd>{{ request.lastUpdatedByRole || 'unknown' }}</dd></div>
+          </dl>
+
+          @if (expandedRequestId() === request.requestId) {
+            <section class="review-editor">
+              @if (request.timeline.length > 0) {
+                <details open>
+                  <summary>Manager-visible timeline</summary>
+                  <ol class="request-timeline">
+                    @for (entry of request.timeline; track $index) {
+                      <li>
+                        <strong>{{ statusLabel(entry.status) }}</strong>
+                        <span>{{ entry.message }}</span>
+                        <small>{{ formatDate(entry.occurredAt) }}</small>
+                      </li>
+                    }
+                  </ol>
+                </details>
+              }
+
+              <div class="review-grid">
+                <label class="rr-field">
+                  <span>Status</span>
+                  <select [(ngModel)]="statusDraft[request.requestId]" class="rr-select">
+                    @for (option of statusOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="rr-field wide-field">
+                  <span>Manager-visible response</span>
+                  <textarea rows="5" maxlength="1200" [(ngModel)]="publicResponseDraft[request.requestId]"></textarea>
+                  <small>{{ (publicResponseDraft[request.requestId] ?? '').length }} / 1200</small>
+                </label>
+
+                <label class="rr-field wide-field">
+                  <span>Private operations note</span>
+                  <textarea rows="4" maxlength="1600" [(ngModel)]="adminNotesDraft[request.requestId]"></textarea>
+                  <small>Never place this text in the public response.</small>
+                </label>
+
+                <label class="rr-field wide-field">
+                  <span>Audit reason</span>
+                  <input maxlength="500" [(ngModel)]="auditReasonDraft[request.requestId]" placeholder="Explain why this revision is appropriate" />
+                </label>
+              </div>
+
+              <button
+                type="button"
+                class="rr-button rr-button--commit"
+                [disabled]="savingRequestId() === request.requestId"
+                (click)="save(request)"
+              >
+                {{ savingRequestId() === request.requestId ? 'Saving…' : 'Save Audited Revision' }}
+              </button>
+            </section>
+          }
+        </article>
+      } @empty {
+        <div class="rr-card rr-card--padded rr-state">
+          <strong>No requests match the current filters.</strong>
+        </div>
+      }
+    </section>
+
+    <section class="export-audits rr-card rr-card--padded" aria-labelledby="privacy-export-audits-title">
+      <div>
+        <span class="eyebrow">Audit Metadata</span>
+        <h2 id="privacy-export-audits-title">Recent Data Exports</h2>
+      </div>
+      <p>RinkRat records package size, counts, and SHA-256 metadata. It does not store a server copy of the downloaded JSON package.</p>
+      <div class="export-audit-list">
+        @for (item of operations.exports; track item.exportId) {
+          <article>
+            <div>
+              <strong>{{ item.ownerReference }}</strong>
+              <span>{{ formatDate(item.generatedAt) }}</span>
+            </div>
+            <small>{{ item.fileName }} · {{ formatBytes(item.byteSize) }} · SHA {{ item.packageHash.slice(0, 12) }}</small>
+          </article>
+        } @empty {
+          <span>No export audits have been recorded.</span>
+        }
+      </div>
+    </section>
+
+    <p class="operations-disclaimer">
+      The {{ operations.responseTargetDays }}-day response target is an internal private-beta operating target, not a universal legal deadline.
+    </p>
+  }
+</section>

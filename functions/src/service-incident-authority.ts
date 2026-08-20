@@ -30,7 +30,7 @@ const PUBLIC_COLLECTION = 'publicServiceIncidents';
 const ADMIN_INCIDENT_LIMIT = 50;
 const PUBLIC_INCIDENT_LIMIT = 40;
 const PUBLIC_STATUS_CACHE_MILLISECONDS = 20_000;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-55-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 
 let publicStatusCache: { expiresAt: number; value: PublicServiceStatusSnapshot } | null = null;
 

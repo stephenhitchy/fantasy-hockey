@@ -114,6 +114,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'privacy-center',
+        title: 'Privacy Center',
+        loadComponent: () =>
+          import('./features/account/privacy-center/privacy-center').then(
+            (module) => module.PrivacyCenter,
+          ),
+      },
+      {
         path: 'support/feedback',
         title: 'Send Feedback',
         loadComponent: () =>
@@ -170,6 +178,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/private-season-research/private-season-research').then(
             (module) => module.PrivateSeasonResearch,
+          ),
+      },
+      {
+        path: 'admin/privacy-requests',
+        title: 'Privacy Request Operations',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/privacy-requests/privacy-requests').then(
+            (module) => module.PrivacyRequests,
           ),
       },
       {

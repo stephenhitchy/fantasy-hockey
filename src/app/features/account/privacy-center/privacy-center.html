@@ -1,0 +1,276 @@
+<section class="privacy-center rr-page-shell">
+  <header class="privacy-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Account &amp; Data</span>
+      <h1>Privacy Center</h1>
+      <p>Download your RinkRat account data, review retention, or submit a privacy request.</p>
+    </div>
+    <div class="privacy-hero-actions">
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="refreshing()"
+        (click)="load(true)"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+      <a routerLink="/privacy" class="rr-button rr-button--secondary">Privacy Policy</a>
+      <a routerLink="/account/settings" class="rr-button rr-button--secondary">Account Settings</a>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="privacy-loading rr-card rr-card--padded rr-state" aria-live="polite">
+      <span class="pixel-icon icon-loading icon-md" aria-hidden="true"></span>
+      <strong>Loading Privacy Center…</strong>
+    </section>
+  } @else if (snapshot(); as center) {
+    <section class="secure-session rr-card rr-card--padded" aria-labelledby="privacy-secure-session-title">
+      <div>
+        <span class="eyebrow">Protected Actions</span>
+        <h2 id="privacy-secure-session-title">Secure Session</h2>
+        <p>{{ recentAuth.snapshot().message }}</p>
+      </div>
+
+      @if (!recentAuth.isRecent()) {
+        <form class="secure-session-form" (ngSubmit)="verifyPassword()">
+          <label class="rr-field">
+            <span>Current password</span>
+            <input
+              type="password"
+              autocomplete="current-password"
+              [(ngModel)]="verificationPassword"
+              name="privacyPassword"
+              [disabled]="verifying()"
+            />
+          </label>
+          <button type="submit" class="rr-button rr-button--commit" [disabled]="verifying()">
+            {{ verifying() ? 'Verifying…' : 'Unlock Protected Actions' }}
+          </button>
+        </form>
+      } @else {
+        <span class="rr-badge rr-badge--success">Verified</span>
+      }
+    </section>
+
+    <div class="privacy-grid">
+      <section class="privacy-panel rr-card rr-card--padded" aria-labelledby="privacy-export-title">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">Data Access</span>
+            <h2 id="privacy-export-title">Download My RinkRat Data</h2>
+          </div>
+          <button
+            type="button"
+            class="rr-button rr-button--commit"
+            [disabled]="exporting() || !recentAuth.isRecent()"
+            (click)="downloadMyData()"
+          >
+            {{ exporting() ? 'Preparing…' : 'Download JSON' }}
+          </button>
+        </div>
+        <p>
+          The package includes account profiles, league membership summaries, your saved watchlist and notes,
+          linked support records, private-season evidence, and privacy-request history. It excludes passwords,
+          tokens, other managers’ private data, and raw server logs.
+        </p>
+        <small>RinkRat stores export metadata and a package hash—not a server copy of the downloaded file.</small>
+
+        @if (center.exports.length > 0) {
+          <div class="export-history" aria-label="Recent data exports">
+            @for (item of center.exports; track item.exportId) {
+              <article>
+                <div>
+                  <strong>{{ item.fileName }}</strong>
+                  <span>{{ formatDate(item.generatedAt) }}</span>
+                </div>
+                <small>{{ formatBytes(item.byteSize) }} · {{ exportSummary(item) }}</small>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="privacy-panel rr-card rr-card--padded" aria-labelledby="privacy-request-title">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">Request Help</span>
+            <h2 id="privacy-request-title">Submit a Privacy Request</h2>
+          </div>
+        </div>
+
+        <form class="privacy-request-form" (ngSubmit)="createRequest()">
+          <label class="rr-field">
+            <span>Request type</span>
+            <select [(ngModel)]="newRequestType" name="privacyRequestType" class="rr-select">
+              @for (option of requestTypeOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+            <small>{{ selectedRequestTypeDetail() }}</small>
+          </label>
+
+          <label class="rr-field">
+            <span>Subject</span>
+            <input
+              type="text"
+              maxlength="120"
+              [(ngModel)]="newRequestSubject"
+              name="privacyRequestSubject"
+              placeholder="Briefly identify the request"
+            />
+          </label>
+
+          <label class="rr-field">
+            <span>Details</span>
+            <textarea
+              rows="5"
+              maxlength="1600"
+              [(ngModel)]="newRequestDetails"
+              name="privacyRequestDetails"
+              placeholder="Describe what you need without sharing passwords, invite codes, or another person’s private information."
+            ></textarea>
+            <small>{{ newRequestDetails.length }} / 1600</small>
+          </label>
+
+          <button
+            type="submit"
+            class="rr-button rr-button--commit"
+            [disabled]="savingRequest() || !recentAuth.isRecent()"
+          >
+            {{ savingRequest() ? 'Submitting…' : 'Submit Request' }}
+          </button>
+        </form>
+
+        <p class="response-target-note">
+          RinkRat’s private-beta operating target is a response within {{ center.responseTargetDays }} days.
+          This target is not a statement of the legal deadline that may apply in a particular jurisdiction.
+        </p>
+      </section>
+    </div>
+
+    <section class="request-history rr-card rr-card--padded" aria-labelledby="privacy-history-title">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">Request History</span>
+          <h2 id="privacy-history-title">My Privacy Requests</h2>
+        </div>
+        <span class="rr-badge rr-badge--info">{{ center.requests.length }}</span>
+      </div>
+
+      @if (center.requests.length === 0) {
+        <div class="rr-state">
+          <strong>No privacy requests yet.</strong>
+        </div>
+      } @else {
+        <div class="request-list">
+          @for (request of center.requests; track request.requestId) {
+            <article class="privacy-request-card" [attr.data-status]="request.status">
+              <header>
+                <div>
+                  <span class="eyebrow">{{ requestTypeLabel(request.requestType) }}</span>
+                  <h3>{{ request.subject }}</h3>
+                  <small>Reference {{ request.requestId.slice(0, 8).toUpperCase() }} · Updated {{ formatDate(request.updatedAt) }}</small>
+                </div>
+                <span class="rr-badge" [class.rr-badge--success]="request.status === 'completed'" [class.rr-badge--warning]="request.status === 'waiting-for-manager'">
+                  {{ requestStatusLabel(request) }}
+                </span>
+              </header>
+
+              <p>{{ request.details }}</p>
+
+              @if (request.publicResponse) {
+                <section class="manager-response rr-notice rr-notice--info">
+                  <strong>RinkRat response</strong>
+                  <p>{{ request.publicResponse }}</p>
+                </section>
+              }
+
+              @if (request.timeline.length > 0) {
+                <details>
+                  <summary>View request timeline</summary>
+                  <ol class="request-timeline">
+                    @for (entry of request.timeline; track $index) {
+                      <li>
+                        <strong>{{ statusLabel(entry.status) }}</strong>
+                        <span>{{ entry.message }}</span>
+                        <small>{{ formatDate(entry.occurredAt) }}</small>
+                      </li>
+                    }
+                  </ol>
+                </details>
+              }
+
+              @if (selectedFollowUpId() === request.requestId) {
+                <form class="follow-up-form" (ngSubmit)="submitFollowUp(request)">
+                  <label class="rr-field">
+                    <span>Follow-up response</span>
+                    <textarea
+                      rows="4"
+                      maxlength="1600"
+                      [(ngModel)]="followUpMessage"
+                      name="followUpMessage"
+                    ></textarea>
+                  </label>
+                  <div class="inline-actions">
+                    <button type="submit" class="rr-button rr-button--commit" [disabled]="savingRequestId() === request.requestId">
+                      {{ savingRequestId() === request.requestId ? 'Sending…' : 'Send Follow-up' }}
+                    </button>
+                    <button type="button" class="rr-button rr-button--quiet" (click)="cancelFollowUp()">Cancel</button>
+                  </div>
+                </form>
+              } @else if (!requestClosed(request)) {
+                <div class="inline-actions">
+                  @if (request.status === 'waiting-for-manager') {
+                    <button type="button" class="rr-button rr-button--secondary" (click)="startFollowUp(request)">
+                      Respond
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="rr-button rr-button--quiet"
+                    [disabled]="savingRequestId() === request.requestId || !recentAuth.isRecent()"
+                    (click)="cancelRequest(request)"
+                  >
+                    {{ savingRequestId() === request.requestId ? 'Updating…' : 'Cancel Request' }}
+                  </button>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="retention-panel rr-card rr-card--padded" aria-labelledby="privacy-retention-title">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">Retention</span>
+          <h2 id="privacy-retention-title">What RinkRat Keeps</h2>
+        </div>
+      </div>
+      <div class="retention-list">
+        @for (entry of center.retention; track entry.key) {
+          <details>
+            <summary>
+              <strong>{{ entry.label }}</strong>
+              <span>{{ entry.retention }}</span>
+            </summary>
+            <p>{{ entry.detail }}</p>
+          </details>
+        }
+      </div>
+      <p>
+        Permanent account deletion remains in <a routerLink="/account/settings">Account Settings</a>.
+        Completed league competition history may remain anonymously so one manager cannot rewrite another manager’s season.
+      </p>
+    </section>
+  }
+</section>

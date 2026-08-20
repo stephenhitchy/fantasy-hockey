@@ -327,6 +327,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         // O1E adds isolated tester-research authority.
         'src/private-season-research.ts',
         'src/shared/core/operations/private-season-research.util.ts',
+        // O1F adds isolated privacy-request and export authority.
+        'src/privacy-request-authority.ts',
+        'src/shared/core/privacy/privacy-request.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

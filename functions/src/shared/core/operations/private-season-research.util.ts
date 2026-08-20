@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const PRIVATE_SEASON_RESEARCH_RELEASE_LABEL = 'Release Candidate 55';
+export const PRIVATE_SEASON_RESEARCH_RELEASE_LABEL = 'Release Candidate 56';
 export const PRIVATE_SEASON_RESEARCH_SCORING_VERSION = 4;
 export const PRIVATE_SEASON_RESEARCH_PROJECTION_VERSION = 11;
 export const PRIVATE_SEASON_RESEARCH_RESPONSE_LIMIT = 1_000;

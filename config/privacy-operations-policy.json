@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "releaseLabel": "Release Candidate 56",
+  "requestRetentionDays": 730,
+  "exportAuditRetentionDays": 365,
+  "responseTargetDays": 30,
+  "maximumRequestsPerAccount": 100,
+  "maximumExportsPerDay": 3,
+  "maximumRequestTextCharacters": 1600,
+  "maximumExportBytes": 4500000,
+  "responseTargetIsLegalDeadline": false,
+  "note": "These are private-beta operating controls, not a substitute for jurisdiction-specific legal advice."
+}

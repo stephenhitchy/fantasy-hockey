@@ -129,10 +129,12 @@ test('shared NHL cache data has TTL plus a scheduled cleanup fallback', async ()
   const indexes = JSON.parse(indexesSource);
 
   assert.equal(ttl.policies.length, 10);
-  assert.equal(retention.collections.length, 10);
+  assert.equal(retention.collections.length, 12);
   assert.ok(ttl.policies.some((entry) => entry.collectionGroup === 'nhlSharedDataCache'));
   assert.ok(retention.collections.some((entry) => entry.collection === 'nhlSharedDataCache'));
   assert.match(cleanup, /collection: 'nhlSharedDataCache'/);
+  assert.ok(retention.collections.some((entry) => entry.collection === 'privacyRequestOperations'));
+  assert.ok(retention.collections.some((entry) => entry.collection === 'privacyExportAudits'));
   assert.ok(indexes.fieldOverrides.some(
     (entry) => entry.collectionGroup === 'nhlSharedDataCache' && entry.fieldPath === 'expiresAt' && entry.ttl === true,
   ));
@@ -152,12 +154,12 @@ test('D1C audit and retention controls remain synchronized under the later C1A c
   assert.equal(packageJson.scripts['data:inspect-nhl-shared-cache'], 'node functions/scripts/nhl-shared-cache-inspect.cjs');
   assert.match(packageJson.scripts['verify:batchd1c:core'], /verify:batchd1b:core/);
   assert.match(packageJson.scripts['verify:batchd1c:core'], /data:audit-nhl-shared-cache/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1e:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
   assert.equal(freeze.requiredTtlPolicyCount, 10);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1e');
-  assert.equal(freeze.releaseLabel, 'Release Candidate 55');
-  assert.match(runtime, /Release Candidate 55/);
-  assert.match(productionRuntime, /Release Candidate 55/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
+  assert.equal(freeze.releaseLabel, 'Release Candidate 56');
+  assert.match(runtime, /Release Candidate 56/);
+  assert.match(productionRuntime, /Release Candidate 56/);
 
   const auditOutput = execFileSync(
     process.execPath,
@@ -178,7 +180,7 @@ test('D1C documentation and roadmap record a Shadow foundation rather than claim
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.46/);
+  assert.match(roadmap, /Version 1\.47/);
   assert.match(roadmap, /# \[x\] S3\.24/);
   assert.match(roadmap, /# \[x\] D1\.19/);
   assert.match(roadmap, /# \[x\] LOG\.29/);

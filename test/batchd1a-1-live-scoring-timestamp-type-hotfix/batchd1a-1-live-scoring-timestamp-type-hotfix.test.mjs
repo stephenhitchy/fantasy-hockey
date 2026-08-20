@@ -160,10 +160,10 @@ test('D1A.1 verification inherits D1A and keeps RC34, Scoring V3, and Projection
     packageJson.scripts['verify:batchd1a-1:core'],
     /verify:batchd1a:core/,
   );
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c|o1d|o1e):core/);
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batcho1e');
-  assert.match(runtime, /Release Candidate 55/);
-  assert.match(productionRuntime, /Release Candidate 55/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c|o1d|o1e|o1f):core/);
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batcho1f');
+  assert.match(runtime, /Release Candidate 56/);
+  assert.match(productionRuntime, /Release Candidate 56/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*4/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
 });

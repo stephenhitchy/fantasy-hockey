@@ -35,6 +35,10 @@ const nhlSharedCacheSource = await readFile(
   path.join(projectRoot, 'functions/src/shared/core/nhl/nhl-shared-cache.service.ts'),
   'utf8',
 );
+const privacyOperationsSource = await readFile(
+  path.join(projectRoot, 'functions/src/privacy-request-authority.ts'),
+  'utf8',
+);
 const failures = [];
 
 if (baseline.schemaVersion !== 1 || baseline.field !== 'expiresAt') {
@@ -59,6 +63,11 @@ const actualCollections = policies
   .filter(Boolean)
   .sort();
 
+const scheduledCleanupOnlyCollections = [
+  'privacyRequestOperations',
+  'privacyExportAudits',
+];
+
 if (JSON.stringify(actualCollections) !== JSON.stringify([...expectedCollections].sort())) {
   failures.push(`TTL baseline collections differ from the approved set: ${actualCollections.join(', ')}`);
 }
@@ -74,12 +83,24 @@ const sourceByCollection = new Map([
   ['betaOperationsDaily', leagueAutomationSource],
   ['nhlSharedDataCache', nhlSharedCacheSource],
   ['leagueAutomationTasks', leagueAutomationSource],
+  ['privacyRequestOperations', privacyOperationsSource],
+  ['privacyExportAudits', privacyOperationsSource],
 ]);
 
 for (const collection of expectedCollections) {
   const source = sourceByCollection.get(collection) ?? '';
   if (!source.includes(collection) || !source.includes('expiresAt')) {
     failures.push(`${collection} does not have a source-level expiresAt contract.`);
+  }
+}
+
+for (const collection of scheduledCleanupOnlyCollections) {
+  const source = sourceByCollection.get(collection) ?? '';
+  if (!source.includes(collection) || !source.includes('expiresAt')) {
+    failures.push(`${collection} does not have a scheduled-cleanup expiresAt contract.`);
+  }
+  if (!operationsSource.includes(`collection: '${collection}'`)) {
+    failures.push(`${collection} is not registered in cleanupExpiredSecurityData.`);
   }
 }
 
@@ -109,5 +130,5 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exitCode = 1;
 } else {
-  console.log(`Security retention verification passed (${policies.length} TTL policies plus scheduled cleanup fallback).`);
+  console.log(`Security retention verification passed (${policies.length} TTL policies plus ${scheduledCleanupOnlyCollections.length} scheduled-cleanup-only privacy collections).`);
 }

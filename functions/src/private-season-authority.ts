@@ -27,7 +27,7 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
 const REASON_MINIMUM = PRIVATE_SEASON_DECISION_REASON_MINIMUM_LENGTH;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-55-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)

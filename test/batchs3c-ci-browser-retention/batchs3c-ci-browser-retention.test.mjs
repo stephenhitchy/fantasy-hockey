@@ -191,9 +191,13 @@ test('Firestore TTL baseline and scheduled cleanup cover every temporary securit
   assert.match(cleanup, /schedule: '35 4 \* \* \*'/);
   assert.match(cleanup, /retentionCleanupStatus/);
   assert.equal(retentionPolicy.defaultField, 'expiresAt');
-  assert.equal(retentionPolicy.collections.length, 10);
+  assert.equal(retentionPolicy.collections.length, 12);
   assert.match(retentionAudit, /cleanupExpiredSecurityData/);
   assert.match(retentionAudit, /cleanupLeagueAutomationTaskHistory/);
+  assert.ok(retentionPolicy.collections.some((item) => item.collection === 'privacyRequestOperations'));
+  assert.ok(retentionPolicy.collections.some((item) => item.collection === 'privacyExportAudits'));
+  assert.match(cleanup, /collection: 'privacyRequestOperations'/);
+  assert.match(cleanup, /collection: 'privacyExportAudits'/);
 });
 
 test('Release Readiness exposes browser-header and temporary-data retention health without blocking invite beta', async () => {

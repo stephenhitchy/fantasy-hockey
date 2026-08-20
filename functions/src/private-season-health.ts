@@ -34,7 +34,7 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-55-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 const ENGAGEMENT_DAILY_LIMIT = 24;
 const HEALTH_EVIDENCE_WINDOW_DAYS = 35;
 const HEALTH_EVIDENCE_LIMIT = 2_000;

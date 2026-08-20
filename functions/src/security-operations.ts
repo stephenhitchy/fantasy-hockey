@@ -53,6 +53,8 @@ const SECURITY_RETENTION_TARGETS: readonly RetentionTarget[] = [
   { collection: 'betaEvidenceEvents', cleanupOwner: 'security-operations' },
   { collection: 'betaOperationsDaily', cleanupOwner: 'security-operations' },
   { collection: 'nhlSharedDataCache', cleanupOwner: 'security-operations' },
+  { collection: 'privacyRequestOperations', cleanupOwner: 'security-operations' },
+  { collection: 'privacyExportAudits', cleanupOwner: 'security-operations' },
   // The scoring queue already owns a dedicated, more frequent cleanup worker.
   { collection: 'leagueAutomationTasks', cleanupOwner: 'league-automation' },
 ] as const;
@@ -454,13 +456,23 @@ async function deleteExpiredDocumentsFromCollection(
       break;
     }
 
-    const batch = db.batch();
-
-    for (const document of snapshot.docs) {
-      batch.delete(document.ref);
+    if (collectionName === 'privacyRequestOperations') {
+      const concurrency = 8;
+      for (let index = 0; index < snapshot.docs.length; index += concurrency) {
+        await Promise.all(
+          snapshot.docs
+            .slice(index, index + concurrency)
+            .map((document) => db.recursiveDelete(document.ref)),
+        );
+      }
+    } else {
+      const batch = db.batch();
+      for (const document of snapshot.docs) {
+        batch.delete(document.ref);
+      }
+      await batch.commit();
     }
 
-    await batch.commit();
     deletedCount += snapshot.size;
 
     if (snapshot.size < RETENTION_QUERY_LIMIT) {
