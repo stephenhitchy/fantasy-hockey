@@ -1,0 +1,198 @@
+<section class="private-health-page rr-page-shell">
+  <header class="private-health-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Platform Administrator</span>
+      <h1>Private Season Health</h1>
+      <p>Activation, retention, support, and exact-build reliability for the tracked tester leagues.</p>
+    </div>
+    <div class="hero-actions no-print">
+      <a routerLink="/admin/private-season" class="rr-button rr-button--secondary">Season Plan</a>
+      <a routerLink="/admin" class="rr-button rr-button--secondary">Admin Center</a>
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+    </div>
+  </header>
+
+  <app-admin-session-step-up></app-admin-session-step-up>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="health-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Loading private-season evidence…</strong>
+    </section>
+  } @else if (snapshot(); as data) {
+    <section class="health-status rr-card rr-card--raised rr-card--padded" [attr.data-status]="data.summary.status">
+      <div>
+        <span class="eyebrow">Current evidence</span>
+        <h2>{{ data.summary.headline }}</h2>
+        <p>
+          {{ data.summary.activeLeagueCount }} tracked leagues ·
+          {{ data.summary.activatedLeagueCount }} activated ·
+          build {{ data.summary.evidenceBuildId || 'not frozen' }}
+        </p>
+      </div>
+      <button type="button" class="rr-button rr-button--secondary no-print" (click)="copySummary()">Copy Summary</button>
+    </section>
+
+    <section class="metric-grid" aria-label="Private-season launch metrics">
+      @for (metric of data.summary.metrics; track metric.key) {
+        <article class="metric-card rr-card rr-card--padded" [attr.data-status]="metric.status">
+          <header>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.valueLabel }}</strong>
+          </header>
+          <div class="metric-meta">
+            <span>{{ metricStatusLabel(metric) }}</span>
+            <small>{{ metric.thresholdLabel }}</small>
+          </div>
+          <p>{{ metric.detail }}</p>
+        </article>
+      }
+    </section>
+
+    <section class="health-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Tracked leagues</span>
+          <h2>Activation and retention</h2>
+        </div>
+      </header>
+
+      @if (data.leagues.length === 0) {
+        <p class="empty-state">Add active tester leagues in the Private Season Control Center first.</p>
+      } @else {
+        <div class="league-health-grid">
+          @for (league of data.leagues; track league.slotId) {
+            <article class="league-health-card" [attr.data-activated]="league.activatedAt ? 'true' : 'false'">
+              <header>
+                <div>
+                  <span class="eyebrow">{{ league.label }}</span>
+                  <h3>{{ leagueActivationLabel(league) }}</h3>
+                </div>
+                <span class="league-health-state">{{ retentionLabel(league) }}</span>
+              </header>
+
+              <dl class="league-health-facts">
+                <div><dt>Managers</dt><dd>{{ league.teamCount }} / {{ league.expectedManagerCount }}</dd></div>
+                <div><dt>Draft</dt><dd>{{ statusLabel(league.draftStatus) }}</dd></div>
+                <div><dt>Game Center</dt><dd>{{ league.firstMatchupViewedAt ? 'Viewed' : 'Waiting' }}</dd></div>
+                <div><dt>Roster action</dt><dd>{{ league.firstRosterActionAt ? 'Observed' : 'Waiting' }}</dd></div>
+                <div><dt>Active · 7 days</dt><dd>{{ league.activeManagerCount7Days }}</dd></div>
+                <div><dt>Week 4 target</dt><dd>{{ league.fourWeekRequiredManagerCount }} managers</dd></div>
+              </dl>
+
+              <ol class="activation-steps" aria-label="League activation steps">
+                <li [class.complete]="league.teamCount >= 6">Six managers</li>
+                <li [class.complete]="league.draftStatus === 'complete'">Draft complete</li>
+                <li [class.complete]="!!league.firstMatchupViewedAt">First matchup viewed</li>
+                <li [class.complete]="!!league.firstRosterActionAt">First roster action</li>
+              </ol>
+
+              <p class="league-health-time">
+                Latest activity: {{ formatDate(league.latestEngagementAt) }}
+              </p>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="health-section weekly-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Weekly founder log</span>
+          <h2>Support, intervention, intent, and cost</h2>
+        </div>
+      </header>
+
+      @if (weeklyDraft; as weekly) {
+        <div class="weekly-top-grid">
+          <label class="rr-field">
+            <span>Week ending</span>
+            <input type="date" [(ngModel)]="weekly.weekEnding" (change)="selectWeek(weekly.weekEnding)" />
+          </label>
+          <label class="rr-field">
+            <span>Platform and operating cost</span>
+            <input type="number" min="0" max="10000" step="0.01" [(ngModel)]="weekly.platformCostUsd" />
+          </label>
+        </div>
+
+        <div class="weekly-league-list">
+          @for (league of data.leagues; track league.slotId) {
+            @if (leagueEntry(league.leagueId); as entry) {
+              <article class="weekly-league-card">
+                <h3>{{ league.label }}</h3>
+                <div class="weekly-field-grid">
+                  <label class="rr-field">
+                    <span>Support minutes</span>
+                    <input type="number" min="0" max="1440" [(ngModel)]="entry.supportMinutes" />
+                  </label>
+                  <label class="rr-field">
+                    <span>Founder interventions</span>
+                    <input type="number" min="0" max="99" [(ngModel)]="entry.founderInterventions" />
+                  </label>
+                  <label class="rr-field">
+                    <span>Commissioner return intent</span>
+                    <select class="rr-select" [(ngModel)]="entry.commissionerIntent">
+                      @for (option of intentOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+                </div>
+                <label class="rr-field">
+                  <span>Privacy-limited note</span>
+                  <textarea class="rr-textarea" rows="2" maxlength="400" [(ngModel)]="entry.note" placeholder="Friction, recurring support, or evidence. No names or contact details."></textarea>
+                </label>
+              </article>
+            }
+          }
+        </div>
+
+        <div class="weekly-save no-print">
+          <label class="rr-field">
+            <span>Audit reason</span>
+            <textarea class="rr-textarea" rows="3" maxlength="600" [(ngModel)]="weeklyReason" placeholder="Summarize this week's evidence and any corrections."></textarea>
+          </label>
+          <button type="button" class="rr-button rr-button--primary" [disabled]="saving() || weeklyReason.trim().length < 12" (click)="saveWeekly()">
+            {{ saving() ? 'Saving…' : 'Save Weekly Evidence' }}
+          </button>
+        </div>
+      }
+    </section>
+
+    <section class="health-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Recent records</span>
+          <h2>Weekly evidence history</h2>
+        </div>
+      </header>
+      @if (data.weeklyRecords.length === 0) {
+        <p class="empty-state">No weekly operations record has been saved yet.</p>
+      } @else {
+        <div class="weekly-history-list">
+          @for (record of data.weeklyRecords; track record.weekEnding) {
+            <button type="button" class="weekly-history-row" (click)="selectWeek(record.weekEnding)">
+              <span>{{ formatDateKey(record.weekEnding) }}</span>
+              <strong>Revision {{ record.revision }}</strong>
+              <small>${{ record.platformCostUsd.toFixed(2) }} cost</small>
+            </button>
+          }
+        </div>
+      }
+      <p class="retention-definition">
+        Week 4 begins on Day {{ data.retentionDefinition.observationStartsDay }}, is due on Day
+        {{ data.retentionDefinition.dueDay }}, and closes on Day {{ data.retentionDefinition.observationClosesDay }}.
+      </p>
+    </section>
+  }
+</section>

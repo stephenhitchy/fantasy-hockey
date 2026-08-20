@@ -318,6 +318,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         // O1B adds isolated platform-admin tester-season planning authority.
         'src/private-season-authority.ts',
         'src/shared/core/operations/private-season.util.ts',
+        // O1C adds isolated private-season health and engagement authority.
+        'src/private-season-health.ts',
+        'src/shared/core/operations/private-season-health.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

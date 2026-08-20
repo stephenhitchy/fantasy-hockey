@@ -130,6 +130,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'admin/private-season/health',
+        title: 'Private Season Health',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/private-season-health/private-season-health').then(
+            (module) => module.PrivateSeasonHealth,
+          ),
+      },
+      {
         path: 'access-denied',
         title: 'Access Denied',
         loadComponent: () =>

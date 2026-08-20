@@ -181,8 +181,8 @@ test('S3E remains monitor-only and preserves Scoring V3 and Projection V11', asy
   assert.doesNotMatch(functionsSource, /enforceAppCheck\s*:\s*true/);
   assert.match(readme, /Scoring V3/);
   assert.match(readme, /Projection V11/);
-  assert.match(runtime, /Release Candidate 52/);
-  assert.match(productionRuntime, /Release Candidate 52/);
+  assert.match(runtime, /Release Candidate 53/);
+  assert.match(productionRuntime, /Release Candidate 53/);
 });
 
 test('S3E verification, documentation, roadmap, and audit commands stay synchronized', async () => {

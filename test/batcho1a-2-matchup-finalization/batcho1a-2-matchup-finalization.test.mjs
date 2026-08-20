@@ -118,9 +118,9 @@ test('O1A.2 documents the league-card timing clarification without changing comp
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.43/);
+  assert.match(roadmap, /Version 1\.44/);
   assert.match(roadmap, /LOG\.63 2026-08-19 — Completed Operations Batch O1A\.2/);
-  assert.match(readme, /Operations Batch O1B/);
+  assert.match(readme, /Operations Batch O1C/);
   assert.match(util, /buildMatchupStatusLabel/);
   assert.match(util, /Finalizes \$\{formatMonthDay\(latestDate\)\}/);
   assert.equal(packageJson.scripts['verify:batcho1a-2:core'], 'npm run verify:batcho1a:core && npm run test:batcho1a-2:run && npm run validate:release-manifest');

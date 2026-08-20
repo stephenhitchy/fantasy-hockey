@@ -6,6 +6,7 @@
       <p>Freeze the exact cohort, verify diverse coverage, and record the go/no-go decision without storing tester contact details.</p>
     </div>
     <div class="hero-actions no-print">
+      <a routerLink="/admin/private-season/health" class="rr-button rr-button--secondary">Season Health</a>
       <a routerLink="/admin" class="rr-button rr-button--secondary">Beta Operations</a>
       <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
         {{ refreshing() ? 'Refreshing…' : 'Refresh evidence' }}
@@ -87,7 +88,7 @@
         </label>
         <label class="rr-field">
           <span>Approved release</span>
-          <input [(ngModel)]="draftPlan.freeze.approvedReleaseLabel" maxlength="80" placeholder="Release Candidate 52" />
+          <input [(ngModel)]="draftPlan.freeze.approvedReleaseLabel" maxlength="80" placeholder="Release Candidate 53" />
         </label>
         <label class="rr-field wide-field">
           <span>Approved build ID</span>

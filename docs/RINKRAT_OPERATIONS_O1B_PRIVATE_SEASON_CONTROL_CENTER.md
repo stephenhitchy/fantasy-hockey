@@ -129,7 +129,7 @@ O1B does not change or promote:
 ## Verification
 
 ```bash
-npm run verify:batcho1b
+npm run verify:batcho1c
 ```
 
 The focused suite covers normalization, cohort bounds, diversity gates, exact-build freeze, approval blocking, immutable audit source, admin route protection, mobile layout, and protected-system retention.
@@ -147,7 +147,7 @@ firebase deploy \
 firebase deploy \
   --only hosting:app \
   --project=nhl-fantasy-app-ab673 \
-  -m "Operations O1B Private Season Control Center Release Candidate 52"
+  -m "Operations O1B Private Season Control Center Release Candidate 53"
 ```
 
 Do not deploy Rules, indexes, TTL policies, App Check settings, scoring-queue configuration, or NHL-cache authority.

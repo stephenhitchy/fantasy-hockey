@@ -44,6 +44,7 @@ import {
 import { ESPN_INJURY_PLAYER_ALIASES } from './shared/core/player/injury-player-aliases';
 import { matchInjuryEntriesToCurrentPlayers } from './shared/core/player/injury-match-quality.util';
 import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
+import { privateSeasonManagerHash } from './shared/core/operations/private-season-health.util';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -2717,6 +2718,69 @@ export const getAccountDeletionReadiness = onCall(
   },
 );
 
+
+async function deletePrivateSeasonEngagementForAccount(
+  userId: string,
+  accountLeagueIds: Iterable<string>,
+): Promise<number> {
+  const planReference = db.doc('platformOperations/privateSeason2026-27');
+  const planSnapshot = await planReference.get();
+  const leagueSlots = Array.isArray(planSnapshot.data()?.['leagueSlots'])
+    ? planSnapshot.data()?.['leagueSlots'] as unknown[]
+    : [];
+  const leagueIds = [...new Set([
+    ...accountLeagueIds,
+    ...leagueSlots
+      .map((value) => asRecord(value))
+      .map((slot) => asString(slot['leagueId']))
+      .filter(Boolean),
+  ])];
+  let deletedCount = 0;
+
+  for (const candidate of leagueIds) {
+    let leagueId: string;
+    try {
+      leagueId = requireFirestoreDocumentId(candidate, 'private-season league ID', {
+        maxBytes: 128,
+      });
+    } catch {
+      continue;
+    }
+
+    const managerHash = privateSeasonManagerHash(userId, leagueId);
+    const summaryReference = planReference.collection('leagueEngagement').doc(leagueId);
+
+    while (true) {
+      const snapshot = await summaryReference
+        .collection('managerDays')
+        .where('managerHash', '==', managerHash)
+        .limit(400)
+        .get();
+
+      if (snapshot.empty) {
+        break;
+      }
+
+      const batch = db.batch();
+      for (const document of snapshot.docs) {
+        batch.delete(document.ref);
+      }
+      await batch.commit();
+      deletedCount += snapshot.size;
+    }
+
+    const summarySnapshot = await summaryReference.get();
+    if (summarySnapshot.exists) {
+      await summaryReference.set({
+        uniqueManagerHashes: FieldValue.arrayRemove(managerHash),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+
+  return deletedCount;
+}
+
 export const deleteMyAccount = onCall(
   {
     region: FUNCTION_REGION,
@@ -2854,6 +2918,8 @@ export const deleteMyAccount = onCall(
       'ownerId',
       userId,
     );
+
+    deletedDocumentCount += await deletePrivateSeasonEngagementForAccount(userId, leagueIds);
 
     const lifecycleStateRef = db.doc(`leagueLifecycleState/${userId}`);
     const managerWatchlistRef = db.doc(`managerWatchlists/${userId}`);
@@ -3989,6 +4055,13 @@ export {
   recordPrivateSeasonGateDecision,
   updatePrivateSeasonPlan,
 } from './private-season-authority';
+
+
+export {
+  getPrivateSeasonHealthDashboard,
+  recordPrivateSeasonEngagement,
+  updatePrivateSeasonWeeklyHealth,
+} from './private-season-health';
 
 export { getSecurityControlReadiness } from './security-authority';
 

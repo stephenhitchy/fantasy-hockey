@@ -12556,3 +12556,24 @@ Deployment is Hosting-only. Full operating and proof guidance is maintained in `
 Release Candidate 52 adds a platform-admin, server-owned control center for the 2026–27 tester-season scope. It tracks 2–4 exact leagues with at least six tracked managers each and 10–30 unique privacy-limited aliases, rejects duplicate league IDs or aliases, verifies complete league assignment, required experience/device and non-founder commissioner coverage, reads live team/Draft evidence, freezes the exact RC52 / Scoring V4 / Projection V11 build, records non-goals and support/rollback/deputy readiness, and writes immutable approved/delayed go/no-go audits with a plan hash. It stores no tester email address or phone number and introduces no browser Firestore write, Rule, index, TTL policy, competitive write, App Check promotion, scoring-queue promotion, or NHL-cache promotion.
 
 See `docs/RINKRAT_OPERATIONS_O1B_PRIVATE_SEASON_CONTROL_CENTER.md`.
+
+
+# Operations Batch O1C — Private Season Health
+
+**Runtime release:** Release Candidate 53
+
+**Competitive models:** Production Scoring V4 and Projection V11
+
+O1C measures the exact O1B private-season league plan through one platform-administrator health surface. The deployed browser records only bounded route categories for verified members of tracked leagues. The server derives the account, verifies membership and the exact RC53 build, and stores league-specific SHA-256 manager hashes rather than raw account IDs in daily engagement documents.
+
+The dashboard calculates six-manager filling, Draft completion, first Game Center view, first canonical roster action, Day 22–35 Week 4 retention, exact-build confirmed-action reliability, unresolved integrity reports, median support burden, commissioner return intent, founder interventions, and cost per activated league/week. A weekly record requires recent administrator authentication, revision matching, audit rationale, and an immutable hash-backed change entry.
+
+O1C adds no Firestore Rule, index, TTL policy, scoring change, projection change, competitive write, or automatic launch approval. Live cohort evidence remains required.
+
+Verification:
+
+```bash
+npm run verify:batcho1c
+```
+
+See `docs/RINKRAT_OPERATIONS_O1C_PRIVATE_SEASON_HEALTH.md`.

@@ -1,0 +1,323 @@
+:host {
+  display: block;
+}
+
+.private-health-page {
+  display: grid;
+  gap: var(--rr-space-5);
+  padding-bottom: var(--rr-space-8);
+}
+
+.private-health-hero,
+.health-status,
+.section-heading,
+.hero-actions,
+.metric-card header,
+.league-health-card header,
+.weekly-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+  flex-wrap: wrap;
+}
+
+.private-health-hero h1,
+.health-status h2,
+.section-heading h2,
+.league-health-card h3,
+.weekly-league-card h3 {
+  margin: 0;
+}
+
+.private-health-hero p,
+.health-status p,
+.metric-card p,
+.league-health-time,
+.retention-definition,
+.empty-state {
+  color: var(--rr-color-text-muted);
+}
+
+.private-health-hero p,
+.health-status p,
+.metric-card p,
+.league-health-time,
+.retention-definition,
+.empty-state {
+  margin: var(--rr-space-2) 0 0;
+}
+
+.hero-actions .rr-button,
+.health-status .rr-button,
+.weekly-save .rr-button,
+.weekly-history-row {
+  min-height: var(--rr-touch-target);
+}
+
+.health-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-3);
+}
+
+.health-status {
+  border-inline-start: 4px solid var(--rr-color-border-strong);
+}
+
+.health-status[data-status='healthy'] {
+  border-inline-start-color: var(--rr-color-status-success);
+}
+
+.health-status[data-status='needs-attention'],
+.health-status[data-status='collecting'] {
+  border-inline-start-color: var(--rr-color-status-warning);
+}
+
+.health-status[data-status='blocked'] {
+  border-inline-start-color: var(--rr-color-status-danger);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rr-space-3);
+}
+
+.metric-card {
+  display: grid;
+  align-content: start;
+  gap: var(--rr-space-3);
+  border-top: 3px solid var(--rr-color-border-strong);
+}
+
+.metric-card[data-status='green'] {
+  border-top-color: var(--rr-color-status-success);
+}
+
+.metric-card[data-status='red'] {
+  border-top-color: var(--rr-color-status-danger);
+}
+
+.metric-card[data-status='collecting'],
+.metric-card[data-status='not-due'] {
+  border-top-color: var(--rr-color-status-warning);
+}
+
+.metric-card header {
+  align-items: flex-start;
+}
+
+.metric-card header span,
+.metric-meta small,
+.league-health-facts dt,
+.weekly-history-row small {
+  color: var(--rr-color-text-muted);
+}
+
+.metric-card header strong {
+  font-size: var(--rr-font-size-xl);
+}
+
+.metric-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-2);
+  flex-wrap: wrap;
+}
+
+.metric-meta span,
+.league-health-state {
+  padding: var(--rr-space-1) var(--rr-space-2);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-pill);
+  font-size: var(--rr-font-size-sm);
+  font-weight: 700;
+}
+
+.health-section {
+  display: grid;
+  gap: var(--rr-space-4);
+}
+
+.league-health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-3);
+}
+
+.league-health-card,
+.weekly-league-card {
+  display: grid;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-4);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-lg);
+  background: var(--rr-color-surface-subtle);
+}
+
+.league-health-card[data-activated='true'] {
+  border-color: var(--rr-color-status-success);
+}
+
+.league-health-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  margin: 0;
+}
+
+.league-health-facts div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+.league-health-facts dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.activation-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activation-steps li {
+  display: grid;
+  place-items: center;
+  min-height: var(--rr-touch-target);
+  padding: var(--rr-space-2);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  color: var(--rr-color-text-muted);
+  text-align: center;
+  font-size: var(--rr-font-size-sm);
+}
+
+.activation-steps li.complete {
+  border-color: var(--rr-color-status-success);
+  color: var(--rr-color-text);
+}
+
+.weekly-top-grid,
+.weekly-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rr-space-3);
+}
+
+.weekly-top-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.weekly-league-list,
+.weekly-history-list {
+  display: grid;
+  gap: var(--rr-space-3);
+}
+
+.rr-field {
+  display: grid;
+  gap: var(--rr-space-2);
+}
+
+.rr-field > span {
+  font-weight: 700;
+}
+
+.rr-field input,
+.rr-field select,
+.rr-field textarea {
+  width: 100%;
+  min-height: var(--rr-touch-target);
+}
+
+.weekly-save {
+  align-items: end;
+}
+
+.weekly-save .rr-field {
+  flex: 1 1 24rem;
+}
+
+.weekly-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--rr-space-3);
+  width: 100%;
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-subtle);
+  color: var(--rr-color-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.weekly-history-row:hover,
+.weekly-history-row:focus-visible {
+  border-color: var(--rr-color-border-strong);
+}
+
+@media (max-width: 900px) {
+  .metric-grid,
+  .league-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activation-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .private-health-hero,
+  .health-status,
+  .section-heading,
+  .hero-actions,
+  .weekly-save {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-actions .rr-button,
+  .health-status .rr-button,
+  .weekly-save .rr-button {
+    width: 100%;
+  }
+
+  .weekly-top-grid,
+  .weekly-field-grid,
+  .league-health-facts,
+  .weekly-history-row {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-history-row {
+    gap: var(--rr-space-1);
+  }
+}
+
+@media print {
+  .no-print,
+  app-admin-session-step-up {
+    display: none;
+  }
+
+  .private-health-page {
+    display: block;
+  }
+
+  .metric-grid,
+  .league-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

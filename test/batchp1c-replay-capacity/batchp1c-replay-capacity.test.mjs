@@ -252,6 +252,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // O1B adds isolated platform-admin tester-season planning authority.
         'src/private-season-authority.ts',
         'src/shared/core/operations/private-season.util.ts',
+        // O1C adds isolated private-season health and engagement authority.
+        'src/private-season-health.ts',
+        'src/shared/core/operations/private-season-health.util.ts',
   ]);
 
   assert.equal(

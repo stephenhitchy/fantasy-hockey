@@ -145,6 +145,14 @@
       "requiredTokens": [
         "requireFirestoreDocumentId"
       ]
+    },
+    {
+      "file": "functions/src/private-season-health.ts",
+      "kind": "Private-season engagement, weekly health, and exact tester-league identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "privateSeasonManagerHash"
+      ]
     }
   ],
   "forbiddenDirectPathSources": [

@@ -403,6 +403,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // O1B adds isolated platform-admin tester-season planning authority.
     'private-season-authority.ts',
     'shared/core/operations/private-season.util.ts',
+    // O1C adds isolated private-season health and engagement authority.
+    'private-season-health.ts',
+    'shared/core/operations/private-season-health.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

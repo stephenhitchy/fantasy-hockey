@@ -103,6 +103,7 @@ import {
 import { requestTestInjuryEmail } from '../../../core/notifications/email-notification.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { ClientHealthService } from '../../../core/observability/client-health.service';
+import { PrivateSeasonEngagementService } from '../../../core/operations/private-season-engagement.service';
 import {
   CompetitiveActionMonitorService,
   type CompetitiveActionHandle,
@@ -184,6 +185,7 @@ import {
 export class CycleOne implements OnDestroy {
   private readonly platformAdminService = inject(PlatformAdminService);
   private readonly clientHealth = inject(ClientHealthService);
+  private readonly privateSeasonEngagement = inject(PrivateSeasonEngagementService);
   private readonly actionMonitor = inject(CompetitiveActionMonitorService);
   private readonly offlineMatchupSnapshots = inject(OfflineMatchupSnapshotService);
 
@@ -2247,6 +2249,11 @@ export class CycleOne implements OnDestroy {
       this.stopMatchupsListener = listenToCycleMatchups(leagueId, cycleNumber, (matchups) => {
         this.matchups.set(matchups);
         this.syncDisplayedMatchupRosterListeners(matchups);
+
+        if (matchups.some((matchup) =>
+          matchup.teamAOwnerId === user.uid || matchup.teamBOwnerId === user.uid)) {
+          this.privateSeasonEngagement.recordLeagueActivity(leagueId, 'game-center');
+        }
 
         const scoringResult = this.cycleScoring();
 
