@@ -37,6 +37,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'status',
+    title: 'RinkRat Status',
+    loadComponent: () =>
+      import('./features/support/service-status/service-status').then(
+        (module) => module.ServiceStatusPage,
+      ),
+  },
+  {
     path: 'support/known-issues',
     title: 'Known Issues',
     loadComponent: () =>
@@ -118,6 +126,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/admin-center/admin-center').then(
             (module) => module.AdminCenter,
+          ),
+      },
+      {
+        path: 'admin/incidents',
+        title: 'Incident Command Center',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/service-incidents/service-incidents').then(
+            (module) => module.ServiceIncidents,
           ),
       },
       {

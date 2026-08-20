@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const PRIVATE_SEASON_HEALTH_SCHEMA_VERSION = 1;
-export const PRIVATE_SEASON_HEALTH_RELEASE_LABEL = 'Release Candidate 53';
+export const PRIVATE_SEASON_HEALTH_RELEASE_LABEL = 'Release Candidate 54';
 export const PRIVATE_SEASON_HEALTH_SCORING_VERSION = 4;
 export const PRIVATE_SEASON_HEALTH_PROJECTION_VERSION = 11;
 export const PRIVATE_SEASON_HEALTH_WEEKLY_REASON_MINIMUM_LENGTH = 12;
@@ -424,8 +424,8 @@ export function buildPrivateSeasonHealthSummary(input: {
         ? 'green'
         : 'red',
       detail: input.unresolvedIntegrityCount === 0
-        ? 'No unresolved competition-integrity report is currently open.'
-        : 'Stop risky releases and acquisition until every integrity report is resolved or deliberately scoped.',
+        ? 'No unresolved competition-integrity report or active P0 incident is currently open.'
+        : 'Stop risky releases and acquisition until every integrity report and active P0 incident is resolved or deliberately scoped.',
       numerator: input.unresolvedIntegrityCount,
       denominator: null,
       percent: null,

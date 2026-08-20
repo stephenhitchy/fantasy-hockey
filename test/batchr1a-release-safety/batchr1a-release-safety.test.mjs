@@ -398,6 +398,9 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // O1C adds isolated private-season health and engagement authority.
         'src/private-season-health.ts',
         'src/shared/core/operations/private-season-health.util.ts',
+        // O1D adds isolated incident/status authority.
+        'src/service-incident-authority.ts',
+        'src/shared/core/operations/service-incident.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

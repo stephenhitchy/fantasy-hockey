@@ -373,15 +373,15 @@ test('A1H advances RC46, completes A1.10, and retains replay latency as work in 
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 53/);
-  assert.match(productionRuntime, /Release Candidate 53/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 53');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1c');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc53-invite-beta');
+  assert.match(runtime, /Release Candidate 54/);
+  assert.match(productionRuntime, /Release Candidate 54/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 54');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1d');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc54-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1h:core'], /verify:batcha1g:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1c:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1d:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.44/);
+  assert.match(roadmap, /Version 1\.45/);
   assert.match(roadmap, /# \[x\] A1\.10/);
   assert.match(roadmap, /# \[x\] A1\.17/);
   assert.match(roadmap, /\[~\] A1\.16 Reduce historical-replay player-data catch-up latency/);
@@ -389,8 +389,8 @@ test('A1H advances RC46, completes A1.10, and retains replay latency as work in 
   assert.match(docs, /exact-position/i);
   assert.match(docs, /entertainment only/i);
   assert.match(docs, /Hosting-only/i);
-  assert.match(readme, /Release Candidate 53 \/ Operations Batch O1C/);
-  assert.match(runbook, /npm run verify:batcho1c/);
-  assert.match(runbook, /rinkrat-rc53-validation\.json/);
-  assert.match(runbook, /rinkrat-rc53-invite-beta/);
+  assert.match(readme, /Release Candidate 54 \/ Operations Batch O1D/);
+  assert.match(runbook, /npm run verify:batcho1d/);
+  assert.match(runbook, /rinkrat-rc54-validation\.json/);
+  assert.match(runbook, /rinkrat-rc54-invite-beta/);
 });

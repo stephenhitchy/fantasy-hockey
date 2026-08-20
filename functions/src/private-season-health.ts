@@ -34,11 +34,12 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-53-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-54-[A-Za-z0-9._:-]{4,160}$/;
 const ENGAGEMENT_DAILY_LIMIT = 24;
 const HEALTH_EVIDENCE_WINDOW_DAYS = 35;
 const HEALTH_EVIDENCE_LIMIT = 2_000;
 const INTEGRITY_REPORT_LIMIT = 200;
+const SERVICE_INCIDENT_SCAN_LIMIT = 50;
 const TRANSACTION_SCAN_LIMIT = 100;
 const MANAGER_DAY_QUERY_LIMIT = 1_000;
 
@@ -156,14 +157,14 @@ function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateS
   ) {
     throw new HttpsError(
       'failed-precondition',
-      'Refresh RinkRat. Private-season health accepts only the current RC53 / Scoring V4 / Projection V11 build.',
+      'Refresh RinkRat. Private-season health accepts only the current RC54 / Scoring V4 / Projection V11 build.',
     );
   }
 
   if (requireDeployableBuild && result.buildId.endsWith('-local')) {
     throw new HttpsError(
       'failed-precondition',
-      'Open the deployed RC53 site before recording private-season evidence.',
+      'Open the deployed RC54 site before recording private-season evidence.',
     );
   }
 
@@ -436,17 +437,30 @@ async function actionEvidence(buildId: string, nowMilliseconds: number): Promise
 }
 
 async function unresolvedIntegrityCount(): Promise<number> {
-  const snapshot = await db.collection('feedbackReports')
-    .orderBy('createdAt', 'desc')
-    .limit(INTEGRITY_REPORT_LIMIT)
-    .get();
+  const [feedbackSnapshot, incidentSnapshot] = await Promise.all([
+    db.collection('feedbackReports')
+      .orderBy('createdAt', 'desc')
+      .limit(INTEGRITY_REPORT_LIMIT)
+      .get(),
+    db.collection('publicServiceIncidents')
+      .orderBy('updatedAt', 'desc')
+      .limit(SERVICE_INCIDENT_SCAN_LIMIT)
+      .get(),
+  ]);
 
-  return snapshot.docs
+  const feedbackCount = feedbackSnapshot.docs
     .map((document) => document.data())
     .filter((entry) =>
       text(entry['severity'], 30) === 'integrity' &&
       OPEN_FEEDBACK_STATUSES.has(text(entry['status'], 30)))
     .length;
+  const activeP0IncidentCount = incidentSnapshot.docs
+    .map((document) => document.data())
+    .filter((entry) =>
+      text(entry['severity'], 10) === 'p0' && text(entry['status'], 30) !== 'resolved')
+    .length;
+
+  return feedbackCount + activeP0IncidentCount;
 }
 
 async function healthSnapshot(

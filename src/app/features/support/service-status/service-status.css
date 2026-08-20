@@ -1,0 +1,202 @@
+:host {
+  display: block;
+}
+
+.service-status-page,
+.status-section,
+.incident-list,
+.incident-card,
+.manager-guidance,
+.competition-data-state,
+.resolved-list {
+  display: grid;
+  gap: var(--rr-space-4);
+}
+
+.service-status-page {
+  padding-bottom: var(--rr-space-8);
+}
+
+.service-status-hero,
+.service-status-actions,
+.overall-status,
+.section-heading,
+.incident-card header,
+.resolved-list article header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+  flex-wrap: wrap;
+}
+
+.service-status-hero h1,
+.overall-status h2,
+.section-heading h2,
+.incident-card h3,
+.resolved-list h3 {
+  margin: 0;
+}
+
+.service-status-hero p,
+.overall-status p,
+.incident-card > p,
+.resolved-list p,
+.empty-status span {
+  color: var(--rr-color-text-muted);
+}
+
+.service-status-actions .rr-button {
+  min-height: var(--rr-touch-target);
+}
+
+.service-status-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-3);
+}
+
+.overall-status {
+  border-inline-start: 4px solid var(--rr-color-status-success);
+}
+
+.overall-status[data-status='minor-issue'] {
+  border-inline-start-color: var(--rr-color-status-warning);
+}
+
+.overall-status[data-status='degraded'],
+.overall-status[data-status='major-incident'] {
+  border-inline-start-color: var(--rr-color-status-danger);
+}
+
+.overall-status-badge,
+.severity-badge,
+.status-badge,
+.component-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: var(--rr-space-1) var(--rr-space-2);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-pill);
+  font-size: var(--rr-font-size-sm);
+  font-weight: 700;
+}
+
+.incident-card {
+  border-inline-start: 4px solid var(--rr-color-border-strong);
+}
+
+.incident-card[data-severity='p0'],
+.incident-card[data-severity='p1'] {
+  border-inline-start-color: var(--rr-color-status-danger);
+}
+
+.incident-card[data-severity='p2'] {
+  border-inline-start-color: var(--rr-color-status-warning);
+}
+
+.component-list {
+  display: flex;
+  gap: var(--rr-space-2);
+  flex-wrap: wrap;
+}
+
+.manager-guidance,
+.competition-data-state {
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-subtle);
+}
+
+.manager-guidance p,
+.competition-data-state p {
+  margin: 0;
+}
+
+.incident-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--rr-space-3);
+  margin: 0;
+}
+
+.incident-meta div {
+  min-width: 0;
+}
+
+.incident-meta dt {
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-font-size-sm);
+}
+
+.incident-meta dd {
+  margin: var(--rr-space-1) 0 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.incident-updates summary,
+.resolved-incidents summary {
+  min-height: var(--rr-touch-target);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.incident-updates ol {
+  display: grid;
+  gap: var(--rr-space-3);
+  margin: var(--rr-space-3) 0 0;
+  padding-inline-start: var(--rr-space-5);
+}
+
+.incident-updates li div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+  flex-wrap: wrap;
+}
+
+.incident-updates li p {
+  margin: var(--rr-space-1) 0 0;
+}
+
+.resolved-list article {
+  padding-block: var(--rr-space-3);
+  border-top: 1px solid var(--rr-color-border);
+}
+
+.empty-status {
+  display: grid;
+  gap: var(--rr-space-2);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .service-status-actions,
+  .service-status-actions .rr-button,
+  .service-status-actions a {
+    width: 100%;
+  }
+
+  .incident-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .incident-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.competition-data-state[data-state='delayed'],
+.competition-data-state[data-state='stale-read-only'] {
+  border-inline-start: 4px solid var(--rr-color-status-warning);
+}
+
+.competition-data-state[data-state='unavailable'] {
+  border-inline-start: 4px solid var(--rr-color-status-danger);
+}

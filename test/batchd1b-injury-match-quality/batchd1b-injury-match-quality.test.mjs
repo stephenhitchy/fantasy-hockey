@@ -221,17 +221,17 @@ test('D1B remains intact under RC34 while preserving Scoring V3, Projection V11,
   const packageJson = JSON.parse(packageSource);
   const freezePolicy = JSON.parse(freezePolicySource);
 
-  assert.match(runtime, /Release Candidate 53/);
-  assert.match(productionRuntime, /Release Candidate 53/);
+  assert.match(runtime, /Release Candidate 54/);
+  assert.match(productionRuntime, /Release Candidate 54/);
   assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*4/);
   assert.match(projectionSnapshot, /SHARED_PROJECTION_VERSION\s*=\s*11/);
   assert.match(appCheckConfig, /"defaultMode": "monitor"/);
   assert.match(queueConfig, /LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE\s*=\s*'shadow'/);
   assert.match(packageJson.scripts['verify:batchd1b:core'], /verify:batchd1a-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c):core/);
-  assert.equal(freezePolicy.releaseLabel, 'Release Candidate 53');
-  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batcho1c');
-  assert.equal(freezePolicy.defaultTag, 'rinkrat-rc53-invite-beta');
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c|o1d):core/);
+  assert.equal(freezePolicy.releaseLabel, 'Release Candidate 54');
+  assert.equal(freezePolicy.verificationCommand, 'npm run verify:batcho1d');
+  assert.equal(freezePolicy.defaultTag, 'rinkrat-rc54-invite-beta');
 });
 
 test('D1B documentation and permanent roadmap record categorized injury identity review', async () => {
@@ -244,14 +244,14 @@ test('D1B documentation and permanent roadmap record categorized injury identity
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.44/);
+  assert.match(roadmap, /Version 1\.45/);
   assert.match(roadmap, /# \[x\] D1\.11/);
   assert.match(roadmap, /# \[x\] D1\.18/);
   assert.match(roadmap, /# \[x\] LOG\.28/);
   assert.match(runbook, /never guesses/i);
   assert.match(runbook, /Team Goalie Unit/);
   assert.match(runbook, /verify:batchd1b/);
-  assert.match(readme, /Release Candidate 53 \/ Operations Batch O1C/);
+  assert.match(readme, /Release Candidate 54 \/ Operations Batch O1D/);
   assert.match(readme, /## Data Quality Batch D1B/);
   assert.match(aliases, /ESPN_INJURY_PLAYER_ALIASES/);
   assert.match(aliases, /do not add an unverified placeholder/i);

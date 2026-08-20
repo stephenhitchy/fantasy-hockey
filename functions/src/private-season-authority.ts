@@ -27,7 +27,7 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
 const REASON_MINIMUM = PRIVATE_SEASON_DECISION_REASON_MINIMUM_LENGTH;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-53-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-54-[A-Za-z0-9._:-]{4,160}$/;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -95,13 +95,13 @@ function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateS
   ) {
     throw new HttpsError(
       'failed-precondition',
-      'Refresh RinkRat. The private-season gate accepts only the current RC53 / Scoring V4 / Projection V11 build.',
+      'Refresh RinkRat. The private-season gate accepts only the current RC54 / Scoring V4 / Projection V11 build.',
     );
   }
   if (requireDeployableBuild && result.buildId.endsWith('-local')) {
     throw new HttpsError(
       'failed-precondition',
-      'Open the deployed RC53 site before changing or approving the private-season plan.',
+      'Open the deployed RC54 site before changing or approving the private-season plan.',
     );
   }
   return result;

@@ -12577,3 +12577,21 @@ npm run verify:batcho1c
 ```
 
 See `docs/RINKRAT_OPERATIONS_O1C_PRIVATE_SEASON_HEALTH.md`.
+
+
+# Operations Batch O1D — Incident Command and Public Service Status
+
+**Runtime release:** Release Candidate 54
+**Competitive models:** Production Scoring V4 and Projection V11
+
+O1D adds a public `/status` page, a guarded platform-admin `/admin/incidents` center, separate server-owned private/public incident documents, immutable revision audits, public update timelines, P0–P3 response targets, explicit manager-action guidance, and live/delayed/stale-read-only/unavailable competition-data language. Only active P0/P1 incidents produce the compact global manager banner. Active public P0 incidents also count toward O1C's stop-the-line integrity evidence.
+
+No incident action edits a Draft, score, roster, waiver result, six-game window, standings record, projection, or infrastructure rollout mode. Resolved incidents are immutable. Independent status hosting for broad Firebase/DNS outages remains a public-launch requirement.
+
+Verification:
+
+```bash
+npm run verify:batcho1d
+```
+
+See `docs/RINKRAT_OPERATIONS_O1D_INCIDENT_STATUS.md` for operating and deployment guidance.

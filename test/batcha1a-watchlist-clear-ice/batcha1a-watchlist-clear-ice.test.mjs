@@ -202,15 +202,15 @@ test('A1A advances release operations to RC39 with one inherited verification ga
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 53/);
-  assert.match(productionRuntime, /Release Candidate 53/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 53');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1c');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc53-invite-beta');
+  assert.match(runtime, /Release Candidate 54/);
+  assert.match(productionRuntime, /Release Candidate 54/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 54');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1d');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc54-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /audit:product-copy-density/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1c:core/);
-  assert.match(releaseScript, /rinkrat-rc53-invite-beta/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1d:core/);
+  assert.match(releaseScript, /rinkrat-rc54-invite-beta/);
   assert.match((await read('functions/package.json')), /getPlayerWatchlist,setPlayerWatchlistEntry,deleteMyAccount/);
 });
 
@@ -224,7 +224,7 @@ test('roadmap and documentation complete A1.5 and record the Clear Ice product p
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.44/);
+  assert.match(roadmap, /Version 1\.45/);
   assert.match(roadmap, /# \[x\] A1\.5 Add watchlists independent of Draft queues/);
   assert.match(roadmap, /# \[x\] A1\.11/);
   assert.match(roadmap, /# \[x\] LOG\.48 2026-08-17/);
@@ -232,9 +232,9 @@ test('roadmap and documentation complete A1.5 and record the Clear Ice product p
   assert.match(docs, /Seventeen manager-facing templates/i);
   assert.match(docs, /Functions-first deployment/);
   assert.match(docs, /functions:getPlayerWatchlist,functions:setPlayerWatchlistEntry,functions:deleteMyAccount/);
-  assert.match(readme, /Release Candidate 53 \/ Operations Batch O1C/);
+  assert.match(readme, /Release Candidate 54 \/ Operations Batch O1D/);
   assert.match(readme, /RINKRAT_PRODUCT_A1A_WATCHLIST_CLEAR_ICE\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcho1c/);
-  assert.match(releaseRunbook, /rinkrat-rc53-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc53-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcho1d/);
+  assert.match(releaseRunbook, /rinkrat-rc54-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc54-invite-beta/);
 });

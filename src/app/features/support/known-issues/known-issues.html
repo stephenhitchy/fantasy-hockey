@@ -10,6 +10,7 @@
     </p>
     <div class="known-issues-actions">
       <a routerLink="/support/feedback" class="rr-button rr-button--primary">Report Something New</a>
+      <a routerLink="/status" class="rr-button rr-button--secondary">Live Service Status</a>
       <button type="button" class="rr-button rr-button--secondary" [disabled]="loading()" (click)="load()">
         {{ loading() ? 'Refreshing…' : 'Refresh Status' }}
       </button>

@@ -4063,6 +4063,13 @@ export {
   updatePrivateSeasonWeeklyHealth,
 } from './private-season-health';
 
+export {
+  createServiceIncident,
+  getPublicServiceStatus,
+  getServiceIncidentOperations,
+  updateServiceIncident,
+} from './service-incident-authority';
+
 export { getSecurityControlReadiness } from './security-authority';
 
 export {

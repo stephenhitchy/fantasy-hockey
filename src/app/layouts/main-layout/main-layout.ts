@@ -20,6 +20,7 @@ import { filter, Subscription } from 'rxjs';
 import { getScoringRuntimeState } from '../../core/cycle/cycle-runtime.config';
 import { ClientHealthService } from '../../core/observability/client-health.service';
 import { PrivateSeasonEngagementService } from '../../core/operations/private-season-engagement.service';
+import { ServiceStatusService } from '../../core/operations/service-status.service';
 import { Navbar } from '../../shared/navbar/navbar';
 import { CoachHelp } from '../../shared/coach-help/coach-help';
 import { buildFullPixelMarquee, PixelLogoItem } from '../../shared/pixel-theme/pixel-theme.data';
@@ -34,6 +35,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
   @ViewChild('mainContent') private mainContent?: ElementRef<HTMLElement>;
 
   protected readonly clientHealth = inject(ClientHealthService);
+  protected readonly serviceStatus = inject(ServiceStatusService);
   private readonly privateSeasonEngagement = inject(PrivateSeasonEngagementService);
   readonly scoringRuntime = getScoringRuntimeState();
   readonly teamRibbon: PixelLogoItem[] = buildFullPixelMarquee();
@@ -47,6 +49,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     private readonly router: Router,
     private readonly documentTitle: Title,
   ) {
+    this.serviceStatus.start();
     this.routeSubscription = this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .subscribe((event) => this.handleRouteChange(event.urlAfterRedirects));
@@ -58,6 +61,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSubscription.unsubscribe();
+    this.serviceStatus.stop();
 
     if (this.routeFocusTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this.routeFocusTimer);

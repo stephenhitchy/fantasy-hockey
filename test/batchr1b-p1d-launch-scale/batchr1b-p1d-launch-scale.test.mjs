@@ -451,6 +451,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // O1C adds isolated private-season health and engagement authority.
         'src/private-season-health.ts',
         'src/shared/core/operations/private-season-health.util.ts',
+        // O1D adds isolated incident/status authority.
+        'src/service-incident-authority.ts',
+        'src/shared/core/operations/service-incident.util.ts',
       ]),
     ),
     '476753579e580d7d15275d139e327ea2dbebcf742e8531ad37241d5e15cd3d2a',

@@ -1,0 +1,248 @@
+<main class="incident-center rr-page-shell">
+  <header class="incident-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Platform operations</span>
+      <h1>Incident Command Center</h1>
+      <p>Publish clear service status, preserve internal evidence, and never silently change competition results.</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="rr-button rr-button--secondary" (click)="startNewIncident()">New Incident</button>
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh Center' }}
+      </button>
+      <a routerLink="/status" class="rr-button rr-button--secondary">Public Status</a>
+      <a routerLink="/admin" class="rr-button rr-button--secondary">Admin Center</a>
+    </div>
+  </header>
+
+  <app-admin-session-step-up></app-admin-session-step-up>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="incident-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Loading incident operations…</strong>
+    </section>
+  } @else {
+    <section class="incident-summary" aria-label="Incident summary">
+      <article class="summary-card" data-tone="urgent">
+        <span>Active P0</span>
+        <strong>{{ activeP0Count() }}</strong>
+        <small>Review the active list below</small>
+      </article>
+      <article class="summary-card">
+        <span>Public state</span>
+        <strong>{{ snapshot()?.publicStatus?.headline || 'Unavailable' }}</strong>
+        <small>{{ snapshot()?.publicStatus?.detail || 'No snapshot loaded' }}</small>
+      </article>
+      <article class="summary-card">
+        <span>Resolved history</span>
+        <strong>{{ resolvedIncidents().length }}</strong>
+        <small>Kept for operating evidence</small>
+      </article>
+    </section>
+
+    <section class="incident-editor rr-card rr-card--raised rr-card--padded" aria-labelledby="incident-editor-title">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">{{ editingIncidentId() ? 'Update incident' : 'Create incident' }}</span>
+          <h2 id="incident-editor-title">{{ editingIncidentId() ? 'Publish the next incident update' : 'Open a new public incident' }}</h2>
+        </div>
+        @if (selectedIncident(); as selected) {
+          <span>Revision {{ selected.revision }} · {{ selected.incidentId.slice(0, 8).toUpperCase() }}</span>
+        }
+      </header>
+
+      <p class="response-target"><strong>Response target:</strong> {{ responseTarget() }}</p>
+
+      <div class="incident-form-grid">
+        <label>
+          <span>Severity</span>
+          <select [(ngModel)]="draft.severity" (ngModelChange)="ensurePostmortemForSeverity()">
+            @for (option of severityOptions; track option.value) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Status</span>
+          <select [(ngModel)]="draft.status">
+            @for (option of statusOptions; track option.value) {
+              <option [ngValue]="option.value" [disabled]="!editingIncidentId() && option.value === 'resolved'">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Competition impact</span>
+          <select [(ngModel)]="draft.competitiveImpact">
+            @for (option of impactOptions; track option.value) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Competition data state</span>
+          <select [(ngModel)]="draft.dataState">
+            @for (option of dataStateOptions; track option.value) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Manager action</span>
+          <select [(ngModel)]="draft.userAction">
+            @for (option of actionOptions; track option.value) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <fieldset class="component-fieldset">
+        <legend>Affected components</legend>
+        <div class="component-grid">
+          @for (option of componentOptions; track option.value) {
+            <label>
+              <input
+                type="checkbox"
+                [checked]="componentChecked(option.value)"
+                (change)="toggleComponent(option.value, $any($event.target).checked)"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      <div class="incident-copy-grid">
+        <label>
+          <span>Public title</span>
+          <input [(ngModel)]="draft.publicTitle" maxlength="140" placeholder="Draft confirmations are delayed" />
+        </label>
+        <label>
+          <span>Internal title</span>
+          <input [(ngModel)]="draft.internalTitle" maxlength="180" placeholder="Optional private operating title" />
+        </label>
+        <label class="wide-field">
+          <span>Public summary</span>
+          <textarea [(ngModel)]="draft.publicSummary" maxlength="900" rows="3" placeholder="Describe what is affected without exposing private league or manager details."></textarea>
+        </label>
+        <label class="wide-field">
+          <span>Manager guidance</span>
+          <textarea [(ngModel)]="draft.publicGuidance" maxlength="600" rows="3" placeholder="Tell managers exactly what to do or avoid while this incident is active."></textarea>
+        </label>
+        @if (draft.dataState !== 'live') {
+          <label class="wide-field">
+            <span>Competition data message</span>
+            <textarea [(ngModel)]="draft.dataMessage" maxlength="700" rows="2" placeholder="Explain whether scores or matchup data are delayed, unavailable, or safe only as a stale read-only view."></textarea>
+          </label>
+        }
+        @if (draft.status !== 'resolved') {
+          <label>
+            <span>Next public update</span>
+            <input type="datetime-local" [(ngModel)]="nextUpdateLocal" />
+          </label>
+        }
+        @if (draft.status === 'resolved') {
+          <label class="wide-field">
+            <span>Public resolution</span>
+            <textarea [(ngModel)]="draft.publicResolution" maxlength="1000" rows="3" placeholder="Explain what was restored and whether any follow-up remains."></textarea>
+          </label>
+        }
+        <label class="wide-field">
+          <span>Public update for this revision</span>
+          <textarea [(ngModel)]="publicUpdate" maxlength="800" rows="3" placeholder="This text is added to the public incident timeline."></textarea>
+        </label>
+        <label class="wide-field">
+          <span>Private operating note</span>
+          <textarea [(ngModel)]="internalNote" maxlength="4000" rows="3" placeholder="Root-cause evidence, owners, rollback notes, or investigation context. Never publish this field automatically."></textarea>
+        </label>
+        <label class="wide-field">
+          <span>Audit reason</span>
+          <textarea [(ngModel)]="auditReason" maxlength="800" rows="2" placeholder="Explain why this incident record is being created or changed."></textarea>
+        </label>
+      </div>
+
+      <label class="postmortem-toggle">
+        <input
+          type="checkbox"
+          [(ngModel)]="draft.postmortemRequired"
+          [disabled]="draft.severity === 'p0'"
+        />
+        <span>{{ draft.severity === 'p0' ? 'Private post-incident review required for P0' : 'Require a private post-incident review for this incident' }}</span>
+      </label>
+
+      <div class="editor-actions">
+        <button type="button" class="rr-button rr-button--secondary" [disabled]="saving()" (click)="startNewIncident()">Clear Editor</button>
+        <button type="button" class="rr-button rr-button--commit" [disabled]="saving()" (click)="save()">
+          {{ saving() ? 'Saving…' : editingIncidentId() ? 'Publish Incident Update' : 'Create Public Incident' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="incident-section" aria-labelledby="active-incidents-admin-title">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Needs action</span>
+          <h2 id="active-incidents-admin-title">Active incidents</h2>
+        </div>
+        <span>{{ activeIncidents().length }}</span>
+      </header>
+
+      <div class="admin-incident-list">
+        @for (incident of activeIncidents(); track incident.incidentId) {
+          <article class="admin-incident-card rr-card rr-card--raised rr-card--padded" [attr.data-severity]="incident.severity">
+            <header>
+              <div>
+                <span>{{ severityLabel(incident.severity) }}</span>
+                <h3>{{ incident.publicTitle }}</h3>
+              </div>
+              <span>{{ statusLabel(incident.status) }}</span>
+            </header>
+            <p>{{ incident.publicSummary }}</p>
+            <dl>
+              <div><dt>Guidance</dt><dd>{{ actionLabel(incident.userAction) }}</dd></div>
+              <div><dt>Data</dt><dd>{{ dataStateLabel(incident.dataState) }}</dd></div>
+              <div><dt>Next update</dt><dd>{{ formatDateTime(incident.nextUpdateAt) }}</dd></div>
+              <div><dt>Updated</dt><dd>{{ formatDateTime(incident.updatedAt) }}</dd></div>
+              <div><dt>Revision</dt><dd>{{ incident.revision }}</dd></div>
+            </dl>
+            @if (incident.internalNotes) {
+              <details class="private-evidence">
+                <summary>Latest private operating note</summary>
+                <p>{{ incident.internalNotes }}</p>
+              </details>
+            }
+            <button type="button" class="rr-button rr-button--secondary" (click)="editIncident(incident)">Update Incident</button>
+          </article>
+        } @empty {
+          <article class="empty-state rr-card rr-card--padded">
+            <strong>No active service incident.</strong>
+            <span>Known Issues can still contain confirmed defects that are not active outages.</span>
+          </article>
+        }
+      </div>
+    </section>
+
+    @if (resolvedIncidents().length > 0) {
+      <details class="resolved-admin rr-card rr-card--raised rr-card--padded">
+        <summary>Resolved incident history ({{ resolvedIncidents().length }})</summary>
+        <div class="resolved-admin-list">
+          @for (incident of resolvedIncidents(); track incident.incidentId) {
+            <article>
+              <h3>{{ incident.publicTitle }}</h3>
+              <p>{{ incident.publicResolution }}</p>
+              <span>{{ formatDateTime(incident.resolvedAt || incident.updatedAt) }}</span>
+            </article>
+          }
+        </div>
+      </details>
+    }
+  }
+</main>

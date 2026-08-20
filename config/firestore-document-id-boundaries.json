@@ -153,6 +153,13 @@
         "requireFirestoreDocumentId",
         "privateSeasonManagerHash"
       ]
+    },
+    {
+      "file": "functions/src/service-incident-authority.ts",
+      "kind": "Service incident administrator and public-update identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId"
+      ]
     }
   ],
   "forbiddenDirectPathSources": [

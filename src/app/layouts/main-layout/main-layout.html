@@ -23,6 +23,24 @@
   </aside>
 }
 
+@if (serviceStatus.bannerIncident(); as incident) {
+  <aside
+    class="service-incident-banner"
+    [attr.data-severity]="incident.severity"
+    [attr.role]="incident.severity === 'p0' ? 'alert' : 'status'"
+    [attr.aria-live]="incident.severity === 'p0' ? 'assertive' : 'polite'"
+  >
+    <div>
+      <strong>{{ incident.title }}</strong>
+      <span>{{ incident.guidance || incident.summary }}</span>
+      @if (serviceStatus.state().stale) {
+        <small>Saved status · confirm live details after reconnecting.</small>
+      }
+    </div>
+    <a routerLink="/status">View Service Status</a>
+  </aside>
+}
+
 @if (scoringRuntime.effectiveMode === 'historical' || scoringRuntime.historicalModeBlocked) {
   <aside
     class="runtime-warning"
@@ -78,6 +96,7 @@
   <nav aria-label="Footer navigation">
     <a routerLink="/training-camp">Training Camp</a>
     <a routerLink="/support">Support</a>
+    <a routerLink="/status">Service Status</a>
     <a routerLink="/support/known-issues">Known Issues</a>
     <a routerLink="/support/feedback">Send Feedback</a>
     <a routerLink="/privacy">Privacy</a>

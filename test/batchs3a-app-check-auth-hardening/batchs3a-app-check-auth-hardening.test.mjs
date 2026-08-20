@@ -316,7 +316,7 @@ test('S3A remains monitor-only and documents the deliberate activation and enfor
   assert.match(setupGuideSource, /security:apply-auth-baseline/);
   assert.match(setupGuideSource, /S3A does not set `enforceAppCheck: true`/);
   assert.match(documentationSource, /Security Batch S3A — App Check Monitor Mode and Authentication Hardening/);
-  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3[AB](?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Product Batch A1A|Product Batch A1B|Product Batch A1C|Product Batch A1E|Product Batch A1F|Product Batch A1H|Product Batch A1I|Mobile Batch N1B|Scoring Batch V4A|Operations Batch O1B|Operations Batch O1C)/);
+  assert.match(readmeSource, /Release Candidate \d+ \/ (?:Security S3[AB](?:\.\d+)?|Onboarding Batch B1A|Security Batch S3C|Security Batch S3D|Security Batch S3E|Security Batch S3F|Beta Operations Batch B1B|Data Quality Batch D1A|Data Quality Batch D1B|Social Batch C1A|Social Batch C1B|Social Batch C1C|Social Batch C1D|Social Batch C1E|Social Batch C1F|Social Batch C1G|Social Batch C1H|Social Batch C1I|Social Batch C1J|Social Batch C1K|Product Batch A1A|Product Batch A1B|Product Batch A1C|Product Batch A1E|Product Batch A1F|Product Batch A1H|Product Batch A1I|Mobile Batch N1B|Scoring Batch V4A|Operations Batch O1B|Operations Batch O1D)/);
 });
 
 test('S3A verification, release manifest, permanent roadmap, and package commands stay synchronized', () => {

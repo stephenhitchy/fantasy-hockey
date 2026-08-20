@@ -406,6 +406,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // O1C adds isolated private-season health and engagement authority.
     'private-season-health.ts',
     'shared/core/operations/private-season-health.util.ts',
+    // O1D adds isolated incident/status authority.
+    'service-incident-authority.ts',
+    'shared/core/operations/service-incident.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

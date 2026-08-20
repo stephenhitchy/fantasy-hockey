@@ -374,3 +374,62 @@
     transition: none;
   }
 }
+
+/* O1D: compact, inline service communication for active P0/P1 incidents. */
+.service-incident-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-3) var(--rr-space-4);
+  border-block-end: 2px solid var(--rr-color-status-warning);
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text);
+}
+
+.service-incident-banner[data-severity='p0'] {
+  border-block-end-color: var(--rr-color-status-danger);
+}
+
+.service-incident-banner > div {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+.service-incident-banner strong,
+.service-incident-banner span {
+  overflow-wrap: anywhere;
+}
+
+.service-incident-banner span {
+  color: var(--rr-color-text-muted);
+}
+
+.service-incident-banner a {
+  min-height: var(--rr-touch-target);
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--rr-color-text);
+  font-weight: 900;
+}
+
+@media (max-width: 700px) {
+  .service-incident-banner {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--rr-space-3);
+  }
+
+  .service-incident-banner a {
+    width: 100%;
+  }
+}
+
+.service-incident-banner small {
+  color: var(--rr-color-status-warning);
+  font-size: var(--rr-font-size-sm);
+  font-weight: 800;
+}
+

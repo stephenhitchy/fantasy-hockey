@@ -1,0 +1,151 @@
+<main class="service-status-page rr-page-shell">
+  <header class="service-status-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">RinkRat operations</span>
+      <h1>Service Status</h1>
+      <p>Live incidents, manager guidance, and recently resolved service problems.</p>
+    </div>
+    <div class="service-status-actions">
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="loading()"
+        (click)="refresh()"
+      >
+        {{ loading() ? 'Refreshing…' : 'Refresh Status' }}
+      </button>
+      <a routerLink="/support/known-issues" class="rr-button rr-button--secondary">Known Issues</a>
+      <a routerLink="/support" class="rr-button rr-button--secondary">Support</a>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--warning" role="status">{{ errorMessage() }}</p>
+  }
+
+  @if (loading() && !snapshot()) {
+    <section class="service-status-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Checking RinkRat services…</strong>
+    </section>
+  } @else if (snapshot(); as status) {
+    <section
+      class="overall-status rr-card rr-card--raised rr-card--padded"
+      [attr.data-status]="status.overallStatus"
+      aria-labelledby="overall-status-title"
+    >
+      <div>
+        <span class="eyebrow">Current state</span>
+        <h2 id="overall-status-title">{{ status.headline }}</h2>
+        <p>{{ status.detail }}</p>
+      </div>
+      <span class="overall-status-badge">{{ overallStatusLabel() }}</span>
+    </section>
+
+    @if (state().stale) {
+      <p class="rr-notice rr-notice--warning" role="status">
+        This is a saved public-status copy from {{ formatDateTime(state().loadedAt) }}. Confirm live status after reconnecting.
+      </p>
+    }
+
+    <section class="status-section" aria-labelledby="active-incidents-title">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Current incidents</span>
+          <h2 id="active-incidents-title">Active service incidents</h2>
+        </div>
+        <span>{{ status.activeIncidents.length }}</span>
+      </header>
+
+      <div class="incident-list">
+        @for (incident of status.activeIncidents; track incident.incidentId) {
+          <article
+            class="incident-card rr-card rr-card--raised rr-card--padded"
+            [attr.data-severity]="incident.severity"
+          >
+            <header>
+              <div>
+                <span class="severity-badge">{{ severityLabel(incident.severity) }}</span>
+                <h3>{{ incident.title }}</h3>
+              </div>
+              <span class="status-badge">{{ statusLabel(incident.status) }}</span>
+            </header>
+
+            <p>{{ incident.summary }}</p>
+
+            <div class="component-list" aria-label="Affected components">
+              @for (component of incident.affectedComponents; track component) {
+                <span>{{ componentLabel(component) }}</span>
+              }
+            </div>
+
+            <section class="manager-guidance">
+              <span class="eyebrow">Manager guidance</span>
+              <strong>{{ actionLabel(incident.userAction) }}</strong>
+              @if (incident.guidance) {
+                <p>{{ incident.guidance }}</p>
+              }
+            </section>
+
+            <section class="competition-data-state" [attr.data-state]="incident.dataState">
+              <span class="eyebrow">Competition data</span>
+              <strong>{{ dataStateLabel(incident.dataState) }}</strong>
+              @if (incident.dataMessage) {
+                <p>{{ incident.dataMessage }}</p>
+              }
+            </section>
+
+            <dl class="incident-meta">
+              <div><dt>Started</dt><dd>{{ formatDateTime(incident.startedAt) }}</dd></div>
+              <div><dt>Last update</dt><dd>{{ formatDateTime(incident.updatedAt) }}</dd></div>
+              <div><dt>Next update</dt><dd>{{ formatDateTime(incident.nextUpdateAt) }}</dd></div>
+              <div><dt>Competition impact</dt><dd>{{ impactLabel(incident.competitiveImpact) }}</dd></div>
+            </dl>
+
+            <details class="incident-updates">
+              <summary>Incident updates ({{ incident.publicUpdates.length }})</summary>
+              <ol>
+                @for (update of incident.publicUpdates; track update.updateId) {
+                  <li>
+                    <div>
+                      <strong>{{ statusLabel(update.status) }}</strong>
+                      <time>{{ formatDateTime(update.createdAt) }}</time>
+                    </div>
+                    <p>{{ update.message }}</p>
+                  </li>
+                }
+              </ol>
+            </details>
+          </article>
+        } @empty {
+          <article class="empty-status rr-card rr-card--raised rr-card--padded">
+            <strong>No active public incident is posted.</strong>
+            <span>Use Known Issues for confirmed product defects that are not active service incidents.</span>
+          </article>
+        }
+      </div>
+    </section>
+
+    @if (status.recentResolvedIncidents.length > 0) {
+      <details class="resolved-incidents rr-card rr-card--raised rr-card--padded">
+        <summary>Recently resolved incidents ({{ status.recentResolvedIncidents.length }})</summary>
+        <div class="resolved-list">
+          @for (incident of status.recentResolvedIncidents; track incident.incidentId) {
+            <article>
+              <header>
+                <h3>{{ incident.title }}</h3>
+                <span>{{ formatDateTime(incident.resolvedAt || incident.updatedAt) }}</span>
+              </header>
+              <p>{{ incident.publicResolution || latestUpdate(incident) }}</p>
+            </article>
+          }
+        </div>
+      </details>
+    }
+  } @else {
+    <section class="empty-status rr-card rr-card--raised rr-card--padded">
+      <strong>Live service status is unavailable.</strong>
+      <span>Check Known Issues or use the feedback form when a RinkRat workflow appears incorrect.</span>
+    </section>
+  }
+</main>
