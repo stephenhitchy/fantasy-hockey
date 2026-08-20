@@ -12595,3 +12595,65 @@ npm run verify:batcho1d
 ```
 
 See `docs/RINKRAT_OPERATIONS_O1D_INCIDENT_STATUS.md` for operating and deployment guidance.
+
+# Operations Batch O1E — Tester Research and Milestone Surveys
+
+**Runtime release:** Release Candidate 55
+**Competitive models:** Production Scoring V4 and Projection V11
+
+O1E adds `/private-season/feedback` for verified members of the exact O1B tester cohort and `/admin/private-season/research` for platform administrators. Seven milestone surveys unlock from server-confirmed evidence after join, Draft, the first successfully loaded Game Center matchup, the first supported roster or waiver action, Week 4, midseason, and season end.
+
+The milestone prompts preserve the Public Launch and Growth Gameplan’s research calendar. Structured responses cover clarity, trust, information load, founder independence, support need, next-season intent, recommendation, friction, and the most useful product moment. The server derives membership, role, eligibility, response identity, and a league-specific pseudonymous manager hash. It stores no raw account ID, email address, or phone number with a response and rejects email or phone patterns in bounded free text.
+
+The administrator dashboard reports milestone and league coverage, privacy-limited aggregate metrics, pseudonymous qualitative evidence, summary copy, and CSV export. O1E is an evidence-collection tool, not proof of product-market fit. Live interviews, commissioner observation, churn interviews, and the full-season postmortem remain open.
+
+The three new callable Functions are:
+
+```text
+getPrivateSeasonResearch
+submitPrivateSeasonResearch
+getPrivateSeasonResearchDashboard
+```
+
+Account deletion removes account-derived research records. O1E adds no Firestore Rule, index, TTL policy, migration, competitive write, scoring/projection change, App Check promotion, scoring-queue promotion, or NHL-cache promotion.
+
+Verification:
+
+```bash
+npm run verify:batcho1e
+```
+
+See `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md` for the complete privacy, deployment, and site-proof procedure.
+
+
+# Operations Batch O1E.1 — Current Competition Design Audit Hotfix
+
+**Runtime release:** Release Candidate 55
+**Competitive models:** Production Scoring V4 and Projection V11
+
+The GitHub security and release workflow was failing in `audit:competition-design-migration` even though the current Unified Add / Drop page passed the current component regression, global design-system, accessibility, and mobile audits. The repeatable audit was still hard-coded to the retired pre-A1C Free Agents page and required `rr-toolbar`, `rr-list-row`, `replacement-player-card`, and `--rr-free-agents-migration-color-`.
+
+O1E.1 creates one shared current-surface expectation module used by both the test and audit, preserves the intentional Player Board/Add-Drop composition, rejects restoration of the retired action-sheet/dialog page, tightens the local literal-color budget from 168 to eight and important-declaration allowance from eight to zero, and explicitly reruns the audit near the end of `verify:batcho1e:core`.
+
+No runtime source, Firebase resource, competition behavior, scoring, projection, roster window, transaction authority, Rule, index, TTL policy, App Check mode, scoring-queue mode, or shared NHL-cache mode changes. No Firebase deployment is required; commit and push the source so GitHub reruns `npm run security:ci`.
+
+Verification:
+
+```bash
+npm run test:competition-design-migration:run
+npm run audit:competition-design-migration
+npm run verify:batcho1e
+```
+
+
+# Operations Batch O1E.2 — Matchup Date Time-Zone Hotfix
+
+The O1A.2 League Dashboard finalization label originally inherited the host machine time zone. That made a canonical Aug 24 NHL schedule date render as Aug 23 on Pacific-time Macs while passing in UTC packaging environments. O1E.2 pins the calendar-only formatter to UTC, adds an explicit Pacific-time regression, and keeps the existing latest-window selection and all competitive authority unchanged.
+
+Verification remains:
+
+```bash
+npm run verify:batcho1e
+```
+
+This hotfix requires no Functions, Firestore, TTL, App Check, scoring-queue, or shared-cache deployment. Deploy Hosting only when the RC55 browser release was not already completed.

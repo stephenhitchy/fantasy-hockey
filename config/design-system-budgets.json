@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Batch 7C.3 budget-safe migration baseline. My Team, Free Agents, Draft Setup, and Draft Room consolidate approved palette values into transitional aliases. Game Center composes the shared primitives but keeps its approved local palette literals to remain below Angular's component-style error budget.",
+  "description": "Current reviewed design-system debt baseline. Batch 7C.3 established shared competition primitives; later reviewed surfaces may replace transitional aliases. Unified Add / Drop uses shared cards, fields, selects, buttons, notices, and states, with eight intentional compact six-game marker literals and no retired Free Agents migration aliases.",
   "allCssImportantDeclarations": 595,
   "allCssLiteralColors": 2862,
   "globalCssLiteralColorsOutsideTokenFile": 420,
@@ -11,7 +11,7 @@
   "leagueHqCssLiteralColors": 140,
   "accountSettingsCssLiteralColors": 111,
   "teamSettingsCssLiteralColors": 224,
-  "freeAgentsCssLiteralColors": 168,
+  "freeAgentsCssLiteralColors": 8,
   "draftSetupCssLiteralColors": 91,
   "draftRoomCssLiteralColors": 189,
   "gameCenterCssLiteralColors": 392

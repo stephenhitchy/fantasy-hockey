@@ -401,6 +401,9 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // O1D adds isolated incident/status authority.
         'src/service-incident-authority.ts',
         'src/shared/core/operations/service-incident.util.ts',
+        // O1E adds isolated tester-research authority.
+        'src/private-season-research.ts',
+        'src/shared/core/operations/private-season-research.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

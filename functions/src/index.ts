@@ -2776,6 +2776,25 @@ async function deletePrivateSeasonEngagementForAccount(
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
+
+    while (true) {
+      const researchSnapshot = await planReference
+        .collection('researchResponses')
+        .where('managerHash', '==', managerHash)
+        .limit(400)
+        .get();
+
+      if (researchSnapshot.empty) {
+        break;
+      }
+
+      const batch = db.batch();
+      for (const document of researchSnapshot.docs) {
+        batch.delete(document.ref);
+      }
+      await batch.commit();
+      deletedCount += researchSnapshot.size;
+    }
   }
 
   return deletedCount;
@@ -4069,6 +4088,12 @@ export {
   getServiceIncidentOperations,
   updateServiceIncident,
 } from './service-incident-authority';
+
+export {
+  getPrivateSeasonResearch,
+  getPrivateSeasonResearchDashboard,
+  submitPrivateSeasonResearch,
+} from './private-season-research';
 
 export { getSecurityControlReadiness } from './security-authority';
 

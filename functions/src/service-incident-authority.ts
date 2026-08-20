@@ -30,7 +30,7 @@ const PUBLIC_COLLECTION = 'publicServiceIncidents';
 const ADMIN_INCIDENT_LIMIT = 50;
 const PUBLIC_INCIDENT_LIMIT = 40;
 const PUBLIC_STATUS_CACHE_MILLISECONDS = 20_000;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-54-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-55-[A-Za-z0-9._:-]{4,160}$/;
 
 let publicStatusCache: { expiresAt: number; value: PublicServiceStatusSnapshot } | null = null;
 
@@ -65,14 +65,14 @@ function buildIdentity(value: unknown, requireDeployableBuild = false): ServiceS
   ) {
     throw new HttpsError(
       'failed-precondition',
-      'Refresh RinkRat. Incident operations accept only the current RC54 / Scoring V4 / Projection V11 build.',
+      'Refresh RinkRat. Incident operations accept only the current RC55 / Scoring V4 / Projection V11 build.',
     );
   }
 
   if (requireDeployableBuild && result.buildId.endsWith('-local')) {
     throw new HttpsError(
       'failed-precondition',
-      'Open the deployed RC54 site before changing public service status.',
+      'Open the deployed RC55 site before changing public service status.',
     );
   }
 

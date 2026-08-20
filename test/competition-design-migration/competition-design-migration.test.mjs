@@ -3,6 +3,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
+import {
+  COMPETITION_STYLE_EXPECTATIONS,
+  COMPETITION_TEMPLATE_EXPECTATIONS,
+} from '../../scripts/competition-design-migration.expectations.mjs';
+
 const root = process.cwd();
 
 async function source(relativePath) {
@@ -145,23 +150,70 @@ test('Game Center uses a wider responsive roster and a compact two-row six-game 
 });
 
 test('competition palettes consolidate repeated literals without raising important debt', async () => {
-  const expectations = [
-    ['src/app/features/team/team-settings/team-settings.css', 224, 4, '--rr-team-migration-color-'],
-    ['src/app/features/free-agents/free-agents.css', 168, 8, null],
-    ['src/app/features/draft/draft-setup/draft-setup.css', 91, 0, '--rr-draft-setup-migration-color-'],
-    ['src/app/features/draft/draft-room/draft-room.css', 189, 1, '--rr-draft-room-migration-color-'],
-    ['src/app/features/cycles/cycle-one/cycle-one.css', 392, 1, null],
-  ];
-  for (const [file, colorBudget, importantBudget, aliasMarker] of expectations) {
-    const css = await source(file);
-    assert.ok(literalColorCount(css) <= colorBudget, `${file} exceeded its migrated color budget.`);
-    assert.ok((css.match(/!important\b/g) ?? []).length <= importantBudget, `${file} increased important overrides.`);
-    if (aliasMarker) {
-      assert.match(css, new RegExp(aliasMarker));
-    } else {
-      assert.doesNotMatch(css, /--rr-game-center-migration-color-/);
+  for (const expectation of COMPETITION_STYLE_EXPECTATIONS) {
+    const css = await source(expectation.relativePath);
+    assert.ok(
+      literalColorCount(css) <= expectation.literalColorBudget,
+      `${expectation.relativePath} exceeded its current color budget.`,
+    );
+    assert.ok(
+      (css.match(/!important\b/g) ?? []).length <= expectation.importantBudget,
+      `${expectation.relativePath} increased important overrides.`,
+    );
+    for (const marker of expectation.requiredMarkers) {
+      assert.match(css, new RegExp(marker));
+    }
+    for (const marker of expectation.forbiddenMarkers) {
+      assert.doesNotMatch(css, new RegExp(marker));
     }
   }
+});
+
+test('current audit follows the unified Add / Drop replacement instead of retired Batch 7C.3 markers', async () => {
+  const expectation = COMPETITION_TEMPLATE_EXPECTATIONS.find(
+    (item) => item.relativePath === 'src/app/features/free-agents/free-agents.html',
+  );
+  assert.ok(expectation, 'Missing current Add / Drop audit expectation.');
+  assert.deepEqual(expectation.requiredMarkers, [
+    'unified-player-page rr-page-shell',
+    'unified-player-controls rr-card rr-card--padded',
+    'class="rr-field',
+    'class="rr-select"',
+    'class="unified-player-list"',
+    'unified-player-row rr-card',
+    'transaction-incoming-row unified-player-row rr-card',
+    'transaction-roster-list',
+    'transaction-confirmation rr-card rr-card--padded',
+    'rr-button--commit',
+  ]);
+  assert.ok(expectation.forbiddenMarkers.includes('replacement-player-card'));
+  assert.ok(expectation.forbiddenMarkers.includes('rr-dialog-backdrop'));
+
+  const [audit, packageSource, roadmap, docsRoadmap] = await Promise.all([
+    source('scripts/audit-competition-design-migration.mjs'),
+    source('package.json'),
+    source('RINKRAT_COMPETITIVE_ROADMAP.txt'),
+    source('docs/RINKRAT_COMPETITIVE_ROADMAP.txt'),
+  ]);
+  const packageJson = JSON.parse(packageSource);
+  assert.match(audit, /competition-design-migration\.expectations\.mjs/);
+  assert.match(audit, /unified Add \/ Drop/);
+  assert.doesNotMatch(audit, /const templates = new Map/);
+  assert.match(
+    packageJson.scripts['verify:batcho1e:core'],
+    /test:batcho1e:run && npm run audit:competition-design-migration && npm run test:batcho1e-2:run && npm run validate:release-manifest/,
+  );
+  assert.match(packageJson.scripts['security:ci'], /Operations Batch O1E\.\d+/);
+  assert.equal(roadmap, docsRoadmap);
+  const versionMatch = roadmap.match(/^Version (\d+)\.(\d+)\.(\d+)$/m);
+  assert.ok(versionMatch, 'Missing semantic roadmap version.');
+  const [, majorText, minorText, patchText] = versionMatch;
+  const [major, minor, patch] = [majorText, minorText, patchText].map(Number);
+  assert.ok(
+    major > 1 || (major === 1 && (minor > 46 || (minor === 46 && patch >= 1))),
+    'The current roadmap must retain the O1E.1 audit rebaseline or a later version.',
+  );
+  assert.match(roadmap, /LOG\.68 2026-08-20 — Completed Operations Batch O1E\.1/);
 });
 
 test('Batch 7C.3 lowers the global debt ceiling and provides verification, audit, and consolidated documentation', async () => {
@@ -169,7 +221,7 @@ test('Batch 7C.3 lowers the global debt ceiling and provides verification, audit
   assert.ok(budget.allCssLiteralColors <= 2862);
   assert.ok(budget.allCssImportantDeclarations <= 595);
   assert.equal(budget.teamSettingsCssLiteralColors, 224);
-  assert.equal(budget.freeAgentsCssLiteralColors, 168);
+  assert.equal(budget.freeAgentsCssLiteralColors, 8);
   assert.equal(budget.draftSetupCssLiteralColors, 91);
   assert.equal(budget.draftRoomCssLiteralColors, 189);
   assert.equal(budget.gameCenterCssLiteralColors, 392);

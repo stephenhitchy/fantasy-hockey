@@ -46,13 +46,16 @@ Core project references:
 - [`docs/RINKRAT_OPERATIONS_O1B_PRIVATE_SEASON_CONTROL_CENTER.md`](docs/RINKRAT_OPERATIONS_O1B_PRIVATE_SEASON_CONTROL_CENTER.md) — exact private-season cohort, privacy-limited tester matrix, release freeze, support/rollback readiness, audited plan changes, and formal go/no-go decision.
 - [`docs/RINKRAT_OPERATIONS_O1C_PRIVATE_SEASON_HEALTH.md`](docs/RINKRAT_OPERATIONS_O1C_PRIVATE_SEASON_HEALTH.md) — tracked-league activation, Week 4 retention, exact-build reliability, support/cost/commissioner-intent evidence, privacy boundaries, deployment, and live proof.
 - [`docs/RINKRAT_OPERATIONS_O1D_INCIDENT_STATUS.md`](docs/RINKRAT_OPERATIONS_O1D_INCIDENT_STATUS.md) — public service status, private incident command, manager guidance, data-state language, immutable incident audits, deployment, and incident smoke testing.
+- [`docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`](docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md) — seven server-gated tester milestones, privacy-limited manager responses, administrator coverage and qualitative evidence, targeted deployment, and live-interview boundary.
+- [`docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md`](docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md) — stale Batch 7C.3 audit diagnosis, current Unified Add / Drop design contract, tightened debt budget, GitHub verification repair, and no-deployment boundary.
+- [`docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md`](docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md) — deterministic League Dashboard finalization dates across Pacific, UTC, CI, and production environments, with no competitive-authority change.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 54 / Operations Batch O1D**. O1B defines the exact 2026–27 proof cohort, O1C measures activation and retention health, and O1D adds one public Service Status page plus a platform-admin Incident Command Center. Active incidents separate sanitized manager communication from private investigation evidence, preserve immutable public updates and audit revisions, and feed active P0 incidents into the private-season stop-the-line integrity metric. Only P0/P1 incidents create a compact global manager banner. Independent status hosting for a Firebase-wide outage and deputy/vendor communication drills remain open. O1A.2 remains included and shows the expected matchup finalization date on each active League Dashboard card.
+The current source runtime is **Release Candidate 55 / Operations Batch O1E.2**. O1B defines the exact 2026–27 proof cohort, O1C measures activation and retention health, O1D provides incident command and public service status, and O1E adds seven server-gated milestone surveys plus one platform-admin research dashboard. Responses use league-specific pseudonymous manager references, bounded free text, exact-build authority, and no raw account ID, email address, or phone number. O1E.1 is a source-only verification hotfix that aligns the repeatable Batch 7C.3 competition audit with the intentional unified Add / Drop and Player Board successor. O1E.2 fixes the League Dashboard finalization-date formatter so NHL calendar dates remain identical in UTC, Pacific, and other host time zones instead of shifting backward by one day.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -60,7 +63,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1d`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1e`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -126,6 +129,7 @@ verify:batcho1a-2
 verify:batcho1b
 verify:batcho1c
 verify:batcho1d
+verify:batcho1e
 ```
 
 RinkRat pins:
@@ -139,13 +143,16 @@ Do not automatically follow npm major-version notices. Restore the pinned versio
 
 ## Current verification
 
+The current deployment gate explicitly reruns `audit:competition-design-migration` after the latest O1E tests. GitHub uses the same chain through `npm run security:ci`.
+
+
 ```bash
 cd /Users/StephenH/Documents/Programming/fantasy-hockey
 nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1d
+npm run verify:batcho1e
 ```
 
 After verification and a clean commit:
@@ -190,7 +197,7 @@ Full guidance is in `docs/RINKRAT_OPERATIONS_O1C_PRIVATE_SEASON_HEALTH.md`.
 
 ## Operations Batch O1D — Incident Command and Public Service Status
 
-O1D adds an unauthenticated `/status` page for sanitized active and recently resolved incidents, plus a platform-admin `/admin/incidents` Incident Command Center. Every incident revision requires an exact deployed RC54 build, verified recent authentication, a public timeline update, and an audit reason. Public manager guidance, affected components, competition-data state, and next-update commitments remain separate from private investigation notes. P0 incidents always require a private post-incident review. Resolved incidents are immutable and cannot be deleted.
+O1D adds an unauthenticated `/status` page for sanitized active and recently resolved incidents, plus a platform-admin `/admin/incidents` Incident Command Center. Every incident revision requires an exact deployed RC55 build, verified recent authentication, a public timeline update, and an audit reason. Public manager guidance, affected components, competition-data state, and next-update commitments remain separate from private investigation notes. P0 incidents always require a private post-incident review. Resolved incidents are immutable and cannot be deleted.
 
 Signed-in pages show one compact, non-sticky banner only for active P0/P1 incidents; any cached fallback is visibly labeled as saved status. Active public P0 incidents also count toward O1C's unresolved integrity gate. O1D adds no Rule, index, TTL policy, migration, competitive write, scoring/projection change, or automatic promotion of App Check, scoring queues, or NHL-cache authority.
 
@@ -201,6 +208,20 @@ npm run verify:batcho1d
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1D_INCIDENT_STATUS.md`.
+
+## Operations Batch O1E — Tester Research and Milestone Surveys
+
+O1E adds `/private-season/feedback` for verified members of the exact O1B tester cohort and `/admin/private-season/research` for the platform administrator. Seven milestone surveys unlock from authoritative evidence after join, Draft, first matchup, first roster action, Week 4, midseason, and season end. The prompts preserve the tester-season research calendar, while structured ratings capture clarity, trust, information load, founder independence, support need, next-season intent, and recommendation.
+
+The server derives membership, role, milestone eligibility, response identity, and the league-specific pseudonymous manager hash. No raw account ID, email address, or phone number is stored with the response. The administrator dashboard shows response coverage, summary metrics, pseudonymous qualitative responses, summary copy, and a privacy-limited CSV export. O1E does not replace live interviews, commissioner observation, churn research, or the full-season postmortem.
+
+Verification:
+
+```bash
+npm run verify:batcho1e
+```
+
+Full guidance is in `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`.
 
 ## Scoring Batch V4A — Team Goalie Differentiation
 

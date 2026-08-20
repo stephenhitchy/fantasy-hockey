@@ -160,6 +160,15 @@
       "requiredTokens": [
         "requireFirestoreDocumentId"
       ]
+    },
+    {
+      "file": "functions/src/private-season-research.ts",
+      "kind": "Private-season research manager, administrator, response, and exact tester-league identifiers",
+      "requiredTokens": [
+        "requireFirestoreDocumentId",
+        "privateSeasonManagerHash",
+        "privateSeasonResearchResponseId"
+      ]
     }
   ],
   "forbiddenDirectPathSources": [

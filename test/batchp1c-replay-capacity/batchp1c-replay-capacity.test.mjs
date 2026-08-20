@@ -258,6 +258,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // O1D adds isolated incident/status authority.
         'src/service-incident-authority.ts',
         'src/shared/core/operations/service-incident.util.ts',
+        // O1E adds isolated tester-research authority.
+        'src/private-season-research.ts',
+        'src/shared/core/operations/private-season-research.util.ts',
   ]);
 
   assert.equal(

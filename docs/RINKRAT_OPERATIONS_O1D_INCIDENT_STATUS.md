@@ -1,6 +1,6 @@
 # Operations Batch O1D — Incident Command and Public Service Status
 
-**Runtime release:** Release Candidate 54
+**Runtime release:** Release Candidate 55
 **Competitive models:** Production Scoring V4 and Projection V11
 **Deployment:** Ten targeted O1B–O1D Functions, then Hosting
 **Authority:** Server-owned incident records with a separately sanitized public projection
@@ -116,7 +116,7 @@ Creating or updating an incident requires:
 
 - platform-administrator authority;
 - verified and recent authentication;
-- the exact deployed RC54 build;
+- the exact deployed RC55 build;
 - Scoring V4 and Projection V11 identity;
 - the expected current revision;
 - a public update;
@@ -164,7 +164,7 @@ O1D does not change:
 ## Verification
 
 ```bash
-npm run verify:batcho1d
+npm run verify:batcho1e
 ```
 
 The focused suite verifies public-state derivation, severity priority, stale/read-only data language, public/private projection boundaries, exact-build authority, revision checks, routes, access guards, inline banner behavior, release identity, roadmap synchronization, and protected modes.
@@ -177,15 +177,15 @@ Deploy Functions before Hosting:
 firebase deploy \
   --only functions:getPublicServiceStatus,functions:getServiceIncidentOperations,functions:createServiceIncident,functions:updateServiceIncident,functions:getPrivateSeasonControlCenter,functions:updatePrivateSeasonPlan,functions:recordPrivateSeasonGateDecision,functions:recordPrivateSeasonEngagement,functions:getPrivateSeasonHealthDashboard,functions:updatePrivateSeasonWeeklyHealth \
   --project=nhl-fantasy-app-ab673 \
-  -m "Operations O1D incident status and RC54 private-season authority"
+  -m "Operations O1E tester research and RC55 authority"
 
 firebase deploy \
   --only hosting:app \
   --project=nhl-fantasy-app-ab673 \
-  -m "Operations O1D Incident Status Release Candidate 54"
+  -m "Operations O1D Incident Status Release Candidate 55"
 ```
 
-Because RC54 also updates exact-build guards used by O1B and O1C, deploy the maintained private-season Functions in the same maintenance window when RC53 Functions are still live. The complete targeted command appears in the release instructions.
+Because RC55 updates exact-build guards used by O1B, O1C, and O1D, deploy the maintained operations Functions with the O1E research Functions in the same maintenance window. The complete current targeted command appears in `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`.
 
 ## Smoke test
 

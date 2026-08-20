@@ -409,6 +409,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // O1D adds isolated incident/status authority.
     'service-incident-authority.ts',
     'shared/core/operations/service-incident.util.ts',
+    // O1E adds isolated tester-research authority.
+    'private-season-research.ts',
+    'shared/core/operations/private-season-research.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

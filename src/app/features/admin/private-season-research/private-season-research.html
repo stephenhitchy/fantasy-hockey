@@ -1,0 +1,240 @@
+<section class="research-page rr-page-shell">
+  <header class="research-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Platform Administrator</span>
+      <h1>Private Season Research</h1>
+      <p>Milestone feedback, founder independence, information load, trust, and next-season intent.</p>
+    </div>
+    <div class="hero-actions no-print">
+      <a routerLink="/admin/private-season/health" class="rr-button rr-button--secondary">Season Health</a>
+      <a routerLink="/admin/private-season" class="rr-button rr-button--secondary">Season Plan</a>
+      <a routerLink="/admin" class="rr-button rr-button--secondary">Admin Center</a>
+      <button type="button" class="rr-button rr-button--secondary" [disabled]="refreshing()" (click)="load(true)">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+    </div>
+  </header>
+
+  <app-admin-session-step-up></app-admin-session-step-up>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="research-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Loading tester research…</strong>
+    </section>
+  } @else if (snapshot(); as data) {
+    <section class="research-status rr-card rr-card--raised rr-card--padded">
+      <div>
+        <span class="eyebrow">Privacy-limited evidence</span>
+        <h2>{{ data.summary.responseCount }} responses from {{ data.summary.uniqueRespondentCount }} league-manager respondents</h2>
+        <p>Responses use pseudonymous manager references and contain no stored contact details.</p>
+      </div>
+      <div class="hero-actions no-print">
+        <button type="button" class="rr-button rr-button--secondary" (click)="copySummary()">Copy Summary</button>
+        <button type="button" class="rr-button rr-button--secondary" (click)="exportCsv()">Export CSV</button>
+      </div>
+    </section>
+
+    @if (data.responseLimitReached) {
+      <p class="rr-notice rr-notice--warning">The research read reached its 1,000-response bound. Export and archive older evidence before the public season.</p>
+    }
+
+    <section class="summary-grid" aria-label="Research summary">
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Average clarity</span>
+        <strong>{{ numberLabel(data.summary.averageClarity, 1, ' / 5') }}</strong>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Average trust</span>
+        <strong>{{ numberLabel(data.summary.averageTrust, 1, ' / 5') }}</strong>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Information about right</span>
+        <strong>{{ percentLabel(data.summary.informationAboutRightPercent) }}</strong>
+        <small>{{ percentLabel(data.summary.informationTooMuchPercent) }} said too much</small>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Founder-independent</span>
+        <strong>{{ percentLabel(data.summary.founderIndependentPercent) }}</strong>
+        <small>Yes or mostly</small>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Recurring support</span>
+        <strong>{{ percentLabel(data.summary.recurringSupportPercent) }}</strong>
+        <small>Monthly or more</small>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Positive next-season intent</span>
+        <strong>{{ percentLabel(data.summary.positiveReturnIntentPercent) }}</strong>
+        <small>Definitely or probably</small>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Recommendation</span>
+        <strong>{{ numberLabel(data.summary.averageRecommendation, 1, ' / 10') }}</strong>
+      </article>
+      <article class="summary-card rr-card rr-card--padded">
+        <span>Follow-up permitted</span>
+        <strong>{{ data.summary.followUpAllowedCount }}</strong>
+      </article>
+    </section>
+
+    <section class="research-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Milestones</span>
+          <h2>Response coverage</h2>
+        </div>
+      </header>
+      <div class="milestone-summary-grid">
+        @for (milestone of data.milestones; track milestone.milestone) {
+          <article class="milestone-summary-card">
+            <header>
+              <strong>{{ milestone.label }}</strong>
+              <span>{{ milestone.responseCount }} / {{ milestone.eligibleCount }}</span>
+            </header>
+            <div class="coverage-track" aria-hidden="true">
+              <span [style.width.%]="milestone.completionPercent ?? 0"></span>
+            </div>
+            <dl>
+              <div><dt>Completion</dt><dd>{{ percentLabel(milestone.completionPercent) }}</dd></div>
+              <div><dt>Clarity</dt><dd>{{ numberLabel(milestone.averageClarity, 1, ' / 5') }}</dd></div>
+              <div><dt>Trust</dt><dd>{{ numberLabel(milestone.averageTrust, 1, ' / 5') }}</dd></div>
+            </dl>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="research-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Tracked leagues</span>
+          <h2>League research coverage</h2>
+        </div>
+      </header>
+      <div class="league-summary-grid">
+        @for (league of data.leagues; track league.leagueId) {
+          <article class="league-summary-card">
+            <header>
+              <div>
+                <strong>{{ league.leagueLabel }}</strong>
+                <small>{{ league.teamCount }} managers</small>
+              </div>
+              <span>{{ league.responseCount }} responses</span>
+            </header>
+            <p>{{ league.uniqueRespondentCount }} unique respondents</p>
+            <ul>
+              @for (milestone of league.milestones; track milestone.milestone) {
+                <li>
+                  <span>{{ milestone.label }}</span>
+                  <strong>{{ milestone.responseCount }} / {{ milestone.eligibleCount }}</strong>
+                </li>
+              }
+            </ul>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="research-section rr-card rr-card--padded">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Pseudonymous responses</span>
+          <h2>Qualitative evidence</h2>
+        </div>
+        <span>{{ filteredResponses().length }} shown</span>
+      </header>
+
+      <div class="research-filters no-print">
+        <label class="rr-field">
+          <span>League</span>
+          <select [(ngModel)]="leagueFilter">
+            <option value="all">All leagues</option>
+            @for (league of data.leagues; track league.leagueId) {
+              <option [value]="league.leagueId">{{ league.leagueLabel }}</option>
+            }
+          </select>
+        </label>
+        <label class="rr-field">
+          <span>Milestone</span>
+          <select [(ngModel)]="milestoneFilter">
+            <option value="all">All milestones</option>
+            @for (milestone of data.milestones; track milestone.milestone) {
+              <option [value]="milestone.milestone">{{ milestone.label }}</option>
+            }
+          </select>
+        </label>
+        <label class="rr-field">
+          <span>Follow-up</span>
+          <select [(ngModel)]="followUpFilter">
+            <option value="all">All responses</option>
+            <option value="allowed">Follow-up allowed</option>
+            <option value="not-allowed">No follow-up</option>
+          </select>
+        </label>
+        <label class="rr-field search-field">
+          <span>Search response text</span>
+          <input [(ngModel)]="search" placeholder="Friction, feature, or response reference" />
+        </label>
+      </div>
+
+      @if (filteredResponses().length === 0) {
+        <p class="empty-state">No responses match the current filters.</p>
+      } @else {
+        <div class="response-list">
+          @for (response of filteredResponses(); track response.responseId) {
+            <article class="response-card">
+              <header>
+                <div>
+                  <span class="eyebrow">{{ response.leagueLabel }} · {{ milestoneLabel(response.milestone) }}</span>
+                  <h3>{{ response.role === 'commissioner' ? 'Commissioner' : 'Manager' }} response</h3>
+                </div>
+                <span class="response-reference">{{ response.responseId.slice(0, 12).toUpperCase() }}</span>
+              </header>
+
+              <dl class="response-metrics">
+                <div><dt>Clarity</dt><dd>{{ response.answers.clarityRating ?? '—' }} / 5</dd></div>
+                <div><dt>Trust</dt><dd>{{ response.answers.trustRating ?? '—' }} / 5</dd></div>
+                <div><dt>Information</dt><dd>{{ valueLabel(response.answers.informationAmount) }}</dd></div>
+                <div><dt>Founder independence</dt><dd>{{ valueLabel(response.answers.founderIndependence) }}</dd></div>
+                <div><dt>Support</dt><dd>{{ valueLabel(response.answers.supportNeeded) }}</dd></div>
+                <div><dt>Next season</dt><dd>{{ valueLabel(response.answers.nextSeasonIntent) }}</dd></div>
+                <div><dt>Recommend</dt><dd>{{ response.answers.recommendationScore ?? '—' }} / 10</dd></div>
+                <div><dt>Follow-up</dt><dd>{{ response.answers.followUpAllowed ? 'Allowed' : 'Not requested' }}</dd></div>
+              </dl>
+
+              <section class="response-copy primary-copy">
+                <h4>Milestone response</h4>
+                <p>{{ response.answers.promptResponse }}</p>
+              </section>
+              @if (response.answers.biggestFriction) {
+                <section class="response-copy">
+                  <h4>Biggest friction</h4>
+                  <p>{{ response.answers.biggestFriction }}</p>
+                </section>
+              }
+              @if (response.answers.mostUsefulFeature) {
+                <section class="response-copy">
+                  <h4>Most useful feature or moment</h4>
+                  <p>{{ response.answers.mostUsefulFeature }}</p>
+                </section>
+              }
+
+              <footer>
+                <span>Updated {{ formatDate(response.updatedAt) }}</span>
+                <span>Revision {{ response.revision }}</span>
+              </footer>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</section>

@@ -78,6 +78,54 @@ test('active matchup status label shows the latest expected finalization date', 
   assert.equal(result.headline, 'vs Bruins');
 });
 
+
+test('matchup calendar labels do not shift backward in Pacific time', () => {
+  const previousTimeZone = process.env.TZ;
+
+  try {
+    process.env.TZ = 'America/Los_Angeles';
+
+    const result = buildDashboardLeagueActivity(dashboardInput({
+      matchup: {
+        cycleNumber: 8,
+        phase: 'regular_season',
+        teamAOwnerId: 'owner-a',
+        teamBOwnerId: 'owner-b',
+        teamAScore: 605.3,
+        teamBScore: 567.7,
+        winnerOwnerId: null,
+        status: 'active',
+      },
+      myWindows: {
+        ownerId: 'owner-a',
+        cycleNumber: 8,
+        windows: [],
+      },
+      opponentWindows: {
+        ownerId: 'owner-b',
+        cycleNumber: 8,
+        windows: [
+          {
+            status: 'active',
+            gamesPlayed: 4,
+            gamesLeft: 2,
+            lastScheduledGameDate: '2026-08-24T02:00:00Z',
+            scheduledGameDates: ['2026-08-24T02:00:00Z'],
+          },
+        ],
+      },
+    }));
+
+    assert.equal(result.statusLabel, 'Finalizes Aug 24');
+  } finally {
+    if (previousTimeZone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = previousTimeZone;
+    }
+  }
+});
+
 test('complete matchup status label shows the completed date when available', () => {
   const result = buildDashboardLeagueActivity(dashboardInput({
     matchup: {
@@ -118,11 +166,12 @@ test('O1A.2 documents the league-card timing clarification without changing comp
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.45/);
+  assert.match(roadmap, /Version 1\.46/);
   assert.match(roadmap, /LOG\.63 2026-08-19 — Completed Operations Batch O1A\.2/);
   assert.match(readme, /Operations Batch O1D/);
   assert.match(util, /buildMatchupStatusLabel/);
   assert.match(util, /Finalizes \$\{formatMonthDay\(latestDate\)\}/);
+  assert.match(util, /timeZone:\s*'UTC'/);
   assert.equal(packageJson.scripts['verify:batcho1a-2:core'], 'npm run verify:batcho1a:core && npm run test:batcho1a-2:run && npm run validate:release-manifest');
   assert.equal(packageJson.scripts['verify:batcho1a-2'], 'npm run toolchain:verify && npm run verify:batcho1a-2:core && npm run security:dependency-audit');
 });

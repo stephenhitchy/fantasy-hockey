@@ -438,22 +438,22 @@ test('RC51 release identity and inherited safety controls are preserved', async 
 
   assert.equal(sha256(rules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(indexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 54/);
-  assert.match(productionRuntime, /Release Candidate 54/);
+  assert.match(runtime, /Release Candidate 55/);
+  assert.match(productionRuntime, /Release Candidate 55/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1d');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc54-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1e');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc55-invite-beta');
   assert.equal(manifest.scoringRulesVersion, 4);
   assert.equal(manifest.projectionVersion, 11);
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
-  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc54-v1'/);
+  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc55-v1'/);
 });
 
 test('the permanent roadmap converts the launch gameplan into explicit product and operating gates', async () => {
@@ -467,7 +467,7 @@ test('the permanent roadmap converts the launch gameplan into explicit product a
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.45/);
+  assert.match(roadmap, /Version 1\.46/);
   assert.match(roadmap, /# \[x\] D1\.20/);
   assert.match(roadmap, /\[~\] D1\.23/);
   assert.match(roadmap, /\[ \] D1\.24/);

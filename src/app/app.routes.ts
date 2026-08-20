@@ -120,6 +120,14 @@ export const routes: Routes = [
           import('./features/support/feedback/feedback').then((module) => module.FeedbackPage),
       },
       {
+        path: 'private-season/feedback',
+        title: 'Tester Season Feedback',
+        loadComponent: () =>
+          import('./features/support/private-season-feedback/private-season-feedback').then(
+            (module) => module.PrivateSeasonFeedback,
+          ),
+      },
+      {
         path: 'admin',
         title: 'Admin Center',
         canActivate: [platformAdminGuard],
@@ -153,6 +161,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/private-season-health/private-season-health').then(
             (module) => module.PrivateSeasonHealth,
+          ),
+      },
+      {
+        path: 'admin/private-season/research',
+        title: 'Private Season Research',
+        canActivate: [platformAdminGuard],
+        loadComponent: () =>
+          import('./features/admin/private-season-research/private-season-research').then(
+            (module) => module.PrivateSeasonResearch,
           ),
       },
       {

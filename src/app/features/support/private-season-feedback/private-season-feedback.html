@@ -1,0 +1,234 @@
+<section class="tester-feedback-page rr-page-shell">
+  <header class="tester-feedback-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">2026–27 Tester Season</span>
+      <h1>Season Feedback</h1>
+      <p>Short milestone surveys for the private leagues you are helping test.</p>
+    </div>
+    <div class="hero-actions">
+      <a routerLink="/support" class="rr-button rr-button--secondary">Support</a>
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="refreshing()"
+        (click)="load(true)"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (successMessage()) {
+    <p class="rr-notice rr-notice--success" role="status">{{ successMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <section class="feedback-loading rr-card rr-card--padded" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <strong>Loading tester-season milestones…</strong>
+    </section>
+  } @else if (snapshot(); as data) {
+    <aside class="privacy-note rr-notice rr-notice--info">
+      <strong>Privacy-limited research</strong>
+      <span>{{ data.privacyNote }}</span>
+    </aside>
+
+    @if (!data.tracked || data.leagues.length === 0) {
+      <section class="empty-feedback rr-card rr-card--padded">
+        <span class="pixel-icon icon-league icon-lg" aria-hidden="true"></span>
+        <div>
+          <h2>No tracked tester league</h2>
+          <p>This account is not currently a verified member of an active private-season league.</p>
+        </div>
+      </section>
+    } @else {
+      <section class="league-feedback-grid" aria-label="Tester leagues and milestones">
+        @for (league of data.leagues; track league.leagueId) {
+          <article class="league-feedback-card rr-card rr-card--padded">
+            <header>
+              <div>
+                <span class="eyebrow">{{ league.role === 'commissioner' ? 'Commissioner' : 'Manager' }}</span>
+                <h2>{{ league.leagueLabel }}</h2>
+              </div>
+              <span class="completion-count">
+                {{ completedCount(league) }} / {{ availableCount(league) }} available complete
+              </span>
+            </header>
+
+            <div class="milestone-list">
+              @for (state of league.milestones; track state.milestone) {
+                <article
+                  class="milestone-row"
+                  [attr.data-state]="state.response ? 'submitted' : state.availability"
+                >
+                  <div>
+                    <strong>{{ state.label }}</strong>
+                    <span>{{ state.prompt }}</span>
+                    @if (state.response) {
+                      <small>Saved {{ formatDate(state.response.updatedAt) }}</small>
+                    } @else if (state.availability === 'locked') {
+                      <small>{{ state.lockedReason }}</small>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    class="milestone-action"
+                    [disabled]="state.availability === 'locked'"
+                    (click)="selectMilestone(league, state)"
+                  >
+                    {{ milestoneButtonLabel(state) }}
+                  </button>
+                </article>
+              }
+            </div>
+          </article>
+        }
+      </section>
+
+      @if (selectedState(); as state) {
+        <section class="survey-editor rr-card rr-card--raised rr-card--padded">
+          <header class="survey-heading">
+            <div>
+              <span class="eyebrow">{{ selectedLeague()?.leagueLabel }}</span>
+              <h2>{{ state.label }}</h2>
+              <p>{{ state.prompt }}</p>
+            </div>
+            <button type="button" class="rr-button rr-button--secondary" (click)="cancelEdit()">
+              Close
+            </button>
+          </header>
+
+          <div class="rating-grid">
+            <fieldset class="rating-fieldset">
+              <legend>How clear was RinkRat at this point?</legend>
+              <div class="rating-options" role="radiogroup" aria-label="Clarity rating">
+                @for (rating of ratingOptions; track rating) {
+                  <label [class.selected]="draft.clarityRating === rating">
+                    <input type="radio" name="clarity" [value]="rating" [(ngModel)]="draft.clarityRating" />
+                    <span>{{ rating }}</span>
+                  </label>
+                }
+              </div>
+              <small>{{ ratingLabel(draft.clarityRating) }}</small>
+            </fieldset>
+
+            <fieldset class="rating-fieldset">
+              <legend>How much did you trust the result or workflow?</legend>
+              <div class="rating-options" role="radiogroup" aria-label="Trust rating">
+                @for (rating of ratingOptions; track rating) {
+                  <label [class.selected]="draft.trustRating === rating">
+                    <input type="radio" name="trust" [value]="rating" [(ngModel)]="draft.trustRating" />
+                    <span>{{ rating }}</span>
+                  </label>
+                }
+              </div>
+              <small>{{ ratingLabel(draft.trustRating) }}</small>
+            </fieldset>
+          </div>
+
+          <div class="survey-grid">
+            <label class="rr-field">
+              <span>Amount of information</span>
+              <select [(ngModel)]="draft.informationAmount">
+                @for (option of informationOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="rr-field">
+              <span>Support needed so far</span>
+              <select [(ngModel)]="draft.supportNeeded">
+                @for (option of supportOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            @if (showFounderIndependence()) {
+              <label class="rr-field">
+                <span>Could the league operate without Stephen?</span>
+                <select [(ngModel)]="draft.founderIndependence">
+                  @for (option of independenceOptions; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            @if (showNextSeasonIntent()) {
+              <label class="rr-field">
+                <span>Would you choose RinkRat next season?</span>
+                <select [(ngModel)]="draft.nextSeasonIntent">
+                  @for (option of returnOptions; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            @if (showRecommendation()) {
+              <label class="rr-field">
+                <span>Recommend RinkRat to another commissioner · 0–10</span>
+                <input type="number" min="0" max="10" step="1" [(ngModel)]="draft.recommendationScore" />
+              </label>
+            }
+          </div>
+
+          <label class="rr-field survey-textarea primary-response">
+            <span>{{ state.prompt }}</span>
+            <textarea
+              rows="5"
+              maxlength="1200"
+              [(ngModel)]="draft.promptResponse"
+              placeholder="Share what actually happened or what you expected."
+            ></textarea>
+            <small>{{ draft.promptResponse.length }} / 1200 · minimum 10 characters</small>
+          </label>
+
+          <div class="survey-text-grid">
+            <label class="rr-field survey-textarea">
+              <span>Biggest friction</span>
+              <textarea
+                rows="4"
+                maxlength="600"
+                [(ngModel)]="draft.biggestFriction"
+                placeholder="What felt confusing, slow, unnecessary, or unreliable?"
+              ></textarea>
+              <small>{{ draft.biggestFriction.length }} / 600</small>
+            </label>
+
+            <label class="rr-field survey-textarea">
+              <span>Most useful feature or moment</span>
+              <textarea
+                rows="4"
+                maxlength="240"
+                [(ngModel)]="draft.mostUsefulFeature"
+                placeholder="What helped you most?"
+              ></textarea>
+              <small>{{ draft.mostUsefulFeature.length }} / 240</small>
+            </label>
+          </div>
+
+          <label class="follow-up-choice">
+            <input type="checkbox" [(ngModel)]="draft.followUpAllowed" />
+            <span>
+              <strong>Stephen may follow up through the tester contact path already on file.</strong>
+              <small>No contact information is stored in this response.</small>
+            </span>
+          </label>
+
+          <footer class="survey-actions">
+            <button type="button" class="rr-button rr-button--secondary" (click)="cancelEdit()">Cancel</button>
+            <button type="button" class="rr-button rr-button--primary" [disabled]="saving()" (click)="save()">
+              {{ saving() ? 'Saving…' : state.response ? 'Update Response' : 'Submit Response' }}
+            </button>
+          </footer>
+        </section>
+      }
+    }
+  }
+</section>

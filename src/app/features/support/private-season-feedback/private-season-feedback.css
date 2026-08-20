@@ -1,0 +1,245 @@
+:host {
+  display: block;
+}
+
+.tester-feedback-page {
+  display: grid;
+  gap: var(--rr-space-5);
+  padding-bottom: var(--rr-space-8);
+}
+
+.tester-feedback-hero,
+.survey-heading,
+.league-feedback-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+}
+
+.tester-feedback-hero h1,
+.survey-heading h2,
+.league-feedback-card h2 {
+  margin: 0;
+}
+
+.tester-feedback-hero p,
+.survey-heading p {
+  margin: var(--rr-space-2) 0 0;
+  color: var(--rr-color-text-muted);
+}
+
+.hero-actions,
+.survey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rr-space-2);
+}
+
+.feedback-loading,
+.empty-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-3);
+}
+
+.privacy-note {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+.league-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: var(--rr-space-4);
+}
+
+.league-feedback-card {
+  display: grid;
+  gap: var(--rr-space-4);
+}
+
+.completion-count {
+  font-size: var(--rr-font-size-sm);
+  color: var(--rr-color-text-muted);
+  text-align: right;
+}
+
+.milestone-list {
+  display: grid;
+  gap: var(--rr-space-2);
+}
+
+.milestone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--rr-space-3);
+  align-items: center;
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border-subtle);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-muted);
+}
+
+.milestone-row[data-state='submitted'] {
+  border-color: var(--rr-color-status-success);
+}
+
+.milestone-row[data-state='locked'] {
+  opacity: 0.72;
+}
+
+.milestone-row > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.milestone-row span,
+.milestone-row small {
+  color: var(--rr-color-text-muted);
+}
+
+.milestone-action {
+  min-height: 44px;
+  padding: 0 var(--rr-space-3);
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface);
+  color: var(--rr-color-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.milestone-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.survey-editor {
+  display: grid;
+  gap: var(--rr-space-5);
+}
+
+.rating-grid,
+.survey-grid,
+.survey-text-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-4);
+}
+
+.rating-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--rr-space-4);
+  border: 1px solid var(--rr-color-border-subtle);
+  border-radius: var(--rr-radius-md);
+}
+
+.rating-fieldset legend {
+  padding: 0 var(--rr-space-1);
+  font-weight: 700;
+}
+
+.rating-fieldset small {
+  display: block;
+  margin-top: var(--rr-space-2);
+  color: var(--rr-color-text-muted);
+}
+
+.rating-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+  gap: var(--rr-space-2);
+}
+
+.rating-options label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: var(--rr-radius-sm);
+  background: var(--rr-color-surface-muted);
+  cursor: pointer;
+}
+
+.rating-options label.selected {
+  border-color: var(--rr-color-accent);
+  background: color-mix(in srgb, var(--rr-color-accent) 12%, var(--rr-color-surface-muted));
+}
+
+.rating-options input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.survey-textarea textarea {
+  resize: vertical;
+}
+
+.primary-response {
+  max-width: 880px;
+}
+
+.follow-up-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--rr-space-3);
+  min-height: 44px;
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border-subtle);
+  border-radius: var(--rr-radius-md);
+}
+
+.follow-up-choice input {
+  width: 20px;
+  height: 20px;
+  margin-top: 0.15rem;
+}
+
+.follow-up-choice span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.follow-up-choice small {
+  color: var(--rr-color-text-muted);
+}
+
+.survey-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .tester-feedback-hero,
+  .survey-heading,
+  .league-feedback-card > header {
+    flex-direction: column;
+  }
+
+  .hero-actions,
+  .survey-actions,
+  .hero-actions .rr-button,
+  .survey-actions .rr-button {
+    width: 100%;
+  }
+
+  .completion-count {
+    text-align: left;
+  }
+
+  .milestone-row,
+  .rating-grid,
+  .survey-grid,
+  .survey-text-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .milestone-action {
+    width: 100%;
+  }
+}

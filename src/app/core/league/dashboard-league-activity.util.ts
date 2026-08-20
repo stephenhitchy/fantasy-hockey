@@ -66,9 +66,12 @@ function formatScheduledDraft(value: unknown): string {
 }
 
 function formatMonthDay(value: Date): string {
+  // NHL gameDate values are calendar dates. Pin UTC so the host
+  // machine's time zone cannot shift an Aug 24 game back to Aug 23.
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   }).format(value);
 }
 

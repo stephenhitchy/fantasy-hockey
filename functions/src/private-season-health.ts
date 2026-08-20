@@ -34,7 +34,7 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-54-[A-Za-z0-9._:-]{4,160}$/;
+const CURRENT_BUILD_ID_PATTERN = /^release-candidate-55-[A-Za-z0-9._:-]{4,160}$/;
 const ENGAGEMENT_DAILY_LIMIT = 24;
 const HEALTH_EVIDENCE_WINDOW_DAYS = 35;
 const HEALTH_EVIDENCE_LIMIT = 2_000;
@@ -157,14 +157,14 @@ function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateS
   ) {
     throw new HttpsError(
       'failed-precondition',
-      'Refresh RinkRat. Private-season health accepts only the current RC54 / Scoring V4 / Projection V11 build.',
+      'Refresh RinkRat. Private-season health accepts only the current RC55 / Scoring V4 / Projection V11 build.',
     );
   }
 
   if (requireDeployableBuild && result.buildId.endsWith('-local')) {
     throw new HttpsError(
       'failed-precondition',
-      'Open the deployed RC54 site before recording private-season evidence.',
+      'Open the deployed RC55 site before recording private-season evidence.',
     );
   }
 

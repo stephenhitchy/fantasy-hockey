@@ -1,0 +1,231 @@
+:host {
+  display: block;
+}
+
+.research-page {
+  display: grid;
+  gap: var(--rr-space-5);
+  padding-bottom: var(--rr-space-8);
+}
+
+.research-hero,
+.research-status,
+.section-heading,
+.response-card > header,
+.league-summary-card > header,
+.milestone-summary-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rr-space-4);
+}
+
+.research-hero h1,
+.research-status h2,
+.section-heading h2,
+.response-card h3 {
+  margin: 0;
+}
+
+.research-hero p,
+.research-status p {
+  margin: var(--rr-space-2) 0 0;
+  color: var(--rr-color-text-muted);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rr-space-2);
+}
+
+.research-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--rr-space-3);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--rr-space-3);
+}
+
+.summary-card {
+  display: grid;
+  gap: var(--rr-space-1);
+}
+
+.summary-card span,
+.summary-card small {
+  color: var(--rr-color-text-muted);
+}
+
+.summary-card strong {
+  font-size: var(--rr-font-size-xl);
+}
+
+.research-section {
+  display: grid;
+  gap: var(--rr-space-4);
+}
+
+.milestone-summary-grid,
+.league-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--rr-space-3);
+}
+
+.milestone-summary-card,
+.league-summary-card,
+.response-card {
+  border: 1px solid var(--rr-color-border-subtle);
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface-muted);
+  padding: var(--rr-space-4);
+}
+
+.coverage-track {
+  height: 8px;
+  margin: var(--rr-space-3) 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--rr-color-surface);
+}
+
+.coverage-track span {
+  display: block;
+  height: 100%;
+  background: var(--rr-color-accent);
+}
+
+.milestone-summary-card dl,
+.response-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rr-space-2);
+  margin: 0;
+}
+
+.milestone-summary-card dl div,
+.response-metrics div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.milestone-summary-card dt,
+.response-metrics dt {
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-font-size-sm);
+}
+
+.milestone-summary-card dd,
+.response-metrics dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.league-summary-card {
+  display: grid;
+  gap: var(--rr-space-3);
+}
+
+.league-summary-card small,
+.league-summary-card p {
+  color: var(--rr-color-text-muted);
+}
+
+.league-summary-card ul {
+  display: grid;
+  gap: var(--rr-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.league-summary-card li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rr-space-2);
+  padding-top: var(--rr-space-1);
+  border-top: 1px solid var(--rr-color-border-subtle);
+}
+
+.research-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(220px, 2fr);
+  gap: var(--rr-space-3);
+}
+
+.response-list {
+  display: grid;
+  gap: var(--rr-space-3);
+}
+
+.response-card {
+  display: grid;
+  gap: var(--rr-space-4);
+}
+
+.response-reference {
+  font-family: var(--rr-font-family-mono);
+  color: var(--rr-color-text-muted);
+}
+
+.response-copy {
+  display: grid;
+  gap: var(--rr-space-1);
+  padding: var(--rr-space-3);
+  border-left: 3px solid var(--rr-color-border-strong);
+  background: var(--rr-color-surface);
+}
+
+.response-copy.primary-copy {
+  border-left-color: var(--rr-color-accent);
+}
+
+.response-copy h4,
+.response-copy p {
+  margin: 0;
+}
+
+.response-copy p {
+  white-space: pre-wrap;
+}
+
+.response-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--rr-space-2);
+  color: var(--rr-color-text-muted);
+  font-size: var(--rr-font-size-sm);
+}
+
+@media (max-width: 800px) {
+  .research-hero,
+  .research-status,
+  .section-heading,
+  .response-card > header {
+    flex-direction: column;
+  }
+
+  .hero-actions,
+  .hero-actions .rr-button {
+    width: 100%;
+  }
+
+  .research-filters,
+  .milestone-summary-card dl,
+  .response-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .no-print,
+  app-admin-session-step-up {
+    display: none;
+  }
+}
