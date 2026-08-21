@@ -161,7 +161,7 @@ test('healthy evidence uses activated leagues rather than drafted-only leagues f
     ],
     weeklyRecords: [weekly()],
     actions: {
-      buildId: 'release-candidate-56-test-build',
+      buildId: 'release-candidate-57-test-build',
       total: 250,
       successes: 250,
       errors: 0,
@@ -187,7 +187,7 @@ test('unresolved integrity evidence blocks the season and low reliability remain
     leagues: [league({ teamCount: 4, draftStatus: 'setup', activatedAt: null, fourWeekDue: false })],
     weeklyRecords: [],
     actions: {
-      buildId: 'release-candidate-56-test-build',
+      buildId: 'release-candidate-57-test-build',
       total: 25,
       successes: 23,
       errors: 1,
@@ -210,8 +210,9 @@ test('engagement authority verifies exact build, tracked league, membership, rat
     read('src/app/core/operations/private-season-engagement.service.ts'),
   ]);
 
-  assert.match(authority, /PRIVATE_SEASON_HEALTH_RELEASE_LABEL/);
-  assert.match(authority, /release-candidate-56-/);
+  assert.match(authority, /assessOperationsClientCompatibility/);
+  assert.match(authority, /normalizeOperationsClientIdentity/);
+  assert.doesNotMatch(authority, /CURRENT_BUILD_ID_PATTERN|PRIVATE_SEASON_HEALTH_RELEASE_LABEL/);
   assert.match(authority, /requireVerifiedManager/);
   assert.match(authority, /plan\.leagueSlots\.some\(\(slot\) => slot\.active && slot\.leagueId === leagueId\)/);
   assert.match(authority, /leagues\/\$\{leagueId\}\/members\/\$\{userId\}/);
@@ -309,15 +310,15 @@ test('O1C adds no Firestore Rule, index, TTL, scoring, projection, or safety-mod
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 56/);
-  assert.match(productionRuntime, /Release Candidate 56/);
+  assert.match(runtime, /Release Candidate 57/);
+  assert.match(productionRuntime, /Release Candidate 57/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc56-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
 });
 
 test('roadmap and documentation advance O1.3 and O1.4 without claiming live proof', async () => {
@@ -333,15 +334,15 @@ test('roadmap and documentation advance O1.3 and O1.4 without claiming live proo
   const boundaries = JSON.parse(boundariesSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.47/);
+  assert.match(roadmap, /Version 1\.48/);
   assert.match(roadmap, /O1\.3[\s\S]*O1C \/ Release Candidate 53/);
   assert.match(roadmap, /O1\.4[\s\S]*live cohort proof remains required/i);
   assert.match(roadmap, /LOG\.65 2026-08-19 — Completed Operations Batch O1C/);
-  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
-  assert.match(readme, /npm run verify:batcho1f/);
+  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
+  assert.match(readme, /npm run verify:batcho1g/);
   assert.match(runbook, /privacy-limited/i);
   assert.match(runbook, /Functions[\s\S]*Hosting/i);
   assert.equal(packageJson.scripts['verify:batcho1c:core'], 'npm run verify:batcho1b:core && npm run beta:audit-season-plan && npm run audit:product-copy-density && npm run test:batcho1c:run && npm run validate:release-manifest');
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
   assert.ok(boundaries.boundaries.some((entry) => entry.file === 'functions/src/private-season-health.ts'));
 });

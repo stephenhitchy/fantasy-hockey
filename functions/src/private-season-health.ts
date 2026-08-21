@@ -12,9 +12,6 @@ import {
   privateSeasonManagerHash,
   privateSeasonRetentionManagerRequirement,
   privateSeasonWeeklyHealthHashInput,
-  PRIVATE_SEASON_HEALTH_PROJECTION_VERSION,
-  PRIVATE_SEASON_HEALTH_RELEASE_LABEL,
-  PRIVATE_SEASON_HEALTH_SCORING_VERSION,
   PRIVATE_SEASON_HEALTH_WEEKLY_REASON_MINIMUM_LENGTH,
   PRIVATE_SEASON_HEALTH_WEEKLY_RECORD_LIMIT,
   type PrivateSeasonActionEvidence,
@@ -28,13 +25,16 @@ import {
   type PrivateSeasonBuildIdentity,
   type PrivateSeasonPlan,
 } from './shared/core/operations/private-season.util';
+import {
+  assessOperationsClientCompatibility,
+  normalizeOperationsClientIdentity,
+} from './shared/core/operations/operations-client-compatibility.util';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 const ENGAGEMENT_DAILY_LIMIT = 24;
 const HEALTH_EVIDENCE_WINDOW_DAYS = 35;
 const HEALTH_EVIDENCE_LIMIT = 2_000;
@@ -137,35 +137,11 @@ function weeklyRecordFromData(
 }
 
 function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateSeasonBuildIdentity {
-  const source = record(value);
-  const result: PrivateSeasonBuildIdentity = {
-    releaseLabel: text(source['releaseLabel'], 80),
-    buildId: text(source['buildId'], 180),
-    scoringRulesVersion: typeof source['scoringRulesVersion'] === 'number'
-      ? Math.round(source['scoringRulesVersion'])
-      : 0,
-    projectionVersion: typeof source['projectionVersion'] === 'number'
-      ? Math.round(source['projectionVersion'])
-      : 0,
-  };
+  const result = normalizeOperationsClientIdentity(value);
+  const compatibility = assessOperationsClientCompatibility(result, { requireDeployableBuild });
 
-  if (
-    result.releaseLabel !== PRIVATE_SEASON_HEALTH_RELEASE_LABEL ||
-    !CURRENT_BUILD_ID_PATTERN.test(result.buildId) ||
-    result.scoringRulesVersion !== PRIVATE_SEASON_HEALTH_SCORING_VERSION ||
-    result.projectionVersion !== PRIVATE_SEASON_HEALTH_PROJECTION_VERSION
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Refresh RinkRat. Private-season health accepts only the current RC55 / Scoring V4 / Projection V11 build.',
-    );
-  }
-
-  if (requireDeployableBuild && result.buildId.endsWith('-local')) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Open the deployed RC55 site before recording private-season evidence.',
-    );
+  if (!compatibility.compatible) {
+    throw new HttpsError('failed-precondition', compatibility.message);
   }
 
   return result;
@@ -586,6 +562,7 @@ export const recordPrivateSeasonEngagement = onCall(
         categories: [...categories].sort(),
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         firstSeenAt: daySnapshot.exists && day['firstSeenAt']
           ? day['firstSeenAt']
           : FieldValue.serverTimestamp(),
@@ -700,6 +677,7 @@ export const updatePrivateSeasonWeeklyHealth = onCall(
         reason,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         actorId: adminId,
         createdAt: FieldValue.serverTimestamp(),
       });

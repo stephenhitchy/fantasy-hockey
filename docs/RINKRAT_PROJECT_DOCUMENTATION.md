@@ -12660,7 +12660,7 @@ This hotfix requires no Functions, Firestore, TTL, App Check, scoring-queue, or 
 
 # Operations Batch O1F — Privacy Center and Request Operations
 
-**Runtime release:** Release Candidate 56
+**Runtime release:** Release Candidate 57
 **Competitive models:** Production Scoring V4 · Projection V11
 
 O1F adds a signed-in manager Privacy Center at `/privacy-center` and a platform-administrator operations page at `/admin/privacy-requests`. The manager surface provides a recent-auth JSON export, request/follow-up/cancellation history, a retention catalog, Privacy notice access, and the existing Account Settings deletion route. The administrator surface maintains a separate manager-visible response and private operations note, enforces valid transitions and optimistic revisions, and writes immutable audits.
@@ -12674,7 +12674,7 @@ The current private-beta Privacy notice and workflows remain subject to professi
 Verification:
 
 ```bash
-npm run verify:batcho1f
+npm run verify:batcho1g
 ```
 
 Deployment order:
@@ -12686,3 +12686,25 @@ Deployment order:
 5. RC56 Hosting.
 
 No Firestore Rule, index, TTL-field override, scoring, Projection V11, six-game window, App Check mode, scoring queue, or shared NHL-cache authority change belongs in O1F.
+
+
+# Operations Batch O1G — Versioned Operations API Compatibility
+
+**Runtime release:** Release Candidate 57
+**Competitive models:** Production Scoring V4 and Projection V11
+**Operations API contract:** v1
+
+O1G decouples the maintained private-season, incident, research, and privacy callables from one exact browser Release Candidate label. Compatible clients send contract v1, a matching RC56-or-newer release/build identity, Scoring V4, and Projection V11. During the one-time rollout, an already-open deployed RC56 client without the new contract field is treated as legacy v1; versionless RC57-or-newer clients fail closed. Malformed, pre-contract, scoring/projection-mismatched, and future incompatible contracts also fail closed.
+
+Release/build identity is compatibility and audit metadata, not authentication. Server-derived ownership, membership, verified-email, recent-authentication, and administrator checks remain authoritative. Formal Private Season approval remains tied to its exact release, build, plan revision, and plan hash. Local clients may inspect compatible operational surfaces but cannot create formal evidence. App Check canary evidence remains exact-build evidence.
+
+After the one-time RC57 compatibility rollout, a browser-only release does not redeploy O1B–O1F Functions merely to change its RC label. Deploy only new or changed Functions; redeploy all affected operational groups when the operations API, scoring version, projection version, or request/response contract changes.
+
+Verification:
+
+```bash
+npm run operations:audit-compatibility
+npm run verify:batcho1g
+```
+
+See `docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`.

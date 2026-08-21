@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "operationsApiVersion": 1,
+  "minimumReleaseCandidate": 56,
+  "legacyClientWithoutVersionReleaseCandidate": 56,
+  "scoringRulesVersion": 4,
+  "projectionVersion": 11,
+  "policy": {
+    "browserOnlyReleaseRequiresOperationsFunctionRedeploy": false,
+    "operationsApiVersionChangeRequiresRedeploy": true,
+    "scoringOrProjectionVersionChangeRequiresRedeploy": true,
+    "operationsRequestOrResponseSchemaChangeRequiresAffectedFunctionRedeploy": true,
+    "formalPrivateSeasonApprovalRemainsExactBuildBound": true,
+    "localBuildWritesRemainBlocked": true
+  },
+  "maintainedFunctionGroups": {
+    "privateSeasonControl": [
+      "getPrivateSeasonControlCenter",
+      "updatePrivateSeasonPlan",
+      "recordPrivateSeasonGateDecision"
+    ],
+    "privateSeasonHealth": [
+      "recordPrivateSeasonEngagement",
+      "getPrivateSeasonHealthDashboard",
+      "updatePrivateSeasonWeeklyHealth"
+    ],
+    "incidents": [
+      "getServiceIncidentOperations",
+      "createServiceIncident",
+      "updateServiceIncident"
+    ],
+    "research": [
+      "getPrivateSeasonResearch",
+      "submitPrivateSeasonResearch",
+      "getPrivateSeasonResearchDashboard"
+    ],
+    "privacy": [
+      "getMyPrivacyCenter",
+      "manageMyPrivacyRequest",
+      "getMyPrivacyExport",
+      "getPrivacyRequestOperations",
+      "updatePrivacyRequestOperation"
+    ]
+  }
+}

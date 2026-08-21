@@ -1,3 +1,5 @@
+import type { OperationsClientIdentity } from './operations-client-compatibility';
+
 export type PrivateSeasonStatus =
   | 'planning'
   | 'rehearsal'
@@ -94,12 +96,7 @@ export interface PrivateSeasonLiveLeagueEvidence {
   draftScheduled: boolean;
 }
 
-export interface PrivateSeasonBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+export interface PrivateSeasonBuildIdentity extends OperationsClientIdentity {}
 
 export interface PrivateSeasonReadiness {
   status: 'blocked' | 'needs-attention' | 'ready';

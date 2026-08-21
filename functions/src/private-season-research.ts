@@ -14,10 +14,7 @@ import {
   privateSeasonResearchMilestonePrompt,
   privateSeasonResearchResponseId,
   PRIVATE_SEASON_RESEARCH_MILESTONES,
-  PRIVATE_SEASON_RESEARCH_PROJECTION_VERSION,
-  PRIVATE_SEASON_RESEARCH_RELEASE_LABEL,
   PRIVATE_SEASON_RESEARCH_RESPONSE_LIMIT,
-  PRIVATE_SEASON_RESEARCH_SCORING_VERSION,
   type PrivateSeasonResearchLeagueState,
   type PrivateSeasonResearchMilestone,
   type PrivateSeasonResearchResponse,
@@ -29,12 +26,15 @@ import {
   type PrivateSeasonBuildIdentity,
   type PrivateSeasonPlan,
 } from './shared/core/operations/private-season.util';
+import {
+  assessOperationsClientCompatibility,
+  normalizeOperationsClientIdentity,
+} from './shared/core/operations/operations-client-compatibility.util';
 import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 const RESPONSE_DAILY_LIMIT = 20;
 const TRANSACTION_SCAN_LIMIT = 100;
 const MANAGER_DAY_SCAN_LIMIT = 250;
@@ -99,38 +99,14 @@ function planFromData(data: DocumentData | undefined): PrivateSeasonPlan {
 }
 
 function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateSeasonBuildIdentity {
-  const source = record(value);
-  const build: PrivateSeasonBuildIdentity = {
-    releaseLabel: text(source['releaseLabel'], 80),
-    buildId: text(source['buildId'], 180),
-    scoringRulesVersion: typeof source['scoringRulesVersion'] === 'number'
-      ? Math.round(source['scoringRulesVersion'])
-      : 0,
-    projectionVersion: typeof source['projectionVersion'] === 'number'
-      ? Math.round(source['projectionVersion'])
-      : 0,
-  };
+  const result = normalizeOperationsClientIdentity(value);
+  const compatibility = assessOperationsClientCompatibility(result, { requireDeployableBuild });
 
-  if (
-    build.releaseLabel !== PRIVATE_SEASON_RESEARCH_RELEASE_LABEL ||
-    !CURRENT_BUILD_ID_PATTERN.test(build.buildId) ||
-    build.scoringRulesVersion !== PRIVATE_SEASON_RESEARCH_SCORING_VERSION ||
-    build.projectionVersion !== PRIVATE_SEASON_RESEARCH_PROJECTION_VERSION
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Refresh RinkRat. Tester research accepts only the current RC55 / Scoring V4 / Projection V11 build.',
-    );
+  if (!compatibility.compatible) {
+    throw new HttpsError('failed-precondition', compatibility.message);
   }
 
-  if (requireDeployableBuild && build.buildId.endsWith('-local')) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Open the deployed RC55 site before saving tester-season research.',
-    );
-  }
-
-  return build;
+  return result;
 }
 
 async function requirePlatformAdmin(
@@ -562,6 +538,7 @@ export const submitPrivateSeasonResearch = onCall(
         answers,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         submittedAt: current.exists && current.data()?.['submittedAt']
           ? current.data()?.['submittedAt']
           : FieldValue.serverTimestamp(),

@@ -1,5 +1,7 @@
+import type { OperationsClientIdentity } from './operations-client-compatibility.util';
+
 export const SERVICE_INCIDENT_SCHEMA_VERSION = 1 as const;
-export const SERVICE_INCIDENT_RELEASE_LABEL = 'Release Candidate 56';
+export const SERVICE_INCIDENT_MINIMUM_RELEASE_CANDIDATE = 56;
 export const SERVICE_INCIDENT_SCORING_VERSION = 4;
 export const SERVICE_INCIDENT_PROJECTION_VERSION = 11;
 export const SERVICE_INCIDENT_PUBLIC_UPDATE_LIMIT = 20;
@@ -43,12 +45,7 @@ export interface ServiceIncidentPublicUpdate {
   createdAt: string;
 }
 
-export interface ServiceStatusBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+export interface ServiceStatusBuildIdentity extends OperationsClientIdentity {}
 
 export interface ServiceIncidentDraft {
   severity: ServiceIncidentSeverity;

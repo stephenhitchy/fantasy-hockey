@@ -1,8 +1,11 @@
 import { Injectable } from '@angular/core';
 import { httpsCallable } from 'firebase/functions';
 
-import { BUNDLED_RELEASE_MANIFEST } from '../../../environments/generated-release-manifest';
 import { functions } from '../firebase-functions';
+import {
+  currentOperationsClientIdentity,
+  type OperationsClientIdentity,
+} from '../operations/operations-client-compatibility';
 import type {
   PrivacyCenterSnapshot,
   PrivacyExportPackageResponse,
@@ -13,20 +16,10 @@ import type {
   PrivacyRequestType,
 } from './privacy-operations.models';
 
-interface PrivacyBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+type PrivacyBuildIdentity = OperationsClientIdentity;
 
 function currentBuild(): PrivacyBuildIdentity {
-  return {
-    releaseLabel: BUNDLED_RELEASE_MANIFEST.releaseLabel,
-    buildId: BUNDLED_RELEASE_MANIFEST.buildId,
-    scoringRulesVersion: BUNDLED_RELEASE_MANIFEST.scoringRulesVersion,
-    projectionVersion: BUNDLED_RELEASE_MANIFEST.projectionVersion,
-  };
+  return currentOperationsClientIdentity();
 }
 
 @Injectable({ providedIn: 'root' })

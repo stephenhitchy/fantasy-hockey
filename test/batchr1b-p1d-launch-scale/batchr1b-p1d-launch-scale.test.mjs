@@ -460,6 +460,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // O1F adds isolated privacy-request and export authority.
         'src/privacy-request-authority.ts',
         'src/shared/core/privacy/privacy-request.util.ts',
+        // O1G adds isolated versioned compatibility for operational callables.
+        'src/shared/core/operations/operations-client-compatibility.util.ts',
       ]),
     ),
     '476753579e580d7d15275d139e327ea2dbebcf742e8531ad37241d5e15cd3d2a',

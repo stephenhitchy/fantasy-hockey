@@ -50,13 +50,14 @@ Core project references:
 - [`docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md`](docs/RINKRAT_OPERATIONS_O1E_1_COMPETITION_DESIGN_AUDIT.md) — stale Batch 7C.3 audit diagnosis, current Unified Add / Drop design contract, tightened debt budget, GitHub verification repair, and no-deployment boundary.
 - [`docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md`](docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md) — deterministic League Dashboard finalization dates across Pacific, UTC, CI, and production environments, with no competitive-authority change.
 - [`docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`](docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md) — signed-in data export, privacy request lifecycle, platform-admin response operations, scheduled cleanup, and account-deletion pseudonymization.
+- [`docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`](docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md) — versioned operational callable compatibility, exact-build boundaries, and the Hosting-only versus targeted-Functions deployment rule.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 56 / Operations Batch O1F**. O1F adds one signed-in Privacy Center for immediate bounded JSON exports including linked diagnostic context and prior export-audit metadata, retention details, and recent-auth privacy requests, plus one platform-administrator request-operations dashboard with separate manager-visible responses and private notes. Export files are prepared on demand and downloaded by the browser; the server retains only audit metadata and a SHA-256 package hash. Privacy-request text and account linkage are pseudonymized through paginated cleanup during permanent account deletion, and expired request audit subcollections are removed recursively, while the approved production TTL field-override count remains unchanged.
+The current source runtime is **Release Candidate 57 / Operations Batch O1G**. O1G introduces operations API contract v1 so compatible browser releases can use the maintained private-season, incident, research, and privacy callables without redeploying them solely to update a Release Candidate label. The formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed. The one-time rollout also accepts already-open deployed RC56 operations clients that predate the explicit contract field, while versionless RC57-or-newer clients fail closed.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -64,7 +65,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1f`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1g`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -132,6 +133,7 @@ verify:batcho1c
 verify:batcho1d
 verify:batcho1e
 verify:batcho1f
+verify:batcho1g
 ```
 
 RinkRat pins:
@@ -154,7 +156,8 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1f
+npm run verify:batcho1g
+verify:batcho1g
 ```
 
 After verification and a clean commit:
@@ -162,6 +165,28 @@ After verification and a clean commit:
 ```bash
 npm run beta:preflight
 ```
+
+## Operations Batch O1G — Operations API Compatibility
+
+O1G removes the need to redeploy every O1B–O1F callable merely because the browser release number changed. Compatible clients send operations contract v1, a matching RC56-or-newer release/build identity, Scoring V4, and Projection V11. The server still rejects missing or incompatible contracts and blocks formal writes from local builds.
+
+After the one-time RC57 compatibility rollout:
+
+- browser-only releases normally deploy Hosting only;
+- changed Functions deploy only their named targets;
+- an operations API, scoring, or projection contract change requires the affected Functions to be redeployed;
+- broad shared competitive Function changes still follow their deliberate grouped or full rollout.
+
+The private-season go/no-go decision remains exact-build-bound and App Check canary evidence remains exact-build evidence.
+
+Verification:
+
+```bash
+npm run operations:audit-compatibility
+npm run verify:batcho1g
+```
+
+Full guidance is in `docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`.
 
 ## Operations Batch O1F — Privacy Center and Request Operations
 
@@ -172,7 +197,8 @@ The immediate export excludes passwords, tokens, secrets, other managers’ priv
 Verification:
 
 ```bash
-npm run verify:batcho1f
+npm run verify:batcho1g
+verify:batcho1g
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`.
@@ -236,6 +262,7 @@ Verification:
 ```bash
 npm run verify:batcho1e
 verify:batcho1f
+verify:batcho1g
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`.

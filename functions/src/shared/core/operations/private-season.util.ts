@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 
+import type { OperationsClientIdentity } from './operations-client-compatibility.util';
+
 export const PRIVATE_SEASON_MINIMUM_LEAGUES = 2;
 export const PRIVATE_SEASON_MAXIMUM_LEAGUES = 4;
 export const PRIVATE_SEASON_MINIMUM_MANAGERS_PER_LEAGUE = 6;
 export const PRIVATE_SEASON_MINIMUM_TESTERS = 10;
 export const PRIVATE_SEASON_MAXIMUM_TESTERS = 30;
 export const PRIVATE_SEASON_DECISION_REASON_MINIMUM_LENGTH = 12;
-export const PRIVATE_SEASON_RELEASE_LABEL = 'Release Candidate 56';
+export const PRIVATE_SEASON_MINIMUM_RELEASE_CANDIDATE = 56;
 export const PRIVATE_SEASON_SCORING_VERSION = 4;
 export const PRIVATE_SEASON_PROJECTION_VERSION = 11;
 
@@ -114,12 +116,7 @@ export interface PrivateSeasonLiveLeagueEvidence {
   draftScheduled: boolean;
 }
 
-export interface PrivateSeasonBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+export interface PrivateSeasonBuildIdentity extends OperationsClientIdentity {}
 
 export interface PrivateSeasonReadiness {
   status: 'blocked' | 'needs-attention' | 'ready';
@@ -603,7 +600,7 @@ export function buildPrivateSeasonReadiness(input: {
     blockers.push('Confirm the noncritical feature freeze.');
   }
   if (!exactBuildFrozen) {
-    blockers.push(`Freeze this exact ${PRIVATE_SEASON_RELEASE_LABEL} / Scoring V${input.build.scoringRulesVersion} / Projection V${input.build.projectionVersion} build.`);
+    blockers.push(`Freeze this exact ${input.build.releaseLabel} / Scoring V${input.build.scoringRulesVersion} / Projection V${input.build.projectionVersion} build.`);
   }
   if (plan.freeze.nonGoals.length === 0) {
     blockers.push('Record at least one tester-season non-goal.');

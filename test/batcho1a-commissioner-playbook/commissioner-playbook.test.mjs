@@ -223,15 +223,15 @@ test('O1A advances to RC51 while preserving Scoring V4, Projection V11, and safe
   const canary = JSON.parse(canarySource);
   const cache = JSON.parse(cacheSource);
 
-  assert.match(runtime, /Release Candidate 56/);
-  assert.match(productionRuntime, /Release Candidate 56/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 56');
+  assert.match(runtime, /Release Candidate 57/);
+  assert.match(productionRuntime, /Release Candidate 57/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 57');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc56-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
   assert.match(packageJson.scripts['verify:batcho1a:core'], /verify:batchv4a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
   assert.equal(sha256(scoringRules), PROTECTED_SOURCE_HASHES.scoringRules);
   assert.equal(sha256(scoringEngine), PROTECTED_SOURCE_HASHES.scoringEngine);
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
@@ -253,17 +253,17 @@ test('documentation and the permanent roadmap record the bounded commissioner fo
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.47/);
+  assert.match(roadmap, /Version 1\.48/);
   assert.match(roadmap, /O1\.5[\s\S]*?O1A/);
   assert.match(roadmap, /LOG\.62/);
-  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
+  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
   assert.match(readme, /RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK\.md/);
   assert.match(doc, /public commissioner guide/i);
   assert.match(doc, /O1A\.1 strict-TypeScript hotfix/);
   assert.match(doc, /league-specific readiness/i);
   assert.match(doc, /device-local/i);
   assert.match(doc, /No Cloud Function/);
-  assert.match(runbook, /Release Candidate 56/);
-  assert.match(runbook, /Operations Batch O1F/);
-  assert.match(runbook, /npm run verify:batcho1f/);
+  assert.match(runbook, /Release Candidate 57/);
+  assert.match(runbook, /Operations Batch O1G/);
+  assert.match(runbook, /npm run verify:batcho1g/);
 });

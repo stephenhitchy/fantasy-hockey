@@ -407,6 +407,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // O1F adds isolated privacy-request and export authority.
         'src/privacy-request-authority.ts',
         'src/shared/core/privacy/privacy-request.util.ts',
+        // O1G adds isolated versioned compatibility for operational callables.
+        'src/shared/core/operations/operations-client-compatibility.util.ts',
       ]),
     ),
     '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',

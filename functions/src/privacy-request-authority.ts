@@ -17,9 +17,6 @@ import {
   PRIVACY_EXPORT_AUDIT_RETENTION_DAYS,
   PRIVACY_EXPORT_MAXIMUM_BYTES,
   PRIVACY_EXPORTS_PER_DAY,
-  PRIVACY_OPERATIONS_PROJECTION_VERSION,
-  PRIVACY_OPERATIONS_RELEASE_LABEL,
-  PRIVACY_OPERATIONS_SCORING_VERSION,
   PRIVACY_REQUEST_ADMIN_NOTE_MAXIMUM,
   PRIVACY_REQUEST_MAXIMUM_PER_ACCOUNT,
   PRIVACY_REQUEST_PUBLIC_RESPONSE_MAXIMUM,
@@ -45,6 +42,11 @@ import {
   type PrivacyRequestType,
 } from './shared/core/privacy/privacy-request.util';
 import {
+  assessOperationsClientCompatibility,
+  normalizeOperationsClientIdentity,
+  type OperationsClientIdentity,
+} from './shared/core/operations/operations-client-compatibility.util';
+import {
   requireAuthenticatedUserId,
   requireVerifiedEmail,
   requireVerifiedRecentAuthentication,
@@ -54,19 +56,13 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 const PRIVACY_REQUEST_DAILY_LIMIT = 5;
 const EXPORT_QUERY_LIMIT = 500;
 const REQUEST_QUERY_LIMIT = 100;
 const ADMIN_REQUEST_QUERY_LIMIT = 250;
 const ADMIN_EXPORT_QUERY_LIMIT = 250;
 
-interface PrivacyBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+type PrivacyBuildIdentity = OperationsClientIdentity;
 
 interface PrivacyExportAuditView {
   exportId: string;
@@ -141,34 +137,14 @@ function number(value: unknown, minimum = 0, maximum = Number.MAX_SAFE_INTEGER):
 }
 
 function buildIdentity(value: unknown, requireDeployableBuild: boolean): PrivacyBuildIdentity {
-  const source = record(value);
-  const build: PrivacyBuildIdentity = {
-    releaseLabel: boundedPrivacyText(source['releaseLabel'], 80),
-    buildId: boundedPrivacyText(source['buildId'], 180),
-    scoringRulesVersion: number(source['scoringRulesVersion'], 0, 100),
-    projectionVersion: number(source['projectionVersion'], 0, 100),
-  };
+  const result = normalizeOperationsClientIdentity(value);
+  const compatibility = assessOperationsClientCompatibility(result, { requireDeployableBuild });
 
-  if (
-    build.releaseLabel !== PRIVACY_OPERATIONS_RELEASE_LABEL ||
-    !CURRENT_BUILD_ID_PATTERN.test(build.buildId) ||
-    build.scoringRulesVersion !== PRIVACY_OPERATIONS_SCORING_VERSION ||
-    build.projectionVersion !== PRIVACY_OPERATIONS_PROJECTION_VERSION
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Refresh RinkRat. Privacy operations accept only the current RC56 / Scoring V4 / Projection V11 build.',
-    );
+  if (!compatibility.compatible) {
+    throw new HttpsError('failed-precondition', compatibility.message);
   }
 
-  if (requireDeployableBuild && build.buildId.endsWith('-local')) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Open the deployed RC56 site before completing a privacy operation.',
-    );
-  }
-
-  return build;
+  return result;
 }
 
 async function requirePlatformAdmin(
@@ -487,7 +463,10 @@ async function buildPrivateSeasonExport(userId: string): Promise<{
   return { researchResponses, engagementDays };
 }
 
-async function buildPrivacyExportPackage(userId: string): Promise<{
+async function buildPrivacyExportPackage(
+  userId: string,
+  build: PrivacyBuildIdentity,
+): Promise<{
   packageData: Record<string, unknown>;
   recordCounts: Record<string, number>;
 }> {
@@ -549,9 +528,10 @@ async function buildPrivacyExportPackage(userId: string): Promise<{
     packageData: {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      sourceRelease: PRIVACY_OPERATIONS_RELEASE_LABEL,
-      scoringRulesVersion: PRIVACY_OPERATIONS_SCORING_VERSION,
-      projectionVersion: PRIVACY_OPERATIONS_PROJECTION_VERSION,
+      sourceRelease: build.releaseLabel,
+      operationsApiVersion: build.operationsApiVersion,
+      scoringRulesVersion: build.scoringRulesVersion,
+      projectionVersion: build.projectionVersion,
       account: {
         authentication: {
           userId,
@@ -708,6 +688,7 @@ export const manageMyPrivacyRequest = onCall(
         targetResponseAt,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         scoringRulesVersion: build.scoringRulesVersion,
         projectionVersion: build.projectionVersion,
         lastUpdatedByRole: 'manager',
@@ -726,6 +707,7 @@ export const manageMyPrivacyRequest = onCall(
         status: 'submitted',
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         createdAt: now,
       });
 
@@ -779,6 +761,7 @@ export const manageMyPrivacyRequest = onCall(
           status: 'in-review',
           releaseLabel: build.releaseLabel,
           buildId: build.buildId,
+          operationsApiVersion: build.operationsApiVersion,
           createdAt: now,
         });
         return;
@@ -808,6 +791,7 @@ export const manageMyPrivacyRequest = onCall(
           status: 'cancelled',
           releaseLabel: build.releaseLabel,
           buildId: build.buildId,
+          operationsApiVersion: build.operationsApiVersion,
           createdAt: now,
         });
         return;
@@ -845,7 +829,7 @@ export const getMyPrivacyExport = onCall(
     const build = buildIdentity(record(request.data)['build'], true);
     await consumePrivacyRateLimit(userId, 'export', PRIVACY_EXPORTS_PER_DAY);
 
-    const { packageData, recordCounts } = await buildPrivacyExportPackage(userId);
+    const { packageData, recordCounts } = await buildPrivacyExportPackage(userId, build);
     const json = JSON.stringify(packageData, null, 2);
     const byteSize = Buffer.byteLength(json, 'utf8');
     if (byteSize > PRIVACY_EXPORT_MAXIMUM_BYTES) {
@@ -875,6 +859,7 @@ export const getMyPrivacyExport = onCall(
       recordCounts,
       releaseLabel: build.releaseLabel,
       buildId: build.buildId,
+      operationsApiVersion: build.operationsApiVersion,
       scoringRulesVersion: build.scoringRulesVersion,
       projectionVersion: build.projectionVersion,
       generatedAt: now,
@@ -1021,6 +1006,7 @@ export const updatePrivacyRequestOperation = onCall(
         auditReason,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         createdAt: now,
       });
     });

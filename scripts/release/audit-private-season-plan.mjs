@@ -36,7 +36,7 @@ assert.equal(gates.operatingPolicies.commissionerFirst, true);
 assert.equal(gates.operatingPolicies.optimizeForActivatedAndRetainedLeagues, true);
 assert.equal(gates.operatingPolicies.noPaidEntryOrPooledLeagueMoney, true);
 assert.equal(gates.operatingPolicies.noPayToWinCompetitiveAdvantage, true);
-assert.equal(freeze.releaseLabel, 'Release Candidate 56');
+assert.equal(freeze.releaseLabel, 'Release Candidate 57');
 assert.equal(freeze.scoringRulesVersion, 4);
 assert.equal(freeze.projectionVersion, 11);
 assert.match(roadmap, /PHASE O1 — TESTER-SEASON OPERATIONS AND PUBLIC-LAUNCH FOUNDATION/);

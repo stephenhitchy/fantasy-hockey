@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { httpsCallable } from 'firebase/functions';
 
-import { BUNDLED_RELEASE_MANIFEST } from '../../../environments/generated-release-manifest';
 import { auth } from '../firebase-auth';
 import { functions } from '../firebase-functions';
+import { currentOperationsClientIdentity } from './operations-client-compatibility';
 import type {
   PrivateSeasonEngagementCategory,
 } from './private-season-health.models';
@@ -15,12 +15,7 @@ interface PrivateSeasonEngagementResponse {
 }
 
 function currentBuild(): PrivateSeasonBuildIdentity {
-  return {
-    releaseLabel: BUNDLED_RELEASE_MANIFEST.releaseLabel,
-    buildId: BUNDLED_RELEASE_MANIFEST.buildId,
-    scoringRulesVersion: BUNDLED_RELEASE_MANIFEST.scoringRulesVersion,
-    projectionVersion: BUNDLED_RELEASE_MANIFEST.projectionVersion,
-  };
+  return currentOperationsClientIdentity();
 }
 
 function engagementCategory(path: string): PrivateSeasonEngagementCategory {

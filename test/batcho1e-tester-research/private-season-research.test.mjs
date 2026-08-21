@@ -47,8 +47,8 @@ function response(overrides = {}) {
     milestone: overrides.milestone ?? 'after-first-matchup',
     revision: 1,
     answers: answers(overrides.answers),
-    releaseLabel: 'Release Candidate 56',
-    buildId: 'release-candidate-56-test-build',
+    releaseLabel: 'Release Candidate 57',
+    buildId: 'release-candidate-57-test-build',
     submittedAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
   };
@@ -183,10 +183,12 @@ test('research summary reports clarity, trust, information load, independence, s
   assert.equal(summary.followUpAllowedCount, 1);
 });
 
-test('server research authority derives membership and identity, enforces RC55, and stores no raw contact details', async () => {
+test('server research authority derives membership and identity, enforces the operations contract, and stores no raw contact details', async () => {
   const source = await read('functions/src/private-season-research.ts');
 
-  assert.match(source, /CURRENT_BUILD_ID_PATTERN = \/\^release-candidate-56-/);
+  assert.match(source, /assessOperationsClientCompatibility/);
+  assert.match(source, /normalizeOperationsClientIdentity/);
+  assert.doesNotMatch(source, /CURRENT_BUILD_ID_PATTERN/);
   assert.match(source, /requireVerifiedManager/);
   assert.match(source, /leagues\/\$\{leagueId\}\/members\/\$\{input\.userId\}/);
   assert.match(source, /privateSeasonManagerHash/);
@@ -271,16 +273,16 @@ test('O1E stays server-authoritative and preserves scoring, projection, Rules, a
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 56/);
-  assert.match(productionRuntime, /Release Candidate 56/);
+  assert.match(runtime, /Release Candidate 57/);
+  assert.match(productionRuntime, /Release Candidate 57/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc56-invite-beta');
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
   assert.match(indexSource, /getPrivateSeasonResearchDashboard/);
   assert.match(indexSource, /submitPrivateSeasonResearch/);
 });
@@ -295,14 +297,14 @@ test('roadmap and documentation record milestone research as evidence collection
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.47/);
+  assert.match(roadmap, /Version 1\.48/);
   assert.match(roadmap, /O1E \/ Release Candidate 55/);
   assert.match(roadmap, /live interviews and the full-season postmortem remain open/i);
-  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
-  assert.match(readme, /npm run verify:batcho1f/);
+  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
+  assert.match(readme, /npm run verify:batcho1g/);
   assert.match(runbook, /seven milestone surveys/i);
   assert.match(runbook, /No email address, phone number, or raw account ID/i);
   assert.match(runbook, /Functions first/i);
-  assert.match(releaseRunbook, /rinkrat-rc56-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc56-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc57-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc57-invite-beta/);
 });

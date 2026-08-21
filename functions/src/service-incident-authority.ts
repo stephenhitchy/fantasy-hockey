@@ -9,10 +9,7 @@ import {
   publicServiceIncident,
   SERVICE_INCIDENT_AUDIT_REASON_MINIMUM_LENGTH,
   SERVICE_INCIDENT_PUBLIC_UPDATE_LIMIT,
-  SERVICE_INCIDENT_PROJECTION_VERSION,
-  SERVICE_INCIDENT_RELEASE_LABEL,
   SERVICE_INCIDENT_SCHEMA_VERSION,
-  SERVICE_INCIDENT_SCORING_VERSION,
   type PublicServiceStatusSnapshot,
   type ServiceIncidentAdminRecord,
   type ServiceIncidentDraft,
@@ -20,6 +17,10 @@ import {
   type ServiceIncidentPublicUpdate,
   type ServiceStatusBuildIdentity,
 } from './shared/core/operations/service-incident.util';
+import {
+  assessOperationsClientCompatibility,
+  normalizeOperationsClientIdentity,
+} from './shared/core/operations/operations-client-compatibility.util';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
@@ -30,7 +31,6 @@ const PUBLIC_COLLECTION = 'publicServiceIncidents';
 const ADMIN_INCIDENT_LIMIT = 50;
 const PUBLIC_INCIDENT_LIMIT = 40;
 const PUBLIC_STATUS_CACHE_MILLISECONDS = 20_000;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 
 let publicStatusCache: { expiresAt: number; value: PublicServiceStatusSnapshot } | null = null;
 
@@ -45,35 +45,11 @@ function text(value: unknown, maximumLength: number): string {
 }
 
 function buildIdentity(value: unknown, requireDeployableBuild = false): ServiceStatusBuildIdentity {
-  const source = record(value);
-  const result: ServiceStatusBuildIdentity = {
-    releaseLabel: text(source['releaseLabel'], 80),
-    buildId: text(source['buildId'], 180),
-    scoringRulesVersion: typeof source['scoringRulesVersion'] === 'number'
-      ? Math.round(source['scoringRulesVersion'])
-      : 0,
-    projectionVersion: typeof source['projectionVersion'] === 'number'
-      ? Math.round(source['projectionVersion'])
-      : 0,
-  };
+  const result = normalizeOperationsClientIdentity(value);
+  const compatibility = assessOperationsClientCompatibility(result, { requireDeployableBuild });
 
-  if (
-    result.releaseLabel !== SERVICE_INCIDENT_RELEASE_LABEL ||
-    !CURRENT_BUILD_ID_PATTERN.test(result.buildId) ||
-    result.scoringRulesVersion !== SERVICE_INCIDENT_SCORING_VERSION ||
-    result.projectionVersion !== SERVICE_INCIDENT_PROJECTION_VERSION
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Refresh RinkRat. Incident operations accept only the current RC55 / Scoring V4 / Projection V11 build.',
-    );
-  }
-
-  if (requireDeployableBuild && result.buildId.endsWith('-local')) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Open the deployed RC55 site before changing public service status.',
-    );
+  if (!compatibility.compatible) {
+    throw new HttpsError('failed-precondition', compatibility.message);
   }
 
   return result;
@@ -365,6 +341,7 @@ export const createServiceIncident = onCall(
         competitiveImpact: incident.competitiveImpact,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         scoringRulesVersion: build.scoringRulesVersion,
         projectionVersion: build.projectionVersion,
         actorId: adminId,
@@ -475,6 +452,7 @@ export const updateServiceIncident = onCall(
         competitiveImpact: next.competitiveImpact,
         releaseLabel: build.releaseLabel,
         buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion,
         scoringRulesVersion: build.scoringRulesVersion,
         projectionVersion: build.projectionVersion,
         actorId: adminId,

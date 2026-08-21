@@ -12,14 +12,15 @@ import {
   privateSeasonPolicy,
   PRIVATE_SEASON_DECISION_REASON_MINIMUM_LENGTH,
   PRIVATE_SEASON_MAXIMUM_LEAGUES,
-  PRIVATE_SEASON_PROJECTION_VERSION,
-  PRIVATE_SEASON_RELEASE_LABEL,
-  PRIVATE_SEASON_SCORING_VERSION,
   type PrivateSeasonBuildIdentity,
   type PrivateSeasonGateOutcome,
   type PrivateSeasonLiveLeagueEvidence,
   type PrivateSeasonPlan,
 } from './shared/core/operations/private-season.util';
+import {
+  assessOperationsClientCompatibility,
+  normalizeOperationsClientIdentity,
+} from './shared/core/operations/operations-client-compatibility.util';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import { requireFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
@@ -27,7 +28,6 @@ import { TRUSTED_WEB_ORIGINS } from './web-security';
 const FUNCTION_REGION = 'us-central1';
 const PLAN_PATH = 'platformOperations/privateSeason2026-27';
 const REASON_MINIMUM = PRIVATE_SEASON_DECISION_REASON_MINIMUM_LENGTH;
-const CURRENT_BUILD_ID_PATTERN = /^release-candidate-56-[A-Za-z0-9._:-]{4,160}$/;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -81,29 +81,13 @@ async function requirePlatformAdmin(
 }
 
 function buildIdentity(value: unknown, requireDeployableBuild = false): PrivateSeasonBuildIdentity {
-  const source = record(value);
-  const result = {
-    releaseLabel: text(source['releaseLabel'], 80),
-    buildId: text(source['buildId'], 180),
-    scoringRulesVersion: typeof source['scoringRulesVersion'] === 'number' ? Math.round(source['scoringRulesVersion']) : 0,
-    projectionVersion: typeof source['projectionVersion'] === 'number' ? Math.round(source['projectionVersion']) : 0,
-  };
-  if (
-    result.releaseLabel !== PRIVATE_SEASON_RELEASE_LABEL || !CURRENT_BUILD_ID_PATTERN.test(result.buildId) ||
-    result.scoringRulesVersion !== PRIVATE_SEASON_SCORING_VERSION ||
-    result.projectionVersion !== PRIVATE_SEASON_PROJECTION_VERSION
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Refresh RinkRat. The private-season gate accepts only the current RC55 / Scoring V4 / Projection V11 build.',
-    );
+  const result = normalizeOperationsClientIdentity(value);
+  const compatibility = assessOperationsClientCompatibility(result, { requireDeployableBuild });
+
+  if (!compatibility.compatible) {
+    throw new HttpsError('failed-precondition', compatibility.message);
   }
-  if (requireDeployableBuild && result.buildId.endsWith('-local')) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Open the deployed RC55 site before changing or approving the private-season plan.',
-    );
-  }
+
   return result;
 }
 
@@ -204,7 +188,7 @@ export const updatePrivateSeasonPlan = onCall(
       transaction.set(reference, { ...next, updatedAt: FieldValue.serverTimestamp() });
       transaction.set(reference.collection('changes').doc(), {
         schemaVersion: 1, action: 'plan-updated', revision: next.revision, reason: auditReason,
-        releaseLabel: build.releaseLabel, buildId: build.buildId,
+        releaseLabel: build.releaseLabel, buildId: build.buildId, operationsApiVersion: build.operationsApiVersion,
         leagueCount: next.leagueSlots.filter((entry) => entry.active).length,
         testerCount: next.testers.length, planHash: hash(next), actorId: adminId, createdAt: FieldValue.serverTimestamp(),
       });
@@ -249,7 +233,8 @@ export const recordPrivateSeasonGateDecision = onCall(
       const decision = {
         decisionId, gate: 'private-season' as const, outcome, reason: auditReason,
         planRevision: nextRevision, planHash: hash(decidedPlan), releaseLabel: build.releaseLabel,
-        buildId: build.buildId, recordedAt: null, recordedBy: adminId,
+        buildId: build.buildId,
+        operationsApiVersion: build.operationsApiVersion, recordedAt: null, recordedBy: adminId,
       };
       transaction.set(reference, {
         ...decidedPlan,

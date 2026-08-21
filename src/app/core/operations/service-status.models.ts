@@ -1,3 +1,5 @@
+import type { OperationsClientIdentity } from './operations-client-compatibility';
+
 export type ServiceIncidentSeverity = 'p0' | 'p1' | 'p2' | 'p3';
 export type ServiceIncidentStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
 export type ServiceIncidentComponent =
@@ -34,12 +36,7 @@ export interface ServiceIncidentPublicUpdate {
   createdAt: string;
 }
 
-export interface ServiceStatusBuildIdentity {
-  releaseLabel: string;
-  buildId: string;
-  scoringRulesVersion: number;
-  projectionVersion: number;
-}
+export interface ServiceStatusBuildIdentity extends OperationsClientIdentity {}
 
 export interface PublicServiceIncident {
   incidentId: string;

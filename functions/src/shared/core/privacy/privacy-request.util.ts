@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
-export const PRIVACY_OPERATIONS_RELEASE_LABEL = 'Release Candidate 56';
+
+export const PRIVACY_OPERATIONS_MINIMUM_RELEASE_CANDIDATE = 56;
 export const PRIVACY_OPERATIONS_SCORING_VERSION = 4;
 export const PRIVACY_OPERATIONS_PROJECTION_VERSION = 11;
 export const PRIVACY_REQUEST_RETENTION_DAYS = 730;

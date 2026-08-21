@@ -415,6 +415,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // O1F adds isolated privacy-request and export authority.
     'privacy-request-authority.ts',
     'shared/core/privacy/privacy-request.util.ts',
+    // O1G adds isolated versioned compatibility for operational callables.
+    'shared/core/operations/operations-client-compatibility.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 34,

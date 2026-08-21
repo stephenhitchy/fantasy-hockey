@@ -201,7 +201,9 @@ test('incident authority separates public projections from private evidence and 
   const source = await read('functions/src/service-incident-authority.ts');
 
   assert.match(source, /requireVerifiedRecentAuthentication/);
-  assert.match(source, /CURRENT_BUILD_ID_PATTERN = \/\^release-candidate-56-/);
+  assert.match(source, /assessOperationsClientCompatibility/);
+  assert.match(source, /normalizeOperationsClientIdentity/);
+  assert.doesNotMatch(source, /CURRENT_BUILD_ID_PATTERN/);
   assert.match(source, /buildIdentity\(input\['build'\], true\)/);
   assert.match(source, /platformIncidents/);
   assert.match(source, /publicServiceIncidents/);
@@ -281,22 +283,23 @@ test('O1D release records the incident/status milestone and the next open operat
   const freeze = JSON.parse(freezeSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.47/);
+  assert.match(roadmap, /Version 1\.48/);
   assert.match(roadmap, /Operations Batch O1D/);
   assert.match(roadmap, /LOG\.66/);
-  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
+  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
   assert.match(runbook, /public Service Status/i);
   assert.match(runbook, /no silent score edits/i);
-  assert.match(runtime, /Release Candidate 56/);
-  assert.match(productionRuntime, /Release Candidate 56/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 56');
+  assert.match(runtime, /Release Candidate 57/);
+  assert.match(productionRuntime, /Release Candidate 57/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 57');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc56-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
+  assert.match(packageJson.scripts['verify:batcho1g:core'], /verify:batcho1f:core/);
   assert.match(packageJson.scripts['verify:batcho1f:core'], /verify:batcho1e:core/);
   assert.match(packageJson.scripts['verify:batcho1e:core'], /verify:batcho1d:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1f:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
 });

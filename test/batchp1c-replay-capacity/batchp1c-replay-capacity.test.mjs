@@ -264,6 +264,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // O1F adds isolated privacy-request and export authority.
         'src/privacy-request-authority.ts',
         'src/shared/core/privacy/privacy-request.util.ts',
+        // O1G adds isolated versioned compatibility for operational callables.
+        'src/shared/core/operations/operations-client-compatibility.util.ts',
   ]);
 
   assert.equal(

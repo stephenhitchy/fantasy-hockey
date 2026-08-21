@@ -19,8 +19,8 @@ async function read(path) {
 
 function buildIdentity() {
   return {
-    releaseLabel: 'Release Candidate 56',
-    buildId: 'release-candidate-56-test-build',
+    releaseLabel: 'Release Candidate 57',
+    buildId: 'release-candidate-57-test-build',
     scoringRulesVersion: 4,
     projectionVersion: 11,
   };
@@ -58,8 +58,8 @@ function readyPlan() {
   };
   plan.freeze = {
     featureFreezeConfirmed: true,
-    approvedReleaseLabel: 'Release Candidate 56',
-    approvedBuildId: 'release-candidate-56-test-build',
+    approvedReleaseLabel: 'Release Candidate 57',
+    approvedBuildId: 'release-candidate-57-test-build',
     nonGoals: ['No public paid acquisition'],
   };
   return plan;
@@ -119,7 +119,7 @@ test('empty plan fails closed on cohort, coverage, exact-build, and support gate
   assert.ok(readiness.blockers.some((item) => item.includes('10–30')));
   assert.ok(readiness.blockers.some((item) => item.includes('non-founder')));
   assert.ok(readiness.blockers.some((item) => item.includes('support channel')));
-  assert.ok(readiness.blockers.some((item) => item.includes('Release Candidate 56')));
+  assert.ok(readiness.blockers.some((item) => item.includes('Release Candidate 57')));
 });
 
 test('diverse two-league plan reaches the explicit decision gate', () => {
@@ -161,7 +161,7 @@ test('an approved decision is current only for the exact plan revision and build
   const hash = createHash('sha256').update(JSON.stringify(privateSeasonPlanHashInput(plan))).digest('hex');
   plan.latestDecision = {
     decisionId: 'decision-1', gate: 'private-season', outcome: 'approved', reason: 'All rehearsal evidence passed.',
-    planRevision: plan.revision, planHash: hash, releaseLabel: 'Release Candidate 56', buildId: 'release-candidate-56-test-build', recordedAt: '2026-09-27T12:00:00Z', recordedBy: 'admin',
+    planRevision: plan.revision, planHash: hash, releaseLabel: 'Release Candidate 57', buildId: 'release-candidate-57-test-build', recordedAt: '2026-09-27T12:00:00Z', recordedBy: 'admin',
   };
   const current = buildPrivateSeasonReadiness({ plan, liveLeagueEvidence: evidence(), build: buildIdentity() });
   const changed = buildPrivateSeasonReadiness({ plan: { ...plan, revision: plan.revision + 1 }, liveLeagueEvidence: evidence(), build: buildIdentity() });
@@ -198,7 +198,10 @@ test('duplicate leagues, duplicate aliases, and incomplete per-league assignment
 });
 
 test('server authority requires platform admin, recent auth, revision checks, and immutable audits', async () => {
-  const source = await read('functions/src/private-season-authority.ts');
+  const [source, compatibility] = await Promise.all([
+    read('functions/src/private-season-authority.ts'),
+    read('functions/src/shared/core/operations/operations-client-compatibility.util.ts'),
+  ]);
 
   assert.match(source, /getPrivateSeasonControlCenter/);
   assert.match(source, /updatePrivateSeasonPlan/);
@@ -208,8 +211,10 @@ test('server authority requires platform admin, recent auth, revision checks, an
   assert.match(source, /collection\('changes'\)/);
   assert.match(source, /collection\('decisions'\)/);
   assert.match(source, /createHash\('sha256'\)/);
-  assert.match(source, /CURRENT_BUILD_ID_PATTERN/);
-  assert.match(source, /buildId\.endsWith\('-local'\)/);
+  assert.match(source, /assessOperationsClientCompatibility/);
+  assert.doesNotMatch(source, /CURRENT_BUILD_ID_PATTERN/);
+  assert.match(compatibility, /OPERATIONS_API_VERSION\s*=\s*1/);
+  assert.match(compatibility, /!identity\.buildId\.endsWith\('-local'\)/);
   assert.match(source, /draftStatus: 'invalid-id'/);
   assert.doesNotMatch(source, /automaticPromotion|setAppCheck|queueMode:\s*'primary'/);
 });
@@ -243,12 +248,12 @@ test('O1B uses current build identity and has a complete verification chain', as
   const packageJson = JSON.parse(packageSource);
   const freeze = JSON.parse(freezeSource);
 
-  assert.match(service, /BUNDLED_RELEASE_MANIFEST/);
+  assert.match(service, /currentOperationsClientIdentity/);
   assert.equal(packageJson.scripts['verify:batcho1b:core'], 'npm run verify:batcho1a-2:core && npm run beta:audit-season-plan && npm run audit:product-copy-density && npm run test:batcho1b:run && npm run validate:release-manifest');
-  assert.equal(freeze.releaseLabel, 'Release Candidate 56');
+  assert.equal(freeze.releaseLabel, 'Release Candidate 57');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1f');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
 });
@@ -279,11 +284,11 @@ test('roadmap and documentation record partial operational completion rather tha
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.47/);
+  assert.match(roadmap, /Version 1\.48/);
   assert.match(roadmap, /\[~\] O1\.1 Freeze the exact 2026–27 tester-season scope/);
   assert.match(roadmap, /\[~\] O1\.2 Recruit and track a diverse tester matrix/);
   assert.match(roadmap, /LOG\.64 2026-08-19 — Completed Operations Batch O1B/);
-  assert.match(readme, /Release Candidate 56 \/ Operations Batch O1F/);
+  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
   assert.match(runbook, /does not automatically approve/i);
   assert.match(releaseRunbook, /Private Season Control Center/);
 });
