@@ -166,7 +166,7 @@ test('O1A.2 documents the league-card timing clarification without changing comp
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.49/);
+  assert.match(roadmap, /Version 1\.50/);
   assert.match(roadmap, /LOG\.63 2026-08-19 — Completed Operations Batch O1A\.2/);
   assert.match(readme, /Operations Batch O1D/);
   assert.match(util, /buildMatchupStatusLabel/);

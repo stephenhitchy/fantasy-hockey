@@ -18,9 +18,14 @@ assert.equal(freeze.projectionVersion, acceptance.projectionVersion);
 assert.equal(scoringRules, serverScoringRules, 'Client and server scoring rules must match before publishing fairness evidence.');
 assert.match(scoringRules, /CURRENT_SCORING_RULES_VERSION\s*=\s*4/);
 
+const acceptanceFingerprintInput = {
+  ...acceptance,
+  releaseLabel: source.publishedReleaseLabel,
+};
+
 const evidenceFingerprint = createHash('sha256')
   .update(JSON.stringify(source))
-  .update(JSON.stringify(acceptance))
+  .update(JSON.stringify(acceptanceFingerprintInput))
   .update(scoringRules)
   .digest('hex');
 

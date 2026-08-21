@@ -1,0 +1,202 @@
+<main class="scoring-calculator-page rr-page-shell">
+  <header class="calculator-hero rr-card rr-card--raised rr-card--padded">
+    <div>
+      <span class="eyebrow">Public tool · Exact Production Scoring V{{ scoringRulesVersion }}</span>
+      <h1>Scoring Calculator</h1>
+      <p>
+        Enter one NHL game stat line and see exactly where every RinkRat point comes from.
+        The calculator uses the same scoring engine as the application.
+      </p>
+      <div class="calculator-badges" aria-label="Calculator boundaries">
+        <span>One NHL game</span>
+        <span>LW · C · RW share one formula</span>
+        <span>No hidden recommendation</span>
+      </div>
+    </div>
+
+    <nav class="calculator-hero-actions" aria-label="Scoring resources">
+      <a class="rr-button rr-button--primary" routerLink="/scoring-guide">Scoring Guide</a>
+      <a class="rr-button rr-button--secondary" routerLink="/fairness">Fairness Report</a>
+      <a class="rr-button rr-button--secondary" routerLink="/support">Support</a>
+    </nav>
+  </header>
+
+  <section class="calculator-workspace">
+    <div class="calculator-input-column">
+      <section class="calculator-step rr-card rr-card--padded" aria-labelledby="calculator-position-title">
+        <header class="calculator-step-heading">
+          <span>01</span>
+          <div>
+            <p class="eyebrow">Choose a scoring role</p>
+            <h2 id="calculator-position-title">Position</h2>
+          </div>
+        </header>
+
+        <div class="position-choice-grid" role="group" aria-label="Position scoring formula">
+          <button
+            type="button"
+            [class.selected]="mode() === 'forward'"
+            [attr.aria-pressed]="mode() === 'forward'"
+            (click)="selectMode('forward')"
+          >
+            <strong>Forward</strong>
+            <span>LW · C · RW</span>
+          </button>
+          <button
+            type="button"
+            [class.selected]="mode() === 'defense'"
+            [attr.aria-pressed]="mode() === 'defense'"
+            (click)="selectMode('defense')"
+          >
+            <strong>Defense</strong>
+            <span>TOI + multi-category floor</span>
+          </button>
+          <button
+            type="button"
+            [class.selected]="mode() === 'goalie'"
+            [attr.aria-pressed]="mode() === 'goalie'"
+            (click)="selectMode('goalie')"
+          >
+            <strong>Goalie Unit</strong>
+            <span>One NHL team game</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="calculator-step rr-card rr-card--padded" aria-labelledby="calculator-stats-title">
+        <header class="calculator-step-heading">
+          <span>02</span>
+          <div>
+            <p class="eyebrow">Try a real stat line</p>
+            <h2 id="calculator-stats-title">Game statistics</h2>
+          </div>
+          <button type="button" class="rr-button rr-button--secondary reset-button" (click)="reset()">Reset</button>
+        </header>
+
+        <div class="preset-list" aria-label="Example stat lines">
+          @for (preset of currentPresets(); track preset.id) {
+            <button type="button" (click)="applyPreset(preset)">
+              <strong>{{ preset.label }}</strong>
+              <span>{{ preset.detail }}</span>
+            </button>
+          }
+        </div>
+
+        @if (mode() === 'goalie') {
+          <div class="calculator-field-grid goalie-field-grid">
+            <label class="rr-field">
+              <span>Saves</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                [ngModel]="goalieInput().saves"
+                (ngModelChange)="updateGoalie('saves', $event)"
+              />
+            </label>
+            <label class="rr-field">
+              <span>Shots against</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                [ngModel]="goalieInput().shotsAgainst"
+                (ngModelChange)="updateGoalie('shotsAgainst', $event)"
+              />
+            </label>
+          </div>
+
+          <div class="calculator-toggle-grid">
+            <label>
+              <input
+                type="checkbox"
+                [ngModel]="goalieInput().won"
+                (ngModelChange)="updateGoalie('won', $event)"
+              />
+              <span><strong>Win</strong><small>NHL team won the game</small></span>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [ngModel]="goalieInput().shutout"
+                (ngModelChange)="updateGoalie('shutout', $event)"
+              />
+              <span><strong>Shutout</strong><small>No goals allowed by the team goalie unit</small></span>
+            </label>
+          </div>
+        } @else {
+          <div class="calculator-field-grid">
+            <label class="rr-field"><span>Goals</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().goals" (ngModelChange)="updateSkater('goals', $event)" /></label>
+            <label class="rr-field"><span>Primary assists</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().primaryAssists" (ngModelChange)="updateSkater('primaryAssists', $event)" /></label>
+            <label class="rr-field"><span>Secondary assists</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().secondaryAssists" (ngModelChange)="updateSkater('secondaryAssists', $event)" /></label>
+            <label class="rr-field"><span>Shots on goal</span><input type="number" min="0" max="30" step="1" [ngModel]="skaterInput().shotsOnGoal" (ngModelChange)="updateSkater('shotsOnGoal', $event)" /></label>
+            <label class="rr-field"><span>Hits</span><input type="number" min="0" max="30" step="1" [ngModel]="skaterInput().hits" (ngModelChange)="updateSkater('hits', $event)" /></label>
+            <label class="rr-field"><span>Blocked shots</span><input type="number" min="0" max="30" step="1" [ngModel]="skaterInput().blockedShots" (ngModelChange)="updateSkater('blockedShots', $event)" /></label>
+            <label class="rr-field"><span>Plus / minus</span><input type="number" min="-10" max="10" step="1" [ngModel]="skaterInput().plusMinus" (ngModelChange)="updateSkater('plusMinus', $event)" /></label>
+            <label class="rr-field"><span>Power-play points</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().powerPlayPoints" (ngModelChange)="updateSkater('powerPlayPoints', $event)" /></label>
+            <label class="rr-field"><span>Short-handed points</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().shortHandedPoints" (ngModelChange)="updateSkater('shortHandedPoints', $event)" /></label>
+            <label class="rr-field"><span>Time on ice</span><input type="number" min="0" max="60" step="0.1" [ngModel]="skaterInput().timeOnIceMinutes" (ngModelChange)="updateSkater('timeOnIceMinutes', $event)" /></label>
+          </div>
+
+          <div class="calculator-toggle-grid">
+            <label>
+              <input type="checkbox" [ngModel]="skaterInput().gameWinningGoal" (ngModelChange)="updateSkater('gameWinningGoal', $event)" />
+              <span><strong>Game-winning goal</strong><small>Stacks with goal points</small></span>
+            </label>
+            <label>
+              <input type="checkbox" [ngModel]="skaterInput().overtimeGoal" (ngModelChange)="setOvertimeGoal($event)" />
+              <span><strong>Overtime goal</strong><small>Also marks the goal as game-winning</small></span>
+            </label>
+          </div>
+        }
+      </section>
+    </div>
+
+    <aside class="calculator-result rr-card rr-card--raised rr-card--padded" aria-live="polite">
+      <span class="eyebrow">Exact one-game result</span>
+      <div class="calculator-scoreboard">
+        <strong>{{ result().valid ? formatPoints(result().breakdown.total) : '—' }}</strong>
+        <span>fantasy points</span>
+      </div>
+
+      @if (!result().valid) {
+        <div class="rr-notice rr-notice--danger" role="alert">
+          {{ result().errorMessage }}
+        </div>
+      } @else {
+        @if (mode() === 'goalie') {
+          <div class="calculator-save-percentage">
+            <span>Save percentage</span>
+            <strong>{{ savePercentageLabel() }}</strong>
+          </div>
+        }
+
+        <div class="calculator-breakdown" aria-label="Scoring contribution breakdown">
+          @for (line of result().breakdown.lines; track line.label) {
+            <div>
+              <span>{{ line.label }}</span>
+              <strong [class.negative]="line.points < 0">{{ formatPoints(line.points, true) }}</strong>
+            </div>
+          } @empty {
+            <p>No scoring category contributed points.</p>
+          }
+        </div>
+
+        <section class="six-game-scale">
+          <span>Same game repeated six times</span>
+          <strong>{{ formatPoints(result().repeatedSixGameTotal) }}</strong>
+          <small>This is a scale example, not a projection. Actual windows contain six different NHL games.</small>
+        </section>
+      }
+
+      <div class="calculator-boundary-note">
+        <strong>What this calculator does not do</strong>
+        <p>
+          It does not project future performance, decide roster value, or change any league. Legacy Scoring V3 leagues may retain older goalie rules.
+        </p>
+      </div>
+    </aside>
+  </section>
+</main>

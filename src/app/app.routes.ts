@@ -77,6 +77,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'scoring-calculator',
+    title: 'RinkRat Scoring Calculator',
+    loadComponent: () =>
+      import('./features/scoring/scoring-calculator/scoring-calculator').then(
+        (module) => module.ScoringCalculator,
+      ),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authChildGuard],

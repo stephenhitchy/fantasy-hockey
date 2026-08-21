@@ -7,6 +7,10 @@
   margin: 0 auto;
   padding: 28px 0 72px;
   color: var(--text-primary);
+  --scoring-guide-accent: #4ca8e8;
+  --scoring-guide-action: #1f6f9f;
+  --scoring-guide-action-text: #ffffff;
+  --scoring-guide-number: var(--text-primary);
 }
 
 .scoring-guide-hero,
@@ -26,7 +30,7 @@
   gap: 28px;
   padding: 30px;
   background:
-    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--user-team-primary) 22%, transparent), transparent 33%),
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--scoring-guide-accent) 22%, transparent), transparent 33%),
     linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 94%, transparent), var(--surface-1));
 }
 
@@ -38,7 +42,7 @@
   font-weight: 700;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--accent-color, var(--user-team-primary));
+  color: var(--text-primary);
 }
 
 .scoring-guide-hero h1,
@@ -113,8 +117,8 @@
 }
 
 .hero-actions button {
-  background: var(--user-team-primary);
-  color: var(--user-team-on-primary);
+  background: var(--scoring-guide-action);
+  color: var(--scoring-guide-action-text);
 }
 
 .status-banner {
@@ -145,7 +149,7 @@
   border-right: 3px solid var(--border-strong);
   font-family: var(--rr-font-display, sans-serif);
   font-size: 2.2rem;
-  color: var(--user-team-primary);
+  color: var(--scoring-guide-accent);
 }
 
 .formula-flow {
@@ -167,8 +171,8 @@
 }
 
 .formula-flow strong {
-  border-color: var(--user-team-primary);
-  color: var(--user-team-primary);
+  border-color: var(--scoring-guide-accent);
+  color: var(--scoring-guide-number);
 }
 
 .formula-flow b {
@@ -287,7 +291,7 @@
 }
 
 .scoring-row b {
-  color: var(--user-team-primary);
+  color: var(--scoring-guide-number);
   font-family: var(--rr-font-data, sans-serif);
   font-size: 1.05rem;
 }
@@ -353,7 +357,7 @@
 }
 
 .save-quality-grid strong {
-  color: var(--user-team-primary);
+  color: var(--scoring-guide-number);
 }
 
 .common-bonuses header,
@@ -382,7 +386,7 @@
 }
 
 .bonus-grid article strong {
-  color: var(--user-team-primary);
+  color: var(--scoring-guide-number);
   font-size: 1.35rem;
 }
 
@@ -466,7 +470,7 @@
 
 .example-card li b {
   flex: 0 0 auto;
-  color: var(--user-team-primary);
+  color: var(--scoring-guide-number);
 }
 
 .example-card footer {
@@ -478,6 +482,7 @@
 }
 
 .example-card footer strong {
+  color: var(--scoring-guide-number);
   font-family: var(--rr-font-display, sans-serif);
   font-size: 1.75rem;
 }
@@ -489,7 +494,7 @@
 }
 
 .clarification-grid article {
-  border-top: 4px solid var(--user-team-primary);
+  border-top: 4px solid var(--scoring-guide-accent);
 }
 
 .clarification-grid strong {

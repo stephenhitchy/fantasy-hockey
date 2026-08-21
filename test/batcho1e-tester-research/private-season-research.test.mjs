@@ -47,7 +47,7 @@ function response(overrides = {}) {
     milestone: overrides.milestone ?? 'after-first-matchup',
     revision: 1,
     answers: answers(overrides.answers),
-    releaseLabel: 'Release Candidate 58',
+    releaseLabel: 'Release Candidate 59',
     buildId: 'release-candidate-58-test-build',
     submittedAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
@@ -273,16 +273,16 @@ test('O1E stays server-authoritative and preserves scoring, projection, Rules, a
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 58/);
-  assert.match(productionRuntime, /Release Candidate 58/);
+  assert.match(runtime, /Release Candidate 59/);
+  assert.match(productionRuntime, /Release Candidate 59/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1h');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc58-invite-beta');
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
   assert.match(indexSource, /getPrivateSeasonResearchDashboard/);
   assert.match(indexSource, /submitPrivateSeasonResearch/);
 });
@@ -297,14 +297,14 @@ test('roadmap and documentation record milestone research as evidence collection
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.49/);
+  assert.match(roadmap, /Version 1\.50/);
   assert.match(roadmap, /O1E \/ Release Candidate 55/);
   assert.match(roadmap, /live interviews and the full-season postmortem remain open/i);
-  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
-  assert.match(readme, /npm run verify:batcho1h/);
+  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /npm run verify:batcho1i/);
   assert.match(runbook, /seven milestone surveys/i);
   assert.match(runbook, /No email address, phone number, or raw account ID/i);
   assert.match(runbook, /Functions first/i);
-  assert.match(releaseRunbook, /rinkrat-rc58-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc58-invite-beta/);
+  assert.match(releaseRunbook, /rinkrat-rc59-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc59-invite-beta/);
 });

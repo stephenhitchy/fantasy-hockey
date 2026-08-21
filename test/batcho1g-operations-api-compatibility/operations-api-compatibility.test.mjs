@@ -177,11 +177,11 @@ test('O1G release records and verification include the compatibility audit', asy
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.49/);
+  assert.match(roadmap, /Version 1\.50/);
   assert.match(roadmap, /LOG\.71 2026-08-20 — Completed Operations Batch O1G/);
-  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
-  assert.match(runtime, /Release Candidate 58/);
-  assert.match(productionRuntime, /Release Candidate 58/);
+  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(runtime, /Release Candidate 59/);
+  assert.match(productionRuntime, /Release Candidate 59/);
   assert.match(packageJson.scripts['verify:batcho1g:core'], /operations:audit-compatibility/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
 });

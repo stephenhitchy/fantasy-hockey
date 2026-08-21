@@ -12733,3 +12733,37 @@ firebase deploy --only hosting:app --project=nhl-fantasy-app-ab673 -m "Operation
 ```
 
 Operations API v1 remains unchanged, so no Operations Function redeployment is required.
+
+# Operations Batch O1I — Public Scoring Calculator and Contrast-Safe Scoring
+
+**Runtime release:** Release Candidate 59
+**Competitive models:** Production Scoring V4 · Projection V11
+**Operations API:** v1 unchanged
+**Deployment:** Hosting only
+
+O1I adds the public `/scoring-calculator` route. The calculator imports the canonical browser scoring engine and Production Scoring V4 rules rather than maintaining a duplicate formula. Forward, defense, and Team Goalie Unit modes show exact per-category contribution lines, validate impossible inputs, and provide a clearly labeled six-game scale example that is not a projection.
+
+The Scoring Guide and completed Game Center matchup breakdown no longer depend on favorite-team colors for scoring-reference numbers. They use fixed semantic scoring palettes so numeric totals, deltas, status colors, and category contributions retain contrast across every team identity and theme.
+
+The published Fairness Report v1 remains evidence-bound to its RC58 publication baseline. Browser-only release-label changes are normalized out of the report fingerprint while scoring rules and the evidence source remain part of that fingerprint.
+
+Verification:
+
+```bash
+npm run verify:batcho1i
+```
+
+Deployment:
+
+```bash
+firebase deploy --only hosting:app --project=nhl-fantasy-app-ab673 -m "Operations O1I Public Scoring Calculator Release Candidate 59"
+```
+
+No Function, Firestore Rule, index, TTL policy, scoring formula, Projection V11 calculation, six-game window, App Check mode, scoring-queue mode, or shared NHL-cache mode changes in O1I.
+
+
+# Operations Batch O1I.1 — TypeScript 6 Isolated Compile Hotfix
+
+The O1I public calculator regression originally called `tsc` with explicit source filenames. Under the pinned TypeScript 6 dependency, TS5112 stops that command because the repository `tsconfig.json` is present but cannot be combined implicitly with file arguments. O1I.1 generates a bounded temporary Node16 project containing the three canonical scoring sources and invokes `tsc --project`. The calculator, scoring rules, browser runtime, Functions, and deployment contract remain unchanged.
+
+Verification remains `npm run verify:batcho1i`.

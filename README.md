@@ -52,15 +52,17 @@ Core project references:
 - [`docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`](docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md) — signed-in data export, privacy request lifecycle, platform-admin response operations, scheduled cleanup, and account-deletion pseudonymization.
 - [`docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`](docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md) — versioned operational callable compatibility, exact-build boundaries, and the Hosting-only versus targeted-Functions deployment rule.
 - [`docs/RINKRAT_OPERATIONS_O1H_PUBLIC_FAIRNESS_REPORT.md`](docs/RINKRAT_OPERATIONS_O1H_PUBLIC_FAIRNESS_REPORT.md) — public six-game methodology, historical balance evidence, acceptance ranges, reproducible JSON/CSV exports, Hosting-only deployment, and modern-data limitations.
+- [`docs/RINKRAT_OPERATIONS_O1I_SCORING_CALCULATOR_CONTRAST.md`](docs/RINKRAT_OPERATIONS_O1I_SCORING_CALCULATOR_CONTRAST.md) — public exact Scoring V4 calculator, theme-independent scoring-reference values, contrast-safe completed-matchup breakdowns, Hosting-only deployment, and site proof.
+- [`docs/RINKRAT_OPERATIONS_O1I_1_TYPESCRIPT6_COMPILE_HOTFIX.md`](docs/RINKRAT_OPERATIONS_O1I_1_TYPESCRIPT6_COMPILE_HOTFIX.md) — TypeScript 6 TS5112 diagnosis, isolated temporary-project compile, regression coverage, and no-runtime-change boundary.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 58 / Operations Batch O1H**. O1H publishes the first public RinkRat Fairness Report and a public standard Scoring Guide. The report explains exactly what the six-game format equalizes, what it deliberately leaves to skill and variance, the historical methodology, position distributions, matchup simulations, exploit checks, and the limitations that remain before modern exact-data calibration is complete. Its JSON and CSV evidence exports are generated from one source-controlled baseline and verified in CI.
+The current source runtime is **Release Candidate 59 / Operations Batch O1I.1**. O1I adds one public scoring calculator that calls the exact Production Scoring V4 browser engine for forwards, defensemen, and Team Goalie Units. It shows every category contribution, validates impossible stat lines, includes representative presets, and labels the repeated-six-game total as a scale example rather than a projection. O1I also removes favorite-team color dependence from the Scoring Guide and completed Game Center matchup breakdown so scoring values stay readable under every team identity and theme. O1I.1 is a verification-only hotfix that compiles the isolated scoring test through a temporary TypeScript project, resolving TypeScript 6 TS5112 without changing runtime behavior.
 
-Operations API contract v1 from O1G remains unchanged. That means this browser-only RC58 release requires Hosting only; the maintained private-season, incident, research, and privacy Functions do not need another deployment merely because the Release Candidate label changed. Formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed.
+Operations API contract v1 from O1G remains unchanged. That means this browser-only RC59 release requires Hosting only; the maintained private-season, incident, research, and privacy Functions do not need another deployment merely because the Release Candidate label changed. Formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -68,7 +70,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1h`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1i`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -137,6 +139,8 @@ verify:batcho1d
 verify:batcho1e
 verify:batcho1f
 verify:batcho1g
+verify:batcho1h
+verify:batcho1i
 ```
 
 RinkRat pins:
@@ -159,8 +163,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1g
-verify:batcho1g
+npm run verify:batcho1i
 ```
 
 After verification and a clean commit:
@@ -200,8 +203,7 @@ The immediate export excludes passwords, tokens, secrets, other managers’ priv
 Verification:
 
 ```bash
-npm run verify:batcho1g
-verify:batcho1g
+npm run verify:batcho1f
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`.
@@ -264,8 +266,6 @@ Verification:
 
 ```bash
 npm run verify:batcho1e
-verify:batcho1f
-verify:batcho1g
 ```
 
 Full guidance is in `docs/RINKRAT_OPERATIONS_O1E_TESTER_RESEARCH.md`.
@@ -881,3 +881,22 @@ Player Intel now includes one private inline note per player. The authenticated 
 
 Full verification, targeted deployment, site-first proof, and fallback diagnostics are maintained in `docs/RINKRAT_PRODUCT_A1D_REPLAY_PLAYER_NOTES.md`.
 
+
+
+## Operations Batch O1I — Public Scoring Calculator and Contrast-Safe Scoring
+
+O1I publishes `/scoring-calculator` without authentication. The calculator reuses `calculateSkaterGameBreakdown`, `calculateGoalieGameBreakdown`, and `defaultScoringRules`; it does not create a second scoring formula. The Scoring Guide and completed Game Center matchup breakdown use fixed scoring-reference colors instead of favorite-team colors so numeric contributions remain legible under every identity theme.
+
+Verification:
+
+```bash
+npm run test:batcho1i:run
+npm run verify:batcho1i
+```
+
+Deployment: Hosting only.
+
+
+## Operations Batch O1I.1 — TypeScript 6 Isolated Compile Hotfix
+
+O1I.1 changes the calculator regression harness from direct source-file arguments to a temporary `tsconfig.json` invoked through `tsc --project`. This preserves strict semantic checking and avoids TypeScript 6 TS5112. It changes no runtime source and requires no Firebase deployment by itself. Because the original O1I verification stopped before deployment, complete `npm run verify:batcho1i`, build RC59, and deploy Hosting once the verification passes.

@@ -1509,6 +1509,13 @@
   border-radius: 18px;
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.78));
+  color: #f8fafc;
+  --matchup-breakdown-text: #f8fafc;
+  --matchup-breakdown-muted: #cbd5e1;
+  --matchup-breakdown-subtle: #9fb0c7;
+  --matchup-breakdown-positive: #4ade80;
+  --matchup-breakdown-negative: #fb7185;
+  --matchup-breakdown-neutral: #facc15;
 }
 
 .g .breakdown-heading {
@@ -1521,6 +1528,7 @@
 
 .g .breakdown-heading h3 {
   margin: 0.15rem 0 0;
+  color: var(--matchup-breakdown-text);
   font-size: 1.15rem;
 }
 
@@ -1528,7 +1536,7 @@
 .g .breakdown-loading-message,
 .g .empty-impact-message {
   margin: 0;
-  color: #b8c6d9;
+  color: var(--matchup-breakdown-muted);
   font-size: 0.85rem;
   line-height: 1.4;
 }
@@ -1563,11 +1571,12 @@
 }
 
 .g .breakdown-team-title strong {
+  color: var(--matchup-breakdown-text);
   font-size: 0.95rem;
 }
 
 .g .breakdown-team-title span {
-  color: #b8c6d9;
+  color: var(--matchup-breakdown-muted);
   font-size: 0.8rem;
   font-weight: 800;
 }
@@ -1588,7 +1597,7 @@
 .g .breakdown-total-grid small,
 .g .position-breakdown-row small {
   display: block;
-  color: #9fb0c7;
+  color: var(--matchup-breakdown-subtle);
   font-size: 0.62rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -1598,6 +1607,7 @@
 .g .breakdown-total-grid strong {
   display: block;
   margin-top: 0.15rem;
+  color: var(--matchup-breakdown-text);
   font-size: 1rem;
 }
 
@@ -1618,29 +1628,30 @@
 }
 
 .g .position-breakdown-row > span {
-  color: #e5edf7;
+  color: var(--matchup-breakdown-text);
   font-size: 0.78rem;
   font-weight: 950;
 }
 
 .g .position-breakdown-row strong {
+  color: var(--matchup-breakdown-text);
   font-size: 0.82rem;
 }
 
 .g .delta-value {
-  color: #e5edf7;
+  color: var(--matchup-breakdown-text);
 }
 
 .g .delta-positive {
-  color: #4ade80;
+  color: var(--matchup-breakdown-positive);
 }
 
 .g .delta-negative {
-  color: #fb7185;
+  color: var(--matchup-breakdown-negative);
 }
 
 .g .delta-neutral {
-  color: #facc15;
+  color: var(--matchup-breakdown-neutral);
 }
 
 .g .impact-grid {
@@ -1651,6 +1662,7 @@
 }
 
 .g .impact-card h4 {
+  color: var(--matchup-breakdown-text);
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
 }
@@ -1684,16 +1696,18 @@
 }
 
 .g .impact-row strong {
+  color: var(--matchup-breakdown-text);
   font-size: 0.78rem;
 }
 
 .g .impact-row span {
-  color: #9fb0c7;
+  color: var(--matchup-breakdown-subtle);
   font-size: 0.68rem;
   font-weight: 800;
 }
 
 .g .impact-row em {
+  color: var(--matchup-breakdown-text);
   font-style: normal;
   font-size: 0.85rem;
   font-weight: 950;

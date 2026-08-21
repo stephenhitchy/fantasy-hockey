@@ -310,15 +310,15 @@ test('O1C adds no Firestore Rule, index, TTL, scoring, projection, or safety-mod
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 58/);
-  assert.match(productionRuntime, /Release Candidate 58/);
+  assert.match(runtime, /Release Candidate 59/);
+  assert.match(productionRuntime, /Release Candidate 59/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1h');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc58-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
 });
 
 test('roadmap and documentation advance O1.3 and O1.4 without claiming live proof', async () => {
@@ -334,15 +334,15 @@ test('roadmap and documentation advance O1.3 and O1.4 without claiming live proo
   const boundaries = JSON.parse(boundariesSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.49/);
+  assert.match(roadmap, /Version 1\.50/);
   assert.match(roadmap, /O1\.3[\s\S]*O1C \/ Release Candidate 53/);
   assert.match(roadmap, /O1\.4[\s\S]*live cohort proof remains required/i);
   assert.match(roadmap, /LOG\.65 2026-08-19 — Completed Operations Batch O1C/);
-  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
-  assert.match(readme, /npm run verify:batcho1h/);
+  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /npm run verify:batcho1i/);
   assert.match(runbook, /privacy-limited/i);
   assert.match(runbook, /Functions[\s\S]*Hosting/i);
   assert.equal(packageJson.scripts['verify:batcho1c:core'], 'npm run verify:batcho1b:core && npm run beta:audit-season-plan && npm run audit:product-copy-density && npm run test:batcho1c:run && npm run validate:release-manifest');
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
   assert.ok(boundaries.boundaries.some((entry) => entry.file === 'functions/src/private-season-health.ts'));
 });

@@ -173,7 +173,7 @@
     "security:verify-retention": "node scripts/security/verify-retention.mjs",
     "test:batchs3c:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchs3c-ci-browser-retention/*.test.mjs",
     "verify:batchs3c": "npm run verify:batchs3c:core && npm run security:dependency-audit",
-    "security:ci": "npm run toolchain:verify && npm run verify:batcho1h:core && node -e \"console.log('Inherited CI coverage through Operations Batch O1H')\" && npm run security:dependency-audit:strict",
+    "security:ci": "npm run toolchain:verify && npm run verify:batcho1i:core && node -e \"console.log('Inherited CI coverage through Operations Batch O1I')\" && npm run security:dependency-audit:strict",
     "security:secret-scan": "node scripts/security/secret-scan.mjs",
     "security:dependency-audit": "node scripts/security/dependency-audit.mjs",
     "security:headers:inspect": "node scripts/security/security-header-audit.mjs",
@@ -452,7 +452,12 @@
     "test:batcho1h:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcho1h-public-fairness-report/*.test.mjs",
     "preverify:batcho1h": "npm run security:sync-repository-automation",
     "verify:batcho1h:core": "npm run verify:batcho1g:core && npm run fairness:verify-report && npm run audit:product-copy-density && npm run test:batcho1h:run && npm run validate:release-manifest",
-    "verify:batcho1h": "npm run toolchain:verify && npm run verify:batcho1h:core && npm run security:dependency-audit"
+    "verify:batcho1h": "npm run toolchain:verify && npm run verify:batcho1h:core && npm run security:dependency-audit",
+    "pretest:batcho1i:run": "npm run generate:release-manifest",
+    "test:batcho1i:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batcho1i-public-scoring-calculator/*.test.mjs",
+    "preverify:batcho1i": "npm run security:sync-repository-automation",
+    "verify:batcho1i:core": "npm run verify:batcho1h:core && npm run audit:product-copy-density && npm run test:batcho1i:run && npm run validate:release-manifest",
+    "verify:batcho1i": "npm run toolchain:verify && npm run verify:batcho1i:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
