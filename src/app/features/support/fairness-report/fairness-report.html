@@ -1,0 +1,249 @@
+<main class="fairness-shell rr-page-shell">
+  <a routerLink="/support" class="fairness-back">← Back to Support</a>
+
+  @if (loading()) {
+    <section class="fairness-state rr-card rr-card--padded" aria-live="polite">
+      <strong>Loading fairness evidence…</strong>
+    </section>
+  } @else if (errorMessage()) {
+    <section class="fairness-state rr-notice rr-notice--danger" role="alert">
+      <strong>Fairness report unavailable</strong>
+      <span>{{ errorMessage() }}</span>
+    </section>
+  } @else if (report(); as evidence) {
+    <header class="fairness-hero rr-card rr-card--raised rr-card--padded">
+      <div>
+        <span class="eyebrow">Public methodology · Report v{{ evidence.reportVersion }}</span>
+        <h1>{{ evidence.title }}</h1>
+        <p>{{ evidence.summary }}</p>
+
+        <div class="fairness-release-badges" aria-label="Report version details">
+          <span>{{ evidence.releaseLabel }}</span>
+          <span>Scoring V{{ evidence.scoringRulesVersion }}</span>
+          <span>Projection V{{ evidence.projectionVersion }}</span>
+        </div>
+      </div>
+
+      <div class="fairness-hero-actions">
+        <a class="rr-button rr-button--primary" routerLink="/scoring-guide">Open Scoring Guide</a>
+        <button type="button" class="rr-button rr-button--secondary" (click)="printReport()">Print Report</button>
+      </div>
+    </header>
+
+    <nav class="fairness-jump rr-card rr-card--padded" aria-label="Fairness report sections">
+      <a href="#opportunity">Six-game opportunity</a>
+      <a href="#results">Balance results</a>
+      <a href="#positions">Position roles</a>
+      <a href="#stress-tests">Stress tests</a>
+      <a href="#methodology">Methodology</a>
+    </nav>
+
+    <section class="fairness-metric-grid" aria-label="Fairness report highlights">
+      @for (metric of evidence.headlineMetrics; track metric.id) {
+        <article class="fairness-metric rr-card rr-card--padded">
+          <strong>{{ formatMetric(metric) }}</strong>
+          <span>{{ metric.label }}</span>
+          <small>{{ evidenceLabel(metric) }}</small>
+        </article>
+      }
+    </section>
+
+    <section id="opportunity" class="fairness-section rr-card rr-card--raised rr-card--padded" aria-labelledby="opportunity-title">
+      <header class="fairness-section-heading">
+        <div>
+          <span class="eyebrow">The defining rule</span>
+          <h2 id="opportunity-title">What six-game windows make fairer</h2>
+        </div>
+        <strong class="fairness-six-mark" aria-label="Six scheduled games">1 · 2 · 3 · 4 · 5 · 6</strong>
+      </header>
+
+      <p class="fairness-lead">
+        Every active roster slot receives exactly <strong>{{ evidence.opportunityDesign.scheduledGamesPerActiveSlot }} scheduled NHL team games</strong>.
+        Game seven starts that slot’s next window. Calendar weeks are not used.
+      </p>
+
+      <div class="fairness-two-column">
+        <article>
+          <h3>RinkRat equalizes</h3>
+          <ul>
+            @for (item of evidence.opportunityDesign.equalizes; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </article>
+
+        <article>
+          <h3>RinkRat intentionally leaves in the game</h3>
+          <ul>
+            @for (item of evidence.opportunityDesign.doesNotEqualize; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </article>
+      </div>
+
+      <p class="fairness-note">
+        Equal opportunity does not mean equal outcomes. Managers still win through drafting, roster timing, waivers, player knowledge, and matchup performance.
+      </p>
+    </section>
+
+    <section id="results" class="fairness-section rr-card rr-card--padded" aria-labelledby="results-title">
+      <header class="fairness-section-heading">
+        <div>
+          <span class="eyebrow">Skill plus uncertainty</span>
+          <h2 id="results-title">What the league simulations found</h2>
+        </div>
+      </header>
+
+      <div class="fairness-result-grid">
+        <article>
+          <span>Underdog wins</span>
+          <strong>{{ formatPercent(evidence.leagueSimulation.projectedUnderdogWinPercent) }}</strong>
+          <small>One six-game matchup</small>
+        </article>
+        <article>
+          <span>Close finishes</span>
+          <strong>{{ formatPercent(evidence.leagueSimulation.closeMatchupPercentWithin25) }}</strong>
+          <small>Within 25 points</small>
+        </article>
+        <article>
+          <span>Large blowouts</span>
+          <strong>{{ formatPercent(evidence.leagueSimulation.blowoutPercentAtLeast150) }}</strong>
+          <small>150+ point margin</small>
+        </article>
+        <article>
+          <span>Best projected roster</span>
+          <strong>{{ formatPercent(evidence.leagueSimulation.topProjectedRosterTopFourPercent) }}</strong>
+          <small>Finished top four</small>
+        </article>
+      </div>
+
+      <p class="fairness-lead">{{ evidence.leagueSimulation.interpretation }}</p>
+
+      <details class="fairness-details">
+        <summary>Current acceptance ranges</summary>
+        <div class="fairness-range-list">
+          @for (range of evidence.acceptanceRanges; track range.id) {
+            <article>
+              <strong>{{ range.label }}</strong>
+              <span>{{ range.minimum }}–{{ range.maximum }}{{ range.unit === 'percent' ? '%' : '' }}</span>
+              <small>{{ range.basis.replaceAll('-', ' ') }}</small>
+            </article>
+          }
+        </div>
+        <p>These are internal product targets, not industry guarantees.</p>
+      </details>
+    </section>
+
+    <section id="positions" class="fairness-section rr-card rr-card--padded" aria-labelledby="positions-title">
+      <header class="fairness-section-heading">
+        <div>
+          <span class="eyebrow">Different roles, not identical averages</span>
+          <h2 id="positions-title">Six-game position profiles</h2>
+        </div>
+      </header>
+
+      <div class="fairness-position-table" role="table" aria-label="Historical six-game position profiles">
+        <div class="fairness-position-head" role="row">
+          <span role="columnheader">Position</span>
+          <span role="columnheader">Mean</span>
+          <span role="columnheader">CV</span>
+          <span role="columnheader">P10–P90</span>
+          <span role="columnheader">100+</span>
+        </div>
+        @for (profile of evidence.positionProfiles; track profile.position) {
+          <article class="fairness-position-row" role="row">
+            <div role="cell">
+              <b>{{ profile.position }}</b>
+              <span>{{ profile.label }}</span>
+              <small>{{ profile.role }}</small>
+            </div>
+            <strong role="cell">{{ formatPoints(profile.meanSixGamePoints) }}</strong>
+            <strong role="cell">{{ formatRatio(profile.coefficientOfVariation) }}</strong>
+            <strong role="cell">{{ formatPoints(profile.p10) }}–{{ formatPoints(profile.p90) }}</strong>
+            <strong role="cell">{{ formatPercent(profile.hundredPlusPercent) }}</strong>
+            <small class="fairness-position-evidence">{{ evidenceLabel(profile) }}</small>
+          </article>
+        }
+      </div>
+
+      <p class="fairness-note">
+        Skater rows use fantasy-relevant historical windows. The goalie row is the Production Scoring V4 sensitivity estimate. Lower CV means a steadier result relative to the position’s average.
+      </p>
+    </section>
+
+    <section id="stress-tests" class="fairness-section rr-card rr-card--padded" aria-labelledby="stress-title">
+      <header class="fairness-section-heading">
+        <div>
+          <span class="eyebrow">Skeptical audit</span>
+          <h2 id="stress-title">Archetypes and exploit checks</h2>
+        </div>
+      </header>
+
+      <div class="fairness-check-list">
+        @for (check of evidence.archetypeChecks; track check.id) {
+          <article [attr.data-status]="check.status">
+            <div>
+              <strong>{{ check.label }}</strong>
+              <p>{{ check.finding }}</p>
+            </div>
+            <span>{{ checkStatusLabel(check) }}</span>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section id="methodology" class="fairness-section rr-card rr-card--raised rr-card--padded" aria-labelledby="methodology-title">
+      <header class="fairness-section-heading">
+        <div>
+          <span class="eyebrow">Reproducible baseline</span>
+          <h2 id="methodology-title">Methodology and limitations</h2>
+        </div>
+        <span class="fairness-fingerprint" title="Evidence fingerprint">{{ evidence.evidenceFingerprint.slice(0, 12) }}</span>
+      </header>
+
+      <div class="fairness-method-grid">
+        <article><span>Regular seasons</span><strong>{{ evidence.methodology.seasons.join(', ') }}</strong></article>
+        <article><span>NHL games</span><strong>{{ formatNumber(evidence.methodology.regularSeasonGames) }}</strong></article>
+        <article><span>Skater game records</span><strong>{{ formatNumber(evidence.methodology.skaterGameRecords) }}</strong></article>
+        <article><span>Goalie-team game records</span><strong>{{ formatNumber(evidence.methodology.teamGoalieGameRecords) }}</strong></article>
+        <article><span>Complete skater windows</span><strong>{{ formatNumber(evidence.methodology.completeSkaterSixGameWindows) }}</strong></article>
+        <article><span>Complete goalie windows</span><strong>{{ formatNumber(evidence.methodology.completeGoalieSixGameWindows) }}</strong></article>
+      </div>
+
+      <details class="fairness-details" open>
+        <summary>Important evidence limits</summary>
+        <ul>
+          @for (limitation of evidence.methodology.limitations; track limitation) {
+            <li>{{ limitation }}</li>
+          }
+        </ul>
+      </details>
+
+      <details class="fairness-details">
+        <summary>Competition invariants preserved</summary>
+        <ul>
+          @for (invariant of evidence.protectedInvariants; track invariant) {
+            <li>{{ invariant }}</li>
+          }
+        </ul>
+      </details>
+
+      <div class="fairness-downloads" aria-label="Fairness report data downloads">
+        <a class="rr-button rr-button--secondary" [href]="evidence.downloads.json" download>Download JSON</a>
+        <a class="rr-button rr-button--secondary" [href]="evidence.downloads.csv" download>Download CSV</a>
+      </div>
+
+      <p class="fairness-note">
+        The report is a transparent product-methodology baseline, not a claim that every future matchup will fit the historical averages. RinkRat will publish a revised report after the modern exact-data audit is complete.
+      </p>
+    </section>
+
+    <footer class="fairness-footer">
+      <a routerLink="/scoring-guide">Scoring Guide</a>
+      <a routerLink="/commissioner-guide">Commissioner Guide</a>
+      <a routerLink="/support">Support</a>
+      <a routerLink="/privacy">Privacy</a>
+    </footer>
+  }
+</main>

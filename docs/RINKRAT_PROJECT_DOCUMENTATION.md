@@ -12660,7 +12660,7 @@ This hotfix requires no Functions, Firestore, TTL, App Check, scoring-queue, or 
 
 # Operations Batch O1F — Privacy Center and Request Operations
 
-**Runtime release:** Release Candidate 57
+**Runtime release:** Release Candidate 58
 **Competitive models:** Production Scoring V4 · Projection V11
 
 O1F adds a signed-in manager Privacy Center at `/privacy-center` and a platform-administrator operations page at `/admin/privacy-requests`. The manager surface provides a recent-auth JSON export, request/follow-up/cancellation history, a retention catalog, Privacy notice access, and the existing Account Settings deletion route. The administrator surface maintains a separate manager-visible response and private operations note, enforces valid transitions and optimistic revisions, and writes immutable audits.
@@ -12674,7 +12674,7 @@ The current private-beta Privacy notice and workflows remain subject to professi
 Verification:
 
 ```bash
-npm run verify:batcho1g
+npm run verify:batcho1h
 ```
 
 Deployment order:
@@ -12690,7 +12690,7 @@ No Firestore Rule, index, TTL-field override, scoring, Projection V11, six-game 
 
 # Operations Batch O1G — Versioned Operations API Compatibility
 
-**Runtime release:** Release Candidate 57
+**Runtime release:** Release Candidate 58
 **Competitive models:** Production Scoring V4 and Projection V11
 **Operations API contract:** v1
 
@@ -12704,7 +12704,32 @@ Verification:
 
 ```bash
 npm run operations:audit-compatibility
-npm run verify:batcho1g
+npm run verify:batcho1h
 ```
 
 See `docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`.
+
+# Operations Batch O1H — Public Fairness Report
+
+**Runtime release:** Release Candidate 58
+**Scoring:** Production Scoring V4
+**Projection:** Projection V11
+**Deployment:** Hosting only
+
+O1H publishes `/fairness` and the public standard `/scoring-guide`. The Fairness Report explains the exact six-game roster-slot opportunity model, seventh-game rollover, historical position and matchup evidence, archetype checks, acceptance ranges, protected invariants, and limitations. It uses no private league, tester, manager, roster, score, waiver, transaction, incident, research, or account data.
+
+The source-controlled report generator produces fingerprinted JSON and CSV exports and fails verification when those assets are stale or when the client/server scoring rules diverge.
+
+Verification:
+
+```bash
+npm run verify:batcho1h
+```
+
+Deployment:
+
+```bash
+firebase deploy --only hosting:app --project=nhl-fantasy-app-ab673 -m "Operations O1H Public Fairness Report Release Candidate 58"
+```
+
+Operations API v1 remains unchanged, so no Operations Function redeployment is required.

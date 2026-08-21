@@ -51,13 +51,16 @@ Core project references:
 - [`docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md`](docs/RINKRAT_OPERATIONS_O1E_2_MATCHUP_DATE_TIMEZONE.md) — deterministic League Dashboard finalization dates across Pacific, UTC, CI, and production environments, with no competitive-authority change.
 - [`docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md`](docs/RINKRAT_OPERATIONS_O1F_PRIVACY_CENTER.md) — signed-in data export, privacy request lifecycle, platform-admin response operations, scheduled cleanup, and account-deletion pseudonymization.
 - [`docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md`](docs/RINKRAT_OPERATIONS_O1G_OPERATIONS_API_COMPATIBILITY.md) — versioned operational callable compatibility, exact-build boundaries, and the Hosting-only versus targeted-Functions deployment rule.
+- [`docs/RINKRAT_OPERATIONS_O1H_PUBLIC_FAIRNESS_REPORT.md`](docs/RINKRAT_OPERATIONS_O1H_PUBLIC_FAIRNESS_REPORT.md) — public six-game methodology, historical balance evidence, acceptance ranges, reproducible JSON/CSV exports, Hosting-only deployment, and modern-data limitations.
 - [`docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md`](docs/RINKRAT_SCORING_QUEUE_ROLLOUT_RUNBOOK.md) — Shadow, Canary, staging Primary, production lock, audit, and rollback procedure.
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 57 / Operations Batch O1G**. O1G introduces operations API contract v1 so compatible browser releases can use the maintained private-season, incident, research, and privacy callables without redeploying them solely to update a Release Candidate label. The formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed. The one-time rollout also accepts already-open deployed RC56 operations clients that predate the explicit contract field, while versionless RC57-or-newer clients fail closed.
+The current source runtime is **Release Candidate 58 / Operations Batch O1H**. O1H publishes the first public RinkRat Fairness Report and a public standard Scoring Guide. The report explains exactly what the six-game format equalizes, what it deliberately leaves to skill and variance, the historical methodology, position distributions, matchup simulations, exploit checks, and the limitations that remain before modern exact-data calibration is complete. Its JSON and CSV evidence exports are generated from one source-controlled baseline and verified in CI.
+
+Operations API contract v1 from O1G remains unchanged. That means this browser-only RC58 release requires Hosting only; the maintained private-season, incident, research, and privacy Functions do not need another deployment merely because the Release Candidate label changed. Formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed.
 
 Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
 
@@ -65,7 +68,7 @@ Existing leagues do not switch scoring merely because Functions were deployed. V
 
 V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1g`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1h`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 

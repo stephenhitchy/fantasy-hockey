@@ -1,0 +1,436 @@
+.fairness-shell {
+  min-height: 100vh;
+  padding: 28px 16px 64px;
+  background: var(--page-bg);
+  color: var(--text-main);
+}
+
+.fairness-back,
+.fairness-hero,
+.fairness-jump,
+.fairness-metric-grid,
+.fairness-section,
+.fairness-footer,
+.fairness-state {
+  width: min(1080px, 100%);
+  margin-inline: auto;
+}
+
+.fairness-back {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--text-main);
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.fairness-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  --rr-card-border-width: 3px;
+  --rr-card-border-color: var(--border-strong);
+  --rr-card-background: var(--surface-raised);
+  --rr-card-shadow: 5px 5px 0 color-mix(in srgb, var(--rr-info) 38%, transparent);
+}
+
+.fairness-hero h1,
+.fairness-section h2 {
+  margin: 6px 0 0;
+  color: var(--text-strong);
+}
+
+.fairness-hero p,
+.fairness-lead,
+.fairness-note,
+.fairness-check-list p,
+.fairness-details li {
+  line-height: 1.55;
+}
+
+.fairness-hero p {
+  max-width: 700px;
+  color: var(--text-muted);
+}
+
+.fairness-release-badges,
+.fairness-hero-actions,
+.fairness-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fairness-release-badges {
+  margin-top: 16px;
+}
+
+.fairness-release-badges span,
+.fairness-fingerprint {
+  padding: 7px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface-panel);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.fairness-hero-actions {
+  flex: 0 0 auto;
+}
+
+.fairness-jump {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.fairness-jump a {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-main);
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fairness-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.fairness-metric {
+  display: grid;
+  gap: 5px;
+  --rr-card-background: var(--surface-raised);
+}
+
+.fairness-metric strong {
+  color: var(--text-strong);
+  font-size: clamp(24px, 4vw, 36px);
+  line-height: 1;
+}
+
+.fairness-metric span {
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.fairness-metric small,
+.fairness-position-row small,
+.fairness-range-list small,
+.fairness-result-grid small {
+  color: var(--text-muted);
+}
+
+.fairness-section {
+  margin-top: 18px;
+  scroll-margin-top: 16px;
+  --rr-card-background: var(--surface-raised);
+  --rr-card-border-color: var(--border-soft);
+}
+
+.fairness-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.fairness-six-mark {
+  flex: 0 0 auto;
+  color: var(--rr-info);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.fairness-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.fairness-two-column article {
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--rr-radius-md);
+  background: var(--surface-panel);
+}
+
+.fairness-two-column h3,
+.fairness-details summary {
+  color: var(--text-strong);
+}
+
+.fairness-two-column li + li,
+.fairness-details li + li {
+  margin-top: 8px;
+}
+
+.fairness-note {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.fairness-result-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.fairness-result-grid article,
+.fairness-method-grid article,
+.fairness-range-list article {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--rr-radius-md);
+  background: var(--surface-panel);
+}
+
+.fairness-result-grid strong {
+  color: var(--text-strong);
+  font-size: 24px;
+}
+
+.fairness-details {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.fairness-details summary {
+  min-height: 48px;
+  padding: 14px 2px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.fairness-range-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fairness-position-table {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--rr-radius-lg);
+}
+
+.fairness-position-head,
+.fairness-position-row {
+  display: grid;
+  grid-template-columns: minmax(230px, 2fr) repeat(4, minmax(80px, 0.65fr));
+  align-items: center;
+  gap: 10px;
+}
+
+.fairness-position-head {
+  padding: 10px 14px;
+  background: var(--surface-panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fairness-position-row {
+  position: relative;
+  min-height: 86px;
+  padding: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.fairness-position-row > div {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 2px 10px;
+  align-items: center;
+}
+
+.fairness-position-row > div b {
+  grid-row: 1 / span 2;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--rr-radius-sm);
+  background: var(--surface-panel);
+}
+
+.fairness-position-row > div small {
+  grid-column: 2;
+  line-height: 1.35;
+}
+
+.fairness-position-evidence {
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  font-size: 10px;
+}
+
+.fairness-check-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.fairness-check-list article {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--rr-radius-md);
+  background: var(--surface-panel);
+}
+
+.fairness-check-list p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+}
+
+.fairness-check-list article > span {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-info) 16%, var(--surface-panel));
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.fairness-check-list article[data-status='pass'] > span {
+  background: color-mix(in srgb, var(--rr-success) 18%, var(--surface-panel));
+}
+
+.fairness-check-list article[data-status='monitor'] > span,
+.fairness-check-list article[data-status='pass-with-monitoring'] > span {
+  background: color-mix(in srgb, var(--rr-warning) 18%, var(--surface-panel));
+}
+
+.fairness-method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.fairness-method-grid span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.fairness-method-grid strong {
+  color: var(--text-strong);
+  line-height: 1.4;
+}
+
+.fairness-downloads {
+  margin-top: 18px;
+}
+
+.fairness-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.fairness-footer a {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.fairness-state {
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 820px) {
+  .fairness-metric-grid,
+  .fairness-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fairness-position-head {
+    display: none;
+  }
+
+  .fairness-position-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding-bottom: 28px;
+  }
+
+  .fairness-position-row > div {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .fairness-hero,
+  .fairness-section-heading,
+  .fairness-check-list article {
+    flex-direction: column;
+  }
+
+  .fairness-hero {
+    align-items: stretch;
+  }
+
+  .fairness-hero-actions,
+  .fairness-hero-actions .rr-button,
+  .fairness-downloads,
+  .fairness-downloads .rr-button {
+    width: 100%;
+  }
+
+  .fairness-two-column,
+  .fairness-range-list,
+  .fairness-method-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fairness-six-mark {
+    align-self: flex-start;
+  }
+}
+
+@media print {
+  .fairness-back,
+  .fairness-hero-actions,
+  .fairness-jump,
+  .fairness-downloads,
+  .fairness-footer {
+    display: none;
+  }
+
+  .fairness-shell {
+    padding: 0;
+    background: white;
+  }
+
+  .fairness-details {
+    break-inside: avoid;
+  }
+}

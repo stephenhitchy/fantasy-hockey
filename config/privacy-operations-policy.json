@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseLabel": "Release Candidate 57",
+  "releaseLabel": "Release Candidate 58",
   "requestRetentionDays": 730,
   "exportAuditRetentionDays": 365,
   "responseTargetDays": 30,

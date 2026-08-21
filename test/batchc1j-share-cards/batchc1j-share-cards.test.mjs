@@ -194,14 +194,14 @@ test('C1J remains intact under RC38 while C1L inherits the C1K verification chai
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 57/);
-  assert.match(productionRuntime, /Release Candidate 57/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 57');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
+  assert.match(runtime, /Release Candidate 58/);
+  assert.match(productionRuntime, /Release Candidate 58/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 58');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1h');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc58-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
-  assert.match(releaseScript, /rinkrat-rc57-invite-beta/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
+  assert.match(releaseScript, /rinkrat-rc58-invite-beta/);
 });
 
 test('documentation and permanent roadmap record the bounded share-card foundation', async () => {
@@ -214,7 +214,7 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.48/);
+  assert.match(roadmap, /Version 1\.49/);
   assert.match(roadmap, /# \[x\] C1\.6 Add shareable matchup/);
   assert.match(roadmap, /# \[x\] C1\.23/);
   assert.match(roadmap, /# \[x\] LOG\.45 2026-08-17/);
@@ -223,9 +223,9 @@ test('documentation and permanent roadmap record the bounded share-card foundati
   assert.match(docs, /Canceling the native share sheet is treated as a normal cancellation/);
   assert.match(docs, /before the first asynchronous boundary/);
   assert.doesNotMatch(docs, /--only functions|--only firestore:rules/);
-  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
+  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
   assert.match(readme, /RINKRAT_SOCIAL_C1J_MATCHUP_SHARE_CARDS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcho1g/);
-  assert.match(releaseRunbook, /rinkrat-rc57-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc57-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcho1h/);
+  assert.match(releaseRunbook, /rinkrat-rc58-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc58-invite-beta/);
 });

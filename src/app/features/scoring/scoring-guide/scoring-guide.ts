@@ -39,6 +39,7 @@ interface SaveQualityExample {
   styleUrl: './scoring-guide.css',
 })
 export class ScoringGuide {
+  readonly publicGuide: boolean;
   readonly rules = signal<ScoringRules>(defaultScoringRules);
   readonly loading = signal(false);
   readonly errorMessage = signal('');
@@ -214,6 +215,7 @@ export class ScoringGuide {
     private readonly telemetry: TelemetryService,
     private readonly viewportScroller: ViewportScroller,
   ) {
+    this.publicGuide = this.route.snapshot.routeConfig?.path === 'scoring-guide';
     this.telemetry.track('scoring_guide_opened', {
       source: this.route.snapshot.paramMap.has('leagueId') ? 'league' : 'global',
     });

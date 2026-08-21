@@ -199,13 +199,13 @@ test('current audit follows the unified Add / Drop replacement instead of retire
   assert.match(audit, /competition-design-migration\.expectations\.mjs/);
   assert.match(audit, /unified Add \/ Drop/);
   assert.doesNotMatch(audit, /const templates = new Map/);
-  assert.match(packageJson.scripts['verify:batcho1g:core'], /verify:batcho1f:core/);
+  assert.match(packageJson.scripts['verify:batcho1h:core'], /verify:batcho1g:core/);
   assert.match(packageJson.scripts['verify:batcho1f:core'], /verify:batcho1e:core/);
   assert.match(
     packageJson.scripts['verify:batcho1e:core'],
     /test:batcho1e:run && npm run audit:competition-design-migration && npm run test:batcho1e-2:run && npm run validate:release-manifest/,
   );
-  assert.match(packageJson.scripts['security:ci'], /Operations Batch O1G/);
+  assert.match(packageJson.scripts['security:ci'], /Operations Batch O1H/);
   assert.equal(roadmap, docsRoadmap);
   const versionMatch = roadmap.match(/^Version (\d+)\.(\d+)(?:\.(\d+))?$/m);
   assert.ok(versionMatch, 'Missing semantic roadmap version.');

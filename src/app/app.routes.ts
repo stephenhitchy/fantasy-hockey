@@ -61,6 +61,22 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'fairness',
+    title: 'RinkRat Fairness Report',
+    loadComponent: () =>
+      import('./features/support/fairness-report/fairness-report').then(
+        (module) => module.FairnessReportPage,
+      ),
+  },
+  {
+    path: 'scoring-guide',
+    title: 'RinkRat Scoring Guide',
+    loadComponent: () =>
+      import('./features/scoring/scoring-guide/scoring-guide').then(
+        (module) => module.ScoringGuide,
+      ),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authChildGuard],

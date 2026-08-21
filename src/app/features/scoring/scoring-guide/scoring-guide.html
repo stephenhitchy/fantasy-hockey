@@ -15,9 +15,12 @@
     <div class="hero-actions">
       @if (leagueId()) {
         <a class="league-return-link league-return-link--hero" [routerLink]="['/leagues', leagueId()]" aria-label="Back to league home">Back to League</a>
+      } @else if (publicGuide) {
+        <a routerLink="/support">Back to Support</a>
       } @else {
         <a routerLink="/dashboard">Back to Dashboard</a>
       }
+      <a routerLink="/fairness">Fairness</a>
       <button type="button" (click)="printGuide()">Print Guide</button>
     </div>
   </header>

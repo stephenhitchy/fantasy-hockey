@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "reportVersion": 1,
+  "reportId": "rinkrat-fairness-baseline-2026",
+  "publishedDate": "2026-08-21",
+  "title": "RinkRat Fairness Report",
+  "subtitle": "Six-game opportunity, scoring roles, and matchup balance",
+  "evidenceStatus": "Historical baseline and Production Scoring V4 sensitivity model",
+  "summary": "RinkRat gives every active roster slot six scheduled NHL team games. The format reduces schedule-opportunity differences without removing drafting skill, roster decisions, injuries, hot streaks, or upset potential.",
+  "opportunityDesign": {
+    "scheduledGamesPerActiveSlot": 6,
+    "seventhGameRollsOver": true,
+    "independentRosterSlotWindows": true,
+    "completedWindowsImmutable": true,
+    "serverAuthoritativeScoring": true,
+    "frozenWindowProjections": true,
+    "equalizes": [
+      "The number of scheduled NHL team games assigned to each active roster slot.",
+      "The boundary between one scoring window and the next: game seven starts the next window.",
+      "The opportunity unit used by forwards, defensemen, and team goalie units."
+    ],
+    "doesNotEqualize": [
+      "Player talent, role, shooting efficiency, or team quality.",
+      "Injuries, scratches, suspensions, missed appearances, or postponed games.",
+      "Draft quality, waiver decisions, roster timing, or matchup luck.",
+      "The calendar date on which different roster slots finish their independent windows."
+    ]
+  },
+  "methodology": {
+    "seasons": [
+      "2013-14",
+      "2014-15",
+      "2015-16",
+      "2016-17",
+      "2017-18"
+    ],
+    "playoffsIncluded": false,
+    "regularSeasonGames": 6191,
+    "skaterGameRecords": 222857,
+    "teamGoalieGameRecords": 12382,
+    "completeSkaterSixGameWindows": 38623,
+    "completeGoalieSixGameWindows": 1963,
+    "simulatedLeagues": 5000,
+    "simulatedMatchups": 390000,
+    "simulatedFirstRounds": 20000,
+    "windowRule": "Games 1-6 form one roster-slot window; game 7 begins the next window. Calendar weeks were not used.",
+    "limitations": [
+      "The historical baseline uses five complete 2013-18 regular seasons rather than the modern NHL scoring environment.",
+      "Historical primary and secondary assists were reconstructed with RinkRat's deterministic calibration fallback because exact sequencing was unavailable.",
+      "Player-level game-winning and overtime-goal bonuses were unavailable in the historical skater dataset and were omitted from that reconstruction.",
+      "Production Scoring V4 goalie distributions and matchup effects are sensitivity-model estimates, not future-season guarantees.",
+      "The complete modern-season exact-data replication remains an open acceptance gate before V4 is considered permanently calibrated."
+    ]
+  },
+  "headlineMetrics": [
+    {
+      "id": "scheduled-games",
+      "label": "Scheduled games per active slot",
+      "value": 6,
+      "unit": "games",
+      "evidenceType": "production-rule"
+    },
+    {
+      "id": "simulated-matchups",
+      "label": "Historical six-game matchups modeled",
+      "value": 390000,
+      "unit": "matchups",
+      "evidenceType": "historical-simulation"
+    },
+    {
+      "id": "underdog-wins",
+      "label": "Projected-underdog wins",
+      "value": 37.5,
+      "unit": "percent",
+      "evidenceType": "v4-sensitivity-estimate"
+    },
+    {
+      "id": "close-matchups",
+      "label": "Matchups within 25 points",
+      "value": 23.4,
+      "unit": "percent",
+      "evidenceType": "v4-sensitivity-estimate"
+    }
+  ],
+  "positionProfiles": [
+    {
+      "position": "C",
+      "label": "Center",
+      "role": "Offensive ceiling with a deeper replacement pool.",
+      "meanSixGamePoints": 44.4,
+      "coefficientOfVariation": 0.392,
+      "p10": 22.7,
+      "p90": 67.9,
+      "hundredPlusPercent": 0.18,
+      "evidenceType": "historical-fantasy-relevant-windows"
+    },
+    {
+      "position": "LW",
+      "label": "Left Wing",
+      "role": "Boom-or-bust scoring with strong elite scarcity.",
+      "meanSixGamePoints": 43.1,
+      "coefficientOfVariation": 0.402,
+      "p10": 21.7,
+      "p90": 66.6,
+      "hundredPlusPercent": 0.22,
+      "evidenceType": "historical-fantasy-relevant-windows"
+    },
+    {
+      "position": "RW",
+      "label": "Right Wing",
+      "role": "Similar starter-level scoring to LW with position-specific scarcity.",
+      "meanSixGamePoints": 43.2,
+      "coefficientOfVariation": 0.402,
+      "p10": 21.1,
+      "p90": 66.2,
+      "hundredPlusPercent": 0.08,
+      "evidenceType": "historical-fantasy-relevant-windows"
+    },
+    {
+      "position": "D",
+      "label": "Defense",
+      "role": "A steadier floor built from usage and multiple categories.",
+      "meanSixGamePoints": 53.8,
+      "coefficientOfVariation": 0.286,
+      "p10": 33.1,
+      "p90": 73.6,
+      "hundredPlusPercent": 0.16,
+      "evidenceType": "historical-fantasy-relevant-windows"
+    },
+    {
+      "position": "G",
+      "label": "Team Goalie Unit",
+      "role": "Highest typical total, stronger floor, and meaningful quality separation.",
+      "meanSixGamePoints": 93.5,
+      "coefficientOfVariation": 0.256,
+      "p10": 62.8,
+      "p90": 124,
+      "hundredPlusPercent": 39.7,
+      "evidenceType": "production-v4-sensitivity-estimate"
+    }
+  ],
+  "leagueSimulation": {
+    "projectedUnderdogWinPercent": 37.5,
+    "closeMatchupPercentWithin25": 23.4,
+    "blowoutPercentAtLeast150": 7.7,
+    "topProjectedRosterTopFourPercent": 83,
+    "bottomProjectedRosterTopFourPercent": 1.4,
+    "interpretation": "A strong draft materially improves season results, while one six-game matchup still gives an underdog a realistic path to win."
+  },
+  "archetypeChecks": [
+    {
+      "id": "hit-only-forward",
+      "label": "Hit-only forward",
+      "status": "pass",
+      "finding": "Hit-heavy grinders did not become elite forward options in the historical sample."
+    },
+    {
+      "id": "shot-only-forward",
+      "label": "Shot volume without production",
+      "status": "pass",
+      "finding": "High-shot, low-conversion players gained useful value but did not routinely overtake elite scorers."
+    },
+    {
+      "id": "toi-only-defense",
+      "label": "High-TOI, low-offense defense",
+      "status": "pass-with-monitoring",
+      "finding": "Usage created a dependable floor, but no identified low-offense archetype became a top-12 defenseman solely through time on ice."
+    },
+    {
+      "id": "poor-efficiency-goalie",
+      "label": "High-volume, poor-efficiency goalie unit",
+      "status": "pass",
+      "finding": "Poor efficiency remained meaningfully weaker than strong goaltending with similar or lower volume."
+    },
+    {
+      "id": "goalie-draft-wave",
+      "label": "Goalie draft wave",
+      "status": "monitor",
+      "finding": "Scoring V4 increases goalie separation, but the separate Projection V11 Draft slot curve still requires live V4 evidence and recalibration."
+    },
+    {
+      "id": "modern-season-replication",
+      "label": "Modern-season replication",
+      "status": "open",
+      "finding": "The complete audit must be repeated with recent exact NHL data before the baseline is considered permanent."
+    }
+  ],
+  "acceptanceRanges": [
+    {
+      "id": "underdog-rate",
+      "label": "Projected-underdog win rate",
+      "minimum": 30,
+      "maximum": 45,
+      "unit": "percent",
+      "basis": "evidence-backed-range-around-v3-v4-behavior"
+    },
+    {
+      "id": "close-rate",
+      "label": "Matchups within 25 points",
+      "minimum": 18,
+      "maximum": 30,
+      "unit": "percent",
+      "basis": "evidence-backed-range-around-v3-v4-behavior"
+    },
+    {
+      "id": "blowout-rate",
+      "label": "Matchups separated by at least 150 points",
+      "minimum": 0,
+      "maximum": 10,
+      "unit": "percent",
+      "basis": "evidence-backed-maximum"
+    },
+    {
+      "id": "top-roster-signal",
+      "label": "Top projected roster finishing top four",
+      "minimum": 70,
+      "maximum": 90,
+      "unit": "percent",
+      "basis": "evidence-backed-range"
+    },
+    {
+      "id": "one-position-first-round-share",
+      "label": "Maximum share of one position in repeated first rounds",
+      "minimum": 0,
+      "maximum": 50,
+      "unit": "percent",
+      "basis": "initial-product-design-target"
+    }
+  ],
+  "protectedInvariants": [
+    "Exactly six scheduled NHL team games per active roster-slot window.",
+    "The seventh NHL team game begins the next roster-slot window.",
+    "Completed windows remain immutable.",
+    "Competition scoring remains server-authoritative.",
+    "Window projections remain frozen once the window starts.",
+    "Queued roster moves activate at the intended boundary.",
+    "Different roster slots may have different active Matchup numbers.",
+    "The same NHL game cannot score twice for the same roster-slot window."
+  ],
+  "publishedReleaseLabel": "Release Candidate 58",
+  "releaseLabel": "Release Candidate 58",
+  "scoringRulesVersion": 4,
+  "projectionVersion": 11,
+  "evidenceFingerprint": "b0b42962075cb0b695dd722cf3546ccab1a6d5833f5813a3b9075b0acff58aab",
+  "downloads": {
+    "json": "/data/rinkrat-fairness-report-v1.json",
+    "csv": "/data/rinkrat-fairness-report-v1.csv"
+  }
+}

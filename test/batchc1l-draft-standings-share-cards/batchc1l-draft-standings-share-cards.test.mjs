@@ -252,18 +252,18 @@ test('C1L advances only the browser release metadata to RC38', async () => {
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 57/);
-  assert.match(productionRuntime, /Release Candidate 57/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 57');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
+  assert.match(runtime, /Release Candidate 58/);
+  assert.match(productionRuntime, /Release Candidate 58/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 58');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1h');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc58-invite-beta');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
-  assert.match(releaseScript, /rinkrat-rc57-invite-beta/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
+  assert.match(releaseScript, /rinkrat-rc58-invite-beta/);
 });
 
 test('documentation and roadmap complete the Draft and standings share-card goal', async () => {
@@ -276,7 +276,7 @@ test('documentation and roadmap complete the Draft and standings share-card goal
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.48/);
+  assert.match(roadmap, /Version 1\.49/);
   assert.match(roadmap, /# \[x\] C1\.6 Add shareable matchup/);
   assert.match(roadmap, /# \[x\] C1\.24/);
   assert.match(roadmap, /# \[x\] LOG\.47 2026-08-17/);
@@ -284,9 +284,9 @@ test('documentation and roadmap complete the Draft and standings share-card goal
   assert.match(docs, /top eight ranked teams/);
   assert.match(docs, /C1L is Hosting-only/);
   assert.doesNotMatch(docs, /--only functions|--only firestore:rules/);
-  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
+  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
   assert.match(readme, /RINKRAT_SOCIAL_C1L_DRAFT_STANDINGS_SHARE_CARDS\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcho1g/);
-  assert.match(releaseRunbook, /rinkrat-rc57-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc57-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batcho1h/);
+  assert.match(releaseRunbook, /rinkrat-rc58-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc58-invite-beta/);
 });

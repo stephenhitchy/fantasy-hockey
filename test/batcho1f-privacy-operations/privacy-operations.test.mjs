@@ -70,7 +70,7 @@ test('manager-visible request records remain bounded and exclude administrator-o
 
 test('source-controlled privacy policy matches the server retention and export bounds', async () => {
   const policy = JSON.parse(await read('config/privacy-operations-policy.json'));
-  assert.equal(policy.releaseLabel, 'Release Candidate 57');
+  assert.equal(policy.releaseLabel, 'Release Candidate 58');
   assert.equal(policy.requestRetentionDays, PRIVACY_REQUEST_RETENTION_DAYS);
   assert.equal(policy.exportAuditRetentionDays, PRIVACY_EXPORT_AUDIT_RETENTION_DAYS);
   assert.equal(policy.responseTargetDays, PRIVACY_REQUEST_RESPONSE_TARGET_DAYS);
@@ -188,14 +188,14 @@ test('O1F stays server-authoritative and preserves scoring, Projection V11, Rule
   assert.equal(createHash('sha256').update(projectionV11).digest('hex'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(firestoreIndexes).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 57/);
-  assert.match(productionRuntime, /Release Candidate 57/);
+  assert.match(runtime, /Release Candidate 58/);
+  assert.match(productionRuntime, /Release Candidate 58/);
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1g');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc57-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1h');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc58-invite-beta');
   assert.match(indexSource, /getMyPrivacyCenter/);
   assert.match(indexSource, /updatePrivacyRequestOperation/);
 });
@@ -219,14 +219,14 @@ test('roadmap and documentation complete O1.24 while keeping attorney-reviewed p
   ]);
   const packageJson = JSON.parse(packageSource);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.48/);
+  assert.match(roadmap, /Version 1\.49/);
   assert.match(roadmap, /\[~\] O1\.7 Publish reviewed Terms/);
   assert.match(roadmap, /# \[x\] O1\.24 Add a verified privacy-request operations log/);
   assert.match(roadmap, /LOG\.70 2026-08-20 — Completed Operations Batch O1F/);
-  assert.match(readme, /Release Candidate 57 \/ Operations Batch O1G/);
-  assert.match(readme, /npm run verify:batcho1g/);
+  assert.match(readme, /Release Candidate 58 \/ Operations Batch O1H/);
+  assert.match(readme, /npm run verify:batcho1h/);
   assert.match(runbook, /Targeted Functions first, then Hosting/);
-  assert.match(releaseRunbook, /rinkrat-rc57-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc57-invite-beta/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1g:core/);
+  assert.match(releaseRunbook, /rinkrat-rc58-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc58-invite-beta/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batcho1h:core/);
 });
