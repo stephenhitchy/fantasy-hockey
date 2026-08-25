@@ -8,6 +8,7 @@ import { repairViewportOverlayLock } from './shared/accessibility/viewport-overl
 import { auth } from './core/firebase-auth';
 import { ClientPerformanceMonitorService } from './core/observability/client-performance-monitor.service';
 import { CompetitiveActionMonitorService } from './core/observability/competitive-action-monitor.service';
+import { NavigationHistoryService } from './core/navigation/navigation-history.service';
 import { RinkRatPwaService } from './core/pwa/rinkrat-pwa.service';
 import { TelemetryService } from './core/observability/telemetry.service';
 import { shortBuildIdentifier } from './core/release/release-manifest.util';
@@ -90,7 +91,9 @@ export class App implements OnDestroy {
     protected readonly actionMonitor: CompetitiveActionMonitorService,
     protected readonly challengeService: TeamIdentityChallengeService,
     protected readonly pwa: RinkRatPwaService,
+    navigationHistory: NavigationHistoryService,
   ) {
+    void navigationHistory;
     initializeStoredUserTheme();
     telemetry.start(router);
     performanceMonitor.start(router);

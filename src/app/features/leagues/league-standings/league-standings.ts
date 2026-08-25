@@ -7,6 +7,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth, db } from '../../../core/firebase';
 
@@ -95,7 +96,7 @@ function getNullableString(value: unknown): string | null {
 
 @Component({
   selector: 'app-league-standings',
-  imports: [RouterLink, ManagerAvatar],
+  imports: [RouterLink, ManagerAvatar, LeagueQuickNavigation],
   templateUrl: './league-standings.html',
   styleUrl: './league-standings.css',
 })

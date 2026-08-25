@@ -1,0 +1,86 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.league-quick-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.league-nav-action {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 2px solid var(--border-strong);
+  padding: 13px 16px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--page-bg) 64%, transparent);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.league-nav-action:hover,
+.league-nav-action:focus-visible {
+  transform: translate(-1px, -1px);
+  filter: brightness(1.08);
+}
+
+.league-nav-action--priority {
+  border-color: color-mix(in srgb, var(--accent-primary) 80%, white 12%);
+  background: var(--accent-primary);
+  color: var(--button-primary-text, #fff);
+}
+
+.league-nav-action--current {
+  border-color: var(--user-team-tertiary);
+  box-shadow:
+    inset 0 -4px 0 color-mix(in srgb, var(--user-team-tertiary) 72%, transparent),
+    4px 4px 0 color-mix(in srgb, var(--page-bg) 64%, transparent);
+  cursor: default;
+  filter: brightness(1.08);
+}
+
+.league-nav-action--current::after {
+  content: 'Current';
+  margin-left: auto;
+  color: currentColor;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  opacity: 0.78;
+  text-transform: uppercase;
+}
+
+.league-quick-navigation--compact {
+  gap: 8px;
+}
+
+.league-quick-navigation--compact .league-nav-action {
+  min-height: 46px;
+  padding: 9px 12px;
+  font-size: .86rem;
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--page-bg) 64%, transparent);
+}
+
+@media (max-width: 920px) {
+  .league-quick-navigation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .league-quick-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .league-nav-action,
+  .league-quick-navigation--compact .league-nav-action {
+    min-height: 50px;
+  }
+}

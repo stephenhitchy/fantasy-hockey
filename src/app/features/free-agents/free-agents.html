@@ -5,7 +5,7 @@
 } @else {
   <main class="unified-player-page rr-page-shell">
     @if (flowStep() === 'player-pool') {
-      <a class="league-return-link" [routerLink]="['/leagues', leagueId]">Back to League</a>
+      <a class="league-return-link" [routerLink]="['/leagues', leagueId]">Back</a>
 
       <header class="unified-player-header">
         <div>
@@ -33,6 +33,14 @@
           </button>
         </nav>
       </header>
+
+      <section class="league-navigation-card">
+        <app-league-quick-navigation
+          [leagueId]="leagueId"
+          [cycleNumber]="latestCycle()?.cycleNumber ?? null"
+          currentDestination="players"
+        />
+      </section>
 
       @if (draft()?.status !== 'complete') {
         <p class="rr-notice rr-notice--info" role="status">

@@ -347,30 +347,6 @@ export class CycleAssetDetail implements OnDestroy {
     return this.returnToUrl || `/leagues/${this.leagueId}/cycles/${this.cycleNumber}`;
   }
 
-  getBackLinkLabel(): string {
-    if (this.returnToUrl.includes('/team')) {
-      return 'Back to My Team';
-    }
-
-    if (this.returnToUrl.includes('/matchups/')) {
-      return 'Back to Matchup';
-    }
-
-    if (this.returnToUrl.includes('/matchups')) {
-      return 'Back to Matchup Overview';
-    }
-
-    if (this.returnToUrl.includes('/standings')) {
-      return 'Back to League Standings';
-    }
-
-    if (this.returnToUrl.includes('/schedule-preview')) {
-      return 'Back to Schedule Preview';
-    }
-
-    return `Back to Matchup ${this.cycleNumber}`;
-  }
-
   private getSafeReturnUrl(value: string | null, leagueId: string): string {
     if (!value) {
       return '';

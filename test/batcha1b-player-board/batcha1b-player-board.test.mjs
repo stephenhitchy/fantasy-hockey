@@ -204,9 +204,9 @@ test('board search, status, position, watched, and sorting remain deterministic'
 });
 
 test('A1B Player Intel remains the shared directory model after A1C unifies Players with Add / Drop', async () => {
-  const [routes, navbar, leagueHq, standings, unifiedTemplate, detailTemplate] = await Promise.all([
+  const [routes, leagueQuickNavigation, leagueHq, standings, unifiedTemplate, detailTemplate] = await Promise.all([
     read('src/app/app.routes.ts'),
-    read('src/app/shared/navbar/navbar.html'),
+    read('src/app/shared/league-quick-navigation/league-quick-navigation.html'),
     read('src/app/features/leagues/league-detail/league-detail.html'),
     read('src/app/features/leagues/league-standings/league-standings.html'),
     read('src/app/features/free-agents/free-agents.html'),
@@ -217,13 +217,14 @@ test('A1B Player Intel remains the shared directory model after A1C unifies Play
   assert.match(routes, /path: 'leagues\/:leagueId\/free-agents',[\s\S]*?redirectTo: 'leagues\/:leagueId\/players'/);
   assert.match(routes, /path: 'leagues\/:leagueId\/players\/:assetKey',[\s\S]*?title: 'Player Intel'[\s\S]*?LeaguePlayerDetail/);
   assert.match(routes, /path: 'leagues\/:leagueId\/leaders',[\s\S]*?title: 'Point Leaders'[\s\S]*?PointLeaders/);
-  assert.match(navbar, /\['\/leagues', activeLeagueId, 'players'\][\s\S]*?>\s*Add\/Drop\s*</);
-  assert.match(leagueHq, /\['\/leagues', leagueId, 'players'\][\s\S]*?<strong>Add \/ Drop<\/strong>/);
-  assert.match(standings, /\['\/leagues', leagueId, 'players'\][\s\S]*?>\s*Add \/ Drop\s*</);
+  assert.match(leagueQuickNavigation, /\['\/leagues', leagueId, 'players'\][\s\S]*?>[\s\S]*?Add \/ Drop Player/);
+  assert.match(leagueHq, /<app-league-quick-navigation[\s\S]*?currentDestination="league-hq"/);
+  assert.match(standings, /<app-league-quick-navigation[\s\S]*?currentDestination="standings"/);
   assert.match(unifiedTemplate, /\['\/leagues', leagueId, 'players', row\.assetKey\]/);
   assert.match(unifiedTemplate, />Point Leaders<\/a>/);
   assert.match(detailTemplate, /\['\/leagues', leagueId, 'players'\]/);
-  assert.match(detailTemplate, /Back to Add \/ Drop/);
+  assert.match(detailTemplate, /data-rinkrat-history-back/);
+  assert.match(detailTemplate, />\s*Back\s*<\/a>/);
 });
 
 test('the unified page reuses bounded A1B board sources and progressive mobile rendering', async () => {
@@ -280,7 +281,8 @@ test('Player Intel keeps real Projection V11 fields and returns to the unified A
   assert.match(template, />Schedule<\/button>/);
   assert.match(template, /Fantasy point breakdown/);
   assert.match(template, /Six-game opportunity/);
-  assert.match(template, /Back to Add \/ Drop/);
+  assert.match(template, /data-rinkrat-history-back/);
+  assert.match(template, />\s*Back\s*<\/a>/);
   assert.match(styles, /player-intel-watch[\s\S]*?min-height:\s*44px/);
   assert.match(styles, /player-intel-tabs[\s\S]*?grid-template-columns/);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
@@ -355,22 +357,22 @@ test('A1B remains permanently recorded while current release operations advance 
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 59');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 65');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1b:core'], /verify:batcha1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.12 Add a league-wide Player Board/);
   assert.match(roadmap, /# \[x\] LOG\.49 2026-08-17/);
   assert.match(docs, /Hosting only/);
   assert.match(docs, /reserved/i);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(readme, /RINKRAT_PRODUCT_A1B_PLAYER_BOARD\.md/);
-  assert.match(runbook, /npm run verify:batcho1i/);
-  assert.match(runbook, /rinkrat-rc59-validation\.json/);
-  assert.match(runbook, /rinkrat-rc59-invite-beta/);
+  assert.match(runbook, /npm run verify:batchb1j/);
+  assert.match(runbook, /rinkrat-rc65-validation\.json/);
+  assert.match(runbook, /rinkrat-rc65-invite-beta/);
 });

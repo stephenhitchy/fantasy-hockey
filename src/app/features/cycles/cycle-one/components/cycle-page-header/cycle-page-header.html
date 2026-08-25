@@ -23,34 +23,12 @@
       </div>
 
       <div class="cycle-header-actions">
-        <a
-          class="schedule-preview-header-link my-team-header-link rr-button rr-button--primary"
-          [routerLink]="['/leagues', presenter.leagueId, 'team']"
-        >
-          My Team
-        </a>
-
-        <a
-          class="schedule-preview-header-link rr-button rr-button--secondary"
-          [routerLink]="['/leagues', presenter.leagueId, 'cycles', 'schedule-preview']"
-        >
-          Schedule Preview
-        </a>
-
-        <a
-          class="schedule-preview-header-link rr-button rr-button--secondary"
-          [routerLink]="['/leagues', presenter.leagueId, 'cycles', presenter.cycleNumber, 'matchups']"
-        >
-          Matchup Overview
-        </a>
-
-        <a class="schedule-preview-header-link rr-button rr-button--secondary" [routerLink]="['/leagues', presenter.leagueId, 'standings']">
-          League Standings
-        </a>
-
-        <a class="schedule-preview-header-link rr-button rr-button--secondary" [routerLink]="['/leagues', presenter.leagueId, 'playoffs']">
-          Playoff Bracket
-        </a>
+        <app-league-quick-navigation
+          [leagueId]="presenter.leagueId"
+          [cycleNumber]="presenter.cycleNumber"
+          currentDestination="matchup"
+          [compact]="true"
+        />
 
         @if (presenter.cycle()?.overlapsPreviousCycle) {
           <span class="cycle-status-badge overlap-status-badge rr-badge rr-badge--warning"> Overlapping Matchups </span>

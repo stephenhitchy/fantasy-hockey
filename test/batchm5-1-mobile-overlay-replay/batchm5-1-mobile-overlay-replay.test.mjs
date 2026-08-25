@@ -239,22 +239,22 @@ test('Draft Room keeps only the compact command bar and selected-player action s
   assert.doesNotMatch(styles, /\.pool-controls\s*\{[^}]*position:\s*sticky/s);
 });
 
-test('every Back to League control uses the shared graphic return treatment', async () => {
+test('every league return control uses the shared graphic treatment', async () => {
   const files = await listHtmlFiles('src/app/');
   let count = 0;
 
   for (const file of files) {
     const html = await readFile(file, 'utf8');
 
-    if (!html.includes('Back to League')) {
+    if (!html.includes('league-return-link')) {
       continue;
     }
 
-    const controls = html.match(/<a\b[^>]*>[\s\S]*?Back to League[\s\S]*?<\/a>/g) ?? [];
-    assert.ok(controls.length > 0, `${file} should expose a Back to League anchor`);
+    const controls = html.match(/<(?:a|button)\b[^>]*class="[^"]*league-return-link[^"]*"[^>]*>[\s\S]*?<\/(?:a|button)>/g) ?? [];
+    assert.ok(controls.length > 0, `${file} should expose a shared league return control`);
 
     for (const control of controls) {
-      assert.match(control, /class="[^"]*league-return-link/);
+      assert.match(control, />[\s\S]*?Back[\s\S]*?<\/(?:a|button)>/);
       count += 1;
     }
   }

@@ -8,9 +8,10 @@
       class="league-return-link"
       [href]="getBackUrl()"
       (click)="navigateBack($event)"
-      [attr.aria-label]="getBackLinkLabel()"
+      aria-label="Back to the previous RinkRat page"
+      data-rinkrat-history-back
     >
-      {{ getBackLinkLabel() }}
+      Back
     </a>
 
     @if (!cycle()) {

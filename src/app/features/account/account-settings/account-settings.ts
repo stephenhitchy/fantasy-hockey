@@ -12,8 +12,19 @@ import {
   getAccountDeletionReadiness,
   reauthenticateCurrentUserWithPassword,
 } from '../../../core/auth/account-deletion.service';
-import { requestVerificationEmail } from '../../../core/notifications/email-notification.service';
-import { hasCompletedTrainingCamp } from '../../../core/onboarding/training-camp.service';
+import {
+  getVerificationEmailState,
+  requestVerificationEmail,
+  type VerificationEmailResponse,
+} from '../../../core/notifications/email-notification.service';
+import {
+  getVerificationCooldownSeconds,
+  getVerificationSendButtonLabel,
+} from '../../../core/notifications/verification-email-state.util';
+import {
+  hasCompletedTrainingCamp,
+  hasResolvedTrainingCampOnboarding,
+} from '../../../core/onboarding/training-camp.service';
 import {
   getMyLeagueSummaries,
   LeagueSummary,
@@ -91,6 +102,9 @@ export class AccountSettings {
   readonly sendingVerification = signal(false);
   readonly refreshingVerification = signal(false);
   readonly emailVerified = signal(false);
+  readonly verificationEmailPreviouslySent = signal(false);
+  readonly verificationEmailEligible = signal(false);
+  readonly verificationCooldownSeconds = signal(0);
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
   readonly deleteAccountPanelOpen = signal(false);
@@ -167,6 +181,19 @@ export class AccountSettings {
   );
 
   readonly trainingCampComplete = computed(() => hasCompletedTrainingCamp(this.profile()));
+  readonly verificationSendButtonLabel = computed(() =>
+    getVerificationSendButtonLabel({
+      sending: this.sendingVerification(),
+      emailPreviouslySent: this.verificationEmailPreviouslySent(),
+      cooldownSeconds: this.verificationCooldownSeconds(),
+    }),
+  );
+  readonly verificationSendDisabled = computed(() =>
+    this.sendingVerification() ||
+    this.refreshingVerification() ||
+    !this.verificationEmailEligible() ||
+    this.verificationCooldownSeconds() > 0,
+  );
   readonly accountDeletionBlocked = computed(
     () => (this.deletionReadiness()?.commissionerLeagues.length ?? 0) > 0,
   );
@@ -178,6 +205,9 @@ export class AccountSettings {
     this.buildAchievement('league', 'crowded-schedule'),
     this.buildAchievement('team', 'identity-architect'),
   ]);
+
+  private verificationNextAllowedAtMillis = 0;
+  private verificationCooldownTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private router: Router,
@@ -195,6 +225,8 @@ export class AccountSettings {
       });
 
     this.destroyRef.onDestroy(() => {
+      this.clearVerificationCooldownTimer();
+
       if (this.customIdentityEditorOpen()) {
         this.previewPreferenceChanges();
       }
@@ -262,6 +294,11 @@ export class AccountSettings {
           }
         : profile;
       this.profile.set(normalizedProfile);
+
+      if (!user.emailVerified) {
+        this.verificationEmailEligible.set(hasResolvedTrainingCampOnboarding(profile));
+        void this.loadVerificationEmailState();
+      }
 
       if (
         profile?.favoriteTeamVariantId &&
@@ -721,7 +758,7 @@ export class AccountSettings {
   }
 
   async sendVerificationEmail(): Promise<void> {
-    if (this.sendingVerification()) {
+    if (this.verificationSendDisabled()) {
       return;
     }
 
@@ -738,9 +775,21 @@ export class AccountSettings {
         return;
       }
 
-      this.successMessage.set(
-        'Verification email sent. Check your inbox and spam folder, then return here to refresh your status.',
-      );
+      this.applyVerificationEmailState(result);
+
+      if (result.outcome === 'cooldown') {
+        this.successMessage.set(
+          'A verification email was sent recently. You can send another when the countdown finishes.',
+        );
+      } else if (result.outcome === 'blocked') {
+        this.errorMessage.set(
+          'Finish Training Camp or choose Finish Later before sending the verification email.',
+        );
+      } else {
+        this.successMessage.set(
+          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Check your inbox and spam folder, then return here to refresh your status.`,
+        );
+      }
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error ? error.message : 'Unable to send a verification email.',
@@ -766,6 +815,11 @@ export class AccountSettings {
       this.emailVerified.set(user.emailVerified);
 
       if (user.emailVerified) {
+        await user.getIdToken(true);
+        this.verificationEmailEligible.set(true);
+        this.verificationCooldownSeconds.set(0);
+        this.verificationNextAllowedAtMillis = 0;
+        this.clearVerificationCooldownTimer();
         this.successMessage.set(
           'Email verified. You can now enable injury notification emails.',
         );
@@ -933,5 +987,61 @@ export class AccountSettings {
   async signOut(): Promise<void> {
     await logoutUser();
     await this.router.navigate(['/']);
+  }
+
+  private async loadVerificationEmailState(): Promise<void> {
+    try {
+      const state = await getVerificationEmailState();
+
+      if (state.alreadyVerified) {
+        this.emailVerified.set(true);
+        this.verificationEmailEligible.set(true);
+        return;
+      }
+
+      this.applyVerificationEmailState(state);
+    } catch {
+      // Account Settings can still send manually if the optional state lookup is interrupted.
+    }
+  }
+
+  private applyVerificationEmailState(state: VerificationEmailResponse): void {
+    this.verificationEmailEligible.set(state.eligible);
+    this.verificationEmailPreviouslySent.set(state.emailPreviouslySent);
+    this.verificationNextAllowedAtMillis = state.nextAllowedAtMillis;
+    this.updateVerificationCooldown(state.cooldownSecondsRemaining);
+  }
+
+  private updateVerificationCooldown(fallbackSeconds = 0): void {
+    this.clearVerificationCooldownTimer();
+
+    if (this.verificationNextAllowedAtMillis <= 0 && fallbackSeconds > 0) {
+      this.verificationNextAllowedAtMillis = Date.now() + fallbackSeconds * 1_000;
+    }
+
+    const update = () => {
+      const remaining = getVerificationCooldownSeconds(
+        this.verificationNextAllowedAtMillis,
+      );
+      this.verificationCooldownSeconds.set(remaining);
+
+      if (remaining === 0) {
+        this.verificationNextAllowedAtMillis = 0;
+        this.clearVerificationCooldownTimer();
+      }
+    };
+
+    update();
+
+    if (this.verificationCooldownSeconds() > 0) {
+      this.verificationCooldownTimer = setInterval(update, 1_000);
+    }
+  }
+
+  private clearVerificationCooldownTimer(): void {
+    if (this.verificationCooldownTimer) {
+      clearInterval(this.verificationCooldownTimer);
+      this.verificationCooldownTimer = null;
+    }
   }
 }

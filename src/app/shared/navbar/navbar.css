@@ -107,6 +107,14 @@
 .logout-button {
   margin-left: 4px;
   border-color: var(--rr-nav-border-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.logout-button:disabled,
+.mobile-logout-button:disabled {
+  cursor: wait;
+  opacity: 0.66;
 }
 
 .mobile-topbar,
@@ -182,6 +190,10 @@
     border-top: 2px solid var(--user-team-secondary);
     background: var(--rr-nav-background);
     box-shadow: var(--rr-nav-bottom-shadow);
+  }
+
+  .mobile-bottom-nav--signed-out {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .mobile-bottom-nav .rr-nav-item {
@@ -361,6 +373,13 @@
     font: inherit;
     font-weight: 900;
   }
+
+  .mobile-sign-out-error {
+    margin: 8px 2px 0;
+    color: var(--rr-nav-danger-text);
+    font-size: var(--rr-mobile-text-micro);
+    line-height: 1.45;
+  }
 }
 
 @media (max-width: 380px) {
@@ -403,4 +422,71 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Beta navigation clarity: icons and consistent visual priority for the pages
+   managers need most during a live league. */
+.desktop-links .rr-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.rr-nav-item--priority {
+  --rr-nav-item-border-color: var(--user-team-accent);
+  --rr-nav-item-background-local: var(--user-team-primary);
+  --rr-nav-item-color: var(--user-team-on-primary);
+  --rr-nav-item-hover-background: color-mix(
+    in srgb,
+    var(--user-team-primary) 88%,
+    var(--rr-nav-surface)
+  );
+  --rr-nav-item-hover-color: var(--user-team-on-primary);
+  --rr-nav-item-hover-border: var(--user-team-tertiary);
+  --rr-nav-item-active-border: var(--user-team-tertiary);
+  box-shadow: inset 0 -3px 0 var(--user-team-secondary);
+}
+
+.rr-nav-item--priority:hover,
+.rr-nav-item--priority:focus-visible,
+.rr-nav-item--priority.active {
+  filter: brightness(1.12);
+}
+
+@media (max-width: 1380px) and (min-width: 781px) {
+  .desktop-navbar {
+    gap: 12px;
+    padding-inline: 14px;
+  }
+
+  .desktop-links {
+    gap: 3px;
+  }
+
+  .desktop-links .rr-nav-item {
+    --rr-nav-item-padding: 9px 8px;
+    --rr-nav-item-font-size: 12px;
+  }
+
+  .desktop-links .desktop-optional {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) and (min-width: 781px) {
+  .desktop-navbar {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .brand > span:last-child {
+    display: none;
+  }
+
+  .desktop-links .rr-nav-item {
+    --rr-nav-item-padding: 8px 7px;
+    --rr-nav-item-font-size: 11px;
+    gap: 5px;
+  }
 }

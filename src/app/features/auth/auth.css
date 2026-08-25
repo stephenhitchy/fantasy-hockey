@@ -967,3 +967,68 @@
     grid-template-columns: 1fr;
   }
 }
+
+.pending-invite-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 72%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--user-team-primary) 13%, var(--rr-color-surface-strong));
+}
+
+.pending-invite-banner > div {
+  display: grid;
+  gap: 4px;
+}
+
+.pending-invite-kicker {
+  color: var(--user-team-accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pending-invite-banner strong {
+  color: var(--rr-color-text);
+  font-size: 14px;
+}
+
+.pending-invite-banner p {
+  margin: 0;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pending-invite-banner b {
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-code);
+  letter-spacing: 0.06em;
+}
+
+.pending-invite-cancel {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--rr-color-border-strong);
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .pending-invite-banner {
+    display: grid;
+  }
+
+  .pending-invite-cancel {
+    width: 100%;
+  }
+}

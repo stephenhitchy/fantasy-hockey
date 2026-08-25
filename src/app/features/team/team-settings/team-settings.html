@@ -7,8 +7,10 @@
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-     aria-label="Back to league home">
-      Back to League
+      aria-label="Back to the previous RinkRat page"
+      data-rinkrat-history-back
+    >
+      Back
     </a>
 
     <header class="team-hero-card rr-card rr-card--padded">
@@ -30,7 +32,8 @@
         class="hero-add-drop-action rr-button rr-button--primary"
         [routerLink]="['/leagues', leagueId, 'players']"
       >
-        Add / Drop
+        <span class="pixel-icon icon-players icon-sm" aria-hidden="true"></span>
+        <span>Add / Drop</span>
       </a>
     </header>
 
@@ -92,60 +95,12 @@
         <h2>Team Navigation</h2>
       </div>
 
-      <div class="quick-actions-list">
-        <a
-          class="secondary-action rr-button rr-button--secondary"
-          [routerLink]="['/leagues', leagueId]"
-        >
-          League Home
-        </a>
-
-        <a
-          class="primary-action rr-button rr-button--primary"
-          [routerLink]="['/leagues', leagueId, 'players']"
-        >
-          Add / Drop Player
-        </a>
-
-        @if (latestCycle()) {
-          @if (currentMatchup(); as matchup) {
-            <a
-              class="primary-action rr-button rr-button--primary"
-              [routerLink]="getCurrentMatchupLink()"
-            >
-              View Current Matchup
-            </a>
-          }
-
-          <a
-            class="secondary-action rr-button rr-button--secondary"
-            [routerLink]="['/leagues', leagueId, 'cycles', latestCycle()?.cycleNumber, 'matchups']"
-          >
-            All Current Matchups
-          </a>
-        }
-
-        <a
-          class="secondary-action rr-button rr-button--secondary"
-          [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
-        >
-          Full Schedule View
-        </a>
-
-        <a
-          class="secondary-action rr-button rr-button--secondary"
-          [routerLink]="['/leagues', leagueId, 'standings']"
-        >
-          League Standings
-        </a>
-
-        <a
-          class="secondary-action rr-button rr-button--secondary"
-          [routerLink]="['/leagues', leagueId, 'projections']"
-        >
-          Projection Lab
-        </a>
-      </div>
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="latestCycle()?.cycleNumber ?? null"
+        [currentMatchupRoute]="currentMatchup() ? getCurrentMatchupLink() : null"
+        currentDestination="team"
+      />
     </section>
 
     <section class="current-matchup-card rr-card rr-card--padded">

@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../core/firebase';
+import { LeagueQuickNavigation } from '../../shared/league-quick-navigation/league-quick-navigation';
 
 import {
   DraftableAsset,
@@ -177,7 +178,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, LeagueQuickNavigation],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })

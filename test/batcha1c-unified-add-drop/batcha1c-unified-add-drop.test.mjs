@@ -41,9 +41,9 @@ function asset(assetKey, name, position, seasonPoints, nextSix, extras = {}) {
 }
 
 test('the former Player Board and Add / Drop routes are one guarded Add / Drop surface', async () => {
-  const [routes, navbar, leagueHq, standings] = await Promise.all([
+  const [routes, leagueQuickNavigation, leagueHq, standings] = await Promise.all([
     read('src/app/app.routes.ts'),
-    read('src/app/shared/navbar/navbar.html'),
+    read('src/app/shared/league-quick-navigation/league-quick-navigation.html'),
     read('src/app/features/leagues/league-detail/league-detail.html'),
     read('src/app/features/leagues/league-standings/league-standings.html'),
   ]);
@@ -51,9 +51,9 @@ test('the former Player Board and Add / Drop routes are one guarded Add / Drop s
   assert.match(routes, /path: 'leagues\/:leagueId\/players',[\s\S]*?title: 'Add \/ Drop'[\s\S]*?canDeactivate: \[pendingRosterActionGuard\][\s\S]*?FreeAgents/);
   assert.match(routes, /path: 'leagues\/:leagueId\/free-agents',[\s\S]*?redirectTo: 'leagues\/:leagueId\/players'/);
   assert.match(routes, /path: 'leagues\/:leagueId\/players\/:assetKey',[\s\S]*?Player Intel/);
-  assert.match(navbar, /\['\/leagues', activeLeagueId, 'players'\][\s\S]*?>\s*Add\/Drop\s*</);
-  assert.match(leagueHq, /\['\/leagues', leagueId, 'players'\][\s\S]*?<strong>Add \/ Drop<\/strong>/);
-  assert.match(standings, /\['\/leagues', leagueId, 'players'\][\s\S]*?>\s*Add \/ Drop\s*</);
+  assert.match(leagueQuickNavigation, /\['\/leagues', leagueId, 'players'\][\s\S]*?>[\s\S]*?Add \/ Drop Player/);
+  assert.match(leagueHq, /<app-league-quick-navigation[\s\S]*?currentDestination="league-hq"/);
+  assert.match(standings, /<app-league-quick-navigation[\s\S]*?currentDestination="standings"/);
 
   await assert.rejects(
     access(new URL('src/app/features/players/league-player-board/league-player-board.ts', ROOT)),
@@ -282,22 +282,22 @@ test('the current release retains A1C while A1D advances release operations to R
   const freeze = JSON.parse(freezeSource);
   const packageJson = JSON.parse(packageSource);
 
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 59');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 65');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1d:core'], /verify:batcha1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.13 Unify Player Board and Add \/ Drop/);
   assert.match(roadmap, /# \[x\] LOG\.50 2026-08-18/);
   assert.match(docs, /processHistoricalReplayAdvance,functions:processProjectionGenerationTask/);
   assert.match(docs, /site-first/i);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(readme, /RINKRAT_PRODUCT_A1C_UNIFIED_ADD_DROP\.md/);
-  assert.match(runbook, /npm run verify:batcho1i/);
-  assert.match(runbook, /rinkrat-rc59-validation\.json/);
-  assert.match(runbook, /rinkrat-rc59-invite-beta/);
+  assert.match(runbook, /npm run verify:batchb1j/);
+  assert.match(runbook, /rinkrat-rc65-validation\.json/);
+  assert.match(runbook, /rinkrat-rc65-invite-beta/);
 });

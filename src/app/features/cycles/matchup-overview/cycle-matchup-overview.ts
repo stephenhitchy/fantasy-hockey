@@ -6,6 +6,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { LiveScoreFreshness } from '../../../shared/live-score-freshness/live-score-freshness';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -59,7 +60,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-matchup-overview',
-  imports: [RouterLink, ManagerAvatar, LiveScoreFreshness],
+  imports: [RouterLink, ManagerAvatar, LiveScoreFreshness, LeagueQuickNavigation],
   templateUrl: './cycle-matchup-overview.html',
   styleUrl: './cycle-matchup-overview.css',
 })

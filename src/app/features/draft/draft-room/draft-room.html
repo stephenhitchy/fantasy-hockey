@@ -1,5 +1,22 @@
 @if (loading()) {
-  <p>Loading draft room...</p>
+  <section class="draft-load-state rr-card rr-card--raised rr-card--padded" aria-live="polite">
+    <span class="pixel-icon icon-loading icon-lg" aria-hidden="true"></span>
+    <div>
+      <span class="eyebrow">Joining Draft</span>
+      <h1>Opening the Draft Room…</h1>
+      <p>Loading your league, board, and saved queue.</p>
+    </div>
+
+    @if (draftLoadRecoveryVisible()) {
+      <div class="draft-load-recovery" role="status">
+        <strong>Still loading?</strong>
+        <span>Reload for a fresh connection.</span>
+        <button type="button" class="rr-button rr-button--primary" (click)="reloadDraftRoom()">
+          Reload Draft Room
+        </button>
+      </div>
+    }
+  </section>
 } @else if (!league()) {
   <p>{{ errorMessage() || 'Draft room not found.' }}</p>
 } @else {
@@ -7,8 +24,8 @@
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-     aria-label="Back to league home">
-      Back to League
+     aria-label="Back to the previous RinkRat page">
+      Back
     </a>
 
     <header class="draft-room-header">
@@ -548,21 +565,38 @@
 </div>
 
           @if (playerPoolLoading()) {
-            <p class="pool-loading">Loading NHL player pool...</p>
-          } @else if (playerPoolError()) {
-            <div class="pool-error-block rr-notice rr-notice--danger">
-                <p class="pool-error">{{ playerPoolError() }}</p>
+            <div class="pool-loading-block rr-notice rr-notice--info" role="status" aria-live="polite">
+              <p class="pool-loading">
+                {{ projectionLoadSlow() ? 'The Draft Room is ready. Rankings are still loading.' : 'Loading verified Draft rankings…' }}
+              </p>
 
+              @if (projectionLoadSlow()) {
+                <p class="pool-loading-detail">
+                  You can follow the Draft board, clock, teams, and queue now. Retry only the rankings if this connection is taking too long.
+                </p>
                 <button
                   type="button"
                   class="retry-pool-button rr-button rr-button--secondary"
-                  (click)="loadPlayerPool()"
-                  [disabled]="playerPoolLoading()"
+                  (click)="retryPlayerPool()"
                 >
-                  Try Loading Player Pool Again
+                  Retry Rankings
                 </button>
+              }
             </div>
-            }@else if (availableAssets().length === 0) {
+          } @else if (playerPoolError()) {
+            <div class="pool-error-block rr-notice rr-notice--danger">
+              <p class="pool-error">{{ playerPoolError() }}</p>
+
+              <button
+                type="button"
+                class="retry-pool-button rr-button rr-button--secondary"
+                (click)="retryPlayerPool()"
+                [disabled]="playerPoolLoading()"
+              >
+                Retry Rankings
+              </button>
+            </div>
+          } @else if (availableAssets().length === 0) {
             <p class="pool-loading">
               No available players or goalie units match that search.
             </p>

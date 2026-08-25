@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
 
+import { LeagueQuickNavigation } from '../../../../../shared/league-quick-navigation/league-quick-navigation';
 import type { CycleOne } from '../../cycle-one';
 
 @Component({
   selector: 'app-cycle-page-header',
-  imports: [RouterLink],
+  imports: [LeagueQuickNavigation],
   templateUrl: './cycle-page-header.html',
   styles: [':host { display: contents; }'],
 })

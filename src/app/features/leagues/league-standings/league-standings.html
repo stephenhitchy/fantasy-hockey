@@ -7,8 +7,8 @@
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-     aria-label="Back to league home">
-      Back to League
+     aria-label="Back to the previous RinkRat page">
+      Back
     </a>
 
     <header class="standings-header">
@@ -40,6 +40,14 @@
         </button>
       </div>
     </header>
+
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="currentCycleNumber()"
+        currentDestination="standings"
+      />
+    </section>
 
     @if (errorMessage()) {
       <p class="status-card error-card">{{ errorMessage() }}</p>
@@ -77,31 +85,7 @@
       </button>
     </nav>
 
-    <section class="league-actions-card">
-      <a
-        [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber()]"
-      >
-        Current Matchup
-      </a>
-
-      <a
-        [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
-      >
-        Matchup Overview
-      </a>
-
-      <a
-        [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
-      >
-        Schedule Preview
-      </a>
-
-      <a
-        [routerLink]="['/leagues', leagueId, 'players']"
-      >
-        Add / Drop
-      </a>
-
+    <section class="league-actions-card" aria-label="Additional league tools">
       <a
         [routerLink]="['/leagues', leagueId, 'playoffs']"
       >

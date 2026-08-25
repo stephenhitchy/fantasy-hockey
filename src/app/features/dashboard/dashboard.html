@@ -286,12 +286,20 @@
                 <div class="league-actions">
                   @if (league.dashboardActivity; as activity) {
                     <a class="open-league rr-button rr-button--primary" [routerLink]="activity.primaryActionRoute">
-                      {{ activity.primaryActionLabel }}
+                      <span
+                        class="pixel-icon icon-sm"
+                        [class.icon-draft]="activity.stage === 'draft-scheduled' || activity.stage === 'draft-live'"
+                        [class.icon-matchup]="activity.stage === 'matchup-active' || activity.stage === 'matchup-complete' || activity.stage === 'cycle-complete'"
+                        [class.icon-league]="activity.stage !== 'draft-scheduled' && activity.stage !== 'draft-live' && activity.stage !== 'matchup-active' && activity.stage !== 'matchup-complete' && activity.stage !== 'cycle-complete'"
+                        aria-hidden="true"
+                      ></span>
+                      <span>{{ activity.primaryActionLabel }}</span>
                       <span aria-hidden="true">→</span>
                     </a>
                   } @else {
                     <a class="open-league rr-button rr-button--primary" [routerLink]="['/leagues', league.leagueId]">
-                      Open League
+                      <span class="pixel-icon icon-league icon-sm" aria-hidden="true"></span>
+                      <span>Open League</span>
                       <span aria-hidden="true">→</span>
                     </a>
                   }
@@ -302,6 +310,7 @@
                     aria-label="Open my team"
                   >
                     <span class="pixel-icon icon-team icon-sm" aria-hidden="true"></span>
+                    <span>My Team</span>
                   </a>
                 </div>
               </article>

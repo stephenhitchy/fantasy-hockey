@@ -22,7 +22,7 @@ import {
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outputDirectory = path.join(projectRoot, '.beta-release');
-const defaultTag = 'rinkrat-rc59-invite-beta';
+const defaultTag = 'rinkrat-rc65-invite-beta';
 
 function parseArguments(argv) {
   const args = [...argv];
@@ -165,6 +165,8 @@ async function inspectStaticSource() {
   requireCondition(productionRuntimeSource.includes(`releaseLabel: '${policy.releaseLabel}'`), 'The production runtime release label changed.');
   requireCondition(packageJson.scripts?.['verify:batchs3d'], 'The approved runtime verification command is missing.');
   requireCondition(packageJson.scripts?.['verify:batchb1c'], 'The B1C verification command is missing.');
+  requireCondition(policy.verificationCommand === 'npm run verify:batchb1j', 'The RC65 verification command changed unexpectedly.');
+  requireCondition(packageJson.scripts?.['verify:batchb1j'], 'The B1J verification command is missing.');
 
   return {
     packageJson,
@@ -387,6 +389,9 @@ async function freeze(options) {
     release: live.manifest,
     liveHeaders: live.headers,
     validation,
+    verification: {
+      command: source.policy.verificationCommand,
+    },
     confirmations: {
       githubCiPassed: true,
       rollbackRehearsed: true,

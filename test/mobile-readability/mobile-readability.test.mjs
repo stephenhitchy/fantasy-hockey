@@ -132,20 +132,23 @@ test('Batch M1 navigation source contracts', async (suite) => {
     read('src/app/shared/navbar/navbar.html'),
   ]);
 
-  await suite.test('follows server-backed draft state and the owner matchup across active cycles', () => {
-    assert.match(navbar, /listenToFantasyDraft/);
-    assert.match(navbar, /listenToEarliestUnfinishedOwnerMatchup/);
+  await suite.test('keeps global navigation independent from league and Draft listeners', () => {
     assert.match(navbar, /listenToAuthState/);
-    assert.match(navbar, /this\.draftStatus\(\) === 'complete'/);
-    assert.doesNotMatch(navbar, /latestCycle|league-wide cycle/i);
+    assert.match(navbar, /NavigationEnd/);
+    assert.doesNotMatch(navbar, /listenToFantasyDraft/);
+    assert.doesNotMatch(navbar, /listenToEarliestUnfinishedOwnerMatchup/);
+    assert.doesNotMatch(navbar, /draftStatus|latestCycle|league-wide cycle/i);
   });
 
-  await suite.test('renders the phase-aware tab and keeps League HQ available in More', () => {
-    assert.match(template, /\[routerLink\]="mobileLeaguePrimary\(\)\.route"/);
-    assert.match(template, /\{\{ mobileLeaguePrimary\(\)\.label \}\}/);
-    assert.match(template, /mobileLeaguePrimary\(\)\.kind === 'draft'/);
-    assert.match(template, /mobileLeaguePrimary\(\)\.kind === 'matchup'/);
-    assert.match(template, /<strong>League HQ<\/strong>/);
+  await suite.test('renders durable mobile destinations and keeps Support and Account in More', () => {
+    assert.match(template, /routerLink="\/dashboard"[\s\S]*?<span>Dashboard<\/span>/);
+    assert.match(template, /routerLink="\/leagues\/create"[\s\S]*?<span>Create<\/span>/);
+    assert.match(template, /routerLink="\/leagues\/join"[\s\S]*?<span>Join<\/span>/);
+    assert.match(template, /routerLink="\/scoring"[\s\S]*?<span>Scoring<\/span>/);
+    assert.match(template, /<strong>Support<\/strong>/);
+    assert.match(template, /<strong>Account<\/strong>/);
+    assert.doesNotMatch(template, /mobileLeaguePrimary/);
+    assert.doesNotMatch(template, /<strong>League HQ<\/strong>/);
   });
 });
 

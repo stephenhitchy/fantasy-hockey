@@ -1,0 +1,61 @@
+/* Beta navigation reliability: a visible Safari-safe recovery path if the
+   first Draft Room load does not settle promptly. */
+.draft-load-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  width: min(680px, calc(100% - 32px));
+  margin: 48px auto;
+}
+
+.draft-load-state h1,
+.draft-load-state p {
+  margin: 0;
+}
+
+.draft-load-state h1 {
+  margin-top: 4px;
+  font-size: clamp(1.55rem, 4vw, 2.2rem);
+}
+
+.draft-load-state p {
+  margin-top: 8px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.draft-load-recovery {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 55%, var(--border-strong));
+  border-radius: var(--rr-radius-md);
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--user-team-primary) 12%);
+}
+
+.draft-load-recovery span {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.draft-load-recovery .rr-button {
+  width: fit-content;
+  margin-top: 4px;
+}
+
+@media (max-width: 520px) {
+  .draft-load-state {
+    grid-template-columns: 1fr;
+    margin-block: 24px;
+  }
+
+  .draft-load-recovery {
+    grid-column: auto;
+  }
+
+  .draft-load-recovery .rr-button {
+    width: 100%;
+  }
+}

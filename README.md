@@ -5,6 +5,13 @@ Core project references:
 - [`docs/RINKRAT_PROJECT_DOCUMENTATION.md`](docs/RINKRAT_PROJECT_DOCUMENTATION.md) — consolidated architecture, release history, deployment, and testing guidance.
 - [`docs/RINKRAT_COMPETITIVE_ROADMAP.txt`](docs/RINKRAT_COMPETITIVE_ROADMAP.txt) — permanent completed/in-progress tracker from invite beta through public-scale competition.
 - [`docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md`](docs/RINKRAT_INVITE_BETA_RELEASE_RUNBOOK.md) — pinned Node/npm toolchain, TTL procedure, exact-build validation export, freeze record, annotated beta tag, and application rollback rehearsal.
+- [`docs/RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md`](docs/RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md) — scanner-safe shareable league links, auth/Training Camp/email-verification continuation, privacy boundaries, deployment scope, and the RC60 browser matrix.
+- [`docs/RINKRAT_BETA_B1F_INVITE_CONTINUATION_RECONCILIATION.md`](docs/RINKRAT_BETA_B1F_INVITE_CONTINUATION_RECONCILIATION.md) — profile-authoritative prerequisite reconciliation, order-independent verification/Training Camp recovery, reload evidence, and the RC61 Hosting-only release matrix.
+- [`docs/RINKRAT_BETA_B1G_TRAINING_FIRST_VERIFICATION.md`](docs/RINKRAT_BETA_B1G_TRAINING_FIRST_VERIFICATION.md) — Training-Camp-first email release, explicit Finish Later deferral, invite continuation, Functions/Rules/Hosting scope, and the RC62 browser matrix.
+- [`docs/RINKRAT_BETA_B1H_NAVIGATION_RELIABILITY.md`](docs/RINKRAT_BETA_B1H_NAVIGATION_RELIABILITY.md) — persistent authenticated/public navigation, history-aware Back controls, high-value destination styling, My Team cleanup, and Draft entry/reload recovery for RC63.
+- [`docs/RINKRAT_BETA_B1I_PROGRESSIVE_TRAINING_CAMP.md`](docs/RINKRAT_BETA_B1I_PROGRESSIVE_TRAINING_CAMP.md) — one-drill-at-a-time Training Camp, simpler six-game teaching, Coach Challenges, viewport-safe one-at-a-time position help, and the RC64 Hosting/browser matrix.
+- [`docs/releases/RC65_B1J_TUTORIAL_NAV_DRAFT_READINESS.md`](docs/releases/RC65_B1J_TUTORIAL_NAV_DRAFT_READINESS.md) — exact Training Camp return, quiz removal, simplified global navigation, shared My Team/Matchup navigation, non-blocking Draft rankings, and the corrected RC65 release gate.
+- [`docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md`](docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md) — manual first verification send, truthful cooldown state, global Sign out, complete shared league navigation, six-game rationale, targeted deployment, and remaining candidate gates.
 - [`docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md`](docs/RINKRAT_FIRESTORE_BACKUP_RESTORE_RUNBOOK.md) — native backup schedules, delete protection, optional PITR, named-database restore drills, verification, cleanup, and recovery evidence.
 - [`docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md`](docs/RINKRAT_BETA_OPERATIONS_RUNBOOK.md) — beta issue severity, triage, public known issues, live evidence, privacy, deployment, and rollback.
 - [`docs/RINKRAT_SECURITY_S3C_RUNBOOK.md`](docs/RINKRAT_SECURITY_S3C_RUNBOOK.md) — CI, dependency/secret auditing, CSP report-only, HSTS, TTL, cleanup, and emergency patch procedure.
@@ -60,17 +67,21 @@ Core project references:
 
 ## Current release and toolchain
 
-The current source runtime is **Release Candidate 59 / Operations Batch O1I.1**. O1I adds one public scoring calculator that calls the exact Production Scoring V4 browser engine for forwards, defensemen, and Team Goalie Units. It shows every category contribution, validates impossible stat lines, includes representative presets, and labels the repeated-six-game total as a scale example rather than a projection. O1I also removes favorite-team color dependence from the Scoring Guide and completed Game Center matchup breakdown so scoring values stay readable under every team identity and theme. O1I.1 is a verification-only hotfix that compiles the isolated scoring test through a temporary TypeScript project, resolving TypeScript 6 TS5112 without changing runtime behavior.
+The current source runtime is **Release Candidate 65 / Beta Batch B1J.2**. The working tree also contains the **B1K playtest-flow usability candidate**; it intentionally retains the RC65 runtime identity until the pinned gate, matching Functions/Hosting deployment, and browser matrix are complete. B1J keeps Training Camp progressive while removing the mandatory quiz gate, preserves the exact shift and drill when a manager opens the full Scoring Guide, and corrects the example schedule so Game 4 is the missed/injured marker. The B1J.2 hotfix portals Hockey Term definitions to the real visual viewport on desktop and mobile and removes duplicated `.git` history from packaged ZIPs while preserving the exact release commit through a tiny `.rinkrat-source-revision` fallback.
 
-Operations API contract v1 from O1G remains unchanged. That means this browser-only RC59 release requires Hosting only; the maintained private-season, incident, research, and privacy Functions do not need another deployment merely because the Release Candidate label changed. Formal Private Season approval remains tied to one exact release and build, local writes remain blocked, and incompatible operations, scoring, or projection contracts still fail closed.
+The original RC65 archive was not release-complete: it omitted the `verify:batchb1j` script and did not package the full B1J source. The corrected RC65 source includes the inherited verification chain, current freeze/tag identity, the complete manager-facing changes, and focused packaging-integrity tests. Do not deploy the superseded archive.
 
-Production Scoring V4 from V4A remains unchanged. V4 keeps every forward and defense scoring value unchanged and rebalances only the Team Goalie Unit: lower participation/save background points, stronger win and shutout value, a wider continuous save-quality curve, and no per-game cap. RC49 saved read-only matchups, the installable PWA shell, A1I **Coach's Briefing**, exact-position default Roster Fit, Power Rankings, League Wire, and every other established manager surface remain intact.
+This source tree also contains the **RC66 / Beta Batch B1K implementation candidate** built on that corrected RC65 baseline. B1K changes post-Training-Camp verification to a deliberate manual first send with a truthful resend countdown, adds cleanup-aware Sign out to desktop and mobile global navigation, extends one listener-free league quick-navigation component across all seven destinations it names, and adds one concise explanation of why six-game matchups reduce schedule luck and daily micromanagement. The candidate intentionally retains the RC65 runtime/freeze identity until the pinned gate, clean builds, Functions-plus-Hosting deployment plan, and real-browser matrix pass. See [`docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md`](docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md).
 
-Existing leagues do not switch scoring merely because Functions were deployed. V4A includes a guarded dry-run/apply migration, a read-only inspector, a projection hash-schema bump that includes the scoring version, and a hard projection-generation guard until the league is explicitly on Scoring V4. Completed cycle/window documents are never rewritten by the migration.
+The durable global navbar is now limited to Dashboard, Create League, Join League, Scoring Guide, Support, and Account. League-specific navigation lives on league pages. My Team and Matchup share one reusable league quick-navigation surface, and Matchup provides a direct **My Team** action instead of linking back to itself.
 
-V4A.1 is a compiler-only hotfix for the RC50 source package. It restores the missing `CURRENT_SCORING_RULES_VERSION` import used by League HQ when validating a last-good Draft projection snapshot. It changes no scoring value, projection formula, migration rule, Firestore behavior, or deployed release identity.
+The Draft Room now releases its board, clock, teams, queue, and live listener state without waiting for projection rankings. Rankings load inside their own panel; after four seconds the panel explains the delay and offers **Retry Rankings**. Each retry supersedes the prior browser request, while the existing server-authoritative snapshot identity, SHA-256, Projection V11, and scoring-version checks remain mandatory.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The current verification command is `npm run verify:batcho1i`.
+B1I's one-at-a-time lessons, simplified six-game explanation, collapsed fantasy-football comparison, viewport-safe position definitions, and readable Training Camp numerals remain intact. B1H's persistent navigation shell, history-aware Back controls, clearer **Open Current Matchup** label, and Draft entry recovery also remain intact.
+
+RC65/B1J is a **Hosting-only** release. The RC62 B1G Firestore Rules and Functions remain required for Training-Camp-first verification and invite continuation. B1J changes no Firestore Rule, index, TTL policy, Function source, Production Scoring V4 value, Projection V11 calculation, immutable six-game window, seventh-game rollover, App Check mode, scoring-queue mode, or shared NHL-cache authority.
+
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The frozen RC65 verification command remains `npm run verify:batchb1j`; the new implementation-candidate gate is `npm run verify:batchb1k`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -141,6 +152,12 @@ verify:batcho1f
 verify:batcho1g
 verify:batcho1h
 verify:batcho1i
+verify:batchb1e
+verify:batchb1f
+verify:batchb1g
+verify:batchb1h
+verify:batchb1i
+verify:batchb1j
 ```
 
 RinkRat pins:
@@ -163,7 +180,7 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1i
+npm run verify:batchb1j
 ```
 
 After verification and a clean commit:
@@ -900,3 +917,12 @@ Deployment: Hosting only.
 ## Operations Batch O1I.1 — TypeScript 6 Isolated Compile Hotfix
 
 O1I.1 changes the calculator regression harness from direct source-file arguments to a temporary `tsconfig.json` invoked through `tsc --project`. This preserves strict semantic checking and avoids TypeScript 6 TS5112. It changes no runtime source and requires no Firebase deployment by itself. Because the original O1I verification stopped before deployment, complete `npm run verify:batcho1i`, build RC59, and deploy Hosting once the verification passes.
+
+## Current Beta Release — RC65 / B1J
+
+Release Candidate 65 focuses on new-manager usability: exact return from the Scoring Guide to Training Camp, progressive lessons without a quiz gate, a six-destination global navbar, shared My Team/Matchup league navigation, and Draft Room rendering that no longer waits for projection rankings. See `docs/releases/RC65_B1J_TUTORIAL_NAV_DRAFT_READINESS.md` for safeguards and the browser acceptance matrix.
+
+## Implementation Candidate — RC66 / B1K
+
+B1K contains the observed-playtest flow fixes requested after RC65: explicit first verification-email sending, truthful server cooldown state, global Sign out, seven-destination shared league navigation, and a compact six-game fairness rationale. Run `npm run verify:batchb1k` with Node 22.23.1 and npm 11.17.0, complete both builds and the browser matrix, then advance the runtime/freeze identity and deploy matching Functions plus Hosting together. See `docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md`.
+

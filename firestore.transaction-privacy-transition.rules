@@ -388,7 +388,13 @@ service cloud.firestore {
               data.trainingCampVersion >= 0 &&
               data.trainingCampVersion <= 10)) &&
           (!data.keys().hasAny(['trainingCampCompletedAt']) ||
-            data.trainingCampCompletedAt is timestamp);
+            data.trainingCampCompletedAt is timestamp) &&
+          (!data.keys().hasAny(['trainingCampDeferredVersion']) ||
+            (data.trainingCampDeferredVersion is int &&
+              data.trainingCampDeferredVersion >= 0 &&
+              data.trainingCampDeferredVersion <= 10)) &&
+          (!data.keys().hasAny(['trainingCampDeferredAt']) ||
+            data.trainingCampDeferredAt is timestamp);
       }
 
       function validUserProfileUpdate() {
@@ -404,7 +410,9 @@ service cloud.firestore {
             'injuryEmailEnabled',
             'hockeyExperience',
             'trainingCampVersion',
-            'trainingCampCompletedAt'
+            'trainingCampCompletedAt',
+            'trainingCampDeferredVersion',
+            'trainingCampDeferredAt'
           ]) &&
           (!changedFields.hasAny(['username']) ||
             validUsername(request.resource.data.username)) &&

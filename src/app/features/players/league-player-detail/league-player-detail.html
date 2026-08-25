@@ -4,9 +4,10 @@
     [routerLink]="openedFromDecisionHistory
       ? ['/leagues', leagueId, 'decision-history']
       : ['/leagues', leagueId, 'players']"
-    [attr.aria-label]="openedFromDecisionHistory ? 'Back to Decision History' : 'Back to Add / Drop'"
+    aria-label="Back to the previous RinkRat page"
+    data-rinkrat-history-back
   >
-    {{ openedFromDecisionHistory ? 'Back to Decision History' : 'Back to Add / Drop' }}
+    Back
   </a>
 
   @if (loading()) {

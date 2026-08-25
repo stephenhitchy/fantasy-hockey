@@ -124,6 +124,7 @@ function sanitizeRoute(value: unknown): string {
   const route = asString(value, 300).split(/[?#]/)[0] || '/';
 
   return route
+    .replace(/\/join\/[^/]+/gi, '/join/:inviteCode')
     .replace(/\/leagues\/[^/]+/gi, '/leagues/:leagueId')
     .replace(/\/players\/[^/]+/gi, '/players/:playerId')
     .replace(/\/matchups\/[^/]+/gi, '/matchups/:matchupId')

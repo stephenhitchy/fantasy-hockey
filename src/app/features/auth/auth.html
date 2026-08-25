@@ -1,3 +1,5 @@
+<app-navbar></app-navbar>
+
 <section class="pixel-auth-page">
   <div class="pixel-logo-ribbon top-ribbon" aria-hidden="true">
     <div class="ribbon-track ribbon-track-left">
@@ -33,6 +35,26 @@
       </div>
 
       <div class="card-body">
+        @if (inviteContinuationActive()) {
+          <section class="pending-invite-banner" aria-live="polite">
+            <div>
+              <span class="pending-invite-kicker">League Invitation Saved</span>
+              <strong>Sign in or create an account to continue</strong>
+              <p>
+                RinkRat will return to invite code <b>{{ pendingInviteCode() }}</b> after the required account steps.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="pending-invite-cancel"
+              (click)="cancelInviteContinuation()"
+              [disabled]="loading()"
+            >
+              Cancel
+            </button>
+          </section>
+        }
+
         <form
           class="auth-form"
           (ngSubmit)="submit()"

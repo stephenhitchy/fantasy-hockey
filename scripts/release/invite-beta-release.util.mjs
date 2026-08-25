@@ -30,7 +30,7 @@ export function validateInviteBetaValidationReport(report, liveManifest) {
   const gate = report?.launchGate;
   const reportBuild = report?.build;
 
-  if (report?.schemaVersion !== 2 || report?.reportType !== 'rinkrat-invite-beta-validation') {
+  if (report?.schemaVersion !== 4 || report?.reportType !== 'rinkrat-invite-beta-validation') {
     issues.push('The file is not a supported RinkRat invite-beta validation report.');
   }
 
@@ -95,10 +95,11 @@ export function validateInviteBetaValidationReport(report, liveManifest) {
 }
 
 export function formatRollbackPlan(record) {
-  const tag = record?.git?.tag ?? 'rinkrat-rc59-invite-beta';
+  const tag = record?.git?.tag ?? 'rinkrat-rc65-invite-beta';
   const projectId = record?.firebase?.projectId ?? 'nhl-fantasy-app-ab673';
   const hostingTarget = record?.firebase?.hostingTarget ?? 'app';
-  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 59';
+  const releaseLabel = record?.release?.releaseLabel ?? 'Release Candidate 65';
+  const verificationCommand = record?.verification?.command ?? 'npm run verify:batchb1j';
 
   return `# RinkRat Invite-Beta Rollback Plan\n\n` +
     `**Frozen release:** ${releaseLabel}\n\n` +
@@ -120,7 +121,7 @@ export function formatRollbackPlan(record) {
     `npm install -g npm@${record?.toolchain?.npm ?? '11.17.0'}\n` +
     `npm ci\n` +
     `npm --prefix functions ci\n` +
-    `npm run verify:batchs3e\n` +
+    `${verificationCommand}\n` +
     `npm run build:all\n` +
     `firebase use ${projectId}\n` +
     `firebase deploy --only functions -m "Rollback to ${releaseLabel}"\n` +

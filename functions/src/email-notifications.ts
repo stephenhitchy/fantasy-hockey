@@ -24,6 +24,7 @@ const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const PASSWORD_RESET_COOLDOWN_SECONDS = 120;
 const VERIFICATION_COOLDOWN_SECONDS = 120;
+const CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION = 1;
 const TEST_INJURY_EMAIL_COOLDOWN_SECONDS = 60;
 const INJURY_BATCH_DELAY_MILLISECONDS = 15 * 60 * 1000;
 const INJURY_MAX_BATCH_HOLD_MILLISECONDS = 30 * 60 * 1000;
@@ -56,6 +57,12 @@ class TransactionalEmailDeliveryError extends Error {
     super(`Email provider rejected the request with status ${status}.`);
     this.name = 'TransactionalEmailDeliveryError';
   }
+}
+
+function isPreviouslyAcceptedIdempotentDelivery(error: unknown): boolean {
+  return error instanceof TransactionalEmailDeliveryError &&
+    error.status === 409 &&
+    /invalid_idempotent_request/i.test(error.responseText);
 }
 
 interface ActiveRosterPlayer {
@@ -111,6 +118,29 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function asInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) ? value : 0;
+}
+
+function hasReleasedOnboardingVerification(profile: DocumentData): boolean {
+  return asInteger(profile['trainingCampVersion']) >=
+      CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION ||
+    asInteger(profile['trainingCampDeferredVersion']) >=
+      CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION;
+}
+
+function hasOnboardingEmailHistory(profile: DocumentData): boolean {
+  return Boolean(
+    profile['welcomeEmailSentAt'] ||
+    profile['lastVerificationEmailSentAt'],
+  );
+}
+
+function isManualVerificationEmailReady(profile: DocumentData): boolean {
+  return asString(profile['welcomeEmailStatus']) === 'ready-for-manual-send' ||
+    Boolean(profile['verificationEmailReadyAt']);
 }
 
 function escapeHtml(value: string): string {
@@ -272,10 +302,48 @@ function buildActionCodeSettings() {
   };
 }
 
-async function claimRateLimit(
+interface EmailRateLimitState {
+  accepted: boolean;
+  retryAfterSeconds: number;
+  nextAllowedAtMillis: number;
+}
+
+function buildEmailRateLimitState(
+  lastRequestedMillis: number,
+  cooldownSeconds: number,
+  nowMillis: number = Date.now(),
+): EmailRateLimitState {
+  const nextAllowedAtMillis = lastRequestedMillis > 0
+    ? lastRequestedMillis + cooldownSeconds * 1_000
+    : 0;
+  const retryAfterSeconds = nextAllowedAtMillis > nowMillis
+    ? Math.ceil((nextAllowedAtMillis - nowMillis) / 1_000)
+    : 0;
+
+  return {
+    accepted: retryAfterSeconds === 0,
+    retryAfterSeconds,
+    nextAllowedAtMillis: retryAfterSeconds > 0 ? nextAllowedAtMillis : 0,
+  };
+}
+
+async function getRateLimitState(
   key: string,
   cooldownSeconds: number,
-): Promise<boolean> {
+): Promise<EmailRateLimitState> {
+  const snapshot = await db.doc(`systemEmailRateLimits/${key}`).get();
+  const lastRequestedAt = snapshot.data()?.['lastRequestedAt'];
+  const lastRequestedMillis = lastRequestedAt instanceof Timestamp
+    ? lastRequestedAt.toMillis()
+    : getTimestampMillis(lastRequestedAt);
+
+  return buildEmailRateLimitState(lastRequestedMillis, cooldownSeconds);
+}
+
+async function claimRateLimitWithState(
+  key: string,
+  cooldownSeconds: number,
+): Promise<EmailRateLimitState> {
   const reference = db.doc(`systemEmailRateLimits/${key}`);
 
   return db.runTransaction(async (transaction) => {
@@ -283,11 +351,16 @@ async function claimRateLimit(
     const lastRequestedAt = snapshot.data()?.['lastRequestedAt'];
     const lastRequestedMillis = lastRequestedAt instanceof Timestamp
       ? lastRequestedAt.toMillis()
-      : 0;
+      : getTimestampMillis(lastRequestedAt);
     const now = Date.now();
+    const currentState = buildEmailRateLimitState(
+      lastRequestedMillis,
+      cooldownSeconds,
+      now,
+    );
 
-    if (lastRequestedMillis > 0 && now - lastRequestedMillis < cooldownSeconds * 1000) {
-      return false;
+    if (!currentState.accepted) {
+      return currentState;
     }
 
     transaction.set(
@@ -299,8 +372,19 @@ async function claimRateLimit(
       { merge: true },
     );
 
-    return true;
+    return {
+      accepted: true,
+      retryAfterSeconds: 0,
+      nextAllowedAtMillis: now + cooldownSeconds * 1_000,
+    };
   });
+}
+
+async function claimRateLimit(
+  key: string,
+  cooldownSeconds: number,
+): Promise<boolean> {
+  return (await claimRateLimitWithState(key, cooldownSeconds)).accepted;
 }
 
 async function releaseRateLimit(key: string): Promise<void> {
@@ -351,21 +435,135 @@ async function sendVerificationEmail(
     footer: 'This is a transactional account message from RinkRat Fantasy. Injury alerts remain disabled until you enable them in Account Settings.',
   });
 
-  await sendTransactionalEmail({
-    to: email,
-    subject,
-    text,
-    html,
-    category,
-  });
+  try {
+    await sendTransactionalEmail({
+      to: email,
+      subject,
+      text,
+      html,
+      category,
+      ...(isWelcome
+        ? { idempotencyKey: `welcome-verification-${userId}` }
+        : {}),
+    });
+  } catch (error: unknown) {
+    if (!isWelcome || !isPreviouslyAcceptedIdempotentDelivery(error)) {
+      throw error;
+    }
+
+    console.info('Reconciled a previously accepted welcome-verification email delivery.', {
+      userId,
+    });
+  }
 
   await db.doc(`users/${userId}`).set(
     {
       lastVerificationEmailSentAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(isWelcome
+        ? {
+            welcomeEmailSentAt: FieldValue.serverTimestamp(),
+            welcomeEmailProvider: 'resend',
+            welcomeEmailStatus: 'sent',
+            welcomeEmailDeferredAt: FieldValue.delete(),
+          }
+        : {}),
     },
     { merge: true },
   );
+}
+
+async function sendVerifiedWelcomeEmail(
+  userId: string,
+  email: string,
+  username: string,
+): Promise<void> {
+  const appUrl = `${getAppBaseUrl()}/dashboard`;
+  const safeName = username || 'Manager';
+
+  try {
+    await sendTransactionalEmail({
+      to: email,
+      subject: 'Welcome to RinkRat Fantasy',
+      text: [
+        `Hi ${safeName},`,
+        '',
+        'Your RinkRat Fantasy account was created successfully.',
+        '',
+        `Open RinkRat Fantasy: ${appUrl}`,
+      ].join('\n'),
+      html: buildEmailShell({
+        eyebrow: 'Account Created',
+        heading: `Welcome, ${safeName}`,
+        intro: 'Your RinkRat Fantasy account was created successfully.',
+        bodyHtml: '<p style="margin:0;">You can now create a league, join with an invite code, and manage your fantasy roster.</p>',
+        buttonLabel: 'Open RinkRat Fantasy',
+        buttonUrl: appUrl,
+        footer: 'Optional injury emails remain disabled until you enable them in Account Settings.',
+      }),
+      category: 'welcome',
+      idempotencyKey: `welcome-verified-${userId}`,
+    });
+  } catch (error: unknown) {
+    if (!isPreviouslyAcceptedIdempotentDelivery(error)) {
+      throw error;
+    }
+
+    console.info('Reconciled a previously accepted verified welcome email delivery.', {
+      userId,
+    });
+  }
+
+  await db.doc(`users/${userId}`).set(
+    {
+      welcomeEmailSentAt: FieldValue.serverTimestamp(),
+      welcomeEmailProvider: 'resend',
+      welcomeEmailStatus: 'sent',
+      welcomeEmailDeferredAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function markInitialAccountEmailReady(
+  userId: string,
+  profile: DocumentData,
+): Promise<boolean> {
+  if (
+    hasOnboardingEmailHistory(profile) ||
+    isManualVerificationEmailReady(profile) ||
+    !hasReleasedOnboardingVerification(profile)
+  ) {
+    return false;
+  }
+
+  const user = await getAuth().getUser(userId);
+
+  if (!user.email) {
+    return false;
+  }
+
+  if (user.emailVerified) {
+    await sendVerifiedWelcomeEmail(
+      userId,
+      user.email,
+      asString(profile['username']) || 'Manager',
+    );
+    return true;
+  }
+
+  await db.doc(`users/${userId}`).set(
+    {
+      welcomeEmailStatus: 'ready-for-manual-send',
+      verificationEmailReadyAt: FieldValue.serverTimestamp(),
+      welcomeEmailDeferredAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return true;
 }
 
 function getTimestampMillis(value: unknown): number {
@@ -1752,36 +1950,116 @@ export const resendVerificationEmail = onCall(
       throw new HttpsError('unauthenticated', 'You must be logged in.');
     }
 
-    const allowed = await claimRateLimit(
-      `verification-${userId}`,
-      VERIFICATION_COOLDOWN_SECONDS,
-    );
-
-    if (!allowed) {
-      return { accepted: true, alreadyVerified: false };
-    }
-
-    const user = await getAuth().getUser(userId);
+    const [user, profileSnapshot] = await Promise.all([
+      getAuth().getUser(userId),
+      db.doc(`users/${userId}`).get(),
+    ]);
 
     if (!user.email) {
       throw new HttpsError('failed-precondition', 'This account does not have an email address.');
     }
 
+    const profile = profileSnapshot.data() ?? {};
+    const username = asString(profile['username']) || 'Manager';
+    const onboardingResolved = hasReleasedOnboardingVerification(profile);
+    const profileShowsEmailHistory = hasOnboardingEmailHistory(profile);
+    const rateLimitKey = `verification-${userId}`;
+    const action = asString(asRecord(request.data)['action']) === 'status'
+      ? 'status'
+      : 'send';
+    const currentRateLimit = await getRateLimitState(
+      rateLimitKey,
+      VERIFICATION_COOLDOWN_SECONDS,
+    );
+    const emailPreviouslySent =
+      profileShowsEmailHistory || !currentRateLimit.accepted;
+
+    const buildResponse = (input: {
+      outcome: 'ready' | 'sent' | 'cooldown' | 'already-verified' | 'blocked';
+      firstSend?: boolean;
+      cooldownSecondsRemaining?: number;
+      nextAllowedAtMillis?: number;
+      previouslySent?: boolean;
+    }) => ({
+      accepted: true,
+      alreadyVerified: user.emailVerified,
+      outcome: input.outcome,
+      eligible: onboardingResolved || user.emailVerified,
+      emailPreviouslySent: input.previouslySent ?? emailPreviouslySent,
+      firstSend: input.firstSend ?? false,
+      cooldownSecondsRemaining: input.cooldownSecondsRemaining ?? 0,
+      nextAllowedAtMillis: input.nextAllowedAtMillis ?? 0,
+    });
+
     if (user.emailVerified) {
-      return { accepted: true, alreadyVerified: true };
+      if (action === 'send' && !profileShowsEmailHistory) {
+        await sendVerifiedWelcomeEmail(userId, user.email, username);
+      }
+
+      return buildResponse({
+        outcome: 'already-verified',
+        previouslySent: profileShowsEmailHistory,
+      });
     }
 
-    const profileSnapshot = await db.doc(`users/${userId}`).get();
-    const username = asString(profileSnapshot.data()?.['username']) || 'Manager';
+    if (!onboardingResolved) {
+      if (action === 'send') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Finish Training Camp or choose Finish Later before requesting email verification.',
+        );
+      }
 
-    await sendVerificationEmail(
-      userId,
-      user.email,
-      username,
-      'verification-resend',
+      return buildResponse({ outcome: 'blocked' });
+    }
+
+    if (action === 'status') {
+      if (!currentRateLimit.accepted) {
+        return buildResponse({
+          outcome: 'cooldown',
+          cooldownSecondsRemaining: currentRateLimit.retryAfterSeconds,
+          nextAllowedAtMillis: currentRateLimit.nextAllowedAtMillis,
+          previouslySent: true,
+        });
+      }
+
+      return buildResponse({ outcome: 'ready' });
+    }
+
+    const firstSend = !profileShowsEmailHistory;
+    const claimedRateLimit = await claimRateLimitWithState(
+      rateLimitKey,
+      VERIFICATION_COOLDOWN_SECONDS,
     );
 
-    return { accepted: true, alreadyVerified: false };
+    if (!claimedRateLimit.accepted) {
+      return buildResponse({
+        outcome: 'cooldown',
+        cooldownSecondsRemaining: claimedRateLimit.retryAfterSeconds,
+        nextAllowedAtMillis: claimedRateLimit.nextAllowedAtMillis,
+        previouslySent: true,
+      });
+    }
+
+    try {
+      await sendVerificationEmail(
+        userId,
+        user.email,
+        username,
+        firstSend ? 'welcome-verification' : 'verification-resend',
+      );
+    } catch (error: unknown) {
+      await releaseRateLimit(rateLimitKey).catch(() => undefined);
+      throw error;
+    }
+
+    return buildResponse({
+      outcome: 'sent',
+      firstSend,
+      cooldownSecondsRemaining: VERIFICATION_COOLDOWN_SECONDS,
+      nextAllowedAtMillis: claimedRateLimit.nextAllowedAtMillis,
+      previouslySent: true,
+    });
   },
 );
 
@@ -1801,12 +2079,6 @@ export const sendWelcomeEmailOnProfileCreated = onDocumentCreated(
       return;
     }
 
-    const profile = snapshot.data();
-
-    if (profile['welcomeEmailSentAt']) {
-      return;
-    }
-
     const userId = resolveSafeFirestoreDocumentId(
       event.params.userId,
       FIRESTORE_AUTH_USER_ID_OPTIONS,
@@ -1817,47 +2089,77 @@ export const sendWelcomeEmailOnProfileCreated = onDocumentCreated(
       return;
     }
 
-    const user = await getAuth().getUser(userId);
+    // The create-event snapshot can be stale if a very fast manager finishes or
+    // exits Training Camp before this retryable trigger runs. Re-read the current
+    // profile so an older creation event never puts an already-released account
+    // back into the waiting state.
+    const currentSnapshot = await db.doc(`users/${userId}`).get();
+    const profile = currentSnapshot.data() ?? snapshot.data();
 
-    if (!user.email) {
+    if (hasOnboardingEmailHistory(profile)) {
       return;
     }
 
-    const username = asString(profile['username']) || 'Manager';
-
-    if (user.emailVerified) {
-      const appUrl = `${getAppBaseUrl()}/dashboard`;
-      await sendTransactionalEmail({
-        to: user.email,
-        subject: 'Welcome to RinkRat Fantasy',
-        text: `Hi ${username},\n\nYour RinkRat Fantasy account was created successfully.\n\nOpen RinkRat Fantasy: ${appUrl}`,
-        html: buildEmailShell({
-          eyebrow: 'Account Created',
-          heading: `Welcome, ${username}`,
-          intro: 'Your RinkRat Fantasy account was created successfully.',
-          bodyHtml: '<p style="margin:0;">You can now create a league, join with an invite code, and manage your fantasy roster.</p>',
-          buttonLabel: 'Open RinkRat Fantasy',
-          buttonUrl: appUrl,
-          footer: 'Optional injury emails remain disabled until you enable them in Account Settings.',
-        }),
-        category: 'welcome',
-      });
-    } else {
-      await sendVerificationEmail(
-        userId,
-        user.email,
-        username,
-        'welcome-verification',
-      );
+    if (hasReleasedOnboardingVerification(profile)) {
+      await markInitialAccountEmailReady(userId, profile);
+      return;
     }
 
-    await snapshot.ref.set(
+    await currentSnapshot.ref.set(
       {
-        welcomeEmailSentAt: FieldValue.serverTimestamp(),
-        welcomeEmailProvider: 'resend',
+        welcomeEmailStatus: 'waiting-for-training-camp',
+        welcomeEmailDeferredAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
+  },
+);
+
+export const sendWelcomeEmailAfterTrainingCampResolved = onDocumentWritten(
+  {
+    document: 'users/{userId}',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    retry: true,
+    secrets: [RESEND_API_KEY],
+  },
+  async (event) => {
+    const snapshot = event.data?.after;
+
+    if (!snapshot?.exists) {
+      return;
+    }
+
+    const profile = snapshot.data();
+
+    // Firestore's DocumentSnapshot.data() remains typed as possibly undefined
+    // even after exists is checked. Keep the runtime guard so strict Functions
+    // builds and any malformed trigger payload both fail closed.
+    if (!profile) {
+      console.warn('Ignored Training Camp email trigger without profile data.');
+      return;
+    }
+
+    if (
+      hasOnboardingEmailHistory(profile) ||
+      !hasReleasedOnboardingVerification(profile)
+    ) {
+      return;
+    }
+
+    const userId = resolveSafeFirestoreDocumentId(
+      event.params.userId,
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    );
+
+    if (!userId) {
+      console.warn('Ignored malformed Training Camp email trigger.');
+      return;
+    }
+
+    await markInitialAccountEmailReady(userId, profile);
   },
 );
 

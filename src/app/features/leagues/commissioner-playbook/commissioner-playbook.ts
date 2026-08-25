@@ -17,6 +17,7 @@ import {
   type CommissionerChecklistState,
 } from '../../../core/league/commissioner-playbook.util';
 import { getLeagueById, type League } from '../../../core/league/league.service';
+import { buildLeagueInviteUrl } from '../../../core/league/invite-link-intent.service';
 import {
   getScheduledStartDate,
   listenToFantasyDraft,
@@ -278,6 +279,16 @@ export class CommissionerPlaybook implements OnDestroy {
     this.copyMessage.set('Draft-night checklist reset on this device.');
   }
 
+  async copyInviteLink(): Promise<void> {
+    const inviteUrl = buildLeagueInviteUrl(this.league()?.inviteCode);
+
+    if (!inviteUrl) {
+      return;
+    }
+
+    await this.copyText(inviteUrl, 'Invite link copied.');
+  }
+
   async copyInviteMessage(): Promise<void> {
     const league = this.league();
     if (!league) {
@@ -288,6 +299,7 @@ export class CommissionerPlaybook implements OnDestroy {
       buildCommissionerInviteMessage({
         leagueName: league.name,
         inviteCode: league.inviteCode,
+        inviteUrl: buildLeagueInviteUrl(league.inviteCode),
         draftTimeLabel: this.draftTimeLabel(),
         managerCount: this.teams().length,
         maximumTeams: league.maxTeams,

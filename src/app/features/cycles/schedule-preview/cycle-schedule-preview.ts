@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 
@@ -46,7 +47,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-schedule-preview',
-  imports: [RouterLink, ManagerAvatar],
+  imports: [RouterLink, ManagerAvatar, LeagueQuickNavigation],
   templateUrl: './cycle-schedule-preview.html',
   styleUrl: './cycle-schedule-preview.css',
 })
@@ -79,6 +80,22 @@ export class CycleSchedulePreview implements OnDestroy {
   );
 
   readonly selectedTeamName = computed(() => this.getTeamName(this.selectedOwnerId()));
+
+  readonly currentCycleNumber = computed(() => {
+    const cycles = Object.values(this.existingCycles()).filter(
+      (cycle): cycle is FantasyCycle => Boolean(cycle),
+    );
+    const activeCycle = cycles.find((cycle) => cycle.status === 'active');
+
+    if (activeCycle) {
+      return activeCycle.cycleNumber;
+    }
+
+    return cycles.reduce(
+      (latest, cycle) => Math.max(latest, cycle.cycleNumber),
+      1,
+    );
+  });
 
   constructor(
     private route: ActivatedRoute,

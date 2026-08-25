@@ -6,9 +6,22 @@ interface PasswordResetResponse {
   accepted: boolean;
 }
 
-interface VerificationEmailResponse {
+export type VerificationEmailOutcome =
+  | 'ready'
+  | 'sent'
+  | 'cooldown'
+  | 'already-verified'
+  | 'blocked';
+
+export interface VerificationEmailResponse {
   accepted: boolean;
   alreadyVerified: boolean;
+  outcome: VerificationEmailOutcome;
+  eligible: boolean;
+  emailPreviouslySent: boolean;
+  firstSend: boolean;
+  cooldownSecondsRemaining: number;
+  nextAllowedAtMillis: number;
 }
 
 interface TestInjuryEmailResponse {
@@ -26,14 +39,27 @@ export async function requestPasswordResetEmail(email: string): Promise<void> {
   await callable({ email });
 }
 
-export async function requestVerificationEmail(): Promise<VerificationEmailResponse> {
-  const callable = httpsCallable<Record<string, never>, VerificationEmailResponse>(
+async function callVerificationEmail(
+  action: 'status' | 'send',
+): Promise<VerificationEmailResponse> {
+  const callable = httpsCallable<
+    { action: 'status' | 'send' },
+    VerificationEmailResponse
+  >(
     functions,
     'resendVerificationEmail',
     { timeout: 35_000 },
   );
-  const result = await callable({});
+  const result = await callable({ action });
   return result.data;
+}
+
+export async function getVerificationEmailState(): Promise<VerificationEmailResponse> {
+  return callVerificationEmail('status');
+}
+
+export async function requestVerificationEmail(): Promise<VerificationEmailResponse> {
+  return callVerificationEmail('send');
 }
 
 

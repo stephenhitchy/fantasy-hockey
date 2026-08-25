@@ -123,6 +123,9 @@ import {
   type PendingDraftPickIdentity,
 } from './draft-pick-confirmation.util';
 
+const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
+const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
+
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
     return Promise.resolve(auth.currentUser);
@@ -172,7 +175,7 @@ interface PendingPickConfirmation extends PendingDraftPickIdentity {
   selector: 'app-draft-room',
   imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-room.html',
-  styleUrl: './draft-room.css',
+  styleUrls: ['./draft-room.css', './draft-room-recovery.css'],
 })
 export class DraftRoom implements OnDestroy {
   @ViewChild('draftTimelineScroller')
@@ -190,7 +193,9 @@ export class DraftRoom implements OnDestroy {
   draftQueues = signal<DraftQueue[]>([]);
 
   loading = signal(true);
+  draftLoadRecoveryVisible = signal(false);
   playerPoolLoading = signal(false);
+  projectionLoadSlow = signal(false);
   makingPickAssetKey = signal<string | null>(null);
   isCommissioner = signal(false);
   draftInjurySyncInProgress = signal(false);
@@ -664,6 +669,9 @@ export class DraftRoom implements OnDestroy {
   private pendingPickAction: CompetitiveActionHandle | null = null;
   private realtimeRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private draftHandoffCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  private initialLoadRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  private projectionLoadSlowTimer: ReturnType<typeof setTimeout> | null = null;
+  private playerPoolRequestId = 0;
   private draftHandoffAttemptedAt = 0;
   private lastDraftHandoffAttemptKey = '';
   private readonly handleBrowserOnline = () => {
@@ -1044,7 +1052,15 @@ export class DraftRoom implements OnDestroy {
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
     }
 
-    this.loadDraftRoom();
+    this.initialLoadRecoveryTimer = setTimeout(() => {
+      this.initialLoadRecoveryTimer = null;
+
+      if (!this.destroyed && this.loading()) {
+        this.draftLoadRecoveryVisible.set(true);
+      }
+    }, DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS);
+
+    void this.loadDraftRoom();
   }
 
   ngOnDestroy(): void {
@@ -1071,6 +1087,18 @@ export class DraftRoom implements OnDestroy {
       clearTimeout(this.draftHandoffCheckTimer);
     }
 
+    if (this.initialLoadRecoveryTimer) {
+      clearTimeout(this.initialLoadRecoveryTimer);
+      this.initialLoadRecoveryTimer = null;
+    }
+
+    this.playerPoolRequestId += 1;
+
+    if (this.projectionLoadSlowTimer) {
+      clearTimeout(this.projectionLoadSlowTimer);
+      this.projectionLoadSlowTimer = null;
+    }
+
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleBrowserOnline);
       window.removeEventListener('offline', this.handleBrowserOffline);
@@ -1084,6 +1112,16 @@ export class DraftRoom implements OnDestroy {
     this.stopPickListener?.();
     this.stopInjurySyncListener?.();
     this.stopQueueListener?.();
+  }
+
+  reloadDraftRoom(): void {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+      return;
+    }
+
+    this.draftLoadRecoveryVisible.set(false);
+    void this.loadDraftRoom();
   }
 
   canLeaveDraftRoom(): boolean {
@@ -1163,11 +1201,13 @@ export class DraftRoom implements OnDestroy {
 
       this.startRealtimeDraftListeners();
 
-      await this.loadPlayerPool();
-
-      if (!this.destroyed) {
-        await this.runScheduledDraftChecks();
-      }
+      // The board, clock, teams, queue, and live Draft listeners are useful
+      // without rankings. Release the page as soon as those core systems are
+      // connected, then let the immutable projection snapshot load inside its
+      // own panel.
+      this.finishInitialDraftRoomLoading();
+      void this.loadPlayerPool();
+      void this.runScheduledDraftChecks();
     } catch (error: unknown) {
       if (!this.destroyed) {
         this.errorMessage.set(
@@ -1175,11 +1215,23 @@ export class DraftRoom implements OnDestroy {
         );
       }
     } finally {
-      if (!this.destroyed) {
-        this.loading.set(false);
-        this.scheduleDraftTimelineScroll();
-      }
+      this.finishInitialDraftRoomLoading();
     }
+  }
+
+  private finishInitialDraftRoomLoading(): void {
+    if (this.initialLoadRecoveryTimer) {
+      clearTimeout(this.initialLoadRecoveryTimer);
+      this.initialLoadRecoveryTimer = null;
+    }
+
+    if (this.destroyed) {
+      return;
+    }
+
+    this.loading.set(false);
+    this.draftLoadRecoveryVisible.set(false);
+    this.scheduleDraftTimelineScroll();
   }
 
   private startRealtimeDraftListeners(): void {
@@ -2092,8 +2144,24 @@ export class DraftRoom implements OnDestroy {
   }
 
   async loadPlayerPool(): Promise<void> {
+    const requestId = ++this.playerPoolRequestId;
+
+    if (this.projectionLoadSlowTimer) {
+      clearTimeout(this.projectionLoadSlowTimer);
+      this.projectionLoadSlowTimer = null;
+    }
+
     this.playerPoolLoading.set(true);
+    this.projectionLoadSlow.set(false);
     this.playerPoolError.set('');
+
+    this.projectionLoadSlowTimer = setTimeout(() => {
+      this.projectionLoadSlowTimer = null;
+
+      if (this.isPlayerPoolRequestActive(requestId) && this.playerPoolLoading()) {
+        this.projectionLoadSlow.set(true);
+      }
+    }, DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS);
 
     try {
       const pinnedSnapshotId = this.draft()?.serverDraftProjectionSnapshotId;
@@ -2101,7 +2169,7 @@ export class DraftRoom implements OnDestroy {
         ? await loadSharedProjectionSnapshotById(this.leagueId, pinnedSnapshotId)
         : await loadSharedProjectionSnapshot(this.leagueId);
 
-      if (this.destroyed) {
+      if (!this.isPlayerPoolRequestActive(requestId)) {
         return;
       }
 
@@ -2144,16 +2212,30 @@ export class DraftRoom implements OnDestroy {
 
       this.playerPool.set(snapshot.assets);
     } catch (error: unknown) {
-      if (!this.destroyed) {
+      if (this.isPlayerPoolRequestActive(requestId)) {
         this.playerPoolError.set(
           error instanceof Error ? error.message : 'Unable to load the shared NHL player pool.',
         );
       }
     } finally {
-      if (!this.destroyed) {
+      if (this.isPlayerPoolRequestActive(requestId)) {
+        if (this.projectionLoadSlowTimer) {
+          clearTimeout(this.projectionLoadSlowTimer);
+          this.projectionLoadSlowTimer = null;
+        }
+
+        this.projectionLoadSlow.set(false);
         this.playerPoolLoading.set(false);
       }
     }
+  }
+
+  retryPlayerPool(): void {
+    void this.loadPlayerPool();
+  }
+
+  private isPlayerPoolRequestActive(requestId: number): boolean {
+    return !this.destroyed && requestId === this.playerPoolRequestId;
   }
 
   getDraftInjurySyncStatusLabel(): string {

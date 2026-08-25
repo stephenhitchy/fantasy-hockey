@@ -86,6 +86,7 @@ export function getCommissionerChecklistProgress(
 export interface CommissionerMessageInput {
   leagueName: string;
   inviteCode: string;
+  inviteUrl?: string;
   draftTimeLabel: string;
   managerCount: number;
   maximumTeams: number;
@@ -98,6 +99,7 @@ export function buildCommissionerInviteMessage(input: CommissionerMessageInput):
 
   return [
     `Join ${input.leagueName} on RinkRat Fantasy.`,
+    ...(input.inviteUrl ? [`Join link: ${input.inviteUrl}`] : []),
     `Invite code: ${input.inviteCode}`,
     draftLine,
     `${input.managerCount} of ${input.maximumTeams} teams have joined.`,

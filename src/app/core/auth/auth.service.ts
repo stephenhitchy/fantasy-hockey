@@ -71,6 +71,7 @@ export async function registerUser(
         injuryEmailEnabled: false,
         hockeyExperience,
         trainingCampVersion: 0,
+        trainingCampDeferredVersion: 0,
       }),
       15_000,
       'Your login was created, but the manager profile took too long to save.',

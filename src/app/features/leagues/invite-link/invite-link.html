@@ -1,0 +1,223 @@
+<app-navbar></app-navbar>
+
+<section class="invite-link-page">
+  <div class="invite-link-shell">
+    <header class="invite-link-brand">
+      <img src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot" />
+      <div>
+        <span class="eyebrow">RinkRat Fantasy</span>
+        <strong>League Invitation</strong>
+      </div>
+    </header>
+
+    <article class="invite-link-card" [attr.aria-busy]="stage() === 'loading' || stage() === 'joining'">
+      <div class="invite-card-heading">
+        <span class="invite-puck" aria-hidden="true">RR</span>
+        <div>
+          <span class="eyebrow">You Were Invited</span>
+          <h1>Join a fantasy hockey league</h1>
+        </div>
+      </div>
+
+      @switch (stage()) {
+        @case ('loading') {
+          <div class="invite-state" aria-live="polite">
+            <span class="pixel-icon icon-loading icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Opening your invitation...</strong>
+              <p>Checking this browser for a saved sign-in or onboarding step.</p>
+            </div>
+          </div>
+        }
+
+        @case ('ready') {
+          <p class="invite-summary">
+            Continue with one deliberate click. RinkRat will remember this invitation while you
+            sign in, create an account, finish or exit Training Camp, and verify your email.
+          </p>
+
+          <div class="invite-code-panel">
+            <span>Invite code</span>
+            <strong>{{ inviteCode() }}</strong>
+          </div>
+
+          <button type="button" class="invite-primary" (click)="beginJoin()">
+            Join League
+          </button>
+
+          <p class="scanner-safety-note">
+            Opening this page never joins you automatically. Membership starts only after you press
+            Join League and complete the required account steps.
+          </p>
+        }
+
+        @case ('sign-in') {
+          <div class="invite-state">
+            <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Your invitation is saved</strong>
+              <p>Sign in or create an account. RinkRat will bring you back here automatically.</p>
+            </div>
+          </div>
+
+          <button type="button" class="invite-primary" (click)="openAuthentication()">
+            Sign In or Create Account
+          </button>
+          <button type="button" class="invite-secondary" (click)="cancelInvite()">
+            Cancel Invitation
+          </button>
+        }
+
+        @case ('account-mismatch') {
+          <div class="invite-state warning">
+            <span class="pixel-icon icon-warning icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Choose the account for this league</strong>
+              <p>
+                This invitation was started under a different RinkRat account. Nothing has been
+                joined yet.
+              </p>
+            </div>
+          </div>
+
+          <button type="button" class="invite-primary" (click)="joinWithCurrentAccount()">
+            Join With This Account
+          </button>
+          <button type="button" class="invite-secondary" (click)="useAnotherAccount()">
+            Use Another Account
+          </button>
+          <button type="button" class="invite-text-button" (click)="cancelInvite()">
+            Cancel Invitation
+          </button>
+        }
+
+        @case ('training-camp') {
+          <div class="invite-state">
+            <span class="pixel-icon icon-whistle icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Training Camp comes first</strong>
+              <p>
+                Finish the five-shift tutorial or choose Finish Later. RinkRat will then let you
+                send the first verification email yourself before this saved invitation resumes.
+              </p>
+            </div>
+          </div>
+
+          <button type="button" class="invite-primary" (click)="continueTrainingCamp()">
+            Continue Training Camp
+          </button>
+          <button type="button" class="invite-secondary" (click)="cancelInvite()">
+            Cancel Invitation
+          </button>
+        }
+
+        @case ('verification') {
+          <div class="invite-state">
+            <span class="pixel-icon icon-mail icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Verify your email to join</strong>
+              <p>
+                Training Camp is saved.
+                @if (verificationEmailPreviouslySent()) {
+                  Open the latest verification email sent to <b>{{ verificationEmail() }}</b>, then return here.
+                } @else {
+                  Click below to send the first verification email to <b>{{ verificationEmail() }}</b>, open the link, then return here.
+                }
+              </p>
+            </div>
+          </div>
+
+          <div class="verification-actions">
+            <button
+              type="button"
+              class="invite-primary"
+              (click)="sendVerificationEmail()"
+              [disabled]="verificationSendDisabled()"
+            >
+              {{ verificationSendButtonLabel() }}
+            </button>
+            <button
+              type="button"
+              class="invite-secondary"
+              (click)="refreshVerificationStatus()"
+              [disabled]="sendingVerification() || refreshingVerification()"
+            >
+              {{ refreshingVerification() ? 'Checking...' : 'I Verified — Continue' }}
+            </button>
+          </div>
+
+          <button type="button" class="invite-text-button" (click)="useAnotherAccount()">
+            Use Another Account
+          </button>
+          <button type="button" class="invite-text-button" (click)="cancelInvite()">
+            Cancel Invitation
+          </button>
+        }
+
+        @case ('joining') {
+          <div class="invite-state" aria-live="polite">
+            <span class="pixel-icon icon-loading icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Joining your league...</strong>
+              <p>RinkRat is securely creating your membership, team, and empty roster.</p>
+            </div>
+          </div>
+        }
+
+        @case ('error') {
+          <div class="invite-state error" role="alert">
+            <span class="pixel-icon icon-warning icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>The invitation could not continue</strong>
+              <p>{{ errorMessage() }}</p>
+            </div>
+          </div>
+
+          @if (hasStoredIntent()) {
+            <button type="button" class="invite-primary" (click)="retry()">
+              Try Again
+            </button>
+          } @else {
+            <button type="button" class="invite-primary" (click)="beginJoin()">
+              Restart Invitation
+            </button>
+          }
+          <button type="button" class="invite-secondary" (click)="cancelInvite()">
+            Leave This Invitation
+          </button>
+        }
+
+        @case ('invalid') {
+          <div class="invite-state error" role="alert">
+            <span class="pixel-icon icon-warning icon-lg" aria-hidden="true"></span>
+            <div>
+              <strong>Invalid invitation link</strong>
+              <p>{{ errorMessage() }}</p>
+            </div>
+          </div>
+
+          <a class="invite-primary link-button" routerLink="/">Open RinkRat</a>
+          <a class="invite-secondary link-button" routerLink="/support">Get Help</a>
+        }
+      }
+
+      @if (statusMessage()) {
+        <p class="invite-notice success" role="status" aria-live="polite">
+          {{ statusMessage() }}
+        </p>
+      }
+
+      @if (errorMessage() && stage() !== 'error' && stage() !== 'invalid') {
+        <p class="invite-notice error" role="alert" aria-live="assertive">
+          {{ errorMessage() }}
+        </p>
+      }
+    </article>
+
+    <footer class="invite-link-footer">
+      <a routerLink="/support">Support</a>
+      <a routerLink="/privacy">Privacy</a>
+      <a routerLink="/terms">Terms</a>
+    </footer>
+  </div>
+</section>

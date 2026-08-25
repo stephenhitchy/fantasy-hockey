@@ -1247,6 +1247,7 @@
   font-weight: 850;
   white-space: nowrap;
 }
+.pool-loading-block,
 .pool-error-block {
   display: grid;
   justify-items: center;

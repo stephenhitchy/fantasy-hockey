@@ -272,6 +272,7 @@ export const saveManagerProfile = onCall(
                   backgroundTheme: 'rink-dark',
                   injuryEmailEnabled: false,
                   trainingCampVersion: 0,
+                  trainingCampDeferredVersion: 0,
                 }),
           },
           { merge: true },

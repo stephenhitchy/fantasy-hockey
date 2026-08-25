@@ -1,0 +1,79 @@
+<nav
+  class="league-quick-navigation"
+  [class.league-quick-navigation--compact]="compact"
+  aria-label="League navigation"
+>
+  <a
+    class="league-nav-action"
+    [class.league-nav-action--current]="isCurrent('league-hq')"
+    [attr.aria-current]="isCurrent('league-hq') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId]"
+  >
+    <span class="pixel-icon icon-league icon-sm" aria-hidden="true"></span>
+    <span>League HQ</span>
+  </a>
+
+  <a
+    class="league-nav-action league-nav-action--priority"
+    [class.league-nav-action--current]="isCurrent('players')"
+    [attr.aria-current]="isCurrent('players') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'players']"
+  >
+    <span class="pixel-icon icon-players icon-sm" aria-hidden="true"></span>
+    <span>Add / Drop Player</span>
+  </a>
+
+  <a
+    class="league-nav-action league-nav-action--priority"
+    [class.league-nav-action--current]="isCurrent('team')"
+    [attr.aria-current]="isCurrent('team') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'team']"
+  >
+    <span class="pixel-icon icon-team icon-sm" aria-hidden="true"></span>
+    <span>My Team</span>
+  </a>
+
+  @if (getCurrentMatchupRoute(); as matchupRoute) {
+    <a
+      class="league-nav-action league-nav-action--priority"
+      [class.league-nav-action--current]="isCurrent('matchup')"
+      [attr.aria-current]="isCurrent('matchup') ? 'page' : null"
+      [routerLink]="matchupRoute"
+    >
+      <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
+      <span>Current Matchup</span>
+    </a>
+  }
+
+  @if (cycleNumber !== null) {
+    <a
+      class="league-nav-action"
+      [class.league-nav-action--current]="isCurrent('matchups')"
+      [attr.aria-current]="isCurrent('matchups') ? 'page' : null"
+      [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber, 'matchups']"
+    >
+      <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
+      <span>All Current Matchups</span>
+    </a>
+  }
+
+  <a
+    class="league-nav-action"
+    [class.league-nav-action--current]="isCurrent('schedule')"
+    [attr.aria-current]="isCurrent('schedule') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
+  >
+    <span class="pixel-icon icon-schedule icon-sm" aria-hidden="true"></span>
+    <span>Full Schedule</span>
+  </a>
+
+  <a
+    class="league-nav-action"
+    [class.league-nav-action--current]="isCurrent('standings')"
+    [attr.aria-current]="isCurrent('standings') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'standings']"
+  >
+    <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
+    <span>League Standings</span>
+  </a>
+</nav>

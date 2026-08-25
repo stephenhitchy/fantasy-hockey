@@ -40,6 +40,8 @@ interface SaveQualityExample {
 })
 export class ScoringGuide {
   readonly publicGuide: boolean;
+  readonly trainingCampReturnActive: boolean;
+  readonly trainingCampReturnQueryParams: Record<string, string>;
   readonly rules = signal<ScoringRules>(defaultScoringRules);
   readonly loading = signal(false);
   readonly errorMessage = signal('');
@@ -216,6 +218,25 @@ export class ScoringGuide {
     private readonly viewportScroller: ViewportScroller,
   ) {
     this.publicGuide = this.route.snapshot.routeConfig?.path === 'scoring-guide';
+
+    const queryParams = this.route.snapshot.queryParamMap;
+    const requestedShift = queryParams.get('shift') ?? '';
+    const requestedDrill = queryParams.get('drill') ?? '';
+    const fromTrainingCamp = queryParams.get('from') === 'training-camp';
+    const validTrainingCampPosition =
+      /^[1-5]$/.test(requestedShift) && /^[1-2]$/.test(requestedDrill);
+
+    this.trainingCampReturnActive = fromTrainingCamp && validTrainingCampPosition;
+    this.trainingCampReturnQueryParams = this.trainingCampReturnActive
+      ? {
+          shift: requestedShift,
+          drill: requestedDrill,
+          ...(queryParams.get('continue') === 'league-invite'
+            ? { continue: 'league-invite' }
+            : {}),
+        }
+      : {};
+
     this.telemetry.track('scoring_guide_opened', {
       source: this.route.snapshot.paramMap.has('leagueId') ? 'league' : 'global',
     });

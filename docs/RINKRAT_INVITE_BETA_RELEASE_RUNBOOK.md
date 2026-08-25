@@ -1,12 +1,15 @@
 # RinkRat Invite-Beta Release Freeze and Rollback Runbook
 
-**Batch:** B1C
-**Runtime release being frozen:** Release Candidate 59
+**Release tooling:** B1C
+**Current product batch:** B1J
+**Runtime release being frozen:** Release Candidate 65
 **Purpose:** Turn the exact deployed beta build, Release Readiness evidence, production security posture, pinned toolchain, Git revision, and rollback order into one reviewable record before inviting the first observed cohort.
 
-B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 59 / Operations Batch O1I.1 runtime; Production Scoring V4 and Projection V11 are the frozen competition models after the guarded preseason migration.
+B1C remains the repository and release-operations tooling, and the tooling itself does not deploy or mutate production. This maintained runbook now targets the current Release Candidate 65 / Beta Batch B1J runtime; Production Scoring V4 and Projection V11 are the frozen competition models after the guarded preseason migration.
 
-O1I.1 is a verification-only TypeScript 6 correction: the isolated scoring regression now writes a temporary Node16 project and invokes `tsc --project`, avoiding TS5112 without changing runtime code.
+O1I.1 remains the verification-only TypeScript 6 correction: the isolated scoring regression writes a temporary Node16 project and invokes `tsc --project`, avoiding TS5112 without changing runtime code.
+
+B1E added scanner-safe shareable league links, one explicit join-intent action, a bounded 72-hour local continuation, account binding, Training Camp and email-verification handoff, and resumption through the existing `joinLeagueSecure` transaction. B1F made the saved manager profile authoritative on every resume. B1G / RC62 withholds the first verification email until Training Camp is completed or deliberately deferred through **Finish Later & Verify**. Either server-visible outcome releases the retryable account email and returns invite-based registrations to the same saved invitation. B1H / RC63 preserves that authority and adds persistent navigation, history-aware Back controls, priority destinations, larger My Team actions, lower injury-report copy density, and bounded Draft entry/reload recovery. B1I / RC64 replaces the instruction-heavy Training Camp with five two-drill shifts, one visible idea at a time, simpler six-game language, session-scoped progress, and one-at-a-time viewport-safe position definitions. B1J / RC65 removes the quiz gate, preserves exact return from the Scoring Guide, simplifies the global navbar, shares league navigation between My Team and Matchup, and lets the Draft Room render before ranking reads finish. Commissioners retain the six-character code fallback, and invite codes remain redacted from application telemetry, beta diagnostics, CSP route collection, and session navigation history. RC62 Rules and Functions remain required; RC65 deploys Hosting only and changes no index, TTL policy, scoring formula, Projection V11 calculation, App Check mode, scoring-queue mode, or NHL-cache authority.
 
 O1B adds the platform-admin Private Season Control Center, exact-build cohort freeze, privacy-limited tester matrix, and immutable approved/delayed gate decision. The control center is evidence support; it does not automatically approve the private season or change competition state.
 
@@ -18,7 +21,7 @@ O1E adds seven server-gated milestone surveys for verified members of the exact 
 
 O1G replaces repeated exact-release checks on O1B–O1F operational callables with operations API contract v1. After the RC57 compatibility Functions are deployed once, later browser-only releases may use Hosting-only deployment while the operations contract, Scoring V4, and Projection V11 remain unchanged. Formal Private Season approval and App Check canary evidence remain exact-build-bound.
 
-O1H publishes the first public Fairness Report and public standard Scoring Guide. O1I adds the public exact Scoring V4 calculator and applies fixed contrast-safe colors to scoring-reference values and completed Game Center scoring breakdowns. Both are browser-only and require Hosting only under Operations API v1.
+O1H publishes the first public Fairness Report and public standard Scoring Guide. O1I adds the public exact Scoring V4 calculator and applies fixed contrast-safe colors to scoring-reference values and completed Game Center scoring breakdowns. B1E deployed the invite-code privacy redaction in Functions with RC60. B1G changed private Training Camp deferral fields, account-email Functions, browser continuation, validation evidence, and documentation, so RC62 required Firestore Rules, Functions, and Hosting. B1H changed only browser navigation and recovery surfaces in RC63. B1I and B1J change only browser presentation and navigation surfaces; RC65 therefore deploys Hosting only while the RC62 Rules and Functions remain live.
 
 O1F adds the signed-in Privacy Center, immediate bounded JSON export, privacy-request operations, scheduled cleanup, and account-deletion pseudonymization. O1G subsequently replaces the former exact-release coupling with Operations API v1 compatibility, while sensitive writes still require a deployed release/build identity and the normal authority checks. The operational workflow remains subject to jurisdiction-specific legal review before public beta.
 
@@ -113,25 +116,33 @@ nvm use 22.23.1
 npm install -g npm@11.17.0
 npm ci
 npm --prefix functions ci
-npm run verify:batcho1i
+npm run verify:batchb1j
 ```
 
-Commit and push the verified RC59 source:
+After the gate passes, deploy the changed browser surface only:
+
+```bash
+firebase deploy --only hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Beta B1J Tutorial Navigation Draft Readiness Release Candidate 65"
+```
+
+Commit and push the verified RC65 source:
 
 ```bash
 git status
 git add .
-git commit -m "Add tester milestone research"
+git commit -m "Complete RC65 B1J tutorial navigation and Draft readiness"
 git push
 ```
 
-Do not run the freeze command until V4A Functions and Hosting are deployed, every intended preseason league is migrated and inspected, each migrated league has a fresh Scoring V4 Projection V11 snapshot, and the live manifest identifies Release Candidate 59. The freeze tooling itself never deploys or mutates production.
+Do not run the freeze command until the RC62 Firestore Rules and Functions remain deployed, RC65 Hosting is live, the B1G training-first verification matrix still passes, the B1H navigation/Draft-recovery browser checks pass, the B1I progressive Training Camp and position-help browser matrix passes, the B1J exact-return, simplified-navbar, shared-league-navigation, and slow/failing-ranking Draft matrix passes, every intended preseason league is migrated and inspected, each migrated league has a fresh Scoring V4 Projection V11 snapshot, and the live manifest identifies Release Candidate 65. The freeze tooling itself never deploys or mutates production.
 
 ## Production Scoring V4 preseason cutover prerequisite
 
 V4A must be applied before any real 2026–27 Draft pick or competition window starts. The dry run and inspector are read-only. The apply command updates the versioned league scoring contract, invalidates mutable projection pointers and Draft projection-preparation fields, and writes one deterministic audit record. It retains immutable projection snapshot documents and never rewrites scores, cycles, windows, standings, rosters, Draft picks, transactions, or waivers.
 
-Perform the cutover during a quiet maintenance window. Deploy the complete V4-aware Functions source and make the verified RC59 browser available before operating a V4 league. RC59 is dual-version-aware: historical V3 leagues continue displaying and scoring as V3 until an explicit migration, while eligible/new V4 leagues use V4. Do not create, schedule, or start a Draft during the brief Functions/Hosting transition.
+Perform the cutover during a quiet maintenance window. Deploy the complete V4-aware Functions source and make the verified RC65 browser available before operating a V4 league. RC65 is dual-version-aware: historical V3 leagues continue displaying and scoring as V3 until an explicit migration, while eligible/new V4 leagues use V4. Do not create, schedule, or start a Draft during the brief Functions/Hosting transition.
 
 Run the dry run:
 
@@ -152,7 +163,7 @@ npm run scoring:v4:migrate -- \
   --league=EXACT_PRE_DRAFT_TEST_LEAGUE_ID
 ```
 
-Regenerate that league's Projection V11 snapshot from the verified RC59 interface, then inspect it:
+Regenerate that league's Projection V11 snapshot from the verified RC65 interface, then inspect it:
 
 ```bash
 npm run scoring:v4:inspect -- \
@@ -191,7 +202,7 @@ The apply form requires the exact `RINKRAT_ROLLBACK_SCORING_V4=ROLLBACK_PRESEASO
 
 ## C1B privacy-cutover prerequisite
 
-The C1B transaction and waiver privacy cutover must already be complete before RC59 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. V4A changes no Firestore Rule, index, TTL policy, App Check setting, Projection V11 formula, scoring-queue mode, or NHL-cache authority.
+The C1B transaction and waiver privacy cutover must already be complete before RC65 invite-beta freeze evidence is accepted. Confirm that the live browser uses owner-private transaction and claim projections, claim-free public waiver projections, and the final privacy Rules. The guarded migration, inspection, transition bridge, final lock, and rollback order remain documented in `docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`. V4A changes no Firestore Rule, index, TTL policy, App Check setting, Projection V11 formula, scoring-queue mode, or NHL-cache authority.
 
 ## Preflight
 
@@ -205,17 +216,17 @@ Preflight verifies:
 
 - Node 22.23.1 and npm 11.17.0 are active.
 - The B1C tooling commit is clean.
-- The live domain serves Release Candidate 59, Scoring V4, and Projection V11.
+- The live domain serves Release Candidate 65, Scoring V4, and Projection V11.
 - The live manifest contains one clean source revision that exists in local Git history.
 - HSTS and CSP report-only are live on `rinkratfantasy.com`.
 - App Check monitor configuration is enabled and production debug mode is off.
 - The `app` Hosting target still maps to `cycle-puck`.
 - All 10 production TTL policies are active.
-- The runtime release label remains RC59.
+- The runtime release label remains RC65.
 
 ## Produce the exact-build validation JSON
 
-On the deployed Release Candidate 59 Release Readiness page:
+On the deployed Release Candidate 65 Release Readiness page:
 
 1. Run the deterministic full-season simulator.
 2. Complete every required automated and manual item.
@@ -225,14 +236,14 @@ On the deployed Release Candidate 59 Release Readiness page:
 On the Mac, save the clipboard into a temporary JSON file:
 
 ```bash
-pbpaste > "$HOME/Downloads/rinkrat-rc59-validation.json"
+pbpaste > "$HOME/Downloads/rinkrat-rc65-validation.json"
 ```
 
 Validate that it is JSON:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log('Validation JSON is readable.');" \
-  "$HOME/Downloads/rinkrat-rc59-validation.json"
+  "$HOME/Downloads/rinkrat-rc65-validation.json"
 ```
 
 The freeze tool independently requires the report to contain:
@@ -256,7 +267,7 @@ Before freezing, rehearse rather than improvise:
 git cat-file -e "$(curl -fsSL https://rinkratfantasy.com/release-manifest.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).sourceRevision")^{commit}"
 ```
 
-4. Review the RC59 rollback selectors: Firestore Rules, complete Functions, and Hosting from the same known-good revision.
+4. Review the RC65 Hosting rollback to the known-good corrected RC64 browser while retaining the separately proven RC62 Firestore Rules and Functions rollback selectors.
 5. Confirm Firestore indexes are deployed only when an incident or known-good revision specifically requires them; C1B adds no index.
 6. Confirm Release Readiness, action evidence, Function logs, and the known-issues workflow are available after rollback.
 
@@ -269,8 +280,8 @@ After GitHub Actions passes, Release Readiness is ready, the simulator passes, p
 ```bash
 RINKRAT_FREEZE_INVITE_BETA=FREEZE \
 npm run beta:freeze -- \
-  --validation-report="$HOME/Downloads/rinkrat-rc59-validation.json" \
-  --tag=rinkrat-rc59-invite-beta \
+  --validation-report="$HOME/Downloads/rinkrat-rc65-validation.json" \
+  --tag=rinkrat-rc65-invite-beta \
   --ci-passed \
   --rollback-rehearsed \
   --queue-shadow
@@ -284,32 +295,32 @@ The command creates ignored local records under:
 
 It never deploys, creates a Git tag, changes queue mode, or writes competitive Firebase data.
 
-Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC59 manifest, not automatically to a newer release-tooling commit.
+Review the generated JSON and rollback Markdown, then create the annotated tag exactly as printed by the command. The tag deliberately points to the source revision recorded in the live RC65 manifest, not automatically to a newer release-tooling commit.
 
 Example:
 
 ```bash
-git tag -a rinkrat-rc59-invite-beta LIVE_SOURCE_REVISION \
-  -m "RinkRat RC59 invite beta baseline"
-git push origin rinkrat-rc59-invite-beta
+git tag -a rinkrat-rc65-invite-beta LIVE_SOURCE_REVISION \
+  -m "RinkRat RC65 invite beta baseline"
+git push origin rinkrat-rc65-invite-beta
 ```
 
 Verify the tag:
 
 ```bash
-npm run beta:verify-tag -- --tag=rinkrat-rc59-invite-beta
+npm run beta:verify-tag -- --tag=rinkrat-rc65-invite-beta
 ```
 
-Verify the complete frozen state while RC59 remains live:
+Verify the complete frozen state while RC65 remains live:
 
 ```bash
-npm run beta:verify-freeze -- --tag=rinkrat-rc59-invite-beta
+npm run beta:verify-freeze -- --tag=rinkrat-rc65-invite-beta
 ```
 
 Regenerate the rollback plan later without changing the record:
 
 ```bash
-npm run beta:rollback-plan -- --tag=rinkrat-rc59-invite-beta
+npm run beta:rollback-plan -- --tag=rinkrat-rc65-invite-beta
 ```
 
 ## After the freeze
@@ -339,3 +350,18 @@ Named dependency/toolchain maintenance batch → upgrade deliberately, regenerat
 ```
 
 Never run `npm audit fix --force` or a package-manager major upgrade as part of ordinary release verification or an emergency rollback.
+
+## RC65 / B1J Hosting Release
+
+Run the exact pinned gate from a clean RC65 checkout:
+
+```bash
+nvm use 22.23.1
+npm --version  # must be 11.17.0
+npm ci
+npm --prefix functions ci
+npm run verify:batchb1j
+```
+
+After every check passes, deploy only `hosting:app`. Validate exact Training Camp return, the simplified navbar, shared league quick navigation, and slow/failing projection behavior before closing the release. Functions, Rules, indexes, and TTL policies are outside this batch.
+

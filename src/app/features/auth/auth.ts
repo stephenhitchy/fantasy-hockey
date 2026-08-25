@@ -2,7 +2,11 @@ import { Component, computed, ElementRef, OnDestroy, signal, ViewChild } from '@
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { loginUser, registerUser } from '../../core/auth/auth.service';
-import { AuthSessionTimeoutError, withTimeout } from '../../core/auth/auth-session.service';
+import {
+  AuthSessionTimeoutError,
+  waitForAuthState,
+  withTimeout,
+} from '../../core/auth/auth-session.service';
 import {
   MAXIMUM_PASSWORD_LENGTH,
   MINIMUM_PASSWORD_LENGTH,
@@ -15,6 +19,14 @@ import {
 import { validateRegistrationPassword } from '../../core/auth/password-policy.service';
 import { TelemetryService } from '../../core/observability/telemetry.service';
 import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
+import {
+  bindPendingLeagueInviteToAccount,
+  buildLeagueInvitePath,
+  clearPendingLeagueInvite,
+  markPendingLeagueInviteRequiresTrainingCamp,
+  pendingLeagueInviteAccountMatch,
+  readPendingLeagueInvite,
+} from '../../core/league/invite-link-intent.service';
 import {
   applyUserTheme,
   getRememberedLastLeagueId,
@@ -29,6 +41,7 @@ import {
   RINKRAT_NEUTRAL_ABBREVIATION,
   RINKRAT_NEUTRAL_THEME,
 } from '../../shared/pixel-theme/pixel-theme.data';
+import { Navbar } from '../../shared/navbar/navbar';
 import {
   DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
   HOCKEY_EXPERIENCE_OPTIONS,
@@ -38,7 +51,7 @@ import {
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, Navbar],
   templateUrl: './auth.html',
   styleUrl: './auth.css',
 })
@@ -62,6 +75,8 @@ export class Auth implements OnDestroy {
   readonly loading = signal(false);
   readonly invalidField = signal<'username' | 'team' | 'email' | 'password' | ''>('');
   readonly mascotCelebrating = signal(false);
+  readonly pendingInviteCode = signal('');
+  readonly inviteContinuationActive = computed(() => Boolean(this.pendingInviteCode()));
   readonly passwordPolicyChecking = signal(false);
   readonly passwordPolicyEvaluation = signal<PasswordPolicyEvaluation>(
     evaluatePasswordAgainstFallbackPolicy(''),
@@ -168,6 +183,9 @@ export class Auth implements OnDestroy {
     private route: ActivatedRoute,
     private telemetry: TelemetryService,
   ) {
+    const pendingInvite = readPendingLeagueInvite();
+    this.pendingInviteCode.set(pendingInvite?.inviteCode ?? '');
+
     const sessionReset = this.route.snapshot.queryParamMap.get('sessionReset');
 
     if (sessionReset === 'deleted-account') {
@@ -178,6 +196,8 @@ export class Auth implements OnDestroy {
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/');
       }
+    } else if (pendingInvite) {
+      void this.resumeSignedInInviteIfAvailable();
     }
   }
 
@@ -227,7 +247,7 @@ export class Auth implements OnDestroy {
 
       this.successMessage.set(
         this.isRegistering()
-          ? 'Profile created. Check your email to verify your address.'
+          ? 'Profile created. Opening Training Camp before email verification...'
           : 'Login successful. Opening your manager home...',
       );
 
@@ -260,6 +280,39 @@ export class Auth implements OnDestroy {
           default_landing: profile?.defaultLandingPage === 'lastLeague' ? 'last_league' : 'dashboard',
         },
       );
+
+      const pendingInvite = readPendingLeagueInvite();
+
+      if (pendingInvite) {
+        const accountMatch = pendingLeagueInviteAccountMatch(pendingInvite, user.uid);
+        const boundIntent = this.isRegistering()
+          ? bindPendingLeagueInviteToAccount(user.uid, {
+              inviteCode: pendingInvite.inviteCode,
+              allowAccountSwitch: true,
+            })
+          : accountMatch === 'mismatch'
+            ? null
+            : bindPendingLeagueInviteToAccount(user.uid, {
+                inviteCode: pendingInvite.inviteCode,
+              });
+        const invitePath = buildLeagueInvitePath(pendingInvite.inviteCode);
+
+        if (this.isRegistering() && boundIntent) {
+          markPendingLeagueInviteRequiresTrainingCamp(
+            user.uid,
+            pendingInvite.inviteCode,
+          );
+          await this.router.navigate(['/training-camp'], {
+            queryParams: { continue: 'league-invite' },
+          });
+          return;
+        }
+
+        if (invitePath) {
+          await this.router.navigateByUrl(invitePath);
+          return;
+        }
+      }
 
       if (this.isRegistering()) {
         await this.router.navigate(['/training-camp']);
@@ -446,6 +499,18 @@ export class Auth implements OnDestroy {
     });
   }
 
+  async cancelInviteContinuation(): Promise<void> {
+    clearPendingLeagueInvite(this.pendingInviteCode());
+    this.pendingInviteCode.set('');
+
+    await this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { invite: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   toggleMode(): void {
     const nextMode = !this.isRegistering();
 
@@ -574,6 +639,29 @@ export class Auth implements OnDestroy {
 
     if (focusTarget && typeof window !== 'undefined') {
       window.requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
+    }
+  }
+
+  private async resumeSignedInInviteIfAvailable(): Promise<void> {
+    const user = await waitForAuthState(undefined, 8_000);
+    const pendingInvite = readPendingLeagueInvite();
+
+    if (!user || !pendingInvite || this.loading()) {
+      return;
+    }
+
+    const accountMatch = pendingLeagueInviteAccountMatch(pendingInvite, user.uid);
+
+    if (accountMatch === 'unbound') {
+      bindPendingLeagueInviteToAccount(user.uid, {
+        inviteCode: pendingInvite.inviteCode,
+      });
+    }
+
+    const invitePath = buildLeagueInvitePath(pendingInvite.inviteCode);
+
+    if (invitePath && readPendingLeagueInvite(pendingInvite.inviteCode)) {
+      await this.router.navigateByUrl(invitePath);
     }
   }
 

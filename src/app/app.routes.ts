@@ -18,71 +18,90 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/auth').then((module) => module.Auth),
   },
   {
-    path: 'privacy',
-    title: 'Privacy',
+    path: 'join/:inviteCode',
+    title: 'League Invitation',
     loadComponent: () =>
-      import('./features/legal/privacy/privacy').then((module) => module.PrivacyPage),
-  },
-  {
-    path: 'terms',
-    title: 'Terms',
-    loadComponent: () => import('./features/legal/terms/terms').then((module) => module.TermsPage),
-  },
-  {
-    path: 'support',
-    title: 'Support',
-    loadComponent: () =>
-      import('./features/support/support-home/support-home').then(
-        (module) => module.SupportHome,
+      import('./features/leagues/invite-link/invite-link').then(
+        (module) => module.LeagueInviteLink,
       ),
   },
   {
-    path: 'status',
-    title: 'RinkRat Status',
+    path: '',
+    title: 'RinkRat Resources',
     loadComponent: () =>
-      import('./features/support/service-status/service-status').then(
-        (module) => module.ServiceStatusPage,
+      import('./layouts/public-resource-layout/public-resource-layout').then(
+        (module) => module.PublicResourceLayout,
       ),
-  },
-  {
-    path: 'support/known-issues',
-    title: 'Known Issues',
-    loadComponent: () =>
-      import('./features/support/known-issues/known-issues').then(
-        (module) => module.KnownIssuesPage,
-      ),
-  },
-  {
-    path: 'commissioner-guide',
-    title: 'Commissioner Guide',
-    loadComponent: () =>
-      import('./features/support/commissioner-guide/commissioner-guide').then(
-        (module) => module.CommissionerGuide,
-      ),
-  },
-  {
-    path: 'fairness',
-    title: 'RinkRat Fairness Report',
-    loadComponent: () =>
-      import('./features/support/fairness-report/fairness-report').then(
-        (module) => module.FairnessReportPage,
-      ),
-  },
-  {
-    path: 'scoring-guide',
-    title: 'RinkRat Scoring Guide',
-    loadComponent: () =>
-      import('./features/scoring/scoring-guide/scoring-guide').then(
-        (module) => module.ScoringGuide,
-      ),
-  },
-  {
-    path: 'scoring-calculator',
-    title: 'RinkRat Scoring Calculator',
-    loadComponent: () =>
-      import('./features/scoring/scoring-calculator/scoring-calculator').then(
-        (module) => module.ScoringCalculator,
-      ),
+    children: [
+      {
+        path: 'privacy',
+        title: 'Privacy',
+        loadComponent: () =>
+          import('./features/legal/privacy/privacy').then((module) => module.PrivacyPage),
+      },
+      {
+        path: 'terms',
+        title: 'Terms',
+        loadComponent: () =>
+          import('./features/legal/terms/terms').then((module) => module.TermsPage),
+      },
+      {
+        path: 'support',
+        title: 'Support',
+        loadComponent: () =>
+          import('./features/support/support-home/support-home').then(
+            (module) => module.SupportHome,
+          ),
+      },
+      {
+        path: 'status',
+        title: 'RinkRat Status',
+        loadComponent: () =>
+          import('./features/support/service-status/service-status').then(
+            (module) => module.ServiceStatusPage,
+          ),
+      },
+      {
+        path: 'support/known-issues',
+        title: 'Known Issues',
+        loadComponent: () =>
+          import('./features/support/known-issues/known-issues').then(
+            (module) => module.KnownIssuesPage,
+          ),
+      },
+      {
+        path: 'commissioner-guide',
+        title: 'Commissioner Guide',
+        loadComponent: () =>
+          import('./features/support/commissioner-guide/commissioner-guide').then(
+            (module) => module.CommissionerGuide,
+          ),
+      },
+      {
+        path: 'fairness',
+        title: 'RinkRat Fairness Report',
+        loadComponent: () =>
+          import('./features/support/fairness-report/fairness-report').then(
+            (module) => module.FairnessReportPage,
+          ),
+      },
+      {
+        path: 'scoring-guide',
+        title: 'RinkRat Scoring Guide',
+        loadComponent: () =>
+          import('./features/scoring/scoring-guide/scoring-guide').then(
+            (module) => module.ScoringGuide,
+          ),
+      },
+      {
+        path: 'scoring-calculator',
+        title: 'RinkRat Scoring Calculator',
+        loadComponent: () =>
+          import('./features/scoring/scoring-calculator/scoring-calculator').then(
+            (module) => module.ScoringCalculator,
+          ),
+      },
+    ],
   },
   {
     path: '',

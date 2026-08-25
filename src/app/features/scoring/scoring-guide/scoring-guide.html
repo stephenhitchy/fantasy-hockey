@@ -1,4 +1,19 @@
 <main class="scoring-guide-page">
+  @if (trainingCampReturnActive) {
+    <aside class="training-camp-return-banner" aria-label="Return to Training Camp">
+      <div>
+        <span class="eyebrow">Training Camp Paused</span>
+        <strong>Your exact lesson is saved while you review the scoring guide.</strong>
+      </div>
+      <a
+        class="rr-button rr-button--primary"
+        routerLink="/training-camp"
+        [queryParams]="trainingCampReturnQueryParams"
+      >
+        ← Back to Training Camp
+      </a>
+    </aside>
+  }
   <header class="scoring-guide-hero">
     <div class="hero-copy">
       <span class="eyebrow">Official Rules Desk</span>
@@ -14,11 +29,11 @@
 
     <div class="hero-actions">
       @if (leagueId()) {
-        <a class="league-return-link league-return-link--hero" [routerLink]="['/leagues', leagueId()]" aria-label="Back to league home">Back to League</a>
+        <a class="league-return-link league-return-link--hero" [routerLink]="['/leagues', leagueId()]" aria-label="Back to the previous RinkRat page">Back</a>
       } @else if (publicGuide) {
-        <a routerLink="/support">Back to Support</a>
+        <a routerLink="/support" data-rinkrat-history-back>Back</a>
       } @else {
-        <a routerLink="/dashboard">Back to Dashboard</a>
+        <a routerLink="/dashboard" data-rinkrat-history-back>Back</a>
       }
       <a routerLink="/scoring-calculator">Scoring Calculator</a>
       <a routerLink="/fairness">Fairness</a>

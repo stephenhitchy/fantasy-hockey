@@ -1,5 +1,7 @@
 # Onboarding Batch B1D — Big-Play Winger Comparison Clarity
 
+See [`RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md`](RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md) for the RC60 invite-link implementation and release matrix.
+
 **Runtime release family:** Release Candidate 21
 **Scope:** Hosting-only Training Camp copy refinement. The LW/RW football analogy now uses plain language for beginners without changing Production Scoring V3, Projection V11, roster construction, Draft strategy logic, or positional eligibility.
 
@@ -12767,3 +12769,133 @@ No Function, Firestore Rule, index, TTL policy, scoring formula, Projection V11 
 The O1I public calculator regression originally called `tsc` with explicit source filenames. Under the pinned TypeScript 6 dependency, TS5112 stops that command because the repository `tsconfig.json` is present but cannot be combined implicitly with file arguments. O1I.1 generates a bounded temporary Node16 project containing the three canonical scoring sources and invokes `tsc --project`. The calculator, scoring rules, browser runtime, Functions, and deployment contract remain unchanged.
 
 Verification remains `npm run verify:batcho1i`.
+
+# Beta Batch B1E — Shareable Invite-Link Onboarding
+
+**Runtime release:** Release Candidate 60
+
+B1E adds a public scanner-safe `/join/:inviteCode` route, one deliberate Join League action, a bounded 72-hour local continuation, account binding, registration and Training Camp handoff, email-verification recovery, commissioner copy/share controls, and terminal/transient error handling. The final membership action continues to use the existing `joinLeagueSecure` callable and its verified-email, expiration, capacity, Draft-lock, quota, idempotency, atomic-write, and audit boundaries.
+
+Invite codes are redacted from browser telemetry, beta evidence, diagnostic text, and CSP route collection. `/join/**` is no-store, noindex, and no-referrer. RC60 requires Functions plus Hosting because the Functions diagnostic redaction changed; Rules, indexes, TTL, scoring, projections, window authority, App Check, scoring queue, and shared NHL-cache modes are unchanged.
+
+Verification is `npm run verify:batchb1e`. The exact pinned build and deployed desktop/mobile browser matrix must pass before the invite-beta tag or observed cohort is frozen. Full implementation and release instructions are in `docs/RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md`.
+
+---
+
+# Beta Batch B1F — Invite Continuation Reconciliation
+
+**Runtime release:** Release Candidate 61
+**Deployment:** Hosting only
+
+B1F hardens the RC60 shareable invitation flow after one non-reproduced first-attempt playtest observation. The pending browser intent remains useful for navigation and account binding, but its `requiresTrainingCamp` flag is no longer treated as authority. On every invitation resume, the browser reads the saved manager profile, evaluates the canonical Training Camp version, refreshes Firebase email verification when needed, and resolves Training Camp, verification, or secure join through one deterministic helper.
+
+This makes Training-Camp-first and verification-first account creation equivalent. A successful email-verification refresh re-enters prerequisite reconciliation instead of calling league join directly, so an already-verified account cannot bypass incomplete Training Camp after a reload, another tab, or a stale local hint. Final membership continues through the unchanged `joinLeagueSecure` callable.
+
+The invite-beta validation schema and release-freeze parser advance to version 3. Release Readiness now requires separate Training-Camp-first, verification-first, and reload/account-choice evidence in addition to the existing returning-account and browser matrix.
+
+Verification:
+
+```bash
+npm run verify:batchb1f
+```
+
+Deployment:
+
+```bash
+firebase deploy --only hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Beta B1F Invite Continuation Reconciliation Release Candidate 61"
+```
+
+RC60's B1E diagnostic-redaction Functions remain deployed. B1F changes no Function source, Firestore Rule, index, TTL policy, scoring model, Projection V11 calculation, six-game window, App Check mode, scoring-queue mode, or shared NHL-cache mode. Full behavior and playtest instructions are in `docs/RINKRAT_BETA_B1F_INVITE_CONTINUATION_RECONCILIATION.md`.
+
+# Beta Batch B1G — Training-First Email Verification
+
+**Runtime release:** Release Candidate 62
+**Competition baseline:** Production Scoring V4 / Projection V11
+
+B1G fixes a confirmed new-account invite-continuation defect by withholding the first verification email until Training Camp is either completed or explicitly deferred through **Finish Later & Verify**. Completion remains canonical `trainingCampVersion`; deferral uses separate `trainingCampDeferredVersion` and timestamp fields, so onboarding may continue without falsely marking the tutorial complete.
+
+The retryable profile-created email trigger now records a waiting state and re-reads current profile data before doing so. A profile-write trigger releases the first welcome/verification email after completion or deferral, while the resend callable enforces the same prerequisite and retains cooldown/idempotency behavior. Invite continuation reads the authoritative completed-or-deferred state and still calls the existing verified-email-protected `joinLeagueSecure` transaction.
+
+Run:
+
+```bash
+npm run verify:batchb1g
+```
+
+After the complete pinned gate passes, deploy:
+
+```bash
+firebase deploy --only firestore:rules,functions,hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Beta B1G Training-First Verification Release Candidate 62"
+```
+
+This batch changes no index, TTL policy, Production Scoring V4 value, Projection V11 calculation, immutable six-game behavior, App Check mode, scoring-queue mode, or shared NHL-cache authority. Full behavior and playtest instructions are in `docs/RINKRAT_BETA_B1G_TRAINING_FIRST_VERIFICATION.md`.
+
+# Beta Batch B1H — Navigation Reliability and Draft Recovery
+
+**Runtime release:** Release Candidate 63
+**Deployment:** Hosting only
+**Protected competition baseline:** Production Scoring V4 / Projection V11 / immutable six-game roster-slot windows
+
+B1H implements the first bounded group of findings from an observed new-manager playtest. Public resources, authentication, invitations, and the authenticated application now share an authentication-aware navigation resource. Signed-in managers retain their remembered league destinations on public pages; signed-out visitors receive public-safe learning, calculator, fairness, support, and sign-in destinations.
+
+The navigation visually prioritizes Current Matchup, My Team, and Add / Drop with stable icons. The Dashboard action is renamed **Open Current Matchup**, Dashboard My Team access is labeled, and My Team's quick-navigation cards are enlarged while Projection Lab is removed from that specific block. League HQ no longer displays the low-value Daily Injury Report timestamp.
+
+A session-scoped internal navigation coordinator now makes top-corner Back controls return to the manager's previous eligible RinkRat route. Direct-loaded pages retain their original safe fallback. The coordinator accepts only same-origin internal URLs, limits history to 40 entries, reconciles browser popstate navigation, and excludes `/join/:inviteCode` so invite credentials do not enter session storage. This also fixes the Support return control that could open the root sign-in route for an authenticated manager.
+
+Draft start routing remains automatic, but the manager can immediately press **Open Draft Room**. A delayed route exposes **Reload & Open Draft Room**, and the Draft Room loading state exposes **Reload Draft Room** after eight seconds. These are browser recovery routes only; no draft membership, pick, clock, queue, or server-authority logic changes.
+
+Verification:
+
+```bash
+npm run verify:batchb1h
+```
+
+Deployment after the pinned gate passes:
+
+```bash
+firebase deploy --only hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Beta B1H Navigation Reliability Release Candidate 63"
+```
+
+The RC62 B1G Firestore Rules and Functions remain required. B1H changes no Function source, Firestore Rule, index, TTL policy, scoring value, projection calculation, six-game behavior, seventh-game rollover, App Check mode, scoring-queue mode, or shared NHL-cache authority.
+
+Full implementation, browser-matrix, and release details are in `docs/RINKRAT_BETA_B1H_NAVIGATION_RELIABILITY.md`.
+
+# Beta Batch B1I — Progressive Training Camp and Position Help
+
+**Runtime release:** Release Candidate 64
+
+**Deployment:** Hosting only
+
+**Protected competition baseline:** Production Scoring V4 / Projection V11 / immutable six-game roster-slot windows
+
+B1I implements the next bounded findings from the first observed beginner session. Training Camp now presents five shifts with two drills each and reveals one focused lesson at a time. The second drill in each shift includes a small Coach Challenge; a correct answer unlocks the next shift, while an incorrect answer provides immediate plain-language feedback. Session-only progress survives an ordinary reload but cannot grant server completion.
+
+The six-game rule is taught as one independent counter for each active roster spot: the first six NHL games build that spot's matchup score, and Game 7 becomes Game 1 of that spot's next matchup while other spots continue finishing their own six. Completion and **Finish Later & Verify** remain separate authoritative outcomes, and the RC62 delayed-email and invite-continuation sequence is unchanged.
+
+Position teaching now separates forward upside, defense workload, and Team Goalie Unit raw totals. The fantasy-football WR/RB/QB comparison remains available as an optional collapsed guide. All Hockey Term chips share one coordinator so only one definition is visible. Panels are viewport-clamped, can flip above the trigger, scroll internally, respond to resize/scroll, close through Escape/outside action/Close, and become fixed mobile bottom sheets.
+
+Number-bearing Training Camp controls and examples use the readable UI font with tabular numerals. The broader site-wide numeric typography and copy-density audit remains B1.37.
+
+Verification:
+
+```bash
+npm run verify:batchb1i
+```
+
+Deployment after the complete pinned gate passes:
+
+```bash
+firebase deploy --only hosting:app \
+  --project=nhl-fantasy-app-ab673 \
+  -m "Beta B1I Progressive Training Camp Release Candidate 64"
+```
+
+The RC62 B1G Firestore Rules and Functions remain required. B1I changes no Function source, Firestore Rule, index, TTL policy, scoring value, projection calculation, six-game authority, seventh-game rollover, Draft/roster/waiver authority, App Check mode, scoring-queue mode, or shared NHL-cache authority.
+
+Full implementation, browser-matrix, and rollback details are in `docs/RINKRAT_BETA_B1I_PROGRESSIVE_TRAINING_CAMP.md`.

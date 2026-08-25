@@ -193,8 +193,8 @@ test('O1I is Hosting-only and keeps Operations API v1 unchanged', async () => {
   ]);
 
   assert.match(compatibility, /"operationsApiVersion":\s*1/);
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
   assert.doesNotMatch(functionIndex, /scoringCalculator|publicScoringCalculator/);
 });
 
@@ -212,14 +212,14 @@ test('roadmap and release gate record O1I without rewriting the O1H evidence rel
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] O1\.30 Keep scoring-reference/);
   assert.match(roadmap, /LOG\.73 2026-08-21 — Completed Operations Batch O1I/);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 59');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 65');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.equal(report.publishedReleaseLabel, 'Release Candidate 58');
   assert.match(packageJson.scripts['verify:batcho1i:core'], /verify:batcho1h:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
 });

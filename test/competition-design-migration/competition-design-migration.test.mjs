@@ -127,7 +127,7 @@ test('Game Center composes shared shell, matchup cards, progress, badges, and co
     'team-matchup-panel rr-data-panel',
     'team-roster-progress-track rr-progress',
     'team-roster-progress-fill rr-progress__value',
-    'schedule-preview-header-link rr-button rr-button--secondary',
+    '<app-league-quick-navigation',
     'shared-scoring-status-card rr-notice rr-notice--info',
   ]) {
     assert.match(combined, new RegExp(marker));
@@ -205,7 +205,7 @@ test('current audit follows the unified Add / Drop replacement instead of retire
     packageJson.scripts['verify:batcho1e:core'],
     /test:batcho1e:run && npm run audit:competition-design-migration && npm run test:batcho1e-2:run && npm run validate:release-manifest/,
   );
-  assert.match(packageJson.scripts['security:ci'], /Operations Batch O1I/);
+  assert.match(packageJson.scripts['security:ci'], /Beta Batch B1J/);
   assert.equal(roadmap, docsRoadmap);
   const versionMatch = roadmap.match(/^Version (\d+)\.(\d+)(?:\.(\d+))?$/m);
   assert.ok(versionMatch, 'Missing semantic roadmap version.');

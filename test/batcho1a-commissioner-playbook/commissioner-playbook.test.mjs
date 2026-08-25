@@ -140,6 +140,7 @@ test('commissioner messages contain the invite, Draft timing, and safe-action gu
   const input = {
     leagueName: 'Rink Rats Invitational',
     inviteCode: 'ICE123',
+    inviteUrl: 'https://rinkratfantasy.com/join/ICE123',
     draftTimeLabel: 'Sep 20, 7:00 PM',
     managerCount: 7,
     maximumTeams: 8,
@@ -147,6 +148,7 @@ test('commissioner messages contain the invite, Draft timing, and safe-action gu
   const invite = buildCommissionerInviteMessage(input);
   const reminder = buildCommissionerDraftNightMessage(input);
 
+  assert.match(invite, /https:\/\/rinkratfantasy\.com\/join\/ICE123/);
   assert.match(invite, /ICE123/);
   assert.match(invite, /7 of 8/);
   assert.match(invite, /six NHL team games/);
@@ -181,6 +183,7 @@ test('League HQ and Support expose the playbook without adding a modal or sticky
   assert.match(support, /Open Commissioner Guide/);
   assert.match(playbook, /League readiness/);
   assert.match(playbook, /Draft-night checklist/);
+  assert.match(playbook, /Copy Invite Link/);
   assert.match(playbook, /Copy Invite Message/);
   assert.match(guide, /Six NHL games per active roster slot/);
   assert.match(guide, /Commissioner FAQ/);
@@ -223,15 +226,15 @@ test('O1A advances to RC51 while preserving Scoring V4, Projection V11, and safe
   const canary = JSON.parse(canarySource);
   const cache = JSON.parse(cacheSource);
 
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 59');
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 65');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
-  assert.equal(freeze.defaultTag, 'rinkrat-rc59-invite-beta');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
+  assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcho1a:core'], /verify:batchv4a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
   assert.equal(sha256(scoringRules), PROTECTED_SOURCE_HASHES.scoringRules);
   assert.equal(sha256(scoringEngine), PROTECTED_SOURCE_HASHES.scoringEngine);
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
@@ -253,17 +256,17 @@ test('documentation and the permanent roadmap record the bounded commissioner fo
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /O1\.5[\s\S]*?O1A/);
   assert.match(roadmap, /LOG\.62/);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(readme, /RINKRAT_OPERATIONS_O1A_COMMISSIONER_PLAYBOOK\.md/);
   assert.match(doc, /public commissioner guide/i);
   assert.match(doc, /O1A\.1 strict-TypeScript hotfix/);
   assert.match(doc, /league-specific readiness/i);
   assert.match(doc, /device-local/i);
   assert.match(doc, /No Cloud Function/);
-  assert.match(runbook, /Release Candidate 59/);
-  assert.match(runbook, /Operations Batch O1I/);
-  assert.match(runbook, /npm run verify:batcho1i/);
+  assert.match(runbook, /Release Candidate 65/);
+  assert.match(runbook, /Beta Batch B1J/);
+  assert.match(runbook, /npm run verify:batchb1j/);
 });

@@ -36,9 +36,9 @@ test('contract v1 accepts RC56, the original versionless RC56 client, and later 
     buildId: 'release-candidate-56-20260820T235959000Z-a1b2c3d4e5',
   });
   const rc57 = identity();
-  const rc61 = identity({
-    releaseLabel: 'Release Candidate 61',
-    buildId: 'release-candidate-61-20260901T010203000Z-f0e1d2c3b4',
+  const rc64 = identity({
+    releaseLabel: 'Release Candidate 65',
+    buildId: 'release-candidate-65-20260901T010203000Z-f0e1d2c3b4',
   });
 
   assert.equal(OPERATIONS_API_VERSION, 1);
@@ -46,7 +46,7 @@ test('contract v1 accepts RC56, the original versionless RC56 client, and later 
   assert.equal(assessOperationsClientCompatibility(legacyRc56).compatible, true);
   assert.match(assessOperationsClientCompatibility(legacyRc56).message, /legacy RC56/);
   assert.equal(assessOperationsClientCompatibility(rc57).compatible, true);
-  assert.equal(assessOperationsClientCompatibility(rc61).compatible, true);
+  assert.equal(assessOperationsClientCompatibility(rc64).compatible, true);
 });
 
 test('pre-contract and versionless RC57-or-newer clients fail closed', () => {
@@ -177,11 +177,11 @@ test('O1G release records and verification include the compatibility audit', asy
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /LOG\.71 2026-08-20 — Completed Operations Batch O1G/);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
   assert.match(packageJson.scripts['verify:batcho1g:core'], /operations:audit-compatibility/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
 });

@@ -34,7 +34,12 @@ export interface UserProfile {
   hockeyExperience?: HockeyExperienceLevel;
   trainingCampVersion?: number;
   trainingCampCompletedAt?: unknown;
+  trainingCampDeferredVersion?: number;
+  trainingCampDeferredAt?: unknown;
   welcomeEmailSentAt?: unknown;
+  welcomeEmailStatus?: 'waiting-for-training-camp' | 'ready-for-manual-send' | 'sent';
+  welcomeEmailDeferredAt?: unknown;
+  verificationEmailReadyAt?: unknown;
   lastVerificationEmailSentAt?: unknown;
 }
 

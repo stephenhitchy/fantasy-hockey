@@ -259,6 +259,44 @@
   line-height: 1.55;
 }
 
+.why-six-games-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border: 2px solid color-mix(in srgb, var(--user-team-accent) 72%, var(--border-strong));
+  background: color-mix(in srgb, var(--user-team-primary) 9%, var(--surface-2));
+}
+
+.why-six-games-callout > .pixel-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--user-team-accent);
+}
+
+.why-six-games-callout small,
+.why-six-games-callout strong {
+  display: block;
+}
+
+.why-six-games-callout small {
+  margin-bottom: 5px;
+  color: var(--user-team-accent);
+  font-family: var(--rr-font-ui, inherit);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.why-six-games-callout strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-ui, inherit);
+  font-size: .94rem;
+  line-height: 1.45;
+}
+
 .coach-note {
   display: flex;
   align-items: center;
@@ -1351,6 +1389,28 @@
   flex-wrap: wrap;
 }
 
+.verification-card {
+  width: min(760px, 100%);
+}
+
+.verification-badge {
+  width: min(560px, 100%);
+}
+
+.verification-status {
+  width: min(590px, 100%);
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 2px solid color-mix(in srgb, var(--user-team-accent) 68%, var(--border-strong));
+  background: color-mix(in srgb, var(--user-team-primary) 10%, var(--surface-2));
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.verification-actions {
+  width: 100%;
+}
+
 @media (max-width: 900px) {
   .camp-lesson-card {
     grid-template-columns: 1fr;
@@ -1512,6 +1572,15 @@
   .completion-card {
     padding: 28px 18px;
   }
+
+  .verification-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .verification-actions button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1608,4 +1677,527 @@
 .training-scoring-link:hover,
 .training-scoring-link:focus-visible {
   translate: 0 -2px;
+}
+
+.training-camp-invite-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 72%, var(--rr-color-border));
+  border-inline-start: 5px solid var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-primary) 12%, var(--rr-color-surface-raised));
+}
+
+.training-camp-invite-banner > div {
+  display: grid;
+  gap: 4px;
+}
+
+.training-camp-invite-banner small {
+  color: var(--user-team-accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.training-camp-invite-banner strong {
+  color: var(--rr-color-text);
+}
+
+.training-camp-invite-banner p {
+  margin: 0;
+  color: var(--rr-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* --------------------------------------------------------------------------
+   Beta B1J — progressive, game-like Training Camp
+   -------------------------------------------------------------------------- */
+
+.training-camp-brand > div {
+  min-width: 0;
+}
+
+.training-camp-brand p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-family: var(--rr-font-ui, inherit);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.camp-progress-copy,
+.camp-progress-copy strong,
+.camp-control-status,
+.shift-number,
+.shift-state,
+.roster-starters strong,
+.game-dot,
+.demo-game-row > span,
+.six-game-strip span,
+.player-metrics strong,
+.rank-chip,
+.season-stage > span:first-child,
+.position-value-badge {
+  font-family: var(--rr-font-ui, inherit);
+  font-variant-numeric: tabular-nums;
+}
+
+.camp-step-tabs button {
+  min-height: 86px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  align-content: center;
+  column-gap: 9px;
+  row-gap: 3px;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    translate 140ms ease;
+}
+
+.camp-step-tabs button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--user-team-accent) 72%, var(--border-strong));
+  translate: 0 -2px;
+}
+
+.camp-step-tabs button:focus-visible {
+  outline: 3px solid var(--focus-ring, var(--user-team-accent));
+  outline-offset: 2px;
+}
+
+.camp-step-tabs button .shift-number {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.camp-step-tabs button small {
+  align-self: end;
+  font-family: var(--rr-font-ui, inherit);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.camp-step-tabs button .shift-state {
+  align-self: start;
+  color: var(--text-muted);
+  font-size: 0.67rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.camp-step-tabs button.cleared {
+  border-color: color-mix(in srgb, #4bbf78 72%, var(--border-strong));
+  background: color-mix(in srgb, #1c7043 16%, var(--surface-2));
+}
+
+.camp-step-tabs button.cleared .shift-number,
+.camp-step-tabs button.cleared .shift-state {
+  color: #95e8b6;
+}
+
+.camp-step-tabs button.locked {
+  filter: saturate(0.45);
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.camp-step-tabs button.active {
+  translate: 0 -2px;
+}
+
+.camp-lesson-card {
+  min-height: 500px;
+  overflow: visible;
+}
+
+.lesson-copy {
+  min-width: 0;
+}
+
+.drill-marker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.drill-marker span,
+.drill-marker strong {
+  padding: 6px 9px;
+  border: 2px solid var(--border-strong);
+  font-family: var(--rr-font-ui, inherit);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.drill-marker span {
+  background: color-mix(in srgb, var(--user-team-primary) 18%, var(--surface-2));
+  color: var(--user-team-accent);
+}
+
+.drill-marker strong {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.lesson-copy > p {
+  max-width: 660px;
+  font-family: var(--rr-font-ui, inherit);
+}
+
+.lesson-visual {
+  align-content: center;
+  place-items: stretch;
+}
+
+.lesson-visual-stack {
+  display: grid;
+  width: min(100%, 760px);
+  justify-self: center;
+  gap: 18px;
+}
+
+.lesson-visual-stack > section,
+.lesson-visual-stack > details,
+.lesson-visual-stack > a {
+  animation: camp-drill-enter 180ms ease-out both;
+}
+
+.counter-drill {
+  display: grid;
+  gap: 18px;
+  padding: clamp(20px, 4vw, 34px);
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--user-team-accent);
+  background: var(--surface-1);
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+}
+
+.counter-drill header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.counter-drill header div {
+  display: grid;
+  gap: 3px;
+}
+
+.counter-drill header small {
+  color: var(--text-muted);
+  font-family: var(--rr-font-ui, inherit);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.counter-drill header strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+}
+
+.six-game-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(42px, 1fr));
+  gap: 8px;
+}
+
+.six-game-strip span {
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 3px solid color-mix(in srgb, var(--user-team-accent) 62%, var(--border-strong));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--user-team-primary) 18%, var(--surface-2));
+  color: var(--text-primary);
+  font-size: clamp(0.9rem, 2vw, 1.18rem);
+  font-weight: 950;
+}
+
+.counter-drill > p,
+.card-reading-tip {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--rr-font-ui, inherit);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.compact-cycle-team {
+  display: grid;
+  gap: 14px;
+}
+
+.standalone-dots {
+  justify-content: center;
+}
+
+.lineup-drill,
+.position-drill {
+  width: 100%;
+}
+
+.position-value-guide > header strong {
+  text-wrap: balance;
+}
+
+.position-value-card {
+  min-width: 0;
+}
+
+.position-value-card p {
+  font-family: var(--rr-font-ui, inherit);
+}
+
+.position-comparison-tip {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 2px solid var(--border-strong);
+  background: color-mix(in srgb, var(--user-team-accent) 8%, var(--surface-2));
+  color: var(--text-primary);
+  font-family: var(--rr-font-ui, inherit);
+  font-weight: 850;
+  text-align: center;
+}
+
+.football-comparison-guide {
+  margin-top: 14px;
+}
+
+.football-comparison-card {
+  min-height: 0;
+}
+
+.football-comparison-card h3,
+.football-comparison-card > p,
+.football-value-note p,
+.football-guide-intro,
+.football-guide-precision {
+  font-family: var(--rr-font-ui, inherit);
+}
+
+.single-move-demo {
+  grid-template-columns: minmax(0, 540px);
+  justify-content: center;
+}
+
+.two-move-demo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.featured-metric {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-primary) 16%, var(--surface-2));
+}
+
+.card-reading-tip {
+  padding: 10px 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.marker-drill {
+  width: min(100%, 620px);
+  justify-self: center;
+}
+
+.automatic-season-demo {
+  display: grid;
+  width: min(100%, 560px);
+  justify-self: center;
+  place-items: center;
+  gap: 14px;
+  padding: clamp(20px, 4vw, 34px);
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--user-team-accent);
+  background: var(--surface-1);
+  text-align: center;
+}
+
+.automatic-season-demo h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.automatic-season-demo ul {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.automatic-season-demo li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-family: var(--rr-font-ui, inherit);
+  font-weight: 800;
+}
+
+.automatic-season-demo li span {
+  color: #7ce0a1;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.camp-controls .primary-camp-button {
+  min-width: 190px;
+}
+
+@keyframes camp-drill-enter {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .two-move-demo {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .training-camp-brand p {
+    font-size: 0.9rem;
+  }
+
+  .camp-progress-copy {
+    align-items: flex-start;
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+  }
+
+  .camp-step-tabs {
+    grid-template-columns: repeat(5, 108px);
+  }
+
+  .camp-step-tabs button {
+    min-height: 74px;
+    padding: 7px;
+  }
+
+  .camp-step-tabs button small {
+    display: block;
+    font-size: 0.7rem;
+  }
+
+  .camp-step-tabs button .shift-number {
+    width: 30px;
+    height: 30px;
+  }
+
+  .camp-step-tabs button .shift-state {
+    font-size: 0.6rem;
+  }
+
+  .lesson-copy h2 {
+    font-size: clamp(1.55rem, 8vw, 2.15rem);
+  }
+
+  .lesson-copy > p {
+    font-size: 1rem;
+  }
+
+  .six-game-strip {
+    gap: 5px;
+  }
+
+  .six-game-strip span {
+    border-width: 2px;
+  }
+
+
+  .camp-controls .primary-camp-button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-camp-brand {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .training-camp-brand img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .training-camp-brand h1 {
+    font-size: 1.45rem;
+  }
+
+  .training-camp-brand p {
+    grid-column: 1 / -1;
+  }
+
+  .drill-marker span,
+  .drill-marker strong {
+    font-size: 0.66rem;
+  }
+
+  .six-game-strip {
+    grid-template-columns: repeat(3, minmax(48px, 1fr));
+  }
+
+  .counter-drill,
+  .automatic-season-demo {
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--page-bg) 70%, black 30%);
+  }
+
+  .camp-controls {
+    grid-template-columns: 0.85fr 1.15fr;
+  }
+
+  .camp-controls button {
+    padding-inline: 9px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-visual-stack > section,
+  .lesson-visual-stack > details,
+  .lesson-visual-stack > a {
+    animation: none;
+  }
+
+  .camp-step-tabs button {
+    transition: none;
+  }
 }

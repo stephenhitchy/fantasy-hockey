@@ -1,0 +1,288 @@
+:host {
+  display: block;
+  min-height: calc(100dvh - 68px);
+}
+
+.invite-link-page {
+  min-height: calc(100dvh - 68px);
+  padding: clamp(20px, 5vw, 56px) 16px;
+  background:
+    radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--user-team-primary) 28%, transparent), transparent 34%),
+    radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--user-team-accent) 18%, transparent), transparent 32%),
+    var(--rr-color-page);
+  color: var(--rr-color-text);
+}
+
+.invite-link-shell {
+  width: min(100%, 660px);
+  margin: 0 auto;
+}
+
+.invite-link-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.invite-link-brand img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.invite-link-brand div {
+  display: grid;
+  gap: 3px;
+}
+
+.invite-link-brand strong {
+  font-size: 18px;
+}
+
+.eyebrow {
+  color: var(--user-team-accent);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invite-link-card {
+  padding: clamp(22px, 5vw, 38px);
+  border: 2px solid var(--user-team-outline);
+  border-radius: var(--rr-radius-lg);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 96%, transparent);
+  box-shadow: var(--rr-shadow-card);
+}
+
+.invite-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rr-color-border);
+}
+
+.invite-card-heading h1 {
+  margin: 4px 0 0;
+  font-size: clamp(25px, 6vw, 38px);
+  line-height: 1.05;
+}
+
+.invite-puck {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 3px solid var(--user-team-accent);
+  border-radius: 50%;
+  background: var(--rr-color-page);
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-code);
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--user-team-primary) 34%, transparent);
+}
+
+.invite-summary,
+.scanner-safety-note,
+.invite-state p {
+  color: var(--rr-color-text-muted);
+  line-height: 1.6;
+}
+
+.invite-summary {
+  margin: 22px 0 16px;
+}
+
+.invite-code-panel {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 2px solid var(--user-team-accent);
+  background: var(--rr-color-page);
+  text-align: center;
+}
+
+.invite-code-panel span {
+  color: var(--rr-color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invite-code-panel strong {
+  font-family: var(--rr-font-code);
+  font-size: clamp(30px, 8vw, 48px);
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: 0.12em;
+}
+
+.invite-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 22px 0;
+  padding: 16px;
+  border: 1px solid var(--rr-color-border);
+  background: var(--rr-color-surface-strong);
+}
+
+.invite-state.warning {
+  border-color: var(--rr-color-warning);
+}
+
+.invite-state.error {
+  border-color: var(--rr-color-danger);
+}
+
+.invite-state strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 17px;
+}
+
+.invite-state p {
+  margin: 0;
+}
+
+.invite-state b {
+  color: var(--rr-color-text);
+  overflow-wrap: anywhere;
+}
+
+.invite-primary,
+.invite-secondary,
+.invite-text-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border-radius: var(--rr-radius-md);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.invite-primary {
+  border: 2px solid var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+}
+
+.invite-secondary {
+  border: 2px solid var(--rr-color-border-strong);
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text);
+}
+
+.invite-text-button {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--rr-color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.invite-primary:hover:not(:disabled),
+.invite-primary:focus-visible,
+.invite-secondary:hover:not(:disabled),
+.invite-secondary:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.invite-primary:disabled,
+.invite-secondary:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.link-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.scanner-safety-note {
+  margin: 16px 0 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.verification-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.invite-notice {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rr-color-border);
+  line-height: 1.5;
+}
+
+.invite-notice.success {
+  border-color: var(--rr-color-success);
+  color: var(--rr-color-success);
+}
+
+.invite-notice.error {
+  border-color: var(--rr-color-danger);
+  color: var(--rr-color-danger);
+}
+
+.invite-link-footer {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  padding: 18px 0;
+  font-size: 12px;
+}
+
+.invite-link-footer a {
+  color: var(--rr-color-text-muted);
+}
+
+@media (max-width: 560px) {
+  .invite-link-page {
+    min-height: calc(100dvh - 56px);
+    padding-right: 10px;
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    padding-left: 10px;
+  }
+
+  .invite-link-card {
+    padding: 20px 16px;
+  }
+
+  .invite-card-heading {
+    align-items: flex-start;
+  }
+
+  .invite-puck {
+    width: 48px;
+    height: 48px;
+    font-size: 14px;
+  }
+
+  .verification-actions {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-primary,
+  .invite-secondary {
+    transition: none;
+  }
+}

@@ -194,7 +194,7 @@
   justify-content: center;
   min-height: 38px;
   padding: 10px 13px;
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   font-size: 13px;
   font-weight: 900;
   text-decoration: none;
@@ -325,7 +325,7 @@
   width: 100%;
   padding: 11px 12px;
   border: 1px solid var(--rr-team-migration-color-19);
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   background: rgba(15, 27, 42, 0.72);
   color: var(--rr-team-migration-color-07);
   font: inherit;
@@ -340,7 +340,7 @@
 .team-name-form button {
   padding: 10px 14px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   background: var(--rr-team-migration-color-01);
   color: #091323;
   cursor: pointer;
@@ -502,7 +502,7 @@
 
 .projection-strip div {
   padding: 8px;
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   background: rgba(15, 27, 42, 0.65);
 }
 
@@ -1591,7 +1591,7 @@
 .ir-activation-cycle-note {
   margin-top: 16px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   background: rgba(29, 46, 70, 0.6);
   color: #b8c9db;
   font-size: 11px;
@@ -1611,7 +1611,7 @@
 .ir-activation-confirm {
   min-height: 40px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--rr-radius-md);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -2609,3 +2609,66 @@
   }
 }
 
+
+/* Beta navigation pass: make team destinations large, scannable, and consistent. */
+.hero-add-drop-action {
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.quick-actions-card {
+  align-items: stretch;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.quick-actions-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 10px;
+}
+
+.quick-actions-list .team-navigation-action {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--rr-radius-md);
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: left;
+  white-space: normal;
+}
+
+.team-navigation-action .pixel-icon {
+  flex: 0 0 auto;
+}
+
+.quick-actions-list .team-navigation-action--priority {
+  border-color: var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: inset 0 -4px 0 var(--user-team-secondary);
+}
+
+@media (max-width: 900px) {
+  .quick-actions-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .quick-actions-list {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions-list .team-navigation-action {
+    min-height: 56px;
+  }
+}

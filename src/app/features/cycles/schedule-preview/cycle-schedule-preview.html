@@ -7,8 +7,8 @@
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
-     aria-label="Back to league home">
-      Back to League
+     aria-label="Back to the previous RinkRat page">
+      Back
     </a>
 
     <header class="schedule-preview-header">
@@ -34,6 +34,14 @@
         </a>
       </div>
     </header>
+
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="currentCycleNumber()"
+        currentDestination="schedule"
+      />
+    </section>
 
     <section class="schedule-team-selector-card">
       <div>

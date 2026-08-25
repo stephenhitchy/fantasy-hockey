@@ -166,6 +166,7 @@ function boundedNumber(value: unknown): number | null {
 
 function redactReportPath(pathname: string): string {
   return pathname
+    .replace(/\/join\/[^/?#]+/gi, '/join/:inviteCode')
     .replace(/\/leagues\/[^/?#]+/gi, '/leagues/:leagueId')
     .replace(/\/players\/[^/?#]+/gi, '/players/:playerId')
     .replace(/\/assets\/[^/?#]+/gi, '/assets/:assetKey')

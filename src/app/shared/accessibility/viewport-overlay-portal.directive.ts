@@ -2,6 +2,7 @@ import {
   AfterViewInit,
   Directive,
   ElementRef,
+  Input,
   OnDestroy,
 } from '@angular/core';
 
@@ -204,9 +205,16 @@ function releaseViewportLock(host: HTMLElement): void {
   standalone: true,
 })
 export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy {
+  /**
+   * Modal overlays lock the page by default. Small anchored help panels can opt
+   * out while still escaping transformed ancestors that misplace fixed content.
+   */
+  @Input() appViewportOverlayPortalLock = true;
+
   private readonly host: HTMLElement;
   private resetFrame: number | null = null;
   private portaled = false;
+  private viewportLockHeld = false;
 
   constructor(elementRef: ElementRef<HTMLElement>) {
     this.host = elementRef.nativeElement;
@@ -220,7 +228,11 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
     document.body.appendChild(this.host);
     this.host.setAttribute('data-viewport-overlay-portaled', 'true');
     this.portaled = true;
-    acquireViewportLock(this.host);
+
+    if (this.appViewportOverlayPortalLock) {
+      acquireViewportLock(this.host);
+      this.viewportLockHeld = true;
+    }
 
     this.resetFrame = window.requestAnimationFrame(() => {
       this.resetFrame = null;
@@ -259,6 +271,10 @@ export class ViewportOverlayPortalDirective implements AfterViewInit, OnDestroy 
      */
     this.host.remove();
     this.portaled = false;
-    releaseViewportLock(this.host);
+
+    if (this.viewportLockHeld) {
+      this.viewportLockHeld = false;
+      releaseViewportLock(this.host);
+    }
   }
 }

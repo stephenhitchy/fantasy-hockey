@@ -1,5 +1,6 @@
 <span class="hockey-term-wrap">
   <button
+    #termTrigger
     type="button"
     class="hockey-term-button"
     [class.expanded-label]="!compact && experience() === 'new'"
@@ -14,9 +15,18 @@
 
   @if (open()) {
     <span
+      #termPanel
+      appViewportOverlayPortal
+      [appViewportOverlayPortalLock]="false"
       class="hockey-term-popover"
       [class.align-center]="popoverAlign === 'center'"
       [class.align-end]="popoverAlign === 'end'"
+      [class.positioning]="!panelPosition()"
+      [class.positioned]="panelPosition()"
+      [style.top.px]="mobilePanel() ? null : (panelPosition()?.top ?? null)"
+      [style.left.px]="mobilePanel() ? null : (panelPosition()?.left ?? null)"
+      [style.width.px]="mobilePanel() ? null : (panelPosition()?.width ?? null)"
+      [style.max-height.px]="mobilePanel() ? null : (panelPosition()?.maxHeight ?? null)"
       role="region"
       [id]="panelId"
       [attr.aria-labelledby]="titleId"
@@ -26,7 +36,7 @@
         <small>{{ definition().abbreviation }}</small>
       </span>
       <span>{{ definition().beginnerExplanation }}</span>
-      <button type="button" (click)="close()" aria-label="Close definition">Close</button>
+      <button type="button" (click)="close(true)" aria-label="Close definition">Close</button>
     </span>
   }
 </span>

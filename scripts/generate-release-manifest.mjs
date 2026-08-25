@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { ensureReleaseManifestGitignore } from './release-manifest-gitignore.mjs';
 
@@ -40,6 +40,24 @@ function compactTimestamp(date) {
   return date.toISOString().replace(/[-:.]/g, '').replace('Z', 'Z');
 }
 
+async function pathExists(url) {
+  try {
+    await stat(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readPackagedSourceRevision() {
+  try {
+    const revision = (await readFile(new URL('.rinkrat-source-revision', ROOT), 'utf8')).trim();
+    return /^[0-9a-f]{7,80}$/i.test(revision) ? revision.slice(0, 80) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveSourceRevision() {
   const environmentRevision = [
     process.env.RINKRAT_SOURCE_REVISION,
@@ -52,41 +70,47 @@ async function resolveSourceRevision() {
     return environmentRevision.trim().slice(0, 80);
   }
 
-  try {
-    const [{ stdout: revisionOutput }, { stdout: statusOutput }] = await Promise.all([
-      execFileAsync('git', ['rev-parse', 'HEAD'], {
-        cwd: new URL('.', ROOT),
-        windowsHide: true,
-      }),
-      execFileAsync(
-        'git',
-        [
-          'status',
-          '--porcelain',
-          '--untracked-files=normal',
-          '--',
-          '.',
-          ':(exclude)public/release-manifest.json',
-          ':(exclude)src/environments/generated-release-manifest.ts',
-        ],
-        {
+  // Release ZIPs intentionally omit .git so the source tree is not duplicated.
+  // A tiny packaged revision file preserves the exact clean commit for manifest
+  // generation. Only use Git when this project root actually owns Git metadata;
+  // otherwise a parent repository could supply an unrelated revision.
+  if (await pathExists(new URL('.git', ROOT))) {
+    try {
+      const [{ stdout: revisionOutput }, { stdout: statusOutput }] = await Promise.all([
+        execFileAsync('git', ['rev-parse', 'HEAD'], {
           cwd: new URL('.', ROOT),
           windowsHide: true,
-        },
-      ),
-    ]);
-    const revision = revisionOutput.trim();
+        }),
+        execFileAsync(
+          'git',
+          [
+            'status',
+            '--porcelain',
+            '--untracked-files=normal',
+            '--',
+            '.',
+            ':(exclude)public/release-manifest.json',
+            ':(exclude)src/environments/generated-release-manifest.ts',
+          ],
+          {
+            cwd: new URL('.', ROOT),
+            windowsHide: true,
+          },
+        ),
+      ]);
+      const revision = revisionOutput.trim();
 
-    if (!revision) {
-      return 'unversioned';
+      if (revision) {
+        return statusOutput.trim()
+          ? `${revision.slice(0, 40)}-dirty`
+          : revision.slice(0, 80);
+      }
+    } catch {
+      // Continue to the packaged-revision fallback below.
     }
-
-    return statusOutput.trim()
-      ? `${revision.slice(0, 40)}-dirty`
-      : revision.slice(0, 80);
-  } catch {
-    return 'unversioned';
   }
+
+  return (await readPackagedSourceRevision()) ?? 'unversioned';
 }
 
 const [runtimeSource, productionRuntimeSource, scoringSource, projectionSource, packageSource] =

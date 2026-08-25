@@ -3074,6 +3074,7 @@ function normalizeBetaRoute(value: unknown): string {
   const rawRoute = asString(value).split(/[?#]/)[0] || '/';
 
   return rawRoute
+    .replace(/\/join\/[^/]+/gi, '/join/:inviteCode')
     .replace(/\/leagues\/[^/]+/gi, '/leagues/:leagueId')
     .replace(/\/players\/[^/]+/gi, '/players/:playerId')
     .replace(/\/matchups\/[^/]+/gi, '/matchups/:matchupId')
@@ -3151,6 +3152,7 @@ async function enforceUserSubmissionLimit(
 function redactDiagnosticText(value: string): string {
   return value
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+    .replace(/\/join\/[A-Za-z0-9_-]+/gi, '/join/:inviteCode')
     .replace(/\/leagues\/[A-Za-z0-9_-]+/g, '/leagues/:leagueId')
     .replace(/\/players\/[A-Za-z0-9_-]+/g, '/players/:playerId')
     .replace(/([?&](?:inviteCode|code)=)[^&\s]+/gi, '$1[redacted]');
@@ -4140,6 +4142,7 @@ export {
   sendInjuryEmailOnAvailabilityChange,
   sendInjuryEmailsOnGlobalAvailabilityChange,
   sendTestInjuryEmail,
+  sendWelcomeEmailAfterTrainingCampResolved,
   sendWelcomeEmailOnProfileCreated,
 } from './email-notifications';
 

@@ -36,13 +36,22 @@
 
             <div class="top-invite-code-row">
               <strong class="invite-code">{{ league()?.inviteCode }}</strong>
-              <button
-                type="button"
-                class="copy-invite-button rr-button rr-button--primary"
-                (click)="copyInviteCode()"
-              >
-                Copy Code
-              </button>
+              <div class="top-invite-copy-actions">
+                <button
+                  type="button"
+                  class="copy-invite-button rr-button rr-button--primary"
+                  (click)="copyInviteLink()"
+                >
+                  Copy Invite Link
+                </button>
+                <button
+                  type="button"
+                  class="copy-invite-button rr-button rr-button--secondary"
+                  (click)="copyInviteCode()"
+                >
+                  Copy Code
+                </button>
+              </div>
             </div>
 
             <div class="invite-progress-copy">
@@ -97,6 +106,15 @@
         </nav>
       </div>
     </header>
+
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="cycle()?.cycleNumber ?? null"
+        [currentMatchupRoute]="cycle() ? getCurrentOwnerMatchupLink() : null"
+        currentDestination="league-hq"
+      />
+    </section>
 
     @if (errorMessage()) {
       <section class="error-card rr-notice rr-notice--danger">
@@ -432,14 +450,16 @@
             class="view-cycle-link rr-button rr-button--primary"
             [routerLink]="getCurrentOwnerMatchupLink()"
           >
-            View Current Matchup
+            <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
+            <span>Open Current Matchup</span>
           </a>
 
           <a
             class="view-cycle-link secondary-cycle-link rr-button rr-button--secondary"
             [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
           >
-            View All Matchups
+            <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
+            <span>View All Matchups</span>
           </a>
         </div>
 
@@ -526,10 +546,8 @@
         <p>{{ getDailyInjuryStatusDescription() }}</p>
       </div>
 
-      <div class="daily-injury-meta">
-        <small>{{ getDailyInjuryStatusTimeLabel() }}</small>
-
-        @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
+      @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
+        <div class="daily-injury-meta">
           <button
             type="button"
             class="daily-injury-refresh-button rr-button rr-button--secondary"
@@ -538,8 +556,8 @@
           >
             {{ dailyInjuryRefreshInProgress() ? 'Refreshing…' : 'Refresh Today' }}
           </button>
-        }
-      </div>
+        </div>
+      }
     </section>
     </section>
 
@@ -822,9 +840,42 @@
 
         <h2 id="draft-live-title">It is time to make your picks.</h2>
 
-        <p>Opening the Draft Room automatically.</p>
+        <p>
+          Opening automatically. You can also open it now.
+        </p>
 
-        <button type="button" class="rr-button rr-button--primary" (click)="enterDraftRoom()">Enter Draft Now</button>
+        <div class="draft-entry-actions">
+          <button
+            type="button"
+            class="rr-button rr-button--primary"
+            [disabled]="draftEntryInProgress()"
+            (click)="enterDraftRoom()"
+          >
+            <span class="pixel-icon icon-draft icon-sm" aria-hidden="true"></span>
+            <span>{{ draftEntryInProgress() ? 'Opening Draft Room…' : 'Open Draft Room' }}</span>
+          </button>
+
+          @if (draftEntryRecoveryVisible()) {
+            <button
+              type="button"
+              class="rr-button rr-button--secondary"
+              [disabled]="draftEntryInProgress()"
+              (click)="reloadIntoDraftRoom()"
+            >
+              Reload &amp; Open Draft Room
+            </button>
+          }
+        </div>
+
+        @if (draftEntryRecoveryVisible() && !draftEntryError()) {
+          <p class="draft-entry-recovery" role="status">
+            Still here? Try the reload option.
+          </p>
+        }
+
+        @if (draftEntryError()) {
+          <p class="draft-entry-error" role="alert">{{ draftEntryError() }}</p>
+        }
       </section>
     </div>
   }

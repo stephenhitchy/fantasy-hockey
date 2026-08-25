@@ -7,9 +7,10 @@
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId, 'cycles', cycleNumber]"
-      [attr.aria-label]="'Back to ' + getCycleLabel()"
+      aria-label="Back to the previous RinkRat page"
+      data-rinkrat-history-back
     >
-      Back to {{ getCycleLabel() }}
+      Back
     </a>
 
     <header class="matchup-overview-header">
@@ -43,6 +44,14 @@
         </a>
       </div>
     </header>
+
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="cycleNumber"
+        currentDestination="matchups"
+      />
+    </section>
 
     <section class="overview-status-card">
       <div>

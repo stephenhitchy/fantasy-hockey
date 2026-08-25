@@ -9,7 +9,7 @@ import type {
   ReleaseUpdateStatus,
 } from './release-manifest.models';
 
-export const INVITE_BETA_VALIDATION_SCHEMA_VERSION = 2;
+export const INVITE_BETA_VALIDATION_SCHEMA_VERSION = 4;
 export const INVITE_BETA_TESTER_LABEL_MAX_LENGTH = 80;
 export const INVITE_BETA_DEVICE_LABEL_MAX_LENGTH = 120;
 export const INVITE_BETA_NOTE_MAX_LENGTH = 600;
@@ -152,6 +152,38 @@ export const INVITE_BETA_VALIDATION_DEFINITIONS: readonly InviteBetaValidationDe
     required: true,
   },
   {
+    id: 'invite-link-training-first',
+    groupId: 'accounts',
+    title: 'Join from a share link with Training Camp first',
+    instruction: 'Open a commissioner share link in a signed-out browser, create a new account, finish all five Training Camp shifts, press Send verification email, then open that email.',
+    evidenceHint: 'No verification email arrives before Training Camp is finished or before the manager presses Send verification email; afterward the same saved invitation resumes, creates one membership, and opens the intended league without re-entering the code.',
+    required: true,
+  },
+  {
+    id: 'invite-link-email-held-during-training-camp',
+    groupId: 'accounts',
+    title: 'Hold the first verification email during Training Camp',
+    instruction: 'Create another account from a share link and remain inside Training Camp without finishing or choosing Finish Later. Check the inbox and spam folder before continuing.',
+    evidenceHint: 'The first verification email is not sent while Training Camp is unresolved, and the invitation remains saved without creating a league membership.',
+    required: true,
+  },
+  {
+    id: 'invite-link-finish-later',
+    groupId: 'accounts',
+    title: 'Exit Training Camp and continue the invitation',
+    instruction: 'From a new-account share-link flow, choose Finish Later before the fifth shift, press Send verification email, open that email, and return to RinkRat.',
+    evidenceHint: 'Training Camp remains incomplete but deliberately deferred; the first verification email is sent only after the manager presses the button, and the intended league is joined exactly once.',
+    required: true,
+  },
+  {
+    id: 'invite-link-reload-recovery',
+    groupId: 'accounts',
+    title: 'Recover an invitation after reload and account choice',
+    instruction: 'Reload during onboarding, reopen the same share link, and test the explicit Use Another Account choice once.',
+    evidenceHint: 'The invitation remains bounded to the chosen account, never silently switches accounts, and can resume or be cancelled without a stuck screen.',
+    required: true,
+  },
+  {
     id: 'identity-theme-switching',
     groupId: 'accounts',
     title: 'Switch between RinkRat and NHL identities',
@@ -163,8 +195,8 @@ export const INVITE_BETA_VALIDATION_DEFINITIONS: readonly InviteBetaValidationDe
     id: 'second-manager-join',
     groupId: 'accounts',
     title: 'Join with a second manager account',
-    instruction: 'Use a separate account and browser session to join through the league code.',
-    evidenceHint: 'The manager receives member access without commissioner-only controls or raw permission errors.',
+    instruction: 'Use a separate verified returning account and browser session to join through the commissioner share link.',
+    evidenceHint: 'The manager receives member access without re-entering the code, commissioner-only controls, duplicate membership, or raw permission errors.',
     required: true,
   },
   {

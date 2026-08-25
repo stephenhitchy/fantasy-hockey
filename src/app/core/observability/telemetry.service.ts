@@ -38,6 +38,11 @@ function sanitizeRoute(url: string): string {
     const segment = segments[index] ?? '';
     const previous = segments[index - 1] ?? '';
 
+    if (previous === 'join') {
+      sanitized.push(':inviteCode');
+      continue;
+    }
+
     if (previous === 'leagues' && segment !== 'create' && segment !== 'join') {
       sanitized.push(':leagueId');
       continue;

@@ -12,8 +12,8 @@
       <span class="eyebrow">Training Camp Complete</span>
       <h1 id="training-camp-step-title" tabindex="-1">You are ready for puck drop</h1>
       <p>
-        You now know how six-game matchups, roster moves, player cards, and the season flow work.
-        The Coach button remains available throughout RinkRat whenever you need a refresher.
+        You cleared five shifts and ten quick drills. The Coach button stays available whenever
+        you need a refresher.
       </p>
 
       <div class="completion-badge" aria-label="RinkRat Training Camp completion badge">
@@ -26,20 +26,97 @@
 
       <div class="completion-actions">
         <a class="primary-camp-button" routerLink="/dashboard">Enter the Arena</a>
-        <button type="button" class="secondary-camp-button" (click)="completed.set(false); selectStep(0)">
+        <button type="button" class="secondary-camp-button" (click)="reviewTrainingCamp()">
           Review Again
+        </button>
+      </div>
+    </article>
+  </section>
+} @else if (verificationPromptVisible()) {
+  <section class="training-camp-page completion-page verification-page">
+    <article class="completion-card verification-card">
+      <div class="completion-mascot" aria-hidden="true">
+        <img src="/assets/branding/rinkrat-headshot.png" alt="" />
+      </div>
+      <span class="eyebrow">Email Verification</span>
+      <h1 id="training-camp-step-title" tabindex="-1">{{ verificationPromptTitle() }}</h1>
+      <p>
+        {{ trainingCampOutcome() === 'completed' ? 'Training Camp is complete.' : 'Training Camp is saved for later.' }}
+        {{ verificationPromptInstruction() }} The email will go to
+        <strong>{{ verificationEmail() }}</strong>.
+      </p>
+
+      <div class="completion-badge verification-badge" aria-live="polite">
+        <span class="pixel-icon icon-mail icon-lg" aria-hidden="true"></span>
+        <div>
+          <small>{{ verificationEmailPreviouslySent() ? 'Verification link sent' : 'Ready when you are' }}</small>
+          <strong>
+            {{ verificationEmailPreviouslySent()
+              ? 'Open the email, then return to RinkRat'
+              : 'Click to send the first verification email' }}
+          </strong>
+        </div>
+      </div>
+
+      @if (verificationStatusMessage()) {
+        <p class="verification-status" role="status">{{ verificationStatusMessage() }}</p>
+      }
+
+      @if (errorMessage()) {
+        <p class="camp-error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <div class="completion-actions verification-actions">
+        <button
+          type="button"
+          class="primary-camp-button"
+          [disabled]="verificationSendDisabled()"
+          (click)="sendVerificationEmail()"
+        >
+          {{ verificationSendButtonLabel() }}
+        </button>
+        <button
+          type="button"
+          class="secondary-camp-button"
+          [disabled]="sendingVerification() || refreshingVerification()"
+          (click)="refreshVerificationStatus()"
+        >
+          {{ refreshingVerification() ? 'Checking...' : 'I Verified — Continue' }}
+        </button>
+        <button
+          type="button"
+          class="secondary-camp-button"
+          [disabled]="sendingVerification() || refreshingVerification()"
+          (click)="verifyLater()"
+        >
+          {{ verifyLaterLabel() }}
         </button>
       </div>
     </article>
   </section>
 } @else {
   <section class="training-camp-page">
+    @if (inviteContinuationActive()) {
+      <aside class="training-camp-invite-banner" aria-live="polite">
+        <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+        <div>
+          <small>League invitation waiting</small>
+          <strong>Clear Training Camp, then verify your email</strong>
+          <p>
+            RinkRat will hold your invitation after you finish—or choose
+            <strong>Finish Later</strong>. You will then send the verification email when you are ready.
+          </p>
+        </div>
+      </aside>
+    }
+
     <header class="training-camp-hero">
       <div class="training-camp-brand">
         <img src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot" />
         <div>
           <span class="eyebrow">RinkRat Training Camp</span>
-          <h1>Learn the game in five shifts</h1>
+          <h1>Five shifts. Two quick drills each.</h1>
+          <p>One idea appears at a time. Use Next Drill when you are ready to keep going.</p>
         </div>
       </div>
 
@@ -47,55 +124,76 @@
         @if (previouslyCompleted()) {
           <span class="completed-chip">Previously completed</span>
         }
-        <button type="button" class="exit-camp-button" (click)="leaveTrainingCamp()">
-          Exit Training Camp
+        <button
+          type="button"
+          class="exit-camp-button"
+          [disabled]="saving()"
+          (click)="leaveTrainingCamp()"
+        >
+          {{ exitActionLabel() }}
         </button>
       </div>
     </header>
 
     <div class="camp-progress" aria-label="Training Camp progress">
       <div class="camp-progress-copy">
-        <span>Shift {{ currentStepIndex() + 1 }} of {{ steps.length }}</span>
-        <strong>{{ progressPercent() }}%</strong>
+        <span>
+          Shift {{ currentStepIndex() + 1 }} of {{ steps.length }} · Drill
+          {{ currentDrillIndex() + 1 }} of {{ currentStep().drills.length }}
+        </span>
+        <strong>{{ progressPercent() }}% cleared</strong>
       </div>
       <div class="camp-progress-track" aria-hidden="true">
         <span [style.width.%]="progressPercent()"></span>
       </div>
     </div>
 
-    <nav class="camp-step-tabs" aria-label="Training Camp sections">
+    <nav class="camp-step-tabs" aria-label="Training Camp shifts">
       @for (step of steps; track step.id; let index = $index) {
         <button
           type="button"
           [class.active]="index === currentStepIndex()"
-          [class.visited]="index < currentStepIndex()"
+          [class.cleared]="isStepCleared(index)"
+          [class.locked]="!canOpenStep(index)"
+          [disabled]="!canOpenStep(index) || saving()"
           [attr.aria-current]="index === currentStepIndex() ? 'step' : null"
+          [attr.aria-label]="
+            'Shift ' + step.number + ': ' + step.shortLabel + (!canOpenStep(index) ? ', locked' : '')
+          "
           (click)="selectStep(index)"
         >
-          <span>{{ step.number }}</span>
-          <small>{{ step.eyebrow }}</small>
+          <span class="shift-number">{{ step.number }}</span>
+          <small>{{ step.shortLabel }}</small>
+          <span class="shift-state" aria-hidden="true">
+            @if (isStepCleared(index)) {
+              ✓
+            } @else if (!canOpenStep(index)) {
+              Locked
+            } @else {
+              Ready
+            }
+          </span>
         </button>
       }
     </nav>
 
     <article class="camp-lesson-card">
       <div class="lesson-copy">
-        <span class="eyebrow">{{ currentStep().eyebrow }}</span>
-        <h2 id="training-camp-step-title" tabindex="-1">{{ currentStep().title }}</h2>
-        <p>{{ currentStep().summary }}</p>
+        <div class="drill-marker">
+          <span>{{ currentStep().eyebrow }}</span>
+          <strong>{{ currentDrill().label }}</strong>
+        </div>
+        <h2 id="training-camp-step-title" tabindex="-1">{{ currentDrill().title }}</h2>
+        <p>{{ currentDrill().body }}</p>
 
-        @if (currentStep().id === 'cycles') {
-          <ol class="lesson-simple-list" aria-label="How six-game matchups work">
-            <li><strong>Games 1 through 6</strong> count toward that player’s first matchup.</li>
-            <li><strong>Game 7 does not go backward.</strong> It becomes Game 1 of that player’s second matchup.</li>
-            <li><strong>Every roster spot keeps its own count.</strong> One player can start Matchup 2 while another player is still finishing Matchup 1.</li>
-          </ol>
-        } @else if (currentStep().id === 'roster') {
-          <ul class="lesson-simple-list roster-simple-list" aria-label="RinkRat roster basics">
-            <li><strong>14 active spots</strong> earn fantasy points.</li>
-            <li><strong>3 bench spots</strong> give you backup options.</li>
-            <li><strong>3 Injured Reserve (IR) spots</strong> hold eligible injured players.</li>
-          </ul>
+        @if (currentDrill().whyItMatters; as whyItMatters) {
+          <aside class="why-six-games-callout">
+            <span class="pixel-icon icon-shield icon-sm" aria-hidden="true"></span>
+            <div>
+              <small>Why RinkRat uses six games</small>
+              <strong>{{ whyItMatters }}</strong>
+            </div>
+          </aside>
         }
 
         <aside class="coach-note">
@@ -104,44 +202,64 @@
           </span>
           <div>
             <small>Coach’s Clipboard</small>
-            <strong>{{ currentStep().coachNote }}</strong>
+            <strong>{{ currentDrill().coachNote }}</strong>
           </div>
         </aside>
       </div>
 
-      <div class="lesson-visual" [attr.data-step]="currentStep().id">
-        @switch (currentStep().id) {
-          @case ('cycles') {
-            <section class="cycle-demo" aria-label="Two players completing independent six-game counts">
-              <div class="cycle-demo-team">
-                <div class="demo-player">
+      <div
+        class="lesson-visual"
+        [attr.data-step]="currentStep().id"
+        [attr.data-drill]="currentDrill().id"
+      >
+        <div class="lesson-visual-stack">
+          @switch (currentDrill().id) {
+            @case ('six-game-counter') {
+              <section class="counter-drill" aria-label="One active roster spot counting six NHL games">
+                <header>
                   <span class="demo-logo">A</span>
-                  <div><strong>Player A</strong><small>Fast NHL schedule</small></div>
-                </div>
-                <div class="cycle-window-map completed-window">
-                  <span class="window-label first-window-label">First Matchup</span>
-                  <span class="window-label next-window-label">Start of Second Matchup</span>
-                  <div class="first-window-dots">
-                    @for (game of [1, 2, 3, 4, 5, 6]; track game) {
-                      <span class="game-dot played">{{ game }}</span>
-                    }
+                  <div>
+                    <small>Active roster spot</small>
+                    <strong>Six-game counter</strong>
                   </div>
-                  <span class="window-arrow" aria-hidden="true">→</span>
-                  <div class="next-window-dot">
-                    <span class="game-dot next">7</span>
-                  </div>
+                </header>
+                <div class="six-game-strip" aria-label="Games one through six">
+                  @for (game of [1, 2, 3, 4, 5, 6]; track game) {
+                    <span>{{ game }}</span>
+                  }
                 </div>
-                <small class="demo-result">Player A finished Matchup 1. Game 7 is now the first game of Matchup 2.</small>
-              </div>
+                <p>These six games build this spot’s matchup score.</p>
+              </section>
+            }
 
-              <div class="cycle-demo-team">
-                <div class="demo-player">
-                  <span class="demo-logo">B</span>
-                  <div><strong>Player B</strong><small>Slower NHL schedule</small></div>
+            @case ('game-seven') {
+              <section class="cycle-demo" aria-label="Two roster spots using independent six-game counters">
+                <div class="cycle-demo-team">
+                  <div class="demo-player">
+                    <span class="demo-logo">A</span>
+                    <div><strong>Spot A</strong><small>Already reached six</small></div>
+                  </div>
+                  <div class="cycle-window-map completed-window">
+                    <span class="window-label first-window-label">Finished Matchup</span>
+                    <span class="window-label next-window-label">Next Matchup</span>
+                    <div class="first-window-dots">
+                      @for (game of [1, 2, 3, 4, 5, 6]; track game) {
+                        <span class="game-dot played">{{ game }}</span>
+                      }
+                    </div>
+                    <span class="window-arrow" aria-hidden="true">→</span>
+                    <div class="next-window-dot">
+                      <span class="game-dot next">7</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="cycle-window-map in-progress-window">
-                  <span class="window-label first-window-label">First Matchup</span>
-                  <div class="first-window-dots">
+
+                <div class="cycle-demo-team compact-cycle-team">
+                  <div class="demo-player">
+                    <span class="demo-logo">B</span>
+                    <div><strong>Spot B</strong><small>Still finishing its six</small></div>
+                  </div>
+                  <div class="first-window-dots standalone-dots">
                     @for (game of [1, 2, 3, 4]; track game) {
                       <span class="game-dot played">{{ game }}</span>
                     }
@@ -150,221 +268,245 @@
                     }
                   </div>
                 </div>
-                <small class="demo-result">Player B is still in Matchup 1. Games 5 and 6 still need to happen.</small>
-              </div>
 
-              <div class="fairness-callout">
-                <strong>Both players still count exactly six games</strong>
-                <span>Finishing sooner does not give Player A extra games in Matchup 1.</span>
-              </div>
-            </section>
-          }
-
-          @case ('roster') {
-            <section class="roster-demo" aria-label="RinkRat roster structure">
-              <div class="roster-starters">
-                <div class="roster-position-slot forward-slot"><app-hockey-term term="left-wing" [compact]="true" /><strong>3</strong></div>
-                <div class="roster-position-slot forward-slot"><app-hockey-term term="center" [compact]="true" /><strong>3</strong></div>
-                <div class="roster-position-slot forward-slot"><app-hockey-term term="right-wing" [compact]="true" /><strong>3</strong></div>
-                <div class="roster-position-slot defense-slot"><app-hockey-term term="defenseman" [compact]="true" /><strong>4</strong></div>
-                <div class="roster-position-slot goalie-slot"><app-hockey-term term="team-goalie-unit" [compact]="true" popoverAlign="end" /><strong>1</strong></div>
-              </div>
-              <p class="term-help-note">
-                Tap any position label marked with a question mark for a plain-language definition.
-              </p>
-              <div class="roster-support">
-                <article>
-                  <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-                  <div><small>Active lineup</small><strong>14 scoring spots</strong></div>
-                </article>
-                <article>
-                  <span class="pixel-icon icon-bench icon-lg" aria-hidden="true"></span>
-                  <div><small>Bench rail</small><strong>3 flexible slots</strong></div>
-                </article>
-                <article>
-                  <span class="pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
-                  <div><small>Treatment room</small><strong>3 injured-reserve spots</strong></div>
-                </article>
-              </div>
-
-              <section class="position-value-guide" aria-labelledby="position-value-title">
-                <header>
-                  <small>How positions are designed to score</small>
-                  <strong id="position-value-title">Different positions help your team in different ways</strong>
-                </header>
-                <div class="position-value-grid">
-                  <article class="position-value-card forwards">
-                    <span class="position-value-badge" aria-hidden="true">F</span>
-                    <div>
-                      <small>Forwards</small>
-                      <strong>Big upside, more ups and downs</strong>
-                      <p>Goals and assists can create huge scores. They can also have quiet six-game stretches.</p>
-                      <em>Higher best-case score · Lower safe score</em>
-                    </div>
-                  </article>
-                  <article class="position-value-card defense">
-                    <span class="position-value-badge" aria-hidden="true">D</span>
-                    <div>
-                      <small>Defensemen</small>
-                      <strong>Steadier and more reliable</strong>
-                      <p>Shots, hits, blocks, and ice time help them keep scoring even when they do not get a goal.</p>
-                      <em>Fewer huge spikes · More consistent totals</em>
-                    </div>
-                  </article>
-                  <article class="position-value-card goalies">
-                    <span class="position-value-badge" aria-hidden="true">G</span>
-                    <div>
-                      <small>Team Goalie Unit</small>
-                      <strong>Usually your highest-scoring roster spot</strong>
-                      <p>Your goalie slot counts the NHL team’s goalie appearances and is meant to carry extra weight.</p>
-                      <em>One starting unit · Major lineup impact</em>
-                    </div>
-                  </article>
+                <div class="fairness-callout">
+                  <strong>Both spots still count exactly six games</strong>
+                  <span>Spot A moving forward does not change Spot B’s counter.</span>
                 </div>
-                <p class="position-comparison-tip">Compare players mostly with others at the same position. A goalie having more points than a skater is expected.</p>
-                <a class="training-scoring-link" routerLink="/scoring">View the complete scoring breakdown <span aria-hidden="true">→</span></a>
               </section>
+            }
 
-              <details class="football-comparison-guide" open>
-                <summary>
-                  <span class="football-guide-ball" aria-hidden="true"></span>
-                  <span class="football-guide-summary-copy">
-                    <small>Know fantasy football?</small>
-                    <strong id="football-comparison-title">Translate RinkRat positions into familiar roles</strong>
-                  </span>
-                  <span class="football-guide-toggle" aria-hidden="true">⌄</span>
-                </summary>
-
-                <div class="football-guide-content" aria-labelledby="football-comparison-title">
-                  <p class="football-guide-intro">
-                    This is a rough mental model for workload and scoring personality—not an exact point-for-point comparison. Individual player role still matters more than the position label.
-                  </p>
-
-                  <div class="football-comparison-grid">
-                    @for (comparison of footballPositionComparisons; track comparison.hockeyRole) {
-                      <article
-                        class="football-comparison-card"
-                        [class.wings]="comparison.cssClass === 'wings'"
-                        [class.centers]="comparison.cssClass === 'centers'"
-                        [class.defense]="comparison.cssClass === 'defense'"
-                        [class.goalies]="comparison.cssClass === 'goalies'"
-                      >
-                        <header>
-                          <span class="football-role-badge" aria-hidden="true">{{ comparison.footballBadge }}</span>
-                          <div>
-                            <small>{{ comparison.hockeyRole }} · {{ comparison.hockeyPositions.join(' / ') }}</small>
-                            <strong>{{ comparison.footballRole }}</strong>
-                          </div>
-                        </header>
-
-                        <h3>{{ comparison.headline }}</h3>
-                        <p>{{ comparison.summary }}</p>
-
-                        <dl>
-                          <div>
-                            <dt>Points come from</dt>
-                            <dd>{{ comparison.scoringDrivers }}</dd>
-                          </div>
-                          <div>
-                            <dt>Draft lens</dt>
-                            <dd>{{ comparison.draftLesson }}</dd>
-                          </div>
-                        </dl>
-                      </article>
-                    }
-                  </div>
-
-                  <aside class="football-value-note">
-                    <span class="football-value-label">Positional value reminder</span>
-                    <p>
-                      A goalie unit may score more raw points than a forward, just as quarterbacks often outscore running backs and wide receivers. The real advantage is how much better an option is than the alternatives at the same position.
-                    </p>
-                  </aside>
-
-                  <p class="football-guide-precision">
-                    RinkRat treats left and right wings the same way. Centers use the same forward scoring rules, but Projection V11 gives the position a slightly more playmaking-oriented baseline on average.
-                  </p>
+            @case ('lineup-spots') {
+              <section class="roster-demo lineup-drill" aria-label="RinkRat roster structure">
+                <div class="roster-starters">
+                  <div class="roster-position-slot forward-slot"><app-hockey-term term="left-wing" [compact]="true" /><strong>3</strong></div>
+                  <div class="roster-position-slot forward-slot"><app-hockey-term term="center" [compact]="true" popoverAlign="center" /><strong>3</strong></div>
+                  <div class="roster-position-slot forward-slot"><app-hockey-term term="right-wing" [compact]="true" popoverAlign="center" /><strong>3</strong></div>
+                  <div class="roster-position-slot defense-slot"><app-hockey-term term="defenseman" [compact]="true" popoverAlign="center" /><strong>4</strong></div>
+                  <div class="roster-position-slot goalie-slot"><app-hockey-term term="team-goalie-unit" [compact]="true" popoverAlign="end" /><strong>1</strong></div>
                 </div>
-              </details>
-            </section>
+                <p class="term-help-note">
+                  Tap a question mark for a plain-language position description.
+                </p>
+                <div class="roster-support">
+                  <article>
+                    <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
+                    <div><small>Active lineup</small><strong>14 scoring spots</strong></div>
+                  </article>
+                  <article>
+                    <span class="pixel-icon icon-bench icon-lg" aria-hidden="true"></span>
+                    <div><small>Bench</small><strong>3 backup spots</strong></div>
+                  </article>
+                  <article>
+                    <span class="pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
+                    <div><small>Injured Reserve</small><strong>3 protected spots</strong></div>
+                  </article>
+                </div>
+              </section>
+            }
+
+            @case ('position-jobs') {
+              <section class="roster-demo position-drill" aria-label="How RinkRat positions are designed to score">
+                <section class="position-value-guide" aria-labelledby="position-value-title">
+                  <header>
+                    <small>Three scoring personalities</small>
+                    <strong id="position-value-title">Different jobs can create different point totals</strong>
+                  </header>
+                  <div class="position-value-grid">
+                    <article class="position-value-card forwards">
+                      <span class="position-value-badge" aria-hidden="true">F</span>
+                      <div>
+                        <small>Forwards</small>
+                        <strong>Big-play upside</strong>
+                        <p>Goals and assists can create huge—but less predictable—matchups.</p>
+                      </div>
+                    </article>
+                    <article class="position-value-card defense">
+                      <span class="position-value-badge" aria-hidden="true">D</span>
+                      <div>
+                        <small>Defensemen</small>
+                        <strong>Steadier workload</strong>
+                        <p>Ice time, blocks, hits, and shots help build a reliable floor.</p>
+                      </div>
+                    </article>
+                    <article class="position-value-card goalies">
+                      <span class="position-value-badge" aria-hidden="true">G</span>
+                      <div>
+                        <small>Team Goalie Unit</small>
+                        <strong>Largest raw totals</strong>
+                        <p>One NHL team’s goalie appearances combine into one premium slot.</p>
+                      </div>
+                    </article>
+                  </div>
+                  <p class="position-comparison-tip">
+                    Compare players mostly with others at the same position.
+                  </p>
+                </section>
+
+                <details class="football-comparison-guide">
+                  <summary>
+                    <span class="football-guide-ball" aria-hidden="true"></span>
+                    <span class="football-guide-summary-copy">
+                      <small>Know fantasy football?</small>
+                      <strong id="football-comparison-title">Open the WR · RB · QB comparison</strong>
+                    </span>
+                    <span class="football-guide-toggle" aria-hidden="true">⌄</span>
+                  </summary>
+
+                  <div class="football-guide-content" aria-labelledby="football-comparison-title">
+                    <p class="football-guide-intro">
+                      This is a rough mental model—not an exact point-for-point comparison.
+                    </p>
+
+                    <div class="football-comparison-grid">
+                      @for (comparison of footballPositionComparisons; track comparison.hockeyRole) {
+                        <article
+                          class="football-comparison-card"
+                          [class.wings]="comparison.cssClass === 'wings'"
+                          [class.centers]="comparison.cssClass === 'centers'"
+                          [class.defense]="comparison.cssClass === 'defense'"
+                          [class.goalies]="comparison.cssClass === 'goalies'"
+                        >
+                          <header>
+                            <span class="football-role-badge" aria-hidden="true">{{ comparison.footballBadge }}</span>
+                            <div>
+                              <small>{{ comparison.hockeyRole }} · {{ comparison.hockeyPositions.join(' / ') }}</small>
+                              <strong>{{ comparison.footballRole }}</strong>
+                            </div>
+                          </header>
+                          <h3>{{ comparison.headline }}</h3>
+                          <p>{{ comparison.draftLesson }}</p>
+                        </article>
+                      }
+                    </div>
+
+                    <aside class="football-value-note">
+                      <span class="football-value-label">Positional value reminder</span>
+                      <p>
+                        Quarterbacks often outscore running backs and wide receivers. RinkRat goalie
+                        units can do the same. The real advantage is how an option compares with the
+                        alternatives at the same position.
+                      </p>
+                    </aside>
+
+                    <p class="football-guide-precision">
+                      RinkRat treats left and right wings the same way. Centers use the same forward
+                      scoring rules with a slightly more playmaking-oriented baseline.
+                    </p>
+                  </div>
+                </details>
+
+                <a
+                  class="training-scoring-link"
+                  routerLink="/scoring"
+                  [queryParams]="scoringGuideQueryParams()"
+                >
+                  View the full scoring guide <span aria-hidden="true">→</span>
+                </a>
+              </section>
+            }
+
+            @case ('move-now') {
+              <section class="move-demo single-move-demo" aria-label="An immediate roster move">
+                <article class="move-example immediate">
+                  <span class="move-status">Immediate</span>
+                  <strong>No affected game has started</strong>
+                  <div class="move-path"><span>Outgoing</span><b>→</b><span>Incoming</span></div>
+                  <small>The new player enters the open six-game counter now.</small>
+                </article>
+              </section>
+            }
+
+            @case ('move-later') {
+              <section class="move-demo two-move-demo" aria-label="Scheduled and injured-reserve roster moves">
+                <article class="move-example queued">
+                  <span class="move-status">Scheduled</span>
+                  <strong>A six-game counter already started</strong>
+                  <div class="move-path"><span>Current player</span><b>→</b><span>Next safe start</span></div>
+                  <small>Played games remain protected.</small>
+                </article>
+                <article class="move-example ir">
+                  <span class="move-status">Injured Reserve</span>
+                  <strong>Eligible injured player</strong>
+                  <div class="move-path"><span>Active</span><b>+</b><span>IR</span></div>
+                  <small>Open a lineup spot without dropping the player.</small>
+                </article>
+              </section>
+            }
+
+            @case ('card-basics') {
+              <section class="player-card-demo" aria-label="Example RinkRat player card">
+                <header>
+                  <span class="demo-player-logo">RR</span>
+                  <div><strong>Example Skater</strong><small>COL · Center</small></div>
+                  <span class="rank-chip">Rank 18</span>
+                </header>
+                <div class="player-metrics">
+                  <article><small>Season</small><strong>286.4</strong></article>
+                  <article class="featured-metric"><small>Next 6</small><strong>82.7</strong></article>
+                  <article><small>Form</small><strong class="positive">+6.2%</strong></article>
+                </div>
+                <p class="card-reading-tip">Start with Next 6. Use the other numbers to understand the risk.</p>
+              </section>
+            }
+
+            @case ('game-markers') {
+              <section class="player-card-demo marker-drill" aria-label="RinkRat game markers and scoring categories">
+                <div class="demo-game-row" aria-label="Six-game schedule markers">
+                  <span class="played">1</span>
+                  <span class="played">2</span>
+                  <span class="played">3</span>
+                  <span class="missed">4</span>
+                  <span class="upcoming">5</span>
+                  <span class="upcoming">6</span>
+                </div>
+                <div class="marker-legend">
+                  <span><i class="played"></i>Played</span>
+                  <span><i class="upcoming"></i>Upcoming</span>
+                  <span><i class="missed"></i>Missed</span>
+                </div>
+                <div class="breakdown-strip" aria-label="Example scoring breakdown">
+                  <span>Goals 72.0</span><span>Assists 84.5</span><span>Shots 61.5</span><span>Other 68.4</span>
+                </div>
+              </section>
+            }
+
+            @case ('season-path') {
+              <section class="season-demo" aria-label="RinkRat season progression">
+                <div class="season-stage active">
+                  <span>1</span><div><small>Opening Night</small><strong>Draft</strong></div>
+                </div>
+                <div class="season-line"></div>
+                <div class="season-stage">
+                  <span>2</span><div><small>Regular Season</small><strong>Matchups</strong></div>
+                </div>
+                <div class="season-line"></div>
+                <div class="season-stage">
+                  <span>3</span><div><small>League Table</small><strong>Standings</strong></div>
+                </div>
+                <div class="season-line"></div>
+                <div class="season-stage trophy-stage">
+                  <span class="pixel-icon icon-trophy" aria-hidden="true"></span>
+                  <div><small>Postseason</small><strong>Playoffs</strong></div>
+                </div>
+              </section>
+            }
+
+            @case ('automatic-season') {
+              <section class="automatic-season-demo" aria-label="Season tasks handled automatically by RinkRat">
+                <span class="pixel-icon icon-trophy icon-xl" aria-hidden="true"></span>
+                <h3>RinkRat handles the league clock</h3>
+                <ul>
+                  <li><span aria-hidden="true">✓</span> Draft timer</li>
+                  <li><span aria-hidden="true">✓</span> Matchup scoring</li>
+                  <li><span aria-hidden="true">✓</span> Standings</li>
+                  <li><span aria-hidden="true">✓</span> Playoff routing</li>
+                </ul>
+              </section>
+            }
           }
 
-          @case ('moves') {
-            <section class="move-demo" aria-label="Examples of immediate and scheduled roster moves">
-              <article class="move-example immediate">
-                <span class="move-status">Immediate</span>
-                <strong>Neither player has played</strong>
-                <div class="move-path"><span>Outgoing</span><b>→</b><span>Incoming</span></div>
-                <small>The new player enters the open six-game count now.</small>
-              </article>
-              <article class="move-example queued">
-                <span class="move-status">Scheduled</span>
-                <strong>A six-game count already started</strong>
-                <div class="move-path"><span>Current player</span><b>⏱</b><span>Next matchup</span></div>
-                <small>Completed and scheduled games remain protected.</small>
-              </article>
-              <article class="move-example ir">
-                <span class="move-status">Injured Reserve Move</span>
-                <strong>Eligible injured player</strong>
-                <div class="move-path"><span>Active</span><b>+</b><span>Injured Reserve</span></div>
-                <small>Open a lineup spot without discarding the player.</small>
-              </article>
-            </section>
-          }
-
-          @case ('cards') {
-            <section class="player-card-demo" aria-label="Example RinkRat player scouting card">
-              <header>
-                <span class="demo-player-logo">RR</span>
-                <div><strong>Example Skater</strong><small>COL · Center</small></div>
-                <span class="rank-chip">Rank #18</span>
-              </header>
-              <div class="player-metrics">
-                <article><small>Season</small><strong>286.4</strong></article>
-                <article><small>Next 6 Games</small><strong>82.7</strong></article>
-                <article><small>Form</small><strong class="positive">+6.2%</strong></article>
-              </div>
-              <div class="demo-game-row" aria-label="Six-game schedule markers">
-                <span class="played">1</span>
-                <span class="played">2</span>
-                <span class="played">3</span>
-                <span class="upcoming">4</span>
-                <span class="upcoming">5</span>
-                <span class="missed">6</span>
-              </div>
-              <div class="marker-legend">
-                <span><i class="played"></i>Played</span>
-                <span><i class="upcoming"></i>Upcoming</span>
-                <span><i class="missed"></i>Missed</span>
-              </div>
-              <div class="breakdown-strip">
-                <span>Goals 72.0</span><span>Assists 84.5</span><span>Shots 61.5</span><span>Other 68.4</span>
-              </div>
-            </section>
-          }
-
-          @case ('season') {
-            <section class="season-demo" aria-label="RinkRat season progression">
-              <div class="season-stage active">
-                <span>1</span><div><small>Opening night</small><strong>Draft completes</strong></div>
-              </div>
-              <div class="season-line"></div>
-              <div class="season-stage">
-                <span>2</span><div><small>Regular season</small><strong>Six-game matchups</strong></div>
-              </div>
-              <div class="season-line"></div>
-              <div class="season-stage">
-                <span>3</span><div><small>League table</small><strong>Standings update</strong></div>
-              </div>
-              <div class="season-line"></div>
-              <div class="season-stage trophy-stage">
-                <span class="pixel-icon icon-trophy" aria-hidden="true"></span>
-                <div><small>Postseason</small><strong>Road to the Cup</strong></div>
-              </div>
-              <p>Already-played games stay banked until the correct playoff matchup is known.</p>
-            </section>
-          }
-        }
+        </div>
       </div>
     </article>
 
@@ -376,28 +518,27 @@
       <button
         type="button"
         class="secondary-camp-button"
-        [disabled]="isFirstStep() || saving()"
-        (click)="previousStep()"
+        [disabled]="isFirstDrill() || saving()"
+        (click)="previousDrill()"
       >
-        ← Previous Shift
+        ← Previous Drill
       </button>
 
-      <span class="camp-control-status">{{ currentStepIndex() + 1 }} / {{ steps.length }}</span>
+      <span class="camp-control-status">
+        Shift {{ currentStepIndex() + 1 }} · Drill {{ currentDrillIndex() + 1 }}
+      </span>
 
-      @if (isLastStep()) {
-        <button
-          type="button"
-          class="primary-camp-button"
-          [disabled]="saving()"
-          (click)="finishTrainingCamp()"
-        >
-          {{ saving() ? 'Saving...' : 'Finish Training Camp' }}
-        </button>
-      } @else {
-        <button type="button" class="primary-camp-button" (click)="nextStep()">
-          Next Shift →
-        </button>
-      }
+      <button
+        type="button"
+        class="primary-camp-button"
+        [disabled]="!canAdvance()"
+        (click)="advanceDrill()"
+      >
+        {{ primaryActionLabel() }}
+        @if (canAdvance() && !(isLastStep() && isLastDrill())) {
+          <span aria-hidden="true">→</span>
+        }
+      </button>
     </footer>
   </section>
 }

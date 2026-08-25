@@ -12,6 +12,12 @@ function requireMatch(source, expression, message) {
   }
 }
 
+function forbidMatch(source, expression, message) {
+  if (expression.test(source)) {
+    failures.push(message);
+  }
+}
+
 const [
   tokens,
   navbarSource,
@@ -50,23 +56,45 @@ requireMatch(
 );
 requireMatch(
   navbarSource,
-  /listenToFantasyDraft/,
-  'Navbar is not following draft state.',
+  /listenToAuthState/,
+  'Navbar is not following authentication state.',
 );
 requireMatch(
   navbarSource,
-  /listenToEarliestUnfinishedOwnerMatchup/,
-  'Navbar is not following the owner matchup across active cycles.',
+  /NavigationEnd/,
+  'Navbar is not following route changes for active-link state.',
+);
+forbidMatch(
+  navbarSource,
+  /listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|getRememberedLastLeagueId/,
+  'Global navigation still opens league, Draft, or matchup listeners.',
+);
+for (const [label, expression] of [
+  ['Dashboard', /routerLink="\/dashboard"[\s\S]*?<span>Dashboard<\/span>/],
+  ['Create', /routerLink="\/leagues\/create"[\s\S]*?<span>Create<\/span>/],
+  ['Join', /routerLink="\/leagues\/join"[\s\S]*?<span>Join<\/span>/],
+  ['Scoring', /routerLink="\/scoring"[\s\S]*?<span>Scoring<\/span>/],
+]) {
+  requireMatch(
+    navbarTemplate,
+    expression,
+    `Mobile ${label} destination is missing from the durable global navigation.`,
+  );
+}
+requireMatch(
+  navbarTemplate,
+  /<strong>Support<\/strong>/,
+  'Support is not preserved in the mobile More menu.',
 );
 requireMatch(
   navbarTemplate,
-  /\[routerLink\]="mobileLeaguePrimary\(\)\.route"/,
-  'Mobile primary league tab is not phase-aware.',
+  /<strong>Account<\/strong>/,
+  'Account is not preserved in the mobile More menu.',
 );
-requireMatch(
+forbidMatch(
   navbarTemplate,
-  /<strong>League HQ<\/strong>/,
-  'League HQ is not preserved in the More menu.',
+  /mobileLeaguePrimary|<strong>League HQ<\/strong>/,
+  'Mobile global navigation still contains the retired phase-aware league destination.',
 );
 requireMatch(
   navbarCss,
@@ -116,7 +144,7 @@ if (tinyBottomNavLabel.test(navbarCss)) {
 }
 
 console.log('RinkRat Batch M1 mobile audit');
-console.log(`  Adaptive destination listeners: ${/listenToFantasyDraft/.test(navbarSource) && /listenToEarliestUnfinishedOwnerMatchup/.test(navbarSource) ? 'yes' : 'no'}`);
+console.log(`  League-independent global navigation: ${!/listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|getRememberedLastLeagueId/.test(navbarSource) ? 'yes' : 'no'}`);
 console.log(`  Shared 12px mobile floor: ${/--rr-mobile-text-micro:\s*var\(--rr-text-xs\)/.test(tokens) ? 'yes' : 'no'}`);
 console.log(`  Shared 44px action target: ${/--rr-mobile-control-min-height:\s*var\(--rr-touch-target\)/.test(tokens) ? 'yes' : 'no'}`);
 console.log(`  Primary surfaces covered: ${surfaces.filter(([, source]) => /--rr-mobile-text-(?:micro|label|player|score)/.test(source)).length}/${surfaces.length}`);
@@ -129,5 +157,5 @@ if (failures.length > 0) {
   }
   process.exitCode = 1;
 } else {
-  console.log('  ✓ Mobile readability and adaptive-navigation checks passed.');
+  console.log('  ✓ Mobile readability and durable-navigation checks passed.');
 }

@@ -88,6 +88,7 @@ import {
   ViewportOverlayPortalDirective,
 } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { ClientHealthService } from '../../../core/observability/client-health.service';
 import { CompetitiveActionMonitorService } from '../../../core/observability/competitive-action-monitor.service';
 import {
@@ -134,7 +135,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective, ActionSheet],
+  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective, ActionSheet, LeagueQuickNavigation],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })

@@ -521,8 +521,16 @@
 
             @if (!emailVerified()) {
               <p class="email-verification-copy">
-                Verify {{ profile()?.email }} before enabling injury alerts. This prevents alerts
-                from being sent to a mistyped or unowned address.
+                @if (!verificationEmailEligible()) {
+                  Finish Training Camp or choose Finish Later before sending a verification email to
+                  <strong>{{ profile()?.email }}</strong>.
+                } @else if (verificationEmailPreviouslySent()) {
+                  A verification email has been sent to <strong>{{ profile()?.email }}</strong>.
+                  Open the latest link, or send another after the countdown finishes.
+                } @else {
+                  Click below to send the first verification email to
+                  <strong>{{ profile()?.email }}</strong>. RinkRat will not send it until you do.
+                }
               </p>
 
               <div class="verification-actions">
@@ -530,9 +538,9 @@
                   type="button"
                   class="verification-button rr-button rr-button--primary"
                   (click)="sendVerificationEmail()"
-                  [disabled]="sendingVerification() || refreshingVerification()"
+                  [disabled]="verificationSendDisabled()"
                 >
-                  {{ sendingVerification() ? 'Sending...' : 'Send Verification Email' }}
+                  {{ verificationSendButtonLabel() }}
                 </button>
 
                 <button

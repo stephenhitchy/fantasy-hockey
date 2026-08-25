@@ -172,6 +172,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/release/invite-beta-validation/invite-beta-validation.html',
     'src/app/features/support/feedback/feedback.html',
     'src/app/features/scoring/scoring-calculator/scoring-calculator.html',
+    'src/app/features/scoring/scoring-guide/scoring-guide.html',
     'src/app/features/support/fairness-report/fairness-report.html',
     'src/app/features/support/private-season-feedback/private-season-feedback.html',
     'src/app/features/support/commissioner-guide/commissioner-guide.html',

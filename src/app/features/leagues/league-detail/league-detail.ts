@@ -50,6 +50,7 @@ import {
   League,
   updateLeagueProfileIcon,
 } from '../../../core/league/league.service';
+import { buildLeagueInviteUrl } from '../../../core/league/invite-link-intent.service';
 
 import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/team/team.service';
 
@@ -58,6 +59,7 @@ import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.serv
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { LeagueWire } from '../league-wire/league-wire';
 import { getLeagueLogoAssetPath } from '../../../shared/league-logo/league-logo.data';
 import {
@@ -66,6 +68,9 @@ import {
   type ProfileIconCategoryId,
   type ProfileIconOption,
 } from '../../../shared/profile-icon/profile-icon.data';
+
+const DRAFT_ROOM_NAVIGATION_TIMEOUT_MILLISECONDS = 8_000;
+const DRAFT_ENTRY_RECOVERY_DELAY_MILLISECONDS = 7_000;
 
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
@@ -82,7 +87,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink, ManagerAvatar, LeagueWire, DialogFocusTrapDirective, ViewportOverlayPortalDirective],
+  imports: [FormsModule, RouterLink, ManagerAvatar, LeagueWire, DialogFocusTrapDirective, ViewportOverlayPortalDirective, LeagueQuickNavigation],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })
@@ -109,6 +114,9 @@ export class LeagueDetail implements OnDestroy {
   copyMessage = signal('');
   errorMessage = signal('');
   showDraftStartedModal = signal(false);
+  draftEntryInProgress = signal(false);
+  draftEntryRecoveryVisible = signal(false);
+  draftEntryError = signal('');
   draftInjurySyncInProgress = signal(false);
   draftInjurySyncMessage = signal('');
   draftInjurySyncWarning = signal('');
@@ -149,6 +157,7 @@ export class LeagueDetail implements OnDestroy {
   private activationRetryNotBefore = 0;
   private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
+  private draftEntryRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
 
   private readonly countdownTimer = setInterval(() => {
@@ -354,6 +363,10 @@ export class LeagueDetail implements OnDestroy {
 
     if (this.redirectTimer) {
       clearTimeout(this.redirectTimer);
+    }
+
+    if (this.draftEntryRecoveryTimer) {
+      clearTimeout(this.draftEntryRecoveryTimer);
     }
 
     this.stopDraftListener?.();
@@ -690,27 +703,6 @@ export class LeagueDetail implements OnDestroy {
     return 'The first league visit each UTC day refreshes one shared report for the entire app.';
   }
 
-  getDailyInjuryStatusTimeLabel(): string {
-    const value =
-      this.injurySyncState()?.lastDailySuccessfulSyncAt ||
-      this.injurySyncState()?.lastSuccessfulSyncAt;
-
-    if (!value) {
-      return 'No successful injury update yet';
-    }
-
-    const parsed = new Date(value);
-
-    if (Number.isNaN(parsed.getTime())) {
-      return 'Successful injury update recorded';
-    }
-
-    return `Last updated: ${parsed.toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })}`;
-  }
-
   getUtcDailyKey(date: Date = new Date()): string {
     return date.toISOString().slice(0, 10);
   }
@@ -1015,14 +1007,95 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
-    this.hasEnteredDraftRoom = true;
+    if (this.draftEntryInProgress()) {
+      this.draftEntryRecoveryVisible.set(true);
+      return;
+    }
 
     if (this.redirectTimer) {
       clearTimeout(this.redirectTimer);
       this.redirectTimer = null;
     }
 
-    await this.router.navigate(['/leagues', this.leagueId, 'draft']);
+    this.draftEntryInProgress.set(true);
+    this.draftEntryError.set('');
+    this.scheduleDraftEntryRecovery();
+
+    let navigationTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    try {
+      const navigationSucceeded = await Promise.race([
+        this.router.navigate(['/leagues', this.leagueId, 'draft']),
+        new Promise<boolean>((resolve) => {
+          navigationTimeout = setTimeout(
+            () => resolve(false),
+            DRAFT_ROOM_NAVIGATION_TIMEOUT_MILLISECONDS,
+          );
+        }),
+      ]);
+
+      if (navigationSucceeded) {
+        this.hasEnteredDraftRoom = true;
+        this.showDraftStartedModal.set(false);
+        this.clearDraftEntryRecoveryTimer();
+        return;
+      }
+
+      this.draftEntryError.set(
+        'The Draft Room did not open. Try again or use the reload option below.',
+      );
+      this.draftEntryRecoveryVisible.set(true);
+    } catch (error: unknown) {
+      this.draftEntryError.set(
+        error instanceof Error
+          ? `The Draft Room could not open: ${error.message}`
+          : 'The Draft Room could not open. Try again or reload directly into it.',
+      );
+      this.draftEntryRecoveryVisible.set(true);
+    } finally {
+      if (navigationTimeout) {
+        clearTimeout(navigationTimeout);
+      }
+      this.draftEntryInProgress.set(false);
+    }
+  }
+
+  async reloadIntoDraftRoom(): Promise<void> {
+    if (this.hasEnteredDraftRoom || this.draftEntryInProgress()) {
+      return;
+    }
+
+    this.draftEntryInProgress.set(true);
+    this.draftEntryError.set('');
+    this.clearDraftEntryTimers();
+
+    const draftUrl = this.router.serializeUrl(
+      this.router.createUrlTree(['/leagues', this.leagueId, 'draft']),
+    );
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.location.assign(draftUrl);
+        return;
+      } catch (error: unknown) {
+        this.draftEntryInProgress.set(false);
+        this.draftEntryError.set(
+          error instanceof Error
+            ? `The Draft Room reload was blocked: ${error.message}`
+            : 'The Draft Room reload was blocked. Try opening it again.',
+        );
+        this.draftEntryRecoveryVisible.set(true);
+        return;
+      }
+    }
+
+    const navigationSucceeded = await this.router.navigateByUrl(draftUrl);
+
+    if (!navigationSucceeded) {
+      this.draftEntryInProgress.set(false);
+      this.draftEntryError.set('The Draft Room still could not open. Refresh this page once.');
+      this.draftEntryRecoveryVisible.set(true);
+    }
   }
 
   formatDraftStart(): string {
@@ -1038,6 +1111,16 @@ export class LeagueDetail implements OnDestroy {
     });
   }
 
+  async copyInviteLink(): Promise<void> {
+    const inviteUrl = buildLeagueInviteUrl(this.league()?.inviteCode);
+
+    if (!inviteUrl) {
+      return;
+    }
+
+    await this.copyInviteText(inviteUrl, 'Invite link copied!');
+  }
+
   async copyInviteCode(): Promise<void> {
     const code = this.league()?.inviteCode;
 
@@ -1045,13 +1128,32 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
-    await navigator.clipboard.writeText(code);
+    await this.copyInviteText(code, 'Invite code copied!');
+  }
 
-    this.copyMessage.set('Invite code copied!');
+  private async copyInviteText(value: string, successMessage: string): Promise<void> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = value;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+
+      this.copyMessage.set(successMessage);
+    } catch {
+      this.copyMessage.set('Copy failed. Select and copy the league code manually.');
+    }
 
     setTimeout(() => {
       this.copyMessage.set('');
-    }, 2000);
+    }, 2500);
   }
 
   getTeamName(ownerId: string | null): string {
@@ -1307,14 +1409,48 @@ export class LeagueDetail implements OnDestroy {
     }
 
     this.showDraftStartedModal.set(true);
+    this.scheduleDraftEntryRecovery();
 
     if (this.redirectTimer) {
       return;
     }
 
     this.redirectTimer = setTimeout(() => {
+      this.redirectTimer = null;
       void this.enterDraftRoom();
     }, 2500);
+  }
+
+  private scheduleDraftEntryRecovery(): void {
+    if (this.draftEntryRecoveryTimer || this.draftEntryRecoveryVisible()) {
+      return;
+    }
+
+    this.draftEntryRecoveryTimer = setTimeout(() => {
+      this.draftEntryRecoveryTimer = null;
+
+      if (!this.hasEnteredDraftRoom) {
+        this.draftEntryRecoveryVisible.set(true);
+      }
+    }, DRAFT_ENTRY_RECOVERY_DELAY_MILLISECONDS);
+  }
+
+  private clearDraftEntryRecoveryTimer(): void {
+    if (!this.draftEntryRecoveryTimer) {
+      return;
+    }
+
+    clearTimeout(this.draftEntryRecoveryTimer);
+    this.draftEntryRecoveryTimer = null;
+  }
+
+  private clearDraftEntryTimers(): void {
+    if (this.redirectTimer) {
+      clearTimeout(this.redirectTimer);
+      this.redirectTimer = null;
+    }
+
+    this.clearDraftEntryRecoveryTimer();
   }
 
   getTeamProfileIconId(ownerId: string | null | undefined): string {

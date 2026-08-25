@@ -175,12 +175,12 @@ test('a waiting worker activates only through the existing manager-approved rele
   assert.doesNotMatch(installHandler, /skipWaiting/);
 });
 
-test('install controls stay optional, inline, and mobile-safe', async () => {
-  const [accountTemplate, accountStyles, navbarTemplate, navbarStyles] = await Promise.all([
+test('install controls stay optional, inline, account-owned, and mobile-safe', async () => {
+  const [accountTemplate, accountStyles, navbarTemplate, navbarComponent] = await Promise.all([
     read('src/app/features/account/account-settings/account-settings.html'),
     read('src/app/features/account/account-settings/account-settings.css'),
     read('src/app/shared/navbar/navbar.html'),
-    read('src/app/shared/navbar/navbar.css'),
+    read('src/app/shared/navbar/navbar.ts'),
   ]);
 
   assert.match(accountTemplate, /@if \(pwa\.showInstallCard\(\)\)/);
@@ -188,9 +188,8 @@ test('install controls stay optional, inline, and mobile-safe', async () => {
   assert.match(accountTemplate, /pwa\.installState\(\)/);
   assert.match(accountTemplate, /pwa\.canInstall\(\)/);
   assert.match(accountTemplate, /Add to Home Screen/);
-  assert.match(navbarTemplate, /@if \(pwa\.canInstall\(\)\)/);
-  assert.match(navbarTemplate, /Install RinkRat/);
-  assert.match(navbarStyles, /mobile-menu-install-button[^]*min-height:\s*58px/);
+  assert.doesNotMatch(navbarTemplate, /Install RinkRat|pwa\.canInstall/);
+  assert.doesNotMatch(navbarComponent, /RinkRatPwaService|\bpwa\b/);
 
   const accountBlock = accountStyles.slice(accountStyles.indexOf('.account-install-card'));
   assert.doesNotMatch(accountBlock, /position:\s*(?:fixed|sticky)/);
@@ -266,10 +265,10 @@ test('the N1A foundation remains intact under RC49 and preserves competitive mod
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(sha256(firestoreRules), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(sha256(firestoreIndexes), PROTECTED_SOURCE_HASHES.firestoreIndexes);
-  assert.match(runtime, /Release Candidate 59/);
-  assert.match(productionRuntime, /Release Candidate 59/);
-  assert.equal(freeze.releaseLabel, 'Release Candidate 59');
-  assert.equal(freeze.verificationCommand, 'npm run verify:batcho1i');
+  assert.match(runtime, /Release Candidate 65/);
+  assert.match(productionRuntime, /Release Candidate 65/);
+  assert.equal(freeze.releaseLabel, 'Release Candidate 65');
+  assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.scoringRulesVersion, 4);
   assert.equal(freeze.projectionVersion, 11);
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
@@ -281,7 +280,7 @@ test('the N1A foundation remains intact under RC49 and preserves competitive mod
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchn1a:core'], /verify:batcha1i:core/);
   assert.match(packageJson.scripts['verify:batchn1b:core'], /verify:batchn1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batcho1i:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
 });
 
 test('documentation and roadmap record the bounded PWA foundation and site-first proof', async () => {
@@ -294,7 +293,7 @@ test('documentation and roadmap record the bounded PWA foundation and site-first
   ]);
 
   assert.equal(roadmap, docsRoadmap);
-  assert.match(roadmap, /Version 1\.50/);
+  assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] N1\.1/);
   assert.match(roadmap, /# \[x\] N1\.2/);
   assert.match(roadmap, /# \[x\] N1\.3/);
@@ -304,9 +303,9 @@ test('documentation and roadmap record the bounded PWA foundation and site-first
   assert.match(runbook, /Mobile Batch N1A/);
   assert.match(runbook, /no Background Sync listener/i);
   assert.match(runbook, /Site-first proof/);
-  assert.match(readme, /Release Candidate 59 \/ Operations Batch O1I/);
+  assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(readme, /RINKRAT_MOBILE_N1A_PWA_FOUNDATION\.md/);
-  assert.match(releaseRunbook, /npm run verify:batcho1i/);
-  assert.match(releaseRunbook, /rinkrat-rc59-validation\.json/);
-  assert.match(releaseRunbook, /rinkrat-rc59-invite-beta/);
+  assert.match(releaseRunbook, /npm run verify:batchb1j/);
+  assert.match(releaseRunbook, /rinkrat-rc65-validation\.json/);
+  assert.match(releaseRunbook, /rinkrat-rc65-invite-beta/);
 });

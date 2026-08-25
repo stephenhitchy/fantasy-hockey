@@ -63,12 +63,13 @@ test('the comparison appears at the bottom of Build Your Club and remains progre
   const template = await read('src/app/features/onboarding/training-camp/training-camp.html');
   const positionGuideIndex = template.indexOf('class="position-value-guide"');
   const footballGuideIndex = template.indexOf('class="football-comparison-guide"');
-  const movesCaseIndex = template.indexOf("@case ('moves')");
+  const movesCaseIndex = template.indexOf("@case ('move-now')");
 
   assert.ok(positionGuideIndex >= 0);
   assert.ok(footballGuideIndex > positionGuideIndex);
   assert.ok(movesCaseIndex > footballGuideIndex);
-  assert.match(template, /<details class="football-comparison-guide" open>/);
+  assert.match(template, /<details class="football-comparison-guide">/);
+  assert.doesNotMatch(template, /<details class="football-comparison-guide" open>/);
   assert.match(template, /Know fantasy football\?/);
   assert.match(template, /Positional value reminder/);
   assert.match(template, /not an exact point-for-point comparison/i);

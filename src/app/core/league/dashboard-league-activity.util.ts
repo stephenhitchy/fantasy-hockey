@@ -376,7 +376,7 @@ export function buildDashboardLeagueActivity(
       tone: complete ? 'success' : 'info',
       headline: opponentOwnerId ? `vs ${opponentTeamName}` : 'Bye matchup',
       detail,
-      primaryActionLabel: 'Open Game Center',
+      primaryActionLabel: 'Open Current Matchup',
       primaryActionRoute: ['/leagues', input.leagueId, 'cycles', matchup.cycleNumber],
       ...attention,
       matchup: {
