@@ -25,6 +25,12 @@ import {
   normalizeBetaDurationAccumulator,
 } from './shared/core/observability/beta-operations.util';
 import {
+  SCORING_PHASE_NAMES,
+  ScoringPhaseTimer,
+  scoringPhaseTimingForFirestore,
+  type ScoringPhaseTimingSnapshot,
+} from './shared/core/observability/scoring-phase-timing.util';
+import {
   isSafeFirestoreDocumentId,
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
@@ -59,6 +65,9 @@ import { syncCycleTeamWindows } from './shared/core/cycle/asset-cycle-window.ser
 import { FantasyCycle } from './shared/core/cycle/cycle.models';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import { SharedCycleScoringSnapshot } from './shared/core/live-scoring/live-scoring.models';
+import {
+  decideCanonicalRequestCompletion,
+} from './shared/core/live-scoring/canonical-request-completion.util';
 import {
   NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT,
   NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
@@ -168,6 +177,7 @@ interface LeagueAutomationResult {
   nextRefreshAtMilliseconds?: number;
   refreshCadence?: LeagueAutomationRefreshCadence;
   refreshDelayMilliseconds?: number;
+  phaseTiming?: ScoringPhaseTimingSnapshot;
 }
 
 interface LeaseClaimResult {
@@ -213,6 +223,8 @@ interface HistoricalReplayAdvanceResult {
   releasedGameCount: number;
   activeCycleNumbers: number[];
   message: string;
+  scoringDurationMilliseconds: number;
+  scoringPhaseTiming?: ScoringPhaseTimingSnapshot;
 }
 
 interface LeagueAutomationQueueConfig {
@@ -2093,6 +2105,7 @@ async function recordLeagueAutomationSuccess(
   skippedSnapshotCount: number,
   refreshCadence: LeagueAutomationRefreshCadence,
   refreshDelayMilliseconds: number,
+  phaseTiming?: ScoringPhaseTimingSnapshot,
 ): Promise<void> {
   const queueTaskOwnsSchedule = trigger === 'queue-task';
   const data: Record<string, unknown> = {
@@ -2108,6 +2121,10 @@ async function recordLeagueAutomationSuccess(
     lastSkippedSnapshotCount: Math.max(0, skippedSnapshotCount),
     lastRefreshCadence: refreshCadence,
     lastRefreshDelayMilliseconds: Math.max(0, refreshDelayMilliseconds),
+    lastPhaseTiming: scoringPhaseTimingForFirestore(phaseTiming),
+    lastLongestPhase: phaseTiming?.longestPhase ?? '',
+    lastLongestPhaseDurationMilliseconds:
+      phaseTiming?.longestPhaseDurationMilliseconds ?? 0,
     lastOutcome: 'success',
     lastTrigger: trigger,
     consecutiveFailureCount: 0,
@@ -2533,6 +2550,7 @@ async function recordBetaServerScoringMetric(
   trigger: LeagueAutomationTrigger,
   outcome: 'success' | 'skipped' | 'error',
   durationMilliseconds: number,
+  phaseTiming?: ScoringPhaseTimingSnapshot,
 ): Promise<void> {
   const dateKey = betaOperationsDateKey();
   const shardId = betaOperationsShardId(leagueId);
@@ -2560,6 +2578,28 @@ async function recordBetaServerScoringMetric(
         outcome,
       ),
     };
+    const existingPhases = data['serverScoringPhases'] &&
+      typeof data['serverScoringPhases'] === 'object' &&
+      !Array.isArray(data['serverScoringPhases'])
+        ? data['serverScoringPhases'] as Record<string, unknown>
+        : {};
+    const serverScoringPhases = { ...existingPhases };
+
+    if (phaseTiming) {
+      for (const phase of SCORING_PHASE_NAMES) {
+        const phaseDuration = phaseTiming.phases[phase];
+
+        if (phaseDuration <= 0) {
+          continue;
+        }
+
+        serverScoringPhases[phase] = addBetaDurationSample(
+          normalizeBetaDurationAccumulator(existingPhases[phase]),
+          phaseDuration,
+          outcome,
+        );
+      }
+    }
 
     transaction.set(reference, {
       schemaVersion: 1,
@@ -2567,6 +2607,7 @@ async function recordBetaServerScoringMetric(
       shardId,
       serverScoring,
       serverScoringByTrigger,
+      serverScoringPhases,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(
         Date.now() + BETA_OPERATION_DAILY_RETENTION_MILLISECONDS,
@@ -2588,14 +2629,19 @@ async function runLeagueAutomation(
   );
   leagueId = safeLeagueId;
   const startedAt = Date.now();
+  const phaseTimer = new ScoringPhaseTimer();
+  const historicalReplayControlForSkip =
+    trigger === 'scheduled' || trigger === 'queue-task'
+      ? await phaseTimer.measure(
+          'lease-and-prerequisites',
+          () => getHistoricalReplayControl(leagueId),
+        )
+      : null;
 
   // Historical replay leagues advance only when a platform administrator
   // releases the next simulated NHL date. The scheduled live scorer must not
   // compete for the same league lease or process that replay date on its own.
-  if (
-    (trigger === 'scheduled' || trigger === 'queue-task') &&
-    await getHistoricalReplayControl(leagueId)
-  ) {
+  if (historicalReplayControlForSkip) {
     await recordLeagueAutomationPaused(leagueId, 'historical-replay')
       .catch((error) => {
         console.warn('Unable to record the historical-replay queue pause.', {
@@ -2605,11 +2651,13 @@ async function runLeagueAutomation(
       });
 
     const durationMilliseconds = Date.now() - startedAt;
+    const phaseTiming = phaseTimer.snapshot(durationMilliseconds);
     await recordBetaServerScoringMetric(
       leagueId,
       trigger,
       'skipped',
       durationMilliseconds,
+      phaseTiming,
     ).catch(() => undefined);
 
     return {
@@ -2621,15 +2669,19 @@ async function runLeagueAutomation(
       skippedSnapshotCount: 0,
       cycleOneCreated: false,
       durationMilliseconds,
+      phaseTiming,
     };
   }
 
   const workerId = `${SERVER_WORKER_PREFIX}${randomUUID()}`;
-  const lease = await claimLeagueAutomationLease(
-    leagueId,
-    workerId,
-    force,
-    trigger,
+  const lease = await phaseTimer.measure(
+    'lease-and-prerequisites',
+    () => claimLeagueAutomationLease(
+      leagueId,
+      workerId,
+      force,
+      trigger,
+    ),
   );
 
   if (!lease.claimed) {
@@ -2649,11 +2701,13 @@ async function runLeagueAutomation(
       });
 
     const durationMilliseconds = Date.now() - startedAt;
+    const phaseTiming = phaseTimer.snapshot(durationMilliseconds);
     await recordBetaServerScoringMetric(
       leagueId,
       trigger,
       'skipped',
       durationMilliseconds,
+      phaseTiming,
     ).catch(() => undefined);
 
     return {
@@ -2666,6 +2720,7 @@ async function runLeagueAutomation(
       cycleOneCreated: false,
       durationMilliseconds,
       nextRefreshAtMilliseconds: lease.nextRefreshAtMilliseconds,
+      phaseTiming,
     };
   }
 
@@ -2678,18 +2733,30 @@ async function runLeagueAutomation(
   const allResults: CycleScoringResult[] = [];
 
   try {
-    const league = await getServerLeague(leagueId);
+    const league = await phaseTimer.measure(
+      'league-and-team-load',
+      () => getServerLeague(leagueId),
+    );
 
     if (!league) {
       throw new Error('League not found for server automation.');
     }
 
-    const teams = await getLeagueTeams(leagueId);
-    cycleOneCreated = await ensureCycleOneStarted(
-      leagueId,
-      teams,
+    const teams = await phaseTimer.measure(
+      'league-and-team-load',
+      () => getLeagueTeams(leagueId),
     );
-    replayControl = await getHistoricalReplayControl(leagueId);
+    cycleOneCreated = await phaseTimer.measure(
+      'cycle-bootstrap',
+      () => ensureCycleOneStarted(
+        leagueId,
+        teams,
+      ),
+    );
+    replayControl = await phaseTimer.measure(
+      'historical-replay-data',
+      () => getHistoricalReplayControl(leagueId),
+    );
     const projectionRefreshPolicy = replayControl
       ? 'saved-only' as const
       : 'refresh-if-needed' as const;
@@ -2710,7 +2777,10 @@ async function runLeagueAutomation(
       pass < MAX_TRANSITION_PASSES;
       pass += 1
     ) {
-      const activeCycles = await getActiveLeagueCycles(leagueId);
+      const activeCycles = await phaseTimer.measure(
+        'cycle-discovery',
+        () => getActiveLeagueCycles(leagueId),
+      );
       activeCycleNumbers = activeCycles.map((cycle) => cycle.cycleNumber);
       const newCycleNumbers = activeCycleNumbers.filter(
         (cycleNumber) => !previousCycleNumbers.has(cycleNumber),
@@ -2724,32 +2794,43 @@ async function runLeagueAutomation(
       let passTransitionOccurred = false;
 
       for (const cycle of activeCycles) {
-        const pendingMoveReconciliation =
-          await reconcilePendingRosterMovesForRegularSeasonCycle(
+        const pendingMoveReconciliation = await phaseTimer.measure(
+          'roster-move-reconciliation',
+          () => reconcilePendingRosterMovesForRegularSeasonCycle(
             leagueId,
             teams,
             cycle,
-          );
+          ),
+        );
 
         if (pendingMoveReconciliation.activatedMoveCount > 0) {
           passTransitionOccurred = true;
         }
 
-        const picks = await getCycleRosterPicksOnce(
-          leagueId,
-          cycle.cycleNumber,
+        const picks = await phaseTimer.measure(
+          'roster-pick-load',
+          () => getCycleRosterPicksOnce(
+            leagueId,
+            cycle.cycleNumber,
+          ),
         );
 
         if (picks.length === 0) {
           continue;
         }
 
-        const previous = await getPreviousScoringSnapshot(
-          leagueId,
-          cycle.cycleNumber,
+        const previous = await phaseTimer.measure(
+          'previous-snapshot-load',
+          () => getPreviousScoringSnapshot(
+            leagueId,
+            cycle.cycleNumber,
+          ),
         );
         const replayContext = replayControl
-          ? await buildReplayRunContext(leagueId, picks, replayControl)
+          ? await phaseTimer.measure(
+              'historical-replay-data',
+              () => buildReplayRunContext(leagueId, picks, replayControl!),
+            )
           : null;
         const result = await calculateCycleScoring({
           picks,
@@ -2767,15 +2848,21 @@ async function runLeagueAutomation(
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
           gameLogSeason: replayControl?.sourceSeason,
           nhlRefreshProfile: refreshCadence,
+          onPhaseDuration: (phase, durationMilliseconds) => {
+            phaseTimer.add(phase, durationMilliseconds);
+          },
         });
-        const published = await publishCycleSnapshot(
-          leagueId,
-          workerId,
-          cycle,
-          snapshotSeason,
-          result,
-          scoringRulesFingerprint,
-          previous,
+        const published = await phaseTimer.measure(
+          'snapshot-publication',
+          () => publishCycleSnapshot(
+            leagueId,
+            workerId,
+            cycle,
+            snapshotSeason,
+            result,
+            scoringRulesFingerprint,
+            previous,
+          ),
         );
 
         if (published) {
@@ -2786,24 +2873,30 @@ async function runLeagueAutomation(
 
         allResults.push(result);
 
-        const changedPeriod = await persistServerScoring(
-          leagueId,
-          teams,
-          cycle,
-          picks,
-          result,
-          dataSeason,
-          scoringRules,
-          replayContext?.gamesByAssetKey,
-          replayControl?.sourceSeason,
-          projectionRefreshPolicy,
+        const changedPeriod = await phaseTimer.measure(
+          'window-and-competition-persistence',
+          () => persistServerScoring(
+            leagueId,
+            teams,
+            cycle,
+            picks,
+            result,
+            dataSeason,
+            scoringRules,
+            replayContext?.gamesByAssetKey,
+            replayControl?.sourceSeason,
+            projectionRefreshPolicy,
+          ),
         );
 
         passTransitionOccurred =
           passTransitionOccurred || changedPeriod;
       }
 
-      const refreshedActiveCycles = await getActiveLeagueCycles(leagueId);
+      const refreshedActiveCycles = await phaseTimer.measure(
+        'post-transition-cycle-refresh',
+        () => getActiveLeagueCycles(leagueId),
+      );
       const refreshedCycleNumbers = refreshedActiveCycles.map(
         (cycle) => cycle.cycleNumber,
       );
@@ -2830,8 +2923,10 @@ async function runLeagueAutomation(
     );
     const nextRefreshAtMilliseconds = Date.now() + refreshDelay;
 
-    await getControlRef(leagueId).set(
-      {
+    await phaseTimer.measure(
+      'control-publication',
+      () => getControlRef(leagueId).set(
+        {
         id: 'control',
         schemaVersion: 2,
         automationMode: replayControl ? 'historical-replay' : 'server',
@@ -2861,35 +2956,74 @@ async function runLeagueAutomation(
         cycleOneCreatedInLastRun: cycleOneCreated,
         lastError: '',
         updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+
+    const durationBeforeObservability = Date.now() - startedAt;
+    const phaseTimingBeforeObservability = phaseTimer.snapshot(
+      durationBeforeObservability,
+    );
+
+    await phaseTimer.measure(
+      'queue-and-observability',
+      async () => {
+        await Promise.all([
+          recordLeagueAutomationSuccess(
+            leagueId,
+            trigger,
+            nextRefreshAtMilliseconds,
+            durationBeforeObservability,
+            publishedSnapshotCount,
+            skippedSnapshotCount,
+            refreshCadence,
+            refreshDelay,
+            phaseTimingBeforeObservability,
+          ).catch((error) => {
+            console.error('League scoring completed, but its queue schedule was not recorded.', {
+              leagueId,
+              trigger,
+              error,
+            });
+          }),
+          recordBetaServerScoringMetric(
+            leagueId,
+            trigger,
+            'success',
+            durationBeforeObservability,
+            phaseTimingBeforeObservability,
+          ).catch(() => undefined),
+          getControlRef(leagueId).set(
+            {
+              lastPhaseTiming: scoringPhaseTimingForFirestore(
+                phaseTimingBeforeObservability,
+              ),
+              lastLongestPhase: phaseTimingBeforeObservability.longestPhase,
+              lastLongestPhaseDurationMilliseconds:
+                phaseTimingBeforeObservability
+                  .longestPhaseDurationMilliseconds,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          ).catch(() => undefined),
+        ]);
       },
-      { merge: true },
     );
 
     const durationMilliseconds = Date.now() - startedAt;
+    const phaseTiming = phaseTimer.snapshot(durationMilliseconds);
 
-    await recordLeagueAutomationSuccess(
+    console.info('League automation phase timing.', {
       leagueId,
       trigger,
-      nextRefreshAtMilliseconds,
+      outcome: 'success',
       durationMilliseconds,
-      publishedSnapshotCount,
-      skippedSnapshotCount,
-      refreshCadence,
-      refreshDelay,
-    ).catch((error) => {
-      console.error('League scoring completed, but its queue schedule was not recorded.', {
-        leagueId,
-        trigger,
-        error,
-      });
+      longestPhase: phaseTiming.longestPhase,
+      longestPhaseDurationMilliseconds:
+        phaseTiming.longestPhaseDurationMilliseconds,
+      phases: phaseTiming.phases,
     });
-
-    await recordBetaServerScoringMetric(
-      leagueId,
-      trigger,
-      'success',
-      durationMilliseconds,
-    ).catch(() => undefined);
 
     return {
       leagueId,
@@ -2902,11 +3036,15 @@ async function runLeagueAutomation(
       nextRefreshAtMilliseconds,
       refreshCadence,
       refreshDelayMilliseconds: refreshDelay,
+      phaseTiming,
     };
   } catch (error: unknown) {
     const message = error instanceof Error
       ? error.message
       : 'Server league automation failed.';
+
+    const errorDurationMilliseconds = Date.now() - startedAt;
+    const errorPhaseTiming = phaseTimer.snapshot(errorDurationMilliseconds);
 
     await getControlRef(leagueId).set(
       {
@@ -2928,6 +3066,10 @@ async function runLeagueAutomation(
         serverHeartbeatAt: FieldValue.serverTimestamp(),
         lastError: message.slice(0, 500),
         totalFailedRefreshCount: FieldValue.increment(1),
+        lastPhaseTiming: scoringPhaseTimingForFirestore(errorPhaseTiming),
+        lastLongestPhase: errorPhaseTiming.longestPhase,
+        lastLongestPhaseDurationMilliseconds:
+          errorPhaseTiming.longestPhaseDurationMilliseconds,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -2946,8 +3088,20 @@ async function runLeagueAutomation(
       leagueId,
       trigger,
       'error',
-      Date.now() - startedAt,
+      errorDurationMilliseconds,
+      errorPhaseTiming,
     ).catch(() => undefined);
+
+    console.error('League automation phase timing.', {
+      leagueId,
+      trigger,
+      outcome: 'error',
+      durationMilliseconds: errorDurationMilliseconds,
+      longestPhase: errorPhaseTiming.longestPhase,
+      longestPhaseDurationMilliseconds:
+        errorPhaseTiming.longestPhaseDurationMilliseconds,
+      phases: errorPhaseTiming.phases,
+    });
 
     throw error;
   }
@@ -3411,15 +3565,13 @@ async function markLeagueAutomationTaskCompleted(
     const latestCanonicalSourceVersion = normalizeCanonicalSourceVersion(
       scheduleData['canonicalRequestedSourceVersion'],
     );
-    const canonicalNeedsFollowUp = Boolean(latestCanonicalSourceVersion) &&
-      (
-        result.status !== 'success' ||
-        !taskCanonicalSourceVersion ||
-        taskCanonicalSourceVersion !== latestCanonicalSourceVersion
-      );
-    const canonicalSatisfied = result.status === 'success' &&
-      Boolean(taskCanonicalSourceVersion) &&
-      taskCanonicalSourceVersion === latestCanonicalSourceVersion;
+    const canonicalCompletion = decideCanonicalRequestCompletion({
+      resultStatus: result.status,
+      taskSourceVersion: taskCanonicalSourceVersion,
+      latestRequestedSourceVersion: latestCanonicalSourceVersion,
+    });
+    const canonicalNeedsFollowUp = canonicalCompletion.needsFollowUp;
+    const canonicalSatisfied = canonicalCompletion.satisfied;
 
     if (activeTaskId === taskId) {
       const scheduleCompletionData: Record<string, unknown> = {
@@ -3490,12 +3642,12 @@ async function markLeagueAutomationTaskCompleted(
         activeCycleNumbers: result.activeCycleNumbers,
         refreshCadence: result.refreshCadence ?? 'standard',
         refreshDelayMilliseconds: result.refreshDelayMilliseconds ?? null,
+        phaseTiming: scoringPhaseTimingForFirestore(result.phaseTiming),
+        longestPhase: result.phaseTiming?.longestPhase ?? '',
+        longestPhaseDurationMilliseconds:
+          result.phaseTiming?.longestPhaseDurationMilliseconds ?? 0,
         canonicalSourceVersion: taskCanonicalSourceVersion || null,
-        canonicalCompletionState: canonicalNeedsFollowUp
-          ? 'superseded'
-          : canonicalSatisfied
-            ? 'satisfied'
-            : 'not-applicable',
+        canonicalCompletionState: canonicalCompletion.completionState,
         completedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(
           Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
@@ -4907,6 +5059,7 @@ interface ManualLiveScoringRefreshResult {
   skippedSnapshotCount: number;
   cycleOneCreated: boolean;
   durationMilliseconds: number;
+  phaseTiming?: ScoringPhaseTimingSnapshot;
 }
 
 interface LiveScoringControlResetResult {
@@ -5013,6 +5166,7 @@ export const requestLeagueLiveScoringRefresh = onCall(
         skippedSnapshotCount: result.skippedSnapshotCount,
         cycleOneCreated: result.cycleOneCreated,
         durationMilliseconds: result.durationMilliseconds,
+        phaseTiming: result.phaseTiming,
       };
     } catch (error: unknown) {
       if (error instanceof HttpsError) {
@@ -5433,6 +5587,13 @@ async function performHistoricalReplayAdvance(
         lastAdvanceCompletedAt: FieldValue.serverTimestamp(),
         lastActiveCycleNumbers: result.activeCycleNumbers,
         lastPublishedSnapshotCount: result.publishedSnapshotCount,
+        lastScoringDurationMilliseconds: result.durationMilliseconds,
+        lastScoringPhaseTiming: scoringPhaseTimingForFirestore(
+          result.phaseTiming,
+        ),
+        lastScoringLongestPhase: result.phaseTiming?.longestPhase ?? '',
+        lastScoringLongestPhaseDurationMilliseconds:
+          result.phaseTiming?.longestPhaseDurationMilliseconds ?? 0,
         message,
         lastError: '',
         lastFailedSimulatedDate: null,
@@ -5452,6 +5613,8 @@ async function performHistoricalReplayAdvance(
       releasedGameCount,
       activeCycleNumbers: result.activeCycleNumbers,
       message,
+      scoringDurationMilliseconds: result.durationMilliseconds,
+      scoringPhaseTiming: result.phaseTiming,
     };
   } catch (error: unknown) {
     const message = error instanceof Error
@@ -5850,6 +6013,11 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
           releasedGameCount: result.releasedGameCount,
           activeCycleNumbers: result.activeCycleNumbers,
           message: result.message,
+          scoringDurationMilliseconds:
+            result.scoringDurationMilliseconds,
+          scoringPhaseTiming: scoringPhaseTimingForFirestore(
+            result.scoringPhaseTiming,
+          ),
           leaseExpiresAt: Timestamp.fromMillis(Date.now()),
           completedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),

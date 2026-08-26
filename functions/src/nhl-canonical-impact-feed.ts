@@ -18,6 +18,9 @@ import {
 } from './shared/core/cycle/cycle.service';
 import { DraftPick } from './shared/core/draft/draft.models';
 import {
+  selectAffectedCanonicalLeagueIds,
+} from './shared/core/nhl/nhl-canonical-impact-routing.util';
+import {
   buildCanonicalNhlGameFacts,
   buildCanonicalNhlGameHashes,
   CANONICAL_NHL_FACTS_SCHEMA_VERSION,
@@ -325,28 +328,6 @@ async function buildCanaryImpactIndex(
   };
 }
 
-function getAffectedLeagueIds(input: {
-  observation: CanonicalGameObservation;
-  exactCanaryLeagueIds: readonly string[];
-  impacts: readonly LeagueScoringImpact[];
-  impactIndexComplete: boolean;
-}): string[] {
-  if (!input.impactIndexComplete) {
-    return [...input.exactCanaryLeagueIds];
-  }
-
-  const playerIds = new Set(input.observation.affectedPlayerIds);
-  const teams = new Set(input.observation.affectedTeamAbbreviations);
-
-  return input.impacts
-    .filter((impact) =>
-      impact.teamAbbreviations.some((team) => teams.has(team)) ||
-      impact.playerIds.some((playerId) => playerIds.has(playerId))
-    )
-    .map((impact) => impact.leagueId)
-    .sort();
-}
-
 async function observeCanonicalGame(input: {
   game: NhlScoreGame;
   previousData: DocumentData | undefined;
@@ -484,8 +465,9 @@ function buildLeagueChangeRequests(input: {
       continue;
     }
 
-    const leagueIds = getAffectedLeagueIds({
-      observation,
+    const leagueIds = selectAffectedCanonicalLeagueIds({
+      affectedPlayerIds: observation.affectedPlayerIds,
+      affectedTeamAbbreviations: observation.affectedTeamAbbreviations,
       exactCanaryLeagueIds: input.exactCanaryLeagueIds,
       impacts: input.impacts,
       impactIndexComplete: input.impactIndexComplete,

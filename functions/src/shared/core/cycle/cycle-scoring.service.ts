@@ -27,6 +27,12 @@ export type CycleGameRuntimeState =
   | 'live'
   | 'final';
 
+export type CycleScoringPhaseName =
+  | 'nhl-schedule-load'
+  | 'nhl-game-data-load'
+  | 'nhl-player-log-load'
+  | 'score-calculation';
+
 export interface CycleAssetScoreSummary {
   assetKey: string;
   ownerId: string;
@@ -120,6 +126,12 @@ export interface CalculateCycleScoringInput {
    * near-live Canary asks for fresher schedule and live game responses.
    */
   nhlRefreshProfile?: NhlApiRefreshProfile;
+
+  /** Optional server-only phase timing sink. It never changes scoring output. */
+  onPhaseDuration?: (
+    phase: CycleScoringPhaseName,
+    durationMilliseconds: number,
+  ) => void;
 
   /** Kept optional for older callers. Scoring is based on NHL game numbers. */
   startDate?: Date;
@@ -608,13 +620,24 @@ export async function calculateCycleScoring(
 ): Promise<CycleScoringResult> {
   const nhlRefreshProfile = input.nhlRefreshProfile ?? 'standard';
   const draftedTeams = getUniqueDraftedTeams(input.picks);
-  const schedulesByTeam = input.replayGamesByAssetKey
-    ? {}
-    : await loadSchedulesByTeam(
+  let schedulesByTeam: Record<string, NhlTeamSeasonGame[]> = {};
+
+  if (!input.replayGamesByAssetKey) {
+    const scheduleStartedAt = Date.now();
+
+    try {
+      schedulesByTeam = await loadSchedulesByTeam(
         draftedTeams,
         input.season,
         nhlRefreshProfile,
       );
+    } finally {
+      input.onPhaseDuration?.(
+        'nhl-schedule-load',
+        Date.now() - scheduleStartedAt,
+      );
+    }
+  }
   const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
   const previousByWindowId = new Map<string, CycleAssetScoreSummary | undefined>();
   const gameIdsToLoad = new Set<number>();
@@ -682,12 +705,44 @@ export async function calculateCycleScoring(
     (asset) => skaterAssetKeysNeedingFinalLogs.has(asset.assetKey)
   );
 
-  const [gameDataById, gameLogsByPlayerId] = await Promise.all([
-    loadScoringGameData([...gameIdsToLoad], nhlRefreshProfile),
-    loadSkaterGameLogs(skatersNeedingLogs, input.gameLogSeason ?? input.season)
-  ]);
+  const gameDataPromise = (async () => {
+    const phaseStartedAt = Date.now();
 
-  const assetScores: Record<string, CycleAssetScoreSummary> = {};
+    try {
+      return await loadScoringGameData(
+        [...gameIdsToLoad],
+        nhlRefreshProfile,
+      );
+    } finally {
+      input.onPhaseDuration?.(
+        'nhl-game-data-load',
+        Date.now() - phaseStartedAt,
+      );
+    }
+  })();
+  const gameLogPromise = (async () => {
+    const phaseStartedAt = Date.now();
+
+    try {
+      return await loadSkaterGameLogs(
+        skatersNeedingLogs,
+        input.gameLogSeason ?? input.season,
+      );
+    } finally {
+      input.onPhaseDuration?.(
+        'nhl-player-log-load',
+        Date.now() - phaseStartedAt,
+      );
+    }
+  })();
+  const [gameDataById, gameLogsByPlayerId] = await Promise.all([
+    gameDataPromise,
+    gameLogPromise,
+  ]);
+  const scoreCalculationStartedAt = Date.now();
+
+  try {
+    const assetScores: Record<string, CycleAssetScoreSummary> = {};
   const windowScores: Record<string, CycleAssetScoreSummary> = {};
   const teamScores: Record<string, number> = {};
   let hasLiveGames = false;
@@ -865,17 +920,23 @@ export async function calculateCycleScoring(
     windowScores
   );
 
-  return {
-    scoringSchemaVersion: 2,
-    assetScores,
-    windowScores,
-    teamScores,
-    teamGameCounts,
-    teamCycleComplete,
-    cycleHasScheduledGames,
-    hasLiveGames,
-    nextScheduledGameStart: getNextScheduledStart(allRelevantGames),
-    refreshedAt: new Date().toISOString(),
-    dataFingerprint
-  };
+    return {
+      scoringSchemaVersion: 2,
+      assetScores,
+      windowScores,
+      teamScores,
+      teamGameCounts,
+      teamCycleComplete,
+      cycleHasScheduledGames,
+      hasLiveGames,
+      nextScheduledGameStart: getNextScheduledStart(allRelevantGames),
+      refreshedAt: new Date().toISOString(),
+      dataFingerprint
+    };
+  } finally {
+    input.onPhaseDuration?.(
+      'score-calculation',
+      Date.now() - scoreCalculationStartedAt,
+    );
+  }
 }

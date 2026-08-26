@@ -100,7 +100,7 @@ test('server scoring repairs ready queued moves before loading picks for scoring
   const loop = section(
     automationSource,
     '      for (const cycle of activeCycles) {',
-    '      const refreshedActiveCycles = await getActiveLeagueCycles(leagueId);',
+    "      const refreshedActiveCycles = await phaseTimer.measure(",
   );
   const reconcileIndex = loop.indexOf('reconcilePendingRosterMovesForRegularSeasonCycle');
   const picksIndex = loop.indexOf('getCycleRosterPicksOnce');
@@ -108,6 +108,7 @@ test('server scoring repairs ready queued moves before loading picks for scoring
   assert.notEqual(reconcileIndex, -1);
   assert.notEqual(picksIndex, -1);
   assert.ok(reconcileIndex < picksIndex, 'Queued moves must be repaired before scoring picks load.');
+  assert.match(automationSource, /'post-transition-cycle-refresh'[\s\S]*getActiveLeagueCycles\(leagueId\)/);
 });
 
 test('manual next-period recovery also reconciles queued moves before returning', () => {

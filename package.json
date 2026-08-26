@@ -502,7 +502,13 @@
     "test:batchd1f:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1f-canonical-facts-impact-index/*.test.mjs",
     "preverify:batchd1f": "npm run security:sync-repository-automation",
     "verify:batchd1f:core": "npm run verify:batchd1d:core && npm run test:batchd1f:run && npm run capacity:100k && npm run validate:release-manifest",
-    "verify:batchd1f": "npm run toolchain:verify && npm run verify:batchd1f:core && npm run security:dependency-audit"
+    "verify:batchd1f": "npm run toolchain:verify && npm run verify:batchd1f:core && npm run security:dependency-audit",
+    "certify:preseason-scoring": "node --no-warnings --experimental-strip-types scripts/certification/run-preseason-scoring-certification.mjs",
+    "pretest:batchd1f2:run": "npm run generate:release-manifest",
+    "test:batchd1f2:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1f2-preseason-certification-phase-timing/*.test.mjs",
+    "preverify:batchd1f2": "npm run security:sync-repository-automation",
+    "verify:batchd1f2:core": "npm run verify:batchd1f:core && npm run certify:preseason-scoring && npm run test:batchd1f2:run && npm run capacity:100k && npm run validate:release-manifest",
+    "verify:batchd1f2": "npm run toolchain:verify && npm run verify:batchd1f2:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

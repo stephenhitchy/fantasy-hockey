@@ -241,7 +241,10 @@ test('final settlement and meaningful fantasy changes signal immediately', () =>
 });
 
 test('the feed is one leased global poll with exact Internal Test Canary targeting', async () => {
-  const source = await read('functions/src/nhl-canonical-impact-feed.ts');
+  const [source, routing] = await Promise.all([
+    read('functions/src/nhl-canonical-impact-feed.ts'),
+    read('functions/src/shared/core/nhl/nhl-canonical-impact-routing.util.ts'),
+  ]);
 
   assert.match(source, /schedule: 'every 2 minutes'/);
   assert.match(source, /maxInstances: 1/);
@@ -249,7 +252,8 @@ test('the feed is one leased global poll with exact Internal Test Canary targeti
   assert.match(source, /getLeagueAutomationCanonicalCanaryScope/);
   assert.match(source, /buildCanaryImpactIndex/);
   assert.match(source, /impactIndexComplete/);
-  assert.match(source, /return \[\.\.\.input\.exactCanaryLeagueIds\]/);
+  assert.match(source, /selectAffectedCanonicalLeagueIds/);
+  assert.match(routing, /return \[\.\.\.new Set\(input\.exactCanaryLeagueIds\)\]\.sort\(\)/);
   assert.match(source, /requestLeagueAutomationForCanonicalChange/);
   assert.doesNotMatch(source, /runLeagueAutomation\(/);
   assert.match(source, /getGameBoxscore\(input\.game\.id, 'near-live-canary'\)/);
@@ -270,10 +274,14 @@ test('the impact index records both player and NHL-team ownership', async () => 
 });
 
 test('canonical source versions cannot be lost behind an older in-flight task', async () => {
-  const source = await read('functions/src/league-automation.ts');
+  const [source, completion] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read('functions/src/shared/core/live-scoring/canonical-request-completion.util.ts'),
+  ]);
 
   assert.match(source, /canonicalRequestedSourceVersion/);
   assert.match(source, /activeTaskCanonicalSourceVersion/);
+  assert.match(source, /decideCanonicalRequestCompletion/);
   assert.match(source, /canonicalNeedsFollowUp/);
   assert.match(source, /canonicalRequestStatus.*'pending-follow-up'/s);
   assert.match(source, /canonicalCompletedSourceVersion/);
@@ -282,7 +290,8 @@ test('canonical source versions cannot be lost behind an older in-flight task', 
     /canonicalRequestedSourceVersion'.*FieldValue\.delete\(\)/s,
   );
   assert.match(source, /payload\.reason === 'canary-manual' \|\|[\s\S]*Boolean\(payloadCanonicalSourceVersion\)/);
-  assert.match(source, /taskCanonicalSourceVersion !== latestCanonicalSourceVersion/);
+  assert.match(completion, /taskSourceVersion === latestRequestedSourceVersion/);
+  assert.match(completion, /needsFollowUp/);
   assert.match(source, /nextScoringAt.*Timestamp\.fromMillis\(Date\.now\(\)\)/s);
   assert.match(
     source,

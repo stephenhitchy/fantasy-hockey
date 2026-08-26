@@ -956,3 +956,13 @@ npm run build:all
 ```
 
 Functions-only deployment and the complete Canary/rollback procedure are documented in `docs/RINKRAT_DATA_D1F_CANONICAL_FACTS_AFFECTED_LEAGUE_INDEX.md`.
+
+## Data Infrastructure Batch D1F.2 — Preseason Scoring Certification and Phase Timing
+
+D1F.2 adds bounded server phase-duration evidence to live and historical scoring and a deterministic sixteen-scenario preseason certification report. It helps identify whether a slow scoring run came from NHL schedules, boxscore/play-by-play data, player game logs, scoring calculation, window transitions, publication, or competition progression. The fixtures never publish production scores, direct NHL scoring remains authoritative, and no Firestore Rule, index, TTL, scoring-value, Projection V11, or automatic Primary change is included.
+
+```bash
+npm run certify:preseason-scoring
+npm run test:batchd1f2:run
+npm run verify:batchd1f2
+```

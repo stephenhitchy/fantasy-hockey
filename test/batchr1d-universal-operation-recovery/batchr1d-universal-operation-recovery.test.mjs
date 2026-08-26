@@ -351,6 +351,10 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // D1F adds isolated canonical facts and affected-league routing.
     'nhl-canonical-impact-feed.ts',
     'shared/core/nhl/nhl-canonical-facts.util.ts',
+    // D1F.2 adds isolated queue-version helpers and scoring phase instrumentation.
+    'shared/core/live-scoring/canonical-request-completion.util.ts',
+    'shared/core/nhl/nhl-canonical-impact-routing.util.ts',
+    'shared/core/observability/scoring-phase-timing.util.ts',
     'draft-authority.ts',
     'draft-automation.ts',
     'shared/core/draft/draft.models.ts',

@@ -193,6 +193,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     // D1F adds isolated canonical facts and affected-league routing.
     'src/nhl-canonical-impact-feed.ts',
     'src/shared/core/nhl/nhl-canonical-facts.util.ts',
+    // D1F.2 adds isolated queue-version helpers and scoring phase instrumentation.
+    'src/shared/core/live-scoring/canonical-request-completion.util.ts',
+    'src/shared/core/nhl/nhl-canonical-impact-routing.util.ts',
+    'src/shared/core/observability/scoring-phase-timing.util.ts',
     'src/shared/core/projection/window-projection.service.ts',
     'src/projection-authority.ts',
     'src/shared/core/projection/projection-asset-catalog.service.ts',
