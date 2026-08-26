@@ -5,6 +5,7 @@ import { functions } from '../firebase-functions';
 
 export type LeagueAutomationQueueMode = 'shadow' | 'canary' | 'primary';
 export type LeagueAutomationEnvironment = 'production' | 'staging' | 'emulator' | 'unknown';
+export type LeagueAutomationRefreshCadence = 'standard' | 'near-live-canary';
 export type LeagueAutomationScoringPath =
   | 'legacy'
   | 'queued-canary'
@@ -35,6 +36,8 @@ export interface LeagueAutomationAdminLeague {
   lastOutcome: string;
   lastTrigger: string;
   lastDurationMilliseconds: number | null;
+  lastRefreshCadence: LeagueAutomationRefreshCadence;
+  lastRefreshDelayMilliseconds: number | null;
   lastError: string;
   activeTaskId: string;
   activeTaskLeaseExpiresAt: string | null;
@@ -81,6 +84,8 @@ export interface LeagueAutomationQueueHealth {
   queueScheduleCoverageCount?: number;
   queueScheduleCoverageCompletedDraftCount?: number;
   queueTaskMaxConcurrentDispatches?: number;
+  queueNearLiveCanaryRefreshIntervalMilliseconds?: number;
+  queueNearLiveCanaryMaxLeagueCount?: number;
 }
 
 export interface LeagueAutomationQueueAdminSnapshot {

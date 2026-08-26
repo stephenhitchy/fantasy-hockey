@@ -215,11 +215,11 @@
         <div class="lesson-visual-stack">
           @switch (currentDrill().id) {
             @case ('six-game-counter') {
-              <section class="counter-drill" aria-label="One active roster spot counting six NHL games">
+              <section class="counter-drill" aria-label="One active player counting six NHL games">
                 <header>
                   <span class="demo-logo">A</span>
                   <div>
-                    <small>Active roster spot</small>
+                    <small>Active player</small>
                     <strong>Six-game counter</strong>
                   </div>
                 </header>
@@ -228,16 +228,16 @@
                     <span>{{ game }}</span>
                   }
                 </div>
-                <p>These six games build this spot’s matchup score.</p>
+                <p>These six games build this player’s matchup score.</p>
               </section>
             }
 
             @case ('game-seven') {
-              <section class="cycle-demo" aria-label="Two roster spots using independent six-game counters">
+              <section class="cycle-demo" aria-label="Two players using independent six-game counters">
                 <div class="cycle-demo-team">
                   <div class="demo-player">
                     <span class="demo-logo">A</span>
-                    <div><strong>Spot A</strong><small>Already reached six</small></div>
+                    <div><strong>Player A</strong><small>Already reached six</small></div>
                   </div>
                   <div class="cycle-window-map completed-window">
                     <span class="window-label first-window-label">Finished Matchup</span>
@@ -257,7 +257,7 @@
                 <div class="cycle-demo-team compact-cycle-team">
                   <div class="demo-player">
                     <span class="demo-logo">B</span>
-                    <div><strong>Spot B</strong><small>Still finishing its six</small></div>
+                    <div><strong>Player B</strong><small>Still finishing their six</small></div>
                   </div>
                   <div class="first-window-dots standalone-dots">
                     @for (game of [1, 2, 3, 4]; track game) {
@@ -270,8 +270,8 @@
                 </div>
 
                 <div class="fairness-callout">
-                  <strong>Both spots still count exactly six games</strong>
-                  <span>Spot A moving forward does not change Spot B’s counter.</span>
+                  <strong>Both players still count exactly six games</strong>
+                  <span>Player A moving forward does not change Player B’s counter.</span>
                 </div>
               </section>
             }

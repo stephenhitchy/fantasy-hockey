@@ -240,7 +240,7 @@ test('B1H release documentation and the permanent roadmap stay synchronized', as
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmapRoot, roadmapDocs);
-  assert.match(roadmapRoot, /Version 1\.54\.[0-3]/);
+  assert.match(roadmapRoot, /Version 1\.54\.4/);
   assert.match(roadmapRoot, /# \[x\] B1\.34 Make every manager-facing route easier to escape and re-enter/);
   assert.match(roadmapRoot, /# \[x\] B1\.35 Rebuild Training Camp as a progressive, game-like sequence/);
   assert.match(roadmapRoot, /# \[x\] B1\.36 Repair Training Camp position help/);

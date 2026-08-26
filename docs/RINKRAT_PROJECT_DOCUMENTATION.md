@@ -12899,3 +12899,45 @@ firebase deploy --only hosting:app \
 The RC62 B1G Firestore Rules and Functions remain required. B1I changes no Function source, Firestore Rule, index, TTL policy, scoring value, projection calculation, six-game authority, seventh-game rollover, Draft/roster/waiver authority, App Check mode, scoring-queue mode, or shared NHL-cache authority.
 
 Full implementation, browser-matrix, and rollback details are in `docs/RINKRAT_BETA_B1I_PROGRESSIVE_TRAINING_CAMP.md`.
+
+# Data Infrastructure Batch D1D — Near-Live Scoring Canary
+
+**Candidate date:** 2026-08-25
+
+**Deployment:** selected Cloud Functions plus Hosting
+
+**Protected competition baseline:** Production Scoring V4 / Projection V11 / immutable six-game roster-slot windows
+
+D1D adds a guarded two-minute live-game target for an exact Internal Test league routed through the existing scoring queue in Canary mode. The server requires the league to be present in both the Canary and Internal Test allowlists and caps the measured near-live cohort at four leagues. It does not shorten the legacy ten-minute scheduled sweep, increase the four-task queue concurrency limit, increase the 24-task admission ceiling, or activate near-live behavior for Shadow, non-Canary, or Primary leagues.
+
+The task worker re-reads the server-owned queue configuration when execution begins. Only when the current mode is `canary`, the exact league ID remains in the current allowlist, and that same league remains marked Internal Test does it select `near-live-canary`; otherwise it uses the standard cadence. This makes a removed Canary or a return to Shadow fail safely without requiring already-enqueued task deletion.
+
+During a live NHL game or scoring/window transition, an exact Canary records a two-minute next-refresh delay. The one-minute due dispatcher may therefore produce an observed task start approximately two to three minutes later, before NHL-source timing and processing duration are included. Near-game and six-hour idle scheduling remain unchanged.
+
+The queue schedule, task history, live-scoring control, health summary, and Release Readiness control surface now expose the selected cadence and delay. The UI labels an exact route **Near-Live Canary** and shows **2-minute live target** without offering broad activation.
+
+The shared NHL cache remains Shadow-only and non-authoritative. D1D is specifically bounded so task duration, upstream request use, queue age, retries, Firestore contention, score correctness, and cost can be measured before centralized change-driven NHL ingestion is promoted.
+
+The same candidate updates the first Training Camp shift to say each active **player** receives six NHL games. Player A and Player B replace Spot A and Spot B in the visual example. One concise sentence preserves the Team Goalie Unit's identical six-game rule.
+
+Verification:
+
+```bash
+npm run verify:batchd1d
+npm run build:all
+```
+
+Targeted deployment after the complete gate passes:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+firebase deploy --only "functions:processLeagueAutomationTask,functions:dispatchDueLeagueAutomation,functions:getLeagueAutomationQueueControlCenter,functions:updateLeagueAutomationQueueConfig,functions:queueLeagueAutomationCanaryCheck,functions:requestLeagueLiveScoringRefresh" \
+  -m "D1D near-live scoring Canary"
+
+firebase deploy --only hosting:app \
+  -m "D1D near-live Canary controls and Training Camp player wording"
+```
+
+Deployment alone does not enable Canary. Keep production in Shadow until one completed-Draft internal live league is deliberately allowlisted and the guarded activation checks pass. The fastest operational rollback is returning the queue to Shadow.
+
+Full implementation, activation, verification, deployment, and rollback guidance is in `docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md`.

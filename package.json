@@ -492,7 +492,12 @@
     "test:batchb1k:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1k-playtest-flow-usability/*.test.mjs",
     "preverify:batchb1k": "npm run security:sync-repository-automation",
     "verify:batchb1k:core": "npm run verify:batchb1j:core && npm run audit:product-copy-density && npm run test:batchb1k:run && npm run validate:release-manifest",
-    "verify:batchb1k": "npm run toolchain:verify && npm run verify:batchb1k:core && npm run security:dependency-audit"
+    "verify:batchb1k": "npm run toolchain:verify && npm run verify:batchb1k:core && npm run security:dependency-audit",
+    "pretest:batchd1d:run": "npm run generate:release-manifest",
+    "test:batchd1d:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1d-near-live-scoring-canary/*.test.mjs",
+    "preverify:batchd1d": "npm run security:sync-repository-automation",
+    "verify:batchd1d:core": "npm run verify:batchb1k:core && npm run test:batchd1d:run && npm run capacity:100k && npm run validate:release-manifest",
+    "verify:batchd1d": "npm run toolchain:verify && npm run verify:batchd1d:core && npm run security:dependency-audit"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

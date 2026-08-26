@@ -186,6 +186,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/league-lifecycle-authority.util.ts',
     'src/league-automation.ts',
     'src/shared/core/cycle/cycle.service.ts',
+    // D1D adds an exact-internal-Canary-only NHL freshness profile without changing replay.
+    'src/shared/core/cycle/cycle-scoring.service.ts',
+    'src/shared/core/nhl/nhl-api.service.ts',
+    'src/shared/core/live-scoring/live-scoring-cadence.util.ts',
     'src/shared/core/projection/window-projection.service.ts',
     'src/projection-authority.ts',
     'src/shared/core/projection/projection-asset-catalog.service.ts',
@@ -270,7 +274,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
   assert.equal(
     await hashTree('functions', exclusions),
-    '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',
+    'ac1c74faa731629cedf0ea8a4362b4bdb59c802a01d0464589b217a7074ea759',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([

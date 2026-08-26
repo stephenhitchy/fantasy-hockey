@@ -90,6 +90,6 @@ Do not deploy Hosting alone. The new interface and the new backend email behavio
 
 Test completion and Finish Later from ordinary onboarding and a saved invite link; first send; cooldown and resend; reload during cooldown; verification return; invitation resume; desktop/mobile sign out; and all eight league destinations in Chrome, Safari, iPhone Safari, and Android Chrome.
 
-## Next infrastructure batch
+## Separate D1D infrastructure candidate
 
-Near-live scoring remains intentionally separate. The next scale batch should prove the existing per-league queue through Canary, move it to Primary after parity/backlog gates pass, promote shared NHL ingestion carefully, coalesce changed NHL game versions, and target healthy 30–90-second updates without blind one-minute full-league polling.
+Near-live scoring remains intentionally separate from the B1K usability release. Data Batch D1D now adds the first measured step: up to four exact Internal Test leagues may receive a guarded two-minute live-game target through the existing per-league queue while Shadow, non-Canary, Primary, and legacy recovery remain standard. Shared NHL data remains Shadow-only and non-authoritative. See `docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md` before deploying or activating that separate infrastructure candidate.

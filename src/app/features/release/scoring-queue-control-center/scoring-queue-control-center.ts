@@ -116,11 +116,19 @@ export class ScoringQueueControlCenter implements OnInit {
       return false;
     }
 
-    if (
-      this.selectedMode() === 'canary' &&
-      this.selectedCanaryLeagueIds().length === 0
-    ) {
-      return false;
+    if (this.selectedMode() === 'canary') {
+      const canaryLeagueIds = this.selectedCanaryLeagueIds();
+      const internalTestLeagueIds = this.selectedInternalTestLeagueIds();
+      const maxCanaryLeagueCount =
+        snapshot.health.queueNearLiveCanaryMaxLeagueCount ?? 4;
+
+      if (
+        canaryLeagueIds.length === 0 ||
+        canaryLeagueIds.length > maxCanaryLeagueCount ||
+        canaryLeagueIds.some((leagueId) => !internalTestLeagueIds.includes(leagueId))
+      ) {
+        return false;
+      }
     }
 
     if (
@@ -177,9 +185,31 @@ export class ScoringQueueControlCenter implements OnInit {
       return;
     }
 
+    const selectingCanary = !this.isSelectedCanary(league.leagueId);
+    const maxCanaryLeagueCount =
+      this.snapshot()?.health.queueNearLiveCanaryMaxLeagueCount ?? 4;
+
+    if (
+      selectingCanary &&
+      this.selectedCanaryLeagueIds().length >= maxCanaryLeagueCount
+    ) {
+      this.errorMessage.set(
+        `Near-live Canary is limited to ${maxCanaryLeagueCount} Internal Test leagues during this measured rollout.`,
+      );
+      return;
+    }
+
+    this.errorMessage.set('');
     this.selectedCanaryLeagueIds.update((current) =>
       toggleId(current, league.leagueId),
     );
+
+    if (selectingCanary && !this.isSelectedInternalTest(league.leagueId)) {
+      this.selectedInternalTestLeagueIds.update((current) =>
+        normalizeIds([...current, league.leagueId]),
+      );
+    }
+
     this.canaryRunArmedLeagueId.set('');
   }
 
@@ -188,9 +218,18 @@ export class ScoringQueueControlCenter implements OnInit {
       return;
     }
 
+    const removingInternalTest = this.isSelectedInternalTest(leagueId);
+
     this.selectedInternalTestLeagueIds.update((current) =>
       toggleId(current, leagueId),
     );
+
+    if (removingInternalTest && this.isSelectedCanary(leagueId)) {
+      this.selectedCanaryLeagueIds.update((current) =>
+        current.filter((candidate) => candidate !== leagueId),
+      );
+      this.canaryRunArmedLeagueId.set('');
+    }
   }
 
   isSelectedCanary(leagueId: string): boolean {
@@ -417,7 +456,7 @@ export class ScoringQueueControlCenter implements OnInit {
   getModeDescription(mode: LeagueAutomationQueueMode): string {
     switch (mode) {
       case 'canary':
-        return 'Only the exact allowlisted live leagues use queued scoring. Every other live league remains on the legacy scorer.';
+        return 'Only exact allowlisted Internal Test leagues use queued scoring. During live NHL games, those controlled canaries target a healthy two-minute refresh cadence while every other live league remains on the legacy scorer.';
       case 'primary':
         return 'Every eligible live league uses queued per-league scoring. The legacy sweep remains available only for recovery.';
       default:
@@ -438,10 +477,26 @@ export class ScoringQueueControlCenter implements OnInit {
     }
   }
 
+  isNearLiveCanary(league: LeagueAutomationAdminLeague): boolean {
+    const snapshot = this.snapshot();
+    const maxCanaryLeagueCount =
+      snapshot?.health.queueNearLiveCanaryMaxLeagueCount ?? 4;
+
+    return Boolean(
+      snapshot &&
+      snapshot.mode === 'canary' &&
+      snapshot.canaryLeagueIds.length > 0 &&
+      snapshot.canaryLeagueIds.length <= maxCanaryLeagueCount &&
+      league.scoringPath === 'queued-canary' &&
+      league.isCanary &&
+      league.isInternalTest
+    );
+  }
+
   getScoringPathLabel(league: LeagueAutomationAdminLeague): string {
     switch (league.scoringPath) {
       case 'queued-canary':
-        return 'Queued Canary';
+        return this.isNearLiveCanary(league) ? 'Near-Live Canary' : 'Queued Canary';
       case 'queued-primary':
         return 'Queued Primary';
       case 'historical-replay':
@@ -453,6 +508,21 @@ export class ScoringQueueControlCenter implements OnInit {
       default:
         return 'Legacy Scorer';
     }
+  }
+
+  getScoringCadenceLabel(league: LeagueAutomationAdminLeague): string {
+    if (this.isNearLiveCanary(league)) {
+      return '2-minute live target';
+    }
+
+    if (
+      league.lastRefreshCadence === 'near-live-canary' &&
+      league.isInternalTest
+    ) {
+      return 'Near-live Canary';
+    }
+
+    return 'Standard';
   }
 
   getScoringPathClass(league: LeagueAutomationAdminLeague): string {

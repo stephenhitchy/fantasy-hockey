@@ -138,6 +138,13 @@
           <strong>{{ current.health.queueTaskMaxConcurrentDispatches ?? 4 }}</strong>
           <small>Concurrent scoring tasks in this build</small>
         </article>
+        <article>
+          <span>Canary live target</span>
+          <strong>
+            {{ formatDuration(current.health.queueNearLiveCanaryRefreshIntervalMilliseconds ?? 120000) }}
+          </strong>
+          <small>Up to {{ current.health.queueNearLiveCanaryMaxLeagueCount ?? 4 }} Internal Test Canaries · Primary stays on the standard cadence</small>
+        </article>
       </div>
     </section>
 
@@ -186,7 +193,7 @@
           <span class="mode-choice-code">C</span>
           <span class="mode-choice-copy">
             <strong>Canary</strong>
-            <small>Only exact selected live leagues use the queued worker. Every other league remains on legacy scoring.</small>
+            <small>Exact selected Internal Test leagues use the queued worker and a guarded two-minute live-game target. Every other league stays standard.</small>
           </span>
           <span class="mode-choice-state">Test path</span>
         </button>
@@ -214,11 +221,11 @@
       <div class="mode-explainer">
         <strong>Canary and Primary use the same worker.</strong>
         <p>
-          The difference is scope, not speed: Canary routes only named leagues; Primary routes every
-          eligible live league. Concurrency stays at
-          {{ current.health.queueTaskMaxConcurrentDispatches ?? 4 }} until the Functions code is
-          intentionally tuned and redeployed. The Primary proof counter resets whenever the exact
-          canary allowlist changes, so successes from an older test group cannot unlock a new one.
+          They share the same idempotent worker and four-task concurrency ceiling, but D1D deliberately
+          gives only exact Internal Test Canaries a two-minute target while live NHL games are active. Primary
+          remains on the standard cadence until shared NHL ingestion, queue cost, and staged load proof
+          are complete. The Primary proof counter resets whenever the exact canary allowlist changes,
+          so successes from an older test group cannot unlock a new one.
         </p>
       </div>
 
@@ -256,8 +263,8 @@
           <span class="queue-eyebrow">Exact league routing</span>
           <h3 id="league-selector-heading">Choose safe test leagues</h3>
           <p>
-            Internal Test is only a label. Canary changes the scoring route after you save the
-            configuration.
+            Near-live Canary is deliberately limited to controlled Internal Test leagues. Selecting
+            Canary marks the league Internal Test automatically; removing that label removes it from Canary.
           </p>
         </div>
         <div class="league-count">
@@ -337,6 +344,10 @@
                   <dd>{{ formatTimestamp(league.nextScoringAt) }}</dd>
                 </div>
                 <div>
+                  <dt>Scoring cadence</dt>
+                  <dd>{{ getScoringCadenceLabel(league) }}</dd>
+                </div>
+                <div>
                   <dt>Last queued result</dt>
                   <dd>{{ league.lastOutcome }} · {{ formatDuration(league.lastDurationMilliseconds) }}</dd>
                 </div>
@@ -360,7 +371,7 @@
                   />
                   <span>
                     <strong>Internal Test</strong>
-                    <small>Labels this as one of your disposable or controlled leagues.</small>
+                    <small>Required for the guarded near-live Canary path.</small>
                   </span>
                 </label>
 
@@ -382,8 +393,7 @@
               </div>
 
               @if (
-                current.mode === 'canary' &&
-                league.isCanary &&
+                isNearLiveCanary(league) &&
                 league.canaryEligible
               ) {
                 <div class="manual-canary-panel">
@@ -391,6 +401,7 @@
                     <strong>Run one real queued scoring check</strong>
                     <p>
                       This forces one safe scoring pass through the same worker used by Primary.
+                      During live NHL games, this exact canary then targets the guarded two-minute cadence.
                       It does not activate Primary for other leagues.
                     </p>
                   </div>

@@ -1,6 +1,7 @@
 # RinkRat Scoring Queue Rollout Runbook
 
-**Current release:** Release Candidate 9 / Batch P1F.1
+**Current queue foundation:** Release Candidate 9 / Batch P1F.1
+**Current cadence extension:** Data Batch D1D near-live exact Canary
 
 **Production default:** Shadow mode
 
@@ -21,9 +22,9 @@ hotfix only and does not change rollout behavior.
 - **Shadow** watches the new queue but scores no live league.
 - **Canary** routes only exact selected league IDs through the queued scorer.
 - **Primary** routes every eligible live league through the queued scorer.
-- Canary and Primary use the **same worker**; the difference is the number of leagues allowed to use it.
+- Canary and Primary use the **same idempotent worker**. D1D changes only the next live-game schedule for exact Canary leagues: two minutes for Canary versus the standard cadence for Primary and every non-Canary league.
 
-The mode does not change queue capacity. In Release Candidate 9, the worker ceiling remains four concurrent scoring tasks and the global queued/processing ceiling remains 24. Those limits must be tuned later from measured task duration, Firestore contention, queue age, retries, NHL-data behavior, and cost.
+The mode does not change queue capacity. The worker ceiling remains four concurrent scoring tasks, the global queued/processing ceiling remains 24, and no more than four Internal Test leagues may enter the near-live Canary cohort. D1D deliberately tests freshness without increasing concurrency. Those limits must be tuned later from measured task duration, Firestore contention, queue age, retries, NHL-data behavior, and cost.
 
 ## Where to manage it
 
@@ -109,6 +110,21 @@ Shadow is a monitoring state, not a lower-user pricing tier. Do not wait for the
 12. Watch Game Center, the league schedule row, queue health, and Function logs.
 
 The manual canary action forces one safe scoring pass through `processLeagueAutomationTask`. It uses the same scoring worker as Primary, but it does not route any other league through the queue.
+
+### D1D near-live Canary cadence
+
+After the D1D Functions are deployed, an exact league uses the two-minute target only when it is present in both the server-owned Canary and Internal Test allowlists and its scoring result reports a live NHL game or a completed-window transition. The schedule then records:
+
+```text
+lastRefreshCadence: near-live-canary
+lastRefreshDelayMilliseconds: 120000
+```
+
+Shadow leagues, non-allowlisted leagues, Canary selections missing the Internal Test safety label, legacy recovery, Historical Replay, and Primary remain on the standard cadence. Primary is intentionally not faster in D1D because broad frequency must wait for shared NHL ingestion, queue-cost evidence, and staged load tests.
+
+Selecting **Route Through Canary** in the Control Center automatically selects **Internal Test**. Removing the Internal Test label removes the league from Canary, and the server callable rejects any mismatched saved configuration.
+
+The control center shows the cadence per league and the server-owned Canary interval. Returning to Shadow immediately removes the near-live path without deleting any score, window, transaction, or task history.
 
 ## Canary acceptance checks
 
@@ -236,7 +252,7 @@ It does not:
 - bypass per-league leases or scoring ledgers;
 - automatically promote modes when traffic grows.
 
-Capacity tuning requires a Functions code change, redeployment, and staged load measurement. Rollout modes should be promoted before overload, not after failures begin.
+Capacity tuning requires a Functions code change, redeployment, and staged load measurement. D1D changes cadence for exact Canaries only; it does not raise worker concurrency or certify broad near-live traffic. Rollout modes should be promoted before overload, not after failures begin.
 
 ## Function deployment for Batch P1F
 
@@ -252,15 +268,32 @@ firebase deploy --only hosting:app -m "Batch P1F safe canary rollout controls"
 
 No Firestore rules, indexes, or data migration are required.
 
-## Production posture after P1F
+## Targeted deployment for D1D
+
+After the original P1F queue foundation is live, deploy the D1D worker/snapshot changes and Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only "functions:processLeagueAutomationTask,functions:dispatchDueLeagueAutomation,functions:getLeagueAutomationQueueControlCenter,functions:updateLeagueAutomationQueueConfig,functions:queueLeagueAutomationCanaryCheck,functions:requestLeagueLiveScoringRefresh" \
+  -m "D1D near-live scoring Canary"
+
+firebase deploy --only hosting:app \
+  -m "D1D near-live Canary controls and Training Camp player wording"
+```
+
+No Firestore Rule, index, TTL, or data migration deployment is required.
+
+## Production posture after P1F and D1D
 
 For the invite beta:
 
 ```text
 Production mode: Shadow
 Historical regression league: Serialized replay queue
-Fake live test league: Prepare for Canary after real NHL games begin
-Friend leagues: Legacy scorer until exact canary evidence is clean
+Fake live test league: Exact near-live Canary after real NHL games begin
+Friend leagues: Legacy scorer until exact Canary evidence is clean
+Near-live Primary: Disabled
 Production Primary: Locked
 ```
 

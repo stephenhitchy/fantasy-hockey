@@ -259,6 +259,10 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/league-lifecycle-authority.ts',
     'src/league-lifecycle-authority.util.ts',
         'src/league-automation.ts',
+        // D1D intentionally changes only the measured near-live scoring path.
+        'src/shared/core/cycle/cycle-scoring.service.ts',
+        'src/shared/core/nhl/nhl-api.service.ts',
+        'src/shared/core/live-scoring/live-scoring-cadence.util.ts',
         'src/shared/core/cycle/cycle.service.ts',
         'src/shared/core/projection/window-projection.service.ts',
         'src/projection-authority.ts',
@@ -334,6 +338,6 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/operations/operations-client-compatibility.util.ts',
       ]),
     ),
-    '793d9a43157133cefbde8c5ee1bc4dd59181f608cd834baccf013592959c18f6',
+    'ac1c74faa731629cedf0ea8a4362b4bdb59c802a01d0464589b217a7074ea759',
   );
 });

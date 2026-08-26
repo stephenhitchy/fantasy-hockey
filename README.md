@@ -24,6 +24,7 @@ Core project references:
 - [`docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md`](docs/RINKRAT_DATA_D1A_1_TIMESTAMP_TYPE_HOTFIX.md) — strict Angular TypeScript narrowing for Firestore timestamp-like values without changing score-freshness behavior.
 - [`docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md`](docs/RINKRAT_DATA_D1B_INJURY_MATCH_QUALITY.md) — categorized ESPN-to-NHL identity matching, bounded candidate context, source-controlled aliases, intentionally ignored individual goalies, deployment, and rollback.
 - [`docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md`](docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md) — deterministic shared NHL Shadow cache, hash deduplication, bounded payloads, retention, inspection, deployment, and future cutover gates.
+- [`docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md`](docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md) — exact-internal-league two-minute scoring Canary, unchanged standard/Primary cadence, queue observability, targeted deployment, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md`](docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md) — member-only League Wire, server-sanitized public outcomes, waiver and queued-action privacy boundaries, bounded mobile UX, deployment, smoke test, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`](docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md) — owner-private transaction and claim projections, claim-free waiver pool, guarded backfill, privacy inspection, staged cutover, smoke test, and coordinated rollback.
 - [`docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`](docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md) — one-event final matchup activity, playoff/championship context, no live-score spam, Functions-first deployment, mobile smoke testing, and rollback.
@@ -65,6 +66,16 @@ Core project references:
 - [`docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md`](docs/RINKRAT_HIGH_SCALE_AUTOMATION_BLUEPRINT.md) — queued-scoring foundation and remaining high-scale architecture.
 - [`docs/RINKRAT_100K_CAPACITY_PLAN.md`](docs/RINKRAT_100K_CAPACITY_PLAN.md) — capacity-model interpretation and staged-load-test sequence.
 
+## Infrastructure Candidate — D1D Near-Live Scoring Canary
+
+D1D adds the first guarded near-live scoring experiment without accelerating the legacy full sweep. Only an exact league present in both the server-owned **Canary** and **Internal Test** allowlists receives a two-minute live-game target, and the measured cohort is capped at four leagues. Shadow, non-Canary, Primary, near-game, and idle behavior remain on their existing schedules. The one-minute due-league dispatcher, deterministic per-league Cloud Task, lease, and authoritative `runLeagueAutomation()` scorer remain the execution path.
+
+The queue still allows four concurrent scoring tasks and 24 queued/processing tasks, and D1D limits the near-live Canary cohort to four Internal Test leagues. Shared NHL data remains Shadow-only and non-authoritative, so the two-minute target must remain limited to measured internal Canaries until upstream request cost, task duration, queue age, retries, Firestore contention, and score correctness are proven. The Scoring Queue Control Center identifies the near-live Canary and records the selected cadence without offering a broad activation control.
+
+The same candidate also completes the requested Training Camp wording refinement: the six-game lesson now says **each player** rather than **each roster spot**, while explicitly noting that the Team Goalie Unit follows the same rule.
+
+Full verification, deployment, activation, rollback, and protected-system boundaries are in [`docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md`](docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md).
+
 ## Current release and toolchain
 
 The current source runtime is **Release Candidate 65 / Beta Batch B1J.2**. The working tree also contains the **B1K playtest-flow usability candidate**; it intentionally retains the RC65 runtime identity until the pinned gate, matching Functions/Hosting deployment, and browser matrix are complete. B1J keeps Training Camp progressive while removing the mandatory quiz gate, preserves the exact shift and drill when a manager opens the full Scoring Guide, and corrects the example schedule so Game 4 is the missed/injured marker. The B1J.2 hotfix portals Hockey Term definitions to the real visual viewport on desktop and mobile and removes duplicated `.git` history from packaged ZIPs while preserving the exact release commit through a tiny `.rinkrat-source-revision` fallback.
@@ -81,7 +92,7 @@ B1I's one-at-a-time lessons, simplified six-game explanation, collapsed fantasy-
 
 RC65/B1J is a **Hosting-only** release. The RC62 B1G Firestore Rules and Functions remain required for Training-Camp-first verification and invite continuation. B1J changes no Firestore Rule, index, TTL policy, Function source, Production Scoring V4 value, Projection V11 calculation, immutable six-game window, seventh-game rollover, App Check mode, scoring-queue mode, or shared NHL-cache authority.
 
-Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The frozen RC65 verification command remains `npm run verify:batchb1j`; the new implementation-candidate gate is `npm run verify:batchb1k`.
+Production Scoring V4, Projection V11 calculation, independent immutable six-game roster-slot windows, seventh-game rollover, server-authoritative competitive actions, transaction/waiver privacy, App Check Monitor, the inactive exact-league/callable canary, scoring queue Shadow, and shared NHL cache Shadow are the current protected baseline. The frozen RC65 verification command remains `npm run verify:batchb1j`; the cumulative B1K.1 plus D1D implementation-candidate gate is `npm run verify:batchd1d`.
 
 Historical verification checkpoints remain available and intentionally stay documented for regression and rollback work:
 
@@ -158,6 +169,8 @@ verify:batchb1g
 verify:batchb1h
 verify:batchb1i
 verify:batchb1j
+verify:batchb1k
+verify:batchd1d
 ```
 
 RinkRat pins:

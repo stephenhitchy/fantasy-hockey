@@ -383,6 +383,10 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/league-lifecycle-authority.ts',
     'src/league-lifecycle-authority.util.ts',
         'src/league-automation.ts',
+        // D1D intentionally changes only the measured near-live scoring path.
+        'src/shared/core/cycle/cycle-scoring.service.ts',
+        'src/shared/core/nhl/nhl-api.service.ts',
+        'src/shared/core/live-scoring/live-scoring-cadence.util.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         'src/shared/core/draft/draft.models.ts',
@@ -464,6 +468,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/operations/operations-client-compatibility.util.ts',
       ]),
     ),
-    '476753579e580d7d15275d139e327ea2dbebcf742e8531ad37241d5e15cd3d2a',
+    'c64614478f122dc68d5518c84abe14f85938e6d7c56672b74a070882f24625cd',
   );
 });

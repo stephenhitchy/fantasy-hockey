@@ -15,6 +15,7 @@ import {
   getRegularSeasonGameLog,
   getSkaterAssistBreakdown,
   getTeamGoalieUnitResult,
+  NhlApiRefreshProfile,
   NhlGameBoxscoreResponse,
   NhlGamePlayByPlayResponse,
   NhlPlayerGameLogEntry,
@@ -113,6 +114,12 @@ export interface CalculateCycleScoringInput {
 
   /** Source season used for historical player game logs during replay. */
   gameLogSeason?: string;
+
+  /**
+   * Ordinary leagues keep the proven cache windows. Only an exact internal
+   * near-live Canary asks for fresher schedule and live game responses.
+   */
+  nhlRefreshProfile?: NhlApiRefreshProfile;
 
   /** Kept optional for older callers. Scoring is based on NHL game numbers. */
   startDate?: Date;
@@ -232,7 +239,8 @@ function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
 
 async function loadSchedulesByTeam(
   teamAbbreviations: string[],
-  season: string
+  season: string,
+  refreshProfile: NhlApiRefreshProfile,
 ): Promise<Record<string, NhlTeamSeasonGame[]>> {
   const schedulesByTeam: Record<string, NhlTeamSeasonGame[]> = {};
 
@@ -250,7 +258,8 @@ async function loadSchedulesByTeam(
       batch.map(async (teamAbbreviation) => {
         const schedule = await getNhlTeamSeasonSchedule(
           teamAbbreviation,
-          season
+          season,
+          refreshProfile,
         );
 
         return {
@@ -287,7 +296,8 @@ async function loadSchedulesByTeam(
 }
 
 async function loadScoringGameData(
-  gameIds: number[]
+  gameIds: number[],
+  refreshProfile: NhlApiRefreshProfile,
 ): Promise<Map<number, ScoringGameData>> {
   const gameDataById = new Map<number, ScoringGameData>();
 
@@ -301,8 +311,8 @@ async function loadScoringGameData(
     const results = await Promise.allSettled(
       batch.map(async (gameId) => {
         const [boxscore, playByPlay] = await Promise.all([
-          getGameBoxscore(gameId),
-          getGamePlayByPlay(gameId)
+          getGameBoxscore(gameId, refreshProfile),
+          getGamePlayByPlay(gameId, refreshProfile)
         ]);
 
         return {
@@ -596,10 +606,15 @@ function buildResultFingerprint(
 export async function calculateCycleScoring(
   input: CalculateCycleScoringInput
 ): Promise<CycleScoringResult> {
+  const nhlRefreshProfile = input.nhlRefreshProfile ?? 'standard';
   const draftedTeams = getUniqueDraftedTeams(input.picks);
   const schedulesByTeam = input.replayGamesByAssetKey
     ? {}
-    : await loadSchedulesByTeam(draftedTeams, input.season);
+    : await loadSchedulesByTeam(
+        draftedTeams,
+        input.season,
+        nhlRefreshProfile,
+      );
   const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
   const previousByWindowId = new Map<string, CycleAssetScoreSummary | undefined>();
   const gameIdsToLoad = new Set<number>();
@@ -668,7 +683,7 @@ export async function calculateCycleScoring(
   );
 
   const [gameDataById, gameLogsByPlayerId] = await Promise.all([
-    loadScoringGameData([...gameIdsToLoad]),
+    loadScoringGameData([...gameIdsToLoad], nhlRefreshProfile),
     loadSkaterGameLogs(skatersNeedingLogs, input.gameLogSeason ?? input.season)
   ]);
 

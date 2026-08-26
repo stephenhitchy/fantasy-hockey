@@ -75,6 +75,10 @@ At the current source settings:
 
 The draft system is more advanced than a simple scan. `functions/src/draft-automation.ts` already creates exact per-pick Cloud Tasks through `processDraftClockDeadline`, uses deterministic task IDs, checks the expected pick and start time, and retains `runScheduledDraftAutomation` as a recovery sweep. The remaining draft concern is recovery coverage and measured queue throughput, not the absence of a task queue.
 
+### D1D measured near-live status
+
+Data Batch D1D adds a deliberately narrow freshness experiment on top of the existing queued scorer. Only an exact league present in both the Canary and Internal Test allowlists receives a two-minute live-game target, with the measured cohort capped at four leagues; Primary, ordinary leagues, and the legacy recovery sweep remain standard. The Canary also requests fresher process-local schedule and live-game responses without promoting the shared NHL Shadow cache. This is a measurement and correctness gate, not a claim that broad near-live scale is complete.
+
 ## Area 1 — Scheduled league scoring
 
 ### Exact current code

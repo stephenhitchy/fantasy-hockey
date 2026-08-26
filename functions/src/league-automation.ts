@@ -60,6 +60,13 @@ import { FantasyCycle } from './shared/core/cycle/cycle.models';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import { SharedCycleScoringSnapshot } from './shared/core/live-scoring/live-scoring.models';
 import {
+  NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT,
+  NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+  getLiveScoringRefreshDelay,
+  selectLeagueAutomationRefreshCadence,
+  type LeagueAutomationRefreshCadence,
+} from './shared/core/live-scoring/live-scoring-cadence.util';
+import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   NhlTeamSeasonGame,
@@ -84,9 +91,6 @@ import {
 const FUNCTION_REGION = 'us-central1';
 const SERVER_WORKER_PREFIX = 'server:';
 const SERVER_LEASE_MILLISECONDS = 9 * 60 * 1000;
-const LIVE_REFRESH_INTERVAL_MILLISECONDS = 10 * 60 * 1000;
-const NEAR_GAME_REFRESH_MAX_MILLISECONDS = 60 * 60 * 1000;
-const IDLE_REFRESH_INTERVAL_MILLISECONDS = 6 * 60 * 60 * 1000;
 const ERROR_RETRY_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 const MAX_TRANSITION_PASSES = 3;
 const MAX_PARALLEL_LEAGUES = 2;
@@ -162,6 +166,8 @@ interface LeagueAutomationResult {
   cycleOneCreated: boolean;
   durationMilliseconds: number;
   nextRefreshAtMilliseconds?: number;
+  refreshCadence?: LeagueAutomationRefreshCadence;
+  refreshDelayMilliseconds?: number;
 }
 
 interface LeaseClaimResult {
@@ -249,6 +255,8 @@ interface LeagueAutomationAdminLeague {
   lastOutcome: string;
   lastTrigger: string;
   lastDurationMilliseconds: number | null;
+  lastRefreshCadence: LeagueAutomationRefreshCadence;
+  lastRefreshDelayMilliseconds: number | null;
   lastError: string;
   activeTaskId: string;
   activeTaskLeaseExpiresAt: string | null;
@@ -479,6 +487,19 @@ async function getLeagueAutomationQueueConfig(): Promise<LeagueAutomationQueueCo
     ),
     revision: normalizeLeagueAutomationRevision(data['revision']),
   };
+}
+
+
+function getConfiguredLeagueAutomationRefreshCadence(
+  config: LeagueAutomationQueueConfig,
+  leagueId: string,
+): LeagueAutomationRefreshCadence {
+  return selectLeagueAutomationRefreshCadence({
+    queueMode: config.mode,
+    leagueId,
+    canaryLeagueIds: config.canaryLeagueIds,
+    internalTestLeagueIds: config.internalTestLeagueIds,
+  });
 }
 
 
@@ -903,6 +924,13 @@ async function loadLeagueAutomationAdminLeagues(
       lastDurationMilliseconds: getLeagueAutomationNumber(
         scheduleData['lastDurationMilliseconds'],
       ),
+      lastRefreshCadence:
+        scheduleData['lastRefreshCadence'] === 'near-live-canary'
+          ? 'near-live-canary'
+          : 'standard',
+      lastRefreshDelayMilliseconds: getLeagueAutomationNumber(
+        scheduleData['lastRefreshDelayMilliseconds'],
+      ),
       lastError: getLeagueAutomationString(
         scheduleData['lastError'] || scheduleData['lastQueueError'],
       ).slice(0, 500),
@@ -1113,6 +1141,10 @@ async function buildLeagueAutomationQueueAdminSnapshot(
       ) ?? 0,
       queueTaskMaxConcurrentDispatches:
         LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+      queueNearLiveCanaryRefreshIntervalMilliseconds:
+        NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+      queueNearLiveCanaryMaxLeagueCount:
+        NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT,
     },
     leagues: leagueResult.leagues,
     truncated: leagueResult.truncated,
@@ -1901,6 +1933,8 @@ async function recordLeagueAutomationSuccess(
   durationMilliseconds: number,
   publishedSnapshotCount: number,
   skippedSnapshotCount: number,
+  refreshCadence: LeagueAutomationRefreshCadence,
+  refreshDelayMilliseconds: number,
 ): Promise<void> {
   const queueTaskOwnsSchedule = trigger === 'queue-task';
   const data: Record<string, unknown> = {
@@ -1914,6 +1948,8 @@ async function recordLeagueAutomationSuccess(
     lastDurationMilliseconds: Math.max(0, durationMilliseconds),
     lastPublishedSnapshotCount: Math.max(0, publishedSnapshotCount),
     lastSkippedSnapshotCount: Math.max(0, skippedSnapshotCount),
+    lastRefreshCadence: refreshCadence,
+    lastRefreshDelayMilliseconds: Math.max(0, refreshDelayMilliseconds),
     lastOutcome: 'success',
     lastTrigger: trigger,
     consecutiveFailureCount: 0,
@@ -2282,41 +2318,6 @@ async function persistServerScoring(
   return true;
 }
 
-function getLiveScoringRefreshDelay(
-  results: Array<Pick<CycleScoringResult, 'hasLiveGames' | 'nextScheduledGameStart'>>,
-  transitionOccurred: boolean,
-  nowMilliseconds = Date.now(),
-): number {
-  if (transitionOccurred || results.some((result) => result.hasLiveGames)) {
-    return LIVE_REFRESH_INTERVAL_MILLISECONDS;
-  }
-
-  const nextStart = results
-    .map((result) => result.nextScheduledGameStart)
-    .filter((value): value is string => Boolean(value))
-    .map((value) => Date.parse(value))
-    .filter(Number.isFinite)
-    .sort((first, second) => first - second)[0];
-
-  if (typeof nextStart === 'number') {
-    const untilStart = nextStart - nowMilliseconds;
-
-    if (untilStart <= 0) {
-      return LIVE_REFRESH_INTERVAL_MILLISECONDS;
-    }
-
-    return Math.max(
-      LIVE_REFRESH_INTERVAL_MILLISECONDS,
-      Math.min(
-        untilStart + 2 * 60 * 1000,
-        NEAR_GAME_REFRESH_MAX_MILLISECONDS,
-      ),
-    );
-  }
-
-  return IDLE_REFRESH_INTERVAL_MILLISECONDS;
-}
-
 async function ensureCycleOneStarted(
   leagueId: string,
   teams?: FantasyTeam[],
@@ -2420,6 +2421,7 @@ async function runLeagueAutomation(
   leagueId: string,
   force: boolean,
   trigger: LeagueAutomationTrigger,
+  refreshCadence: LeagueAutomationRefreshCadence = 'standard',
 ): Promise<LeagueAutomationResult> {
   const safeLeagueId = requireServerFirestoreDocumentId(
     leagueId,
@@ -2606,6 +2608,7 @@ async function runLeagueAutomation(
               : null,
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
           gameLogSeason: replayControl?.sourceSeason,
+          nhlRefreshProfile: refreshCadence,
         });
         const published = await publishCycleSnapshot(
           leagueId,
@@ -2664,6 +2667,8 @@ async function runLeagueAutomation(
     const refreshDelay = getLiveScoringRefreshDelay(
       allResults,
       transitionOccurred,
+      Date.now(),
+      refreshCadence,
     );
     const nextRefreshAtMilliseconds = Date.now() + refreshDelay;
 
@@ -2685,6 +2690,8 @@ async function runLeagueAutomation(
         serverTrigger: trigger,
         serverHeartbeatAt: FieldValue.serverTimestamp(),
         lastRefreshDurationMs: Math.max(0, Date.now() - startedAt),
+        lastRefreshCadence: refreshCadence,
+        lastRefreshDelayMilliseconds: refreshDelay,
         lastPublishedSnapshotCount: publishedSnapshotCount,
         lastSkippedSnapshotWriteCount: skippedSnapshotCount,
         totalSuccessfulRefreshCount: FieldValue.increment(1),
@@ -2709,6 +2716,8 @@ async function runLeagueAutomation(
       durationMilliseconds,
       publishedSnapshotCount,
       skippedSnapshotCount,
+      refreshCadence,
+      refreshDelay,
     ).catch((error) => {
       console.error('League scoring completed, but its queue schedule was not recorded.', {
         leagueId,
@@ -2733,6 +2742,8 @@ async function runLeagueAutomation(
       cycleOneCreated,
       durationMilliseconds,
       nextRefreshAtMilliseconds,
+      refreshCadence,
+      refreshDelayMilliseconds: refreshDelay,
     };
   } catch (error: unknown) {
     const message = error instanceof Error
@@ -3245,6 +3256,8 @@ async function markLeagueAutomationTaskCompleted(
         publishedSnapshotCount: result.publishedSnapshotCount,
         skippedSnapshotCount: result.skippedSnapshotCount,
         activeCycleNumbers: result.activeCycleNumbers,
+        refreshCadence: result.refreshCadence ?? 'standard',
+        refreshDelayMilliseconds: result.refreshDelayMilliseconds ?? null,
         completedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(
           Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
@@ -3557,12 +3570,30 @@ export const updateLeagueAutomationQueueConfig = onCall(
         );
       }
 
+      if (canaryLeagueIds.length > NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Near-live Canary is limited to ${NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT} Internal Test leagues until measured game-night evidence supports expansion.`,
+        );
+      }
+
       if (confirmationText !== LEAGUE_AUTOMATION_CANARY_CONFIRMATION) {
         throw new HttpsError(
           'failed-precondition',
           `Type “${LEAGUE_AUTOMATION_CANARY_CONFIRMATION}” exactly before enabling canary mode.`,
         );
       }
+    }
+
+    const canaryLeagueIdsMissingInternalTest = canaryLeagueIds.filter(
+      (leagueId) => !internalTestLeagueIds.includes(leagueId),
+    );
+
+    if (mode === 'canary' && canaryLeagueIdsMissingInternalTest.length > 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Every queued scoring canary must also be marked Internal Test before it can receive the guarded near-live cadence.',
+      );
     }
 
     if (mode !== 'shadow') {
@@ -3843,6 +3874,20 @@ export const queueLeagueAutomationCanaryCheck = onCall(
       );
     }
 
+    if (!config.internalTestLeagueIds.includes(leagueId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This league must also be marked Internal Test before it can run the guarded near-live Canary.',
+      );
+    }
+
+    if (config.canaryLeagueIds.length > NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Reduce the near-live Canary cohort to ${NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT} Internal Test leagues before running a check.`,
+      );
+    }
+
     await validateLeagueAutomationAdminLeagueIds([leagueId], true);
 
     const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
@@ -4107,6 +4152,8 @@ export const dispatchDueLeagueAutomation = onSchedule(
         queueTaskMaxConcurrentDispatches:
           LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
         queueTaskMaxPendingTasks: LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS,
+        queueNearLiveCanaryRefreshIntervalMilliseconds:
+          NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
         queueLastDispatchDurationMilliseconds: Date.now() - startedAt,
         queueLastDispatchAt: FieldValue.serverTimestamp(),
         queueLastDispatchStatus: failedCount > 0 ? 'partial-error' : 'success',
@@ -4234,10 +4281,16 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
     ]);
 
     try {
+      const queueConfig = await getLeagueAutomationQueueConfig();
+      const refreshCadence = getConfiguredLeagueAutomationRefreshCadence(
+        queueConfig,
+        leagueId,
+      );
       const result = await runLeagueAutomation(
         leagueId,
         payload.reason === 'canary-manual',
         'queue-task',
+        refreshCadence,
       );
 
       if (result.status === 'skipped' && result.skipReason === 'another-server-worker') {
@@ -4254,6 +4307,13 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
             result.status === 'skipped' ? 1 : 0,
           ),
           queueLastTaskDurationMilliseconds: Date.now() - startedAt,
+          queueLastTaskRefreshCadence: result.refreshCadence ?? 'standard',
+          queueLastTaskRefreshDelayMilliseconds:
+            result.refreshDelayMilliseconds ?? null,
+          queueNearLiveCanaryRefreshIntervalMilliseconds:
+            NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+          queueNearLiveCanaryMaxLeagueCount:
+            NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT,
           queueLastTaskCompletedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
@@ -4671,7 +4731,13 @@ export const requestLeagueLiveScoringRefresh = onCall(
     }
 
     try {
-      const result = await runLeagueAutomation(leagueId, true, 'manual');
+      const config = await getLeagueAutomationQueueConfig();
+      const result = await runLeagueAutomation(
+        leagueId,
+        true,
+        'manual',
+        getConfiguredLeagueAutomationRefreshCadence(config, leagueId),
+      );
 
       if (result.status === 'skipped') {
         throw new HttpsError(

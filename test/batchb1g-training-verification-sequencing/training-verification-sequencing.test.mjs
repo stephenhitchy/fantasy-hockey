@@ -220,7 +220,7 @@ test('roadmap and permanent documentation record the B1G sequencing decision', a
     ]);
 
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.54\.[0-3]/);
+  assert.match(rootRoadmap, /Version 1\.54\.4/);
   assert.match(rootRoadmap, /B1\.33 Delay the first account verification email/);
   assert.match(rootRoadmap, /LOG\.78 2026-08-21/);
   assert.match(projectDocumentation, /Beta Batch B1G — Training-First Email Verification/);

@@ -414,7 +414,7 @@ test('the six-game window and seventh-game rollover sources remain frozen', asyn
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), 'fbd0683f7dda81406248921545a3dfaa8e247818b06366e821763615e7eb063c');
-  assert.equal(sha256(serverScoring), '51d31dd230c2b853407faf6bcc4cfbf5a58f29ff572b4d3b9e3d228cc4e4a8fc');
+  assert.equal(sha256(serverScoring), 'ff62e70067ad75a2f98bba8533164f305bc30799b17c1877fd690232f7987fcf');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

@@ -24,16 +24,16 @@ export const TRAINING_CAMP_STEPS: readonly TrainingCampStep[] = [
     number: '1',
     eyebrow: 'Fair Matchups',
     shortLabel: 'Six Games',
-    title: 'Six games for every active spot',
+    title: 'Six games for every active player',
     drills: [
       {
         id: 'six-game-counter',
         label: 'Drill 1',
-        title: 'One active spot. Six NHL games.',
+        title: 'One active player. Six NHL games.',
         body:
-          'Each active roster spot gets six NHL games. Those six games make that spot’s score for the matchup.',
+          'Each active player gets six NHL games. Those six games make that player’s score for the matchup. Your Team Goalie Unit follows the same six-game rule.',
         coachNote:
-          'Your lineup is 14 separate six-game races. One spot can finish before another.',
+          'Each player has their own six-game race, so one player can finish before another.',
         whyItMatters:
           'NHL teams play uneven schedules. Equal six-game opportunities reduce schedule luck, keep both managers’ chances more even, and let you focus on meaningful roster strategy instead of changing a lineup every day. Games and points already earned stay protected.',
       },
@@ -42,9 +42,9 @@ export const TRAINING_CAMP_STEPS: readonly TrainingCampStep[] = [
         label: 'Drill 2',
         title: 'Game 7 starts the next matchup',
         body:
-          'After a spot counts six games, its next NHL game starts that spot’s next matchup. Other spots keep finishing their own six.',
+          'After a player counts six games, their next NHL game starts that player’s next matchup. Other players keep finishing their own six.',
         coachNote:
-          'It is okay if one spot finishes before another. Every spot still counts exactly six games.',
+          'It is okay if one player finishes before another. Every player still counts exactly six games.',
       },
     ],
   },

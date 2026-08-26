@@ -15,6 +15,20 @@ const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
 const NHL_GAME_DATA_CACHE_MILLISECONDS = 2 * 60 * 1000;
 const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 15 * 60 * 1000;
 const NHL_STATS_CACHE_MILLISECONDS = 5 * 60 * 1000;
+const NHL_NEAR_LIVE_SCHEDULE_CACHE_MILLISECONDS = 30 * 1000;
+const NHL_NEAR_LIVE_GAME_DATA_CACHE_MILLISECONDS = 15 * 1000;
+
+export type NhlApiRefreshProfile = 'standard' | 'near-live-canary';
+
+function getNhlCacheMilliseconds(
+  refreshProfile: NhlApiRefreshProfile,
+  standardMilliseconds: number,
+  nearLiveMilliseconds: number,
+): number {
+  return refreshProfile === 'near-live-canary'
+    ? nearLiveMilliseconds
+    : standardMilliseconds;
+}
 
 const RETRYABLE_HTTP_STATUSES = new Set([
   408,
@@ -394,14 +408,19 @@ export async function getRegularSeasonTeamGames(
 
 export async function getNhlTeamSeasonSchedule(
   teamAbbreviation: string,
-  season: string
+  season: string,
+  refreshProfile: NhlApiRefreshProfile = 'standard',
 ): Promise<NhlTeamSeasonGame[]> {
   const url =
     `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`;
 
   const data = await getCachedApiJson<NhlTeamSeasonScheduleResponse>(
     url,
-    NHL_SCHEDULE_CACHE_MILLISECONDS,
+    getNhlCacheMilliseconds(
+      refreshProfile,
+      NHL_SCHEDULE_CACHE_MILLISECONDS,
+      NHL_NEAR_LIVE_SCHEDULE_CACHE_MILLISECONDS,
+    ),
     'NHL season schedule request failed'
   );
 
@@ -415,26 +434,36 @@ export async function getNhlTeamSeasonSchedule(
 }
 
 export async function getGameBoxscore(
-  gameId: number
+  gameId: number,
+  refreshProfile: NhlApiRefreshProfile = 'standard',
 ): Promise<NhlGameBoxscoreResponse> {
   const url = `${NHL_API_BASE_URL}/gamecenter/${gameId}/boxscore`;
 
   return getCachedApiJson<NhlGameBoxscoreResponse>(
     url,
-    NHL_GAME_DATA_CACHE_MILLISECONDS,
+    getNhlCacheMilliseconds(
+      refreshProfile,
+      NHL_GAME_DATA_CACHE_MILLISECONDS,
+      NHL_NEAR_LIVE_GAME_DATA_CACHE_MILLISECONDS,
+    ),
     'NHL boxscore request failed'
   );
 }
 
 export async function getGamePlayByPlay(
-  gameId: number
+  gameId: number,
+  refreshProfile: NhlApiRefreshProfile = 'standard',
 ): Promise<NhlGamePlayByPlayResponse> {
   const url =
     `${NHL_API_BASE_URL}/gamecenter/${gameId}/play-by-play`;
 
   return getCachedApiJson<NhlGamePlayByPlayResponse>(
     url,
-    NHL_GAME_DATA_CACHE_MILLISECONDS,
+    getNhlCacheMilliseconds(
+      refreshProfile,
+      NHL_GAME_DATA_CACHE_MILLISECONDS,
+      NHL_NEAR_LIVE_GAME_DATA_CACHE_MILLISECONDS,
+    ),
     'NHL play-by-play request failed'
   );
 }

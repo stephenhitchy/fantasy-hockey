@@ -46,10 +46,10 @@ test('Training Camp teaches five shifts through ten focused drills', () => {
   }
 
   const cycleStep = TRAINING_CAMP_STEPS[0];
-  assert.match(cycleStep.drills[0].body, /Each active roster spot gets six NHL games/i);
-  assert.match(cycleStep.drills[0].body, /make that spot’s score for the matchup/i);
+  assert.match(cycleStep.drills[0].body, /Each active player gets six NHL games/i);
+  assert.match(cycleStep.drills[0].body, /make that player’s score for the matchup/i);
   assert.match(cycleStep.drills[1].title, /Game 7 starts the next matchup/i);
-  assert.match(cycleStep.drills[1].coachNote, /every spot still counts exactly six games/i);
+  assert.match(cycleStep.drills[1].coachNote, /every player still counts exactly six games/i);
 });
 
 test('the page reveals one drill at a time and unlocks later shifts through natural progress', async () => {
@@ -215,7 +215,7 @@ test('B1I safeguards remain documented under the current RC65 release', async ()
   assert.match(runbook, /firebase deploy --only hosting:app/);
   assert.match(batchDocumentation, /one focused drill at a time/i);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.54\.[0-3]/);
+  assert.match(rootRoadmap, /Version 1\.54\.\d+/);
   assert.match(rootRoadmap, /# \[x\] B1\.35/);
   assert.match(rootRoadmap, /# \[x\] B1\.36/);
   assert.match(rootRoadmap, /# \[x\] LOG\.80/);

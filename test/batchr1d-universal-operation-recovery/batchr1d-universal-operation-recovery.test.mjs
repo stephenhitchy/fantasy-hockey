@@ -344,6 +344,10 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'league-lifecycle-authority.ts',
     'league-lifecycle-authority.util.ts',
     'league-automation.ts',
+    // D1D intentionally changes only the measured near-live scoring path.
+    'shared/core/cycle/cycle-scoring.service.ts',
+    'shared/core/nhl/nhl-api.service.ts',
+    'shared/core/live-scoring/live-scoring-cadence.util.ts',
     'draft-authority.ts',
     'draft-automation.ts',
     'shared/core/draft/draft.models.ts',
@@ -419,7 +423,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/operations/operations-client-compatibility.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 34,
-    digest: '03b35fed008a331a592493fb31be30e9c91fd5e4e2279ee88f52ee3c0390cc76',
+    count: 32,
+    digest: '2fcc29de6acfe4a22f1ce1231fcc13c8e5fb2ffa4d0059ec7c0900caf2a9aac5',
   });
 });
