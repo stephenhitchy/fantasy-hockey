@@ -8,6 +8,7 @@ import {
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import {
+  type CanonicalLeagueAutomationGameVersion,
   getLeagueAutomationCanonicalCanaryScope,
   requestLeagueAutomationForCanonicalChange,
 } from './league-automation';
@@ -21,6 +22,7 @@ import {
   selectAffectedCanonicalLeagueIds,
 } from './shared/core/nhl/nhl-canonical-impact-routing.util';
 import {
+  applyCanonicalNhlFinalSettlements,
   buildCanonicalNhlGameFacts,
   buildCanonicalNhlGameHashes,
   CANONICAL_NHL_FACTS_SCHEMA_VERSION,
@@ -29,21 +31,27 @@ import {
   canonicalNhlSha256,
   CanonicalNhlChangeKind,
   decideCanonicalNhlGameChange,
+  type CanonicalNhlGameFacts,
   PreviousCanonicalNhlSignalState,
 } from './shared/core/nhl/nhl-canonical-facts.util';
 import {
   getGameBoxscore,
   getGamePlayByPlay,
   getNhlScoreNow,
+  getRegularSeasonGameLog,
+  type NhlPlayerGameLogEntry,
   NhlScoreGame,
 } from './shared/core/nhl/nhl-api.service';
 
 const FUNCTION_REGION = 'us-central1';
-const FEED_SCHEMA_VERSION = 1;
+const FEED_SCHEMA_VERSION = 2;
 const FEED_LEASE_MILLISECONDS = 100 * 1000;
 const FEED_GAME_CONCURRENCY = 4;
 const FEED_MAX_GAME_COUNT = 20;
 const FEED_MAX_CANONICAL_DOCUMENT_BYTES = 650 * 1024;
+const FINAL_SETTLEMENT_CONCURRENCY = 6;
+const FINAL_SETTLEMENT_SECOND_CHECKPOINT_MILLISECONDS = 5 * 60 * 1000;
+const FINAL_SETTLEMENT_FINAL_CHECKPOINT_MILLISECONDS = 28 * 60 * 1000;
 const IMPACT_INDEX_SCHEMA_VERSION = 1;
 const IMPACT_INDEX_MAX_PLAYER_IDS = 700;
 const IMPACT_INDEX_MAX_TEAM_ABBREVIATIONS = 40;
@@ -70,6 +78,7 @@ interface LeagueChangeRequest {
   gameIds: number[];
   changeKinds: string[];
   sourceVersions: string[];
+  gameVersions: CanonicalLeagueAutomationGameVersion[];
 }
 
 function toMilliseconds(value: unknown): number {
@@ -126,6 +135,112 @@ function isLiveScoreboardGame(game: NhlScoreGame): boolean {
 function isFinalScoreboardGame(game: NhlScoreGame): boolean {
   const state = getGameState(game);
   return state === 'OFF' || state === 'FINAL';
+}
+
+function getNhlSeasonForGameDate(value: string): string {
+  const parsed = new Date(value);
+  const date = Number.isFinite(parsed.getTime()) ? parsed : new Date();
+  const year = date.getUTCFullYear();
+  const startYear = date.getUTCMonth() + 1 >= 7 ? year : year - 1;
+  return `${startYear}${startYear + 1}`;
+}
+
+function getPreviousCanonicalFacts(
+  data: DocumentData | undefined,
+): CanonicalNhlGameFacts | null {
+  const facts = data?.['facts'];
+
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) {
+    return null;
+  }
+
+  const candidate = facts as Partial<CanonicalNhlGameFacts>;
+
+  if (typeof candidate.gameId !== 'number' || !Number.isFinite(candidate.gameId)) {
+    return null;
+  }
+
+  return {
+    ...candidate,
+    schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
+    finalSettlements: Array.isArray(candidate.finalSettlements)
+      ? candidate.finalSettlements
+      : [],
+    finalSettlementPlayerIds: Array.isArray(candidate.finalSettlementPlayerIds)
+      ? candidate.finalSettlementPlayerIds
+      : [],
+  } as CanonicalNhlGameFacts;
+}
+
+function getFinalSettlementStage(data: DocumentData | undefined): number {
+  const value = data?.['finalSettlementStage'];
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(3, Math.trunc(value)))
+    : 0;
+}
+
+function selectNextFinalSettlementStage(input: {
+  currentStage: number;
+  elapsedFinalMilliseconds: number;
+}): number {
+  if (input.currentStage < 1) {
+    return 1;
+  }
+
+  if (
+    input.currentStage < 2 &&
+    input.elapsedFinalMilliseconds >=
+      FINAL_SETTLEMENT_SECOND_CHECKPOINT_MILLISECONDS
+  ) {
+    return 2;
+  }
+
+  if (
+    input.currentStage < 3 &&
+    input.elapsedFinalMilliseconds >=
+      FINAL_SETTLEMENT_FINAL_CHECKPOINT_MILLISECONDS
+  ) {
+    return 3;
+  }
+
+  return input.currentStage;
+}
+
+async function loadFinalSettlementEntries(input: {
+  playerIds: readonly number[];
+  gameId: number;
+  season: string;
+}): Promise<Map<number, NhlPlayerGameLogEntry>> {
+  const entries = new Map<number, NhlPlayerGameLogEntry>();
+  const results = await mapWithConcurrency(
+    input.playerIds,
+    async (playerId) => {
+      const response = await getRegularSeasonGameLog(
+        playerId,
+        input.season,
+        true,
+      );
+      const gameLog = (response.gameLog ?? []).find(
+        (entry) => entry.gameId === input.gameId,
+      );
+
+      return { playerId, gameLog };
+    },
+    FINAL_SETTLEMENT_CONCURRENCY,
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.gameLog) {
+      entries.set(result.value.playerId, result.value.gameLog);
+    } else if (result.status === 'rejected') {
+      console.warn('Unable to load canonical final player settlement.', {
+        gameId: input.gameId,
+        error: result.reason,
+      });
+    }
+  }
+
+  return entries;
 }
 
 function getPreviousSignalState(
@@ -332,12 +447,13 @@ async function observeCanonicalGame(input: {
   game: NhlScoreGame;
   previousData: DocumentData | undefined;
   nowMilliseconds: number;
+  finalSettlementPlayerIds: readonly number[];
 }): Promise<CanonicalGameObservation> {
   const [boxscore, playByPlay] = await Promise.all([
     getGameBoxscore(input.game.id, 'near-live-canary'),
     getGamePlayByPlay(input.game.id, 'near-live-canary'),
   ]);
-  const facts = buildCanonicalNhlGameFacts({
+  let facts = buildCanonicalNhlGameFacts({
     scoreboard: {
       gameId: input.game.id,
       gameState: input.game.gameState,
@@ -353,6 +469,55 @@ async function observeCanonicalGame(input: {
     boxscore,
     playByPlay,
   });
+  const previousFacts = getPreviousCanonicalFacts(input.previousData);
+  const firstObservedFinalAtMilliseconds = facts.gameState === 'final'
+    ? toMilliseconds(input.previousData?.['firstObservedFinalAt']) ||
+      input.nowMilliseconds
+    : 0;
+  let finalSettlementStage = getFinalSettlementStage(input.previousData);
+  const relevantFinalPlayerIds = [...new Set(
+    input.finalSettlementPlayerIds
+      .filter((playerId) => facts.skaters.some((entry) => entry.playerId === playerId))
+      .map((playerId) => Math.trunc(playerId)),
+  )].sort((left, right) => left - right);
+
+  if (facts.gameState === 'final') {
+    facts = {
+      ...facts,
+      finalSettlements: previousFacts?.finalSettlements ?? [],
+      finalSettlementPlayerIds:
+        previousFacts?.finalSettlementPlayerIds ?? [],
+    };
+    const nextStage = selectNextFinalSettlementStage({
+      currentStage: finalSettlementStage,
+      elapsedFinalMilliseconds: Math.max(
+        0,
+        input.nowMilliseconds - firstObservedFinalAtMilliseconds,
+      ),
+    });
+
+    if (nextStage > finalSettlementStage) {
+      if (relevantFinalPlayerIds.length > 0) {
+        const entriesByPlayerId = await loadFinalSettlementEntries({
+          playerIds: relevantFinalPlayerIds,
+          gameId: facts.gameId,
+          season: getNhlSeasonForGameDate(
+            facts.startTimeUTC || facts.gameDate,
+          ),
+        });
+
+        facts = applyCanonicalNhlFinalSettlements({
+          facts,
+          entriesByPlayerId,
+        });
+      }
+
+      finalSettlementStage = nextStage;
+    }
+  } else {
+    finalSettlementStage = 0;
+  }
+
   const hashes = buildCanonicalNhlGameHashes(facts);
   const previous = getPreviousSignalState(input.previousData);
   const decision = decideCanonicalNhlGameChange({
@@ -367,15 +532,19 @@ async function observeCanonicalGame(input: {
   const lastTimeOnIceSettledAtMilliseconds = decision.shouldSignal || !previous
     ? input.nowMilliseconds
     : previous.lastTimeOnIceSettledAtMilliseconds;
-  const firstObservedFinalAtMilliseconds = facts.gameState === 'final'
-    ? toMilliseconds(input.previousData?.['firstObservedFinalAt']) ||
-      input.nowMilliseconds
-    : 0;
   const payload = {
     schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
     gameId: facts.gameId,
     facts,
     ...hashes,
+    finalSettlementStage,
+    finalSettlementRelevantPlayerIds: relevantFinalPlayerIds,
+    finalSettlementComplete: relevantFinalPlayerIds.every((playerId) =>
+      facts.finalSettlementPlayerIds.includes(playerId)
+    ),
+    finalSettlementMissingPlayerIds: relevantFinalPlayerIds
+      .filter((playerId) => !facts.finalSettlementPlayerIds.includes(playerId))
+      .slice(0, 40),
     lastSignaledTimeOnIceHash,
     timeOnIceDirty: decision.timeOnIceDirty,
     nextTimeOnIceSettlementAt:
@@ -479,11 +648,16 @@ function buildLeagueChangeRequests(input: {
         gameIds: [],
         changeKinds: [],
         sourceVersions: [],
+        gameVersions: [],
       };
 
       existing.gameIds.push(observation.gameId);
       existing.changeKinds.push(observation.changeKind);
       existing.sourceVersions.push(observation.sourceVersion);
+      existing.gameVersions.push({
+        gameId: observation.gameId,
+        sourceVersion: observation.sourceVersion,
+      });
       byLeague.set(leagueId, existing);
     }
   }
@@ -494,6 +668,9 @@ function buildLeagueChangeRequests(input: {
       gameIds: [...new Set(request.gameIds)].sort((left, right) => left - right),
       changeKinds: [...new Set(request.changeKinds)].sort(),
       sourceVersions: [...new Set(request.sourceVersions)].sort(),
+      gameVersions: [...new Map(
+        request.gameVersions.map((entry) => [entry.gameId, entry] as const),
+      ).values()].sort((left, right) => left.gameId - right.gameId),
     }))
     .sort((left, right) => left.leagueId.localeCompare(right.leagueId));
 }
@@ -627,12 +804,16 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
           startedAt - firstObservedFinalAt <=
             CANONICAL_NHL_FINAL_RECONCILIATION_MILLISECONDS;
       });
+      const finalSettlementPlayerIds = [...new Set(
+        impactIndex.impacts.flatMap((impact) => impact.playerIds),
+      )].sort((left, right) => left - right);
       const observationResults = await mapWithConcurrency(
         eligibleGames,
         (game) => observeCanonicalGame({
           game,
           previousData: previousByGameId.get(game.id),
           nowMilliseconds: startedAt,
+          finalSettlementPlayerIds,
         }),
         FEED_GAME_CONCURRENCY,
       );
@@ -671,6 +852,7 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
           sourceVersion,
           observedAtMilliseconds: startedAt,
           gameIds: request.gameIds,
+          gameVersions: request.gameVersions,
           changeKinds: request.changeKinds,
         });
 

@@ -405,7 +405,7 @@ test('source-controlled scoring and private-season acceptance gates match the au
   assert.match(seasonAudit, /Audit only/);
 });
 
-test('the six-game window remains frozen and server scoring matches the D1F.2 instrumented baseline', async () => {
+test('the six-game window remains frozen and server scoring matches the D1G shadow-parity baseline', async () => {
   const [serverSelection, clientSelection, serverScoring] = await Promise.all([
     read('functions/src/shared/core/cycle/cycle-window-selection.util.ts'),
     read('src/app/core/cycle/cycle-window-selection.util.ts'),
@@ -414,7 +414,7 @@ test('the six-game window remains frozen and server scoring matches the D1F.2 in
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), 'fbd0683f7dda81406248921545a3dfaa8e247818b06366e821763615e7eb063c');
-  assert.equal(sha256(serverScoring), 'c7ae2211cffbdc0985c2dd9bd410c8beb525ae38c1c2dbbabd80589850a72aae');
+  assert.equal(sha256(serverScoring), '9c20a12fbcdd148fcd2e2a926aad4869830f7191d81ad8eec19dcb878648c83e');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {
@@ -472,7 +472,7 @@ test('the permanent roadmap converts the launch gameplan into explicit product a
   assert.match(roadmap, /\[~\] D1\.23/);
   assert.match(roadmap, /\[ \] D1\.24/);
   assert.match(roadmap, /# \[x\] D1\.26/);
-  assert.match(roadmap, /\[ \] D1\.27/);
+  assert.match(roadmap, /\[~\] D1\.27/);
   assert.match(roadmap, /# \[x\] D1\.28/);
   assert.match(roadmap, /PHASE O1 — TESTER-SEASON OPERATIONS AND PUBLIC-LAUNCH FOUNDATION/);
   for (const [milestone, date] of [

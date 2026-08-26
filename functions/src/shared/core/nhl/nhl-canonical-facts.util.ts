@@ -5,11 +5,12 @@ import type {
   NhlGamePlayByPlayResponse,
   NhlGoalieBoxscoreLine,
   NhlPlayByPlayEvent,
+  NhlPlayerGameLogEntry,
   NhlSkaterBoxscoreLine,
   NhlTeamBoxscore,
 } from './nhl-api.service';
 
-export const CANONICAL_NHL_FACTS_SCHEMA_VERSION = 1;
+export const CANONICAL_NHL_FACTS_SCHEMA_VERSION = 2;
 export const CANONICAL_NHL_TOI_SETTLEMENT_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 export const CANONICAL_NHL_FINAL_RECONCILIATION_MILLISECONDS = 30 * 60 * 1000;
 
@@ -64,6 +65,20 @@ export interface CanonicalNhlGoalieFacts {
   timeOnIceSeconds: number;
 }
 
+export interface CanonicalNhlSkaterFinalSettlement {
+  playerId: number;
+  goals: number;
+  assists: number;
+  shotsOnGoal: number;
+  plusMinus: number;
+  powerPlayPoints: number;
+  shortHandedPoints: number;
+  gameWinningGoal: boolean;
+  overtimeGoal: boolean;
+  timeOnIceSeconds: number;
+  source: 'player-game-log';
+}
+
 export interface CanonicalNhlGoalEvent {
   eventId: number | null;
   period: number | null;
@@ -78,7 +93,7 @@ export interface CanonicalNhlGoalEvent {
 }
 
 export interface CanonicalNhlGameFacts {
-  schemaVersion: 1;
+  schemaVersion: 2;
   gameId: number;
   gameState: CanonicalNhlGameState;
   sourceGameState: string;
@@ -97,6 +112,8 @@ export interface CanonicalNhlGameFacts {
   skaters: CanonicalNhlSkaterFacts[];
   goalies: CanonicalNhlGoalieFacts[];
   goals: CanonicalNhlGoalEvent[];
+  finalSettlements: CanonicalNhlSkaterFinalSettlement[];
+  finalSettlementPlayerIds: number[];
   playerIds: number[];
   teamAbbreviations: string[];
 }
@@ -382,8 +399,59 @@ export function buildCanonicalNhlGameFacts(input: {
     skaters,
     goalies,
     goals,
+    finalSettlements: [],
+    finalSettlementPlayerIds: [],
     playerIds,
     teamAbbreviations,
+  };
+}
+
+function normalizeFinalSettlementEntry(
+  playerId: number,
+  entry: NhlPlayerGameLogEntry,
+): CanonicalNhlSkaterFinalSettlement {
+  return {
+    playerId: Math.trunc(playerId),
+    goals: finiteNumber(entry.goals),
+    assists: finiteNumber(entry.assists),
+    shotsOnGoal: finiteNumber(entry.shots),
+    plusMinus: finiteNumber(entry.plusMinus),
+    powerPlayPoints: finiteNumber(entry.powerPlayPoints),
+    shortHandedPoints: finiteNumber(entry.shorthandedPoints),
+    gameWinningGoal: finiteNumber(entry.gameWinningGoals) > 0,
+    overtimeGoal: finiteNumber(entry.otGoals) > 0,
+    timeOnIceSeconds: parseNhlTimeOnIceSeconds(entry.toi),
+    source: 'player-game-log',
+  };
+}
+
+export function applyCanonicalNhlFinalSettlements(input: {
+  facts: CanonicalNhlGameFacts;
+  entriesByPlayerId: ReadonlyMap<number, NhlPlayerGameLogEntry>;
+}): CanonicalNhlGameFacts {
+  const existingByPlayerId = new Map(
+    input.facts.finalSettlements.map((entry) => [entry.playerId, entry] as const),
+  );
+
+  for (const [playerId, gameLog] of input.entriesByPlayerId) {
+    if (!Number.isFinite(playerId) || playerId <= 0) {
+      continue;
+    }
+
+    existingByPlayerId.set(
+      Math.trunc(playerId),
+      normalizeFinalSettlementEntry(Math.trunc(playerId), gameLog),
+    );
+  }
+
+  const finalSettlements = [...existingByPlayerId.values()]
+    .filter((entry) => entry.playerId > 0)
+    .sort((left, right) => left.playerId - right.playerId);
+
+  return {
+    ...input.facts,
+    finalSettlements,
+    finalSettlementPlayerIds: finalSettlements.map((entry) => entry.playerId),
   };
 }
 
@@ -450,6 +518,7 @@ export function buildCanonicalNhlGameHashes(
     fantasyEvents,
     timeOnIce,
     gameState,
+    finalSettlements: facts.finalSettlements,
   });
   const sourceVersion = canonicalNhlSha256({
     schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,

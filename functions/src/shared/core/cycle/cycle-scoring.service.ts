@@ -8,6 +8,11 @@ import {
 import { ScoringRules } from '../scoring/scoring-rules';
 import { selectCycleWindowGames } from './cycle-window-selection.util';
 import {
+  compareDirectAndCanonicalGameScore,
+  type CanonicalScoringParityGame,
+  type CanonicalScoringParityObservation,
+} from '../nhl/nhl-canonical-scoring-parity.util';
+import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
   getGamePlayByPlay,
@@ -131,6 +136,17 @@ export interface CalculateCycleScoringInput {
   onPhaseDuration?: (
     phase: CycleScoringPhaseName,
     durationMilliseconds: number,
+  ) => void;
+
+  /**
+   * Optional server-only canonical game facts used only for shadow parity.
+   * Direct NHL data remains the scoring authority in D1G.
+   */
+  canonicalParityGamesById?: ReadonlyMap<number, CanonicalScoringParityGame>;
+
+  /** Bounded observation sink for direct-vs-canonical shadow comparison. */
+  onCanonicalParityObservation?: (
+    observation: CanonicalScoringParityObservation,
   ) => void;
 
   /** Kept optional for older callers. Scoring is based on NHL game numbers. */
@@ -789,12 +805,27 @@ export async function calculateCycleScoring(
 
       if (state === 'final' && canReuseFinalGame(previous, game.id)) {
         const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
+        const appeared = previous?.appearanceGameIds?.includes(game.id) ?? false;
         gameScores[gameIdKey] = rounded(previousScore);
         currentScore += previousScore;
 
-        if (previous?.appearanceGameIds?.includes(game.id)) {
+        if (appeared) {
           actualGamesPlayed += 1;
           appearanceGameIds.push(game.id);
+        }
+
+        if (input.canonicalParityGamesById) {
+          input.onCanonicalParityObservation?.(
+            compareDirectAndCanonicalGameScore({
+              gameId: game.id,
+              asset: pick.asset,
+              canonicalGame: input.canonicalParityGamesById.get(game.id),
+              gameIsFinal: true,
+              scoringRules: input.scoringRules,
+              directPoints: previousScore,
+              directAppeared: appeared,
+            }),
+          );
         }
 
         continue;
@@ -823,6 +854,20 @@ export async function calculateCycleScoring(
 
       gameScores[gameIdKey] = scoreResult.points;
       currentScore += scoreResult.points;
+
+      if (input.canonicalParityGamesById) {
+        input.onCanonicalParityObservation?.(
+          compareDirectAndCanonicalGameScore({
+            gameId: game.id,
+            asset: pick.asset,
+            canonicalGame: input.canonicalParityGamesById.get(game.id),
+            gameIsFinal: state === 'final',
+            scoringRules: input.scoringRules,
+            directPoints: scoreResult.points,
+            directAppeared: scoreResult.appeared,
+          }),
+        );
+      }
 
       if (state === 'final' && scoreResult.appeared) {
         actualGamesPlayed += 1;

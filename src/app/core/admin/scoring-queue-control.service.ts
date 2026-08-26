@@ -86,6 +86,26 @@ export interface LeagueAutomationQueueHealth {
   queueTaskMaxConcurrentDispatches?: number;
   queueNearLiveCanaryRefreshIntervalMilliseconds?: number;
   queueNearLiveCanaryMaxLeagueCount?: number;
+  canonicalParityShadowOnly?: boolean;
+  canonicalParityAuthoritativeReadsEnabled?: boolean;
+  canonicalParityLastLeagueId?: string;
+  canonicalParityLastStatus?: string;
+  canonicalParityLastTaskVersionAligned?: boolean;
+  canonicalParityLastComparedCount?: number;
+  canonicalParityLastMatchedCount?: number;
+  canonicalParityLastMismatchCount?: number;
+  canonicalParityLastIncompleteCount?: number;
+  canonicalParityLastMaximumAbsolutePointDelta?: number;
+  canonicalParityLastComparedAt?: string | null;
+  canonicalParityExpectedLeagueCount?: number;
+  canonicalParityPassingLeagueCount?: number;
+  canonicalParityMismatchLeagueCount?: number;
+  canonicalParityIncompleteLeagueCount?: number;
+  canonicalParityMissingLeagueCount?: number;
+  canonicalParityStaleLeagueCount?: number;
+  canonicalParityTotalComparedCount?: number;
+  canonicalParityCohortMaximumAbsolutePointDelta?: number;
+  canonicalParityCohortPassing?: boolean;
 }
 
 export interface LeagueAutomationQueueAdminSnapshot {

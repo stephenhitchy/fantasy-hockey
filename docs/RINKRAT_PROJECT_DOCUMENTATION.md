@@ -1,3 +1,24 @@
+# Data Infrastructure Batch D1G — Canonical Scoring Shadow Parity
+
+**Candidate:** RC66 / D1G
+**Authority:** Direct NHL scoring remains authoritative; canonical game facts are comparison-only.
+
+D1G extends the D1F canonical NHL observer and D1F.2 phase-timing evidence with a version-aligned direct-versus-canonical scoring proof. Relevant final player-game-log fields are settled once into each shared game record at immediate, five-minute, and 28-minute checkpoints. Queued tasks carry the exact NHL game IDs and per-game source versions that produced the league request, so an older in-flight task cannot prove or clear newer data.
+
+The existing direct-source `calculateCycleScoring()` result continues to publish points, windows, transactions, standings, and playoffs. A separate shadow calculator evaluates the same skater and Team Goalie Unit through canonical facts and records matched, mismatch, missing, or incomplete evidence. Primary promotion requires current zero-mismatch, zero-incomplete evidence for every exact Canary league after the current allowlist was activated.
+
+Verification:
+
+```bash
+npm run test:batchd1g:run
+npm run verify:batchd1g
+npm run build:all
+```
+
+Deployment is limited to `pollCanonicalNhlImpactFeed`, `processLeagueAutomationTask`, `dispatchDueLeagueAutomation`, `queueLeagueAutomationCanaryCheck`, `getLeagueAutomationQueueControlCenter`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Firestore Rule, index, TTL, migration, scoring-value, Projection V11, or automatic Primary change is required. Full details are in `docs/RINKRAT_DATA_D1G_CANONICAL_SCORING_PARITY.md`.
+
+---
+
 # Onboarding Batch B1D — Big-Play Winger Comparison Clarity
 
 See [`RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md`](RINKRAT_BETA_B1E_INVITE_LINK_ONBOARDING.md) for the RC60 invite-link implementation and release matrix.

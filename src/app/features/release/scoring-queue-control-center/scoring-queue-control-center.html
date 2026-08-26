@@ -145,6 +145,28 @@
           </strong>
           <small>Up to {{ current.health.queueNearLiveCanaryMaxLeagueCount ?? 4 }} Internal Test Canaries · Primary stays on the standard cadence</small>
         </article>
+        <article
+          [class.health-attention]="
+            current.mode !== 'shadow' &&
+            current.health.canonicalParityCohortPassing !== true
+          "
+        >
+          <span>Canonical scoring parity</span>
+          <strong>
+            {{ current.health.canonicalParityCohortPassing ? 'Canary cohort passes' : 'Proof incomplete' }}
+          </strong>
+          <small>
+            {{ current.health.canonicalParityPassingLeagueCount ?? 0 }} /
+            {{ current.health.canonicalParityExpectedLeagueCount ?? 0 }} Canary leagues pass ·
+            {{ current.health.canonicalParityMismatchLeagueCount ?? 0 }} mismatch ·
+            {{ current.health.canonicalParityIncompleteLeagueCount ?? 0 }} incomplete
+          </small>
+          <small>
+            {{ current.health.canonicalParityMissingLeagueCount ?? 0 }} missing ·
+            {{ current.health.canonicalParityStaleLeagueCount ?? 0 }} stale ·
+            {{ current.health.canonicalParityTotalComparedCount ?? 0 }} comparisons · shadow only
+          </small>
+        </article>
       </div>
     </section>
 
@@ -223,8 +245,9 @@
         <p>
           They share the same idempotent worker and four-task concurrency ceiling, but D1D deliberately
           gives only exact Internal Test Canaries a two-minute target while live NHL games are active. Primary
-          remains on the standard cadence until shared NHL ingestion, queue cost, and staged load proof
-          are complete. The Primary proof counter resets whenever the exact canary allowlist changes,
+          remains on the standard cadence until shared NHL ingestion, direct-versus-canonical scoring
+          parity, queue cost, and staged load proof are complete. Canonical facts remain shadow-only and
+          cannot publish points in D1G. The Primary proof counter resets whenever the exact canary allowlist changes,
           so successes from an older test group cannot unlock a new one.
         </p>
       </div>

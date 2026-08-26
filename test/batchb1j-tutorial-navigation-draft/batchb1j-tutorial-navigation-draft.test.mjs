@@ -212,7 +212,7 @@ test('RC65 documentation and synchronized roadmaps point to the B1J gate', async
   assert.match(runbook, /npm run verify:batchb1j/);
   assert.match(releaseDoc, /Hosting only/);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.54\.4/);
+  assert.match(rootRoadmap, /Version 1\.54\.5/);
   assert.match(rootRoadmap, /# \[x\] B1\.39/);
   assert.match(rootRoadmap, /# \[x\] B1\.40/);
   assert.match(rootRoadmap, /# \[x\] B1\.41/);
