@@ -4,10 +4,12 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 import { areDeveloperToolsEnabled } from '../../../core/cycle/cycle-runtime.config';
+import { getLatestCycle } from '../../../core/cycle/cycle.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
 
@@ -49,7 +51,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-playoff-bracket',
-  imports: [RouterLink, ManagerAvatar],
+  imports: [RouterLink, LeagueQuickNavigation, ManagerAvatar],
   templateUrl: './playoff-bracket.html',
   styleUrl: './playoff-bracket.css',
 })
@@ -61,6 +63,7 @@ export class PlayoffBracket implements OnDestroy {
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
   playoffs = signal<FantasyPlayoffs | null>(null);
+  latestCycleNumber = signal<number | null>(null);
   loading = signal(true);
   errorMessage = signal('');
 
@@ -484,6 +487,7 @@ export class PlayoffBracket implements OnDestroy {
 
       this.league.set(league);
       this.teams.set(teams);
+      this.loadLatestCycleForNavigation(leagueId);
 
       this.stopPlayoffsListener = listenToFantasyPlayoffs(
         leagueId,
@@ -502,6 +506,21 @@ export class PlayoffBracket implements OnDestroy {
       );
       this.loading.set(false);
     }
+  }
+
+
+  private loadLatestCycleForNavigation(leagueId: string): void {
+    void getLatestCycle(leagueId)
+      .then((cycle) => {
+        if (this.leagueId === leagueId) {
+          this.latestCycleNumber.set(cycle?.cycleNumber ?? null);
+        }
+      })
+      .catch(() => {
+        if (this.leagueId === leagueId) {
+          this.latestCycleNumber.set(null);
+        }
+      });
   }
 
   getTeamProfileIconId(ownerId: string | null | undefined): string {

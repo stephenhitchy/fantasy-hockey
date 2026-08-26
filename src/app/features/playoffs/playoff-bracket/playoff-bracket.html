@@ -26,6 +26,14 @@
       </div>
     </header>
 
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="latestCycleNumber()"
+        currentDestination="playoffs"
+      />
+    </section>
+
     @if (errorMessage()) {
       <p class="status-card error-card">{{ errorMessage() }}</p>
     }

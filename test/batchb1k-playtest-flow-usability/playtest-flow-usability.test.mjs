@@ -115,9 +115,10 @@ test('desktop and mobile global navigation expose cleanup-aware sign out', async
 });
 
 test('one listener-free league navigation component is present on every destination it names', async () => {
-  const [component, template, ...pages] = await Promise.all([
+  const [component, template, playoffSource, ...pages] = await Promise.all([
     read('src/app/shared/league-quick-navigation/league-quick-navigation.ts'),
     read('src/app/shared/league-quick-navigation/league-quick-navigation.html'),
+    read('src/app/features/playoffs/playoff-bracket/playoff-bracket.ts'),
     read('src/app/features/leagues/league-detail/league-detail.html'),
     read('src/app/features/free-agents/free-agents.html'),
     read('src/app/features/team/team-settings/team-settings.html'),
@@ -125,11 +126,15 @@ test('one listener-free league navigation component is present on every destinat
     read('src/app/features/cycles/matchup-overview/cycle-matchup-overview.html'),
     read('src/app/features/cycles/schedule-preview/cycle-schedule-preview.html'),
     read('src/app/features/leagues/league-standings/league-standings.html'),
+    read('src/app/features/playoffs/playoff-bracket/playoff-bracket.html'),
   ]);
 
   assert.match(component, /LeagueNavigationDestination/);
   assert.match(component, /currentDestination/);
   assert.doesNotMatch(component, /Firestore|listenTo|onSnapshot/);
+  assert.match(playoffSource, /loadLatestCycleForNavigation/);
+  assert.match(playoffSource, /void getLatestCycle\(leagueId\)/);
+  assert.doesNotMatch(playoffSource, /listenToLatestCycle|await getLatestCycle/);
   for (const label of [
     'League HQ',
     'Add / Drop Player',
@@ -138,10 +143,13 @@ test('one listener-free league navigation component is present on every destinat
     'All Current Matchups',
     'Full Schedule',
     'League Standings',
+    'Playoffs',
   ]) {
     assert.match(template, new RegExp(label.replace('/', '\\/')));
   }
-  assert.equal(pages.filter((page) => page.includes('<app-league-quick-navigation')).length, 7);
+  assert.equal(pages.filter((page) => page.includes('<app-league-quick-navigation')).length, 8);
+  assert.match(pages[7], /currentDestination="playoffs"/);
+  assert.doesNotMatch(pages[0], /Most-used league pages|League Essentials|league-essentials-card/);
 });
 
 test('Release Readiness now tests the manual first-send path', async () => {

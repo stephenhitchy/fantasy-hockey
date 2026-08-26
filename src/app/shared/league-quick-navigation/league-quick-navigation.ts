@@ -8,7 +8,8 @@ export type LeagueNavigationDestination =
   | 'matchup'
   | 'matchups'
   | 'schedule'
-  | 'standings';
+  | 'standings'
+  | 'playoffs';
 
 @Component({
   selector: 'app-league-quick-navigation',

@@ -76,4 +76,14 @@
     <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
     <span>League Standings</span>
   </a>
+
+  <a
+    class="league-nav-action"
+    [class.league-nav-action--current]="isCurrent('playoffs')"
+    [attr.aria-current]="isCurrent('playoffs') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'playoffs']"
+  >
+    <span class="pixel-icon icon-playoffs icon-sm" aria-hidden="true"></span>
+    <span>Playoffs</span>
+  </a>
 </nav>

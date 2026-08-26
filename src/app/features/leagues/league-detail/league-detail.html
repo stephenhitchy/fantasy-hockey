@@ -275,59 +275,6 @@
     </section>
 
 
-    <section class="quick-actions-card league-essentials-card rr-card rr-card--padded" aria-labelledby="league-essentials-title">
-      <div class="quick-actions-heading">
-        <div>
-          <span class="draft-section-eyebrow">League Essentials</span>
-          <h2 id="league-essentials-title">Most-used league pages</h2>
-        </div>
-
-      </div>
-
-      <div class="quick-actions-grid primary-actions-grid">
-        @if (isCommissioner() && draft()?.status !== 'complete' && draft()?.status !== 'live') {
-          <a class="hub-action hub-action-highlight rr-action-tile" [routerLink]="['/leagues', leagueId, 'draft']">
-            <span class="hub-action-icon pixel-icon icon-draft icon-lg" aria-hidden="true"></span>
-            <span class="hub-action-copy">
-              <strong>Draft Room</strong>
-            </span>
-          </a>
-        }
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'team']">
-          <span class="hub-action-icon pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>My Team</strong>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'players']">
-          <span class="hub-action-icon pixel-icon icon-players icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Add / Drop</strong>
-          </span>
-        </a>
-
-        <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'standings']">
-          <span class="hub-action-icon pixel-icon icon-standings icon-lg" aria-hidden="true"></span>
-          <span class="hub-action-copy">
-            <strong>Standings</strong>
-          </span>
-        </a>
-
-
-
-        @if (draft()?.status === 'complete') {
-          <a class="hub-action rr-action-tile" [routerLink]="['/leagues', leagueId, 'playoffs']">
-            <span class="hub-action-icon pixel-icon icon-playoffs icon-lg" aria-hidden="true"></span>
-            <span class="hub-action-copy">
-              <strong>Playoffs</strong>
-            </span>
-          </a>
-        }
-      </div>
-    </section>
-
     <app-league-wire
       [leagueId]="leagueId"
       [leagueName]="league()?.name ?? 'RinkRat League'"

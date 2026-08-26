@@ -16,14 +16,16 @@ function cardSlice(html, loopMarker, endMarker) {
   return html.slice(start, end);
 }
 
-test('League HQ places team identity before the most-used page grid', async () => {
+test('League HQ keeps one shared navigation surface before team identity', async () => {
   const html = await source('src/app/features/leagues/league-detail/league-detail.html');
+  const invite = html.indexOf('id="invite-code-title"');
+  const navigation = html.indexOf('<app-league-quick-navigation');
   const identity = html.indexOf('id="my-league-team-title"');
-  const essentials = html.indexOf('id="league-essentials-title"');
 
-  assert.ok(identity > 0);
-  assert.ok(essentials > identity);
-  assert.ok(html.indexOf('id="invite-code-title"') < identity);
+  assert.ok(invite >= 0);
+  assert.ok(navigation > invite);
+  assert.ok(identity > navigation);
+  assert.doesNotMatch(html, /Most-used league pages|league-essentials-card/);
 });
 
 test('unified player rows lead with the six-game tracker and four compact decision metrics', async () => {

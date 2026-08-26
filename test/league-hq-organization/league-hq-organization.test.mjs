@@ -31,8 +31,8 @@ test('the invite code is promoted into the top header priority area', async () =
   expectOrder(html, [
     'class="league-header"',
     'class="top-invite-card',
+    'class="league-navigation-card"',
     'class="my-team-card',
-    'league-essentials-card',
   ]);
 });
 
@@ -91,26 +91,24 @@ test('primary header actions adapt to draft and season state', async () => {
   assert.doesNotMatch(primaryNav, /secondary-action/);
 });
 
-test('team identity appears before the most-used pages, followed by status, teams, and tools', async () => {
+test('team identity flows into league activity, status, teams, and tools without duplicate page tiles', async () => {
   const html = await source(htmlPath);
 
   expectOrder(html, [
     'id="my-league-team-title"',
-    'id="league-essentials-title"',
-    '>Draft Room<',
-    '>My Team<',
-    '>Add / Drop<',
-    '>Standings<',
+    '<app-league-wire',
     'id="league-status-title"',
     'class="teams-section"',
     'class="league-secondary-tools"',
     'class="commissioner-danger-zone',
   ]);
 
+  assert.match(html, /<app-league-quick-navigation[\s\S]*?currentDestination="league-hq"/);
+  assert.doesNotMatch(html, /Most-used league pages|league-essentials-card|id="league-essentials-title"/);
   assert.doesNotMatch(
     html,
     /\['\/leagues', leagueId, 'leaders'\]/,
-    'Point Leaders remains available from Players and More rather than duplicating the essential grid.',
+    'Point Leaders remains available from Players and More rather than duplicating primary navigation.',
   );
 });
 
@@ -126,9 +124,11 @@ test('less-frequent and commissioner tools are separated from essential navigati
   assert.match(html, /Scoring Diagnostics/);
   assert.match(html, /Release Readiness/);
 
-  const essentialEnd = html.indexOf('</section>', html.indexOf('league-essentials-card'));
+  const navigationStart = html.indexOf('<app-league-quick-navigation');
+  const navigationEnd = html.indexOf('</section>', navigationStart);
   const diagnostics = html.indexOf('Scoring Diagnostics');
-  assert.ok(diagnostics > essentialEnd, 'Technical diagnostics must not crowd the essential action grid.');
+  assert.ok(navigationStart >= 0 && navigationEnd > navigationStart);
+  assert.ok(diagnostics > navigationEnd, 'Technical diagnostics must not crowd the shared league navigation.');
 });
 
 test('cycle matchup cards are available behind disclosure instead of dominating the page', async () => {

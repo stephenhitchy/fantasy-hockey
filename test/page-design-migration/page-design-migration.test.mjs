@@ -67,14 +67,14 @@ test('Account Settings composes shared panels, choices, forms, status notices, a
   }
 });
 
-test('League HQ composes shared status cards, action tiles, forms, and danger controls', async () => {
+test('League HQ composes shared status cards, league navigation, forms, and danger controls', async () => {
   const html = await source('src/app/features/leagues/league-detail/league-detail.html');
   for (const marker of [
     'daily-injury-status rr-notice rr-notice--info',
     'league-info-grid rr-stat-grid',
     'league-info-card rr-stat-card',
     'draft-status-card rr-card rr-card--padded',
-    'hub-action rr-action-tile',
+    '<app-league-quick-navigation',
     'tool-link rr-action-tile',
     'cycle-status-card rr-card rr-card--padded',
     'team-card rr-card rr-card--padded',

@@ -6,12 +6,13 @@
 
 ## Why this candidate exists
 
-A beginner playtest found four connected usability problems:
+A beginner playtest found five connected usability problems:
 
 1. Leaving Training Camp automatically released the first verification email even though the screen looked like a manual action.
 2. A cooldown-blocked resend could still look successful.
 3. Sign out was available only inside Account Settings.
 4. The reusable league navigation added to My Team and Matchup was missing from the other destinations it named.
+5. League HQ still repeated several of those same destinations in a separate Most-used league pages section, while Playoffs was absent from the shared navigation.
 
 The same playtest also showed that Training Camp explained how the six-game system works without briefly explaining why RinkRat uses it.
 
@@ -43,8 +44,9 @@ One presentation-only league quick-navigation component now appears on:
 - All Current Matchups
 - Full Schedule
 - League Standings
+- Playoffs
 
-The open destination receives `aria-current="page"` and a visible Current marker. The component creates no Firestore, Draft, roster, or matchup listeners.
+The open destination receives `aria-current="page"` and a visible Current marker. The Playoffs page now uses the same navigation and performs only a bounded best-effort one-time latest-cycle lookup for its links; the navigation component itself creates no Firestore, Draft, roster, or matchup listeners. The duplicate League Essentials / Most-used league pages card has been removed from League HQ.
 
 ## Six-game rationale
 
@@ -55,9 +57,9 @@ The five-shift, ten-drill progressive structure is unchanged.
 ## Verification performed in the reconstruction environment
 
 - Focused B1K suite: 9/9 passed.
-- Combined B1F–B1K onboarding/navigation regression: 60/60 passed.
+- Combined B1E–B1K onboarding/navigation regression: 73/73 passed.
 - Broad project source sweep: 1,071 tests passed; two dependency-backed files could not start because compiled Functions output and the Firebase package/emulator dependencies are not installed in this reconstruction environment.
-- TypeScript syntax check: all 16 changed TypeScript files passed.
+- TypeScript syntax check: all 17 changed TypeScript source files passed.
 - `git diff --check`: passed.
 - Protected Scoring V4, Projection V11, and Firestore Rules hashes: unchanged.
 
@@ -79,14 +81,14 @@ npm run build:all
 ```bash
 firebase use nhl-fantasy-app-ab673
 firebase deploy --only functions:resendVerificationEmail,functions:sendWelcomeEmailOnProfileCreated,functions:sendWelcomeEmailAfterTrainingCampResolved,hosting:app \
-  -m "B1K manual verification and navigation usability"
+  -m "B1K.1 manual verification and league navigation cleanup"
 ```
 
 Do not deploy Hosting alone. The new interface and the new backend email behavior must move together.
 
 ## Browser proof still required
 
-Test completion and Finish Later from ordinary onboarding and a saved invite link; first send; cooldown and resend; reload during cooldown; verification return; invitation resume; desktop/mobile sign out; and all seven league destinations in Chrome, Safari, iPhone Safari, and Android Chrome.
+Test completion and Finish Later from ordinary onboarding and a saved invite link; first send; cooldown and resend; reload during cooldown; verification return; invitation resume; desktop/mobile sign out; and all eight league destinations in Chrome, Safari, iPhone Safari, and Android Chrome.
 
 ## Next infrastructure batch
 
