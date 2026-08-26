@@ -320,6 +320,8 @@ interface LeagueAutomationTaskPayload {
   expectedDueAtMilliseconds: number;
   dueBucket: string;
   reason: 'scheduled' | 'recovery' | 'canary-manual';
+  canonicalSourceVersion?: string;
+  canonicalRequestedAtMilliseconds?: number;
 }
 
 interface DueLeagueAutomationSchedule {
@@ -328,6 +330,25 @@ interface DueLeagueAutomationSchedule {
   queueStatus: string;
   activeTaskId: string;
   activeTaskLeaseExpiresAtMilliseconds: number;
+  canonicalSourceVersion: string;
+  canonicalRequestedAtMilliseconds: number;
+}
+
+export interface LeagueAutomationCanonicalCanaryScope {
+  mode: LeagueAutomationQueueMode;
+  canaryLeagueIds: string[];
+  internalTestLeagueIds: string[];
+  eligibleLeagueIds: string[];
+  valid: boolean;
+  reason: string;
+}
+
+export interface CanonicalLeagueAutomationRequestInput {
+  leagueId: string;
+  sourceVersion: string;
+  observedAtMilliseconds: number;
+  gameIds: number[];
+  changeKinds: string[];
 }
 
 interface HistoricalReplayAssetMap {
@@ -499,6 +520,143 @@ function getConfiguredLeagueAutomationRefreshCadence(
     leagueId,
     canaryLeagueIds: config.canaryLeagueIds,
     internalTestLeagueIds: config.internalTestLeagueIds,
+  });
+}
+
+function normalizeCanonicalSourceVersion(value: unknown): string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value.trim())
+    ? value.trim().toLowerCase()
+    : '';
+}
+
+export async function getLeagueAutomationCanonicalCanaryScope(): Promise<
+  LeagueAutomationCanonicalCanaryScope
+> {
+  const config = await getLeagueAutomationQueueConfig();
+  const internalSet = new Set(config.internalTestLeagueIds);
+  const eligibleLeagueIds = config.canaryLeagueIds.filter((leagueId) =>
+    internalSet.has(leagueId)
+  );
+  const valid = config.mode === 'canary' &&
+    config.canaryLeagueIds.length > 0 &&
+    config.canaryLeagueIds.length <= NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT &&
+    eligibleLeagueIds.length === config.canaryLeagueIds.length;
+
+  return {
+    mode: config.mode,
+    canaryLeagueIds: [...config.canaryLeagueIds],
+    internalTestLeagueIds: [...config.internalTestLeagueIds],
+    eligibleLeagueIds: valid ? eligibleLeagueIds : [],
+    valid,
+    reason: valid
+      ? 'exact-internal-canary'
+      : config.mode !== 'canary'
+        ? 'queue-mode-not-canary'
+        : config.canaryLeagueIds.length === 0
+          ? 'canary-empty'
+          : config.canaryLeagueIds.length > NEAR_LIVE_CANARY_MAX_LEAGUE_COUNT
+            ? 'canary-too-large'
+            : 'canary-not-fully-internal-test',
+  };
+}
+
+export async function requestLeagueAutomationForCanonicalChange(
+  input: CanonicalLeagueAutomationRequestInput,
+): Promise<'requested' | 'coalesced' | 'ineligible'> {
+  const leagueId = requireServerFirestoreDocumentId(
+    input.leagueId,
+    'canonical scoring league identifier',
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const sourceVersion = normalizeCanonicalSourceVersion(input.sourceVersion);
+
+  if (!sourceVersion) {
+    throw new Error('canonical-source-version-invalid');
+  }
+
+  const scope = await getLeagueAutomationCanonicalCanaryScope();
+
+  if (!scope.valid || !scope.eligibleLeagueIds.includes(leagueId)) {
+    return 'ineligible';
+  }
+
+  const observedAtMilliseconds = Number.isFinite(input.observedAtMilliseconds)
+    ? Math.max(0, Math.trunc(input.observedAtMilliseconds))
+    : Date.now();
+  const gameIds = [...new Set(
+    input.gameIds
+      .filter((gameId) => Number.isFinite(gameId) && gameId > 0)
+      .map((gameId) => Math.trunc(gameId)),
+  )].sort((left, right) => left - right).slice(0, 32);
+  const changeKinds = [...new Set(
+    input.changeKinds
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.trim().slice(0, 40)),
+  )].sort().slice(0, 12);
+  const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
+  const now = Date.now();
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(scheduleRef);
+    const data = snapshot.data() ?? {};
+    const currentVersion = normalizeCanonicalSourceVersion(
+      data['canonicalRequestedSourceVersion'],
+    );
+    const existingGameIds = Array.isArray(data['canonicalPendingGameIds'])
+      ? data['canonicalPendingGameIds']
+          .filter((gameId): gameId is number =>
+            typeof gameId === 'number' && Number.isFinite(gameId) && gameId > 0
+          )
+          .map((gameId) => Math.trunc(gameId))
+      : [];
+    const existingChangeKinds = Array.isArray(data['canonicalPendingChangeKinds'])
+      ? data['canonicalPendingChangeKinds']
+          .filter((value): value is string =>
+            typeof value === 'string' && value.trim().length > 0
+          )
+          .map((value) => value.trim().slice(0, 40))
+      : [];
+    const mergedGameIds = [...new Set([...existingGameIds, ...gameIds])]
+      .sort((left, right) => left - right)
+      .slice(0, 32);
+    const mergedChangeKinds = [...new Set([
+      ...existingChangeKinds,
+      ...changeKinds,
+    ])].sort().slice(0, 12);
+    const alreadyRequested = currentVersion === sourceVersion;
+    const existingNextScoringAt = toMilliseconds(data['nextScoringAt']);
+    const nextScoringAt = existingNextScoringAt > 0
+      ? Math.min(existingNextScoringAt, now)
+      : now;
+
+    transaction.set(
+      scheduleRef,
+      {
+        schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        leagueId,
+        shard: getLeagueAutomationShard(leagueId),
+        scoringEnabled: data['scoringEnabled'] !== false,
+        nextScoringAt: Timestamp.fromMillis(nextScoringAt),
+        canonicalRequestedSourceVersion: sourceVersion,
+        canonicalRequestedAt: Timestamp.fromMillis(observedAtMilliseconds),
+        canonicalRequestStatus: alreadyRequested
+          ? getLeagueAutomationString(data['canonicalRequestStatus'], 'pending')
+          : 'pending',
+        canonicalPendingGameIds: mergedGameIds,
+        canonicalPendingChangeKinds: mergedChangeKinds,
+        canonicalRequestSequence: alreadyRequested
+          ? getLeagueAutomationNumber(data['canonicalRequestSequence']) ?? 1
+          : FieldValue.increment(1),
+        canonicalLastObservedAt: FieldValue.serverTimestamp(),
+        canonicalLastRequestedAt: alreadyRequested
+          ? data['canonicalLastRequestedAt'] ?? FieldValue.serverTimestamp()
+          : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return alreadyRequested ? 'coalesced' : 'requested';
   });
 }
 
@@ -1267,7 +1425,7 @@ function getLeagueAutomationDueBucket(dueAtMilliseconds: number): string {
 function buildLeagueAutomationTaskId(payload: LeagueAutomationTaskPayload): string {
   return createHash('sha256')
     .update(
-      `${payload.taskSchemaVersion}:${payload.leagueId}:${payload.expectedDueAtMilliseconds}:${payload.reason}`,
+      `${payload.taskSchemaVersion}:${payload.leagueId}:${payload.expectedDueAtMilliseconds}:${payload.reason}:${payload.canonicalSourceVersion ?? ''}`,
     )
     .digest('hex')
     .slice(0, 40);
@@ -2922,6 +3080,12 @@ function normalizeDueLeagueAutomationSchedule(
     activeTaskLeaseExpiresAtMilliseconds: toMilliseconds(
       value?.['activeTaskLeaseExpiresAt'],
     ),
+    canonicalSourceVersion: normalizeCanonicalSourceVersion(
+      value?.['canonicalRequestedSourceVersion'],
+    ),
+    canonicalRequestedAtMilliseconds: toMilliseconds(
+      value?.['canonicalRequestedAt'],
+    ),
   };
 }
 
@@ -3040,6 +3204,13 @@ function buildLeagueAutomationTaskPayload(
     expectedDueAtMilliseconds: Math.trunc(schedule.expectedDueAtMilliseconds),
     dueBucket: getLeagueAutomationDueBucket(schedule.expectedDueAtMilliseconds),
     reason,
+    ...(schedule.canonicalSourceVersion
+      ? {
+          canonicalSourceVersion: schedule.canonicalSourceVersion,
+          canonicalRequestedAtMilliseconds:
+            schedule.canonicalRequestedAtMilliseconds || undefined,
+        }
+      : {}),
   };
 }
 
@@ -3072,12 +3243,20 @@ async function claimLeagueAutomationTask(
     const alreadyActive =
       (queueStatus === 'queued' || queueStatus === 'processing') &&
       activeTaskLeaseExpiresAt > now;
+    const scheduleCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      data['canonicalRequestedSourceVersion'],
+    );
+    const payloadCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      payload.canonicalSourceVersion,
+    );
 
     if (
       data['scoringEnabled'] === false ||
       nextScoringAt <= 0 ||
       nextScoringAt > now ||
-      nextScoringAt !== payload.expectedDueAtMilliseconds
+      nextScoringAt !== payload.expectedDueAtMilliseconds ||
+      (payloadCanonicalSourceVersion &&
+        payloadCanonicalSourceVersion !== scheduleCanonicalSourceVersion)
     ) {
       return false;
     }
@@ -3099,6 +3278,12 @@ async function claimLeagueAutomationTask(
         lastEnqueuedTaskId: taskId,
         lastEnqueuedDueBucket: payload.dueBucket,
         lastQueueReason: payload.reason,
+        activeTaskCanonicalSourceVersion:
+          payloadCanonicalSourceVersion || null,
+        activeTaskCanonicalRequestedAt:
+          payload.canonicalRequestedAtMilliseconds
+            ? Timestamp.fromMillis(payload.canonicalRequestedAtMilliseconds)
+            : FieldValue.delete(),
         lastQueueError: '',
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -3113,6 +3298,11 @@ async function claimLeagueAutomationTask(
         expectedDueAt: Timestamp.fromMillis(payload.expectedDueAtMilliseconds),
         dueBucket: payload.dueBucket,
         reason: payload.reason,
+        canonicalSourceVersion: payloadCanonicalSourceVersion || null,
+        canonicalRequestedAt:
+          payload.canonicalRequestedAtMilliseconds
+            ? Timestamp.fromMillis(payload.canonicalRequestedAtMilliseconds)
+            : null,
         status: 'queued',
         attemptCount: 0,
         queuedAt: FieldValue.serverTimestamp(),
@@ -3215,11 +3405,33 @@ async function markLeagueAutomationTaskCompleted(
       typeof scheduleData['activeTaskId'] === 'string'
         ? scheduleData['activeTaskId']
         : '';
+    const taskCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      payload.canonicalSourceVersion,
+    );
+    const latestCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      scheduleData['canonicalRequestedSourceVersion'],
+    );
+    const canonicalNeedsFollowUp = Boolean(latestCanonicalSourceVersion) &&
+      (
+        result.status !== 'success' ||
+        !taskCanonicalSourceVersion ||
+        taskCanonicalSourceVersion !== latestCanonicalSourceVersion
+      );
+    const canonicalSatisfied = result.status === 'success' &&
+      Boolean(taskCanonicalSourceVersion) &&
+      taskCanonicalSourceVersion === latestCanonicalSourceVersion;
 
     if (activeTaskId === taskId) {
       const scheduleCompletionData: Record<string, unknown> = {
-        queueStatus: result.status === 'success' ? 'idle' : 'skipped',
+        queueStatus: canonicalNeedsFollowUp
+          ? 'pending'
+          : result.status === 'success'
+            ? 'idle'
+            : 'skipped',
         activeTaskId: null,
+        activeTaskDueAt: FieldValue.delete(),
+        activeTaskCanonicalSourceVersion: FieldValue.delete(),
+        activeTaskCanonicalRequestedAt: FieldValue.delete(),
         activeTaskLeaseExpiresAt: FieldValue.delete(),
         lastQueueCompletedAt: FieldValue.serverTimestamp(),
         lastQueueTaskId: taskId,
@@ -3230,7 +3442,27 @@ async function markLeagueAutomationTaskCompleted(
         updatedAt: FieldValue.serverTimestamp(),
       };
 
-      if (
+      if (canonicalNeedsFollowUp) {
+        scheduleCompletionData['nextScoringAt'] = Timestamp.fromMillis(Date.now());
+        scheduleCompletionData['canonicalRequestStatus'] = 'pending-follow-up';
+        scheduleCompletionData['canonicalFollowUpRequestedAt'] =
+          FieldValue.serverTimestamp();
+      } else if (canonicalSatisfied) {
+        scheduleCompletionData['canonicalRequestStatus'] = 'complete';
+        scheduleCompletionData['canonicalCompletedSourceVersion'] =
+          taskCanonicalSourceVersion;
+        scheduleCompletionData['canonicalCompletedAt'] =
+          FieldValue.serverTimestamp();
+        // Move the satisfied version out of the pending fields so later ordinary
+        // scheduled tasks do not keep carrying an already-completed NHL version.
+        scheduleCompletionData['canonicalRequestedSourceVersion'] =
+          FieldValue.delete();
+        scheduleCompletionData['canonicalRequestedAt'] = FieldValue.delete();
+        scheduleCompletionData['canonicalFollowUpRequestedAt'] =
+          FieldValue.delete();
+        scheduleCompletionData['canonicalPendingGameIds'] = [];
+        scheduleCompletionData['canonicalPendingChangeKinds'] = [];
+      } else if (
         result.status === 'skipped' &&
         result.skipReason === 'not-due' &&
         typeof result.nextRefreshAtMilliseconds === 'number'
@@ -3258,6 +3490,12 @@ async function markLeagueAutomationTaskCompleted(
         activeCycleNumbers: result.activeCycleNumbers,
         refreshCadence: result.refreshCadence ?? 'standard',
         refreshDelayMilliseconds: result.refreshDelayMilliseconds ?? null,
+        canonicalSourceVersion: taskCanonicalSourceVersion || null,
+        canonicalCompletionState: canonicalNeedsFollowUp
+          ? 'superseded'
+          : canonicalSatisfied
+            ? 'satisfied'
+            : 'not-applicable',
         completedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(
           Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
@@ -4009,6 +4247,12 @@ export const queueLeagueAutomationCanaryCheck = onCall(
       queueStatus: 'idle',
       activeTaskId: '',
       activeTaskLeaseExpiresAtMilliseconds: 0,
+      // Manual Canary refreshes are not tied to a canonical NHL source version.
+      // Neutral values keep the normalized schedule contract complete. If a newer
+      // canonical request is already pending, task completion will leave it pending
+      // and immediately require a versioned follow-up task.
+      canonicalSourceVersion: '',
+      canonicalRequestedAtMilliseconds: 0,
     };
     const queueResult = await enqueueLeagueAutomationSchedule(
       schedule,
@@ -4190,6 +4434,11 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
       payload?.leagueId,
       FIRESTORE_LEAGUE_ID_OPTIONS,
     );
+    const payloadCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      payload?.canonicalSourceVersion,
+    );
+    const payloadHasCanonicalSourceVersion =
+      typeof payload?.canonicalSourceVersion !== 'undefined';
 
     if (
       !payload ||
@@ -4198,6 +4447,9 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
       !Number.isFinite(payload.expectedDueAtMilliseconds) ||
       typeof payload.dueBucket !== 'string' ||
       !payload.dueBucket ||
+      (payloadHasCanonicalSourceVersion && !payloadCanonicalSourceVersion) ||
+      (typeof payload.canonicalRequestedAtMilliseconds !== 'undefined' &&
+        !Number.isFinite(payload.canonicalRequestedAtMilliseconds)) ||
       (payload.reason !== 'scheduled' &&
         payload.reason !== 'recovery' &&
         payload.reason !== 'canary-manual')
@@ -4233,11 +4485,16 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
         ? scheduleData['activeTaskId']
         : '';
     const expectedDueAt = toMilliseconds(scheduleData['activeTaskDueAt']);
+    const activeTaskCanonicalSourceVersion = normalizeCanonicalSourceVersion(
+      scheduleData['activeTaskCanonicalSourceVersion'],
+    );
 
     if (
       scheduleData['scoringEnabled'] === false ||
       activeTaskId !== taskId ||
-      expectedDueAt !== Math.trunc(payload.expectedDueAtMilliseconds)
+      expectedDueAt !== Math.trunc(payload.expectedDueAtMilliseconds) ||
+      (payloadCanonicalSourceVersion &&
+        activeTaskCanonicalSourceVersion !== payloadCanonicalSourceVersion)
     ) {
       await taskRef.set(
         {
@@ -4288,7 +4545,8 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
       );
       const result = await runLeagueAutomation(
         leagueId,
-        payload.reason === 'canary-manual',
+        payload.reason === 'canary-manual' ||
+          Boolean(payloadCanonicalSourceVersion),
         'queue-task',
         refreshCadence,
       );
@@ -4310,6 +4568,8 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
           queueLastTaskRefreshCadence: result.refreshCadence ?? 'standard',
           queueLastTaskRefreshDelayMilliseconds:
             result.refreshDelayMilliseconds ?? null,
+          queueLastTaskCanonicalSourceVersion:
+            payloadCanonicalSourceVersion || null,
           queueNearLiveCanaryRefreshIntervalMilliseconds:
             NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
           queueNearLiveCanaryMaxLeagueCount:

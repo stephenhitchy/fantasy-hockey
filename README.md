@@ -939,3 +939,20 @@ Release Candidate 65 focuses on new-manager usability: exact return from the Sco
 
 B1K contains the observed-playtest flow fixes requested after RC65: explicit first verification-email sending, truthful server cooldown state, global Sign out, eight-destination shared league navigation with Playoffs, removal of the duplicate League HQ page tiles, and a compact six-game fairness rationale. Run `npm run verify:batchb1k` with Node 22.23.1 and npm 11.17.0, complete both builds and the browser matrix, then advance the runtime/freeze identity and deploy matching Functions plus Hosting together. See `docs/releases/RC66_B1K_PLAYTEST_FLOW_USABILITY_CANDIDATE.md`.
 
+
+
+## Data Infrastructure Batch D1F — Canonical Game Facts and Affected-League Index
+
+D1F adds one leased server-owned NHL observation path for exact Internal Test Canaries. Boxscore and play-by-play responses are normalized into compact game facts with separate SHA-256 hashes for meaningful fantasy events, TOI, game state, and final settlement. TOI-only churn is coalesced for up to five minutes, final games reconcile for 30 minutes, and a server-owned player/team impact index requests only affected Canary leagues. Missing index evidence fails open to the bounded exact Canary cohort.
+
+The existing direct NHL scoring path and `runLeagueAutomation()` remain the only competitive authority. Canonical records route work but do not publish points, move six-game windows, activate transactions, or update standings/playoffs. The task handshake preserves newer NHL versions that arrive while an older task is running.
+
+Verification:
+
+```bash
+npm run test:batchd1f:run
+npm run verify:batchd1f
+npm run build:all
+```
+
+Functions-only deployment and the complete Canary/rollback procedure are documented in `docs/RINKRAT_DATA_D1F_CANONICAL_FACTS_AFFECTED_LEAGUE_INDEX.md`.

@@ -79,7 +79,7 @@ test('canary selection validates exact live leagues and a manual run uses the Pr
   assert.match(automation, /reason: 'scheduled' \| 'recovery' \| 'canary-manual'/);
   assert.match(automation, /enqueueLeagueAutomationSchedule\([\s\S]*'canary-manual'/);
   assert.match(automation, /payload\.reason === 'canary-manual'/);
-  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual',[\s\S]*'queue-task'/);
+  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual' \|\|[\s\S]*Boolean\(payloadCanonicalSourceVersion\),[\s\S]*'queue-task'/);
 });
 
 test('Primary promotion is gated, cannot jump from Shadow, and requires a separate production approval', async () => {

@@ -15,6 +15,7 @@ const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
 const NHL_GAME_DATA_CACHE_MILLISECONDS = 2 * 60 * 1000;
 const NHL_PLAYER_LOG_CACHE_MILLISECONDS = 15 * 60 * 1000;
 const NHL_STATS_CACHE_MILLISECONDS = 5 * 60 * 1000;
+const NHL_SCOREBOARD_CACHE_MILLISECONDS = 20 * 1000;
 const NHL_NEAR_LIVE_SCHEDULE_CACHE_MILLISECONDS = 30 * 1000;
 const NHL_NEAR_LIVE_GAME_DATA_CACHE_MILLISECONDS = 15 * 1000;
 
@@ -200,6 +201,52 @@ export function clearNhlProjectionApiCache(): void {
   }
 }
 
+export interface NhlScoreTeam {
+  abbrev: string;
+  score?: number;
+}
+
+export interface NhlScoreGame {
+  id: number;
+  gameDate: string;
+  startTimeUTC: string;
+  gameState: string;
+  gameScheduleState?: string;
+  period?: number;
+  periodDescriptor?: {
+    number?: number;
+    periodType?: string;
+  };
+  clock?: {
+    timeRemaining?: string;
+    secondsRemaining?: number;
+    running?: boolean;
+    inIntermission?: boolean;
+  };
+  awayTeam: NhlScoreTeam;
+  homeTeam: NhlScoreTeam;
+}
+
+export interface NhlScoreNowResponse {
+  prevDate?: string;
+  currentDate?: string;
+  nextDate?: string;
+  games?: NhlScoreGame[];
+}
+
+export async function getNhlScoreNow(
+  forceRefresh: boolean = false,
+): Promise<NhlScoreNowResponse> {
+  const url = `${NHL_API_BASE_URL}/score/now`;
+
+  return getCachedApiJson<NhlScoreNowResponse>(
+    url,
+    NHL_SCOREBOARD_CACHE_MILLISECONDS,
+    'NHL scoreboard request failed',
+    forceRefresh,
+  );
+}
+
 export interface NhlPlayerGameLogEntry {
   gameId: number;
   teamAbbrev: string;
@@ -274,13 +321,25 @@ export interface NhlGoalieBoxscoreLine {
   savePctg?: number;
 }
 
+export interface NhlPlayByPlayEventDetails {
+  scoringPlayerId?: number;
+  assist1PlayerId?: number;
+  assist2PlayerId?: number;
+  situationCode?: string;
+  homeScore?: number;
+  awayScore?: number;
+  [key: string]: unknown;
+}
+
 export interface NhlPlayByPlayEvent {
+  eventId?: number;
   typeDescKey?: string;
-  details?: {
-    scoringPlayerId?: number;
-    assist1PlayerId?: number;
-    assist2PlayerId?: number;
+  periodDescriptor?: {
+    number?: number;
+    periodType?: string;
   };
+  timeInPeriod?: string;
+  details?: NhlPlayByPlayEventDetails;
 }
 
 export interface NhlGamePlayByPlayResponse {

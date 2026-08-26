@@ -4032,6 +4032,10 @@ export {
 } from './league-automation';
 
 export {
+  pollCanonicalNhlImpactFeed,
+} from './nhl-canonical-impact-feed';
+
+export {
   continueServerDraftAutomation,
   processAutoDraftQueueChange,
   processDraftClockDeadline,

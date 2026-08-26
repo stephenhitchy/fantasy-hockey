@@ -75,7 +75,7 @@ test('at-least-once task delivery cannot double-publish a league run', async () 
 
   assert.match(automation, /activeTaskId !== taskId/);
   assert.match(automation, /expectedDueAt !== Math\.trunc\(payload\.expectedDueAtMilliseconds\)/);
-  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual',[\s\S]*'queue-task'/);
+  assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual' \|\|[\s\S]*Boolean\(payloadCanonicalSourceVersion\),[\s\S]*'queue-task'/);
   assert.match(automation, /claimLeagueAutomationLease/);
   assert.match(automation, /result\.skipReason === 'another-server-worker'/);
   assert.match(automation, /league-automation-lease-busy/);

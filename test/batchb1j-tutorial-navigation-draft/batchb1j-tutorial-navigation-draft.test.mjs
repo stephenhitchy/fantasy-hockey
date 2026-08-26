@@ -185,7 +185,7 @@ test('B1J changes no protected scoring, projection formula, Rules, or Function a
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
     await sha256('functions/src/index.ts'),
-    '9c87d04071777b84da3dd5b515082d7ae68a1fcfa49c1d0714b08fbcb8c6d88b',
+    '87c99bbbc6d12b975e70bd26b6e6be37661cefc3d686e4dec187216c04b73622',
   );
 });
 
