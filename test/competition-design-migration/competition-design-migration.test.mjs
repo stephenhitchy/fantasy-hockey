@@ -205,7 +205,7 @@ test('current audit follows the unified Add / Drop replacement instead of retire
     packageJson.scripts['verify:batcho1e:core'],
     /test:batcho1e:run && npm run audit:competition-design-migration && npm run test:batcho1e-2:run && npm run validate:release-manifest/,
   );
-  assert.match(packageJson.scripts['security:ci'], /Beta Batch B1J/);
+  assert.match(packageJson.scripts['security:ci'], /(?:Beta Batch B1J|Data Batch D1J)/);
   assert.equal(roadmap, docsRoadmap);
   const versionMatch = roadmap.match(/^Version (\d+)\.(\d+)(?:\.(\d+))?$/m);
   assert.ok(versionMatch, 'Missing semantic roadmap version.');

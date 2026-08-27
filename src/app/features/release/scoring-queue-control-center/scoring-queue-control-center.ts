@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 
+import { BUNDLED_RELEASE_MANIFEST } from '../../../../environments/generated-release-manifest';
 import {
   createScoringQueueRequestId,
   LeagueAutomationAdminLeague,
@@ -14,6 +15,9 @@ import {
   LeagueAutomationQueueMode,
   ScoringQueueControlService,
 } from '../../../core/admin/scoring-queue-control.service';
+import {
+  createSeasonLaunchScoringEvidenceReport,
+} from '../../../core/release/season-launch-evidence.util';
 
 @Component({
   selector: 'app-scoring-queue-control-center',
@@ -41,6 +45,7 @@ export class ScoringQueueControlCenter implements OnInit {
   readonly shadowRollbackArmed = signal(false);
   readonly canaryRunArmedLeagueId = signal('');
   readonly canaryRunLeagueId = signal('');
+  readonly copyingSeasonEvidence = signal(false);
 
   readonly filteredLeagues = computed(() => {
     const snapshot = this.snapshot();
@@ -453,6 +458,45 @@ export class ScoringQueueControlCenter implements OnInit {
     } finally {
       this.canaryRunLeagueId.set('');
       this.busy.set(false);
+    }
+  }
+
+  async copySeasonLaunchEvidence(): Promise<void> {
+    const snapshot = this.snapshot();
+
+    if (!snapshot || this.copyingSeasonEvidence()) {
+      return;
+    }
+
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard?.writeText
+    ) {
+      this.errorMessage.set('Clipboard access is unavailable in this browser.');
+      return;
+    }
+
+    this.copyingSeasonEvidence.set(true);
+    this.errorMessage.set('');
+
+    const report = createSeasonLaunchScoringEvidenceReport({
+      snapshot,
+      build: BUNDLED_RELEASE_MANIFEST,
+      expectedProjectId: 'nhl-fantasy-app-ab673',
+    });
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      this.actionMessage.set(
+        report.gate.readyForFreeze
+          ? 'Season-launch scoring evidence copied. The scoring gate is ready for the exact-release freeze.'
+          : `Season-launch scoring evidence copied with ${report.gate.blockers.length} freeze blocker(s).`,
+      );
+    } catch (error: unknown) {
+      this.errorMessage.set(getErrorMessage(error));
+      this.actionMessage.set('');
+    } finally {
+      this.copyingSeasonEvidence.set(false);
     }
   }
 

@@ -524,7 +524,7 @@ test('RC33 preserves the frozen competitive models, six-game contract, and Shado
   assert.equal(cachePolicy.mode, 'shadow');
   assert.equal(cachePolicy.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1b:core'], /verify:batchc1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1B documentation records the staged privacy cutover, rollback unit, and permanent roadmap completion', async () => {

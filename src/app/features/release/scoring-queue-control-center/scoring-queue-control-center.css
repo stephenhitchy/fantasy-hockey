@@ -236,6 +236,17 @@
   line-height: var(--rr-line-normal);
 }
 
+
+.season-freeze-evidence-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.season-freeze-evidence-actions .queue-button {
+  white-space: nowrap;
+}
+
 .season-safety-status {
   padding: var(--rr-space-2) var(--rr-space-3);
   border: var(--rr-border-width) solid currentColor;
@@ -1511,5 +1522,16 @@ textarea {
   .mode-choice:hover:not(:disabled),
   .queue-button:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .season-freeze-evidence-actions {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .season-freeze-evidence-actions .season-safety-status {
+    justify-self: start;
   }
 }

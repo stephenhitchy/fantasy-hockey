@@ -234,7 +234,7 @@ test('current release controls inherit B1G as the exact verification gate', asyn
   assert.equal(freeze.releaseLabel, 'Release Candidate 65');
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(runbook, /npm run verify:batchb1j/);
   assert.match(runbook, /rinkrat-rc65-invite-beta/);

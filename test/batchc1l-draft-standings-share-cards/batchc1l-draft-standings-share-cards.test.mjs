@@ -262,7 +262,7 @@ test('C1L advances only the browser release metadata to RC38', async () => {
   assert.equal(freeze.requiredGamesPerRosterSlot, 6);
   assert.equal(freeze.queueMode, 'shadow');
   assert.equal(freeze.appCheckMode, 'monitor');
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(releaseScript, /rinkrat-rc65-invite-beta/);
 });
 

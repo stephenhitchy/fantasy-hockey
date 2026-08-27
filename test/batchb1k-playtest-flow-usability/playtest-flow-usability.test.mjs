@@ -181,7 +181,7 @@ test('the B1K candidate is documented and exposes one inherited verification gat
   assert.match(rootRoadmap, /B1\.43 Complete the observed-playtest flow correction/);
   assert.match(rootRoadmap, /LOG\.84 2026-08-25/);
   assert.match(releaseNotes, /has not been deployed, frozen, tagged, or promoted/i);
-  assert.match(packageJson.scripts['verify:batchb1k:core'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['verify:batchb1k:core'], /verify:batch(?:b1j|d1j):core/);
   assert.match(packageJson.scripts['verify:batchb1k'], /toolchain:verify/);
   assert.match(runtime, /Release Candidate 65/);
 });

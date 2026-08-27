@@ -285,7 +285,7 @@ test('C1D remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1d:core'], /verify:batchc1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1D documentation and roadmap record the bounded transparency slice and simple owner workflow', async () => {

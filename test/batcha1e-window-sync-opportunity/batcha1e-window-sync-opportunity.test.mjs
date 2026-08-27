@@ -276,7 +276,7 @@ test('A1E remains preserved under RC44 and permanently records slot-window parit
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1e:core'], /verify:batcha1d:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.4/);

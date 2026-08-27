@@ -211,5 +211,5 @@ test('O1H release records complete the public fairness baseline and retain moder
   assert.equal(report.releaseLabel, 'Release Candidate 58');
   assert.match(packageJson.scripts['verify:batcho1h:core'], /fairness:verify-report/);
   assert.match(packageJson.scripts['verify:batcho1i:core'], /verify:batcho1h:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });

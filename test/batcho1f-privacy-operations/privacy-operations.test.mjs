@@ -228,5 +228,5 @@ test('roadmap and documentation complete O1.24 while keeping attorney-reviewed p
   assert.match(runbook, /Targeted Functions first, then Hosting/);
   assert.match(releaseRunbook, /rinkrat-rc65-validation\.json/);
   assert.match(releaseRunbook, /rinkrat-rc65-invite-beta/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });

@@ -379,7 +379,7 @@ test('A1H advances RC46, completes A1.10, and retains replay latency as work in 
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1h:core'], /verify:batcha1g:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.10/);

@@ -356,7 +356,7 @@ test('C1H advances to RC34 while preserving competitive models, Rules, indexes, 
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1h:core'], /verify:batchc1g:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1H documentation and roadmap record the bounded implementation and site-first workflow', async () => {

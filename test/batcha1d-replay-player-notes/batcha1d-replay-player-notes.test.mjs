@@ -292,7 +292,7 @@ test('A1D advances release operations to RC42 and permanently records replay ali
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1d:core'], /verify:batcha1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(functionsPackage.scripts.logs, /getPlayerNote/);
   assert.match(functionsPackage.scripts.logs, /setPlayerNote/);
   assert.equal(roadmap, docsRoadmap);

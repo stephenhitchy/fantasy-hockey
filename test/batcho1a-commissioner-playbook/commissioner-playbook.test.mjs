@@ -234,7 +234,7 @@ test('O1A advances to RC51 while preserving Scoring V4, Projection V11, and safe
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcho1a:core'], /verify:batchv4a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(sha256(scoringRules), PROTECTED_SOURCE_HASHES.scoringRules);
   assert.equal(sha256(scoringEngine), PROTECTED_SOURCE_HASHES.scoringEngine);
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);

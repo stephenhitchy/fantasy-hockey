@@ -240,6 +240,6 @@ test('D1H scripts, documentation, and synchronized roadmaps are present', async 
   assert.match(scripts['verify:batchd1h:core'], /verify:batchd1g:core/);
   assert.match(readme, /RINKRAT_DATA_D1H_SEASON_SAFETY_CANONICAL_AUTHORITY/);
   assert.match(docs, /automatic direct-source fallback/i);
-  assert.match(rootRoadmap, /Version 1\.54\.7/);
+  assert.match(rootRoadmap, /Version 1\.54\.8/);
   assert.equal(rootRoadmap, docsRoadmap);
 });

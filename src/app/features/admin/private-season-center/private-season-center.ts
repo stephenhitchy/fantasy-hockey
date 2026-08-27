@@ -2,6 +2,8 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
+import { BUNDLED_RELEASE_MANIFEST } from '../../../../environments/generated-release-manifest';
+
 import type {
   PrivateSeasonControlCenterSnapshot,
   PrivateSeasonDevice,
@@ -13,6 +15,7 @@ import type {
   PrivateSeasonTester,
 } from '../../../core/operations/private-season.models';
 import { PrivateSeasonService } from '../../../core/operations/private-season.service';
+import { createPrivateSeasonFreezeEvidenceReport } from '../../../core/release/private-season-freeze-evidence.util';
 import { AdminSessionStepUp } from '../../../shared/admin-session-step-up/admin-session-step-up';
 
 function newId(prefix: string): string {
@@ -66,6 +69,7 @@ export class PrivateSeasonCenter {
   readonly refreshing = signal(false);
   readonly saving = signal(false);
   readonly deciding = signal(false);
+  readonly copyingFreezeEvidence = signal(false);
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
   readonly snapshot = signal<PrivateSeasonControlCenterSnapshot | null>(null);
@@ -243,6 +247,43 @@ export class PrivateSeasonCenter {
       this.errorMessage.set(this.friendlyError(error, 'Unable to record the go/no-go decision.'));
     } finally {
       this.deciding.set(false);
+    }
+  }
+
+  async copyFreezeEvidence(): Promise<void> {
+    const snapshot = this.snapshot();
+
+    if (!snapshot || this.copyingFreezeEvidence()) {
+      return;
+    }
+
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.clipboard?.writeText
+    ) {
+      this.errorMessage.set('Clipboard access is unavailable in this browser.');
+      return;
+    }
+
+    this.copyingFreezeEvidence.set(true);
+    this.errorMessage.set('');
+
+    const report = createPrivateSeasonFreezeEvidenceReport({
+      snapshot,
+      build: BUNDLED_RELEASE_MANIFEST,
+    });
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      this.successMessage.set(
+        report.gate.readyForFreeze
+          ? 'Private-season freeze evidence copied for the exact approved build.'
+          : `Private-season freeze evidence copied with ${report.gate.blockers.length} blocker(s).`,
+      );
+    } catch {
+      this.errorMessage.set('The private-season freeze evidence could not be copied automatically.');
+    } finally {
+      this.copyingFreezeEvidence.set(false);
     }
   }
 

@@ -331,7 +331,7 @@ test('A1I remains browser-only and preserves competitive, security, and data bou
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1i:core'], /verify:batcha1h:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('A1I documentation completes the home feed while retaining replay latency as work in progress', async () => {

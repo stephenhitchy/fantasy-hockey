@@ -31,7 +31,7 @@ test('B1J exposes a complete inherited release gate instead of a missing npm scr
   assert.match(packageJson.scripts['verify:batchb1j:core'], /test:batchb1j:run/);
   assert.match(packageJson.scripts['verify:batchb1j'], /toolchain:verify/);
   assert.match(packageJson.scripts['verify:batchb1j'], /security:dependency-audit/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('Training Camp can leave for the Scoring Guide and return to the exact permitted lesson', async () => {
@@ -212,7 +212,7 @@ test('RC65 documentation and synchronized roadmaps point to the B1J gate', async
   assert.match(runbook, /npm run verify:batchb1j/);
   assert.match(releaseDoc, /Hosting only/);
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.54\.7/);
+  assert.match(rootRoadmap, /Version 1\.54\.8/);
   assert.match(rootRoadmap, /# \[x\] B1\.39/);
   assert.match(rootRoadmap, /# \[x\] B1\.40/);
   assert.match(rootRoadmap, /# \[x\] B1\.41/);

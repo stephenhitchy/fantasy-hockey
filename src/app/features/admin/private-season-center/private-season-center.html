@@ -14,6 +14,14 @@
         {{ refreshing() ? 'Refreshing…' : 'Refresh evidence' }}
       </button>
       <button type="button" class="rr-button rr-button--secondary" (click)="copySummary()">Copy summary</button>
+      <button
+        type="button"
+        class="rr-button rr-button--secondary"
+        [disabled]="copyingFreezeEvidence()"
+        (click)="copyFreezeEvidence()"
+      >
+        {{ copyingFreezeEvidence() ? 'Copying…' : 'Copy Freeze Evidence' }}
+      </button>
       <button type="button" class="rr-button rr-button--secondary" (click)="print()">Print</button>
     </div>
   </header>

@@ -307,7 +307,7 @@ test('C1F remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1f:core'], /verify:batchc1e:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1F documentation and roadmap record the bounded recap and site-first workflow', async () => {

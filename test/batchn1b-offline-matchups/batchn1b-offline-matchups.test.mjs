@@ -266,7 +266,7 @@ test('N1B remains Hosting-only and preserves protected systems', async () => {
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchn1b:core'], /verify:batchn1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('documentation and roadmap record exact-route stale access and site-first proof', async () => {

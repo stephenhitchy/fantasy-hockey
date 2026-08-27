@@ -219,7 +219,7 @@ test('C1E remains intact under RC34 while preserving competitive models, Rules, 
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1e:core'], /verify:batchc1d:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1E documentation and roadmap record announcements, pinning, and the site-first workflow', async () => {

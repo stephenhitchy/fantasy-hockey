@@ -291,7 +291,7 @@ test('C1A remains intact under RC34 while preserving competitive models and safe
   assert.equal(appCheck.mode, 'monitor');
   assert.equal(freeze.queueMode, 'shadow');
   assert.match(packageJson.scripts['verify:batchc1a:core'], /verify:batchd1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('active integrity tests share one approved current Firestore Rules baseline', async () => {

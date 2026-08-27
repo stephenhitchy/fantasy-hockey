@@ -62,3 +62,6 @@ functions/.secret.local
 
 # Generated invite-beta freeze records
 /.beta-release/
+
+# Generated private-season freeze and recovery kits
+/.season-release/

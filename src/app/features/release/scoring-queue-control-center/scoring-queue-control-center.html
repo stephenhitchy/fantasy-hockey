@@ -187,7 +187,17 @@
             expand the cohort until it is resolved.
           </p>
         </div>
-        <span class="season-safety-status">{{ current.seasonSafetyStatus }}</span>
+        <div class="season-freeze-evidence-actions">
+          <span class="season-safety-status">{{ current.seasonSafetyStatus }}</span>
+          <button
+            type="button"
+            class="queue-button queue-button-secondary"
+            [disabled]="copyingSeasonEvidence()"
+            (click)="copySeasonLaunchEvidence()"
+          >
+            {{ copyingSeasonEvidence() ? 'Copying…' : 'Copy Season Freeze Evidence' }}
+          </button>
+        </div>
       </div>
 
       @if (current.seasonSafetyAlerts.length) {

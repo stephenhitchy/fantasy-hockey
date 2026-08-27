@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "firebaseProjectId": "nhl-fantasy-app-ab673",
+  "hostingTarget": "app",
+  "functionsRegion": "us-central1",
+  "affectedFunctions": [
+    "pollCanonicalNhlImpactFeed",
+    "processLeagueAutomationTask",
+    "dispatchDueLeagueAutomation",
+    "queueLeagueAutomationCanaryCheck",
+    "getLeagueAutomationQueueControlCenter",
+    "updateLeagueAutomationQueueConfig",
+    "runScheduledLeagueAutomation",
+    "runSeasonStartAutomation",
+    "initializeSeasonAfterDraft",
+    "requestLeagueLiveScoringRefresh",
+    "processHistoricalReplayAdvance",
+    "monitorLeagueAutomationSeasonSafety",
+    "refreshLeagueAutomationCapacityEvidence"
+  ],
+  "rollbackOrder": [
+    "return-scoring-to-shadow",
+    "preserve-evidence",
+    "deploy-frozen-functions",
+    "deploy-frozen-hosting",
+    "verify-release-manifest",
+    "verify-scoring-health"
+  ]
+}

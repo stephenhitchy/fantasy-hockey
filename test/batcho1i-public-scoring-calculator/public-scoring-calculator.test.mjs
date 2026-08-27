@@ -221,5 +221,5 @@ test('roadmap and release gate record O1I without rewriting the O1H evidence rel
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.equal(report.publishedReleaseLabel, 'Release Candidate 58');
   assert.match(packageJson.scripts['verify:batcho1i:core'], /verify:batcho1h:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });

@@ -183,5 +183,5 @@ test('O1G release records and verification include the compatibility audit', asy
   assert.match(runtime, /Release Candidate 65/);
   assert.match(productionRuntime, /Release Candidate 65/);
   assert.match(packageJson.scripts['verify:batcho1g:core'], /operations:audit-compatibility/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });

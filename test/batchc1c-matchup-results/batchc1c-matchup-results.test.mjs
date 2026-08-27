@@ -263,7 +263,7 @@ test('C1C changes no competitive model, Firestore Rule, index, or safety-mode au
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1c:core'], /verify:batchc1b:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1C documentation and permanent roadmap record the bounded matchup-result slice', async () => {

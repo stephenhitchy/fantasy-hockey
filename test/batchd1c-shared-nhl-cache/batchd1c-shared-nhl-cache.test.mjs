@@ -154,7 +154,7 @@ test('D1C audit and retention controls remain synchronized under the later C1A c
   assert.equal(packageJson.scripts['data:inspect-nhl-shared-cache'], 'node functions/scripts/nhl-shared-cache-inspect.cjs');
   assert.match(packageJson.scripts['verify:batchd1c:core'], /verify:batchd1b:core/);
   assert.match(packageJson.scripts['verify:batchd1c:core'], /data:audit-nhl-shared-cache/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(freeze.requiredTtlPolicyCount, 10);
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.releaseLabel, 'Release Candidate 65');

@@ -363,7 +363,7 @@ test('A1B remains permanently recorded while current release operations advance 
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1b:core'], /verify:batcha1a:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.12 Add a league-wide Player Board/);

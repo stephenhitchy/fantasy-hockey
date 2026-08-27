@@ -445,7 +445,7 @@ test('C1G.4 remains intact under RC34 and preserves competitive models, Rules, i
   assert.equal(cache.authoritativeReadsEnabled, false);
   assert.match(packageJson.scripts['verify:batchc1g:core'], /verify:batchc1f:core/);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
 });
 
 test('C1G.4 documentation records the emoji-only catalog and mobile picker repair', async () => {

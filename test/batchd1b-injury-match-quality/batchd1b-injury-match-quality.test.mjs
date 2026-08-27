@@ -228,7 +228,7 @@ test('D1B remains intact under RC34 while preserving Scoring V3, Projection V11,
   assert.match(appCheckConfig, /"defaultMode": "monitor"/);
   assert.match(queueConfig, /LEAGUE_AUTOMATION_QUEUE_DEFAULT_MODE\s*=\s*'shadow'/);
   assert.match(packageJson.scripts['verify:batchd1b:core'], /verify:batchd1a-1:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c|o1d|o1e|o1f|o1g|o1h|o1i|b1e|b1f|b1g|b1h|b1i|b1j):core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:d1b|d1c|c1a|c1b|c1c|c1d|c1e|c1f|c1g|c1h|c1i|c1j|c1k|c1l|c1m|a1a|a1b|a1c|a1d|a1e|a1f|a1g|a1h|a1i|n1a|n1b|v4a|o1a|o1b|o1c|o1d|o1e|o1f|o1g|o1h|o1i|b1e|b1f|b1g|b1h|b1i|b1j|d1j):core/);
   assert.equal(freezePolicy.releaseLabel, 'Release Candidate 65');
   assert.equal(freezePolicy.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freezePolicy.defaultTag, 'rinkrat-rc65-invite-beta');

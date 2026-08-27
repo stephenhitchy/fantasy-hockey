@@ -343,6 +343,6 @@ test('roadmap and documentation advance O1.3 and O1.4 without claiming live proo
   assert.match(runbook, /privacy-limited/i);
   assert.match(runbook, /Functions[\s\S]*Hosting/i);
   assert.equal(packageJson.scripts['verify:batcho1c:core'], 'npm run verify:batcho1b:core && npm run beta:audit-season-plan && npm run audit:product-copy-density && npm run test:batcho1c:run && npm run validate:release-manifest');
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.ok(boundaries.boundaries.some((entry) => entry.file === 'functions/src/private-season-health.ts'));
 });

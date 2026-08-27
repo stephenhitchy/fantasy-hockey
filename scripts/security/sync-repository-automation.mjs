@@ -12,6 +12,7 @@ const manifestPath = path.join(
 const markerPath = path.join(projectRoot, '.github/rinkrat-automation-version');
 const SECURITY_REPORT_IGNORE_RULE = '/.security-reports/';
 const BETA_RELEASE_IGNORE_RULE = '/.beta-release/';
+const SEASON_RELEASE_IGNORE_RULE = '/.season-release/';
 
 function safeProjectPath(relativePath) {
   if (
@@ -53,6 +54,12 @@ async function ensureGeneratedIgnoreRules() {
   }
   if (!normalizedLines.has(BETA_RELEASE_IGNORE_RULE)) {
     additions.push('# Generated invite-beta freeze records', BETA_RELEASE_IGNORE_RULE);
+  }
+  if (!normalizedLines.has(SEASON_RELEASE_IGNORE_RULE)) {
+    additions.push(
+      '# Generated private-season freeze and recovery kits',
+      SEASON_RELEASE_IGNORE_RULE,
+    );
   }
 
   if (additions.length === 0) {

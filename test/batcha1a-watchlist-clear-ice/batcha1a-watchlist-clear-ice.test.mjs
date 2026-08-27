@@ -209,7 +209,7 @@ test('A1A advances release operations to RC39 with one inherited verification ga
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1a:core'], /verify:batchc1l:core/);
   assert.match(packageJson.scripts['verify:batcha1a:core'], /audit:product-copy-density/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(releaseScript, /rinkrat-rc65-invite-beta/);
   assert.match((await read('functions/package.json')), /getPlayerWatchlist,setPlayerWatchlistEntry,deleteMyAccount/);
 });

@@ -240,7 +240,7 @@ test('B1H release documentation and the permanent roadmap stay synchronized', as
   const packageJson = JSON.parse(packageSource);
 
   assert.equal(roadmapRoot, roadmapDocs);
-  assert.match(roadmapRoot, /Version 1\.54\.7/);
+  assert.match(roadmapRoot, /Version 1\.54\.8/);
   assert.match(roadmapRoot, /# \[x\] B1\.34 Make every manager-facing route easier to escape and re-enter/);
   assert.match(roadmapRoot, /# \[x\] B1\.35 Rebuild Training Camp as a progressive, game-like sequence/);
   assert.match(roadmapRoot, /# \[x\] B1\.36 Repair Training Camp position help/);
@@ -251,7 +251,7 @@ test('B1H release documentation and the permanent roadmap stay synchronized', as
 
   assert.match(packageJson.scripts['verify:batchb1h:core'], /verify:batchb1g:core/);
   assert.match(packageJson.scripts['verify:batchb1h:core'], /test:batchb1h:run/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(readme, /RINKRAT_BETA_B1H_NAVIGATION_RELIABILITY\.md/);
   assert.match(runbook, /firebase deploy --only hosting:app/);

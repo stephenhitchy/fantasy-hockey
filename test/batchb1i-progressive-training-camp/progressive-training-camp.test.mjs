@@ -205,7 +205,7 @@ test('B1I safeguards remain documented under the current RC65 release', async ()
   );
   assert.match(packageJson.scripts['verify:batchb1i:core'], /verify:batchb1h:core/);
   assert.match(packageJson.scripts['verify:batchb1i'], /toolchain:verify/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(runtime, /Release Candidate 65/);
   assert.match(productionRuntime, /Release Candidate 65/);
   assert.equal(freeze.releaseLabel, 'Release Candidate 65');

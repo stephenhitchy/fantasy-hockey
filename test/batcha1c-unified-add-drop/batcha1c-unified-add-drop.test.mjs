@@ -288,7 +288,7 @@ test('the current release retains A1C while A1D advances release operations to R
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batcha1d:core'], /verify:batcha1c:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] A1\.13 Unify Player Board and Add \/ Drop/);

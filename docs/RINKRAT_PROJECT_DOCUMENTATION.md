@@ -13004,3 +13004,10 @@ firebase deploy --only hosting:app \
 Deployment alone does not enable Canary. Keep production in Shadow until one completed-Draft internal live league is deliberately allowlisted and the guarded activation checks pass. The fastest operational rollback is returning the queue to Shadow.
 
 Full implementation, activation, verification, deployment, and rollback guidance is in `docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md`.
+
+
+---
+
+## Data Infrastructure Batch D1J — Exact Season Freeze and Recovery
+
+D1J binds the exact live build to four independent reports before the 2026–27 private-season tag can be created: Release Readiness validation, scoring safety/queue evidence, private-season approval evidence, and the sixteen-scenario preseason scoring certification. The non-deploying local tool requires CI, Shadow, a drained queue, formal private-season approval, and a recorded rollback rehearsal; then it writes one ignored freeze record, targeted rollback plan, first-fifteen-minute incident guide, launch checklist, evidence copies, and the exact cumulative scoring Function selector. The Scoring Queue Control Center and Private Season Control Center each gain one clipboard export for their bounded evidence. No competitive formula, authority, Rule, index, TTL, queue limit, or automatic promotion changes. Full details are in `docs/RINKRAT_DATA_D1J_SEASON_FREEZE_RECOVERY.md`.

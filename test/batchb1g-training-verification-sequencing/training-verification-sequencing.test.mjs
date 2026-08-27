@@ -204,7 +204,7 @@ test('RC64 and B1I are the exact release, CI, freeze, and deployment identity', 
   assert.equal(freeze.verificationCommand, 'npm run verify:batchb1j');
   assert.equal(freeze.defaultTag, 'rinkrat-rc65-invite-beta');
   assert.match(packageJson.scripts['verify:batchb1g:core'], /verify:batchb1f:core/);
-  assert.match(packageJson.scripts['security:ci'], /verify:batchb1j:core/);
+  assert.match(packageJson.scripts['security:ci'], /verify:batch(?:b1j|d1j):core/);
   assert.match(readme, /Release Candidate 65 \/ Beta Batch B1J/);
   assert.match(runbook, /firebase deploy --only hosting:app/);
   assert.match(runbook, /RC62 Rules and Functions remain required/);
@@ -220,7 +220,7 @@ test('roadmap and permanent documentation record the B1G sequencing decision', a
     ]);
 
   assert.equal(rootRoadmap, docsRoadmap);
-  assert.match(rootRoadmap, /Version 1\.54\.7/);
+  assert.match(rootRoadmap, /Version 1\.54\.8/);
   assert.match(rootRoadmap, /B1\.33 Delay the first account verification email/);
   assert.match(rootRoadmap, /LOG\.78 2026-08-21/);
   assert.match(projectDocumentation, /Beta Batch B1G — Training-First Email Verification/);
