@@ -170,6 +170,234 @@
       </div>
     </section>
 
+    <section
+      class="season-safety-section"
+      [class]="'season-safety-section ' + getSeasonSafetyClass(current.seasonSafetyStatus)"
+      aria-labelledby="season-safety-heading"
+    >
+      <div class="section-heading-row">
+        <div>
+          <span class="queue-eyebrow">Preseason launch signal</span>
+          <h3 id="season-safety-heading">
+            {{ getSeasonSafetyLabel(current.seasonSafetyStatus) }}
+          </h3>
+          <p>
+            This summary combines dispatcher freshness, canonical-feed freshness, backlog age,
+            schedule coverage, parity, and automatic fallback evidence. A red item means do not
+            expand the cohort until it is resolved.
+          </p>
+        </div>
+        <span class="season-safety-status">{{ current.seasonSafetyStatus }}</span>
+      </div>
+
+      @if (current.seasonSafetyAlerts.length) {
+        <div class="season-safety-alert-list">
+          @for (alert of current.seasonSafetyAlerts; track alert.id) {
+            <article [class]="'season-safety-alert season-safety-alert-' + alert.severity">
+              <span aria-hidden="true">
+                {{ alert.severity === 'critical' ? '!' : alert.severity === 'warning' ? '△' : 'i' }}
+              </span>
+              <div>
+                <strong>{{ alert.label }}</strong>
+                <p>{{ alert.detail }}</p>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="season-safety-clear">No current scoring-pipeline warning is recorded.</p>
+      }
+    </section>
+
+    <section class="season-guardrail-grid" aria-label="Automatic season guardrails">
+      <article
+        class="watchdog-section"
+        [class]="'watchdog-section ' + getWatchdogClass(current.seasonSafetyWatchdog.status)"
+      >
+        <div>
+          <span class="queue-eyebrow">Automatic safety fallback</span>
+          <h3>{{ getWatchdogLabel(current.seasonSafetyWatchdog.status) }}</h3>
+          <p>
+            RinkRat waits for two consecutive unsafe checks before acting. A canonical-only
+            problem disables canonical authority and keeps queued direct scoring. A queue problem
+            returns the system to Shadow so the legacy scorer remains available.
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Last heartbeat</dt>
+            <dd>{{ formatTimestamp(current.seasonSafetyWatchdog.lastSuccessfulAt) }}</dd>
+          </div>
+          <div>
+            <dt>Queue warning streak</dt>
+            <dd>
+              {{ current.seasonSafetyWatchdog.queueBlockingStreak }} /
+              {{ current.seasonSafetyWatchdog.requiredBlockingStreak }}
+            </dd>
+          </div>
+          <div>
+            <dt>Canonical warning streak</dt>
+            <dd>
+              {{ current.seasonSafetyWatchdog.canonicalBlockingStreak }} /
+              {{ current.seasonSafetyWatchdog.requiredBlockingStreak }}
+            </dd>
+          </div>
+          <div>
+            <dt>Automatic fallbacks</dt>
+            <dd>
+              {{ current.seasonSafetyWatchdog.automaticShadowFallbackCount }} Shadow ·
+              {{ current.seasonSafetyWatchdog.automaticCanonicalFallbackCount }} canonical
+            </dd>
+          </div>
+        </dl>
+        @if (current.seasonSafetyWatchdog.lastError) {
+          <p class="watchdog-last-action">
+            Latest watchdog error: {{ current.seasonSafetyWatchdog.lastError }}
+          </p>
+        }
+        @if (current.seasonSafetyWatchdog.lastAction !== 'none') {
+          <p class="watchdog-last-action">
+            Last action {{ formatTimestamp(current.seasonSafetyWatchdog.lastActionAt) }}:
+            {{ current.seasonSafetyWatchdog.lastActionReason || current.seasonSafetyWatchdog.lastAction }}
+          </p>
+        }
+      </article>
+
+      <article
+        class="capacity-evidence-section"
+        [class.capacity-evidence-ready]="current.capacityEvidence.primaryCapacityReady"
+        [class.capacity-evidence-insufficient]="current.capacityEvidence.evidenceLevel === 'insufficient'"
+        [class.capacity-evidence-error]="current.capacityEvidence.status === 'error'"
+      >
+        <div>
+          <span class="queue-eyebrow">Measured scoring capacity</span>
+          <h3>{{ getCapacityEvidenceLabel(current.capacityEvidence.evidenceLevel) }}</h3>
+          <p>
+            Refresher status: {{ current.capacityEvidence.status }}.
+            @if (current.capacityEvidence.lastError) {
+              Last error: {{ current.capacityEvidence.lastError }}
+            }
+          </p>
+          <p>
+            Capacity uses live queue-task duration—not replay speed—with
+            {{ formatHeadroomRatio(current.capacityEvidence.headroomRatio) }} operating headroom.
+            It never changes worker limits automatically.
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Queue attempts / successful</dt>
+            <dd>
+              {{ current.capacityEvidence.queueTaskSampleCount }} /
+              {{ current.capacityEvidence.queueTaskSuccessCount }} across
+              {{ current.capacityEvidence.sampledDayCount }} day(s)
+            </dd>
+          </div>
+          <div>
+            <dt>Non-error reliability</dt>
+            <dd>
+              {{ formatPercentage(current.capacityEvidence.queueTaskReliabilityRate, current.capacityEvidence.queueTaskSampleCount) }}
+              · {{ current.capacityEvidence.queueTaskErrorCount }} error
+              · {{ current.capacityEvidence.queueTaskSkippedCount }} expected no-op skip
+            </dd>
+          </div>
+          <div>
+            <dt>Queue p95</dt>
+            <dd>{{ formatDuration(current.capacityEvidence.p95DurationMilliseconds) }}</dd>
+          </div>
+          <div>
+            <dt>Evidence refreshed</dt>
+            <dd>{{ formatTimestamp(current.capacityEvidence.lastRefreshedAt) }}</dd>
+          </div>
+          <div>
+            <dt>Average / maximum</dt>
+            <dd>
+              {{ formatDuration(current.capacityEvidence.averageDurationMilliseconds) }} /
+              {{ formatDuration(current.capacityEvidence.maximumDurationMilliseconds) }}
+            </dd>
+          </div>
+          <div>
+            <dt>Conservative affected-league capacity</dt>
+            <dd>{{ current.capacityEvidence.safeAffectedLeagueCapacity }}</dd>
+          </div>
+          <div>
+            <dt>Current workers</dt>
+            <dd>{{ current.capacityEvidence.workerCount }}</dd>
+          </div>
+          <div>
+            <dt>Workers estimated for 25 / 50</dt>
+            <dd>
+              {{ current.capacityEvidence.recommendedWorkersFor25Leagues || '—' }} /
+              {{ current.capacityEvidence.recommendedWorkersFor50Leagues || '—' }}
+            </dd>
+          </div>
+        </dl>
+        <p class="capacity-planning-note">
+          Reliability treats expected no-op skips as healthy queue handling, but only completed scoring work contributes to average, p95, maximum, and capacity estimates.
+        </p>
+        @if (current.capacityEvidence.queueTaskSampleCount === 0 && current.capacityEvidence.allScoringSampleCount > 0) {
+          <p class="capacity-planning-note">
+            {{ current.capacityEvidence.allScoringSampleCount }} replay/direct scoring sample(s) exist,
+            but they remain planning evidence only. Primary stays locked until real queue tasks are measured.
+          </p>
+        }
+      </article>
+    </section>
+
+    <section
+      class="canonical-authority-section"
+      [class.canonical-authority-active]="current.canonicalAuthorityLeagueIds.length === 1"
+      [class.canonical-authority-open]="current.health.canonicalAuthorityCircuitState === 'open'"
+      aria-labelledby="canonical-authority-heading"
+    >
+      <div>
+        <span class="queue-eyebrow">Season safety · scoring source</span>
+        <h3 id="canonical-authority-heading">
+          @if (current.health.canonicalAuthorityCircuitState === 'open') {
+            Direct fallback active
+          } @else if (current.canonicalAuthorityLeagueIds.length === 1) {
+            Verified canonical-read Canary
+          } @else {
+            Direct NHL scoring authority
+          }
+        </h3>
+        <p>
+          @if (current.health.canonicalAuthorityCircuitState === 'open') {
+            A canonical comparison was missing, incomplete, misaligned, or different. RinkRat used
+            the direct result and automatically removed canonical authority without disabling queued scoring.
+          } @else if (current.canonicalAuthorityLeagueIds.length === 1) {
+            One exact Internal Test league may publish the canonical result only when the same task
+            verifies an exact direct-source match. Any problem triggers automatic direct fallback and opens the circuit breaker.
+          } @else {
+            Canonical facts continue as comparison evidence only. The proven direct NHL path publishes every score.
+          }
+        </p>
+      </div>
+      <dl>
+        <div>
+          <dt>Configured league</dt>
+          <dd>{{ current.canonicalAuthorityLeagueIds[0] || 'None' }}</dd>
+        </div>
+        <div>
+          <dt>Last decision</dt>
+          <dd>{{ current.health.canonicalAuthorityLastDecision || 'Not recorded' }}</dd>
+        </div>
+        <div>
+          <dt>Canonical uses</dt>
+          <dd>{{ current.health.canonicalAuthorityLastCanonicalUseCount ?? 0 }}</dd>
+        </div>
+        <div>
+          <dt>Direct fallbacks</dt>
+          <dd>{{ current.health.canonicalAuthorityLastDirectFallbackCount ?? 0 }}</dd>
+        </div>
+      </dl>
+      @if (current.health.canonicalAuthorityLastFallbackReason) {
+        <p class="canonical-authority-fallback-reason">
+          Last fallback: {{ current.health.canonicalAuthorityLastFallbackReason }}
+        </p>
+      }
+    </section>
+
     <section class="rollout-section" aria-labelledby="queue-rollout-heading">
       <div class="section-heading-row">
         <div>
@@ -246,8 +474,9 @@
           They share the same idempotent worker and four-task concurrency ceiling, but D1D deliberately
           gives only exact Internal Test Canaries a two-minute target while live NHL games are active. Primary
           remains on the standard cadence until shared NHL ingestion, direct-versus-canonical scoring
-          parity, queue cost, and staged load proof are complete. Canonical facts remain shadow-only and
-          cannot publish points in D1G. The Primary proof counter resets whenever the exact canary allowlist changes,
+          parity, queue cost, and staged load proof are complete. D1H permits only one exact verified
+          canonical-read Canary, and that task still calculates the direct result as an automatic fallback.
+          The Primary proof counter resets whenever the exact canary allowlist changes,
           so successes from an older test group cannot unlock a new one.
         </p>
       </div>
@@ -374,6 +603,13 @@
                   <dt>Last queued result</dt>
                   <dd>{{ league.lastOutcome }} · {{ formatDuration(league.lastDurationMilliseconds) }}</dd>
                 </div>
+                <div>
+                  <dt>Perfect parity streak</dt>
+                  <dd>
+                    {{ league.canonicalParityConsecutivePassingRunCount }} /
+                    {{ league.canonicalParityRequiredPassingRunCount }}
+                  </dd>
+                </div>
               </dl>
 
               @if (!league.canaryEligible) {
@@ -413,7 +649,39 @@
                     <small>{{ league.canaryEligibilityReason }}</small>
                   </span>
                 </label>
+
+                @if (isSelectedCanary(league.leagueId) && isSelectedInternalTest(league.leagueId)) {
+                  <label
+                    class="toggle-control toggle-control-authority"
+                    [class.toggle-control-disabled]="
+                      !league.canonicalAuthorityEligible &&
+                      !isSelectedCanonicalAuthority(league.leagueId)
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="isSelectedCanonicalAuthority(league.leagueId)"
+                      [disabled]="
+                        busy() ||
+                        (!league.canonicalAuthorityEligible &&
+                          !isSelectedCanonicalAuthority(league.leagueId))
+                      "
+                      (change)="toggleCanonicalAuthority(league)"
+                    />
+                    <span>
+                      <strong>Verified canonical-read Canary</strong>
+                      <small>{{ league.canonicalAuthorityEligibilityReason }}</small>
+                    </span>
+                  </label>
+                }
               </div>
+
+              @if (league.canonicalAuthorityCircuitState === 'open') {
+                <p class="league-error-note">
+                  Canonical authority was automatically disabled. Direct scoring stayed active.
+                  {{ league.canonicalAuthorityLastFallbackReason }}
+                </p>
+              }
 
               @if (
                 isNearLiveCanary(league) &&
@@ -491,6 +759,10 @@
         <article>
           <span>Internal test leagues</span>
           <strong>{{ selectedInternalTestLeagueIds().length }}</strong>
+        </article>
+        <article>
+          <span>Canonical-read leagues</span>
+          <strong>{{ selectedCanonicalAuthorityLeagueIds().length }} / 1</strong>
         </article>
       </div>
 
@@ -595,7 +867,8 @@
               </p>
               <span>
                 {{ getModeLabel(entry.modeBefore) }} → {{ getModeLabel(entry.modeAfter) }} ·
-                {{ entry.canaryLeagueIdsAfter.length }} canary league(s)
+                {{ entry.canaryLeagueIdsAfter.length }} canary league(s) ·
+                {{ entry.canonicalAuthorityLeagueIdsAfter.length }} canonical-read league(s)
               </span>
             </article>
           }

@@ -201,7 +201,7 @@ test('parity reports matched, mismatch, and incomplete without becoming authorit
   assert.equal(incomplete.canonicalPoints, null);
 });
 
-test('D1G centralizes final settlement and keeps canonical scoring shadow-only', async () => {
+test('D1G centralizes final settlement and keeps shadow parity available under the guarded D1H authority layer', async () => {
   const [feed, automation, cycle, paritySource] = await Promise.all([
     read('functions/src/nhl-canonical-impact-feed.ts'),
     read('functions/src/league-automation.ts'),
@@ -216,14 +216,15 @@ test('D1G centralizes final settlement and keeps canonical scoring shadow-only',
   assert.match(feed, /gameVersions:\s*request\.gameVersions/);
   assert.doesNotMatch(feed, /runLeagueAutomation\(/);
 
-  assert.match(automation, /shadowOnly:\s*true/);
-  assert.match(automation, /authoritativeReadsEnabled:\s*false/);
+  assert.match(automation, /shadowOnly:\s*input\.authorityEnabled !== true/);
+  assert.match(automation, /authoritativeReadsEnabled:\s*input\.authorityEnabled === true/);
+  assert.match(automation, /canonicalAuthorityContext/);
   assert.match(automation, /canonical-shadow-parity/);
   assert.match(automation, /canonicalParityCohort\.passing/);
   assert.match(automation, /canonicalGameVersions/);
   assert.match(automation, /canonical-game-version-set-invalid/);
   assert.match(cycle, /compareDirectAndCanonicalGameScore/);
-  assert.match(cycle, /directPoints:\s*scoreResult\.points/);
+  assert.match(cycle, /directPoints:\s*directScoreResult\.points/);
   assert.match(paritySource, /calculateCanonicalAssetGameScore/);
 });
 
@@ -284,6 +285,6 @@ test('D1G release scripts, documentation, and synchronized roadmaps are present'
   assert.match(scripts['verify:batchd1g:core'], /verify:batchd1f2:core/);
   assert.match(readme, /RINKRAT_DATA_D1G_CANONICAL_SCORING_PARITY/);
   assert.match(docs, /direct NHL scoring remains authoritative/i);
-  assert.match(rootRoadmap, /Version 1\.54\.5/);
+  assert.match(rootRoadmap, /Version 1\.54\.7/);
   assert.equal(rootRoadmap, docsRoadmap);
 });

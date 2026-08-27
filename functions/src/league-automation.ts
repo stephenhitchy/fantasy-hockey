@@ -19,9 +19,14 @@ import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   BETA_OPERATION_DAILY_RETENTION_MILLISECONDS,
+  BETA_OPERATION_SHARD_COUNT,
   addBetaDurationSample,
+  betaHistogramPercentile,
   betaOperationsDateKey,
+  betaOperationsDateKeys,
   betaOperationsShardId,
+  emptyBetaDurationAccumulator,
+  mergeBetaDurationAccumulators,
   normalizeBetaDurationAccumulator,
 } from './shared/core/observability/beta-operations.util';
 import {
@@ -76,6 +81,17 @@ import {
   type LeagueAutomationRefreshCadence,
 } from './shared/core/live-scoring/live-scoring-cadence.util';
 import {
+  LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT,
+  LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS,
+  LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE,
+  LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
+  buildLeagueAutomationCapacityRecommendation,
+  decideLeagueAutomationWatchdogAction,
+  type LeagueAutomationCapacityRecommendation,
+  type LeagueAutomationWatchdogAction,
+  type LeagueAutomationWatchdogStatus,
+} from './shared/core/live-scoring/league-automation-season-safety.util';
+import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   NhlTeamSeasonGame,
@@ -89,6 +105,11 @@ import type {
   CanonicalScoringParityGame,
   CanonicalScoringParityObservation,
 } from './shared/core/nhl/nhl-canonical-scoring-parity.util';
+import {
+  summarizeCanonicalScoringAuthorityTask,
+  type CanonicalScoringAuthorityDecision,
+  type CanonicalScoringAuthorityTaskSummary,
+} from './shared/core/nhl/nhl-canonical-scoring-authority.util';
 import { getFantasyPlayoffs } from './shared/core/playoffs/playoff.service';
 import {
   ensureNextPlayoffBankWindows,
@@ -136,6 +157,18 @@ const LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT = 200;
 const LEAGUE_AUTOMATION_ADMIN_AUDIT_LIMIT = 20;
 const LEAGUE_AUTOMATION_PRODUCTION_PROJECT_ID = 'nhl-fantasy-app-ab673';
 const LEAGUE_AUTOMATION_CANARY_CONFIRMATION = 'ENABLE CANARY';
+const LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_CONFIRMATION =
+  'ENABLE CANONICAL READ CANARY';
+const LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MAX_LEAGUE_COUNT = 1;
+const LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MIN_PARITY_STREAK = 3;
+const LEAGUE_AUTOMATION_SEASON_SAFETY_DISPATCH_STALE_MILLISECONDS = 5 * 60 * 1000;
+const LEAGUE_AUTOMATION_SEASON_SAFETY_FEED_STALE_MILLISECONDS = 5 * 60 * 1000;
+const LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_WARNING_MILLISECONDS = 4 * 60 * 1000;
+const LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_BLOCKING_MILLISECONDS = 10 * 60 * 1000;
+const LEAGUE_AUTOMATION_SEASON_WATCHDOG_STALE_MILLISECONDS = 3 * 60 * 1000;
+const LEAGUE_AUTOMATION_CAPACITY_EVIDENCE_STALE_MILLISECONDS = 2 * 60 * 60 * 1000;
+const LEAGUE_AUTOMATION_SEASON_WATCHDOG_ACTOR = 'server:season-safety-watchdog';
+const LEAGUE_AUTOMATION_CAPACITY_WINDOW_DAYS = 14;
 const LEAGUE_AUTOMATION_STAGING_PRIMARY_CONFIRMATION = 'ENABLE PRIMARY IN STAGING';
 const LEAGUE_AUTOMATION_PRODUCTION_PRIMARY_CONFIRMATION = 'ENABLE PRIMARY IN PRODUCTION';
 
@@ -187,6 +220,9 @@ interface LeagueAutomationResult {
   refreshCadence?: LeagueAutomationRefreshCadence;
   refreshDelayMilliseconds?: number;
   phaseTiming?: ScoringPhaseTimingSnapshot;
+  canonicalAuthorityUsedCount?: number;
+  canonicalAuthorityFallbackCount?: number;
+  canonicalAuthorityCircuitOpened?: boolean;
 }
 
 interface LeaseClaimResult {
@@ -240,6 +276,7 @@ interface LeagueAutomationQueueConfig {
   mode: LeagueAutomationQueueMode;
   canaryLeagueIds: string[];
   internalTestLeagueIds: string[];
+  canonicalAuthorityLeagueIds: string[];
   maxEnqueuePerRun: number;
   canarySuccessBaseline: number;
   revision: number;
@@ -253,6 +290,54 @@ interface LeagueAutomationPromotionGate {
   passed: boolean;
   blocking: boolean;
   detail: string;
+}
+
+type LeagueAutomationSeasonSafetyStatus =
+  | 'observing'
+  | 'ready'
+  | 'attention'
+  | 'blocked';
+
+interface LeagueAutomationSeasonSafetyAlert {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  label: string;
+  detail: string;
+}
+
+interface LeagueAutomationSeasonWatchdogSnapshot {
+  status: LeagueAutomationWatchdogStatus | 'not-recorded';
+  lastAttemptAt: string | null;
+  lastSuccessfulAt: string | null;
+  queueBlockingStreak: number;
+  canonicalBlockingStreak: number;
+  requiredBlockingStreak: number;
+  lastAction: LeagueAutomationWatchdogAction;
+  lastActionAt: string | null;
+  lastActionReason: string;
+  automaticShadowFallbackCount: number;
+  automaticCanonicalFallbackCount: number;
+  consecutiveFailureCount: number;
+  lastError: string;
+  lastQueueBlockingAlertIds: string[];
+  lastCanonicalBlockingAlertIds: string[];
+}
+
+interface LeagueAutomationCapacityEvidence
+  extends LeagueAutomationCapacityRecommendation {
+  status: 'not-recorded' | 'healthy' | 'error';
+  consecutiveFailureCount: number;
+  lastError: string;
+  lastAttemptAt: string | null;
+  windowDays: number;
+  dateFrom: string;
+  dateTo: string;
+  lastRefreshedAt: string | null;
+  source: 'queue-task';
+  allScoringSampleCount: number;
+  allScoringAverageDurationMilliseconds: number;
+  allScoringP95DurationMilliseconds: number;
+  allScoringMaximumDurationMilliseconds: number;
 }
 
 interface LeagueAutomationPrimaryApproval {
@@ -283,6 +368,16 @@ interface LeagueAutomationAdminLeague {
   activeTaskLeaseExpiresAt: string | null;
   isCanary: boolean;
   isInternalTest: boolean;
+  canonicalAuthorityConfigured: boolean;
+  canonicalAuthorityEligible: boolean;
+  canonicalAuthorityEligibilityReason: string;
+  canonicalAuthorityCircuitState: 'closed' | 'open' | 'not-configured';
+  canonicalAuthorityLastDecision: string;
+  canonicalAuthorityLastFallbackReason: string;
+  canonicalAuthorityCanonicalUseCount: number;
+  canonicalAuthorityDirectFallbackCount: number;
+  canonicalParityConsecutivePassingRunCount: number;
+  canonicalParityRequiredPassingRunCount: number;
   canaryEligible: boolean;
   canaryEligibilityReason: string;
   scoringPath: 'legacy' | 'queued-canary' | 'queued-primary' | 'historical-replay' | 'draft-incomplete' | 'paused';
@@ -296,6 +391,14 @@ interface LeagueAutomationQueueAdminSnapshot {
   mode: LeagueAutomationQueueMode;
   canaryLeagueIds: string[];
   internalTestLeagueIds: string[];
+  canonicalAuthorityLeagueIds: string[];
+  canonicalAuthorityConfirmationPhrase: string;
+  canonicalAuthorityMaximumLeagueCount: number;
+  canonicalAuthorityMinimumParityStreak: number;
+  seasonSafetyStatus: LeagueAutomationSeasonSafetyStatus;
+  seasonSafetyAlerts: LeagueAutomationSeasonSafetyAlert[];
+  seasonSafetyWatchdog: LeagueAutomationSeasonWatchdogSnapshot;
+  capacityEvidence: LeagueAutomationCapacityEvidence;
   maxEnqueuePerRun: number;
   canarySuccessBaseline: number;
   successfulTasksSinceCanary: number;
@@ -324,6 +427,8 @@ interface LeagueAutomationQueueAdminSnapshot {
     canaryLeagueIdsAfter: string[];
     internalTestLeagueIdsBefore: string[];
     internalTestLeagueIdsAfter: string[];
+    canonicalAuthorityLeagueIdsBefore: string[];
+    canonicalAuthorityLeagueIdsAfter: string[];
     reason: string;
     adminId: string;
     leagueId: string;
@@ -388,6 +493,13 @@ interface CanonicalScoringParityTaskContext {
   gameIds: number[];
 }
 
+interface CanonicalScoringAuthorityRuntimeContext {
+  configured: boolean;
+  circuitState: 'closed' | 'open';
+  enabled: boolean;
+  reason: string;
+}
+
 interface CanonicalScoringParityLoadResult {
   gamesById: Map<number, CanonicalScoringParityGame>;
   requestedGameIds: number[];
@@ -419,6 +531,11 @@ interface CanonicalScoringParityCohortSummary {
   totalComparedCount: number;
   maximumAbsolutePointDelta: number;
   passing: boolean;
+}
+
+interface CanonicalScoringAuthorityEligibility {
+  eligible: boolean;
+  reason: string;
 }
 
 interface HistoricalReplayAssetMap {
@@ -545,6 +662,13 @@ function normalizeLeagueAutomationInternalTestIds(value: unknown): string[] {
   return normalizeLeagueAutomationLeagueIds(value);
 }
 
+function normalizeLeagueAutomationCanonicalAuthorityIds(value: unknown): string[] {
+  return normalizeLeagueAutomationLeagueIds(value).slice(
+    0,
+    LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MAX_LEAGUE_COUNT,
+  );
+}
+
 function normalizeLeagueAutomationRevision(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.trunc(value))
@@ -570,6 +694,10 @@ async function getLeagueAutomationQueueConfig(): Promise<LeagueAutomationQueueCo
     internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
       data['internalTestLeagueIds'],
     ),
+    canonicalAuthorityLeagueIds:
+      normalizeLeagueAutomationCanonicalAuthorityIds(
+        data['canonicalAuthorityLeagueIds'],
+      ),
     maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
       data['maxEnqueuePerRun'],
     ),
@@ -975,6 +1103,7 @@ async function recordCanonicalScoringParityEvidence(input: {
   context: CanonicalScoringParityTaskContext;
   load: CanonicalScoringParityLoadResult;
   observations: readonly CanonicalScoringParityObservation[];
+  authorityEnabled?: boolean;
 }): Promise<void> {
   const summary = summarizeCanonicalScoringParity(input.observations);
   const details = input.observations
@@ -996,12 +1125,20 @@ async function recordCanonicalScoringParityEvidence(input: {
   const parityStatus = !input.load.taskVersionAligned && summary.status === 'pass'
     ? 'incomplete'
     : summary.status;
+  const perfectShadowPass =
+    input.authorityEnabled !== true &&
+    input.load.taskVersionAligned &&
+    parityStatus === 'pass' &&
+    summary.comparedCount > 0 &&
+    summary.mismatchCount === 0 &&
+    summary.incompleteCount === 0 &&
+    summary.canonicalMissingCount === 0;
   const evidence = {
     schemaVersion: 1,
     leagueId: input.leagueId,
     status: parityStatus,
-    shadowOnly: true,
-    authoritativeReadsEnabled: false,
+    shadowOnly: input.authorityEnabled !== true,
+    authoritativeReadsEnabled: input.authorityEnabled === true,
     taskSourceVersion: input.context.sourceVersion,
     requestedAt: input.context.requestedAtMilliseconds > 0
       ? Timestamp.fromMillis(input.context.requestedAtMilliseconds)
@@ -1020,6 +1157,14 @@ async function recordCanonicalScoringParityEvidence(input: {
     incompleteCount: summary.incompleteCount,
     canonicalMissingCount: summary.canonicalMissingCount,
     maximumAbsolutePointDelta: summary.maximumAbsolutePointDelta,
+    totalComparisonRunCount: FieldValue.increment(1),
+    totalPassingRunCount: FieldValue.increment(perfectShadowPass ? 1 : 0),
+    consecutivePassingRunCount: perfectShadowPass
+      ? FieldValue.increment(1)
+      : 0,
+    ...(perfectShadowPass
+      ? { lastPassingAt: FieldValue.serverTimestamp() }
+      : { lastNonPassingAt: FieldValue.serverTimestamp() }),
     details,
     comparedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -1042,6 +1187,9 @@ async function recordCanonicalScoringParityEvidence(input: {
           summary.incompleteCount + summary.canonicalMissingCount,
         canonicalParityMaximumAbsolutePointDelta:
           summary.maximumAbsolutePointDelta,
+        canonicalParityConsecutivePassingRunCount: perfectShadowPass
+          ? FieldValue.increment(1)
+          : 0,
         canonicalParityComparedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -1050,8 +1198,8 @@ async function recordCanonicalScoringParityEvidence(input: {
     db.doc('appData/leagueAutomationCanonicalParity').set(
       {
         schemaVersion: 1,
-        shadowOnly: true,
-        authoritativeReadsEnabled: false,
+        shadowOnly: input.authorityEnabled !== true,
+        authoritativeReadsEnabled: input.authorityEnabled === true,
         lastLeagueId: input.leagueId,
         lastStatus: parityStatus,
         lastTaskVersionAligned: input.load.taskVersionAligned,
@@ -1072,8 +1220,9 @@ async function recordCanonicalScoringParityEvidence(input: {
     ),
     db.doc('appData/leagueAutomation').set(
       {
-        canonicalParityShadowOnly: true,
-        canonicalParityAuthoritativeReadsEnabled: false,
+        canonicalParityShadowOnly: input.authorityEnabled !== true,
+        canonicalParityAuthoritativeReadsEnabled:
+          input.authorityEnabled === true,
         canonicalParityLastLeagueId: input.leagueId,
         canonicalParityLastStatus: parityStatus,
         canonicalParityLastTaskVersionAligned: input.load.taskVersionAligned,
@@ -1106,6 +1255,294 @@ async function recordCanonicalScoringParityEvidence(input: {
       summary,
     });
   }
+}
+
+function getCanonicalScoringAuthorityRef(leagueId: string) {
+  return db.doc(`leagueAutomationCanonicalAuthority/${leagueId}`);
+}
+
+async function loadCanonicalScoringAuthorityRuntimeContext(input: {
+  config: LeagueAutomationQueueConfig;
+  leagueId: string;
+  canonicalContext?: CanonicalScoringParityTaskContext;
+}): Promise<CanonicalScoringAuthorityRuntimeContext> {
+  const configured = input.config.canonicalAuthorityLeagueIds.includes(
+    input.leagueId,
+  );
+
+  if (!configured) {
+    return {
+      configured: false,
+      circuitState: 'closed',
+      enabled: false,
+      reason: 'canonical-authority-not-configured',
+    };
+  }
+
+  if (
+    input.config.mode !== 'canary' ||
+    !input.config.canaryLeagueIds.includes(input.leagueId) ||
+    !input.config.internalTestLeagueIds.includes(input.leagueId)
+  ) {
+    return {
+      configured: true,
+      circuitState: 'open',
+      enabled: false,
+      reason: 'canonical-authority-cohort-invalid',
+    };
+  }
+
+  const authoritySnapshot = await getCanonicalScoringAuthorityRef(
+    input.leagueId,
+  ).get();
+  const authorityData = authoritySnapshot.data() ?? {};
+  const circuitState = authorityData['circuitState'] === 'open'
+    ? 'open' as const
+    : 'closed' as const;
+
+  if (circuitState === 'open') {
+    return {
+      configured: true,
+      circuitState,
+      enabled: false,
+      reason: getLeagueAutomationString(
+        authorityData['openedReason'],
+        'canonical-authority-circuit-open',
+      ),
+    };
+  }
+
+  if (!input.canonicalContext?.sourceVersion) {
+    return {
+      configured: true,
+      circuitState,
+      enabled: false,
+      reason: 'canonical-authority-task-not-versioned',
+    };
+  }
+
+  return {
+    configured: true,
+    circuitState,
+    enabled: true,
+    reason: 'canonical-authority-verified-read',
+  };
+}
+
+async function recordCanonicalScoringAuthorityOutcome(input: {
+  leagueId: string;
+  sourceVersion: string;
+  summary: CanonicalScoringAuthorityTaskSummary;
+}): Promise<void> {
+  if (!input.summary.configured) {
+    return;
+  }
+
+  const authorityRef = getCanonicalScoringAuthorityRef(input.leagueId);
+  const now = Date.now();
+
+  if (!input.summary.tripCircuitBreaker) {
+    await Promise.all([
+      authorityRef.set(
+        {
+          schemaVersion: 1,
+          leagueId: input.leagueId,
+          circuitState: 'closed',
+          lastDecision: input.summary.canonicalUsedCount > 0
+            ? 'canonical-verified'
+            : 'no-relevant-comparison',
+          lastSourceVersion: input.sourceVersion,
+          lastTaskVersionAligned: input.summary.taskVersionAligned,
+          lastObservationCount: input.summary.observationCount,
+          lastCanonicalUseCount: input.summary.canonicalUsedCount,
+          lastDirectFallbackCount: input.summary.directFallbackCount,
+          totalCanonicalUseCount: FieldValue.increment(
+            input.summary.canonicalUsedCount,
+          ),
+          totalDirectFallbackCount: FieldValue.increment(0),
+          consecutiveSuccessfulTaskCount: FieldValue.increment(1),
+          lastSuccessfulAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+      db.doc('appData/leagueAutomation').set(
+        {
+          canonicalAuthorityConfiguredLeagueId: input.leagueId,
+          canonicalAuthorityCircuitState: 'closed',
+          canonicalAuthorityLastDecision:
+            input.summary.canonicalUsedCount > 0
+              ? 'canonical-verified'
+              : 'no-relevant-comparison',
+          canonicalAuthorityLastSourceVersion: input.sourceVersion,
+          canonicalAuthorityLastCanonicalUseCount:
+            input.summary.canonicalUsedCount,
+          canonicalAuthorityLastDirectFallbackCount: 0,
+          canonicalAuthorityLastCompletedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    ]);
+    return;
+  }
+
+  const breakerHash = createHash('sha256')
+    .update([
+      input.leagueId,
+      input.sourceVersion,
+      input.summary.circuitBreakerReason,
+    ].join(':'))
+    .digest('hex')
+    .slice(0, 32);
+  const auditRef = getLeagueAutomationAuditRef(
+    `canonical-breaker-${breakerHash}`,
+  );
+  const configRef = db.doc('appData/leagueAutomationQueueConfig');
+  const healthRef = db.doc('appData/leagueAutomation');
+
+  await db.runTransaction(async (transaction) => {
+    const [configSnapshot, auditSnapshot] = await Promise.all([
+      transaction.get(configRef),
+      transaction.get(auditRef),
+    ]);
+    const configData = configSnapshot.data() ?? {};
+    const before: LeagueAutomationQueueConfig = {
+      mode: normalizeLeagueAutomationQueueMode(configData['mode']),
+      canaryLeagueIds: normalizeLeagueAutomationCanaryIds(
+        configData['canaryLeagueIds'],
+      ),
+      internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+        configData['internalTestLeagueIds'],
+      ),
+      canonicalAuthorityLeagueIds:
+        normalizeLeagueAutomationCanonicalAuthorityIds(
+          configData['canonicalAuthorityLeagueIds'],
+        ),
+      maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+        configData['maxEnqueuePerRun'],
+      ),
+      canarySuccessBaseline: normalizeLeagueAutomationRevision(
+        configData['canarySuccessBaseline'],
+      ),
+      revision: normalizeLeagueAutomationRevision(configData['revision']),
+    };
+    const canonicalAuthorityLeagueIds = before.canonicalAuthorityLeagueIds
+      .filter((leagueId) => leagueId !== input.leagueId);
+    const nextRevision = canonicalAuthorityLeagueIds.length ===
+      before.canonicalAuthorityLeagueIds.length
+        ? before.revision
+        : before.revision + 1;
+
+    transaction.set(
+      authorityRef,
+      {
+        schemaVersion: 1,
+        leagueId: input.leagueId,
+        circuitState: 'open',
+        openedReason: input.summary.circuitBreakerReason,
+        openedSourceVersion: input.sourceVersion,
+        openedAt: FieldValue.serverTimestamp(),
+        lastDecision: 'direct-fallback',
+        lastSourceVersion: input.sourceVersion,
+        lastTaskVersionAligned: input.summary.taskVersionAligned,
+        lastObservationCount: input.summary.observationCount,
+        lastCanonicalUseCount: input.summary.canonicalUsedCount,
+        lastDirectFallbackCount: input.summary.directFallbackCount,
+        totalCanonicalUseCount: FieldValue.increment(
+          input.summary.canonicalUsedCount,
+        ),
+        totalDirectFallbackCount: FieldValue.increment(
+          Math.max(1, input.summary.directFallbackCount),
+        ),
+        totalCircuitOpenCount: FieldValue.increment(1),
+        consecutiveSuccessfulTaskCount: 0,
+        lastFallbackAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (nextRevision !== before.revision) {
+      transaction.set(
+        configRef,
+        {
+          canonicalAuthorityLeagueIds,
+          revision: nextRevision,
+          updatedBy: 'server:canonical-circuit-breaker',
+          updatedAt: FieldValue.serverTimestamp(),
+          changeReason:
+            `Canonical authority automatically disabled: ${input.summary.circuitBreakerReason}`,
+        },
+        { merge: true },
+      );
+    }
+
+    transaction.set(
+      healthRef,
+      {
+        canonicalAuthorityConfiguredLeagueId: null,
+        canonicalAuthorityCircuitState: 'open',
+        canonicalAuthorityLastLeagueId: input.leagueId,
+        canonicalAuthorityLastDecision: 'direct-fallback',
+        canonicalAuthorityLastFallbackReason:
+          input.summary.circuitBreakerReason,
+        canonicalAuthorityLastSourceVersion: input.sourceVersion,
+        canonicalAuthorityLastCanonicalUseCount:
+          input.summary.canonicalUsedCount,
+        canonicalAuthorityLastDirectFallbackCount:
+          input.summary.directFallbackCount,
+        canonicalAuthorityCircuitOpenCount: FieldValue.increment(1),
+        canonicalAuthorityLastOpenedAt: FieldValue.serverTimestamp(),
+        queueConfigRevision: nextRevision,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (!auditSnapshot.exists) {
+      transaction.set(
+        auditRef,
+        {
+          schemaVersion: 1,
+          action: 'canonical-authority-circuit-opened',
+          requestId: auditRef.id,
+          adminId: 'server:canonical-circuit-breaker',
+          projectId: getLeagueAutomationProjectId(),
+          environment: getLeagueAutomationEnvironment(
+            getLeagueAutomationProjectId(),
+          ),
+          modeBefore: before.mode,
+          modeAfter: before.mode,
+          canaryLeagueIdsBefore: before.canaryLeagueIds,
+          canaryLeagueIdsAfter: before.canaryLeagueIds,
+          internalTestLeagueIdsBefore: before.internalTestLeagueIds,
+          internalTestLeagueIdsAfter: before.internalTestLeagueIds,
+          canonicalAuthorityLeagueIdsBefore:
+            before.canonicalAuthorityLeagueIds,
+          canonicalAuthorityLeagueIdsAfter: canonicalAuthorityLeagueIds,
+          maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
+          maxEnqueuePerRunAfter: before.maxEnqueuePerRun,
+          canarySuccessBaselineBefore: before.canarySuccessBaseline,
+          canarySuccessBaselineAfter: before.canarySuccessBaseline,
+          revisionBefore: before.revision,
+          revisionAfter: nextRevision,
+          leagueId: input.leagueId,
+          reason:
+            `Automatic direct-source fallback: ${input.summary.circuitBreakerReason}`,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: false },
+      );
+    }
+  });
+
+  console.error('Canonical scoring authority circuit breaker opened.', {
+    leagueId: input.leagueId,
+    sourceVersion: input.sourceVersion,
+    summary: input.summary,
+    openedAtMilliseconds: now,
+  });
 }
 
 
@@ -1228,11 +1665,428 @@ function getLeagueAutomationAgeMilliseconds(value: unknown, now = Date.now()): n
   return milliseconds > 0 ? Math.max(0, now - milliseconds) : null;
 }
 
-async function loadCanonicalScoringParityCohort(input: {
-  canaryLeagueIds: readonly string[];
+function normalizeLeagueAutomationWatchdogAction(
+  value: unknown,
+): LeagueAutomationWatchdogAction {
+  return value === 'disable-canonical-authority' || value === 'return-to-shadow'
+    ? value
+    : 'none';
+}
+
+function normalizeLeagueAutomationWatchdogStatus(
+  value: unknown,
+): LeagueAutomationSeasonWatchdogSnapshot['status'] {
+  return value === 'observing' ||
+    value === 'healthy' ||
+    value === 'warning' ||
+    value === 'error' ||
+    value === 'canonical-fallback' ||
+    value === 'shadow-fallback'
+      ? value
+      : 'not-recorded';
+}
+
+function normalizeLeagueAutomationWatchdogAlertIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(
+    value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim().slice(0, 80))
+      .filter(Boolean),
+  )].sort().slice(0, 20);
+}
+
+function normalizeLeagueAutomationSeasonWatchdog(
+  value: DocumentData | undefined,
+): LeagueAutomationSeasonWatchdogSnapshot {
+  return {
+    status: normalizeLeagueAutomationWatchdogStatus(value?.['status']),
+    lastAttemptAt: getLeagueAutomationIso(value?.['lastAttemptAt']),
+    lastSuccessfulAt: getLeagueAutomationIso(value?.['lastSuccessfulAt']),
+    queueBlockingStreak: normalizeLeagueAutomationRevision(
+      value?.['queueBlockingStreak'],
+    ),
+    canonicalBlockingStreak: normalizeLeagueAutomationRevision(
+      value?.['canonicalBlockingStreak'],
+    ),
+    requiredBlockingStreak:
+      LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
+    lastAction: normalizeLeagueAutomationWatchdogAction(value?.['lastAction']),
+    lastActionAt: getLeagueAutomationIso(value?.['lastActionAt']),
+    lastActionReason: getLeagueAutomationString(
+      value?.['lastActionReason'],
+    ).slice(0, 500),
+    automaticShadowFallbackCount: normalizeLeagueAutomationRevision(
+      value?.['automaticShadowFallbackCount'],
+    ),
+    automaticCanonicalFallbackCount: normalizeLeagueAutomationRevision(
+      value?.['automaticCanonicalFallbackCount'],
+    ),
+    consecutiveFailureCount: normalizeLeagueAutomationRevision(
+      value?.['consecutiveFailureCount'],
+    ),
+    lastError: getLeagueAutomationString(value?.['lastError']).slice(0, 500),
+    lastQueueBlockingAlertIds: normalizeLeagueAutomationWatchdogAlertIds(
+      value?.['lastQueueBlockingAlertIds'],
+    ),
+    lastCanonicalBlockingAlertIds: normalizeLeagueAutomationWatchdogAlertIds(
+      value?.['lastCanonicalBlockingAlertIds'],
+    ),
+  };
+}
+
+function emptyLeagueAutomationCapacityEvidence(
+  activeLeagueTarget: number,
+): LeagueAutomationCapacityEvidence {
+  return {
+    ...buildLeagueAutomationCapacityRecommendation({
+      queueTaskSampleCount: 0,
+      queueTaskSuccessCount: 0,
+      sampledDayCount: 0,
+      averageDurationMilliseconds: 0,
+      p95DurationMilliseconds: 0,
+      maximumDurationMilliseconds: 0,
+      workerCount: LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+      refreshIntervalMilliseconds:
+        NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+      activeLeagueTarget,
+    }),
+    status: 'not-recorded',
+    consecutiveFailureCount: 0,
+    lastError: '',
+    lastAttemptAt: null,
+    windowDays: LEAGUE_AUTOMATION_CAPACITY_WINDOW_DAYS,
+    dateFrom: '',
+    dateTo: '',
+    lastRefreshedAt: null,
+    source: 'queue-task',
+    allScoringSampleCount: 0,
+    allScoringAverageDurationMilliseconds: 0,
+    allScoringP95DurationMilliseconds: 0,
+    allScoringMaximumDurationMilliseconds: 0,
+  };
+}
+
+function normalizeStoredLeagueAutomationCapacityEvidence(
+  value: DocumentData | undefined,
+  activeLeagueTarget: number,
+): LeagueAutomationCapacityEvidence {
+  if (!value) {
+    return emptyLeagueAutomationCapacityEvidence(activeLeagueTarget);
+  }
+
+  const recommendation = buildLeagueAutomationCapacityRecommendation({
+    queueTaskSampleCount:
+      getLeagueAutomationNumber(value['queueTaskSampleCount']) ?? 0,
+    queueTaskSuccessCount:
+      getLeagueAutomationNumber(value['queueTaskSuccessCount']) ?? 0,
+    queueTaskErrorCount:
+      getLeagueAutomationNumber(value['queueTaskErrorCount']) ?? 0,
+    queueTaskSkippedCount:
+      getLeagueAutomationNumber(value['queueTaskSkippedCount']) ?? 0,
+    sampledDayCount:
+      getLeagueAutomationNumber(value['sampledDayCount']) ?? 0,
+    averageDurationMilliseconds:
+      getLeagueAutomationNumber(value['averageDurationMilliseconds']) ?? 0,
+    p95DurationMilliseconds:
+      getLeagueAutomationNumber(value['p95DurationMilliseconds']) ?? 0,
+    maximumDurationMilliseconds:
+      getLeagueAutomationNumber(value['maximumDurationMilliseconds']) ?? 0,
+    workerCount: LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+    refreshIntervalMilliseconds:
+      NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+    activeLeagueTarget,
+  });
+
+  return {
+    ...recommendation,
+    status: value['status'] === 'healthy' || value['status'] === 'error'
+      ? value['status']
+      : 'not-recorded',
+    consecutiveFailureCount: normalizeLeagueAutomationRevision(
+      value['consecutiveFailureCount'],
+    ),
+    lastError: getLeagueAutomationString(value['lastError']).slice(0, 500),
+    lastAttemptAt: getLeagueAutomationIso(value['lastAttemptAt']),
+    windowDays:
+      getLeagueAutomationNumber(value['windowDays']) ??
+      LEAGUE_AUTOMATION_CAPACITY_WINDOW_DAYS,
+    dateFrom: getLeagueAutomationString(value['dateFrom']),
+    dateTo: getLeagueAutomationString(value['dateTo']),
+    lastRefreshedAt: getLeagueAutomationIso(value['lastSuccessfulAt']),
+    source: 'queue-task',
+    allScoringSampleCount:
+      getLeagueAutomationNumber(value['allScoringSampleCount']) ?? 0,
+    allScoringAverageDurationMilliseconds:
+      getLeagueAutomationNumber(
+        value['allScoringAverageDurationMilliseconds'],
+      ) ?? 0,
+    allScoringP95DurationMilliseconds:
+      getLeagueAutomationNumber(
+        value['allScoringP95DurationMilliseconds'],
+      ) ?? 0,
+    allScoringMaximumDurationMilliseconds:
+      getLeagueAutomationNumber(
+        value['allScoringMaximumDurationMilliseconds'],
+      ) ?? 0,
+  };
+}
+
+async function loadLeagueAutomationCapacityEvidence(
+  activeLeagueTarget: number,
+): Promise<LeagueAutomationCapacityEvidence> {
+  const dateKeys = betaOperationsDateKeys(
+    LEAGUE_AUTOMATION_CAPACITY_WINDOW_DAYS,
+  );
+  const references = dateKeys.flatMap((dateKey) =>
+    Array.from({ length: BETA_OPERATION_SHARD_COUNT }, (_, shard) =>
+      db.doc(
+        `betaOperationsDaily/${dateKey}-${shard.toString().padStart(2, '0')}`,
+      )
+    )
+  );
+  const snapshots = references.length > 0
+    ? await db.getAll(...references)
+    : [];
+  let queueTaskAttempts = emptyBetaDurationAccumulator();
+  let queueTaskSuccesses = emptyBetaDurationAccumulator();
+  let allScoring = emptyBetaDurationAccumulator();
+  const sampledDays = new Set<string>();
+
+  for (const snapshot of snapshots) {
+    if (!snapshot.exists) {
+      continue;
+    }
+
+    const data = snapshot.data() ?? {};
+    const dateKey = getLeagueAutomationString(data['dateKey']);
+    const byTrigger = data['serverScoringByTrigger'] &&
+      typeof data['serverScoringByTrigger'] === 'object' &&
+      !Array.isArray(data['serverScoringByTrigger'])
+        ? data['serverScoringByTrigger'] as Record<string, unknown>
+        : {};
+    const queueTaskAttemptAccumulator = normalizeBetaDurationAccumulator(
+      byTrigger['queue-task'],
+    );
+    const successfulByTrigger = data['serverScoringSuccessfulByTrigger'] &&
+      typeof data['serverScoringSuccessfulByTrigger'] === 'object' &&
+      !Array.isArray(data['serverScoringSuccessfulByTrigger'])
+        ? data['serverScoringSuccessfulByTrigger'] as Record<string, unknown>
+        : {};
+    const explicitQueueTaskSuccessAccumulator =
+      normalizeBetaDurationAccumulator(successfulByTrigger['queue-task']);
+    const legacyQueueTaskSuccessAccumulator =
+      explicitQueueTaskSuccessAccumulator.total === 0 &&
+      queueTaskAttemptAccumulator.total > 0 &&
+      queueTaskAttemptAccumulator.successes === queueTaskAttemptAccumulator.total
+        ? queueTaskAttemptAccumulator
+        : explicitQueueTaskSuccessAccumulator;
+
+    queueTaskAttempts = mergeBetaDurationAccumulators(
+      queueTaskAttempts,
+      queueTaskAttemptAccumulator,
+    );
+    queueTaskSuccesses = mergeBetaDurationAccumulators(
+      queueTaskSuccesses,
+      legacyQueueTaskSuccessAccumulator,
+    );
+    allScoring = mergeBetaDurationAccumulators(
+      allScoring,
+      normalizeBetaDurationAccumulator(data['serverScoring']),
+    );
+
+    if (legacyQueueTaskSuccessAccumulator.total > 0 && dateKey) {
+      sampledDays.add(dateKey);
+    }
+  }
+
+  const queueAverage = queueTaskSuccesses.total > 0
+    ? Math.round(
+        queueTaskSuccesses.durationSumMilliseconds /
+        queueTaskSuccesses.total,
+      )
+    : 0;
+  const queueP95 = betaHistogramPercentile(
+    queueTaskSuccesses.durationBuckets,
+    queueTaskSuccesses.total,
+    0.95,
+  );
+  const allAverage = allScoring.total > 0
+    ? Math.round(allScoring.durationSumMilliseconds / allScoring.total)
+    : 0;
+  const allP95 = betaHistogramPercentile(
+    allScoring.durationBuckets,
+    allScoring.total,
+    0.95,
+  );
+  const recommendation = buildLeagueAutomationCapacityRecommendation({
+    queueTaskSampleCount: queueTaskAttempts.total,
+    queueTaskSuccessCount: queueTaskSuccesses.total,
+    queueTaskErrorCount: queueTaskAttempts.errors,
+    queueTaskSkippedCount: queueTaskAttempts.skipped,
+    sampledDayCount: sampledDays.size,
+    averageDurationMilliseconds: queueAverage,
+    p95DurationMilliseconds: queueP95,
+    maximumDurationMilliseconds:
+      queueTaskSuccesses.durationMaximumMilliseconds,
+    workerCount: LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
+    refreshIntervalMilliseconds:
+      NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
+    activeLeagueTarget,
+  });
+
+  return {
+    ...recommendation,
+    status: 'healthy',
+    consecutiveFailureCount: 0,
+    lastError: '',
+    lastAttemptAt: new Date().toISOString(),
+    windowDays: LEAGUE_AUTOMATION_CAPACITY_WINDOW_DAYS,
+    dateFrom: dateKeys[0] ?? '',
+    dateTo: dateKeys[dateKeys.length - 1] ?? '',
+    lastRefreshedAt: new Date().toISOString(),
+    source: 'queue-task',
+    allScoringSampleCount: allScoring.total,
+    allScoringAverageDurationMilliseconds: allAverage,
+    allScoringP95DurationMilliseconds: allP95,
+    allScoringMaximumDurationMilliseconds:
+      allScoring.durationMaximumMilliseconds,
+  };
+}
+
+function getCanonicalScoringAuthorityEligibility(input: {
+  config: LeagueAutomationQueueConfig;
+  leagueId: string;
+  configUpdatedAtMilliseconds: number;
+  parityData: DocumentData | undefined;
+  authorityData: DocumentData | undefined;
+  healthData: DocumentData | undefined;
+}): CanonicalScoringAuthorityEligibility {
+  if (input.config.mode !== 'canary') {
+    return {
+      eligible: false,
+      reason: 'Enable the exact queued-scoring Canary before canonical reads.',
+    };
+  }
+
+  if (
+    !input.config.canaryLeagueIds.includes(input.leagueId) ||
+    !input.config.internalTestLeagueIds.includes(input.leagueId)
+  ) {
+    return {
+      eligible: false,
+      reason: 'The league must be both Canary and Internal Test.',
+    };
+  }
+
+  const otherConfiguredLeague = input.config.canonicalAuthorityLeagueIds.find(
+    (leagueId) => leagueId !== input.leagueId,
+  );
+
+  if (otherConfiguredLeague) {
+    return {
+      eligible: false,
+      reason: 'D1H permits only one canonical-read Canary at a time.',
+    };
+  }
+
+  const parityData = input.parityData ?? {};
+  const authorityData = input.authorityData ?? {};
+  const healthData = input.healthData ?? {};
+  const openedAtMilliseconds = toMilliseconds(authorityData['openedAt']);
+  const minimumComparedAtMilliseconds = Math.max(
+    input.configUpdatedAtMilliseconds,
+    openedAtMilliseconds,
+  );
+  const comparedAtMilliseconds = toMilliseconds(parityData['comparedAt']);
+  const comparedCount = getLeagueAutomationNumber(
+    parityData['comparedCount'],
+  ) ?? 0;
+  const mismatchCount = getLeagueAutomationNumber(
+    parityData['mismatchCount'],
+  ) ?? 0;
+  const consecutivePassingRunCount = getLeagueAutomationNumber(
+    parityData['consecutivePassingRunCount'],
+  ) ?? 0;
+  const incompleteCount =
+    (getLeagueAutomationNumber(parityData['incompleteCount']) ?? 0) +
+    (getLeagueAutomationNumber(parityData['canonicalMissingCount']) ?? 0);
+  const totalQueueSuccessCount = getLeagueAutomationNumber(
+    healthData['queueTaskSuccessCount'],
+  ) ?? 0;
+  const successfulTasksSinceCanary = Math.max(
+    0,
+    totalQueueSuccessCount - input.config.canarySuccessBaseline,
+  );
+  const activePendingTaskCount = getLeagueAutomationNumber(
+    healthData['queueActivePendingTaskCount'],
+  ) ?? 0;
+  const parityPasses =
+    parityData['shadowOnly'] === true &&
+    parityData['authoritativeReadsEnabled'] === false &&
+    parityData['taskVersionAligned'] === true &&
+    parityData['status'] === 'pass' &&
+    comparedCount > 0 &&
+    mismatchCount === 0 &&
+    incompleteCount === 0 &&
+    comparedAtMilliseconds >= minimumComparedAtMilliseconds;
+
+  if (!parityPasses) {
+    return {
+      eligible: false,
+      reason: openedAtMilliseconds > 0
+        ? 'Fresh perfect shadow parity is required after the last circuit-breaker event.'
+        : 'Current version-aligned shadow parity must pass before canonical reads.',
+    };
+  }
+
+  if (
+    consecutivePassingRunCount <
+    LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MIN_PARITY_STREAK
+  ) {
+    return {
+      eligible: false,
+      reason: `${
+        LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MIN_PARITY_STREAK -
+        consecutivePassingRunCount
+      } more consecutive perfect shadow-parity task(s) are required.`,
+    };
+  }
+
+  if (successfulTasksSinceCanary < 3) {
+    return {
+      eligible: false,
+      reason: `${3 - successfulTasksSinceCanary} more successful Canary task(s) are required.`,
+    };
+  }
+
+  if (activePendingTaskCount > 0) {
+    return {
+      eligible: false,
+      reason: 'Wait for the scoring queue to become idle before changing authority.',
+    };
+  }
+
+  return {
+    eligible: true,
+    reason: 'Eligible for one verified canonical-read Canary with automatic direct fallback.',
+  };
+}
+
+interface CanonicalScoringParitySnapshotLike {
+  exists: boolean;
+  data(): DocumentData | undefined;
+}
+
+function summarizeCanonicalScoringParityCohort(input: {
+  leagueIds: readonly string[];
   minimumComparedAtMilliseconds: number;
-}): Promise<CanonicalScoringParityCohortSummary> {
-  const leagueIds = [...new Set(input.canaryLeagueIds)].sort();
+  snapshots: readonly CanonicalScoringParitySnapshotLike[];
+}): CanonicalScoringParityCohortSummary {
+  const leagueIds = [...new Set(input.leagueIds)].sort();
 
   if (leagueIds.length === 0) {
     return {
@@ -1248,11 +2102,6 @@ async function loadCanonicalScoringParityCohort(input: {
     };
   }
 
-  const snapshots = await db.getAll(
-    ...leagueIds.map((leagueId) =>
-      db.doc(`leagueAutomationCanonicalParity/${leagueId}`)
-    ),
-  );
   let passingLeagueCount = 0;
   let mismatchLeagueCount = 0;
   let incompleteLeagueCount = 0;
@@ -1261,7 +2110,7 @@ async function loadCanonicalScoringParityCohort(input: {
   let totalComparedCount = 0;
   let maximumAbsolutePointDelta = 0;
 
-  for (const snapshot of snapshots) {
+  for (const snapshot of input.snapshots) {
     if (!snapshot.exists) {
       missingLeagueCount += 1;
       continue;
@@ -1308,6 +2157,12 @@ async function loadCanonicalScoringParityCohort(input: {
     }
   }
 
+  const unreturnedSnapshotCount = Math.max(
+    0,
+    leagueIds.length - input.snapshots.length,
+  );
+  missingLeagueCount += unreturnedSnapshotCount;
+
   return {
     expectedLeagueCount: leagueIds.length,
     passingLeagueCount,
@@ -1324,6 +2179,33 @@ async function loadCanonicalScoringParityCohort(input: {
       missingLeagueCount === 0 &&
       staleLeagueCount === 0,
   };
+}
+
+async function loadCanonicalScoringParityCohort(input: {
+  canaryLeagueIds: readonly string[];
+  minimumComparedAtMilliseconds: number;
+}): Promise<CanonicalScoringParityCohortSummary> {
+  const leagueIds = [...new Set(input.canaryLeagueIds)].sort();
+
+  if (leagueIds.length === 0) {
+    return summarizeCanonicalScoringParityCohort({
+      leagueIds,
+      minimumComparedAtMilliseconds: input.minimumComparedAtMilliseconds,
+      snapshots: [],
+    });
+  }
+
+  const snapshots = await db.getAll(
+    ...leagueIds.map((leagueId) =>
+      db.doc(`leagueAutomationCanonicalParity/${leagueId}`)
+    ),
+  );
+
+  return summarizeCanonicalScoringParityCohort({
+    leagueIds,
+    minimumComparedAtMilliseconds: input.minimumComparedAtMilliseconds,
+    snapshots,
+  });
 }
 
 function normalizeLeagueAutomationPrimaryApproval(
@@ -1350,6 +2232,8 @@ function isLeagueAutomationPrimaryApprovalValid(
 function buildLeagueAutomationPromotionGates(input: {
   config: LeagueAutomationQueueConfig;
   health: DocumentData | undefined;
+  watchdog: DocumentData | undefined;
+  capacityEvidence: LeagueAutomationCapacityEvidence;
   canonicalParityCohort: CanonicalScoringParityCohortSummary;
   approval: LeagueAutomationPrimaryApproval;
   projectId: string;
@@ -1388,6 +2272,28 @@ function buildLeagueAutomationPromotionGates(input: {
     input.projectId,
     now,
   );
+  const watchdog = normalizeLeagueAutomationSeasonWatchdog(input.watchdog);
+  const watchdogAge = getLeagueAutomationAgeMilliseconds(
+    input.watchdog?.['lastSuccessfulAt'],
+    now,
+  );
+  const watchdogHealthy =
+    watchdogAge !== null &&
+    watchdogAge <= LEAGUE_AUTOMATION_SEASON_WATCHDOG_STALE_MILLISECONDS &&
+    watchdog.status === 'healthy' &&
+    watchdog.queueBlockingStreak === 0 &&
+    watchdog.canonicalBlockingStreak === 0;
+  const capacityEvidenceAge = getLeagueAutomationAgeMilliseconds(
+    input.capacityEvidence.lastRefreshedAt,
+    now,
+  );
+  const capacityEvidenceFresh =
+    capacityEvidenceAge !== null &&
+    capacityEvidenceAge <=
+      LEAGUE_AUTOMATION_CAPACITY_EVIDENCE_STALE_MILLISECONDS;
+  const capacityEvidenceHealthy =
+    input.capacityEvidence.status === 'healthy' &&
+    input.capacityEvidence.consecutiveFailureCount === 0;
 
   return [
     {
@@ -1407,6 +2313,34 @@ function buildLeagueAutomationPromotionGates(input: {
       detail: `${successfulTasksSinceCanary} successful queued scoring task(s) are recorded since the current canary allowlist was activated; at least 3 are required before promotion.`,
     },
     {
+      id: 'season-safety-watchdog',
+      label: 'Automatic season fallback watchdog is healthy',
+      passed: watchdogHealthy,
+      blocking: true,
+      detail: watchdogAge === null
+        ? 'No watchdog heartbeat is available yet.'
+        : `${watchdog.status}; heartbeat ${Math.round(watchdogAge / 1000)} seconds old; queue streak ${watchdog.queueBlockingStreak}; canonical streak ${watchdog.canonicalBlockingStreak}.`,
+    },
+    {
+      id: 'measured-queue-capacity',
+      label: 'Measured queue capacity covers every active league',
+      passed:
+        capacityEvidenceFresh &&
+        capacityEvidenceHealthy &&
+        input.capacityEvidence.primaryCapacityReady,
+      blocking: true,
+      detail: !capacityEvidenceFresh
+        ? capacityEvidenceAge === null
+          ? 'No measured capacity refresh is available yet.'
+          : `Measured capacity evidence is ${Math.round(capacityEvidenceAge / 60_000)} minutes old; refresh evidence before Primary promotion.`
+        : !capacityEvidenceHealthy
+          ? `The latest capacity refresh is ${input.capacityEvidence.status}; ${input.capacityEvidence.lastError || 'investigate the capacity refresher before Primary promotion'}.`
+          : input.capacityEvidence.queueTaskSuccessCount <
+            LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT
+          ? `${input.capacityEvidence.queueTaskSuccessCount} successful live queue task(s) from ${input.capacityEvidence.queueTaskSampleCount} attempt(s) across ${input.capacityEvidence.sampledDayCount} day(s); at least ${LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT} successful samples across 3 days are required.`
+          : `Queue p95 ${Math.round(input.capacityEvidence.p95DurationMilliseconds / 1000)} seconds; reliability ${(input.capacityEvidence.queueTaskReliabilityRate * 100).toFixed(1)}%; conservative affected-league capacity ${input.capacityEvidence.safeAffectedLeagueCapacity}; active target ${coverageTarget}; primary p95 ceiling ${Math.round(LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS / 1000)} seconds.`,
+    },
+    {
       id: 'canonical-shadow-parity',
       label: 'Canonical NHL facts match direct scoring',
       passed: input.canonicalParityCohort.passing,
@@ -1414,6 +2348,15 @@ function buildLeagueAutomationPromotionGates(input: {
       detail: input.canonicalParityCohort.expectedLeagueCount === 0
         ? 'No exact Canary leagues are configured for direct-versus-canonical comparison.'
         : `${input.canonicalParityCohort.passingLeagueCount}/${input.canonicalParityCohort.expectedLeagueCount} current Canary league(s) pass; ${input.canonicalParityCohort.mismatchLeagueCount} mismatch, ${input.canonicalParityCohort.incompleteLeagueCount} incomplete, ${input.canonicalParityCohort.missingLeagueCount} missing, ${input.canonicalParityCohort.staleLeagueCount} stale; ${input.canonicalParityCohort.totalComparedCount} comparison(s).`,
+    },
+    {
+      id: 'canonical-authority-canary-complete',
+      label: 'Canonical-read Canary is not active during global promotion',
+      passed: input.config.canonicalAuthorityLeagueIds.length === 0,
+      blocking: true,
+      detail: input.config.canonicalAuthorityLeagueIds.length === 0
+        ? 'No single-league canonical authority experiment is active.'
+        : `Disable the canonical-read Canary for ${input.config.canonicalAuthorityLeagueIds[0]} before considering global Primary.`,
     },
     {
       id: 'schedule-coverage',
@@ -1554,6 +2497,8 @@ function getLeagueAutomationCanaryEligibility(input: {
 async function loadLeagueAutomationAdminLeagues(
   config: LeagueAutomationQueueConfig,
   focusLeagueId: string,
+  configUpdatedAtMilliseconds: number,
+  healthData: DocumentData,
 ): Promise<{ leagues: LeagueAutomationAdminLeague[]; truncated: boolean }> {
   const snapshot = await db.collection('leagues')
     .orderBy('createdAt', 'desc')
@@ -1566,6 +2511,7 @@ async function loadLeagueAutomationAdminLeagues(
     focusLeagueId,
     ...config.canaryLeagueIds,
     ...config.internalTestLeagueIds,
+    ...config.canonicalAuthorityLeagueIds,
   ].filter(Boolean))];
   const missingManagedLeagueRefs = explicitlyManagedLeagueIds
     .filter((leagueId) =>
@@ -1596,10 +2542,24 @@ async function loadLeagueAutomationAdminLeagues(
   const scheduleRefs = leagueIds.map((leagueId) =>
     getLeagueAutomationScheduleRef(leagueId),
   );
-  const [draftSnapshots, replaySnapshots, scheduleSnapshots] = await Promise.all([
+  const parityRefs = leagueIds.map((leagueId) =>
+    db.doc(`leagueAutomationCanonicalParity/${leagueId}`),
+  );
+  const authorityRefs = leagueIds.map((leagueId) =>
+    getCanonicalScoringAuthorityRef(leagueId),
+  );
+  const [
+    draftSnapshots,
+    replaySnapshots,
+    scheduleSnapshots,
+    paritySnapshots,
+    authoritySnapshots,
+  ] = await Promise.all([
     draftRefs.length > 0 ? db.getAll(...draftRefs) : Promise.resolve([]),
     replayRefs.length > 0 ? db.getAll(...replayRefs) : Promise.resolve([]),
     scheduleRefs.length > 0 ? db.getAll(...scheduleRefs) : Promise.resolve([]),
+    parityRefs.length > 0 ? db.getAll(...parityRefs) : Promise.resolve([]),
+    authorityRefs.length > 0 ? db.getAll(...authorityRefs) : Promise.resolve([]),
   ]);
 
   const leagues = uniqueDocuments.map((leagueDocument, index) => {
@@ -1608,6 +2568,8 @@ async function loadLeagueAutomationAdminLeagues(
     const replayData = replaySnapshots[index]?.data() ?? {};
     const scheduleSnapshot = scheduleSnapshots[index];
     const scheduleData = scheduleSnapshot?.data() ?? {};
+    const parityData = paritySnapshots[index]?.data() ?? {};
+    const authorityData = authoritySnapshots[index]?.data() ?? {};
     const draftStatus = getLeagueAutomationString(draftData['status'], 'not-created');
     const historicalReplayEnabled = replayData['enabled'] === true;
     const scheduleExists = scheduleSnapshot?.exists === true;
@@ -1618,6 +2580,17 @@ async function loadLeagueAutomationAdminLeagues(
       scheduleExists,
       scoringEnabled,
     });
+    const canonicalAuthorityEligibility =
+      getCanonicalScoringAuthorityEligibility({
+        config,
+        leagueId: leagueDocument.id,
+        configUpdatedAtMilliseconds,
+        parityData,
+        authorityData,
+        healthData,
+      });
+    const canonicalAuthorityConfigured =
+      config.canonicalAuthorityLeagueIds.includes(leagueDocument.id);
 
     return {
       leagueId: leagueDocument.id,
@@ -1654,6 +2627,36 @@ async function loadLeagueAutomationAdminLeagues(
       ),
       isCanary: config.canaryLeagueIds.includes(leagueDocument.id),
       isInternalTest: config.internalTestLeagueIds.includes(leagueDocument.id),
+      canonicalAuthorityConfigured,
+      canonicalAuthorityEligible: canonicalAuthorityEligibility.eligible,
+      canonicalAuthorityEligibilityReason:
+        canonicalAuthorityConfigured
+          ? authorityData['circuitState'] === 'open'
+            ? 'The circuit breaker opened; direct scoring remained active.'
+            : 'Configured: canonical points publish only after an exact same-task direct match.'
+          : canonicalAuthorityEligibility.reason,
+      canonicalAuthorityCircuitState: authorityData['circuitState'] === 'open'
+        ? 'open'
+        : canonicalAuthorityConfigured
+          ? 'closed'
+          : 'not-configured',
+      canonicalAuthorityLastDecision: getLeagueAutomationString(
+        authorityData['lastDecision'],
+        'not-recorded',
+      ),
+      canonicalAuthorityLastFallbackReason: getLeagueAutomationString(
+        authorityData['openedReason'] || authorityData['lastFallbackReason'],
+      ),
+      canonicalAuthorityCanonicalUseCount:
+        getLeagueAutomationNumber(authorityData['totalCanonicalUseCount']) ?? 0,
+      canonicalAuthorityDirectFallbackCount:
+        getLeagueAutomationNumber(authorityData['totalDirectFallbackCount']) ?? 0,
+      canonicalParityConsecutivePassingRunCount:
+        getLeagueAutomationNumber(
+          parityData['consecutivePassingRunCount'],
+        ) ?? 0,
+      canonicalParityRequiredPassingRunCount:
+        LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MIN_PARITY_STREAK,
       canaryEligible: eligibility.eligible,
       canaryEligibilityReason: eligibility.reason,
       scoringPath: getLeagueAutomationScoringPath({
@@ -1669,6 +2672,12 @@ async function loadLeagueAutomationAdminLeagues(
   leagues.sort((left, right) => {
     if (left.leagueId === focusLeagueId) return -1;
     if (right.leagueId === focusLeagueId) return 1;
+    if (
+      left.canonicalAuthorityConfigured !==
+      right.canonicalAuthorityConfigured
+    ) {
+      return left.canonicalAuthorityConfigured ? -1 : 1;
+    }
     if (left.isCanary !== right.isCanary) return left.isCanary ? -1 : 1;
     if (left.isInternalTest !== right.isInternalTest) return left.isInternalTest ? -1 : 1;
     return left.leagueName.localeCompare(right.leagueName);
@@ -1706,6 +2715,14 @@ async function loadLeagueAutomationConfigAudit(): Promise<LeagueAutomationQueueA
       internalTestLeagueIdsAfter: normalizeLeagueAutomationInternalTestIds(
         data['internalTestLeagueIdsAfter'],
       ),
+      canonicalAuthorityLeagueIdsBefore:
+        normalizeLeagueAutomationCanonicalAuthorityIds(
+          data['canonicalAuthorityLeagueIdsBefore'],
+        ),
+      canonicalAuthorityLeagueIdsAfter:
+        normalizeLeagueAutomationCanonicalAuthorityIds(
+          data['canonicalAuthorityLeagueIdsAfter'],
+        ),
       reason: getLeagueAutomationString(data['reason']).slice(0, 500),
       adminId: getLeagueAutomationString(data['adminId']),
       leagueId: getLeagueAutomationString(data['leagueId']),
@@ -1722,19 +2739,374 @@ async function loadLeagueAutomationConfigAudit(): Promise<LeagueAutomationQueueA
   });
 }
 
+function buildLeagueAutomationSeasonSafetyAlerts(input: {
+  config: LeagueAutomationQueueConfig;
+  healthData: DocumentData;
+  feedData: DocumentData;
+  watchdogData: DocumentData;
+  capacityEvidence: LeagueAutomationCapacityEvidence;
+  canonicalParityCohort: CanonicalScoringParityCohortSummary;
+  nowMilliseconds?: number;
+}): {
+  status: LeagueAutomationSeasonSafetyStatus;
+  alerts: LeagueAutomationSeasonSafetyAlert[];
+} {
+  const now = input.nowMilliseconds ?? Date.now();
+  const alerts: LeagueAutomationSeasonSafetyAlert[] = [];
+  const modeActive = input.config.mode !== 'shadow';
+  const dispatchAge = getLeagueAutomationAgeMilliseconds(
+    input.healthData['queueLastDispatchAt'],
+    now,
+  );
+  const feedAge = getLeagueAutomationAgeMilliseconds(
+    input.feedData['lastSuccessfulAt'],
+    now,
+  );
+  const oldestDueAge = getLeagueAutomationNumber(
+    input.healthData['queueOldestDueAgeMilliseconds'],
+  ) ?? 0;
+  const activePending = getLeagueAutomationNumber(
+    input.healthData['queueActivePendingTaskCount'],
+  ) ?? 0;
+  const maxPending = getLeagueAutomationNumber(
+    input.healthData['queueTaskMaxPendingTasks'],
+  ) ?? LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS;
+  const failedEnqueues = getLeagueAutomationNumber(
+    input.healthData['queueFailedEnqueueCount'],
+  ) ?? 0;
+  const staleRecoveries = getLeagueAutomationNumber(
+    input.healthData['queueLastRecoveryCount'],
+  ) ?? 0;
+  const scheduleCoverage = getLeagueAutomationNumber(
+    input.healthData['queueScheduleCoverageCount'],
+  ) ?? 0;
+  const completedDraftCount = getLeagueAutomationNumber(
+    input.healthData['queueScheduleCoverageCompletedDraftCount'],
+  ) ?? 0;
+  const feedFailures = getLeagueAutomationNumber(
+    input.feedData['consecutiveFailureCount'],
+  ) ?? 0;
+  const feedFailedGameCount = getLeagueAutomationNumber(
+    input.feedData['failedGameCount'],
+  ) ?? 0;
+  const circuitOpen =
+    input.healthData['canonicalAuthorityCircuitState'] === 'open';
+  const watchdog = normalizeLeagueAutomationSeasonWatchdog(
+    input.watchdogData,
+  );
+  const watchdogAge = getLeagueAutomationAgeMilliseconds(
+    input.watchdogData['lastSuccessfulAt'],
+    now,
+  );
+  const watchdogActionAge = getLeagueAutomationAgeMilliseconds(
+    input.watchdogData['lastActionAt'],
+    now,
+  );
+
+  if (!modeActive) {
+    alerts.push({
+      id: 'queue-observing',
+      severity: 'info',
+      label: 'Shadow observation is active',
+      detail: 'The legacy scorer remains authoritative while queue and feed health are observed.',
+    });
+  }
+
+  if (
+    modeActive &&
+    (watchdogAge === null ||
+      watchdogAge > LEAGUE_AUTOMATION_SEASON_WATCHDOG_STALE_MILLISECONDS)
+  ) {
+    alerts.push({
+      id: 'season-watchdog-stale',
+      severity: 'critical',
+      label: 'Automatic season fallback watchdog is stale',
+      detail: watchdogAge === null
+        ? 'No successful season-safety watchdog heartbeat is recorded.'
+        : `The last successful watchdog check is ${Math.round(watchdogAge / 1000)} seconds old.`,
+    });
+  }
+
+  if (
+    modeActive &&
+    (watchdog.queueBlockingStreak > 0 ||
+      watchdog.canonicalBlockingStreak > 0)
+  ) {
+    alerts.push({
+      id: 'season-watchdog-warning-streak',
+      severity: 'warning',
+      label: 'The season watchdog is confirming an unsafe condition',
+      detail: `Queue blocking streak ${watchdog.queueBlockingStreak}/${watchdog.requiredBlockingStreak}; canonical blocking streak ${watchdog.canonicalBlockingStreak}/${watchdog.requiredBlockingStreak}.`,
+    });
+  }
+
+  if (
+    watchdog.lastAction !== 'none' &&
+    watchdogActionAge !== null &&
+    watchdogActionAge <= 24 * 60 * 60 * 1000
+  ) {
+    alerts.push({
+      id: 'season-watchdog-recent-fallback',
+      severity: 'info',
+      label: watchdog.lastAction === 'return-to-shadow'
+        ? 'The watchdog recently returned scoring to Shadow'
+        : 'The watchdog recently disabled canonical authority',
+      detail: watchdog.lastActionReason ||
+        'The safer direct or legacy scoring path was selected automatically.',
+    });
+  }
+
+  if (
+    modeActive &&
+    (dispatchAge === null ||
+      dispatchAge > LEAGUE_AUTOMATION_SEASON_SAFETY_DISPATCH_STALE_MILLISECONDS)
+  ) {
+    alerts.push({
+      id: 'dispatcher-stale',
+      severity: 'critical',
+      label: 'Scoring dispatcher heartbeat is stale',
+      detail: dispatchAge === null
+        ? 'No successful dispatcher heartbeat is recorded.'
+        : `The last dispatcher heartbeat is ${Math.round(dispatchAge / 1000)} seconds old.`,
+    });
+  }
+
+  if (
+    modeActive &&
+    (feedAge === null ||
+      feedAge > LEAGUE_AUTOMATION_SEASON_SAFETY_FEED_STALE_MILLISECONDS)
+  ) {
+    alerts.push({
+      id: 'canonical-feed-stale',
+      severity: 'critical',
+      label: 'Canonical NHL feed is stale',
+      detail: feedAge === null
+        ? 'No successful canonical-feed observation is recorded.'
+        : `The last successful canonical-feed observation is ${Math.round(feedAge / 1000)} seconds old.`,
+    });
+  }
+
+  if (oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_BLOCKING_MILLISECONDS) {
+    alerts.push({
+      id: 'queue-backlog-blocking',
+      severity: 'critical',
+      label: 'Scoring backlog exceeds ten minutes',
+      detail: `The oldest due league has waited ${Math.round(oldestDueAge / 1000)} seconds. Return to Shadow if this does not clear immediately.`,
+    });
+  } else if (oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_WARNING_MILLISECONDS) {
+    alerts.push({
+      id: 'queue-backlog-warning',
+      severity: 'warning',
+      label: 'Scoring backlog is growing',
+      detail: `The oldest due league has waited ${Math.round(oldestDueAge / 1000)} seconds.`,
+    });
+  }
+
+  if (failedEnqueues > 0) {
+    alerts.push({
+      id: 'enqueue-failures',
+      severity: 'critical',
+      label: 'The latest dispatcher pass had enqueue failures',
+      detail: `${failedEnqueues} league task(s) failed to enqueue in the latest recorded pass.`,
+    });
+  }
+
+  if (activePending >= maxPending && maxPending > 0) {
+    alerts.push({
+      id: 'queue-capacity-full',
+      severity: 'warning',
+      label: 'Queue admission ceiling is full',
+      detail: `${activePending} of ${maxPending} allowed queued/processing tasks are active.`,
+    });
+  }
+
+  if (staleRecoveries > 0) {
+    alerts.push({
+      id: 'stale-recoveries',
+      severity: 'warning',
+      label: 'Stale scoring tasks required recovery',
+      detail: `${staleRecoveries} stale task(s) were recovered in the latest sweep.`,
+    });
+  }
+
+  if (completedDraftCount > 0 && scheduleCoverage < completedDraftCount) {
+    alerts.push({
+      id: 'schedule-coverage',
+      severity: 'critical',
+      label: 'Completed leagues are missing scoring schedules',
+      detail: `${scheduleCoverage} of ${completedDraftCount} completed-Draft leagues have schedule coverage.`,
+    });
+  }
+
+  if (feedFailures > 0 || feedFailedGameCount > 0) {
+    alerts.push({
+      id: 'feed-failures',
+      severity: feedFailures > 1 ? 'critical' : 'warning',
+      label: 'Canonical NHL observations need attention',
+      detail: `${feedFailures} consecutive feed failure(s); ${feedFailedGameCount} game request failure(s) in the latest successful evidence.`,
+    });
+  }
+
+  if (
+    modeActive &&
+    input.config.canaryLeagueIds.length > 0 &&
+    !input.canonicalParityCohort.passing
+  ) {
+    alerts.push({
+      id: 'parity-incomplete',
+      severity: 'warning',
+      label: 'Canonical parity proof is incomplete',
+      detail: `${input.canonicalParityCohort.passingLeagueCount}/${input.canonicalParityCohort.expectedLeagueCount} Canary league(s) currently pass.`,
+    });
+  }
+
+  if (circuitOpen) {
+    alerts.push({
+      id: 'canonical-circuit-open',
+      severity: 'critical',
+      label: 'Canonical authority circuit breaker opened',
+      detail: 'RinkRat used direct NHL scoring and automatically disabled canonical authority for the affected league.',
+    });
+  }
+
+  if (
+    input.config.canonicalAuthorityLeagueIds.length > 0 &&
+    getLeagueAutomationString(
+      input.healthData['canonicalAuthorityLastDecision'],
+    ) !== 'canonical-verified'
+  ) {
+    alerts.push({
+      id: 'canonical-authority-awaiting-proof',
+      severity: 'info',
+      label: 'Canonical-read Canary is awaiting a verified use',
+      detail: 'The first version-aligned task must use canonical points with zero direct fallback.',
+    });
+  }
+
+  const capacityEvidenceAge = getLeagueAutomationAgeMilliseconds(
+    input.capacityEvidence.lastRefreshedAt,
+    now,
+  );
+
+  if (
+    modeActive &&
+    (capacityEvidenceAge === null ||
+      capacityEvidenceAge >
+        LEAGUE_AUTOMATION_CAPACITY_EVIDENCE_STALE_MILLISECONDS)
+  ) {
+    alerts.push({
+      id: 'capacity-evidence-stale',
+      severity: input.config.mode === 'primary' ? 'critical' : 'warning',
+      label: 'Measured scoring capacity evidence is stale',
+      detail: capacityEvidenceAge === null
+        ? 'No successful capacity-evidence refresh is recorded.'
+        : `The latest capacity evidence is ${Math.round(capacityEvidenceAge / 60_000)} minutes old.`,
+    });
+  }
+
+  if (
+    input.capacityEvidence.status === 'error' ||
+    input.capacityEvidence.consecutiveFailureCount > 0
+  ) {
+    alerts.push({
+      id: 'capacity-refresh-failed',
+      severity: input.config.mode === 'primary' ? 'critical' : 'warning',
+      label: 'Measured capacity refresh failed',
+      detail: input.capacityEvidence.lastError ||
+        `${input.capacityEvidence.consecutiveFailureCount} consecutive capacity refresh failure(s) are recorded.`,
+    });
+  }
+
+  if (
+    modeActive &&
+    input.capacityEvidence.queueTaskSuccessCount <
+      LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT
+  ) {
+    alerts.push({
+      id: 'capacity-evidence-insufficient',
+      severity: 'info',
+      label: 'Live queue capacity evidence is still limited',
+      detail: `${input.capacityEvidence.queueTaskSuccessCount} successful queue task(s) from ${input.capacityEvidence.queueTaskSampleCount} attempt(s) across ${input.capacityEvidence.sampledDayCount} day(s) are available. Keep the cohort capped while evidence grows.`,
+    });
+  }
+
+  if (
+    input.capacityEvidence.queueTaskSampleCount > 0 &&
+    !input.capacityEvidence.reliabilityWithinPrimaryTarget
+  ) {
+    alerts.push({
+      id: 'capacity-success-rate-low',
+      severity: input.config.mode === 'primary' ? 'critical' : 'warning',
+      label: 'Measured queue-task reliability is below the Primary target',
+      detail: `${(input.capacityEvidence.queueTaskReliabilityRate * 100).toFixed(1)}% of ${input.capacityEvidence.queueTaskSampleCount} queue attempt(s) completed without error; the Primary target is ${(LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE * 100).toFixed(1)}%. Expected no-op skips count as reliable but never contribute to duration capacity samples.`,
+    });
+  }
+
+  if (
+    input.capacityEvidence.p95DurationMilliseconds >
+      LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS
+  ) {
+    alerts.push({
+      id: 'capacity-p95-high',
+      severity: input.config.mode === 'primary' ? 'critical' : 'warning',
+      label: 'Measured scoring p95 is above the Primary target',
+      detail: `Queue p95 is ${Math.round(input.capacityEvidence.p95DurationMilliseconds / 1000)} seconds; the current conservative Primary ceiling is ${Math.round(LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS / 1000)} seconds.`,
+    });
+  }
+
+  if (
+    input.config.mode === 'primary' &&
+    !input.capacityEvidence.primaryCapacityReady
+  ) {
+    alerts.push({
+      id: 'capacity-primary-unsafe',
+      severity: 'critical',
+      label: 'Measured capacity does not cover the active league target',
+      detail: `Conservative capacity ${input.capacityEvidence.safeAffectedLeagueCapacity}; active completed-Draft target ${completedDraftCount}. Return to Canary or Shadow.`,
+    });
+  }
+
+  const hasCritical = alerts.some((alert) => alert.severity === 'critical');
+  const hasWarning = alerts.some((alert) => alert.severity === 'warning');
+  const status: LeagueAutomationSeasonSafetyStatus = hasCritical
+    ? 'blocked'
+    : hasWarning
+      ? 'attention'
+      : !modeActive || input.config.canonicalAuthorityLeagueIds.length > 0 &&
+          getLeagueAutomationString(
+            input.healthData['canonicalAuthorityLastDecision'],
+          ) !== 'canonical-verified'
+        ? 'observing'
+        : 'ready';
+
+  return { status, alerts };
+}
+
 async function buildLeagueAutomationQueueAdminSnapshot(
   focusLeagueId = '',
 ): Promise<LeagueAutomationQueueAdminSnapshot> {
   const projectId = getLeagueAutomationProjectId();
   const environment = getLeagueAutomationEnvironment(projectId);
-  const [configSnapshot, healthSnapshot, approvalSnapshot, audit] = await Promise.all([
+  const [
+    configSnapshot,
+    healthSnapshot,
+    canonicalFeedSnapshot,
+    watchdogSnapshot,
+    capacitySnapshot,
+    approvalSnapshot,
+    audit,
+  ] = await Promise.all([
     db.doc('appData/leagueAutomationQueueConfig').get(),
     db.doc('appData/leagueAutomation').get(),
+    db.doc('appData/nhlCanonicalImpactFeed').get(),
+    db.doc('appData/leagueAutomationSeasonWatchdog').get(),
+    db.doc('appData/leagueAutomationCapacityEvidence').get(),
     db.doc('appData/leagueAutomationPrimaryApproval').get(),
     loadLeagueAutomationConfigAudit(),
   ]);
   const configData = configSnapshot.data() ?? {};
   const healthData = healthSnapshot.data() ?? {};
+  const canonicalFeedData = canonicalFeedSnapshot.data() ?? {};
   const approval = normalizeLeagueAutomationPrimaryApproval(
     approvalSnapshot.data(),
   );
@@ -1746,6 +3118,10 @@ async function buildLeagueAutomationQueueAdminSnapshot(
     internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
       configData['internalTestLeagueIds'],
     ),
+    canonicalAuthorityLeagueIds:
+      normalizeLeagueAutomationCanonicalAuthorityIds(
+        configData['canonicalAuthorityLeagueIds'],
+      ),
     maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
       configData['maxEnqueuePerRun'],
     ),
@@ -1754,13 +3130,25 @@ async function buildLeagueAutomationQueueAdminSnapshot(
     ),
     revision: normalizeLeagueAutomationRevision(configData['revision']),
   };
+  const activeLeagueTarget = Math.max(
+    config.canaryLeagueIds.length,
+    getLeagueAutomationNumber(
+      healthData['queueScheduleCoverageCompletedDraftCount'],
+    ) ?? 0,
+  );
   const canonicalParityCohort = await loadCanonicalScoringParityCohort({
     canaryLeagueIds: config.canaryLeagueIds,
     minimumComparedAtMilliseconds: toMilliseconds(configData['updatedAt']),
   });
+  const capacityEvidence = normalizeStoredLeagueAutomationCapacityEvidence(
+    capacitySnapshot.data(),
+    activeLeagueTarget,
+  );
   const promotionGates = buildLeagueAutomationPromotionGates({
     config,
     health: healthData,
+    watchdog: watchdogSnapshot.data(),
+    capacityEvidence,
     canonicalParityCohort,
     approval,
     projectId,
@@ -1769,9 +3157,19 @@ async function buildLeagueAutomationQueueAdminSnapshot(
   const primaryPromotionAllowed = promotionGates
     .filter((gate) => gate.blocking)
     .every((gate) => gate.passed);
+  const seasonSafety = buildLeagueAutomationSeasonSafetyAlerts({
+    config,
+    healthData,
+    feedData: canonicalFeedData,
+    watchdogData: watchdogSnapshot.data() ?? {},
+    capacityEvidence,
+    canonicalParityCohort,
+  });
   const leagueResult = await loadLeagueAutomationAdminLeagues(
     config,
     focusLeagueId,
+    toMilliseconds(configData['updatedAt']),
+    healthData,
   );
   const approvalValid = isLeagueAutomationPrimaryApprovalValid(
     approval,
@@ -1795,6 +3193,19 @@ async function buildLeagueAutomationQueueAdminSnapshot(
     mode: config.mode,
     canaryLeagueIds: config.canaryLeagueIds,
     internalTestLeagueIds: config.internalTestLeagueIds,
+    canonicalAuthorityLeagueIds: config.canonicalAuthorityLeagueIds,
+    canonicalAuthorityConfirmationPhrase:
+      LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_CONFIRMATION,
+    canonicalAuthorityMaximumLeagueCount:
+      LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MAX_LEAGUE_COUNT,
+    canonicalAuthorityMinimumParityStreak:
+      LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MIN_PARITY_STREAK,
+    seasonSafetyStatus: seasonSafety.status,
+    seasonSafetyAlerts: seasonSafety.alerts,
+    seasonSafetyWatchdog: normalizeLeagueAutomationSeasonWatchdog(
+      watchdogSnapshot.data(),
+    ),
+    capacityEvidence,
     maxEnqueuePerRun: config.maxEnqueuePerRun,
     canarySuccessBaseline: config.canarySuccessBaseline,
     successfulTasksSinceCanary,
@@ -1912,6 +3323,39 @@ async function buildLeagueAutomationQueueAdminSnapshot(
       canonicalParityCohortMaximumAbsolutePointDelta:
         canonicalParityCohort.maximumAbsolutePointDelta,
       canonicalParityCohortPassing: canonicalParityCohort.passing,
+      canonicalAuthorityConfiguredLeagueId: getLeagueAutomationString(
+        healthData['canonicalAuthorityConfiguredLeagueId'],
+      ),
+      canonicalAuthorityCircuitState: getLeagueAutomationString(
+        healthData['canonicalAuthorityCircuitState'],
+        config.canonicalAuthorityLeagueIds.length > 0
+          ? 'closed'
+          : 'not-configured',
+      ),
+      canonicalAuthorityLastDecision: getLeagueAutomationString(
+        healthData['canonicalAuthorityLastDecision'],
+        'not-recorded',
+      ),
+      canonicalAuthorityLastFallbackReason: getLeagueAutomationString(
+        healthData['canonicalAuthorityLastFallbackReason'],
+      ),
+      canonicalAuthorityLastRuntimeEnabled:
+        healthData['canonicalAuthorityLastRuntimeEnabled'] === true,
+      canonicalAuthorityLastRuntimeReason: getLeagueAutomationString(
+        healthData['canonicalAuthorityLastRuntimeReason'],
+      ),
+      canonicalAuthorityLastCanonicalUseCount: getLeagueAutomationNumber(
+        healthData['canonicalAuthorityLastCanonicalUseCount'],
+      ) ?? 0,
+      canonicalAuthorityLastDirectFallbackCount: getLeagueAutomationNumber(
+        healthData['canonicalAuthorityLastDirectFallbackCount'],
+      ) ?? 0,
+      canonicalAuthorityCircuitOpenCount: getLeagueAutomationNumber(
+        healthData['canonicalAuthorityCircuitOpenCount'],
+      ) ?? 0,
+      canonicalAuthorityLastOpenedAt: getLeagueAutomationIso(
+        healthData['canonicalAuthorityLastOpenedAt'],
+      ),
     },
     leagues: leagueResult.leagues,
     truncated: leagueResult.truncated,
@@ -1985,13 +3429,21 @@ async function validateLeagueAutomationAdminLeagueIds(
 async function assertLeagueAutomationPrimaryPromotionAllowed(
   config: LeagueAutomationQueueConfig,
   confirmationText: string,
-): Promise<CanonicalScoringParityCohortSummary> {
+): Promise<void> {
   const projectId = getLeagueAutomationProjectId();
   const environment = getLeagueAutomationEnvironment(projectId);
-  const [healthSnapshot, approvalSnapshot, configSnapshot] = await Promise.all([
+  const [
+    healthSnapshot,
+    watchdogSnapshot,
+    approvalSnapshot,
+    configSnapshot,
+    capacitySnapshot,
+  ] = await Promise.all([
     db.doc('appData/leagueAutomation').get(),
+    db.doc('appData/leagueAutomationSeasonWatchdog').get(),
     db.doc('appData/leagueAutomationPrimaryApproval').get(),
     db.doc('appData/leagueAutomationQueueConfig').get(),
+    db.doc('appData/leagueAutomationCapacityEvidence').get(),
   ]);
   const canonicalParityCohort = await loadCanonicalScoringParityCohort({
     canaryLeagueIds: config.canaryLeagueIds,
@@ -1999,9 +3451,21 @@ async function assertLeagueAutomationPrimaryPromotionAllowed(
       configSnapshot.data()?.['updatedAt'],
     ),
   });
+  const activeLeagueTarget = Math.max(
+    config.canaryLeagueIds.length,
+    getLeagueAutomationNumber(
+      healthSnapshot.data()?.['queueScheduleCoverageCompletedDraftCount'],
+    ) ?? 0,
+  );
+  const capacityEvidence = normalizeStoredLeagueAutomationCapacityEvidence(
+    capacitySnapshot.data(),
+    activeLeagueTarget,
+  );
   const gates = buildLeagueAutomationPromotionGates({
     config,
     health: healthSnapshot.data(),
+    watchdog: watchdogSnapshot.data(),
+    capacityEvidence,
     canonicalParityCohort,
     approval: normalizeLeagueAutomationPrimaryApproval(approvalSnapshot.data()),
     projectId,
@@ -2026,7 +3490,7 @@ async function assertLeagueAutomationPrimaryPromotionAllowed(
     );
   }
 
-  return canonicalParityCohort;
+  return;
 }
 
 function getLeagueAutomationShard(leagueId: string): number {
@@ -3185,6 +4649,21 @@ async function recordBetaServerScoringMetric(
         outcome,
       ),
     };
+    const successfulByTrigger = data['serverScoringSuccessfulByTrigger'] &&
+      typeof data['serverScoringSuccessfulByTrigger'] === 'object' &&
+      !Array.isArray(data['serverScoringSuccessfulByTrigger'])
+        ? data['serverScoringSuccessfulByTrigger'] as Record<string, unknown>
+        : {};
+    const serverScoringSuccessfulByTrigger = outcome === 'success'
+      ? {
+          ...successfulByTrigger,
+          [triggerKey]: addBetaDurationSample(
+            normalizeBetaDurationAccumulator(successfulByTrigger[triggerKey]),
+            durationMilliseconds,
+            'success',
+          ),
+        }
+      : successfulByTrigger;
     const existingPhases = data['serverScoringPhases'] &&
       typeof data['serverScoringPhases'] === 'object' &&
       !Array.isArray(data['serverScoringPhases'])
@@ -3214,6 +4693,7 @@ async function recordBetaServerScoringMetric(
       shardId,
       serverScoring,
       serverScoringByTrigger,
+      serverScoringSuccessfulByTrigger,
       serverScoringPhases,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(
@@ -3229,6 +4709,7 @@ async function runLeagueAutomation(
   trigger: LeagueAutomationTrigger,
   refreshCadence: LeagueAutomationRefreshCadence = 'standard',
   canonicalParityContext?: CanonicalScoringParityTaskContext,
+  canonicalAuthorityContext?: CanonicalScoringAuthorityRuntimeContext,
 ): Promise<LeagueAutomationResult> {
   const safeLeagueId = requireServerFirestoreDocumentId(
     leagueId,
@@ -3340,6 +4821,7 @@ async function runLeagueAutomation(
   let replayControl: HistoricalReplayControl | null = null;
   const allResults: CycleScoringResult[] = [];
   const canonicalParityObservations: CanonicalScoringParityObservation[] = [];
+  const canonicalAuthorityDecisions: CanonicalScoringAuthorityDecision[] = [];
   const canonicalParityLoad = canonicalParityContext
     ? await loadCanonicalScoringParityGames({
         leagueId,
@@ -3491,6 +4973,17 @@ async function runLeagueAutomation(
                 }
               }
             : undefined,
+          canonicalAuthorityConfigured:
+            canonicalAuthorityContext?.enabled === true,
+          canonicalAuthorityTaskVersionAligned:
+            canonicalParityLoad?.taskVersionAligned === true,
+          onCanonicalAuthorityDecision: canonicalAuthorityContext?.enabled
+            ? (decision) => {
+                if (canonicalAuthorityDecisions.length < 2_000) {
+                  canonicalAuthorityDecisions.push(decision);
+                }
+              }
+            : undefined,
         });
         const published = await phaseTimer.measure(
           'snapshot-publication',
@@ -3605,6 +5098,14 @@ async function runLeagueAutomation(
     const phaseTimingBeforeObservability = phaseTimer.snapshot(
       durationBeforeObservability,
     );
+    const canonicalAuthoritySummary = canonicalAuthorityContext?.enabled
+      ? summarizeCanonicalScoringAuthorityTask({
+          configured: true,
+          taskVersionAligned:
+            canonicalParityLoad?.taskVersionAligned === true,
+          decisions: canonicalAuthorityDecisions,
+        })
+      : undefined;
 
     await phaseTimer.measure(
       'queue-and-observability',
@@ -3653,11 +5154,24 @@ async function runLeagueAutomation(
                 context: canonicalParityContext,
                 load: canonicalParityLoad,
                 observations: canonicalParityObservations,
+                authorityEnabled: canonicalAuthorityContext?.enabled === true,
               }).catch((error: unknown) => {
                 console.error('Unable to record canonical scoring parity.', {
                   leagueId,
                   error,
                 });
+              })
+            : Promise.resolve(),
+          canonicalAuthoritySummary && canonicalParityContext
+            ? recordCanonicalScoringAuthorityOutcome({
+                leagueId,
+                sourceVersion: canonicalParityContext.sourceVersion,
+                summary: canonicalAuthoritySummary,
+              }).catch((error: unknown) => {
+                console.error(
+                  'Unable to record canonical scoring authority outcome.',
+                  { leagueId, error },
+                );
               })
             : Promise.resolve(),
         ]);
@@ -3690,6 +5204,12 @@ async function runLeagueAutomation(
       refreshCadence,
       refreshDelayMilliseconds: refreshDelay,
       phaseTiming,
+      canonicalAuthorityUsedCount:
+        canonicalAuthoritySummary?.canonicalUsedCount ?? 0,
+      canonicalAuthorityFallbackCount:
+        canonicalAuthoritySummary?.directFallbackCount ?? 0,
+      canonicalAuthorityCircuitOpened:
+        canonicalAuthoritySummary?.tripCircuitBreaker ?? false,
     };
   } catch (error: unknown) {
     const message = error instanceof Error
@@ -4518,6 +6038,570 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
 }
 
 
+function getLeagueAutomationWatchdogActionReason(input: {
+  action: LeagueAutomationWatchdogAction;
+  alerts: LeagueAutomationSeasonSafetyAlert[];
+  queueBlockingAlertIds: readonly string[];
+  canonicalBlockingAlertIds: readonly string[];
+}): string {
+  const selectedIds = input.action === 'return-to-shadow'
+    ? input.queueBlockingAlertIds
+    : input.canonicalBlockingAlertIds;
+  const selected = input.alerts
+    .filter((alert) => selectedIds.includes(alert.id))
+    .map((alert) => alert.label);
+  const actionLabel = input.action === 'return-to-shadow'
+    ? 'Queued scoring automatically returned to Shadow'
+    : 'Canonical scoring authority automatically disabled';
+
+  return `${actionLabel}: ${selected.join('; ') || selectedIds.join(', ') || 'season safety threshold reached'}`
+    .slice(0, 500);
+}
+
+async function recordLeagueAutomationWatchdogObservation(input: {
+  decision: ReturnType<typeof decideLeagueAutomationWatchdogAction>;
+  config: LeagueAutomationQueueConfig;
+  safety: {
+    status: LeagueAutomationSeasonSafetyStatus;
+    alerts: LeagueAutomationSeasonSafetyAlert[];
+  };
+  durationMilliseconds: number;
+}): Promise<void> {
+  const watchdogRef = db.doc('appData/leagueAutomationSeasonWatchdog');
+  const healthRef = db.doc('appData/leagueAutomation');
+  const alertIds = input.safety.alerts.map((alert) => alert.id).slice(0, 30);
+
+  await Promise.all([
+    watchdogRef.set(
+      {
+        schemaVersion: 1,
+        status: input.decision.status,
+        queueBlockingStreak: input.decision.queueBlockingStreak,
+        canonicalBlockingStreak: input.decision.canonicalBlockingStreak,
+        requiredBlockingStreak:
+          LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
+        lastQueueBlockingAlertIds:
+          input.decision.queueBlockingAlertIds,
+        lastCanonicalBlockingAlertIds:
+          input.decision.canonicalBlockingAlertIds,
+        lastSafetyStatus: input.safety.status,
+        lastSafetyAlertIds: alertIds,
+        lastObservedMode: input.config.mode,
+        lastObservedConfigRevision: input.config.revision,
+        lastDurationMilliseconds: input.durationMilliseconds,
+        consecutiveFailureCount: 0,
+        lastError: null,
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        lastSuccessfulAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+    healthRef.set(
+      {
+        seasonWatchdogStatus: input.decision.status,
+        seasonWatchdogQueueBlockingStreak:
+          input.decision.queueBlockingStreak,
+        seasonWatchdogCanonicalBlockingStreak:
+          input.decision.canonicalBlockingStreak,
+        seasonWatchdogRequiredBlockingStreak:
+          LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
+        seasonWatchdogLastError: null,
+        seasonWatchdogLastAttemptAt: FieldValue.serverTimestamp(),
+        seasonWatchdogLastSuccessfulAt: FieldValue.serverTimestamp(),
+        seasonWatchdogLastAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ),
+  ]);
+}
+
+async function applyLeagueAutomationWatchdogFallback(input: {
+  observedConfig: LeagueAutomationQueueConfig;
+  decision: ReturnType<typeof decideLeagueAutomationWatchdogAction>;
+  safety: {
+    status: LeagueAutomationSeasonSafetyStatus;
+    alerts: LeagueAutomationSeasonSafetyAlert[];
+  };
+  reason: string;
+  durationMilliseconds: number;
+}): Promise<boolean> {
+  const configRef = db.doc('appData/leagueAutomationQueueConfig');
+  const healthRef = db.doc('appData/leagueAutomation');
+  const watchdogRef = db.doc('appData/leagueAutomationSeasonWatchdog');
+  const primaryApprovalRef = db.doc('appData/leagueAutomationPrimaryApproval');
+  const actionHash = createHash('sha256')
+    .update([
+      input.decision.action,
+      input.observedConfig.revision,
+      ...input.decision.queueBlockingAlertIds,
+      ...input.decision.canonicalBlockingAlertIds,
+    ].join(':'))
+    .digest('hex')
+    .slice(0, 24);
+  const auditRef = getLeagueAutomationAuditRef(
+    `season-watchdog-${input.observedConfig.revision}-${actionHash}`,
+  );
+  const projectId = getLeagueAutomationProjectId();
+  const environment = getLeagueAutomationEnvironment(projectId);
+
+  return db.runTransaction(async (transaction) => {
+    const [configSnapshot, auditSnapshot] = await Promise.all([
+      transaction.get(configRef),
+      transaction.get(auditRef),
+    ]);
+    const data = configSnapshot.data() ?? {};
+    const before: LeagueAutomationQueueConfig = {
+      mode: normalizeLeagueAutomationQueueMode(data['mode']),
+      canaryLeagueIds: normalizeLeagueAutomationCanaryIds(
+        data['canaryLeagueIds'],
+      ),
+      internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+        data['internalTestLeagueIds'],
+      ),
+      canonicalAuthorityLeagueIds:
+        normalizeLeagueAutomationCanonicalAuthorityIds(
+          data['canonicalAuthorityLeagueIds'],
+        ),
+      maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+        data['maxEnqueuePerRun'],
+      ),
+      canarySuccessBaseline: normalizeLeagueAutomationRevision(
+        data['canarySuccessBaseline'],
+      ),
+      revision: normalizeLeagueAutomationRevision(data['revision']),
+    };
+    const queueFallbackApplicable =
+      input.decision.action === 'return-to-shadow' &&
+      before.mode !== 'shadow';
+    const canonicalFallbackApplicable =
+      input.decision.action === 'disable-canonical-authority' &&
+      before.canonicalAuthorityLeagueIds.length > 0;
+
+    if (
+      before.revision !== input.observedConfig.revision ||
+      (!queueFallbackApplicable && !canonicalFallbackApplicable)
+    ) {
+      return false;
+    }
+
+    const modeAfter: LeagueAutomationQueueMode = queueFallbackApplicable
+      ? 'shadow'
+      : before.mode;
+    const canonicalAuthorityLeagueIdsAfter: string[] = [];
+    const nextRevision = before.revision + 1;
+    const action = queueFallbackApplicable
+      ? 'season-watchdog-returned-to-shadow'
+      : 'season-watchdog-canonical-fallback';
+
+    transaction.set(
+      configRef,
+      {
+        schemaVersion: 2,
+        mode: modeAfter,
+        canonicalAuthorityLeagueIds: canonicalAuthorityLeagueIdsAfter,
+        revision: nextRevision,
+        updatedBy: LEAGUE_AUTOMATION_SEASON_WATCHDOG_ACTOR,
+        updatedAt: FieldValue.serverTimestamp(),
+        changeReason: input.reason,
+        configuredProjectId: projectId,
+        configuredEnvironment: environment,
+        lastMutationId: auditRef.id,
+      },
+      { merge: true },
+    );
+
+    transaction.set(
+      healthRef,
+      {
+        queueConfiguredMode: modeAfter,
+        canonicalAuthorityConfiguredLeagueId: null,
+        canonicalAuthorityConfiguredLeagueCount: 0,
+        queueConfigRevision: nextRevision,
+        queueConfigUpdatedAt: FieldValue.serverTimestamp(),
+        seasonWatchdogStatus: input.decision.status,
+        seasonWatchdogLastAction: input.decision.action,
+        seasonWatchdogLastActionReason: input.reason,
+        seasonWatchdogLastActionAt: FieldValue.serverTimestamp(),
+        seasonWatchdogQueueBlockingStreak: 0,
+        seasonWatchdogCanonicalBlockingStreak: 0,
+        seasonWatchdogLastAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    if (queueFallbackApplicable) {
+      transaction.set(
+        primaryApprovalRef,
+        {
+          enabled: false,
+          disabledReason: 'season-watchdog-returned-to-shadow',
+          disabledAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    transaction.set(
+      watchdogRef,
+      {
+        schemaVersion: 1,
+        status: input.decision.status,
+        queueBlockingStreak: 0,
+        canonicalBlockingStreak: 0,
+        requiredBlockingStreak:
+          LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
+        lastTriggeredQueueBlockingStreak:
+          input.decision.queueBlockingStreak,
+        lastTriggeredCanonicalBlockingStreak:
+          input.decision.canonicalBlockingStreak,
+        lastQueueBlockingAlertIds:
+          input.decision.queueBlockingAlertIds,
+        lastCanonicalBlockingAlertIds:
+          input.decision.canonicalBlockingAlertIds,
+        lastSafetyStatus: input.safety.status,
+        lastSafetyAlertIds: input.safety.alerts
+          .map((alert) => alert.id)
+          .slice(0, 30),
+        lastObservedMode: before.mode,
+        lastObservedConfigRevision: before.revision,
+        lastAction: input.decision.action,
+        lastActionReason: input.reason,
+        lastActionAt: FieldValue.serverTimestamp(),
+        automaticShadowFallbackCount: queueFallbackApplicable
+          ? FieldValue.increment(1)
+          : FieldValue.increment(0),
+        automaticCanonicalFallbackCount: canonicalFallbackApplicable
+          ? FieldValue.increment(1)
+          : FieldValue.increment(0),
+        lastDurationMilliseconds: input.durationMilliseconds,
+        consecutiveFailureCount: 0,
+        lastError: null,
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        lastSuccessfulAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    for (const authorityLeagueId of before.canonicalAuthorityLeagueIds) {
+      transaction.set(
+        getCanonicalScoringAuthorityRef(authorityLeagueId),
+        {
+          schemaVersion: 1,
+          leagueId: authorityLeagueId,
+          configured: false,
+          circuitState: 'open',
+          openedReason: input.reason,
+          openedAt: FieldValue.serverTimestamp(),
+          lastDecision: 'season-safety-direct-fallback',
+          disabledAt: FieldValue.serverTimestamp(),
+          disabledBy: LEAGUE_AUTOMATION_SEASON_WATCHDOG_ACTOR,
+          consecutiveSuccessfulTaskCount: 0,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    if (!auditSnapshot.exists) {
+      transaction.set(
+        auditRef,
+        {
+          schemaVersion: 1,
+          action,
+          requestId: auditRef.id,
+          adminId: LEAGUE_AUTOMATION_SEASON_WATCHDOG_ACTOR,
+          projectId,
+          environment,
+          modeBefore: before.mode,
+          modeAfter,
+          canaryLeagueIdsBefore: before.canaryLeagueIds,
+          canaryLeagueIdsAfter: before.canaryLeagueIds,
+          internalTestLeagueIdsBefore: before.internalTestLeagueIds,
+          internalTestLeagueIdsAfter: before.internalTestLeagueIds,
+          canonicalAuthorityLeagueIdsBefore:
+            before.canonicalAuthorityLeagueIds,
+          canonicalAuthorityLeagueIdsAfter,
+          maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
+          maxEnqueuePerRunAfter: before.maxEnqueuePerRun,
+          canarySuccessBaselineBefore: before.canarySuccessBaseline,
+          canarySuccessBaselineAfter: before.canarySuccessBaseline,
+          revisionBefore: before.revision,
+          revisionAfter: nextRevision,
+          reason: input.reason,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: false },
+      );
+    }
+
+    return true;
+  });
+}
+
+export const refreshLeagueAutomationCapacityEvidence = onSchedule(
+  {
+    schedule: 'every 60 minutes',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const startedAt = Date.now();
+    const evidenceRef = db.doc('appData/leagueAutomationCapacityEvidence');
+
+    try {
+      const healthSnapshot = await db.doc('appData/leagueAutomation').get();
+      const activeLeagueTarget = getLeagueAutomationNumber(
+        healthSnapshot.data()?.['queueScheduleCoverageCompletedDraftCount'],
+      ) ?? 0;
+      const evidence = await loadLeagueAutomationCapacityEvidence(
+        activeLeagueTarget,
+      );
+
+      await evidenceRef.set(
+        {
+          schemaVersion: 1,
+          ...evidence,
+          status: 'healthy',
+          consecutiveFailureCount: 0,
+          lastError: null,
+          activeLeagueTarget,
+          lastDurationMilliseconds: Date.now() - startedAt,
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          lastSuccessfulAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to refresh league-automation capacity evidence.';
+
+      await evidenceRef.set(
+        {
+          schemaVersion: 1,
+          status: 'error',
+          consecutiveFailureCount: FieldValue.increment(1),
+          lastError: message.slice(0, 500),
+          lastDurationMilliseconds: Date.now() - startedAt,
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ).catch(() => undefined);
+
+      console.error('Unable to refresh league-automation capacity evidence.', {
+        error,
+      });
+      throw error;
+    }
+  },
+);
+
+async function runLeagueAutomationSeasonSafetyWatchdog(
+  startedAt: number,
+): Promise<void> {
+  const [
+    configSnapshot,
+    healthSnapshot,
+    feedSnapshot,
+    watchdogSnapshot,
+    capacitySnapshot,
+  ] = await Promise.all([
+    db.doc('appData/leagueAutomationQueueConfig').get(),
+    db.doc('appData/leagueAutomation').get(),
+    db.doc('appData/nhlCanonicalImpactFeed').get(),
+    db.doc('appData/leagueAutomationSeasonWatchdog').get(),
+    db.doc('appData/leagueAutomationCapacityEvidence').get(),
+  ]);
+  const configData = configSnapshot.data() ?? {};
+  const healthData = healthSnapshot.data() ?? {};
+  const config: LeagueAutomationQueueConfig = {
+    mode: normalizeLeagueAutomationQueueMode(configData['mode']),
+    canaryLeagueIds: normalizeLeagueAutomationCanaryIds(
+      configData['canaryLeagueIds'],
+    ),
+    internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
+      configData['internalTestLeagueIds'],
+    ),
+    canonicalAuthorityLeagueIds:
+      normalizeLeagueAutomationCanonicalAuthorityIds(
+        configData['canonicalAuthorityLeagueIds'],
+      ),
+    maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
+      configData['maxEnqueuePerRun'],
+    ),
+    canarySuccessBaseline: normalizeLeagueAutomationRevision(
+      configData['canarySuccessBaseline'],
+    ),
+    revision: normalizeLeagueAutomationRevision(configData['revision']),
+  };
+  const activeLeagueTarget = Math.max(
+    config.canaryLeagueIds.length,
+    getLeagueAutomationNumber(
+      healthData['queueScheduleCoverageCompletedDraftCount'],
+    ) ?? 0,
+  );
+  const capacityEvidence = normalizeStoredLeagueAutomationCapacityEvidence(
+    capacitySnapshot.data(),
+    activeLeagueTarget,
+  );
+  const canonicalParityCohort =
+    config.canonicalAuthorityLeagueIds.length > 0
+      ? await loadCanonicalScoringParityCohort({
+          canaryLeagueIds: config.canaryLeagueIds,
+          minimumComparedAtMilliseconds: toMilliseconds(
+            configData['updatedAt'],
+          ),
+        })
+      : {
+          expectedLeagueCount: 0,
+          passingLeagueCount: 0,
+          mismatchLeagueCount: 0,
+          incompleteLeagueCount: 0,
+          missingLeagueCount: 0,
+          staleLeagueCount: 0,
+          totalComparedCount: 0,
+          maximumAbsolutePointDelta: 0,
+          passing: true,
+        };
+  const safety = buildLeagueAutomationSeasonSafetyAlerts({
+    config,
+    healthData,
+    feedData: feedSnapshot.data() ?? {},
+    watchdogData: watchdogSnapshot.data() ?? {},
+    capacityEvidence,
+    canonicalParityCohort,
+  });
+  const actionableAlertIds = safety.alerts
+    .filter((alert) =>
+      alert.severity === 'critical' ||
+      (config.canonicalAuthorityLeagueIds.length > 0 &&
+        alert.id === 'parity-incomplete')
+    )
+    .map((alert) => alert.id);
+  const previousWatchdog = normalizeLeagueAutomationSeasonWatchdog(
+    watchdogSnapshot.data(),
+  );
+  const decision = decideLeagueAutomationWatchdogAction({
+    mode: config.mode,
+    canonicalAuthorityConfigured:
+      config.canonicalAuthorityLeagueIds.length > 0,
+    alertIds: actionableAlertIds,
+    previousQueueBlockingStreak:
+      previousWatchdog.queueBlockingStreak,
+    previousCanonicalBlockingStreak:
+      previousWatchdog.canonicalBlockingStreak,
+  });
+  const durationMilliseconds = Date.now() - startedAt;
+
+  if (decision.action === 'none') {
+    await recordLeagueAutomationWatchdogObservation({
+      decision,
+      config,
+      safety,
+      durationMilliseconds,
+    });
+    return;
+  }
+
+  const reason = getLeagueAutomationWatchdogActionReason({
+    action: decision.action,
+    alerts: safety.alerts,
+    queueBlockingAlertIds: decision.queueBlockingAlertIds,
+    canonicalBlockingAlertIds: decision.canonicalBlockingAlertIds,
+  });
+  const applied = await applyLeagueAutomationWatchdogFallback({
+    observedConfig: config,
+    decision,
+    safety,
+    reason,
+    durationMilliseconds,
+  });
+
+  if (!applied) {
+    await recordLeagueAutomationWatchdogObservation({
+      decision: {
+        ...decision,
+        action: 'none',
+        status: 'warning',
+      },
+      config,
+      safety,
+      durationMilliseconds: Date.now() - startedAt,
+    });
+    return;
+  }
+
+  console.error('Season safety watchdog selected a safer scoring path.', {
+    action: decision.action,
+    modeBefore: config.mode,
+    canonicalAuthorityLeagueIds:
+      config.canonicalAuthorityLeagueIds,
+    reason,
+  });
+}
+
+export const monitorLeagueAutomationSeasonSafety = onSchedule(
+  {
+    schedule: '* * * * *',
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    retryCount: 0,
+    maxInstances: 1,
+  },
+  async () => {
+    const startedAt = Date.now();
+    const watchdogRef = db.doc('appData/leagueAutomationSeasonWatchdog');
+    const healthRef = db.doc('appData/leagueAutomation');
+
+    try {
+      await runLeagueAutomationSeasonSafetyWatchdog(startedAt);
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to complete the league-automation season-safety check.';
+      const failureEvidence = {
+        seasonWatchdogStatus: 'error',
+        seasonWatchdogLastError: message.slice(0, 500),
+        seasonWatchdogLastAttemptAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      await Promise.all([
+        watchdogRef.set(
+          {
+            schemaVersion: 1,
+            status: 'error',
+            consecutiveFailureCount: FieldValue.increment(1),
+            lastError: message.slice(0, 500),
+            lastDurationMilliseconds: Date.now() - startedAt,
+            lastAttemptAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        ).catch(() => undefined),
+        healthRef.set(failureEvidence, { merge: true }).catch(() => undefined),
+      ]);
+
+      console.error('League-automation season-safety watchdog failed.', {
+        error,
+      });
+      throw error;
+    }
+  },
+);
+
+
 export const getLeagueAutomationQueueControlCenter = onCall(
   {
     region: FUNCTION_REGION,
@@ -4597,6 +6681,19 @@ export const updateLeagueAutomationQueueConfig = onCall(
         pattern: /^[A-Za-z0-9_-]+$/,
       },
     ))].sort();
+    const canonicalAuthorityLeagueIds = [...new Set(
+      requireFirestoreDocumentIds(
+        data['canonicalAuthorityLeagueIds'] ?? [],
+        'canonical authority league ID',
+        {
+          maximumCount:
+            LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_MAX_LEAGUE_COUNT,
+          minimumLength: 6,
+          maxBytes: 128,
+          pattern: /^[A-Za-z0-9_-]+$/,
+        },
+      ),
+    )].sort();
     const maxEnqueuePerRun = normalizeLeagueAutomationMaxEnqueuePerRun(
       data['maxEnqueuePerRun'],
     );
@@ -4605,6 +6702,11 @@ export const updateLeagueAutomationQueueConfig = onCall(
     );
     const confirmationText = getLeagueAutomationString(data['confirmationText']);
     const changeReason = normalizeLeagueAutomationChangeReason(data['changeReason']);
+    const currentConfig = await getLeagueAutomationQueueConfig();
+    const enablingCanonicalAuthority = canonicalAuthorityLeagueIds.some(
+      (leagueId) =>
+        !currentConfig.canonicalAuthorityLeagueIds.includes(leagueId),
+    );
 
     if (
       requestedMode !== 'shadow' &&
@@ -4636,10 +6738,14 @@ export const updateLeagueAutomationQueueConfig = onCall(
         );
       }
 
-      if (confirmationText !== LEAGUE_AUTOMATION_CANARY_CONFIRMATION) {
+      const canaryConfirmation = enablingCanonicalAuthority
+        ? LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_CONFIRMATION
+        : LEAGUE_AUTOMATION_CANARY_CONFIRMATION;
+
+      if (confirmationText !== canaryConfirmation) {
         throw new HttpsError(
           'failed-precondition',
-          `Type “${LEAGUE_AUTOMATION_CANARY_CONFIRMATION}” exactly before enabling canary mode.`,
+          `Type “${canaryConfirmation}” exactly before saving this canary configuration.`,
         );
       }
     }
@@ -4655,6 +6761,27 @@ export const updateLeagueAutomationQueueConfig = onCall(
       );
     }
 
+    if (mode !== 'canary' && canonicalAuthorityLeagueIds.length > 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Canonical scoring authority is limited to one exact Internal Test league while queue mode is Canary.',
+      );
+    }
+
+    const canonicalAuthorityLeagueIdsOutsideCohort =
+      canonicalAuthorityLeagueIds.filter(
+        (leagueId) =>
+          !canaryLeagueIds.includes(leagueId) ||
+          !internalTestLeagueIds.includes(leagueId),
+      );
+
+    if (canonicalAuthorityLeagueIdsOutsideCohort.length > 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The canonical-read league must already be included in both Canary and Internal Test.',
+      );
+    }
+
     if (mode !== 'shadow') {
       await Promise.all([
         validateLeagueAutomationAdminLeagueIds(canaryLeagueIds, true),
@@ -4662,11 +6789,57 @@ export const updateLeagueAutomationQueueConfig = onCall(
       ]);
     }
 
-    const currentConfig = await getLeagueAutomationQueueConfig();
-    let primaryCanonicalParityCohort: CanonicalScoringParityCohortSummary | null = null;
+    if (enablingCanonicalAuthority) {
+      const authorityLeagueId = canonicalAuthorityLeagueIds[0];
+      const canarySelectionUnchanged =
+        JSON.stringify(currentConfig.canaryLeagueIds) ===
+        JSON.stringify(canaryLeagueIds) &&
+        JSON.stringify(currentConfig.internalTestLeagueIds) ===
+        JSON.stringify(internalTestLeagueIds);
 
+      if (
+        currentConfig.mode !== 'canary' ||
+        !canarySelectionUnchanged ||
+        !currentConfig.canaryLeagueIds.includes(authorityLeagueId) ||
+        !currentConfig.internalTestLeagueIds.includes(authorityLeagueId)
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'First save and prove the exact Canary cohort. Canonical reads cannot be enabled in the same change that creates or changes that cohort.',
+        );
+      }
+
+      const [
+        currentConfigSnapshot,
+        paritySnapshot,
+        authoritySnapshot,
+        healthSnapshot,
+      ] = await Promise.all([
+        db.doc('appData/leagueAutomationQueueConfig').get(),
+        db.doc(`leagueAutomationCanonicalParity/${authorityLeagueId}`).get(),
+        getCanonicalScoringAuthorityRef(authorityLeagueId).get(),
+        db.doc('appData/leagueAutomation').get(),
+      ]);
+      const eligibility = getCanonicalScoringAuthorityEligibility({
+        config: currentConfig,
+        leagueId: authorityLeagueId,
+        configUpdatedAtMilliseconds: toMilliseconds(
+          currentConfigSnapshot.data()?.['updatedAt'],
+        ),
+        parityData: paritySnapshot.data(),
+        authorityData: authoritySnapshot.data(),
+        healthData: healthSnapshot.data(),
+      });
+
+      if (!eligibility.eligible) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Canonical reads remain locked: ${eligibility.reason}`,
+        );
+      }
+    }
     if (mode === 'primary') {
-      primaryCanonicalParityCohort = await assertLeagueAutomationPrimaryPromotionAllowed(
+      await assertLeagueAutomationPrimaryPromotionAllowed(
         currentConfig,
         confirmationText,
       );
@@ -4674,15 +6847,26 @@ export const updateLeagueAutomationQueueConfig = onCall(
 
     const configRef = db.doc('appData/leagueAutomationQueueConfig');
     const healthRef = db.doc('appData/leagueAutomation');
+    const watchdogRef = db.doc('appData/leagueAutomationSeasonWatchdog');
+    const capacityRef = db.doc('appData/leagueAutomationCapacityEvidence');
     const approvalRef = db.doc('appData/leagueAutomationPrimaryApproval');
     const auditRef = getLeagueAutomationAuditRef(requestId);
     const projectId = getLeagueAutomationProjectId();
     const environment = getLeagueAutomationEnvironment(projectId);
     const transactionResult = await db.runTransaction(async (transaction) => {
-      const [configSnapshot, auditSnapshot, healthSnapshot, approvalSnapshot] = await Promise.all([
+      const [
+        configSnapshot,
+        auditSnapshot,
+        healthSnapshot,
+        watchdogSnapshot,
+        capacitySnapshot,
+        approvalSnapshot,
+      ] = await Promise.all([
         transaction.get(configRef),
         transaction.get(auditRef),
         transaction.get(healthRef),
+        transaction.get(watchdogRef),
+        transaction.get(capacityRef),
         transaction.get(approvalRef),
       ]);
       const configData = configSnapshot.data() ?? {};
@@ -4694,6 +6878,10 @@ export const updateLeagueAutomationQueueConfig = onCall(
         internalTestLeagueIds: normalizeLeagueAutomationInternalTestIds(
           configData['internalTestLeagueIds'],
         ),
+        canonicalAuthorityLeagueIds:
+          normalizeLeagueAutomationCanonicalAuthorityIds(
+            configData['canonicalAuthorityLeagueIds'],
+          ),
         maxEnqueuePerRun: normalizeLeagueAutomationMaxEnqueuePerRun(
           configData['maxEnqueuePerRun'],
         ),
@@ -4730,21 +6918,38 @@ export const updateLeagueAutomationQueueConfig = onCall(
       }
 
       if (mode === 'primary') {
+        const transactionParitySnapshots = await Promise.all(
+          before.canaryLeagueIds.map((leagueId) =>
+            transaction.get(
+              db.doc(`leagueAutomationCanonicalParity/${leagueId}`),
+            )
+          ),
+        );
+        const transactionCanonicalParityCohort =
+          summarizeCanonicalScoringParityCohort({
+            leagueIds: before.canaryLeagueIds,
+            minimumComparedAtMilliseconds: toMilliseconds(
+              configData['updatedAt'],
+            ),
+            snapshots: transactionParitySnapshots,
+          });
+        const transactionActiveLeagueTarget = Math.max(
+          before.canaryLeagueIds.length,
+          getLeagueAutomationNumber(
+            healthSnapshot.data()?.['queueScheduleCoverageCompletedDraftCount'],
+          ) ?? 0,
+        );
+        const transactionCapacityEvidence =
+          normalizeStoredLeagueAutomationCapacityEvidence(
+            capacitySnapshot.data(),
+            transactionActiveLeagueTarget,
+          );
         const transactionGates = buildLeagueAutomationPromotionGates({
           config: before,
           health: healthSnapshot.data(),
-          canonicalParityCohort:
-            primaryCanonicalParityCohort ?? {
-              expectedLeagueCount: 0,
-              passingLeagueCount: 0,
-              mismatchLeagueCount: 0,
-              incompleteLeagueCount: 0,
-              missingLeagueCount: 0,
-              staleLeagueCount: 0,
-              totalComparedCount: 0,
-              maximumAbsolutePointDelta: 0,
-              passing: false,
-            },
+          watchdog: watchdogSnapshot.data(),
+          capacityEvidence: transactionCapacityEvidence,
+          canonicalParityCohort: transactionCanonicalParityCohort,
           approval: normalizeLeagueAutomationPrimaryApproval(
             approvalSnapshot.data(),
           ),
@@ -4765,6 +6970,9 @@ export const updateLeagueAutomationQueueConfig = onCall(
 
       const canaryLeagueSelectionChanged =
         JSON.stringify(before.canaryLeagueIds) !== JSON.stringify(canaryLeagueIds);
+      const canonicalAuthoritySelectionChanged =
+        JSON.stringify(before.canonicalAuthorityLeagueIds) !==
+        JSON.stringify(canonicalAuthorityLeagueIds);
       const enteringOrChangingCanary =
         mode === 'canary' &&
         (before.mode !== 'canary' || canaryLeagueSelectionChanged);
@@ -4778,7 +6986,9 @@ export const updateLeagueAutomationQueueConfig = onCall(
         before.mode === mode &&
         before.maxEnqueuePerRun === maxEnqueuePerRun &&
         !canaryLeagueSelectionChanged &&
-        JSON.stringify(before.internalTestLeagueIds) === JSON.stringify(internalTestLeagueIds);
+        !canonicalAuthoritySelectionChanged &&
+        JSON.stringify(before.internalTestLeagueIds) ===
+          JSON.stringify(internalTestLeagueIds);
 
       if (unchanged) {
         transaction.set(
@@ -4796,6 +7006,10 @@ export const updateLeagueAutomationQueueConfig = onCall(
             canaryLeagueIdsAfter: before.canaryLeagueIds,
             internalTestLeagueIdsBefore: before.internalTestLeagueIds,
             internalTestLeagueIdsAfter: before.internalTestLeagueIds,
+            canonicalAuthorityLeagueIdsBefore:
+              before.canonicalAuthorityLeagueIds,
+            canonicalAuthorityLeagueIdsAfter:
+              before.canonicalAuthorityLeagueIds,
             maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
             maxEnqueuePerRunAfter: before.maxEnqueuePerRun,
             canarySuccessBaselineBefore: before.canarySuccessBaseline,
@@ -4823,7 +7037,11 @@ export const updateLeagueAutomationQueueConfig = onCall(
           : mode === 'canary'
             ? 'queue-promoted-to-canary'
             : 'queue-promoted-to-primary'
-        : 'queue-selection-updated';
+        : canonicalAuthoritySelectionChanged
+          ? canonicalAuthorityLeagueIds.length > 0
+            ? 'canonical-authority-canary-enabled'
+            : 'canonical-authority-canary-disabled'
+          : 'queue-selection-updated';
 
       transaction.set(
         configRef,
@@ -4832,6 +7050,7 @@ export const updateLeagueAutomationQueueConfig = onCall(
           mode,
           canaryLeagueIds,
           internalTestLeagueIds,
+          canonicalAuthorityLeagueIds,
           maxEnqueuePerRun,
           canarySuccessBaseline: nextCanarySuccessBaseline,
           revision: nextRevision,
@@ -4850,6 +7069,10 @@ export const updateLeagueAutomationQueueConfig = onCall(
           queueConfiguredMode: mode,
           queueConfiguredCanaryLeagueCount: canaryLeagueIds.length,
           queueConfiguredInternalTestLeagueCount: internalTestLeagueIds.length,
+          canonicalAuthorityConfiguredLeagueId:
+            canonicalAuthorityLeagueIds[0] ?? null,
+          canonicalAuthorityConfiguredLeagueCount:
+            canonicalAuthorityLeagueIds.length,
           queueConfigRevision: nextRevision,
           queueConfigUpdatedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -4871,6 +7094,9 @@ export const updateLeagueAutomationQueueConfig = onCall(
           canaryLeagueIdsAfter: canaryLeagueIds,
           internalTestLeagueIdsBefore: before.internalTestLeagueIds,
           internalTestLeagueIdsAfter: internalTestLeagueIds,
+          canonicalAuthorityLeagueIdsBefore:
+            before.canonicalAuthorityLeagueIds,
+          canonicalAuthorityLeagueIdsAfter: canonicalAuthorityLeagueIds,
           maxEnqueuePerRunBefore: before.maxEnqueuePerRun,
           maxEnqueuePerRunAfter: maxEnqueuePerRun,
           canarySuccessBaselineBefore: before.canarySuccessBaseline,
@@ -4883,6 +7109,43 @@ export const updateLeagueAutomationQueueConfig = onCall(
         { merge: false },
       );
 
+      if (canonicalAuthoritySelectionChanged) {
+        const authorityLeagueIds = [...new Set([
+          ...before.canonicalAuthorityLeagueIds,
+          ...canonicalAuthorityLeagueIds,
+        ])];
+
+        for (const authorityLeagueId of authorityLeagueIds) {
+          transaction.set(
+            getCanonicalScoringAuthorityRef(authorityLeagueId),
+            canonicalAuthorityLeagueIds.includes(authorityLeagueId)
+              ? {
+                  schemaVersion: 1,
+                  leagueId: authorityLeagueId,
+                  configured: true,
+                  circuitState: 'closed',
+                  openedReason: '',
+                  activatedAt: FieldValue.serverTimestamp(),
+                  activatedBy: adminId,
+                  activationConfigRevision: nextRevision,
+                  consecutiveSuccessfulTaskCount: 0,
+                  lastDecision: 'awaiting-versioned-task',
+                  updatedAt: FieldValue.serverTimestamp(),
+                }
+              : {
+                  schemaVersion: 1,
+                  leagueId: authorityLeagueId,
+                  configured: false,
+                  lastDecision: 'disabled-by-admin',
+                  disabledAt: FieldValue.serverTimestamp(),
+                  disabledBy: adminId,
+                  updatedAt: FieldValue.serverTimestamp(),
+                },
+            { merge: true },
+          );
+        }
+      }
+
       return {
         updated: true,
         revision: nextRevision,
@@ -4890,7 +7153,9 @@ export const updateLeagueAutomationQueueConfig = onCall(
         message: mode === 'shadow'
           ? 'The queued scorer returned to observation mode. The legacy scorer remains primary.'
           : mode === 'canary'
-            ? `${canaryLeagueIds.length} exact league(s) are now routed through queued scoring.`
+            ? canonicalAuthorityLeagueIds.length > 0
+              ? `${canaryLeagueIds.length} exact league(s) use queued scoring; ${canonicalAuthorityLeagueIds[0]} is the single verified canonical-read Canary with automatic direct fallback.`
+              : `${canaryLeagueIds.length} exact league(s) are now routed through queued scoring.`
             : 'Queued scoring is now the primary live-league dispatcher for this Firebase project.',
       };
     });
@@ -5018,6 +7283,10 @@ export const queueLeagueAutomationCanaryCheck = onCall(
           canaryLeagueIdsAfter: config.canaryLeagueIds,
           internalTestLeagueIdsBefore: config.internalTestLeagueIds,
           internalTestLeagueIdsAfter: config.internalTestLeagueIds,
+          canonicalAuthorityLeagueIdsBefore:
+            config.canonicalAuthorityLeagueIds,
+          canonicalAuthorityLeagueIdsAfter:
+            config.canonicalAuthorityLeagueIds,
           maxEnqueuePerRunBefore: config.maxEnqueuePerRun,
           maxEnqueuePerRunAfter: config.maxEnqueuePerRun,
           canarySuccessBaselineBefore: config.canarySuccessBaseline,
@@ -5410,6 +7679,12 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
             gameIds: payloadCanonicalGameIds,
           } satisfies CanonicalScoringParityTaskContext
         : undefined;
+      const canonicalAuthorityContext =
+        await loadCanonicalScoringAuthorityRuntimeContext({
+          config: queueConfig,
+          leagueId,
+          canonicalContext: canonicalParityContext,
+        });
       const result = await runLeagueAutomation(
         leagueId,
         payload.reason === 'canary-manual' ||
@@ -5417,6 +7692,7 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
         'queue-task',
         refreshCadence,
         canonicalParityContext,
+        canonicalAuthorityContext,
       );
 
       if (result.status === 'skipped' && result.skipReason === 'another-server-worker') {
@@ -5438,6 +7714,16 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
             result.refreshDelayMilliseconds ?? null,
           queueLastTaskCanonicalSourceVersion:
             payloadCanonicalSourceVersion || null,
+          canonicalAuthorityLastRuntimeEnabled:
+            canonicalAuthorityContext.enabled,
+          canonicalAuthorityLastRuntimeReason:
+            canonicalAuthorityContext.reason,
+          canonicalAuthorityLastCanonicalUseCount:
+            result.canonicalAuthorityUsedCount ?? 0,
+          canonicalAuthorityLastDirectFallbackCount:
+            result.canonicalAuthorityFallbackCount ?? 0,
+          canonicalAuthorityLastCircuitOpened:
+            result.canonicalAuthorityCircuitOpened === true,
           queueNearLiveCanaryRefreshIntervalMilliseconds:
             NEAR_LIVE_CANARY_REFRESH_INTERVAL_MILLISECONDS,
           queueNearLiveCanaryMaxLeagueCount:

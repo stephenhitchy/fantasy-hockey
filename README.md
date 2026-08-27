@@ -26,6 +26,8 @@ Core project references:
 - [`docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md`](docs/RINKRAT_DATA_D1C_SHARED_NHL_CACHE_SHADOW.md) — deterministic shared NHL Shadow cache, hash deduplication, bounded payloads, retention, inspection, deployment, and future cutover gates.
 - [`docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md`](docs/RINKRAT_DATA_D1D_NEAR_LIVE_SCORING_CANARY.md) — exact-internal-league two-minute scoring Canary, unchanged standard/Primary cadence, queue observability, targeted deployment, and rollback.
 - [`docs/RINKRAT_DATA_D1G_CANONICAL_SCORING_PARITY.md`](docs/RINKRAT_DATA_D1G_CANONICAL_SCORING_PARITY.md) — centralized final-game settlement, exact game/version queue payloads, direct-versus-canonical shadow scoring, all-Canary parity gating, targeted deployment, and rollback.
+- [`docs/RINKRAT_DATA_D1H_SEASON_SAFETY_CANONICAL_AUTHORITY.md`](docs/RINKRAT_DATA_D1H_SEASON_SAFETY_CANONICAL_AUTHORITY.md) — one verified canonical-read Canary, same-task direct verification, automatic direct-source fallback, circuit-breaker rollback, season launch checklist, targeted deployment, and recovery.
+- [`docs/RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS.md`](docs/RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS.md) — two-strike automatic season fallback, hourly live queue-capacity evidence, stricter Primary gates, Control Center evidence, targeted deployment, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md`](docs/RINKRAT_SOCIAL_C1A_LEAGUE_WIRE.md) — member-only League Wire, server-sanitized public outcomes, waiver and queued-action privacy boundaries, bounded mobile UX, deployment, smoke test, and rollback.
 - [`docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md`](docs/RINKRAT_SOCIAL_C1B_TRANSACTION_PRIVACY.md) — owner-private transaction and claim projections, claim-free waiver pool, guarded backfill, privacy inspection, staged cutover, smoke test, and coordinated rollback.
 - [`docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md`](docs/RINKRAT_SOCIAL_C1C_MATCHUP_RESULTS.md) — one-event final matchup activity, playoff/championship context, no live-score spam, Functions-first deployment, mobile smoke testing, and rollback.
@@ -967,3 +969,23 @@ npm run certify:preseason-scoring
 npm run test:batchd1f2:run
 npm run verify:batchd1f2
 ```
+
+
+# Data Infrastructure Batch D1I — Season Launch Guardrails
+
+**Candidate:** RC66 / D1I
+**Authority:** D1H remains limited to one exact canonical-read Canary; direct and legacy scoring remain the proven fallbacks.
+
+D1I adds one minute-by-minute server watchdog and one hourly measured-capacity summary. One unsafe check records a warning. Two consecutive queue-wide blockers return the queue to Shadow; two consecutive canonical-only blockers remove only canonical authority while queued direct scoring continues. Every automatic fallback is revision-checked and written to the existing immutable configuration audit.
+
+Primary now also requires a healthy watchdog, fresh measured-capacity evidence, at least 30 successful live queue tasks over three days, at least 99.5% queue reliability, queue p95 no higher than 20 seconds, and conservative affected-league capacity that covers every active completed-Draft league. The worker count, 24-task admission ceiling, Canary limits, and Primary mode are never adjusted automatically.
+
+Verification:
+
+```bash
+npm run test:batchd1i:run
+npm run verify:batchd1i
+npm run build:all
+```
+
+Targeted deployment is limited to `monitorLeagueAutomationSeasonSafety`, `refreshLeagueAutomationCapacityEvidence`, `processLeagueAutomationTask`, `getLeagueAutomationQueueControlCenter`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Firestore Rule, index, TTL, migration, scoring-value, Projection V11, or automatic Primary change is required. Full details are in `docs/RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS.md`.

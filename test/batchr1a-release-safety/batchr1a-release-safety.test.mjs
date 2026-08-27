@@ -337,6 +337,10 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/nhl/nhl-canonical-facts.util.ts',
         // D1G adds isolated direct-versus-canonical shadow scoring parity.
         'src/shared/core/nhl/nhl-canonical-scoring-parity.util.ts',
+        // D1H adds an isolated same-task authority decision and circuit-breaker helper.
+        'src/shared/core/nhl/nhl-canonical-scoring-authority.util.ts',
+        // D1I adds isolated automatic fallback and measured-capacity decisions.
+        'src/shared/core/live-scoring/league-automation-season-safety.util.ts',
         // D1F.2 adds isolated queue-version helpers and scoring phase instrumentation.
         'src/shared/core/live-scoring/canonical-request-completion.util.ts',
         'src/shared/core/nhl/nhl-canonical-impact-routing.util.ts',

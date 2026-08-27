@@ -13,6 +13,10 @@ import {
   type CanonicalScoringParityObservation,
 } from '../nhl/nhl-canonical-scoring-parity.util';
 import {
+  decideCanonicalScoringAuthority,
+  type CanonicalScoringAuthorityDecision,
+} from '../nhl/nhl-canonical-scoring-authority.util';
+import {
   findSkaterBoxscoreLine,
   getGameBoxscore,
   getGamePlayByPlay,
@@ -149,6 +153,20 @@ export interface CalculateCycleScoringInput {
     observation: CanonicalScoringParityObservation,
   ) => void;
 
+  /**
+   * Enables the single-league canonical-read Canary. The direct result is
+   * still calculated in the same task and remains the automatic fallback.
+   */
+  canonicalAuthorityConfigured?: boolean;
+
+  /** The queued task must carry the exact canonical game/version set. */
+  canonicalAuthorityTaskVersionAligned?: boolean;
+
+  /** Bounded server-only evidence sink for canonical-use/fallback decisions. */
+  onCanonicalAuthorityDecision?: (
+    decision: CanonicalScoringAuthorityDecision,
+  ) => void;
+
   /** Kept optional for older callers. Scoring is based on NHL game numbers. */
   startDate?: Date;
   endDate?: Date;
@@ -162,6 +180,27 @@ interface ScoringGameData {
 interface GameScoreResult {
   points: number;
   appeared: boolean;
+}
+
+function selectCanonicalAuthorityGameResult(input: {
+  scoringInput: CalculateCycleScoringInput;
+  observation: CanonicalScoringParityObservation;
+}): GameScoreResult {
+  input.scoringInput.onCanonicalParityObservation?.(input.observation);
+
+  const decision = decideCanonicalScoringAuthority({
+    configured: input.scoringInput.canonicalAuthorityConfigured === true,
+    taskVersionAligned:
+      input.scoringInput.canonicalAuthorityTaskVersionAligned === true,
+    observation: input.observation,
+  });
+
+  input.scoringInput.onCanonicalAuthorityDecision?.(decision);
+
+  return {
+    points: decision.selectedPoints,
+    appeared: decision.selectedAppeared,
+  };
 }
 
 const NHL_SCORING_BATCH_SIZE = 6;
@@ -806,17 +845,15 @@ export async function calculateCycleScoring(
       if (state === 'final' && canReuseFinalGame(previous, game.id)) {
         const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
         const appeared = previous?.appearanceGameIds?.includes(game.id) ?? false;
-        gameScores[gameIdKey] = rounded(previousScore);
-        currentScore += previousScore;
-
-        if (appeared) {
-          actualGamesPlayed += 1;
-          appearanceGameIds.push(game.id);
-        }
+        let effectiveResult: GameScoreResult = {
+          points: rounded(previousScore),
+          appeared,
+        };
 
         if (input.canonicalParityGamesById) {
-          input.onCanonicalParityObservation?.(
-            compareDirectAndCanonicalGameScore({
+          effectiveResult = selectCanonicalAuthorityGameResult({
+            scoringInput: input,
+            observation: compareDirectAndCanonicalGameScore({
               gameId: game.id,
               asset: pick.asset,
               canonicalGame: input.canonicalParityGamesById.get(game.id),
@@ -825,7 +862,15 @@ export async function calculateCycleScoring(
               directPoints: previousScore,
               directAppeared: appeared,
             }),
-          );
+          });
+        }
+
+        gameScores[gameIdKey] = rounded(effectiveResult.points);
+        currentScore += effectiveResult.points;
+
+        if (effectiveResult.appeared) {
+          actualGamesPlayed += 1;
+          appearanceGameIds.push(game.id);
         }
 
         continue;
@@ -837,7 +882,7 @@ export async function calculateCycleScoring(
             .get(pick.asset.player.id)
             ?.get(game.id)
         : undefined;
-      const scoreResult = pick.asset.assetType === 'skater'
+      const directScoreResult = pick.asset.assetType === 'skater'
         ? calculateSkaterGameScore(
             pick.asset,
             gameData,
@@ -851,25 +896,27 @@ export async function calculateCycleScoring(
             state === 'final',
             input.scoringRules
           );
-
-      gameScores[gameIdKey] = scoreResult.points;
-      currentScore += scoreResult.points;
+      let effectiveScoreResult = directScoreResult;
 
       if (input.canonicalParityGamesById) {
-        input.onCanonicalParityObservation?.(
-          compareDirectAndCanonicalGameScore({
+        effectiveScoreResult = selectCanonicalAuthorityGameResult({
+          scoringInput: input,
+          observation: compareDirectAndCanonicalGameScore({
             gameId: game.id,
             asset: pick.asset,
             canonicalGame: input.canonicalParityGamesById.get(game.id),
             gameIsFinal: state === 'final',
             scoringRules: input.scoringRules,
-            directPoints: scoreResult.points,
-            directAppeared: scoreResult.appeared,
+            directPoints: directScoreResult.points,
+            directAppeared: directScoreResult.appeared,
           }),
-        );
+        });
       }
 
-      if (state === 'final' && scoreResult.appeared) {
+      gameScores[gameIdKey] = effectiveScoreResult.points;
+      currentScore += effectiveScoreResult.points;
+
+      if (state === 'final' && effectiveScoreResult.appeared) {
         actualGamesPlayed += 1;
         appearanceGameIds.push(game.id);
       }

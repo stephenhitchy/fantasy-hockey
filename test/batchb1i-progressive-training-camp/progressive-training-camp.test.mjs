@@ -170,7 +170,7 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
   );
   assert.equal(
     await sha256('functions/src/index.ts'),
-    '87c99bbbc6d12b975e70bd26b6e6be37661cefc3d686e4dec187216c04b73622',
+    '9d6ef3cb9e2bcc9426e8d1aedd0c17e9b71508cc7395ba660c1d286c807f14fc',
   );
 });
 

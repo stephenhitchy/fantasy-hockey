@@ -34,6 +34,7 @@ export class ScoringQueueControlCenter implements OnInit {
   readonly selectedMode = signal<LeagueAutomationQueueMode>('shadow');
   readonly selectedCanaryLeagueIds = signal<string[]>([]);
   readonly selectedInternalTestLeagueIds = signal<string[]>([]);
+  readonly selectedCanonicalAuthorityLeagueIds = signal<string[]>([]);
   readonly maxEnqueuePerRun = signal(100);
   readonly changeReason = signal('');
   readonly confirmationText = signal('');
@@ -70,7 +71,8 @@ export class ScoringQueueControlCenter implements OnInit {
           return Boolean(league.lastError) ||
             league.queueStatus === 'error' ||
             !league.scheduleExists ||
-            league.historicalReplayEnabled;
+            league.historicalReplayEnabled ||
+            league.canonicalAuthorityCircuitState === 'open';
         default:
           return true;
       }
@@ -87,15 +89,29 @@ export class ScoringQueueControlCenter implements OnInit {
     return snapshot.mode !== this.selectedMode() ||
       snapshot.maxEnqueuePerRun !== this.maxEnqueuePerRun() ||
       !sameIds(snapshot.canaryLeagueIds, this.selectedCanaryLeagueIds()) ||
-      !sameIds(snapshot.internalTestLeagueIds, this.selectedInternalTestLeagueIds());
+      !sameIds(snapshot.internalTestLeagueIds, this.selectedInternalTestLeagueIds()) ||
+      !sameIds(
+        snapshot.canonicalAuthorityLeagueIds,
+        this.selectedCanonicalAuthorityLeagueIds(),
+      );
   });
 
   readonly requiredConfirmationPhrase = computed(() => {
     const snapshot = this.snapshot();
     const mode = this.selectedMode();
+    const enablingCanonicalAuthority = Boolean(
+      snapshot &&
+      this.selectedCanonicalAuthorityLeagueIds().some(
+        (leagueId) =>
+          !snapshot.canonicalAuthorityLeagueIds.includes(leagueId),
+      )
+    );
 
     if (mode === 'canary') {
-      return 'ENABLE CANARY';
+      return enablingCanonicalAuthority
+        ? snapshot?.canonicalAuthorityConfirmationPhrase ??
+          'ENABLE CANONICAL READ CANARY'
+        : 'ENABLE CANARY';
     }
 
     if (mode === 'primary') {
@@ -129,6 +145,30 @@ export class ScoringQueueControlCenter implements OnInit {
       ) {
         return false;
       }
+
+      const canonicalAuthorityLeagueIds =
+        this.selectedCanonicalAuthorityLeagueIds();
+      const maximumCanonicalAuthorityLeagueCount =
+        snapshot.canonicalAuthorityMaximumLeagueCount ?? 1;
+
+      if (
+        canonicalAuthorityLeagueIds.length >
+          maximumCanonicalAuthorityLeagueCount ||
+        canonicalAuthorityLeagueIds.some(
+          (leagueId) =>
+            !canaryLeagueIds.includes(leagueId) ||
+            !internalTestLeagueIds.includes(leagueId),
+        )
+      ) {
+        return false;
+      }
+    }
+
+    if (
+      this.selectedMode() !== 'canary' &&
+      this.selectedCanonicalAuthorityLeagueIds().length > 0
+    ) {
+      return false;
     }
 
     if (
@@ -176,6 +216,11 @@ export class ScoringQueueControlCenter implements OnInit {
     }
 
     this.selectedMode.set(mode);
+
+    if (mode !== 'canary') {
+      this.selectedCanonicalAuthorityLeagueIds.set([]);
+    }
+
     this.confirmationText.set('');
     this.shadowRollbackArmed.set(false);
   }
@@ -204,6 +249,10 @@ export class ScoringQueueControlCenter implements OnInit {
       toggleId(current, league.leagueId),
     );
 
+    if (!selectingCanary && this.isSelectedCanonicalAuthority(league.leagueId)) {
+      this.selectedCanonicalAuthorityLeagueIds.set([]);
+    }
+
     if (selectingCanary && !this.isSelectedInternalTest(league.leagueId)) {
       this.selectedInternalTestLeagueIds.update((current) =>
         normalizeIds([...current, league.leagueId]),
@@ -230,6 +279,13 @@ export class ScoringQueueControlCenter implements OnInit {
       );
       this.canaryRunArmedLeagueId.set('');
     }
+
+    if (
+      removingInternalTest &&
+      this.isSelectedCanonicalAuthority(leagueId)
+    ) {
+      this.selectedCanonicalAuthorityLeagueIds.set([]);
+    }
   }
 
   isSelectedCanary(leagueId: string): boolean {
@@ -238,6 +294,31 @@ export class ScoringQueueControlCenter implements OnInit {
 
   isSelectedInternalTest(leagueId: string): boolean {
     return this.selectedInternalTestLeagueIds().includes(leagueId);
+  }
+
+  isSelectedCanonicalAuthority(leagueId: string): boolean {
+    return this.selectedCanonicalAuthorityLeagueIds().includes(leagueId);
+  }
+
+  toggleCanonicalAuthority(league: LeagueAutomationAdminLeague): void {
+    if (this.busy()) {
+      return;
+    }
+
+    if (this.isSelectedCanonicalAuthority(league.leagueId)) {
+      this.selectedCanonicalAuthorityLeagueIds.set([]);
+      this.confirmationText.set('');
+      return;
+    }
+
+    if (!league.canonicalAuthorityEligible) {
+      this.errorMessage.set(league.canonicalAuthorityEligibilityReason);
+      return;
+    }
+
+    this.errorMessage.set('');
+    this.selectedCanonicalAuthorityLeagueIds.set([league.leagueId]);
+    this.confirmationText.set('');
   }
 
   async saveConfiguration(): Promise<void> {
@@ -258,6 +339,9 @@ export class ScoringQueueControlCenter implements OnInit {
         mode: this.selectedMode(),
         canaryLeagueIds: normalizeIds(this.selectedCanaryLeagueIds()),
         internalTestLeagueIds: normalizeIds(this.selectedInternalTestLeagueIds()),
+        canonicalAuthorityLeagueIds: normalizeIds(
+          this.selectedCanonicalAuthorityLeagueIds(),
+        ),
         maxEnqueuePerRun: this.maxEnqueuePerRun(),
         confirmationText: this.confirmationText().trim(),
         changeReason: this.changeReason().trim(),
@@ -312,6 +396,7 @@ export class ScoringQueueControlCenter implements OnInit {
         mode: 'shadow',
         canaryLeagueIds: normalizeIds(snapshot.canaryLeagueIds),
         internalTestLeagueIds: normalizeIds(snapshot.internalTestLeagueIds),
+        canonicalAuthorityLeagueIds: [],
         maxEnqueuePerRun: snapshot.maxEnqueuePerRun,
         confirmationText: '',
         changeReason: 'Safe rollback to shadow mode from the platform-admin control center.',
@@ -386,6 +471,7 @@ export class ScoringQueueControlCenter implements OnInit {
       mode: snapshot.mode,
       canaryLeagueIds: snapshot.canaryLeagueIds,
       internalTestLeagueIds: snapshot.internalTestLeagueIds,
+      canonicalAuthorityLeagueIds: snapshot.canonicalAuthorityLeagueIds,
       maxEnqueuePerRun: snapshot.maxEnqueuePerRun,
       canarySuccessBaseline: snapshot.canarySuccessBaseline,
       successfulTasksSinceCanary: snapshot.successfulTasksSinceCanary,
@@ -462,6 +548,79 @@ export class ScoringQueueControlCenter implements OnInit {
       default:
         return 'The queued system observes schedules and health without scoring any live league. The legacy scorer remains primary.';
     }
+  }
+
+  getSeasonSafetyLabel(
+    status: LeagueAutomationQueueAdminSnapshot['seasonSafetyStatus'],
+  ): string {
+    switch (status) {
+      case 'ready':
+        return 'Ready for controlled season use';
+      case 'attention':
+        return 'Needs attention';
+      case 'blocked':
+        return 'Blocked — use direct fallback or Shadow';
+      default:
+        return 'Observing';
+    }
+  }
+
+  getSeasonSafetyClass(
+    status: LeagueAutomationQueueAdminSnapshot['seasonSafetyStatus'],
+  ): string {
+    return `season-safety-${status}`;
+  }
+
+  getWatchdogLabel(
+    status: LeagueAutomationQueueAdminSnapshot['seasonSafetyWatchdog']['status'],
+  ): string {
+    switch (status) {
+      case 'healthy':
+        return 'Healthy and armed';
+      case 'warning':
+        return 'Confirming a warning';
+      case 'error':
+        return 'Watchdog check failed';
+      case 'canonical-fallback':
+        return 'Canonical authority disabled';
+      case 'shadow-fallback':
+        return 'Returned to Shadow';
+      case 'observing':
+        return 'Observing in Shadow';
+      default:
+        return 'Awaiting first heartbeat';
+    }
+  }
+
+  getWatchdogClass(
+    status: LeagueAutomationQueueAdminSnapshot['seasonSafetyWatchdog']['status'],
+  ): string {
+    return `watchdog-status-${status}`;
+  }
+
+  getCapacityEvidenceLabel(
+    level: LeagueAutomationQueueAdminSnapshot['capacityEvidence']['evidenceLevel'],
+  ): string {
+    switch (level) {
+      case 'representative':
+        return 'Representative live evidence';
+      case 'preliminary':
+        return 'Preliminary live evidence';
+      default:
+        return 'Not enough live evidence';
+    }
+  }
+
+  formatHeadroomRatio(value: number): string {
+    return Number.isFinite(value)
+      ? `${Math.round(value * 100)}%`
+      : 'Not recorded';
+  }
+
+  formatPercentage(value: number, sampleCount: number): string {
+    return Number.isFinite(value) && sampleCount > 0
+      ? `${(value * 100).toFixed(1)}%`
+      : 'Not recorded';
   }
 
   getEnvironmentLabel(environment: LeagueAutomationQueueAdminSnapshot['environment']): string {
@@ -541,6 +700,16 @@ export class ScoringQueueControlCenter implements OnInit {
         return 'League Selection Updated';
       case 'manual-canary-run-requested':
         return 'Manual Canary Run';
+      case 'canonical-authority-canary-enabled':
+        return 'Canonical Read Canary Enabled';
+      case 'canonical-authority-canary-disabled':
+        return 'Canonical Read Canary Disabled';
+      case 'canonical-authority-circuit-opened':
+        return 'Canonical Circuit Breaker Opened';
+      case 'season-watchdog-canonical-fallback':
+        return 'Season Watchdog Disabled Canonical Authority';
+      case 'season-watchdog-returned-to-shadow':
+        return 'Season Watchdog Returned to Shadow';
       case 'configuration-no-change':
         return 'Configuration Rechecked';
       default:
@@ -590,6 +759,9 @@ export class ScoringQueueControlCenter implements OnInit {
     this.selectedCanaryLeagueIds.set(normalizeIds(snapshot.canaryLeagueIds));
     this.selectedInternalTestLeagueIds.set(
       normalizeIds(snapshot.internalTestLeagueIds),
+    );
+    this.selectedCanonicalAuthorityLeagueIds.set(
+      normalizeIds(snapshot.canonicalAuthorityLeagueIds),
     );
     this.maxEnqueuePerRun.set(snapshot.maxEnqueuePerRun);
     this.confirmationText.set('');

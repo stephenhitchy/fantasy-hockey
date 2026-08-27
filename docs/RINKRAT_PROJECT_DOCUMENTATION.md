@@ -1,3 +1,45 @@
+# Data Infrastructure Batch D1I — Season Launch Guardrails
+
+**Candidate:** RC66 / D1I
+**Authority:** D1H canonical authority remains limited to one exact Internal Test Canary; direct and legacy scoring remain available fallbacks.
+
+D1I adds the operational guardrails needed before the season: a minute-by-minute two-strike watchdog, automatic canonical-only fallback, automatic return to Shadow for persistent queue-wide blockers, and one hourly fourteen-day live queue-capacity summary. Every automatic mode change uses the existing revision and audit contract. The watchdog never promotes Primary, expands the Canary cohort, or changes queue concurrency.
+
+Primary is additionally locked until the watchdog is healthy, capacity evidence is fresh, at least 30 successful live queue tasks span at least three days, queue reliability is at least 99.5%, p95 is no more than 20 seconds, and the conservative 70%-headroom capacity calculation covers all completed-Draft leagues. The Control Center exposes heartbeat, warning streaks, automatic actions, queue samples, p95, capacity, and planning-only worker estimates.
+
+Verification:
+
+```bash
+npm run test:batchd1i:run
+npm run verify:batchd1i
+npm run build:all
+```
+
+Deployment is limited to `monitorLeagueAutomationSeasonSafety`, `refreshLeagueAutomationCapacityEvidence`, `processLeagueAutomationTask`, `getLeagueAutomationQueueControlCenter`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Firestore Rule, index, TTL, migration, scoring-value, Projection V11, six-game, or automatic Primary change is required. Full details are in `docs/RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS.md`.
+
+---
+
+# Data Infrastructure Batch D1H — Season-Safe Canonical Authority Canary
+
+**Candidate:** RC66 / D1H
+**Authority:** one exact Internal Test league may select a canonical value only after the same task proves an exact direct-source match; automatic direct-source fallback remains available on every task.
+
+D1H adds the smallest reversible competitive cutover. The existing direct NHL result is still calculated first. Exact matched canonical points may be selected for one pre-proven Canary league, while missing, incomplete, mismatched, or version-misaligned evidence immediately selects the direct result and opens a server circuit breaker. The breaker removes only canonical authority, retains queued Canary scoring, records an audit trail, and requires fresh shadow parity before deliberate reactivation.
+
+Activation requires an unchanged exact Canary/Internal Test cohort, current perfect D1G parity, at least three successful queued tasks, an idle queue, one league maximum, recent administrator authentication, and the exact `ENABLE CANONICAL READ CANARY` phrase. Global Primary remains locked while this experiment is active.
+
+Verification:
+
+```bash
+npm run test:batchd1h:run
+npm run verify:batchd1h
+npm run build:all
+```
+
+Deployment is limited to `processLeagueAutomationTask`, `getLeagueAutomationQueueControlCenter`, `updateLeagueAutomationQueueConfig`, `queueLeagueAutomationCanaryCheck`, and `hosting:app`. No Firestore Rule, index, TTL, migration, scoring-value, Projection V11, or automatic Primary change is required. Full details and the season launch checklist are in `docs/RINKRAT_DATA_D1H_SEASON_SAFETY_CANONICAL_AUTHORITY.md`.
+
+---
+
 # Data Infrastructure Batch D1G — Canonical Scoring Shadow Parity
 
 **Candidate:** RC66 / D1G

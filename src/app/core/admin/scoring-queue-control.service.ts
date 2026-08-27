@@ -22,6 +22,93 @@ export interface LeagueAutomationPromotionGate {
   detail: string;
 }
 
+export type LeagueAutomationSeasonSafetyStatus =
+  | 'observing'
+  | 'ready'
+  | 'attention'
+  | 'blocked';
+
+export interface LeagueAutomationSeasonSafetyAlert {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  label: string;
+  detail: string;
+}
+
+export type LeagueAutomationWatchdogAction =
+  | 'none'
+  | 'disable-canonical-authority'
+  | 'return-to-shadow';
+
+export type LeagueAutomationWatchdogStatus =
+  | 'not-recorded'
+  | 'observing'
+  | 'healthy'
+  | 'warning'
+  | 'error'
+  | 'canonical-fallback'
+  | 'shadow-fallback';
+
+export interface LeagueAutomationSeasonWatchdogSnapshot {
+  status: LeagueAutomationWatchdogStatus;
+  lastAttemptAt: string | null;
+  lastSuccessfulAt: string | null;
+  queueBlockingStreak: number;
+  canonicalBlockingStreak: number;
+  requiredBlockingStreak: number;
+  lastAction: LeagueAutomationWatchdogAction;
+  lastActionAt: string | null;
+  lastActionReason: string;
+  automaticShadowFallbackCount: number;
+  automaticCanonicalFallbackCount: number;
+  consecutiveFailureCount: number;
+  lastError: string;
+  lastQueueBlockingAlertIds: string[];
+  lastCanonicalBlockingAlertIds: string[];
+}
+
+export type LeagueAutomationCapacityEvidenceLevel =
+  | 'insufficient'
+  | 'preliminary'
+  | 'representative';
+
+export interface LeagueAutomationCapacityEvidence {
+  status: 'not-recorded' | 'healthy' | 'error';
+  consecutiveFailureCount: number;
+  lastError: string;
+  lastAttemptAt: string | null;
+  evidenceLevel: LeagueAutomationCapacityEvidenceLevel;
+  queueTaskSampleCount: number;
+  queueTaskSuccessCount: number;
+  queueTaskErrorCount: number;
+  queueTaskSkippedCount: number;
+  queueTaskReliabilityRate: number;
+  sampledDayCount: number;
+  averageDurationMilliseconds: number;
+  p95DurationMilliseconds: number;
+  maximumDurationMilliseconds: number;
+  workerCount: number;
+  refreshIntervalMilliseconds: number;
+  headroomRatio: number;
+  safeAffectedLeagueCapacity: number;
+  recommendedWorkersFor25Leagues: number;
+  recommendedWorkersFor50Leagues: number;
+  promotionEvidenceReady: boolean;
+  p95WithinPrimaryTarget: boolean;
+  reliabilityWithinPrimaryTarget: boolean;
+  supportsActiveLeagueTarget: boolean;
+  primaryCapacityReady: boolean;
+  windowDays: number;
+  dateFrom: string;
+  dateTo: string;
+  lastRefreshedAt: string | null;
+  source: 'queue-task';
+  allScoringSampleCount: number;
+  allScoringAverageDurationMilliseconds: number;
+  allScoringP95DurationMilliseconds: number;
+  allScoringMaximumDurationMilliseconds: number;
+}
+
 export interface LeagueAutomationAdminLeague {
   leagueId: string;
   leagueName: string;
@@ -43,6 +130,16 @@ export interface LeagueAutomationAdminLeague {
   activeTaskLeaseExpiresAt: string | null;
   isCanary: boolean;
   isInternalTest: boolean;
+  canonicalAuthorityConfigured: boolean;
+  canonicalAuthorityEligible: boolean;
+  canonicalAuthorityEligibilityReason: string;
+  canonicalAuthorityCircuitState: 'closed' | 'open' | 'not-configured';
+  canonicalAuthorityLastDecision: string;
+  canonicalAuthorityLastFallbackReason: string;
+  canonicalAuthorityCanonicalUseCount: number;
+  canonicalAuthorityDirectFallbackCount: number;
+  canonicalParityConsecutivePassingRunCount: number;
+  canonicalParityRequiredPassingRunCount: number;
   canaryEligible: boolean;
   canaryEligibilityReason: string;
   scoringPath: LeagueAutomationScoringPath;
@@ -57,6 +154,8 @@ export interface LeagueAutomationQueueAuditEntry {
   canaryLeagueIdsAfter: string[];
   internalTestLeagueIdsBefore: string[];
   internalTestLeagueIdsAfter: string[];
+  canonicalAuthorityLeagueIdsBefore: string[];
+  canonicalAuthorityLeagueIdsAfter: string[];
   reason: string;
   adminId: string;
   leagueId: string;
@@ -106,6 +205,16 @@ export interface LeagueAutomationQueueHealth {
   canonicalParityTotalComparedCount?: number;
   canonicalParityCohortMaximumAbsolutePointDelta?: number;
   canonicalParityCohortPassing?: boolean;
+  canonicalAuthorityConfiguredLeagueId?: string;
+  canonicalAuthorityCircuitState?: string;
+  canonicalAuthorityLastDecision?: string;
+  canonicalAuthorityLastFallbackReason?: string;
+  canonicalAuthorityLastRuntimeEnabled?: boolean;
+  canonicalAuthorityLastRuntimeReason?: string;
+  canonicalAuthorityLastCanonicalUseCount?: number;
+  canonicalAuthorityLastDirectFallbackCount?: number;
+  canonicalAuthorityCircuitOpenCount?: number;
+  canonicalAuthorityLastOpenedAt?: string | null;
 }
 
 export interface LeagueAutomationQueueAdminSnapshot {
@@ -116,6 +225,14 @@ export interface LeagueAutomationQueueAdminSnapshot {
   mode: LeagueAutomationQueueMode;
   canaryLeagueIds: string[];
   internalTestLeagueIds: string[];
+  canonicalAuthorityLeagueIds: string[];
+  canonicalAuthorityConfirmationPhrase: string;
+  canonicalAuthorityMaximumLeagueCount: number;
+  canonicalAuthorityMinimumParityStreak: number;
+  seasonSafetyStatus: LeagueAutomationSeasonSafetyStatus;
+  seasonSafetyAlerts: LeagueAutomationSeasonSafetyAlert[];
+  seasonSafetyWatchdog: LeagueAutomationSeasonWatchdogSnapshot;
+  capacityEvidence: LeagueAutomationCapacityEvidence;
   maxEnqueuePerRun: number;
   canarySuccessBaseline: number;
   successfulTasksSinceCanary: number;
@@ -148,6 +265,7 @@ export interface UpdateLeagueAutomationQueueConfigRequest {
   mode: LeagueAutomationQueueMode;
   canaryLeagueIds: string[];
   internalTestLeagueIds: string[];
+  canonicalAuthorityLeagueIds: string[];
   maxEnqueuePerRun: number;
   confirmationText: string;
   changeReason: string;
