@@ -92,6 +92,18 @@ test('Firebase Functions and Hosting fail closed around clean builds', async () 
   assert.match(packageJson.scripts['deploy:season-ready'], /refuse-broad-production-deploy/);
 });
 
+
+
+test('Firebase CLI and Emulator Suite debug logs cannot dirty a release build', async () => {
+  const gitignore = await read('.gitignore');
+  const recovery = await read('scripts/security/sync-repository-automation.mjs');
+
+  assert.match(gitignore, /^\/\*-debug\.log$/m);
+  assert.match(gitignore, /^\/\*-debug\.\*\.log$/m);
+  assert.match(recovery, /FIREBASE_DEBUG_IGNORE_RULES/);
+  assert.match(recovery, /Firebase CLI and Emulator Suite debug logs/);
+});
+
 test('Release Readiness displays one required clean-source check', async () => {
   const source = await read('src/app/core/release/release-readiness.service.ts');
   assert.match(source, /'clean-source-revision'/);

@@ -1003,3 +1003,7 @@ npm run build:all
 ```
 
 Deploy only `dispatchDueLeagueAutomation`, `getLeagueAutomationQueueControlCenter`, `monitorLeagueAutomationSeasonSafety`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Rules, indexes, TTL, migration, scoring-value, or Projection V11 deployment is required. See `docs/RINKRAT_OPERATIONS_D1J2_RELEASE_EVIDENCE_REPAIR.md`.
+
+## Operations Hotfix D1J.2.1 — Firebase Debug Log Reproducibility
+
+D1J.2.1 keeps Firebase CLI and Emulator Suite `*-debug.log` output outside Git release evidence and teaches repository recovery to restore the ignore policy. Existing repositories must untrack any inherited `firestore-debug.log` once before rebuilding. Competitive behavior is unchanged.

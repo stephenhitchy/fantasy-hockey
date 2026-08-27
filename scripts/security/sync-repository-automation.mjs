@@ -13,6 +13,10 @@ const markerPath = path.join(projectRoot, '.github/rinkrat-automation-version');
 const SECURITY_REPORT_IGNORE_RULE = '/.security-reports/';
 const BETA_RELEASE_IGNORE_RULE = '/.beta-release/';
 const SEASON_RELEASE_IGNORE_RULE = '/.season-release/';
+const FIREBASE_DEBUG_IGNORE_RULES = [
+  '/*-debug.log',
+  '/*-debug.*.log',
+];
 
 function safeProjectPath(relativePath) {
   if (
@@ -48,6 +52,16 @@ async function ensureGeneratedIgnoreRules() {
   let current = await readOptionalText(gitignorePath) ?? '';
   const additions = [];
   const normalizedLines = new Set(current.split(/\r?\n/).map((line) => line.trim()));
+
+  const missingFirebaseDebugRules = FIREBASE_DEBUG_IGNORE_RULES.filter(
+    (rule) => !normalizedLines.has(rule),
+  );
+  if (missingFirebaseDebugRules.length > 0) {
+    additions.push(
+      '# Firebase CLI and Emulator Suite debug logs',
+      ...missingFirebaseDebugRules,
+    );
+  }
 
   if (!normalizedLines.has(SECURITY_REPORT_IGNORE_RULE)) {
     additions.push('# Generated security reports', SECURITY_REPORT_IGNORE_RULE);
