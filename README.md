@@ -991,3 +991,15 @@ npm run build:all
 ```
 
 Targeted deployment is limited to `monitorLeagueAutomationSeasonSafety`, `refreshLeagueAutomationCapacityEvidence`, `processLeagueAutomationTask`, `getLeagueAutomationQueueControlCenter`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Firestore Rule, index, TTL, migration, scoring-value, Projection V11, or automatic Primary change is required. Full details are in `docs/RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS.md`.
+
+## Operations Batch D1J.2 — Release Evidence Repair
+
+D1J.2 repairs the season-freeze evidence path found during production review. RinkRat now separates all observed due schedules from Canary/Primary-eligible backlog, so Shadow and unrelated historical schedules cannot create a false critical alert. Release Readiness and the invite-beta gate reject missing, unversioned, or dirty source revisions. Functions and Hosting deployments check Git before and after their builds and cancel before upload when the source is not one clean commit; legacy broad npm production deployment commands fail closed in favor of exact release selectors.
+
+```bash
+npm run test:batchd1j2:run
+npm run verify:batchd1j2
+npm run build:all
+```
+
+Deploy only `dispatchDueLeagueAutomation`, `getLeagueAutomationQueueControlCenter`, `monitorLeagueAutomationSeasonSafety`, `updateLeagueAutomationQueueConfig`, and `hosting:app`. No Rules, indexes, TTL, migration, scoring-value, or Projection V11 deployment is required. See `docs/RINKRAT_OPERATIONS_D1J2_RELEASE_EVIDENCE_REPAIR.md`.

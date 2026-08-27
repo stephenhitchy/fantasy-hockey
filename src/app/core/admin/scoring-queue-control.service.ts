@@ -180,6 +180,7 @@ export interface LeagueAutomationQueueHealth {
   queueTaskSuccessCount?: number;
   queueTaskRetryAttemptCount?: number;
   queueOldestDueAgeMilliseconds?: number | null;
+  queueOldestObservedDueAgeMilliseconds?: number | null;
   queueScheduleCoverageCount?: number;
   queueScheduleCoverageCompletedDraftCount?: number;
   queueTaskMaxConcurrentDispatches?: number;

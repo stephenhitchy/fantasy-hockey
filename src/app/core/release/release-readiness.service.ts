@@ -1,4 +1,5 @@
 import { FIREBASE_APP_CHECK_CONFIG } from '../../../environments/app-check.config';
+import { BUNDLED_RELEASE_MANIFEST } from '../../../environments/generated-release-manifest';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 import { getScoringRuntimeState } from '../cycle/cycle-runtime.config';
@@ -263,6 +264,24 @@ export async function loadReleaseReadinessSnapshot(
           ? 'Production-like host is using the safe effective scoring mode.'
           : 'Local development host detected; historical testing is permitted.',
       'pass',
+      true,
+    ),
+  );
+
+  const cleanSourceRevision = /^[0-9a-f]{40}$/i.test(
+    BUNDLED_RELEASE_MANIFEST.sourceRevision,
+  );
+  checks.push(
+    createCheck(
+      'clean-source-revision',
+      'configuration',
+      'Deployed source revision is clean and reproducible',
+      cleanSourceRevision
+        ? `This build is tied to Git commit ${BUNDLED_RELEASE_MANIFEST.sourceRevision.slice(0, 12)}.`
+        : BUNDLED_RELEASE_MANIFEST.sourceRevision.endsWith('-dirty')
+          ? 'This build was created from uncommitted source. Commit the intended release, rebuild from that clean commit, and redeploy before season validation.'
+          : 'This build does not contain one clean 40-character Git revision. Rebuild from a committed source revision before season validation.',
+      cleanSourceRevision ? 'pass' : 'fail',
       true,
     ),
   );
@@ -655,7 +674,11 @@ export async function loadReleaseReadinessSnapshot(
     typeof leagueAutomation?.['queueScheduleCoverageCompletedDraftCount'] === 'number'
       ? leagueAutomation['queueScheduleCoverageCompletedDraftCount']
       : 0;
-  const queueOldestDueAge = leagueAutomation?.['queueOldestDueAgeMilliseconds'];
+  const queueOldestEligibleDueAge =
+    leagueAutomation?.['queueOldestDueAgeMilliseconds'];
+  const queueOldestObservedDueAge =
+    leagueAutomation?.['queueOldestObservedDueAgeMilliseconds'] ??
+    queueOldestEligibleDueAge;
   const queueHealthy =
     queueFailedEnqueueCount === 0 &&
     queueRecoveredStaleCount === 0 &&
@@ -676,7 +699,9 @@ export async function loadReleaseReadinessSnapshot(
       `Mode ${leagueQueueMode}; dispatcher last ran ${formatAgeMinutes(queueDispatchAge)}; ` +
         `${queueDueCount} due schedule(s) sampled, ${queueEligibleCount} eligible for enqueue; ` +
         `${queueSelectedCount} selected this pass, ${queueActivePendingCount}/${queueMaxPendingCount || 'unknown'} pending; ` +
-        `oldest due age ${formatDurationMilliseconds(queueOldestDueAge)}${leagueQueueMode === 'shadow' ? ' (observation only; the legacy scorer remains authoritative)' : ''}; ` +
+        (leagueQueueMode === 'shadow'
+          ? `oldest observed due age ${formatDurationMilliseconds(queueOldestObservedDueAge)} (observation only; the legacy scorer remains authoritative); `
+          : `oldest eligible due age ${formatDurationMilliseconds(queueOldestEligibleDueAge)}; `) +
         `schedule coverage ${queueCoverageCount}/${queueCoverageTarget || 'not measured'} ` +
         `(bootstrap ${formatAgeMinutes(queueBootstrapAge)}); ` +
         `${queueFailedEnqueueCount} enqueue failure(s), ${queueRecoveredStaleCount} stale task(s) recovered in the latest sweep.`,

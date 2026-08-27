@@ -12,7 +12,9 @@
         "*.local"
       ],
       "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
+        "npm --prefix \"$PROJECT_DIR\" run release:verify-clean-deploy-source",
+        "npm --prefix \"$RESOURCE_DIR\" run build",
+        "npm --prefix \"$PROJECT_DIR\" run release:verify-clean-deploy-source"
       ]
     }
   ],
@@ -183,6 +185,11 @@
           }
         ]
       }
+    ],
+    "predeploy": [
+      "npm --prefix \"$PROJECT_DIR\" run release:verify-clean-deploy-source",
+      "npm --prefix \"$PROJECT_DIR\" run build",
+      "npm --prefix \"$PROJECT_DIR\" run release:verify-clean-deploy-source"
     ]
   },
   "emulators": {

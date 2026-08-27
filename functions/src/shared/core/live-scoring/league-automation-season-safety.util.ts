@@ -6,6 +6,12 @@ export const LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_DAY_COUNT = 3;
 export const LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS = 20_000;
 export const LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE = 0.995;
 
+export function shouldTreatLeagueAutomationDueAgeAsBacklog(
+  mode: 'shadow' | 'canary' | 'primary',
+): boolean {
+  return mode !== 'shadow';
+}
+
 export type LeagueAutomationWatchdogAction =
   | 'none'
   | 'disable-canonical-authority'

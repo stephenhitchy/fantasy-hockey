@@ -87,6 +87,7 @@ import {
   LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
   buildLeagueAutomationCapacityRecommendation,
   decideLeagueAutomationWatchdogAction,
+  shouldTreatLeagueAutomationDueAgeAsBacklog,
   type LeagueAutomationCapacityRecommendation,
   type LeagueAutomationWatchdogAction,
   type LeagueAutomationWatchdogStatus,
@@ -2765,6 +2766,9 @@ function buildLeagueAutomationSeasonSafetyAlerts(input: {
   const oldestDueAge = getLeagueAutomationNumber(
     input.healthData['queueOldestDueAgeMilliseconds'],
   ) ?? 0;
+  const oldestObservedDueAge = getLeagueAutomationNumber(
+    input.healthData['queueOldestObservedDueAgeMilliseconds'],
+  ) ?? oldestDueAge;
   const activePending = getLeagueAutomationNumber(
     input.healthData['queueActivePendingTaskCount'],
   ) ?? 0;
@@ -2808,7 +2812,9 @@ function buildLeagueAutomationSeasonSafetyAlerts(input: {
       id: 'queue-observing',
       severity: 'info',
       label: 'Shadow observation is active',
-      detail: 'The legacy scorer remains authoritative while queue and feed health are observed.',
+      detail: oldestObservedDueAge > 0
+        ? `The legacy scorer remains authoritative. ${Math.round(oldestObservedDueAge / 1000)} seconds of due-schedule age is observation evidence, not queued backlog.`
+        : 'The legacy scorer remains authoritative while queue and feed health are observed.',
     });
   }
 
@@ -2886,19 +2892,28 @@ function buildLeagueAutomationSeasonSafetyAlerts(input: {
     });
   }
 
-  if (oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_BLOCKING_MILLISECONDS) {
+  const dueAgeRepresentsBacklog =
+    shouldTreatLeagueAutomationDueAgeAsBacklog(input.config.mode);
+
+  if (
+    dueAgeRepresentsBacklog &&
+    oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_BLOCKING_MILLISECONDS
+  ) {
     alerts.push({
       id: 'queue-backlog-blocking',
       severity: 'critical',
       label: 'Scoring backlog exceeds ten minutes',
-      detail: `The oldest due league has waited ${Math.round(oldestDueAge / 1000)} seconds. Return to Shadow if this does not clear immediately.`,
+      detail: `The oldest eligible due league has waited ${Math.round(oldestDueAge / 1000)} seconds. Return to Shadow if this does not clear immediately.`,
     });
-  } else if (oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_WARNING_MILLISECONDS) {
+  } else if (
+    dueAgeRepresentsBacklog &&
+    oldestDueAge > LEAGUE_AUTOMATION_SEASON_SAFETY_BACKLOG_WARNING_MILLISECONDS
+  ) {
     alerts.push({
       id: 'queue-backlog-warning',
       severity: 'warning',
       label: 'Scoring backlog is growing',
-      detail: `The oldest due league has waited ${Math.round(oldestDueAge / 1000)} seconds.`,
+      detail: `The oldest eligible due league has waited ${Math.round(oldestDueAge / 1000)} seconds.`,
     });
   }
 
@@ -3262,6 +3277,9 @@ async function buildLeagueAutomationQueueAdminSnapshot(
       ) ?? 0,
       queueOldestDueAgeMilliseconds: getLeagueAutomationNumber(
         healthData['queueOldestDueAgeMilliseconds'],
+      ),
+      queueOldestObservedDueAgeMilliseconds: getLeagueAutomationNumber(
+        healthData['queueOldestObservedDueAgeMilliseconds'],
       ),
       queueScheduleCoverageCount: getLeagueAutomationNumber(
         healthData['queueScheduleCoverageCount'],
@@ -7478,7 +7496,10 @@ export const dispatchDueLeagueAutomation = onSchedule(
       (result) => result.status === 'fulfilled' && result.value === 'stale',
     ).length;
     const failedCount = results.filter((result) => result.status === 'rejected').length;
-    const oldestDueAt = dueSchedules[0]?.expectedDueAtMilliseconds ?? null;
+    const oldestObservedDueAt =
+      dueSchedules[0]?.expectedDueAtMilliseconds ?? null;
+    const oldestEligibleDueAt =
+      eligibleSchedules[0]?.expectedDueAtMilliseconds ?? null;
 
     await db.doc('appData/leagueAutomation').set(
       {
@@ -7497,7 +7518,13 @@ export const dispatchDueLeagueAutomation = onSchedule(
         queueStaleCandidateCount: staleCount,
         queueFailedEnqueueCount: failedCount,
         queueOldestDueAgeMilliseconds:
-          oldestDueAt === null ? null : Math.max(0, now - oldestDueAt),
+          oldestEligibleDueAt === null
+            ? null
+            : Math.max(0, now - oldestEligibleDueAt),
+        queueOldestObservedDueAgeMilliseconds:
+          oldestObservedDueAt === null
+            ? null
+            : Math.max(0, now - oldestObservedDueAt),
         queueTaskMaxConcurrentDispatches:
           LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
         queueTaskMaxPendingTasks: LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS,

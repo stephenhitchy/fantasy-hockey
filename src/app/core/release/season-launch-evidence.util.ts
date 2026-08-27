@@ -71,6 +71,7 @@ export interface SeasonLaunchScoringSnapshot {
     queueFailedEnqueueCount?: number;
     queueLastRecoveryCount?: number;
     queueOldestDueAgeMilliseconds?: number | null;
+    queueOldestObservedDueAgeMilliseconds?: number | null;
     canonicalParityCohortPassing?: boolean;
     canonicalParityMismatchLeagueCount?: number;
     canonicalParityIncompleteLeagueCount?: number;
@@ -115,6 +116,7 @@ export interface SeasonLaunchScoringEvidenceReport {
     failedEnqueueCount: number;
     staleRecoveryCount: number;
     oldestDueAgeMilliseconds: number | null;
+    oldestObservedDueAgeMilliseconds: number | null;
     canonicalParityCohortPassing: boolean;
     canonicalParityMismatchLeagueCount: number;
     canonicalParityIncompleteLeagueCount: number;
@@ -341,6 +343,8 @@ export function createSeasonLaunchScoringEvidenceReport(input: {
       staleRecoveryCount: finiteInteger(health.queueLastRecoveryCount),
       oldestDueAgeMilliseconds:
         health.queueOldestDueAgeMilliseconds ?? null,
+      oldestObservedDueAgeMilliseconds:
+        health.queueOldestObservedDueAgeMilliseconds ?? null,
       canonicalParityCohortPassing:
         health.canonicalParityCohortPassing === true,
       canonicalParityMismatchLeagueCount: finiteInteger(

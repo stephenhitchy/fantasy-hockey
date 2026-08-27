@@ -71,6 +71,7 @@ export interface InviteBetaValidationGroupView {
 export interface InviteBetaLaunchGateInput {
   automatedChecks: ReleaseReadinessCheck[];
   simulation: SeasonLifecycleSimulationResult | null;
+  releaseManifest: ReleaseManifest | null;
   manualSession: InviteBetaValidationSession;
   connectionOnline: boolean;
   activeActionCount: number;
@@ -586,6 +587,24 @@ export function buildInviteBetaValidationGroups(
   });
 }
 
+export function getInviteBetaBuildIntegrityBlocker(
+  manifest: ReleaseManifest | null,
+): string | null {
+  if (!manifest) {
+    return 'The deployed build fingerprint is unavailable. Refresh the deployed-build check before final validation.';
+  }
+
+  if (/^[0-9a-f]{40}$/i.test(manifest.sourceRevision)) {
+    return null;
+  }
+
+  if (manifest.sourceRevision.endsWith('-dirty')) {
+    return 'The deployed build was created from uncommitted source. Commit the release, rebuild it, redeploy Hosting, and repeat validation on the clean build.';
+  }
+
+  return 'The deployed build does not contain one clean 40-character Git revision. Rebuild and redeploy from a committed release before final validation.';
+}
+
 export function calculateInviteBetaLaunchGate(
   input: InviteBetaLaunchGateInput,
 ): InviteBetaLaunchGate {
@@ -608,6 +627,14 @@ export function calculateInviteBetaLaunchGate(
   const blockers: string[] = [];
   const advisories: string[] = [];
   let hasHardFailure = false;
+  const buildIntegrityBlocker = getInviteBetaBuildIntegrityBlocker(
+    input.releaseManifest,
+  );
+
+  if (buildIntegrityBlocker) {
+    blockers.push(buildIntegrityBlocker);
+    hasHardFailure = true;
+  }
 
   for (const check of automatedRequiredChecks) {
     if (check.level === 'pass') {

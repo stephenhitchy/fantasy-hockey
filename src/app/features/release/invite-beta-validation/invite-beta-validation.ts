@@ -78,6 +78,7 @@ export class InviteBetaValidation implements OnChanges, OnDestroy {
     return calculateInviteBetaLaunchGate({
       automatedChecks: this.automatedChecks,
       simulation: this.simulation,
+      releaseManifest: this.releaseManifest,
       manualSession: this.session(),
       connectionOnline: this.connectionOnline,
       activeActionCount: this.competitiveActions?.activeCount ?? 0,

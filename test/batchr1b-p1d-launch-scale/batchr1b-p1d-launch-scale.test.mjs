@@ -106,6 +106,17 @@ const automatedPass = {
   requiredForLiveLaunch: true,
 };
 
+const cleanReleaseManifest = {
+  schemaVersion: 1,
+  releaseLabel: 'Release Candidate 6',
+  buildId: 'build-a',
+  builtAt: '2026-08-05T12:00:00.000Z',
+  sourceRevision: 'abcdef1234567890abcdef1234567890abcdef12',
+  packageVersion: '0.0.0',
+  scoringRulesVersion: 3,
+  projectionVersion: 11,
+};
+
 test('invite-beta board covers the fresh-league launch workflow and preserves the scale boundary', () => {
   assert.equal(INVITE_BETA_VALIDATION_GROUPS.length, 6);
   assert.ok(INVITE_BETA_VALIDATION_DEFINITIONS.length >= 25);
@@ -175,6 +186,7 @@ test('launch gate combines automated checks, simulation, manual workflows, conne
   const testingGate = calculateInviteBetaLaunchGate({
     automatedChecks: [automatedPass],
     simulation: null,
+    releaseManifest: cleanReleaseManifest,
     manualSession: emptySession,
     connectionOnline: true,
     activeActionCount: 0,
@@ -191,6 +203,7 @@ test('launch gate combines automated checks, simulation, manual workflows, conne
   const readyGate = calculateInviteBetaLaunchGate({
     automatedChecks: [automatedPass],
     simulation: simulation(true),
+    releaseManifest: cleanReleaseManifest,
     manualSession: passEveryRequiredItem(emptySession),
     connectionOnline: true,
     activeActionCount: 0,
@@ -206,6 +219,7 @@ test('launch gate combines automated checks, simulation, manual workflows, conne
   const staleGate = calculateInviteBetaLaunchGate({
     automatedChecks: [automatedPass],
     simulation: simulation(true),
+    releaseManifest: cleanReleaseManifest,
     manualSession: passEveryRequiredItem(emptySession),
     connectionOnline: true,
     activeActionCount: 0,
@@ -229,6 +243,7 @@ test('validation reports retain manual evidence and build identity without autom
   const gate = calculateInviteBetaLaunchGate({
     automatedChecks: [automatedPass],
     simulation: simulation(true),
+    releaseManifest: cleanReleaseManifest,
     manualSession: session,
     connectionOnline: true,
     activeActionCount: 0,
@@ -246,16 +261,7 @@ test('validation reports retain manual evidence and build identity without autom
     simulation: simulation(true),
     clientPerformance: null,
     competitiveActions: null,
-    releaseManifest: {
-      schemaVersion: 1,
-      releaseLabel: 'Release Candidate 6',
-      buildId: 'build-a',
-      builtAt: '2026-08-05T12:00:00.000Z',
-      sourceRevision: 'abcdef123456',
-      packageVersion: '0.0.0',
-      scoringRulesVersion: 3,
-      projectionVersion: 11,
-    },
+    releaseManifest: cleanReleaseManifest,
     viewport: '390x844 @ 3x',
     browser: 'Mobile Safari',
   });
