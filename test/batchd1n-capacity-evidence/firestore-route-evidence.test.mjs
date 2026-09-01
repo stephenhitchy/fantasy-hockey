@@ -217,6 +217,7 @@ test('all browser snapshot streams emit bounded metadata-only evidence', async (
   assert.match(monitorSource, /snapshot\.exists/);
   assert.match(monitorSource, /metadata\?\.fromCache/);
   assert.match(performanceSource, /MAX_FIRESTORE_ROUTE_SAMPLES_PER_SESSION = 24/);
+  assert.match(performanceSource, /FIRESTORE_ROUTE_SETTLE_MILLISECONDS = 5_000/);
   assert.match(performanceSource, /telemetry\.sanitizedRoute\(event\.url\)/);
   assert.match(performanceSource, /markFirestoreRouteNavigationSettled\(token, this\.latestRoute\)/);
   assert.match(performanceSource, /firestore_route_evidence/);

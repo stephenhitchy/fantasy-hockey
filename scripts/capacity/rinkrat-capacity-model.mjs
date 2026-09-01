@@ -41,7 +41,7 @@ const STATIC_ROUTE_PROFILES = Object.freeze({
 });
 
 const FREE_AGENTS_LISTENER_MODEL = Object.freeze({
-  fixedRouteListeners: 6,
+  fixedRouteListeners: 9,
   rosterListenersPerTeam: 1,
   assumedActiveCycles: 1,
   teamWindowListenersPerActiveCycle: 1,

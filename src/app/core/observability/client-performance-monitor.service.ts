@@ -32,7 +32,10 @@ import {
 } from './firestore-route-evidence.util';
 import { TelemetryService } from './telemetry.service';
 
-const FIRESTORE_ROUTE_SETTLE_MILLISECONDS = 3_000;
+// Some authenticated routes open their dynamic roster/window listeners after
+// the first fixed subscriptions resolve. Three seconds was short enough to
+// publish a misleading partial sample during warm in-app navigation.
+const FIRESTORE_ROUTE_SETTLE_MILLISECONDS = 5_000;
 const MAX_FIRESTORE_ROUTE_SAMPLES_PER_SESSION = 24;
 
 interface LayoutShiftPerformanceEntry extends PerformanceEntry {

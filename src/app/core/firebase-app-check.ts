@@ -6,6 +6,7 @@ import {
 import type { AppCheck } from 'firebase/app-check';
 
 import { FIREBASE_APP_CHECK_CONFIG } from '../../environments/app-check.config';
+import { D1N_LOCAL_EMULATOR_CONFIG } from '../../environments/d1n-local-emulator.config';
 import { firebaseApp } from './firebase-app';
 
 export type RinkRatAppCheckStatus =
@@ -141,6 +142,16 @@ export async function verifyRinkRatAppCheckToken(
 export function initializeRinkRatAppCheck(): AppCheck | null {
   if (initializedAppCheck || !isBrowser()) {
     return initializedAppCheck;
+  }
+
+  if (D1N_LOCAL_EMULATOR_CONFIG.enabled) {
+    publishAppCheckState({
+      configured: false,
+      initialized: false,
+      status: 'disabled',
+      errorMessage: '',
+    });
+    return null;
   }
 
   const siteKey = FIREBASE_APP_CHECK_CONFIG.recaptchaEnterpriseSiteKey.trim();

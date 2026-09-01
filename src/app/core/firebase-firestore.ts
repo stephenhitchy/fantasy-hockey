@@ -1,5 +1,6 @@
-import { initializeFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore';
 
+import { D1N_LOCAL_EMULATOR_CONFIG } from '../../environments/d1n-local-emulator.config';
 import { firebaseApp } from './firebase-app';
 
 /**
@@ -19,3 +20,11 @@ export const db = initializeFirestore(firebaseApp, {
     timeoutSeconds: 15,
   },
 });
+
+if (D1N_LOCAL_EMULATOR_CONFIG.enabled) {
+  connectFirestoreEmulator(
+    db,
+    D1N_LOCAL_EMULATOR_CONFIG.hostname,
+    D1N_LOCAL_EMULATOR_CONFIG.firestorePort,
+  );
+}

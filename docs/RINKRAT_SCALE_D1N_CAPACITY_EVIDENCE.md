@@ -16,23 +16,26 @@ unsubscribe, timeout, success, or error behavior.
 
 ## Available Players listener model
 
-The capacity model previously assigned four listeners to Available Players. The current route source
-actually opens:
+The capacity model previously assigned four listeners to Available Players, and the first source
+audit raised that to 17. Authenticated measurement consistently observed 20 and exposed three
+omitted streams. The current route source actually opens:
 
-- six fixed route listeners for replay control, the Projection V11 pointer, Draft, cycles, waivers,
-  and teams;
+- seven fixed route listeners for replay control, the Projection V11 pointer, Draft, cycles, two
+  waiver streams behind one service call, and teams;
+- two league-context availability listeners for the shared report and commissioner overrides;
 - one roster listener per fantasy team; and
 - one team-window collection listener per active cycle.
 
 The planning model now derives the route total as:
 
 ```text
-6 + managersPerLeague + assumedActiveCycles
+9 + managersPerLeague + assumedActiveCycles
 ```
 
 The current explicit assumption is one active cycle. At ten managers per league the route estimate is
-17 listeners; at the supported twelve-manager maximum it is 19. Regression tests bind that model to
-the eight listener-creation sites and the route cleanup paths.
+20 listeners; at the supported twelve-manager maximum it is 22. Regression tests bind that model to
+the route call sites, the waiver service's two-stream fan-out, both availability streams, and the
+route cleanup paths.
 
 Cold-start document reads remain an explicit planning assumption. Listener count is not document
 count: a collection listener can return many documents. First-snapshot document-count telemetry is a
@@ -53,7 +56,10 @@ contents, or projection contents. Routes are sanitized to templates such as
 `/leagues/:leagueId/draft` before they reach the monitor or Analytics. Redirected navigations are
 attributed to the final sanitized route rather than the pre-redirect URL.
 
-Each successful navigation opens a three-second observation window. The window records starting,
+Each successful navigation opens a five-second observation window. The initial three-second window
+could settle after a previous route cleaned up but before a warm authenticated route opened its
+dynamic listeners, producing a partial route sample. The five-second bound covers that observed
+startup gap without creating or retaining any listener. The window records starting,
 ending, and peak listener counts; opened and closed listeners; first-snapshot observed documents;
 cache/server/unknown origin; cache-to-server transitions; explicit retry starts; post-reconnect
 snapshots; hidden-tab snapshots; listener errors; navigation cleanup; and listeners that had not
@@ -104,15 +110,90 @@ The local `rinkratHealth=1` diagnostic additionally prints JSON evidence for man
 
 ## Manual verification status
 
-The local development build emitted sanitized three-second samples for `/support` and
-`/scoring-guide`; both correctly reported zero active Firestore listeners and zero observed
-documents. The public signed-out surface was visually checked at 320, 390, 430, and 1,440 pixels.
-At each width, document width equaled scroll width and no horizontal overflow was observed.
+Authenticated, non-production fixtures were represented by one synthetic league measured against
+the loopback-only Firebase Auth and Firestore emulators under project ID `demo-rinkrat-d1n`. No
+production account or document was read or written. The fixture contains ten synthetic teams and
+rosters, one active-cycle window document per team, 100 synthetic Projection V11 assets in one
+chunk, and 20 synthetic activity records.
 
-Available Players, Matchup, Draft, League Home, and Projection require an authenticated league.
-They were not manually sampled because the isolated browser session had no authenticated local or
-staging fixture. No production account was created and no production write was made to manufacture
-evidence. Those five route profiles remain the next evidence gate.
+The final five-second implementation received 20 full-navigation samples per route: ten at
+390 × 844 and ten at 1,440 × 1,000. Every sample had zero listener errors, zero unknown document
+counts, and zero listeners awaiting a first snapshot. Values were identical at both widths, so each
+p50, p95, and maximum below is the same:
+
+| Sanitized route | Samples | Peak listeners p50/p95/max | First-snapshot documents p50/p95/max | First-snapshot origins per sample |
+| --- | ---: | ---: | ---: | --- |
+| Available Players | 20 | 20 / 20 / 20 | 26 / 26 / 26 | 1 cache, 19 server |
+| Matchup | 20 | 13 / 13 / 13 | 18 / 18 / 18 | 1 cache, 12 server |
+| Draft, live fixture | 20 | 5 / 5 / 5 | 12 / 12 / 12 | 0 cache, 5 server |
+| League Home, scheduled-Draft fixture | 20 | 10 / 10 / 10 | 27 / 27 / 27 | 2 cache, 8 server |
+| Projection Lab | 20 | 0 / 0 / 0 | 0 / 0 / 0 | no live listener |
+
+Projection Lab loads its snapshot through bounded Firestore reads. Its zero in this table means it
+opens no monitored `onSnapshot` stream; it does not mean the route performs zero reads or incurs no
+billed reads.
+
+Warm in-app spot checks verified the corrected five-second window after the three-second window had
+misclassified late dynamic startup. Available Players reached 20 listeners and 34 first-snapshot
+documents; Matchup reached 13 and 17; Draft reached 5 and 12; Projection Lab retained only the two
+league-context availability listeners while its bounded load completed. Warm first snapshots were
+cache-heavy and produced separate cache-to-server transitions. Navigation to `/support` then reduced
+the listener count to zero. The final League Home cleanup sample started at 10, closed all 10, ended
+at zero, recorded no error or awaiting snapshot, and had a maximum closed-listener lifetime of
+12,031 milliseconds.
+
+At both measured widths, document width equaled scroll width on all five routes. No horizontal
+overflow was observed. Route-loaded focus reached the main landmark on Available Players, Matchup,
+League Home, and Projection Lab; Draft retained body focus and therefore remains a focused keyboard
+review item rather than a claimed pass.
+
+### Contention and remaining evidence
+
+A separate four-tab stale-session stress pass produced a degraded Available Players sample with a
+peak of 18, ten listeners awaiting their first snapshot, and only six observed documents. Increasing
+the local run to six authenticated tabs saturated the emulator's long-poll connections: a membership
+check timed out and the league guard failed closed to Access Denied. Closing the extra tabs restored
+the stable normal envelope. This is useful stale-tab pressure evidence, but it is not a production
+capacity measurement and cannot distinguish browser-client pressure from single-emulator limits.
+
+No controlled browser-network toggle was available in the isolated browser run, so a real
+offline-to-online reconnect sample was not manufactured. The reconnect generation and aggregation
+logic is unit-tested, but authenticated reconnect evidence and physical mobile-device evidence remain
+open. D1N-C must not claim that gate as complete.
+
+The connected Firebase account exposed only the production project. No separate billed staging
+project was available, and none was created or deployed from this task. Exact billed reads, Key
+Visualizer evidence, real-device reconnects, and staged concurrency remain unmeasured.
+
+## Reproducing the local fixture
+
+Use the required Node 22.23.1/npm 11.17.0 toolchain. In one terminal:
+
+```bash
+npm run fixture:d1n:emulators
+```
+
+In a second terminal, seed the live-Draft fixture for Draft measurements:
+
+```bash
+npm run fixture:d1n:seed
+```
+
+For League Home measurements, reseed with a future scheduled Draft so the product's correct
+live-Draft redirect does not replace League Home:
+
+```bash
+npm run fixture:d1n:seed:league-home
+```
+
+Start Angular and open `http://127.0.0.1:4200/?d1nEmulator=1&rinkratHealth=1`. Sign in with the
+source-controlled synthetic credentials printed by the seed command. The client switch is ignored
+on every non-loopback hostname, and the seed refuses missing, remote, or nonstandard emulator ports.
+
+Do not add the Functions emulator to this fixture. Loading the full Functions surface also loads
+unrelated Firestore triggers and can expose non-emulated external integrations. Auth+Firestore is
+the deliberate boundary; expected callable-unavailable warnings are excluded from route-listener
+results but must remain visible during manual review.
 
 ## Security, authority, and deployment
 
@@ -120,9 +201,11 @@ Scoring V4 and Projection V11 are unchanged. Six-game ownership, seventh-game ro
 started windows, Draft, transactions, standings, playoffs, Rules, indexes, TTL policies, App Check,
 queue mode, worker limits, and canonical authority are unchanged.
 
-No Functions or Firebase configuration changes are included. If this slice is later released, only
-the existing Firebase Hosting target contains changed runtime bytes. Do not perform a broad Firebase
-deployment.
+No Functions source, Rules, indexes, TTLs, App Check policy, queue configuration, worker limits, or
+Firebase resource configuration changed. The browser has a new explicit loopback-only demo-project
+switch; it cannot activate on Hosting or another non-loopback hostname. If this slice is later
+released, only the existing Firebase Hosting target contains changed runtime bytes. Do not perform a
+broad Firebase deployment.
 
 Rollback is a Hosting-only return to the preceding verified release manifest, plus reverting this
 client observability slice. No Functions, Rules, index, TTL, App Check, queue, or worker rollback is
@@ -130,10 +213,12 @@ required.
 
 ## Next gate
 
-Use authenticated, non-production fixtures to collect repeated Available Players, Matchup, Draft,
-League Home, and Projection samples on real mobile and desktop clients. Verify cleanup by navigating
-from each route to a zero-listener public route and confirming the listener count returns to zero.
-Record p50, p95, maximum, cache/server mix, awaiting-first-snapshot count, and reconnect behavior.
+Complete the remaining authenticated evidence on real mobile and desktop clients with controlled
+offline-to-online reconnects. Investigate the Draft Room's initial body focus and confirm the
+multi-tab awaiting-snapshot behavior against a separate billed staging project rather than treating a
+single local emulator as production evidence.
 
-Only after those profiles are accepted should D1N-C build the staged load harness in a separate
-billed staging Firebase project. No large load test may target production.
+Only after those profiles are accepted should D1N-C build the scoring and Draft load harness in that
+separate billed staging Firebase project. Follow with canonical fan-out scaling, Draft recovery
+pagination/starvation protection, and staged App Check/abuse/queue-promotion evidence. No large load
+test may target production.

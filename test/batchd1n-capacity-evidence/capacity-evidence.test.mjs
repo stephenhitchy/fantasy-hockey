@@ -29,7 +29,12 @@ test('Projection V11 listeners are visible to the shared client-health monitor',
 });
 
 test('Available Players source fan-out stays aligned with the capacity model', async () => {
-  const source = await read('src/app/features/free-agents/free-agents.ts');
+  const [source, draftSource, availabilitySource, availabilitySyncSource] = await Promise.all([
+    read('src/app/features/free-agents/free-agents.ts'),
+    read('src/app/core/draft/draft.service.ts'),
+    read('src/app/core/player/player-availability.service.ts'),
+    read('src/app/core/player/player-availability-sync.service.ts'),
+  ]);
   const listenerCalls = source.match(/\blistenTo[A-Z][A-Za-z]+\(/g) ?? [];
 
   assert.equal(listenerCalls.length, 8);
@@ -53,6 +58,13 @@ test('Available Players source fan-out stays aligned with the capacity model', a
     source,
     /ngOnDestroy\(\)[\s\S]*clearRosterListeners\(\)[\s\S]*clearTeamWindowListeners\(\)/,
   );
+  assert.match(
+    draftSource,
+    /function listenToLeagueWaivers[\s\S]*'draft:public-waiver-pool'[\s\S]*'draft:private-waiver-claims'/,
+    'the one waiver API call opens two protected snapshot streams',
+  );
+  assert.match(availabilitySource, /'availability:commissioner-overrides'/);
+  assert.match(availabilitySyncSource, /'availability:global'/);
 });
 
 test('capacity estimates include per-team roster and active-cycle window listeners', async () => {
@@ -74,10 +86,10 @@ test('capacity estimates include per-team roster and active-cycle window listene
   const tenTeamProfile = tenTeamReport.assumptions.routeProfiles.freeAgents;
   const twelveTeamProfile = twelveTeamReport.assumptions.routeProfiles.freeAgents;
 
-  assert.equal(tenTeamProfile.listeners, 17);
-  assert.equal(twelveTeamProfile.listeners, 19);
+  assert.equal(tenTeamProfile.listeners, 20);
+  assert.equal(twelveTeamProfile.listeners, 22);
   assert.deepEqual(tenTeamProfile.listenerEvidence, {
-    fixedRouteListeners: 6,
+    fixedRouteListeners: 9,
     rosterListenersPerTeam: 1,
     assumedActiveCycles: 1,
     teamWindowListenersPerActiveCycle: 1,
@@ -88,7 +100,7 @@ test('capacity estimates include per-team roster and active-cycle window listene
     2,
     'two additional teams must add two roster listeners',
   );
-  assert.equal(tenTeamReport.estimates.concurrentFirestoreListeners, 760_000);
+  assert.equal(tenTeamReport.estimates.concurrentFirestoreListeners, 790_000);
   assert.match(tenTeamReport.assumptions.documentReads, /not yet measured/i);
   assert.ok(
     tenTeamReport.caveats.some((caveat) => /Cold-start and steady-read profiles/.test(caveat)),
