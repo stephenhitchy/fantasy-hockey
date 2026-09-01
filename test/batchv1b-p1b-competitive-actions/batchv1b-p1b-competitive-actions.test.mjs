@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { hashFunctionsRuntimeIntegrity } from '../shared/functions-runtime-integrity.mjs';
 import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 
 import {
@@ -20,54 +21,6 @@ async function read(relativePath) {
 
 async function sha256(relativePath) {
   return createHash('sha256').update(await read(relativePath)).digest('hex');
-}
-
-async function hashTree(relativeDirectory, excludedPaths = new Set()) {
-  const directoryUrl = new URL(
-    relativeDirectory.endsWith('/') ? relativeDirectory : `${relativeDirectory}/`,
-    ROOT,
-  );
-  const rootPath = decodeURIComponent(directoryUrl.pathname);
-  const files = [];
-
-  async function visit(currentPath, relativePath = '') {
-    const entries = await readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries.sort((first, second) => first.name.localeCompare(second.name))) {
-      if (entry.name === 'node_modules' || entry.name === 'lib') {
-        continue;
-      }
-
-      const childPath = `${currentPath}/${entry.name}`;
-      const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-
-      if (excludedPaths.has(childRelativePath)) {
-        continue;
-      }
-
-      if (entry.isDirectory()) {
-        await visit(childPath, childRelativePath);
-      } else if (entry.isFile()) {
-        files.push({ path: childPath, relativePath: childRelativePath });
-      }
-    }
-  }
-
-  await visit(rootPath);
-  const digest = createHash('sha256');
-
-  for (const file of files) {
-    const metadata = await stat(file.path);
-    const bytes = await readFile(file.path);
-    const pathBytes = Buffer.from(file.relativePath);
-
-    digest.update(Buffer.from(Uint32Array.of(pathBytes.length).buffer).reverse());
-    digest.update(pathBytes);
-    digest.update(Buffer.from(BigUint64Array.of(BigInt(metadata.size)).buffer).reverse());
-    digest.update(bytes);
-  }
-
-  return digest.digest('hex');
 }
 
 function actionRecord(overrides = {}) {
@@ -277,9 +230,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
     '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
   );
   assert.equal(
-    await hashTree(
-      'functions',
-      new Set([
+    await hashFunctionsRuntimeIntegrity({
+      excludedPaths: new Set([
         'src/index.ts',
         'src/league-lifecycle-authority.ts',
     'src/league-lifecycle-authority.util.ts',
@@ -383,7 +335,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // O1G adds isolated versioned compatibility for operational callables.
         'src/shared/core/operations/operations-client-compatibility.util.ts',
       ]),
-    ),
+    }),
     'ac1c74faa731629cedf0ea8a4362b4bdb59c802a01d0464589b217a7074ea759',
   );
 });

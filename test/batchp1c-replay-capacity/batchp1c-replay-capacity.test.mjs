@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
+import { hashFunctionsRuntimeIntegrity } from '../shared/functions-runtime-integrity.mjs';
 import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -14,50 +15,6 @@ const root = path.resolve(__dirname, '..', '..');
 
 async function read(relativePath) {
   return fs.readFile(path.join(root, relativePath), 'utf8');
-}
-
-async function hashTree(relativeDirectory, excludedPaths = new Set()) {
-  const rootPath = path.join(root, relativeDirectory);
-  const files = [];
-
-  async function visit(currentPath, relativePath = '') {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries.sort((first, second) => first.name.localeCompare(second.name))) {
-      if (entry.name === 'node_modules' || entry.name === 'lib') {
-        continue;
-      }
-
-      const childPath = path.join(currentPath, entry.name);
-      const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-
-      if (excludedPaths.has(childRelativePath)) {
-        continue;
-      }
-
-      if (entry.isDirectory()) {
-        await visit(childPath, childRelativePath);
-      } else if (entry.isFile()) {
-        files.push({ path: childPath, relativePath: childRelativePath });
-      }
-    }
-  }
-
-  await visit(rootPath);
-  const digest = createHash('sha256');
-
-  for (const file of files) {
-    const metadata = await fs.stat(file.path);
-    const bytes = await fs.readFile(file.path);
-    const pathBytes = Buffer.from(file.relativePath);
-
-    digest.update(Buffer.from(Uint32Array.of(pathBytes.length).buffer).reverse());
-    digest.update(pathBytes);
-    digest.update(Buffer.from(BigUint64Array.of(BigInt(metadata.size)).buffer).reverse());
-    digest.update(bytes);
-  }
-
-  return digest.digest('hex');
 }
 
 test('replay callable no longer depends on a long browser transport deadline', async () => {
@@ -286,7 +243,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
   ]);
 
   assert.equal(
-    await hashTree('functions', exclusions),
+    await hashFunctionsRuntimeIntegrity({ excludedPaths: exclusions }),
     'ac1c74faa731629cedf0ea8a4362b4bdb59c802a01d0464589b217a7074ea759',
   );
 
@@ -304,4 +261,3 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
 });
-

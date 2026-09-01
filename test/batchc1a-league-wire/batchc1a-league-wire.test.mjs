@@ -331,7 +331,8 @@ test('legacy release and Functions-tree guards recognize the isolated C1A throug
     const source = await read(`test/${relativePath}`);
     const hashesFunctionsTree =
       source.includes("hashTree('functions'") ||
-      (source.includes('hashTree(') && source.includes("'functions',"));
+      (source.includes('hashTree(') && source.includes("'functions',")) ||
+      (source.includes('hashFunctionsRuntimeIntegrity({') && source.includes('excludedPaths:'));
     const hashesFunctionsSourceTree =
       source.includes('hashFunctionTreeExcept(') && source.includes('unchangedFunctions');
 
