@@ -9,7 +9,6 @@ const GENERATED_DIRECTORY_NAMES = new Set([
   '.firebase',
   '.cache',
   'coverage',
-  'lib',
   'node_modules',
 ]);
 
@@ -17,7 +16,9 @@ const GENERATED_DIRECTORY_NAMES = new Set([
  * The protected fingerprint covers source-controlled inputs that define the
  * Firebase Functions runtime, build/dependency contract, and operational
  * tooling. Repository instructions and generated output are intentionally not
- * part of that contract.
+ * part of that contract. The explicit directory inventory excludes top-level
+ * generated output such as functions/lib while preserving legitimate nested
+ * source directories such as functions/src/lib and functions/scripts/lib.
  */
 export const FUNCTIONS_RUNTIME_INTEGRITY_INVENTORY = Object.freeze({
   files: Object.freeze([

@@ -15,15 +15,17 @@ async function createFunctionsFixture(testContext) {
   testContext.after(() => rm(fixtureRoot, { force: true, recursive: true }));
 
   await Promise.all([
-    mkdir(path.join(fixtureRoot, 'scripts'), { recursive: true }),
-    mkdir(path.join(fixtureRoot, 'src'), { recursive: true }),
+    mkdir(path.join(fixtureRoot, 'scripts', 'lib'), { recursive: true }),
+    mkdir(path.join(fixtureRoot, 'src', 'lib'), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(path.join(fixtureRoot, 'package-lock.json'), '{"lockfileVersion":3}\n'),
     writeFile(path.join(fixtureRoot, 'package.json'), '{"main":"lib/index.js"}\n'),
     writeFile(path.join(fixtureRoot, 'tsconfig.json'), '{"compilerOptions":{}}\n'),
     writeFile(path.join(fixtureRoot, 'scripts', 'ensure-dependencies.cjs'), 'module.exports = {};\n'),
+    writeFile(path.join(fixtureRoot, 'scripts', 'lib', 'deploy-input.mjs'), 'export const deployInput = 1;\n'),
     writeFile(path.join(fixtureRoot, 'src', 'index.ts'), 'export const runtimeValue = 1;\n'),
+    writeFile(path.join(fixtureRoot, 'src', 'lib', 'runtime.ts'), 'export const nestedRuntimeValue = 1;\n'),
   ]);
 
   return fixtureRoot;
@@ -41,7 +43,9 @@ test('the Functions fingerprint inventory protects runtime, package, build, and 
     'package-lock.json',
     'package.json',
     'scripts/ensure-dependencies.cjs',
+    'scripts/lib/deploy-input.mjs',
     'src/index.ts',
+    'src/lib/runtime.ts',
     'tsconfig.json',
   ]);
 });
@@ -69,6 +73,20 @@ test('a TypeScript runtime-source change alters the protected Functions fingerpr
 
   assert.notEqual(await hashFunctionsRuntimeIntegrity({ functionsRoot: fixtureRoot }), baseline);
 });
+
+for (const [relativePath, changedSource] of [
+  ['src/lib/runtime.ts', 'export const nestedRuntimeValue = 2;\n'],
+  ['scripts/lib/deploy-input.mjs', 'export const deployInput = 2;\n'],
+]) {
+  test(`a nested lib source change in ${relativePath} alters the protected Functions fingerprint`, async (testContext) => {
+    const fixtureRoot = await createFunctionsFixture(testContext);
+    const baseline = await hashFunctionsRuntimeIntegrity({ functionsRoot: fixtureRoot });
+
+    await writeFile(path.join(fixtureRoot, relativePath), changedSource);
+
+    assert.notEqual(await hashFunctionsRuntimeIntegrity({ functionsRoot: fixtureRoot }), baseline);
+  });
+}
 
 test('Functions package, dependency, compiler, and operational inputs remain protected', async (testContext) => {
   const mutations = [
