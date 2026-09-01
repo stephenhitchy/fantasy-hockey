@@ -441,8 +441,14 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/privacy/privacy-request.util.ts',
         // O1G adds isolated versioned compatibility for operational callables.
         'src/shared/core/operations/operations-client-compatibility.util.ts',
+        // D1L explicitly changes these additional final-input and durable-outbox paths.
+        'src/shared/core/cycle/asset-cycle-window.service.ts',
+        'src/shared/core/cycle/cycle.models.ts',
+        'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
+        'src/shared/core/nhl/nhl-final-input-completeness.util.ts',
+        'src/shared/core/playoffs/playoff-window-bank.service.ts',
       ]),
     }),
-    'c64614478f122dc68d5518c84abe14f85938e6d7c56672b74a070882f24625cd',
+    'fbffd287343e1545f009e7576e897ecede44a7cdb8712f8366c4b036476eceef',
   );
 });

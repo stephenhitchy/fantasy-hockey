@@ -240,11 +240,17 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         'src/shared/core/privacy/privacy-request.util.ts',
         // O1G adds isolated versioned compatibility for operational callables.
         'src/shared/core/operations/operations-client-compatibility.util.ts',
+        // D1L explicitly changes these additional final-input and durable-outbox paths.
+        'src/shared/core/cycle/asset-cycle-window.service.ts',
+        'src/shared/core/cycle/cycle.models.ts',
+        'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
+        'src/shared/core/nhl/nhl-final-input-completeness.util.ts',
+        'src/shared/core/playoffs/playoff-window-bank.service.ts',
   ]);
 
   assert.equal(
     await hashFunctionsRuntimeIntegrity({ excludedPaths: exclusions }),
-    'ac1c74faa731629cedf0ea8a4362b4bdb59c802a01d0464589b217a7074ea759',
+    '374217e5c5f20d2c9ca877a42c13f41eb501e2bb7a99b60206ceab1bbdd69fb9',
   );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
