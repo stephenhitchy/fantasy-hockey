@@ -134,12 +134,15 @@ change.
 
 ## Rollback
 
-Before release, discard or revert the L1A commit. After release, restore the
-previous verified Hosting manifest and deploy the previous verified revisions
-of exactly `removeLeagueMemberSecure` and `publishLeagueAuditActivity`. Existing
-successful removals are authoritative audit-backed membership changes and are
-not automatically undone by code rollback; restoring one would require a
-separately reviewed authority repair.
+Before release, discard or revert the L1A commit. After release, first restore
+the previous verified Hosting manifest, then deploy the previous verified
+revision of exactly `publishLeagueAuditActivity`. Because
+`removeLeagueMemberSecure` is a new callable with no prior revision, Stephen
+must separately remove only that exact function after confirming the restored
+Hosting build no longer invokes it; Codex does not execute Function deletion.
+Existing successful removals are authoritative audit-backed membership changes
+and are not automatically undone by code rollback; restoring one would require
+a separately reviewed authority repair.
 
 ## Protected contracts
 
