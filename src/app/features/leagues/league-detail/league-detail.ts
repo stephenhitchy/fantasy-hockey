@@ -1,4 +1,12 @@
-import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  OnDestroy,
+  signal,
+  ViewChild,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -48,6 +56,7 @@ import {
   deleteLeaguePermanently,
   getLeagueById,
   League,
+  removeLeagueMemberBeforeDraft,
   updateLeagueProfileIcon,
 } from '../../../core/league/league.service';
 import { buildLeagueInviteUrl } from '../../../core/league/invite-link-intent.service';
@@ -68,6 +77,7 @@ import {
   type ProfileIconCategoryId,
   type ProfileIconOption,
 } from '../../../shared/profile-icon/profile-icon.data';
+import { ClientHealthService } from '../../../core/observability/client-health.service';
 
 const DRAFT_ROOM_NAVIGATION_TIMEOUT_MILLISECONDS = 8_000;
 const DRAFT_ENTRY_RECOVERY_DELAY_MILLISECONDS = 7_000;
@@ -93,13 +103,22 @@ function waitForAuthUser(): Promise<User | null> {
 })
 export class LeagueDetail implements OnDestroy {
   private readonly platformAdminService = inject(PlatformAdminService);
+  private readonly clientHealth = inject(ClientHealthService);
   readonly isPlatformAdmin = this.platformAdminService.isAdmin;
+
+  @ViewChild('memberRemovalTeamNameInput')
+  private memberRemovalTeamNameInput?: ElementRef<HTMLInputElement>;
+
+  @ViewChild('memberRemovalStatus')
+  private memberRemovalStatus?: ElementRef<HTMLElement>;
 
   leagueId = '';
   userId = '';
   teamNameDraft = '';
   deleteLeagueNameDraft = '';
   deleteLeaguePasswordDraft = '';
+  memberRemovalTeamNameDraft = '';
+  memberRemovalPasswordDraft = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -138,6 +157,10 @@ export class LeagueDetail implements OnDestroy {
   deleteLeaguePanelOpen = signal(false);
   deleteLeagueInProgress = signal(false);
   deleteLeagueError = signal('');
+  memberRemovalTarget = signal<FantasyTeam | null>(null);
+  memberRemovalInProgress = signal(false);
+  memberRemovalMessage = signal('');
+  memberRemovalError = signal('');
 
   readonly profileIconCategories = PROFILE_ICON_CATEGORIES;
 
@@ -159,6 +182,7 @@ export class LeagueDetail implements OnDestroy {
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private draftEntryRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
+  private memberRemovalReturnFocus: HTMLElement | null = null;
 
   private readonly countdownTimer = setInterval(() => {
     if (!this.destroyed) {
@@ -173,6 +197,30 @@ export class LeagueDetail implements OnDestroy {
   readonly myTeam = computed(
     () => this.teams().find((team) => team.ownerId === this.userId) ?? null,
   );
+
+  readonly removableMemberTeams = computed(() =>
+    this.teams().filter((team) => team.ownerId !== this.userId),
+  );
+
+  readonly preDraftMemberRemovalAvailable = computed(() => {
+    const league = this.league();
+    const draft = this.draft();
+
+    if (!league || !this.isCommissioner() || this.cycle() || league.joinStatus === 'locked') {
+      return false;
+    }
+
+    if (!draft) {
+      return true;
+    }
+
+    return (
+      draft.status === 'setup' &&
+      draft.roundOneOrder.length === 0 &&
+      draft.nextOverallPick === 1 &&
+      draft.draftedAssetKeys.length === 0
+    );
+  });
 
   readonly selectedLeagueProfileIconId = computed(() =>
     getFantasyTeamProfileIconId(this.myTeam()),
@@ -450,6 +498,172 @@ export class LeagueDetail implements OnDestroy {
       this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load this league.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  memberRemovalAvailabilityMessage(): string {
+    if (this.cycle()) {
+      return 'Competition has started. Existing teams and history must remain intact.';
+    }
+
+    if (this.league()?.joinStatus === 'locked' || this.draft()?.status === 'scheduled') {
+      return 'Membership locked when Draft setup was saved. Existing teams cannot be deleted.';
+    }
+
+    if (this.draft()?.status === 'live' || this.draft()?.status === 'complete') {
+      return 'The Draft has started. Existing teams, picks, and competition history must remain intact.';
+    }
+
+    if ((this.draft()?.roundOneOrder.length ?? 0) > 0) {
+      return 'Draft order has been saved. Existing teams cannot be deleted.';
+    }
+
+    return 'Member removal is unavailable until League HQ finishes loading current authority.';
+  }
+
+  openMemberRemoval(team: FantasyTeam, event: Event): void {
+    if (this.memberRemovalInProgress()) {
+      return;
+    }
+
+    this.memberRemovalMessage.set('');
+    this.memberRemovalError.set('');
+
+    if (!this.preDraftMemberRemovalAvailable()) {
+      this.memberRemovalError.set(this.memberRemovalAvailabilityMessage());
+      return;
+    }
+
+    if (team.ownerId === this.userId) {
+      this.memberRemovalError.set('The commissioner cannot remove their own team.');
+      return;
+    }
+
+    this.memberRemovalReturnFocus = event.currentTarget instanceof HTMLElement
+      ? event.currentTarget
+      : null;
+    this.memberRemovalTarget.set(team);
+    this.memberRemovalTeamNameDraft = '';
+    this.memberRemovalPasswordDraft = '';
+
+    window.setTimeout(() => {
+      if (!this.destroyed) {
+        this.memberRemovalTeamNameInput?.nativeElement.focus();
+      }
+    });
+  }
+
+  closeMemberRemoval(): void {
+    if (this.memberRemovalInProgress()) {
+      return;
+    }
+
+    const returnFocus = this.memberRemovalReturnFocus;
+    this.memberRemovalTarget.set(null);
+    this.memberRemovalTeamNameDraft = '';
+    this.memberRemovalPasswordDraft = '';
+    this.memberRemovalError.set('');
+    this.memberRemovalReturnFocus = null;
+
+    window.setTimeout(() => returnFocus?.focus());
+  }
+
+  canConfirmMemberRemoval(): boolean {
+    const target = this.memberRemovalTarget();
+
+    return Boolean(
+      target &&
+      this.preDraftMemberRemovalAvailable() &&
+      this.memberRemovalTeamNameDraft.trim() === target.teamName &&
+      this.memberRemovalPasswordDraft.length > 0 &&
+      this.clientHealth.competitiveActionsReady() &&
+      !this.memberRemovalInProgress(),
+    );
+  }
+
+  async confirmMemberRemoval(): Promise<void> {
+    const target = this.memberRemovalTarget();
+
+    if (!target || !this.leagueId || !this.isCommissioner()) {
+      this.memberRemovalError.set('Choose a current league member before continuing.');
+      return;
+    }
+
+    if (!this.preDraftMemberRemovalAvailable()) {
+      this.memberRemovalError.set(this.memberRemovalAvailabilityMessage());
+      return;
+    }
+
+    if (!this.clientHealth.competitiveActionsReady()) {
+      this.memberRemovalError.set(this.clientHealth.competitiveActionBlockReason());
+      return;
+    }
+
+    if (this.memberRemovalTeamNameDraft.trim() !== target.teamName) {
+      this.memberRemovalError.set(`Type “${target.teamName}” exactly before removing this member.`);
+      return;
+    }
+
+    if (!this.memberRemovalPasswordDraft) {
+      this.memberRemovalError.set('Enter your current password before removing this member.');
+      return;
+    }
+
+    if (!this.teams().some((team) => team.ownerId === target.ownerId)) {
+      this.memberRemovalError.set('This member is no longer in the league. Refresh League HQ.');
+      return;
+    }
+
+    this.memberRemovalError.set('');
+    this.memberRemovalMessage.set('');
+    this.memberRemovalInProgress.set(true);
+
+    try {
+      await reauthenticateCurrentUserWithPassword(this.memberRemovalPasswordDraft);
+      this.memberRemovalPasswordDraft = '';
+      const result = await removeLeagueMemberBeforeDraft({
+        leagueId: this.leagueId,
+        targetOwnerId: target.ownerId,
+        confirmationTeamName: this.memberRemovalTeamNameDraft,
+      });
+
+      if (this.destroyed) {
+        return;
+      }
+
+      this.league.update((league) => league
+        ? {
+            ...league,
+            teamCount: result.teamCount,
+            joinStatus: result.joinStatus,
+            joinLockedAt: result.joinStatus === 'open' ? null : league.joinLockedAt,
+            joinLockedReason: result.joinStatus === 'open' ? null : league.joinLockedReason,
+          }
+        : league);
+      this.memberRemovalTarget.set(null);
+      this.memberRemovalTeamNameDraft = '';
+      this.memberRemovalReturnFocus = null;
+      this.memberRemovalMessage.set(
+        `${result.removedTeamName} was removed. The league now has ${result.teamCount} of ${result.maxTeams} teams.`,
+      );
+
+      window.setTimeout(() => {
+        if (!this.destroyed) {
+          this.memberRemovalStatus?.nativeElement.focus();
+        }
+      });
+    } catch (error: unknown) {
+      if (!this.destroyed) {
+        this.memberRemovalError.set(
+          error instanceof Error
+            ? error.message
+            : 'The member could not be removed. No league data was changed.',
+        );
+      }
+    } finally {
+      if (!this.destroyed) {
+        this.memberRemovalInProgress.set(false);
+      }
     }
   }
 

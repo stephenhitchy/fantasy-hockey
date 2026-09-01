@@ -672,6 +672,142 @@
     </section>
 
     @if (isCommissioner()) {
+      <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="member-management-title">
+        <div class="section-heading rr-section-heading">
+          <div>
+            <span class="draft-section-eyebrow">Commissioner Only</span>
+            <h2 id="member-management-title">Manage league members</h2>
+            <p>
+              Remove an invited manager only before Draft setup is saved. Once competition is
+              configured, RinkRat preserves the team and its history.
+            </p>
+          </div>
+        </div>
+
+        @if (memberRemovalMessage()) {
+          <p
+            #memberRemovalStatus
+            class="member-removal-message rr-notice rr-notice--success"
+            role="status"
+            aria-live="polite"
+            tabindex="-1"
+          >
+            {{ memberRemovalMessage() }}
+          </p>
+        }
+
+        @if (!preDraftMemberRemovalAvailable()) {
+          <p class="member-removal-locked rr-notice" role="note">
+            {{ memberRemovalAvailabilityMessage() }}
+          </p>
+        } @else if (removableMemberTeams().length === 0) {
+          <p class="member-removal-empty">No other managers have joined this league yet.</p>
+        } @else {
+          <div class="member-removal-list" role="list" aria-label="League members eligible for removal">
+            @for (team of removableMemberTeams(); track team.ownerId) {
+              <article class="member-removal-row rr-card rr-card--padded" role="listitem">
+                <span class="manager-name-with-avatar">
+                  <app-manager-avatar
+                    [profileIconId]="getTeamProfileIconId(team.ownerId)"
+                    [label]="getTeamManagerLabel(team.ownerId)"
+                    size="sm"
+                  />
+                  <span>
+                    <strong>{{ team.teamName }}</strong>
+                    <small>{{ getTeamManagerLabel(team.ownerId) }}</small>
+                  </span>
+                </span>
+
+                <button
+                  type="button"
+                  class="rr-button rr-button--danger"
+                  (click)="openMemberRemoval(team, $event)"
+                  [disabled]="memberRemovalInProgress()"
+                  [attr.aria-label]="'Remove ' + getTeamManagerLabel(team.ownerId) + ' from the league'"
+                >
+                  Remove member
+                </button>
+              </article>
+            }
+          </div>
+        }
+
+        @if (memberRemovalTarget(); as target) {
+          <section
+            class="member-removal-confirmation"
+            role="region"
+            aria-labelledby="member-removal-confirmation-title"
+          >
+            <div class="delete-league-warning rr-notice rr-notice--danger" role="note">
+              <span class="delete-league-warning-icon" aria-hidden="true">!</span>
+              <div>
+                <strong id="member-removal-confirmation-title">Remove {{ target.teamName }}?</strong>
+                <p>
+                  Their membership, empty team, empty roster, and Draft queue will be removed.
+                  This action is blocked if Draft or competition history exists.
+                </p>
+              </div>
+            </div>
+
+            <label for="member-removal-team-name">
+              Type the team name exactly: <strong>{{ target.teamName }}</strong>
+            </label>
+            <input
+              #memberRemovalTeamNameInput
+              id="member-removal-team-name"
+              class="rr-field"
+              type="text"
+              maxlength="60"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [(ngModel)]="memberRemovalTeamNameDraft"
+              [disabled]="memberRemovalInProgress()"
+            />
+
+            <label for="member-removal-password">Confirm your current RinkRat password:</label>
+            <input
+              id="member-removal-password"
+              class="rr-field"
+              type="password"
+              maxlength="128"
+              autocomplete="current-password"
+              [(ngModel)]="memberRemovalPasswordDraft"
+              [disabled]="memberRemovalInProgress()"
+            />
+
+            <div class="delete-league-actions">
+              <button
+                type="button"
+                class="rr-button rr-button--danger"
+                (click)="confirmMemberRemoval()"
+                [disabled]="!canConfirmMemberRemoval()"
+              >
+                {{ memberRemovalInProgress() ? 'Removing member…' : 'Remove member' }}
+              </button>
+              <button
+                type="button"
+                class="rr-button rr-button--quiet"
+                (click)="closeMemberRemoval()"
+                [disabled]="memberRemovalInProgress()"
+              >
+                Cancel
+              </button>
+            </div>
+
+            @if (memberRemovalError()) {
+              <p class="rr-notice rr-notice--danger" role="alert">
+                {{ memberRemovalError() }}
+              </p>
+            }
+          </section>
+        } @else if (memberRemovalError()) {
+          <p class="rr-notice rr-notice--danger" role="alert">
+            {{ memberRemovalError() }}
+          </p>
+        }
+      </section>
+
       <section class="commissioner-danger-zone rr-danger-zone" aria-labelledby="delete-league-title">
         <div class="danger-zone-heading">
           <div>

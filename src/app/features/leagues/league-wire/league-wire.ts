@@ -782,6 +782,10 @@ export class LeagueWire {
       case 'member-joined':
         headline = `${managerLabel} joined the league.`;
         break;
+      case 'member-removed':
+        headline = `${commissionerLabel} removed a manager before the Draft.`;
+        detail = 'The open league spot is available again.';
+        break;
       case 'league-presentation-updated':
         headline = `${commissionerLabel} updated the league look.`;
         detail = 'Name, emblem, or colors changed.';

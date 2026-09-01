@@ -177,6 +177,112 @@ export function isDraftJoinLocked(draftData: unknown): boolean {
   );
 }
 
+export type PreDraftMemberRemovalBlockReason =
+  | 'membership-locked'
+  | 'membership-state-unsafe'
+  | 'draft-locked'
+  | 'competition-started'
+  | 'draft-picks-exist'
+  | 'transactions-exist'
+  | 'waivers-exist'
+  | 'team-history-exists'
+  | 'roster-state-unsafe';
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function teamCompetitionStateIsEmpty(value: unknown): boolean {
+  const team = asRecord(value);
+
+  return Boolean(
+    team &&
+    ['wins', 'losses', 'ties', 'pointsFor', 'pointsAgainst'].every((field) =>
+      typeof team[field] === 'number' &&
+      Number.isFinite(team[field]) &&
+      team[field] === 0),
+  );
+}
+
+function rosterStateIsEmpty(value: unknown): boolean {
+  const roster = asRecord(value);
+
+  if (!roster) {
+    return false;
+  }
+
+  for (const field of ['activeSlots', 'benchSlots', 'irSlots']) {
+    const slots = roster[field];
+
+    if (!Array.isArray(slots)) {
+      return false;
+    }
+
+    for (const value of slots) {
+      const slot = asRecord(value);
+
+      if (
+        !slot ||
+        (slot['asset'] !== null && slot['asset'] !== undefined) ||
+        (slot['pendingMove'] !== null && slot['pendingMove'] !== undefined)
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+export function getPreDraftMemberRemovalBlockReason(input: {
+  leagueJoinStatus: unknown;
+  draftData: unknown;
+  cycleDocumentCount: number;
+  draftPickDocumentCount: number;
+  transactionDocumentCount: number;
+  waiverDocumentCount: number;
+  teamData: unknown;
+  rosterData: unknown;
+}): PreDraftMemberRemovalBlockReason | null {
+  if (input.leagueJoinStatus === 'locked') {
+    return 'membership-locked';
+  }
+
+  if (input.leagueJoinStatus !== 'open' && input.leagueJoinStatus !== 'full') {
+    return 'membership-state-unsafe';
+  }
+
+  if (isDraftJoinLocked(input.draftData)) {
+    return 'draft-locked';
+  }
+
+  if (input.cycleDocumentCount > 0) {
+    return 'competition-started';
+  }
+
+  if (input.draftPickDocumentCount > 0) {
+    return 'draft-picks-exist';
+  }
+
+  if (input.transactionDocumentCount > 0) {
+    return 'transactions-exist';
+  }
+
+  if (input.waiverDocumentCount > 0) {
+    return 'waivers-exist';
+  }
+
+  if (!teamCompetitionStateIsEmpty(input.teamData)) {
+    return 'team-history-exists';
+  }
+
+  return rosterStateIsEmpty(input.rosterData)
+    ? null
+    : 'roster-state-unsafe';
+}
+
 export function getOccupiedLeagueOwnerIds(
   memberOwnerIds: readonly string[],
   teamOwnerIds: readonly string[],

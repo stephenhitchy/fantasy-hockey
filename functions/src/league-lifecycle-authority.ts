@@ -16,6 +16,7 @@ import {
   getCanonicalJoinStatus,
   getEffectiveActiveLeagueCount,
   getOccupiedLeagueOwnerIds,
+  getPreDraftMemberRemovalBlockReason,
   getUnexpectedDocumentKeys,
   isDraftJoinLocked,
   LEAGUE_AUDIT_SCHEMA_VERSION,
@@ -54,6 +55,7 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{16,80}$/;
 const LEAGUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const COMMISSIONER_REASON_MAX_LENGTH = 240;
 const SECURITY_RELEASE_LABEL = 'Security Batch S1C';
+const MEMBER_REMOVAL_RELEASE_LABEL = 'League Lifecycle L1A';
 
 const SUPPORTED_LEAGUE_LOGO_IDS = new Set([
   'crossed-sticks',
@@ -166,6 +168,32 @@ export interface JoinLeagueSecureResult {
   teamCount: number;
   maxTeams: number;
   authoritySchemaVersion: number;
+}
+
+interface RemoveLeagueMemberSecureRequest {
+  requestId?: unknown;
+  leagueId?: unknown;
+  targetOwnerId?: unknown;
+  confirmationTeamName?: unknown;
+}
+
+interface NormalizedRemoveLeagueMemberRequest {
+  requestId: string;
+  leagueId: string;
+  targetOwnerId: string;
+  confirmationTeamName: string;
+}
+
+export interface RemoveLeagueMemberSecureResult {
+  removed: true;
+  leagueId: string;
+  targetOwnerId: string;
+  removedTeamName: string;
+  teamCount: number;
+  maxTeams: number;
+  joinStatus: 'open' | 'locked' | 'full';
+  idempotentReplay: boolean;
+  auditId: string;
 }
 
 interface UpdateLeagueCosmeticsSecureRequest {
@@ -468,6 +496,37 @@ function normalizeJoinRequest(data: unknown): NormalizedJoinLeagueRequest {
       SUPPORTED_PROFILE_ICON_IDS,
       'Choose a supported manager icon.',
     ),
+  };
+}
+
+function normalizeRemoveLeagueMemberRequest(
+  data: unknown,
+): NormalizedRemoveLeagueMemberRequest {
+  const input = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as RemoveLeagueMemberSecureRequest & Record<string, unknown>
+    : {};
+  requireOnlyInputKeys(
+    input,
+    ['requestId', 'leagueId', 'targetOwnerId', 'confirmationTeamName'],
+    'League member removal',
+  );
+  const confirmationTeamName = asString(input.confirmationTeamName);
+
+  if (!confirmationTeamName || confirmationTeamName.length > 60) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Type the member team name exactly before removing the member.',
+    );
+  }
+
+  return {
+    requestId: requireRequestId(input.requestId, 'league member removal'),
+    leagueId: requireLeagueId(input.leagueId),
+    targetOwnerId: requireFirestoreDocumentId(input.targetOwnerId, 'member ID', {
+      minimumLength: 1,
+      maxBytes: 128,
+    }),
+    confirmationTeamName,
   };
 }
 
@@ -1510,6 +1569,456 @@ export const joinLeagueSecure = onCall(
         maxTeams,
         authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
       };
+    });
+  },
+);
+
+function createMemberRemovalAuditId(commissionerId: string, requestId: string): string {
+  const fingerprint = createHash('sha256')
+    .update(`rinkrat-member-removal:${commissionerId}:${requestId}`)
+    .digest('hex')
+    .slice(0, 32);
+
+  return `member-removed-${fingerprint}`;
+}
+
+function createMemberRemovalPayloadHash(
+  input: NormalizedRemoveLeagueMemberRequest,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      leagueId: input.leagueId,
+      targetOwnerId: input.targetOwnerId,
+      confirmationTeamName: input.confirmationTeamName,
+    }))
+    .digest('hex');
+}
+
+function readCompletedMemberRemoval(
+  value: Record<string, unknown>,
+  commissionerId: string,
+  input: NormalizedRemoveLeagueMemberRequest,
+  payloadHash: string,
+  auditId: string,
+): RemoveLeagueMemberSecureResult | null {
+  if (Object.keys(value).length === 0) {
+    return null;
+  }
+
+  const values = getRecord(value['values']);
+
+  if (
+    value['action'] !== 'member-removed' ||
+    asString(value['actorId']) !== commissionerId ||
+    asString(values['payloadHash']) !== payloadHash ||
+    asString(values['targetOwnerId']) !== input.targetOwnerId
+  ) {
+    throw new HttpsError(
+      'already-exists',
+      'That member-removal request identifier was already used for different information. Refresh League HQ before trying again.',
+    );
+  }
+
+  const removedTeamName = asString(values['removedTeamName']);
+  const teamCount = getNonNegativeInteger(values['resultingTeamCount'], -1);
+  const maxTeams = getNonNegativeInteger(values['maxTeams'], -1);
+  const joinStatus = asString(values['joinStatus']);
+
+  if (
+    !removedTeamName ||
+    teamCount < 1 ||
+    maxTeams < 2 ||
+    (joinStatus !== 'open' && joinStatus !== 'locked' && joinStatus !== 'full')
+  ) {
+    throw new HttpsError(
+      'aborted',
+      'The prior member removal is still being reconciled. Refresh League HQ and try again.',
+    );
+  }
+
+  return {
+    removed: true,
+    leagueId: input.leagueId,
+    targetOwnerId: input.targetOwnerId,
+    removedTeamName,
+    teamCount,
+    maxTeams,
+    joinStatus,
+    idempotentReplay: true,
+    auditId,
+  };
+}
+
+export async function executePreDraftLeagueMemberRemoval(input: {
+  commissionerId: string;
+  request: NormalizedRemoveLeagueMemberRequest;
+  nowMilliseconds?: number;
+}): Promise<RemoveLeagueMemberSecureResult> {
+  const commissionerId = requireFirestoreDocumentId(
+    input.commissionerId,
+    'commissioner ID',
+    { minimumLength: 1, maxBytes: 128 },
+  );
+  const request = input.request;
+  const nowMilliseconds = input.nowMilliseconds ?? Date.now();
+  const payloadHash = createMemberRemovalPayloadHash(request);
+  const auditId = createMemberRemovalAuditId(commissionerId, request.requestId);
+  const leagueRef = db.doc(`leagues/${request.leagueId}`);
+  const auditRef = db.doc(`leagues/${request.leagueId}/audit/${auditId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const [leagueSnapshot, auditSnapshot] = await Promise.all([
+      transaction.get(leagueRef),
+      transaction.get(auditRef),
+    ]);
+
+    const completed = readCompletedMemberRemoval(
+      auditSnapshot.data() ?? {},
+      commissionerId,
+      request,
+      payloadHash,
+      auditId,
+    );
+
+    if (completed) {
+      return completed;
+    }
+
+    if (!leagueSnapshot.exists) {
+      throw new HttpsError('not-found', 'This league no longer exists.');
+    }
+
+    const leagueData = leagueSnapshot.data() ?? {};
+
+    if (asString(leagueData['commissionerId']) !== commissionerId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the current league commissioner can remove a member.',
+      );
+    }
+
+    if (request.targetOwnerId === commissionerId) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The commissioner cannot remove their own team. Transfer or delete the league instead.',
+        { reason: 'commissioner-self-removal' },
+      );
+    }
+
+    const draftRef = db.doc(`leagues/${request.leagueId}/draft/current`);
+    const memberRef = db.doc(
+      `leagues/${request.leagueId}/members/${request.targetOwnerId}`,
+    );
+    const teamRef = db.doc(
+      `leagues/${request.leagueId}/teams/${request.targetOwnerId}`,
+    );
+    const rosterRef = db.doc(
+      `leagues/${request.leagueId}/teams/${request.targetOwnerId}/roster/current`,
+    );
+    const queueRef = db.doc(
+      `leagues/${request.leagueId}/draft/current/queues/${request.targetOwnerId}`,
+    );
+    const lifecycleRef = db.doc(`leagueLifecycleState/${request.targetOwnerId}`);
+    const inviteCode = asString(leagueData['inviteCode']);
+    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
+    const membersQuery = db.collection(`leagues/${request.leagueId}/members`).limit(25);
+    const teamsQuery = db.collection(`leagues/${request.leagueId}/teams`).limit(25);
+    const cyclesQuery = db.collection(`leagues/${request.leagueId}/cycles`).limit(1);
+    const picksQuery = db.collection(
+      `leagues/${request.leagueId}/draft/current/picks`,
+    ).limit(1);
+    const transactionsQuery = db.collection(
+      `leagues/${request.leagueId}/transactions`,
+    ).limit(1);
+    const waiversQuery = db.collection(`leagues/${request.leagueId}/waivers`).limit(1);
+    const privateTransactionsQuery = db.collection(
+      `leagues/${request.leagueId}/members/${request.targetOwnerId}/transactions`,
+    ).limit(1);
+    const privateWaiversQuery = db.collection(
+      `leagues/${request.leagueId}/members/${request.targetOwnerId}/waiverClaims`,
+    ).limit(1);
+    const [
+      draftSnapshot,
+      memberSnapshot,
+      teamSnapshot,
+      rosterSnapshot,
+      queueSnapshot,
+      lifecycleSnapshot,
+      membersSnapshot,
+      teamsSnapshot,
+      cyclesSnapshot,
+      picksSnapshot,
+      transactionsSnapshot,
+      waiversSnapshot,
+      privateTransactionsSnapshot,
+      privateWaiversSnapshot,
+      inviteSnapshot,
+    ] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(memberRef),
+      transaction.get(teamRef),
+      transaction.get(rosterRef),
+      transaction.get(queueRef),
+      transaction.get(lifecycleRef),
+      transaction.get(membersQuery),
+      transaction.get(teamsQuery),
+      transaction.get(cyclesQuery),
+      transaction.get(picksQuery),
+      transaction.get(transactionsQuery),
+      transaction.get(waiversQuery),
+      transaction.get(privateTransactionsQuery),
+      transaction.get(privateWaiversQuery),
+      inviteRef ? transaction.get(inviteRef) : Promise.resolve(null),
+    ]);
+
+    if (!memberSnapshot.exists || !teamSnapshot.exists || !rosterSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This member record is incomplete. Refresh League HQ or repair league authority before removing it.',
+        { reason: 'incomplete-member-authority' },
+      );
+    }
+
+    if (!inviteRef || !inviteSnapshot?.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This league invite authority is incomplete. Repair League HQ before removing a member.',
+        { reason: 'incomplete-invite-authority' },
+      );
+    }
+
+    if (!lifecycleSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This member quota authority is incomplete. Repair the account before removing it.',
+        { reason: 'incomplete-lifecycle-authority' },
+      );
+    }
+
+    const memberData = memberSnapshot.data() ?? {};
+    const teamData = teamSnapshot.data() ?? {};
+    const inviteData = inviteSnapshot.data() ?? {};
+
+    if (
+      asString(memberData['uid']) !== request.targetOwnerId ||
+      asString(memberData['leagueId']) !== request.leagueId ||
+      asString(memberData['role']) !== 'member' ||
+      asString(teamData['id']) !== request.targetOwnerId ||
+      asString(teamData['ownerId']) !== request.targetOwnerId ||
+      asString(inviteData['inviteCode']) !== inviteCode ||
+      asString(inviteData['leagueId']) !== request.leagueId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This member identity does not match the league authority record.',
+        { reason: 'member-identity-mismatch' },
+      );
+    }
+
+    const removedTeamName = asString(teamData['teamName']);
+
+    if (!removedTeamName || removedTeamName !== request.confirmationTeamName) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The confirmation did not exactly match the member team name.',
+        { reason: 'confirmation-mismatch' },
+      );
+    }
+
+    const blockReason = getPreDraftMemberRemovalBlockReason({
+      leagueJoinStatus: leagueData['joinStatus'],
+      draftData: draftSnapshot.data(),
+      cycleDocumentCount: cyclesSnapshot.size,
+      draftPickDocumentCount: picksSnapshot.size,
+      transactionDocumentCount:
+        transactionsSnapshot.size + privateTransactionsSnapshot.size,
+      waiverDocumentCount: waiversSnapshot.size + privateWaiversSnapshot.size,
+      teamData,
+      rosterData: rosterSnapshot.data(),
+    });
+
+    if (blockReason) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Members can be removed only before Draft setup is saved and before any roster or competition history exists.',
+        { reason: blockReason },
+      );
+    }
+
+    const memberOwnerIds = membersSnapshot.docs
+      .map((document) => document.id)
+      .sort((first, second) => first.localeCompare(second));
+    const teamOwnerIds = teamsSnapshot.docs
+      .map((document) => document.id)
+      .sort((first, second) => first.localeCompare(second));
+    const maxTeamsValue = leagueData['maxTeams'];
+    const storedTeamCount = leagueData['teamCount'];
+    const storedInviteCount = inviteData['joinCount'];
+
+    if (
+      memberOwnerIds.length !== teamOwnerIds.length ||
+      memberOwnerIds.some((ownerId, index) => ownerId !== teamOwnerIds[index]) ||
+      !Number.isInteger(maxTeamsValue) ||
+      (maxTeamsValue as number) < 2 ||
+      (maxTeamsValue as number) > 12 ||
+      !Number.isInteger(storedTeamCount) ||
+      storedTeamCount !== memberOwnerIds.length ||
+      !Number.isInteger(storedInviteCount) ||
+      storedInviteCount !== memberOwnerIds.length ||
+      memberOwnerIds.length > (maxTeamsValue as number)
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'League membership authority is inconsistent. Repair League HQ before removing a member.',
+        { reason: 'membership-authority-mismatch' },
+      );
+    }
+
+    const occupiedOwnerIds = getOccupiedLeagueOwnerIds(
+      memberOwnerIds,
+      teamOwnerIds,
+    );
+
+    if (!occupiedOwnerIds.includes(request.targetOwnerId)) {
+      throw new HttpsError('not-found', 'This member is no longer in the league.');
+    }
+
+    const resultingOwnerIds = occupiedOwnerIds.filter(
+      (ownerId) => ownerId !== request.targetOwnerId,
+    );
+
+    if (!resultingOwnerIds.includes(commissionerId) || resultingOwnerIds.length < 1) {
+      throw new HttpsError(
+        'failed-precondition',
+        'RinkRat could not prove that the commissioner team remains in this league.',
+        { reason: 'commissioner-team-missing' },
+      );
+    }
+
+    const maxTeams = maxTeamsValue as number;
+    const teamCount = resultingOwnerIds.length;
+    const joinStatus = getCanonicalJoinStatus({
+      teamCount,
+      maxTeams,
+      draftLocked: false,
+      storedStatus: leagueData['joinStatus'] === 'full'
+        ? 'open'
+        : leagueData['joinStatus'],
+    });
+    const inviteExpiresAtMilliseconds = timestampMilliseconds(inviteData['expiresAt']);
+    const inviteExpired = inviteExpiresAtMilliseconds !== null &&
+      inviteExpiresAtMilliseconds <= nowMilliseconds;
+    const timestamp = FieldValue.serverTimestamp();
+    const lifecycleData = lifecycleSnapshot.data() ?? {};
+    const activeLeagueCount = lifecycleData['activeLeagueCount'];
+
+    if (!Number.isInteger(activeLeagueCount) || (activeLeagueCount as number) < 1) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This member quota authority is inconsistent. Repair the account before removing it.',
+        { reason: 'incomplete-lifecycle-authority' },
+      );
+    }
+
+    transaction.delete(memberRef);
+    transaction.delete(teamRef);
+    transaction.delete(rosterRef);
+
+    if (queueSnapshot.exists) {
+      transaction.delete(queueRef);
+    }
+
+    transaction.set(
+      leagueRef,
+      {
+        teamCount,
+        joinStatus,
+        joinLockedAt: joinStatus === 'open' ? null : leagueData['joinLockedAt'] ?? null,
+        joinLockedReason: joinStatus === 'open' ? null : leagueData['joinLockedReason'] ?? null,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
+
+    transaction.set(
+      inviteRef,
+      {
+        joinCount: teamCount,
+        active: joinStatus === 'open' && !inviteExpired,
+        lockedAt: joinStatus === 'open' ? null : inviteData['lockedAt'] ?? null,
+        lockedReason: joinStatus === 'open'
+          ? null
+          : inviteData['lockedReason'] ?? null,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
+
+    transaction.set(
+      lifecycleRef,
+      {
+        schemaVersion: LEAGUE_LIFECYCLE_STATE_SCHEMA_VERSION,
+        activeLeagueCount: (activeLeagueCount as number) - 1,
+        lastMembershipReleasedAt: timestamp,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
+    transaction.create(auditRef, {
+      schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
+      id: auditId,
+      leagueId: request.leagueId,
+      action: 'member-removed',
+      actorId: commissionerId,
+      actorRole: 'commissioner',
+      authority: 'cloud-function',
+      authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
+      reason: 'Commissioner removed a member before Draft membership was locked.',
+      release: MEMBER_REMOVAL_RELEASE_LABEL,
+      values: {
+        payloadHash,
+        targetOwnerId: request.targetOwnerId,
+        removedTeamName,
+        resultingTeamCount: teamCount,
+        maxTeams,
+        joinStatus,
+      },
+      createdAt: timestamp,
+    });
+
+    return {
+      removed: true,
+      leagueId: request.leagueId,
+      targetOwnerId: request.targetOwnerId,
+      removedTeamName,
+      teamCount,
+      maxTeams,
+      joinStatus,
+      idempotentReplay: false,
+      auditId,
+    };
+  });
+}
+
+export const removeLeagueMemberSecure = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 45,
+    memory: '256MiB',
+    maxInstances: 40,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<RemoveLeagueMemberSecureResult> => {
+    const commissionerId = requireAuthenticatedUserId(
+      request.auth,
+      'remove a league member',
+    );
+    requireVerifiedRecentAuthentication(request.auth, 'remove a league member');
+
+    return executePreDraftLeagueMemberRemoval({
+      commissionerId,
+      request: normalizeRemoveLeagueMemberRequest(request.data),
     });
   },
 );

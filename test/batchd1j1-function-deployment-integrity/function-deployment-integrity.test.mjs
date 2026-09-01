@@ -25,7 +25,8 @@ test('the local Functions inventory is derived from the one authoritative index'
   const names = collectExpectedFirebaseFunctionNames(
     await read('functions/src/index.ts'),
   );
-  assert.equal(names.length, 105);
+  assert.equal(names.length, 106);
+  assert.ok(names.includes('removeLeagueMemberSecure'));
   assert.ok(names.includes('pollCanonicalNhlImpactFeed'));
   assert.ok(names.includes('sendInjuryEmailsOnGlobalAvailabilityChange'));
   assert.ok(names.includes('refreshLeagueAutomationCapacityEvidence'));

@@ -1729,6 +1729,80 @@
    Commissioner league deletion danger zone
    ------------------------------------------------------------------------- */
 
+.commissioner-member-management {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.commissioner-member-management .section-heading p {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--rr-color-text-muted);
+}
+
+.member-removal-message,
+.member-removal-locked,
+.member-removal-empty {
+  margin: 0;
+}
+
+.member-removal-message:focus-visible {
+  outline: 0;
+  box-shadow: var(--rr-focus-ring);
+}
+
+.member-removal-list {
+  display: grid;
+  gap: 10px;
+}
+
+.member-removal-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.member-removal-row .manager-name-with-avatar,
+.member-removal-row .manager-name-with-avatar > span:last-child {
+  min-width: 0;
+}
+
+.member-removal-row strong,
+.member-removal-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.member-removal-row strong {
+  color: var(--rr-color-text);
+}
+
+.member-removal-row small {
+  margin-top: 3px;
+  color: var(--rr-color-text-muted);
+}
+
+.member-removal-confirmation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 2px solid color-mix(in srgb, var(--danger, var(--rr-league-hq-migration-color-02)) 42%, var(--rr-color-border-strong));
+  border-radius: var(--rr-radius-md);
+  background: var(--rr-color-surface);
+}
+
+.member-removal-confirmation label {
+  color: var(--rr-color-text);
+  font-weight: 750;
+}
+
+.member-removal-confirmation label strong {
+  color: var(--rr-color-danger);
+}
+
 .commissioner-danger-zone {
   margin-top: 22px;
   padding: 18px;
@@ -1869,6 +1943,19 @@
 }
 
 @media (max-width: 720px) {
+  .commissioner-member-management {
+    padding: 14px;
+  }
+
+  .member-removal-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .member-removal-row button {
+    width: 100%;
+  }
+
   .commissioner-danger-zone {
     padding: 14px;
   }

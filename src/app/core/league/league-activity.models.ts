@@ -10,6 +10,7 @@ export type LeagueActivityCategory =
 export type LeagueActivityEventType =
   | 'league-created'
   | 'member-joined'
+  | 'member-removed'
   | 'league-presentation-updated'
   | 'draft-settings-saved'
   | 'draft-pick'
