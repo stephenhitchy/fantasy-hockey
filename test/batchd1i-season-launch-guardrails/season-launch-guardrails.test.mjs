@@ -207,10 +207,11 @@ test('global Primary requires healthy watchdog evidence and measured queue capac
 });
 
 test('the control center explains automatic fallback and measured capacity without auto-tuning workers', async () => {
-  const [service, component, template] = await Promise.all([
+  const [service, component, template, styles] = await Promise.all([
     read('src/app/core/admin/scoring-queue-control.service.ts'),
     read('src/app/features/release/scoring-queue-control-center/scoring-queue-control-center.ts'),
     read('src/app/features/release/scoring-queue-control-center/scoring-queue-control-center.html'),
+    read('src/app/features/release/scoring-queue-control-center/scoring-queue-control-center.css'),
   ]);
 
   assert.match(service, /seasonSafetyWatchdog/);
@@ -224,6 +225,12 @@ test('the control center explains automatic fallback and measured capacity witho
   assert.match(template, /two consecutive unsafe checks/i);
   assert.match(template, /never changes worker limits automatically/i);
   assert.match(template, /Non-error reliability/);
+  assert.match(styles, /\.season-safety-section > \.season-safety-clear\s*\{/);
+  assert.match(
+    styles,
+    /\.canonical-authority-section > \.canonical-authority-fallback-reason\s*\{/,
+  );
+  assert.doesNotMatch(styles, /!important\b/);
 });
 
 test('D1I preserves scoring, Projection V11, Rules, and indexes', async () => {
