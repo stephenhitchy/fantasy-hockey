@@ -20,6 +20,10 @@ export type CanonicalScoringParityStatus =
 export interface CanonicalScoringParityGame {
   sourceVersion: string;
   facts: CanonicalNhlGameFacts;
+  finalInputCompletenessByAssetType?: {
+    skater?: unknown;
+    teamGoalieUnit?: unknown;
+  };
 }
 
 export interface CanonicalAssetGameScore {
@@ -43,8 +47,58 @@ export interface CanonicalScoringParityObservation {
   reason: string;
 }
 
+export function shouldCompareCanonicalScoringParityGame(input: {
+  requestedGameIds: ReadonlySet<number> | undefined;
+  gameId: number;
+}): boolean {
+  return input.requestedGameIds?.has(Math.trunc(input.gameId)) === true;
+}
+
 function rounded(value: number): number {
   return Number(value.toFixed(1));
+}
+
+function hasCompleteCanonicalFinalInput(input: {
+  game: CanonicalScoringParityGame;
+  assetType: DraftableAsset['assetType'];
+}): boolean {
+  const evidence = input.assetType === 'skater'
+    ? input.game.finalInputCompletenessByAssetType?.skater
+    : input.game.finalInputCompletenessByAssetType?.teamGoalieUnit;
+
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    return false;
+  }
+
+  const candidate = evidence as Record<string, unknown>;
+  const requiredSources = candidate['requiredSources'];
+  const expectedSources = input.assetType === 'skater'
+    ? ['boxscore', 'play-by-play', 'player-log', 'source-version']
+    : ['boxscore', 'source-version'];
+
+  return candidate['status'] === 'complete' &&
+    candidate['complete'] === true &&
+    candidate['reusableFinal'] === true &&
+    candidate['sourceVersion'] === input.game.sourceVersion &&
+    Array.isArray(requiredSources) &&
+    requiredSources.length === expectedSources.length &&
+    expectedSources.every((source) => requiredSources.includes(source)) &&
+    Array.isArray(candidate['failures']) &&
+    candidate['failures'].length === 0;
+}
+
+function getCanonicalFinalInputReason(input: {
+  game: CanonicalScoringParityGame;
+  assetType: DraftableAsset['assetType'];
+}): string {
+  const evidence = input.assetType === 'skater'
+    ? input.game.finalInputCompletenessByAssetType?.skater
+    : input.game.finalInputCompletenessByAssetType?.teamGoalieUnit;
+  const status = evidence && typeof evidence === 'object' && !Array.isArray(evidence)
+    ? String((evidence as Record<string, unknown>)['status'] ?? '')
+    : '';
+
+  return `canonical-${status || 'final-input-incomplete'}`.slice(0, 100);
 }
 
 function minutesFromSeconds(seconds: number): number {
@@ -256,6 +310,8 @@ export function compareDirectAndCanonicalGameScore(input: {
   scoringRules: ScoringRules;
   directPoints: number;
   directAppeared: boolean;
+  directInputComplete?: boolean;
+  directIncompleteReason?: string;
 }): CanonicalScoringParityObservation {
   if (!input.canonicalGame) {
     return {
@@ -270,6 +326,48 @@ export function compareDirectAndCanonicalGameScore(input: {
       directAppeared: input.directAppeared,
       canonicalAppeared: null,
       reason: 'canonical-game-missing',
+    };
+  }
+
+  if (input.directInputComplete === false) {
+    return {
+      gameId: input.gameId,
+      assetKey: input.asset.assetKey,
+      assetType: input.asset.assetType,
+      sourceVersion: input.canonicalGame.sourceVersion,
+      status: 'incomplete',
+      directPoints: rounded(input.directPoints),
+      canonicalPoints: null,
+      pointDelta: null,
+      directAppeared: input.directAppeared,
+      canonicalAppeared: null,
+      reason: `direct-${input.directIncompleteReason || 'final-input-incomplete'}`
+        .slice(0, 100),
+    };
+  }
+
+  if (
+    input.gameIsFinal &&
+    !hasCompleteCanonicalFinalInput({
+      game: input.canonicalGame,
+      assetType: input.asset.assetType,
+    })
+  ) {
+    return {
+      gameId: input.gameId,
+      assetKey: input.asset.assetKey,
+      assetType: input.asset.assetType,
+      sourceVersion: input.canonicalGame.sourceVersion,
+      status: 'incomplete',
+      directPoints: rounded(input.directPoints),
+      canonicalPoints: null,
+      pointDelta: null,
+      directAppeared: input.directAppeared,
+      canonicalAppeared: null,
+      reason: getCanonicalFinalInputReason({
+        game: input.canonicalGame,
+        assetType: input.asset.assetType,
+      }),
     };
   }
 

@@ -26,6 +26,37 @@ hotfix only and does not change rollout behavior.
 
 The mode does not change queue capacity. The worker ceiling remains four concurrent scoring tasks, the global queued/processing ceiling remains 24, and no more than four Internal Test leagues may enter the near-live Canary cohort. D1D deliberately tests freshness without increasing concurrency. Those limits must be tuned later from measured task duration, Firestore contention, queue age, retries, NHL-data behavior, and cost.
 
+## D1L-A final-input and canonical handoff evidence
+
+After D1L-A, a final numeric score is reusable only when its saved
+`gameInputCompleteness` record is complete and carries a deterministic source
+version. Missing boxscore, play-by-play, or required skater game-log data leaves
+the player window active and retryable; it is never converted to an
+authoritative zero. Inspect `incompleteFinalGameIds` before treating an idle
+score as settled.
+
+Signal-worthy canonical facts now commit a deterministic
+`nhlCanonicalPublicationOutbox/{gameId}_{sourceVersion}` entry in the same
+Firestore transaction as the game fact. The canonical poll drains pending
+entries through the existing idempotent league-request transaction. Check
+`appData/nhlCanonicalImpactFeed.outboxStatus`, its loaded/delivered/failed
+counts, its durable `outboxCursorId`, and pending outbox attempt/error fields
+during Canary review. The cursor rotates bounded pages so stable failures do
+not starve later pending entries. An older entry becomes `superseded` when a
+newer canonical game version is current, and a stale observer cannot overwrite
+that newer canonical document.
+
+Parity evidence is valid only for the exact game IDs and source versions in the
+queued task. A game elsewhere in an active player window must not appear as
+canonical-missing merely because it was outside that task.
+Final canonical evidence that is missing, malformed, or version-misaligned is
+classified incomplete and retains direct fallback.
+
+This does not enable canonical Primary, expand Canary, change queue capacity,
+or automatically correct completed matchups. See
+`docs/RINKRAT_DATA_D1L_FINAL_SCORE_INPUT_INTEGRITY.md` for the complete
+acceptance, observability, deployment-boundary, and rollback contract.
+
 ## Where to manage it
 
 Open a league for which the platform administrator is also a member, then open:

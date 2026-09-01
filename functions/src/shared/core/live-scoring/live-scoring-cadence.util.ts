@@ -10,6 +10,7 @@ export type LeagueAutomationRefreshCadence =
 
 export interface LiveScoringRefreshResult {
   hasLiveGames: boolean;
+  hasIncompleteFinalGames?: boolean;
   nextScheduledGameStart: string | null;
 }
 
@@ -44,7 +45,12 @@ export function getLiveScoringRefreshDelay(
 ): number {
   const liveRefreshInterval = getLiveRefreshIntervalMilliseconds(cadence);
 
-  if (transitionOccurred || results.some((result) => result.hasLiveGames)) {
+  if (
+    transitionOccurred ||
+    results.some((result) =>
+      result.hasLiveGames || result.hasIncompleteFinalGames === true
+    )
+  ) {
     return liveRefreshInterval;
   }
 

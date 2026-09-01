@@ -9,6 +9,7 @@ import { ScoringRules } from '../scoring/scoring-rules';
 import { selectCycleWindowGames } from './cycle-window-selection.util';
 import {
   compareDirectAndCanonicalGameScore,
+  shouldCompareCanonicalScoringParityGame,
   type CanonicalScoringParityGame,
   type CanonicalScoringParityObservation,
 } from '../nhl/nhl-canonical-scoring-parity.util';
@@ -30,6 +31,19 @@ import {
   NhlPlayerGameLogEntry,
   NhlTeamSeasonGame
 } from '../nhl/nhl-api.service';
+import {
+  assessNhlFinalInputCompleteness,
+  buildNhlFinalInputSourceVersion,
+  classifyNhlFinalInputFailure,
+  isReusableNhlFinalScore,
+  selectIncompleteFinalScoreFallback,
+  validateNhlFinalGoalieUnitBoxscore,
+  validateNhlFinalPlayerGameLog,
+  validateNhlFinalPlayByPlay,
+  validateNhlFinalSkaterBoxscore,
+  type NhlFinalInputCompleteness,
+  type NhlFinalInputSourceState,
+} from '../nhl/nhl-final-input-completeness.util';
 
 export type CycleGameRuntimeState =
   | 'scheduled'
@@ -70,6 +84,8 @@ export interface CycleAssetScoreSummary {
    */
   gameScores: Record<string, number>;
   gameStates: Record<string, CycleGameRuntimeState>;
+  gameInputCompleteness: Record<string, NhlFinalInputCompleteness>;
+  incompleteFinalGameIds: number[];
 
   firstScheduledGameDate: string | null;
   lastScheduledGameDate: string | null;
@@ -97,6 +113,7 @@ export interface CycleScoringResult {
 
   /** Live-game metadata used by the shared scoring scheduler. */
   hasLiveGames: boolean;
+  hasIncompleteFinalGames: boolean;
   nextScheduledGameStart: string | null;
   refreshedAt: string;
   dataFingerprint: string;
@@ -148,6 +165,9 @@ export interface CalculateCycleScoringInput {
    */
   canonicalParityGamesById?: ReadonlyMap<number, CanonicalScoringParityGame>;
 
+  /** Exact game ids carried by the current canonical queue task. */
+  canonicalParityRequestedGameIds?: ReadonlySet<number>;
+
   /** Bounded observation sink for direct-vs-canonical shadow comparison. */
   onCanonicalParityObservation?: (
     observation: CanonicalScoringParityObservation,
@@ -173,8 +193,16 @@ export interface CalculateCycleScoringInput {
 }
 
 interface ScoringGameData {
-  boxscore: NhlGameBoxscoreResponse;
-  playByPlay: NhlGamePlayByPlayResponse;
+  boxscore?: NhlGameBoxscoreResponse;
+  playByPlay?: NhlGamePlayByPlayResponse;
+  boxscoreState: NhlFinalInputSourceState;
+  playByPlayState: NhlFinalInputSourceState;
+}
+
+interface SkaterGameLogLoad {
+  gameLog: NhlPlayerGameLogEntry[];
+  gameLogByGameId: Map<number, NhlPlayerGameLogEntry>;
+  sourceState: NhlFinalInputSourceState;
 }
 
 interface GameScoreResult {
@@ -304,6 +332,27 @@ function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
   return [...skatersByKey.values()];
 }
 
+function isStructurallyValidBoxscore(
+  value: NhlGameBoxscoreResponse,
+): boolean {
+  return typeof value?.homeTeam?.abbrev === 'string' &&
+    value.homeTeam.abbrev.trim().length > 0 &&
+    typeof value.homeTeam.score === 'number' &&
+    Number.isFinite(value.homeTeam.score) &&
+    typeof value?.awayTeam?.abbrev === 'string' &&
+    value.awayTeam.abbrev.trim().length > 0 &&
+    typeof value.awayTeam.score === 'number' &&
+    Number.isFinite(value.awayTeam.score) &&
+    Boolean(value.playerByGameStats?.homeTeam) &&
+    Boolean(value.playerByGameStats?.awayTeam);
+}
+
+function isStructurallyValidPlayByPlay(
+  value: NhlGamePlayByPlayResponse,
+): boolean {
+  return Array.isArray(value?.plays);
+}
+
 async function loadSchedulesByTeam(
   teamAbbreviations: string[],
   season: string,
@@ -377,28 +426,57 @@ async function loadScoringGameData(
 
     const results = await Promise.allSettled(
       batch.map(async (gameId) => {
-        const [boxscore, playByPlay] = await Promise.all([
+        const [boxscoreResult, playByPlayResult] = await Promise.allSettled([
           getGameBoxscore(gameId, refreshProfile),
           getGamePlayByPlay(gameId, refreshProfile)
         ]);
+        const boxscore = boxscoreResult.status === 'fulfilled' &&
+          isStructurallyValidBoxscore(boxscoreResult.value)
+            ? boxscoreResult.value
+            : undefined;
+        const playByPlay = playByPlayResult.status === 'fulfilled' &&
+          isStructurallyValidPlayByPlay(playByPlayResult.value)
+            ? playByPlayResult.value
+            : undefined;
 
         return {
           gameId,
           data: {
             boxscore,
-            playByPlay
+            playByPlay,
+            boxscoreState: boxscore
+              ? { availability: 'available' as const }
+              : boxscoreResult.status === 'rejected'
+                ? classifyNhlFinalInputFailure(boxscoreResult.reason)
+                : {
+                    availability: 'malformed' as const,
+                    detail: 'NHL boxscore payload was missing required final-game fields.',
+                  },
+            playByPlayState: playByPlay
+              ? { availability: 'available' as const }
+              : playByPlayResult.status === 'rejected'
+                ? classifyNhlFinalInputFailure(playByPlayResult.reason)
+                : {
+                    availability: 'malformed' as const,
+                    detail: 'NHL play-by-play payload did not contain a plays array.',
+                  },
           }
         };
       })
     );
 
-    for (const result of results) {
+    results.forEach((result, resultIndex) => {
       if (result.status === 'fulfilled') {
         gameDataById.set(result.value.gameId, result.value.data);
       } else {
         console.warn('Unable to load NHL game scoring data.', result.reason);
+        const sourceState = classifyNhlFinalInputFailure(result.reason);
+        gameDataById.set(batch[resultIndex], {
+          boxscoreState: sourceState,
+          playByPlayState: sourceState,
+        });
       }
-    }
+    });
 
     if (index + NHL_SCORING_BATCH_SIZE < gameIds.length) {
       await wait(NHL_SCORING_BATCH_DELAY_MS);
@@ -411,11 +489,8 @@ async function loadScoringGameData(
 async function loadSkaterGameLogs(
   skaters: DraftableAsset[],
   season: string
-): Promise<Map<number, Map<number, NhlPlayerGameLogEntry>>> {
-  const gameLogsByPlayerId = new Map<
-    number,
-    Map<number, NhlPlayerGameLogEntry>
-  >();
+): Promise<Map<number, SkaterGameLogLoad>> {
+  const gameLogsByPlayerId = new Map<number, SkaterGameLogLoad>();
 
   for (
     let index = 0;
@@ -443,29 +518,56 @@ async function loadSkaterGameLogs(
           true
         );
 
+        if (!Array.isArray(gameLogResponse.gameLog)) {
+          return {
+            playerId: asset.player.id,
+            gameLog: [],
+            gameLogByGameId: new Map<number, NhlPlayerGameLogEntry>(),
+            sourceState: {
+              availability: 'malformed' as const,
+              detail: 'NHL player game-log payload did not contain a gameLog array.',
+            },
+          };
+        }
+
         const gameLogByGameId = new Map<number, NhlPlayerGameLogEntry>();
 
-        for (const gameLog of gameLogResponse.gameLog ?? []) {
+        for (const gameLog of gameLogResponse.gameLog) {
           gameLogByGameId.set(gameLog.gameId, gameLog);
         }
 
         return {
           playerId: asset.player.id,
-          gameLogByGameId
+          gameLog: gameLogResponse.gameLog,
+          gameLogByGameId,
+          sourceState: { availability: 'available' as const },
         };
       })
     );
 
-    for (const result of results) {
+    results.forEach((result, resultIndex) => {
       if (result.status === 'fulfilled') {
         gameLogsByPlayerId.set(
           result.value.playerId,
-          result.value.gameLogByGameId
+          {
+            gameLog: result.value.gameLog,
+            gameLogByGameId: result.value.gameLogByGameId,
+            sourceState: result.value.sourceState,
+          },
         );
       } else {
         console.warn('Unable to load newly final skater game log.', result.reason);
+        const asset = batch[resultIndex];
+
+        if (asset.assetType === 'skater') {
+          gameLogsByPlayerId.set(asset.player.id, {
+            gameLog: [],
+            gameLogByGameId: new Map<number, NhlPlayerGameLogEntry>(),
+            sourceState: classifyNhlFinalInputFailure(result.reason),
+          });
+        }
       }
-    }
+    });
 
     if (index + NHL_SCORING_BATCH_SIZE < skaters.length) {
       await wait(NHL_SCORING_BATCH_DELAY_MS);
@@ -473,6 +575,115 @@ async function loadSkaterGameLogs(
   }
 
   return gameLogsByPlayerId;
+}
+
+function getFinalGameInputCompleteness(input: {
+  asset: DraftableAsset;
+  gameId: number;
+  gameData: ScoringGameData | undefined;
+  playerLogLoad: SkaterGameLogLoad | undefined;
+}): NhlFinalInputCompleteness {
+  let boxscoreState = input.gameData?.boxscoreState ?? {
+    availability: 'temporarily-unavailable' as const,
+    detail: 'NHL boxscore result was omitted from the scoring batch.',
+  };
+  const assetTeamAbbreviation = getAssetTeamAbbreviation(input.asset)
+    .trim()
+    .toUpperCase();
+  const boxscore = input.gameData?.boxscore;
+
+  if (boxscoreState.availability === 'available' && boxscore) {
+    boxscoreState = input.asset.assetType === 'skater'
+      ? validateNhlFinalSkaterBoxscore({
+          boxscore,
+          teamAbbreviation: assetTeamAbbreviation,
+          playerId: input.asset.player.id,
+        })
+      : validateNhlFinalGoalieUnitBoxscore({
+          boxscore,
+          teamAbbreviation: assetTeamAbbreviation,
+        });
+  }
+  let playByPlayState: NhlFinalInputSourceState = input.asset.assetType === 'skater'
+    ? input.gameData?.playByPlayState ?? {
+        availability: 'temporarily-unavailable' as const,
+        detail: 'NHL play-by-play result was omitted from the scoring batch.',
+      }
+    : { availability: 'not-required' as const };
+
+  if (
+    input.asset.assetType === 'skater' &&
+    playByPlayState.availability === 'available' &&
+    input.gameData?.playByPlay
+  ) {
+    playByPlayState = validateNhlFinalPlayByPlay(input.gameData.playByPlay);
+  }
+
+  let playerLogState: NhlFinalInputSourceState =
+    input.asset.assetType === 'skater'
+      ? input.playerLogLoad?.sourceState ?? {
+          availability: 'temporarily-unavailable' as const,
+          detail: 'NHL player game-log result was omitted from the scoring batch.',
+        }
+      : { availability: 'not-required' as const };
+
+  if (
+    input.asset.assetType === 'skater' &&
+    playerLogState.availability === 'available' &&
+    input.playerLogLoad
+  ) {
+    playerLogState = validateNhlFinalPlayerGameLog({
+      gameLog: input.playerLogLoad.gameLog,
+      gameId: input.gameId,
+      appeared: Boolean(
+        input.gameData?.boxscore &&
+        findSkaterBoxscoreLine(input.gameData.boxscore, input.asset.player.id)
+      ),
+    }).sourceState;
+  }
+  let sourceVersion = '';
+  const requiredSourcesAvailable = boxscoreState.availability === 'available' &&
+    (
+      input.asset.assetType === 'team-goalie-unit' ||
+      (
+        playByPlayState.availability === 'available' &&
+        playerLogState.availability === 'available'
+      )
+    );
+
+  if (requiredSourcesAvailable) {
+    try {
+      sourceVersion = buildNhlFinalInputSourceVersion({
+        schemaVersion: 1,
+        gameId: input.gameId,
+        assetType: input.asset.assetType,
+        assetKey: input.asset.assetKey,
+        boxscore: input.gameData?.boxscore,
+        ...(input.asset.assetType === 'skater'
+          ? {
+              playByPlay: input.gameData?.playByPlay,
+              playerGameLog:
+                input.playerLogLoad?.gameLogByGameId.get(input.gameId) ?? null,
+              playerGameLogRetrieved: true,
+            }
+          : {}),
+      });
+    } catch (error: unknown) {
+      console.warn('Unable to create a deterministic final-input source version.', {
+        gameId: input.gameId,
+        assetKey: input.asset.assetKey,
+        error,
+      });
+    }
+  }
+
+  return assessNhlFinalInputCompleteness({
+    assetType: input.asset.assetType,
+    boxscore: boxscoreState,
+    playByPlay: playByPlayState,
+    playerLog: playerLogState,
+    sourceVersion,
+  });
 }
 
 function getRelevantAssetGames(
@@ -506,7 +717,7 @@ function calculateSkaterGameScore(
     };
   }
 
-  const skaterLine = gameData
+  const skaterLine = gameData?.boxscore
     ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
     : null;
 
@@ -517,7 +728,7 @@ function calculateSkaterGameScore(
     };
   }
 
-  const assistBreakdown = gameData
+  const assistBreakdown = gameData?.playByPlay
     ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
     : {
         primaryAssists: 0,
@@ -571,7 +782,7 @@ function calculateGoalieUnitGameScore(
   gameIsFinal: boolean,
   scoringRules: ScoringRules
 ): GameScoreResult {
-  if (asset.assetType === 'skater' || !gameData) {
+  if (asset.assetType === 'skater' || !gameData?.boxscore) {
     return {
       points: 0,
       appeared: false
@@ -607,14 +818,17 @@ function calculateGoalieUnitGameScore(
 
 function canReuseFinalGame(
   previous: CycleAssetScoreSummary | undefined,
-  gameId: number
+  gameId: number,
+  assetType: DraftableAsset['assetType'],
 ): boolean {
   const key = String(gameId);
 
-  return (
-    previous?.gameStates?.[key] === 'final' &&
-    typeof previous.gameScores?.[key] === 'number'
-  );
+  return isReusableNhlFinalScore({
+    assetType,
+    gameState: previous?.gameStates?.[key],
+    score: previous?.gameScores?.[key],
+    completeness: previous?.gameInputCompleteness?.[key],
+  });
 }
 
 function getPreviousWindowSummary(
@@ -661,11 +875,22 @@ function buildResultFingerprint(
         summary.actualGamesPlayed ?? 0,
         summary.status,
         summary.completedGameIds.join(','),
+        summary.incompleteFinalGameIds.join(','),
         summary.liveGameIds.join(','),
         Object.entries(summary.gameScores)
           .sort(([first], [second]) => first.localeCompare(second))
           .map(([gameId, score]) => `${gameId}:${score.toFixed(1)}`)
-          .join(',')
+          .join(','),
+        Object.entries(summary.gameInputCompleteness)
+          .sort(([first], [second]) => first.localeCompare(second))
+          .map(([gameId, evidence]) => [
+            gameId,
+            evidence.status,
+            evidence.sourceVersion,
+            evidence.preservedPreviousScore ? 'preserved' : 'fresh',
+            evidence.failures.map((failure) => `${failure.code}:${failure.source}`).join('+'),
+          ].join(':'))
+          .join(','),
       ].join(':'))
   ].join('|');
 }
@@ -746,7 +971,10 @@ export async function calculateCycleScoring(
         continue;
       }
 
-      if (state === 'final' && !canReuseFinalGame(previous, game.id)) {
+      if (
+        state === 'final' &&
+        !canReuseFinalGame(previous, game.id, pick.asset.assetType)
+      ) {
         gameIdsToLoad.add(game.id);
 
         if (pick.asset.assetType === 'skater') {
@@ -798,10 +1026,11 @@ export async function calculateCycleScoring(
 
   try {
     const assetScores: Record<string, CycleAssetScoreSummary> = {};
-  const windowScores: Record<string, CycleAssetScoreSummary> = {};
-  const teamScores: Record<string, number> = {};
-  let hasLiveGames = false;
-  const allRelevantGames: NhlTeamSeasonGame[] = [];
+    const windowScores: Record<string, CycleAssetScoreSummary> = {};
+    const teamScores: Record<string, number> = {};
+    let hasLiveGames = false;
+    let hasIncompleteFinalGames = false;
+    const allRelevantGames: NhlTeamSeasonGame[] = [];
 
   for (const pick of input.picks) {
     const rosterSlotId = getRosterSlotId(pick);
@@ -814,7 +1043,9 @@ export async function calculateCycleScoring(
     const previous = previousByWindowId.get(windowId);
     const gameScores: Record<string, number> = {};
     const gameStates: Record<string, CycleGameRuntimeState> = {};
+    const gameInputCompleteness: Record<string, NhlFinalInputCompleteness> = {};
     const completedGameIds: number[] = [];
+    const incompleteFinalGameIds: number[] = [];
     const liveGameIds: number[] = [];
     const appearanceGameIds: number[] = [];
     let gamesPlayed = 0;
@@ -837,20 +1068,32 @@ export async function calculateCycleScoring(
         liveGameIds.push(game.id);
       }
 
-      if (state === 'final') {
-        gamesPlayed += 1;
-        completedGameIds.push(game.id);
-      }
-
-      if (state === 'final' && canReuseFinalGame(previous, game.id)) {
+      if (
+        state === 'final' &&
+        canReuseFinalGame(previous, game.id, pick.asset.assetType)
+      ) {
         const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
         const appeared = previous?.appearanceGameIds?.includes(game.id) ?? false;
+        const previousCompleteness = previous?.gameInputCompleteness?.[gameIdKey];
         let effectiveResult: GameScoreResult = {
           points: rounded(previousScore),
           appeared,
         };
 
-        if (input.canonicalParityGamesById) {
+        gamesPlayed += 1;
+        completedGameIds.push(game.id);
+
+        if (previousCompleteness) {
+          gameInputCompleteness[gameIdKey] = previousCompleteness;
+        }
+
+        if (
+          input.canonicalParityGamesById &&
+          shouldCompareCanonicalScoringParityGame({
+            requestedGameIds: input.canonicalParityRequestedGameIds,
+            gameId: game.id,
+          })
+        ) {
           effectiveResult = selectCanonicalAuthorityGameResult({
             scoringInput: input,
             observation: compareDirectAndCanonicalGameScore({
@@ -877,11 +1120,82 @@ export async function calculateCycleScoring(
       }
 
       const gameData = gameDataById.get(game.id);
-      const gameLog = pick.asset.assetType === 'skater'
-        ? gameLogsByPlayerId
-            .get(pick.asset.player.id)
-            ?.get(game.id)
+      const playerLogLoad = pick.asset.assetType === 'skater'
+        ? gameLogsByPlayerId.get(pick.asset.player.id)
         : undefined;
+      const gameLog = pick.asset.assetType === 'skater'
+        ? playerLogLoad?.gameLogByGameId.get(game.id)
+        : undefined;
+
+      if (state === 'final') {
+        const completeness = getFinalGameInputCompleteness({
+          asset: pick.asset,
+          gameId: game.id,
+          gameData,
+          playerLogLoad,
+        });
+
+        if (!completeness.complete) {
+          hasIncompleteFinalGames = true;
+          incompleteFinalGameIds.push(game.id);
+          const previousCompleteness = previous?.gameInputCompleteness?.[gameIdKey];
+          const previousScoreTrustworthy =
+            previous?.gameStates?.[gameIdKey] === 'live' ||
+            Boolean(previousCompleteness);
+          const fallback = selectIncompleteFinalScoreFallback({
+            previousScore: previousScoreTrustworthy
+              ? previous?.gameScores?.[gameIdKey]
+              : undefined,
+            previousAppeared:
+              previous?.appearanceGameIds?.includes(game.id) ?? false,
+          });
+
+          gameInputCompleteness[gameIdKey] = {
+            ...completeness,
+            preservedPreviousScore: fallback.preservedPrevious,
+          };
+
+          if (
+            input.canonicalParityGamesById &&
+            shouldCompareCanonicalScoringParityGame({
+              requestedGameIds: input.canonicalParityRequestedGameIds,
+              gameId: game.id,
+            })
+          ) {
+            selectCanonicalAuthorityGameResult({
+              scoringInput: input,
+              observation: compareDirectAndCanonicalGameScore({
+                gameId: game.id,
+                asset: pick.asset,
+                canonicalGame: input.canonicalParityGamesById.get(game.id),
+                gameIsFinal: true,
+                scoringRules: input.scoringRules,
+                directPoints: fallback.score ?? 0,
+                directAppeared: fallback.appeared,
+                directInputComplete: false,
+                directIncompleteReason: completeness.status,
+              }),
+            });
+          }
+
+          if (fallback.score !== null) {
+            gameScores[gameIdKey] = fallback.score;
+            currentScore += fallback.score;
+          }
+
+          if (fallback.appeared) {
+            actualGamesPlayed += 1;
+            appearanceGameIds.push(game.id);
+          }
+
+          continue;
+        }
+
+        gameInputCompleteness[gameIdKey] = completeness;
+        gamesPlayed += 1;
+        completedGameIds.push(game.id);
+      }
+
       const directScoreResult = pick.asset.assetType === 'skater'
         ? calculateSkaterGameScore(
             pick.asset,
@@ -898,7 +1212,13 @@ export async function calculateCycleScoring(
           );
       let effectiveScoreResult = directScoreResult;
 
-      if (input.canonicalParityGamesById) {
+      if (
+        input.canonicalParityGamesById &&
+        shouldCompareCanonicalScoringParityGame({
+          requestedGameIds: input.canonicalParityRequestedGameIds,
+          gameId: game.id,
+        })
+      ) {
         effectiveScoreResult = selectCanonicalAuthorityGameResult({
           scoringInput: input,
           observation: compareDirectAndCanonicalGameScore({
@@ -925,7 +1245,7 @@ export async function calculateCycleScoring(
     const gamesLeft = Math.max(0, games.length - gamesPlayed);
     const status = games.length > 0 && gamesLeft === 0
       ? 'complete'
-      : gamesPlayed > 0 || liveGameIds.length > 0
+      : gamesPlayed > 0 || liveGameIds.length > 0 || incompleteFinalGameIds.length > 0
         ? 'active'
         : 'scheduled';
 
@@ -948,10 +1268,12 @@ export async function calculateCycleScoring(
           : `@ ${game.homeTeam.abbrev}`;
       }),
       completedGameIds,
+      incompleteFinalGameIds,
       liveGameIds,
       appearanceGameIds,
       gameScores,
       gameStates,
+      gameInputCompleteness,
       firstScheduledGameDate: games[0]?.gameDate ?? null,
       lastScheduledGameDate: games.at(-1)?.gameDate ?? null,
       status
@@ -1021,6 +1343,7 @@ export async function calculateCycleScoring(
       teamCycleComplete,
       cycleHasScheduledGames,
       hasLiveGames,
+      hasIncompleteFinalGames,
       nextScheduledGameStart: getNextScheduledStart(allRelevantGames),
       refreshedAt: new Date().toISOString(),
       dataFingerprint

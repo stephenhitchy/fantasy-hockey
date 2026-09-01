@@ -1,4 +1,5 @@
 import { DraftPosition, DraftableAsset } from '../draft/draft.models';
+import type { NhlFinalInputCompleteness } from '../nhl/nhl-final-input-completeness.util';
 
 export type FantasyCycleStatus = 'active' | 'complete';
 
@@ -35,6 +36,8 @@ export interface FantasyAssetCycleWindow {
   appearanceGameIds: number[];
   gameScores: Record<string, number>;
   gameStates: Record<string, AssetCycleGameState>;
+  gameInputCompleteness?: Record<string, NhlFinalInputCompleteness>;
+  incompleteFinalGameIds?: number[];
   scheduledGames: number;
   gamesPlayed: number;
   actualGamesPlayed: number;
