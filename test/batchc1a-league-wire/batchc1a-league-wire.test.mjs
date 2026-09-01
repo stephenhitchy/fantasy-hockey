@@ -322,7 +322,7 @@ test('active integrity tests share one approved current Firestore Rules baseline
   assert.deepEqual(staleHistoricalHashes, []);
 });
 
-test('legacy release and Functions-tree guards recognize the isolated C1A through C1G additions', async () => {
+test('legacy release and Functions-tree guards recognize approved C1A through D1L additions', async () => {
   const executableTests = await listExecutableTests();
   const missingFunctionTreeExclusions = [];
   const staleReleaseFamilyAllowlists = [];
@@ -342,7 +342,12 @@ test('legacy release and Functions-tree guards recognize the isolated C1A throug
         !source.includes("'src/shared/core/league/league-activity.util.ts'") ||
         !source.includes("'src/shared/core/league/league-activity-reaction.util.ts'") ||
         !source.includes("'scripts/transaction-privacy-backfill.cjs'") ||
-        !source.includes("'scripts/transaction-privacy-inspect.cjs'"))
+        !source.includes("'scripts/transaction-privacy-inspect.cjs'") ||
+        !source.includes("'src/shared/core/cycle/asset-cycle-window.service.ts'") ||
+        !source.includes("'src/shared/core/cycle/cycle.models.ts'") ||
+        !source.includes("'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts'") ||
+        !source.includes("'src/shared/core/nhl/nhl-final-input-completeness.util.ts'") ||
+        !source.includes("'src/shared/core/playoffs/playoff-window-bank.service.ts'"))
     ) {
       missingFunctionTreeExclusions.push(relativePath);
     }
@@ -351,7 +356,12 @@ test('legacy release and Functions-tree guards recognize the isolated C1A throug
       hashesFunctionsSourceTree &&
       (!source.includes("'league-activity.ts'") ||
         !source.includes("'shared/core/league/league-activity.util.ts'") ||
-        !source.includes("'shared/core/league/league-activity-reaction.util.ts'"))
+        !source.includes("'shared/core/league/league-activity-reaction.util.ts'") ||
+        !source.includes("'shared/core/cycle/asset-cycle-window.service.ts'") ||
+        !source.includes("'shared/core/cycle/cycle.models.ts'") ||
+        !source.includes("'shared/core/nhl/nhl-canonical-publication-outbox.service.ts'") ||
+        !source.includes("'shared/core/nhl/nhl-final-input-completeness.util.ts'") ||
+        !source.includes("'shared/core/playoffs/playoff-window-bank.service.ts'"))
     ) {
       missingFunctionTreeExclusions.push(relativePath);
     }

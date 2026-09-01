@@ -434,9 +434,15 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/privacy/privacy-request.util.ts',
     // O1G adds isolated versioned compatibility for operational callables.
     'shared/core/operations/operations-client-compatibility.util.ts',
+    // D1L explicitly changes these additional final-input and durable-outbox paths.
+    'shared/core/cycle/asset-cycle-window.service.ts',
+    'shared/core/cycle/cycle.models.ts',
+    'shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
+    'shared/core/nhl/nhl-final-input-completeness.util.ts',
+    'shared/core/playoffs/playoff-window-bank.service.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 32,
-    digest: '2fcc29de6acfe4a22f1ce1231fcc13c8e5fb2ffa4d0059ec7c0900caf2a9aac5',
+    count: 29,
+    digest: '54b78021ce1bbbc1c6be5bc5eb92fe5fc5fc344e57f492ee2b45b312ff730110',
   });
 });
