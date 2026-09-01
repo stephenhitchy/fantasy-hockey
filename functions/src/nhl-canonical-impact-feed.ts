@@ -8,7 +8,6 @@ import {
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import {
-  type CanonicalLeagueAutomationGameVersion,
   getLeagueAutomationCanonicalCanaryScope,
   requestLeagueAutomationForCanonicalChange,
 } from './league-automation';
@@ -35,6 +34,20 @@ import {
   PreviousCanonicalNhlSignalState,
 } from './shared/core/nhl/nhl-canonical-facts.util';
 import {
+  loadPendingCanonicalPublicationOutbox,
+  markCanonicalPublicationOutboxDelivered,
+  persistCanonicalPublicationWithOutbox,
+  recordCanonicalPublicationOutboxFailure,
+} from './shared/core/nhl/nhl-canonical-publication-outbox.service';
+import {
+  assessNhlFinalInputCompleteness,
+  classifyNhlFinalInputFailure,
+  validateNhlFinalCanonicalBoxscore,
+  validateNhlFinalPlayerGameLog,
+  validateNhlFinalPlayByPlay,
+  type NhlFinalInputSourceState,
+} from './shared/core/nhl/nhl-final-input-completeness.util';
+import {
   getGameBoxscore,
   getGamePlayByPlay,
   getNhlScoreNow,
@@ -55,6 +68,7 @@ const FINAL_SETTLEMENT_FINAL_CHECKPOINT_MILLISECONDS = 28 * 60 * 1000;
 const IMPACT_INDEX_SCHEMA_VERSION = 1;
 const IMPACT_INDEX_MAX_PLAYER_IDS = 700;
 const IMPACT_INDEX_MAX_TEAM_ABBREVIATIONS = 40;
+const CANONICAL_OUTBOX_DRAIN_LIMIT = 40;
 
 interface LeagueScoringImpact {
   leagueId: string;
@@ -73,12 +87,14 @@ interface CanonicalGameObservation {
   affectedTeamAbbreviations: string[];
 }
 
-interface LeagueChangeRequest {
-  leagueId: string;
-  gameIds: number[];
-  changeKinds: string[];
-  sourceVersions: string[];
-  gameVersions: CanonicalLeagueAutomationGameVersion[];
+interface FinalSettlementFailure {
+  playerId: number;
+  sourceState: NhlFinalInputSourceState;
+}
+
+interface FinalSettlementLoadResult {
+  entriesByPlayerId: Map<number, NhlPlayerGameLogEntry>;
+  failures: FinalSettlementFailure[];
 }
 
 function toMilliseconds(value: unknown): number {
@@ -210,8 +226,9 @@ async function loadFinalSettlementEntries(input: {
   playerIds: readonly number[];
   gameId: number;
   season: string;
-}): Promise<Map<number, NhlPlayerGameLogEntry>> {
-  const entries = new Map<number, NhlPlayerGameLogEntry>();
+}): Promise<FinalSettlementLoadResult> {
+  const entriesByPlayerId = new Map<number, NhlPlayerGameLogEntry>();
+  const failures: FinalSettlementFailure[] = [];
   const results = await mapWithConcurrency(
     input.playerIds,
     async (playerId) => {
@@ -220,27 +237,47 @@ async function loadFinalSettlementEntries(input: {
         input.season,
         true,
       );
-      const gameLog = (response.gameLog ?? []).find(
-        (entry) => entry.gameId === input.gameId,
-      );
+      const validation = validateNhlFinalPlayerGameLog({
+        gameLog: response.gameLog,
+        gameId: input.gameId,
+        appeared: true,
+      });
 
-      return { playerId, gameLog };
+      return {
+        playerId,
+        gameLog: validation.gameLogEntry,
+        sourceState: validation.sourceState,
+      };
     },
     FINAL_SETTLEMENT_CONCURRENCY,
   );
 
-  for (const result of results) {
+  results.forEach((result, resultIndex) => {
     if (result.status === 'fulfilled' && result.value.gameLog) {
-      entries.set(result.value.playerId, result.value.gameLog);
+      entriesByPlayerId.set(result.value.playerId, result.value.gameLog);
+    } else if (result.status === 'fulfilled') {
+      failures.push({
+        playerId: result.value.playerId,
+        sourceState: result.value.sourceState,
+      });
     } else if (result.status === 'rejected') {
+      const playerId = input.playerIds[resultIndex];
+      failures.push({
+        playerId,
+        sourceState: classifyNhlFinalInputFailure(result.reason),
+      });
       console.warn('Unable to load canonical final player settlement.', {
         gameId: input.gameId,
+        playerId,
         error: result.reason,
       });
     }
-  }
+  });
 
-  return entries;
+  return {
+    entriesByPlayerId,
+    failures: failures.slice(0, 40),
+  };
 }
 
 function getPreviousSignalState(
@@ -272,7 +309,10 @@ function getPreviousSignalState(
   };
 }
 
-async function claimFeedLease(runId: string): Promise<boolean> {
+async function claimFeedLease(runId: string): Promise<{
+  claimed: boolean;
+  outboxCursorId: string;
+}> {
   const reference = getFeedControlRef();
   const now = Date.now();
 
@@ -281,9 +321,14 @@ async function claimFeedLease(runId: string): Promise<boolean> {
     const data = snapshot.data() ?? {};
     const status = normalizedString(data['status']);
     const leaseExpiresAt = toMilliseconds(data['leaseExpiresAt']);
+    const outboxCursorId = /^\d+_[a-f0-9]{64}$/.test(
+      normalizedString(data['outboxCursorId']).toLowerCase(),
+    )
+      ? normalizedString(data['outboxCursorId']).toLowerCase()
+      : '';
 
     if (status === 'running' && leaseExpiresAt > now) {
-      return false;
+      return { claimed: false, outboxCursorId };
     }
 
     transaction.set(
@@ -299,7 +344,7 @@ async function claimFeedLease(runId: string): Promise<boolean> {
       { merge: true },
     );
 
-    return true;
+    return { claimed: true, outboxCursorId };
   });
 }
 
@@ -453,6 +498,11 @@ async function observeCanonicalGame(input: {
     getGameBoxscore(input.game.id, 'near-live-canary'),
     getGamePlayByPlay(input.game.id, 'near-live-canary'),
   ]);
+  const finalBoxscoreState = validateNhlFinalCanonicalBoxscore(boxscore);
+  const finalPlayByPlayState = validateNhlFinalPlayByPlay(playByPlay);
+  const finalBaseSourcesComplete =
+    finalBoxscoreState.availability === 'available' &&
+    finalPlayByPlayState.availability === 'available';
   let facts = buildCanonicalNhlGameFacts({
     scoreboard: {
       gameId: input.game.id,
@@ -475,6 +525,7 @@ async function observeCanonicalGame(input: {
       input.nowMilliseconds
     : 0;
   let finalSettlementStage = getFinalSettlementStage(input.previousData);
+  let finalSettlementFailures: FinalSettlementFailure[] = [];
   const relevantFinalPlayerIds = [...new Set(
     input.finalSettlementPlayerIds
       .filter((playerId) => facts.skaters.some((entry) => entry.playerId === playerId))
@@ -496,22 +547,49 @@ async function observeCanonicalGame(input: {
       ),
     });
 
-    if (nextStage > finalSettlementStage) {
-      if (relevantFinalPlayerIds.length > 0) {
-        const entriesByPlayerId = await loadFinalSettlementEntries({
-          playerIds: relevantFinalPlayerIds,
-          gameId: facts.gameId,
-          season: getNhlSeasonForGameDate(
-            facts.startTimeUTC || facts.gameDate,
-          ),
-        });
+    const unsettledFinalPlayerIds = relevantFinalPlayerIds.filter(
+      (playerId) => !facts.finalSettlementPlayerIds.includes(playerId),
+    );
+    const previousRelevantPlayerIds = Array.isArray(
+      input.previousData?.['finalSettlementRelevantPlayerIds'],
+    )
+      ? input.previousData['finalSettlementRelevantPlayerIds'] as unknown[]
+      : [];
+    const relevantPlayerSetExpanded = unsettledFinalPlayerIds.some(
+      (playerId) => !previousRelevantPlayerIds.includes(playerId),
+    );
+    const shouldRetryIncompleteSettlement =
+      input.previousData?.['finalSettlementComplete'] === false ||
+      relevantPlayerSetExpanded;
+    const checkpointDue = nextStage > finalSettlementStage;
 
-        facts = applyCanonicalNhlFinalSettlements({
-          facts,
-          entriesByPlayerId,
-        });
-      }
+    if (
+      finalBaseSourcesComplete &&
+      relevantFinalPlayerIds.length > 0 &&
+      (checkpointDue || shouldRetryIncompleteSettlement)
+    ) {
+      const settlementLoad = await loadFinalSettlementEntries({
+        playerIds: relevantFinalPlayerIds,
+        gameId: facts.gameId,
+        season: getNhlSeasonForGameDate(
+          facts.startTimeUTC || facts.gameDate,
+        ),
+      });
 
+      finalSettlementFailures = settlementLoad.failures;
+      facts = applyCanonicalNhlFinalSettlements({
+        facts,
+        entriesByPlayerId: settlementLoad.entriesByPlayerId,
+      });
+    }
+
+    const finalSettlementComplete = finalBaseSourcesComplete &&
+      finalSettlementFailures.length === 0 &&
+      relevantFinalPlayerIds.every((playerId) =>
+        facts.finalSettlementPlayerIds.includes(playerId)
+      );
+
+    if (nextStage > finalSettlementStage && finalSettlementComplete) {
       finalSettlementStage = nextStage;
     }
   } else {
@@ -532,6 +610,43 @@ async function observeCanonicalGame(input: {
   const lastTimeOnIceSettledAtMilliseconds = decision.shouldSignal || !previous
     ? input.nowMilliseconds
     : previous.lastTimeOnIceSettledAtMilliseconds;
+  const finalSettlementComplete = facts.gameState === 'final' &&
+    finalBaseSourcesComplete &&
+    finalSettlementFailures.length === 0 &&
+    relevantFinalPlayerIds.every((playerId) =>
+      facts.finalSettlementPlayerIds.includes(playerId)
+    );
+  const finalPlayerLogState: NhlFinalInputSourceState = finalSettlementComplete
+    ? { availability: 'available' }
+    : finalSettlementFailures.some(
+        (failure) => failure.sourceState.availability === 'malformed',
+      )
+      ? {
+          availability: 'malformed',
+          detail: 'One or more required canonical final player logs were malformed.',
+        }
+      : {
+          availability: 'temporarily-unavailable',
+          detail: 'One or more required canonical final player logs are unavailable.',
+        };
+  const finalInputCompletenessByAssetType = facts.gameState === 'final'
+    ? {
+        skater: assessNhlFinalInputCompleteness({
+          assetType: 'skater',
+          boxscore: finalBoxscoreState,
+          playByPlay: finalPlayByPlayState,
+          playerLog: finalPlayerLogState,
+          sourceVersion: hashes.sourceVersion,
+        }),
+        teamGoalieUnit: assessNhlFinalInputCompleteness({
+          assetType: 'team-goalie-unit',
+          boxscore: finalBoxscoreState,
+          playByPlay: { availability: 'not-required' },
+          playerLog: { availability: 'not-required' },
+          sourceVersion: hashes.sourceVersion,
+        }),
+      }
+    : {};
   const payload = {
     schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
     gameId: facts.gameId,
@@ -539,12 +654,17 @@ async function observeCanonicalGame(input: {
     ...hashes,
     finalSettlementStage,
     finalSettlementRelevantPlayerIds: relevantFinalPlayerIds,
-    finalSettlementComplete: relevantFinalPlayerIds.every((playerId) =>
-      facts.finalSettlementPlayerIds.includes(playerId)
-    ),
+    finalSettlementComplete,
     finalSettlementMissingPlayerIds: relevantFinalPlayerIds
       .filter((playerId) => !facts.finalSettlementPlayerIds.includes(playerId))
       .slice(0, 40),
+    finalSettlementFailureReasons: finalSettlementFailures.map((failure) => ({
+      playerId: failure.playerId,
+      availability: failure.sourceState.availability,
+      detail: (failure.sourceState.detail ?? 'Final player log unavailable.')
+        .slice(0, 180),
+    })),
+    finalInputCompletenessByAssetType,
     lastSignaledTimeOnIceHash,
     timeOnIceDirty: decision.timeOnIceDirty,
     nextTimeOnIceSettlementAt:
@@ -575,7 +695,20 @@ async function observeCanonicalGame(input: {
     throw new Error(`canonical-game-document-too-large:${facts.gameId}:${payloadBytes}`);
   }
 
-  await getCanonicalGameRef(facts.gameId).set(payload, { merge: true });
+  await persistCanonicalPublicationWithOutbox({
+    firestore: db,
+    gameId: facts.gameId,
+    sourceVersion: hashes.sourceVersion,
+    changeKind: decision.kind,
+    shouldSignal: decision.shouldSignal,
+    affectedPlayerIds: facts.playerIds,
+    affectedTeamAbbreviations: facts.teamAbbreviations,
+    observedAtMilliseconds: input.nowMilliseconds,
+    expectedSourceVersion: normalizedString(
+      input.previousData?.['sourceVersion'],
+    ).toLowerCase(),
+    canonicalPayload: payload,
+  });
 
   return {
     gameId: facts.gameId,
@@ -621,58 +754,126 @@ async function mapWithConcurrency<TValue, TResult>(
   return results;
 }
 
-function buildLeagueChangeRequests(input: {
-  observations: readonly CanonicalGameObservation[];
+async function deliverPendingCanonicalPublications(input: {
   exactCanaryLeagueIds: readonly string[];
   impacts: readonly LeagueScoringImpact[];
   impactIndexComplete: boolean;
-}): LeagueChangeRequest[] {
-  const byLeague = new Map<string, LeagueChangeRequest>();
+  afterOutboxId: string;
+}): Promise<{
+  loadedOutboxCount: number;
+  deliveredOutboxCount: number;
+  failedOutboxCount: number;
+  requestedLeagueCount: number;
+  coalescedLeagueCount: number;
+  nextOutboxCursorId: string;
+}> {
+  const outboxBatch = await loadPendingCanonicalPublicationOutbox({
+    firestore: db,
+    limit: CANONICAL_OUTBOX_DRAIN_LIMIT,
+    afterId: input.afterOutboxId,
+  });
+  const entries = outboxBatch.entries;
+  let deliveredOutboxCount = 0;
+  let failedOutboxCount = 0;
+  let requestedLeagueCount = 0;
+  let coalescedLeagueCount = 0;
 
-  for (const observation of input.observations) {
-    if (!observation.shouldSignal) {
-      continue;
-    }
+  for (const entry of entries) {
+    try {
+      const currentCanonicalSnapshot = await getCanonicalGameRef(entry.gameId).get();
+      const currentSourceVersion = normalizedString(
+        currentCanonicalSnapshot.data()?.['sourceVersion'],
+      ).toLowerCase();
 
-    const leagueIds = selectAffectedCanonicalLeagueIds({
-      affectedPlayerIds: observation.affectedPlayerIds,
-      affectedTeamAbbreviations: observation.affectedTeamAbbreviations,
-      exactCanaryLeagueIds: input.exactCanaryLeagueIds,
-      impacts: input.impacts,
-      impactIndexComplete: input.impactIndexComplete,
-    });
+      if (!currentSourceVersion) {
+        throw new Error('canonical-outbox-source-document-missing');
+      }
 
-    for (const leagueId of leagueIds) {
-      const existing = byLeague.get(leagueId) ?? {
-        leagueId,
-        gameIds: [],
-        changeKinds: [],
-        sourceVersions: [],
-        gameVersions: [],
-      };
+      if (currentSourceVersion !== entry.sourceVersion) {
+        await markCanonicalPublicationOutboxDelivered({
+          firestore: db,
+          entry,
+          leagueIds: [],
+          outcome: 'superseded',
+        });
+        deliveredOutboxCount += 1;
+        continue;
+      }
 
-      existing.gameIds.push(observation.gameId);
-      existing.changeKinds.push(observation.changeKind);
-      existing.sourceVersions.push(observation.sourceVersion);
-      existing.gameVersions.push({
-        gameId: observation.gameId,
-        sourceVersion: observation.sourceVersion,
+      const leagueIds = selectAffectedCanonicalLeagueIds({
+        affectedPlayerIds: entry.affectedPlayerIds,
+        affectedTeamAbbreviations: entry.affectedTeamAbbreviations,
+        exactCanaryLeagueIds: input.exactCanaryLeagueIds,
+        impacts: input.impacts,
+        impactIndexComplete: input.impactIndexComplete,
       });
-      byLeague.set(leagueId, existing);
+
+      for (const leagueId of leagueIds) {
+        const gameVersions = [{
+          gameId: entry.gameId,
+          sourceVersion: entry.sourceVersion,
+        }];
+        const sourceVersion = canonicalNhlSha256({
+          schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
+          leagueId,
+          gameVersions: gameVersions.map((game) => game.sourceVersion).sort(),
+        });
+        const outcome = await requestLeagueAutomationForCanonicalChange({
+          leagueId,
+          sourceVersion,
+          observedAtMilliseconds: entry.observedAtMilliseconds,
+          gameIds: [entry.gameId],
+          gameVersions,
+          changeKinds: [entry.changeKind],
+        });
+
+        if (outcome === 'ineligible') {
+          throw new Error(`canonical-outbox-league-became-ineligible:${leagueId}`);
+        }
+
+        if (outcome === 'requested') {
+          requestedLeagueCount += 1;
+        } else {
+          coalescedLeagueCount += 1;
+        }
+      }
+
+      await markCanonicalPublicationOutboxDelivered({
+        firestore: db,
+        entry,
+        leagueIds,
+        outcome: leagueIds.length > 0 ? 'delivered' : 'no-targets',
+      });
+      deliveredOutboxCount += 1;
+    } catch (error: unknown) {
+      failedOutboxCount += 1;
+      await recordCanonicalPublicationOutboxFailure({
+        firestore: db,
+        entry,
+        error,
+      }).catch((recordError: unknown) => {
+        console.error('Unable to record canonical publication outbox failure.', {
+          outboxId: entry.id,
+          recordError,
+        });
+      });
+      console.error('Unable to deliver a pending canonical publication.', {
+        outboxId: entry.id,
+        gameId: entry.gameId,
+        sourceVersion: entry.sourceVersion,
+        error,
+      });
     }
   }
 
-  return [...byLeague.values()]
-    .map((request) => ({
-      leagueId: request.leagueId,
-      gameIds: [...new Set(request.gameIds)].sort((left, right) => left - right),
-      changeKinds: [...new Set(request.changeKinds)].sort(),
-      sourceVersions: [...new Set(request.sourceVersions)].sort(),
-      gameVersions: [...new Map(
-        request.gameVersions.map((entry) => [entry.gameId, entry] as const),
-      ).values()].sort((left, right) => left.gameId - right.gameId),
-    }))
-    .sort((left, right) => left.leagueId.localeCompare(right.leagueId));
+  return {
+    loadedOutboxCount: entries.length,
+    deliveredOutboxCount,
+    failedOutboxCount,
+    requestedLeagueCount,
+    coalescedLeagueCount,
+    nextOutboxCursorId: outboxBatch.nextCursorId,
+  };
 }
 
 async function recordFeedSuccess(input: {
@@ -684,6 +885,10 @@ async function recordFeedSuccess(input: {
   signalCount: number;
   requestedLeagueCount: number;
   coalescedLeagueCount: number;
+  outboxLoadedCount: number;
+  outboxDeliveredCount: number;
+  outboxFailedCount: number;
+  outboxCursorId: string;
   failedGameCount: number;
   impactIndexComplete: boolean;
   impactIndexFallbackCount: number;
@@ -700,6 +905,11 @@ async function recordFeedSuccess(input: {
       signaledGameCount: input.signalCount,
       requestedLeagueCount: input.requestedLeagueCount,
       coalescedLeagueCount: input.coalescedLeagueCount,
+      outboxLoadedCount: input.outboxLoadedCount,
+      outboxDeliveredCount: input.outboxDeliveredCount,
+      outboxFailedCount: input.outboxFailedCount,
+      outboxCursorId: input.outboxCursorId || null,
+      outboxStatus: input.outboxFailedCount > 0 ? 'pending-retry' : 'drained',
       failedGameCount: input.failedGameCount,
       impactIndexComplete: input.impactIndexComplete,
       impactIndexFallbackCount: input.impactIndexFallbackCount,
@@ -758,9 +968,9 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
   async () => {
     const runId = randomUUID().replaceAll('-', '');
     const startedAt = Date.now();
-    const claimed = await claimFeedLease(runId);
+    const lease = await claimFeedLease(runId);
 
-    if (!claimed) {
+    if (!lease.claimed) {
       return;
     }
 
@@ -799,8 +1009,10 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
         const firstObservedFinalAt = toMilliseconds(
           previous?.['firstObservedFinalAt'],
         );
+        const finalInputIncomplete = previous?.['finalSettlementComplete'] === false;
 
         return firstObservedFinalAt <= 0 ||
+          finalInputIncomplete ||
           startedAt - firstObservedFinalAt <=
             CANONICAL_NHL_FINAL_RECONCILIATION_MILLISECONDS;
       });
@@ -832,36 +1044,12 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
         }
       }
 
-      const requests = buildLeagueChangeRequests({
-        observations,
+      const outboxDelivery = await deliverPendingCanonicalPublications({
         exactCanaryLeagueIds,
         impacts: impactIndex.impacts,
         impactIndexComplete: impactIndex.complete,
+        afterOutboxId: lease.outboxCursorId,
       });
-      let requestedLeagueCount = 0;
-      let coalescedLeagueCount = 0;
-
-      for (const request of requests) {
-        const sourceVersion = canonicalNhlSha256({
-          schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
-          leagueId: request.leagueId,
-          gameVersions: request.sourceVersions,
-        });
-        const outcome = await requestLeagueAutomationForCanonicalChange({
-          leagueId: request.leagueId,
-          sourceVersion,
-          observedAtMilliseconds: startedAt,
-          gameIds: request.gameIds,
-          gameVersions: request.gameVersions,
-          changeKinds: request.changeKinds,
-        });
-
-        if (outcome === 'requested') {
-          requestedLeagueCount += 1;
-        } else if (outcome === 'coalesced') {
-          coalescedLeagueCount += 1;
-        }
-      }
 
       await recordFeedSuccess({
         runId,
@@ -870,8 +1058,12 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
         exactCanaryLeagueIds,
         gameCount: observations.length,
         signalCount: observations.filter((entry) => entry.shouldSignal).length,
-        requestedLeagueCount,
-        coalescedLeagueCount,
+        requestedLeagueCount: outboxDelivery.requestedLeagueCount,
+        coalescedLeagueCount: outboxDelivery.coalescedLeagueCount,
+        outboxLoadedCount: outboxDelivery.loadedOutboxCount,
+        outboxDeliveredCount: outboxDelivery.deliveredOutboxCount,
+        outboxFailedCount: outboxDelivery.failedOutboxCount,
+        outboxCursorId: outboxDelivery.nextOutboxCursorId,
         failedGameCount,
         impactIndexComplete: impactIndex.complete,
         impactIndexFallbackCount: impactIndex.failedLeagueIds.length,

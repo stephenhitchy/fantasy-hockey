@@ -547,6 +547,12 @@
     "preverify:batchd1j2": "npm run security:sync-repository-automation",
     "verify:batchd1j2:core": "npm run verify:batchd1j1:core && npm run test:batchd1j2:run && npm run season:preflight -- --source-only && npm run capacity:100k && npm run validate:release-manifest",
     "verify:batchd1j2": "npm run toolchain:verify && npm run verify:batchd1j2:core && npm run security:dependency-audit",
+    "pretest:batchd1l:run": "npm --prefix functions run build",
+    "test:batchd1l:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1l-final-score-integrity/*.test.mjs",
+    "test:batchd1l": "firebase emulators:exec --project demo-rinkrat-d1l --only firestore \"npm run test:batchd1l:run\"",
+    "preverify:batchd1l": "npm run security:sync-repository-automation",
+    "verify:batchd1l:core": "npm run verify:batchd1j2:core && npm run test:batchd1l && npm run capacity:100k && npm run validate:release-manifest",
+    "verify:batchd1l": "npm run toolchain:verify && npm run verify:batchd1l:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
   },
   "private": true,

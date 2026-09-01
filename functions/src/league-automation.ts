@@ -492,6 +492,7 @@ interface CanonicalScoringParityTaskContext {
   sourceVersion: string;
   requestedAtMilliseconds: number;
   gameIds: number[];
+  gameVersions: CanonicalLeagueAutomationGameVersion[];
 }
 
 interface CanonicalScoringAuthorityRuntimeContext {
@@ -507,6 +508,7 @@ interface CanonicalScoringParityLoadResult {
   loadedGameIds: number[];
   missingGameIds: number[];
   invalidGameIds: number[];
+  versionMismatchGameIds: number[];
   calculatedAggregateSourceVersion: string;
   taskSourceVersion: string;
   taskVersionAligned: boolean;
@@ -1003,6 +1005,12 @@ async function loadCanonicalScoringParityGames(input: {
   context: CanonicalScoringParityTaskContext;
 }): Promise<CanonicalScoringParityLoadResult> {
   const requestedGameIds = normalizeCanonicalParityGameIds(input.context.gameIds);
+  const expectedGameVersions = normalizeCanonicalGameVersions(
+    input.context.gameVersions,
+  );
+  const expectedVersionByGameId = new Map(
+    expectedGameVersions.map((entry) => [entry.gameId, entry.sourceVersion] as const),
+  );
   const references = requestedGameIds.map((gameId) =>
     db.doc(`nhlCanonicalGameFacts/${gameId}`)
   );
@@ -1012,6 +1020,7 @@ async function loadCanonicalScoringParityGames(input: {
   const gamesById = new Map<number, CanonicalScoringParityGame>();
   const missingGameIds: number[] = [];
   const invalidGameIds: number[] = [];
+  const versionMismatchGameIds: number[] = [];
 
   snapshots.forEach((snapshot, index) => {
     const gameId = requestedGameIds[index];
@@ -1024,13 +1033,31 @@ async function loadCanonicalScoringParityGames(input: {
     const data = snapshot.data() ?? {};
     const sourceVersion = normalizeCanonicalSourceVersion(data['sourceVersion']);
     const facts = normalizeCanonicalParityFacts(data['facts'], gameId);
+    const rawFinalInputCompleteness = data['finalInputCompletenessByAssetType'];
+    const finalInputCompletenessByAssetType = rawFinalInputCompleteness &&
+      typeof rawFinalInputCompleteness === 'object' &&
+      !Array.isArray(rawFinalInputCompleteness)
+        ? rawFinalInputCompleteness as CanonicalScoringParityGame[
+            'finalInputCompletenessByAssetType'
+          ]
+        : undefined;
+    const expectedSourceVersion = expectedVersionByGameId.get(gameId) ?? '';
 
     if (!sourceVersion || !facts) {
       invalidGameIds.push(gameId);
       return;
     }
 
-    gamesById.set(gameId, { sourceVersion, facts });
+    if (!expectedSourceVersion || sourceVersion !== expectedSourceVersion) {
+      versionMismatchGameIds.push(gameId);
+      return;
+    }
+
+    gamesById.set(gameId, {
+      sourceVersion,
+      facts,
+      finalInputCompletenessByAssetType,
+    });
   });
 
   const loadedGameIds = [...gamesById.keys()].sort((left, right) => left - right);
@@ -1057,7 +1084,10 @@ async function loadCanonicalScoringParityGames(input: {
       requestedGameIds.length > 0 &&
       missingGameIds.length === 0 &&
       invalidGameIds.length === 0 &&
+      versionMismatchGameIds.length === 0 &&
+      expectedGameVersions.length === requestedGameIds.length &&
       calculatedAggregateSourceVersion === input.context.sourceVersion,
+    versionMismatchGameIds,
   };
 }
 
@@ -1151,6 +1181,7 @@ async function recordCanonicalScoringParityEvidence(input: {
     loadedGameIds: input.load.loadedGameIds,
     missingGameIds: input.load.missingGameIds,
     invalidGameIds: input.load.invalidGameIds,
+    versionMismatchGameIds: input.load.versionMismatchGameIds,
     observationCount: input.observations.length,
     comparedCount: summary.comparedCount,
     matchedCount: summary.matchedCount,
@@ -4857,6 +4888,7 @@ async function runLeagueAutomation(
           loadedGameIds: [],
           missingGameIds: canonicalParityContext.gameIds,
           invalidGameIds: [],
+          versionMismatchGameIds: [],
           calculatedAggregateSourceVersion: '',
           taskSourceVersion: canonicalParityContext.sourceVersion,
           taskVersionAligned: false,
@@ -4984,6 +5016,9 @@ async function runLeagueAutomation(
             phaseTimer.add(phase, durationMilliseconds);
           },
           canonicalParityGamesById: canonicalParityLoad?.gamesById,
+          canonicalParityRequestedGameIds: canonicalParityLoad
+            ? new Set(canonicalParityLoad.requestedGameIds)
+            : undefined,
           onCanonicalParityObservation: canonicalParityLoad
             ? (observation) => {
                 if (canonicalParityObservations.length < 2_000) {
@@ -7704,6 +7739,7 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
             requestedAtMilliseconds:
               payload.canonicalRequestedAtMilliseconds ?? 0,
             gameIds: payloadCanonicalGameIds,
+            gameVersions: payloadCanonicalGameVersions,
           } satisfies CanonicalScoringParityTaskContext
         : undefined;
       const canonicalAuthorityContext =

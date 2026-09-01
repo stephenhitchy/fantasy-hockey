@@ -22,6 +22,7 @@ import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scorin
 import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
 import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
 import { NhlTeamSeasonGame } from '../nhl/nhl-api.service';
+import { normalizeNhlFinalInputCompletenessRecord } from '../nhl/nhl-final-input-completeness.util';
 import { FantasyPlayoffWindowBank } from './playoff-window-bank.models';
 import { FantasyPlayoffs } from './playoff.models';
 
@@ -110,6 +111,10 @@ function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAs
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
     gameScores: normalizeNumberRecord(value.gameScores),
     gameStates: normalizeGameStateRecord(value.gameStates),
+    gameInputCompleteness: normalizeNhlFinalInputCompletenessRecord(
+      value.gameInputCompleteness,
+    ),
+    incompleteFinalGameIds: normalizeNumberArray(value.incompleteFinalGameIds),
     scheduledGames: typeof value.scheduledGames === 'number' ? value.scheduledGames : 0,
     gamesPlayed: typeof value.gamesPlayed === 'number' ? value.gamesPlayed : 0,
     actualGamesPlayed: typeof value.actualGamesPlayed === 'number' ? value.actualGamesPlayed : 0,
@@ -435,6 +440,10 @@ function buildSlotWindows(
       appearanceGameIds: summary?.appearanceGameIds ?? previous?.appearanceGameIds ?? [],
       gameScores: summary?.gameScores ?? previous?.gameScores ?? {},
       gameStates: summary?.gameStates ?? previous?.gameStates ?? {},
+      gameInputCompleteness:
+        summary?.gameInputCompleteness ?? previous?.gameInputCompleteness ?? {},
+      incompleteFinalGameIds:
+        summary?.incompleteFinalGameIds ?? previous?.incompleteFinalGameIds ?? [],
       scheduledGames: summary?.scheduledGames ?? 0,
       gamesPlayed: summary?.gamesPlayed ?? 0,
       actualGamesPlayed: summary?.actualGamesPlayed ?? 0,
@@ -489,6 +498,8 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
       appearanceGameIds: window.appearanceGameIds,
       gameScores: window.gameScores,
       gameStates: window.gameStates,
+      gameInputCompleteness: window.gameInputCompleteness ?? {},
+      incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       fantasyPoints: window.fantasyPoints,
       frozenProjectionPoints: window.frozenProjectionPoints,
       frozenProjectionVersion: window.frozenProjectionVersion,
@@ -513,6 +524,7 @@ function buildPreviousScoringResultFromBanks(
   const teamScores: Record<string, number> = {};
   const teamCycleComplete: Record<string, boolean> = {};
   let hasLiveGames = false;
+  let hasIncompleteFinalGames = false;
 
   for (const window of slotWindows) {
     const summary = {
@@ -533,6 +545,8 @@ function buildPreviousScoringResultFromBanks(
       appearanceGameIds: window.appearanceGameIds,
       gameScores: window.gameScores,
       gameStates: window.gameStates,
+      gameInputCompleteness: window.gameInputCompleteness ?? {},
+      incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       firstScheduledGameDate: window.firstScheduledGameDate,
       lastScheduledGameDate: window.lastScheduledGameDate,
       status: window.status,
@@ -544,6 +558,8 @@ function buildPreviousScoringResultFromBanks(
       ((teamScores[window.ownerId] ?? 0) + window.fantasyPoints).toFixed(1),
     );
     hasLiveGames = hasLiveGames || window.liveGameIds.length > 0;
+    hasIncompleteFinalGames = hasIncompleteFinalGames ||
+      (window.incompleteFinalGameIds?.length ?? 0) > 0;
   }
 
   for (const bank of banks) {
@@ -559,6 +575,7 @@ function buildPreviousScoringResultFromBanks(
     teamCycleComplete,
     cycleHasScheduledGames: slotWindows.some((window) => window.scheduledGames > 0),
     hasLiveGames,
+    hasIncompleteFinalGames,
     nextScheduledGameStart: null,
     refreshedAt: new Date().toISOString(),
     dataFingerprint: banks

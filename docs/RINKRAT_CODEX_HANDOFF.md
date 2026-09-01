@@ -55,6 +55,9 @@ RinkRat contains:
 - TOI-only coalescing;
 - an affected-league impact index;
 - exact canonical source versions carried through queue tasks;
+- explicit per-asset final-input completeness and retry evidence;
+- deterministic canonical publication outbox records committed atomically with
+  signal-worthy game-fact versions;
 - direct-versus-canonical shadow parity;
 - one-league canonical-read Canary controls;
 - automatic direct fallback and a canonical circuit breaker;
@@ -75,6 +78,13 @@ Already present:
   misalignment;
 - circuit-breaker evidence;
 - synthetic final-correction certification scenarios.
+- final numeric-score reuse only after complete source-version evidence;
+- exact task game/version parity scope, so unrelated active-window games are
+  not classified as canonical-missing;
+- durable, idempotent canonical-to-league notification with older-version
+  supersession, stale-writer compare-and-set, and bounded cursor rotation;
+- canonical parity fallback when the requested final fact lacks complete,
+  exact-version input evidence.
 
 Not fully finished:
 
@@ -83,6 +93,8 @@ Not fully finished:
 - a safe replay mechanism for correcting already completed player windows;
 - exact-once correction proof across transactions, standings, playoffs, and
   Game 7 ownership.
+- a retention or cleanup policy for delivered canonical publication outbox
+  evidence.
 
 The first correction phase should detect and report discrepancies only. It
 must not automatically rewrite production scores.

@@ -143,6 +143,20 @@ const goalieAsset = {
   teamName: 'Minnesota', teamAbbreviation: 'MIN',
 };
 
+function completeFinalInputEvidence(sourceVersion) {
+  return {
+    skater: {
+      status: 'complete', complete: true, reusableFinal: true, sourceVersion,
+      requiredSources: ['boxscore', 'play-by-play', 'player-log', 'source-version'],
+      failures: [],
+    },
+    teamGoalieUnit: {
+      status: 'complete', complete: true, reusableFinal: true, sourceVersion,
+      requiredSources: ['boxscore', 'source-version'], failures: [],
+    },
+  };
+}
+
 test('final player logs settle one canonical game record and change its final hash', () => {
   const before = buildCanonicalNhlGameFacts(rawFinalGame());
   const beforeHash = buildCanonicalNhlGameHashes(before).finalSettlementHash;
@@ -188,12 +202,17 @@ test('canonical skater and goalie calculations match the direct scoring engine',
 
 test('parity reports matched, mismatch, and incomplete without becoming authority', () => {
   const facts = parityFacts();
-  const game = { sourceVersion: buildCanonicalNhlGameHashes(facts).sourceVersion, facts };
+  const sourceVersion = buildCanonicalNhlGameHashes(facts).sourceVersion;
+  const game = {
+    sourceVersion,
+    facts,
+    finalInputCompletenessByAssetType: completeFinalInputEvidence(sourceVersion),
+  };
   const canonical = parity.calculateCanonicalAssetGameScore({ asset: skaterAsset, facts, gameIsFinal: true, scoringRules: rulesModule.defaultScoringRules });
   const matched = parity.compareDirectAndCanonicalGameScore({ gameId: facts.gameId, asset: skaterAsset, canonicalGame: game, gameIsFinal: true, scoringRules: rulesModule.defaultScoringRules, directPoints: canonical.points, directAppeared: true });
   const mismatch = parity.compareDirectAndCanonicalGameScore({ gameId: facts.gameId, asset: skaterAsset, canonicalGame: game, gameIsFinal: true, scoringRules: rulesModule.defaultScoringRules, directPoints: canonical.points + 1, directAppeared: true });
   const incompleteFacts = { ...facts, finalSettlements: [], finalSettlementPlayerIds: [] };
-  const incomplete = parity.compareDirectAndCanonicalGameScore({ gameId: facts.gameId, asset: skaterAsset, canonicalGame: { sourceVersion: 'v', facts: incompleteFacts }, gameIsFinal: true, scoringRules: rulesModule.defaultScoringRules, directPoints: canonical.points, directAppeared: true });
+  const incomplete = parity.compareDirectAndCanonicalGameScore({ gameId: facts.gameId, asset: skaterAsset, canonicalGame: { sourceVersion, facts: incompleteFacts, finalInputCompletenessByAssetType: completeFinalInputEvidence(sourceVersion) }, gameIsFinal: true, scoringRules: rulesModule.defaultScoringRules, directPoints: canonical.points, directAppeared: true });
 
   assert.equal(matched.status, 'matched');
   assert.equal(mismatch.status, 'mismatch');
@@ -213,7 +232,8 @@ test('D1G centralizes final settlement and keeps shadow parity available under t
   assert.match(feed, /FINAL_SETTLEMENT_SECOND_CHECKPOINT_MILLISECONDS\s*=\s*5 \* 60 \* 1000/);
   assert.match(feed, /FINAL_SETTLEMENT_FINAL_CHECKPOINT_MILLISECONDS\s*=\s*28 \* 60 \* 1000/);
   assert.match(feed, /applyCanonicalNhlFinalSettlements/);
-  assert.match(feed, /gameVersions:\s*request\.gameVersions/);
+  assert.match(feed, /persistCanonicalPublicationWithOutbox/);
+  assert.match(feed, /requestLeagueAutomationForCanonicalChange\(\{[\s\S]*?gameVersions,/);
   assert.doesNotMatch(feed, /runLeagueAutomation\(/);
 
   assert.match(automation, /shadowOnly:\s*input\.authorityEnabled !== true/);

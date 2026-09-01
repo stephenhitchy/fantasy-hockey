@@ -10,6 +10,7 @@ import {
 import { db } from '../firebase';
 import { DraftPick } from '../draft/draft.models';
 import { getFrozenCycleProjection } from '../projection/cycle-projection.util';
+import { normalizeNhlFinalInputCompletenessRecord } from '../nhl/nhl-final-input-completeness.util';
 import {
   AssetCycleWindowStatus,
   FantasyAssetCycleWindow,
@@ -116,6 +117,10 @@ function normalizeAssetCycleWindow(
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
     gameScores: normalizeNumberRecord(value.gameScores),
     gameStates: normalizeGameStateRecord(value.gameStates),
+    gameInputCompleteness: normalizeNhlFinalInputCompletenessRecord(
+      value.gameInputCompleteness,
+    ),
+    incompleteFinalGameIds: normalizeNumberArray(value.incompleteFinalGameIds),
     scheduledGames: typeof value.scheduledGames === 'number' ? value.scheduledGames : 0,
     gamesPlayed: typeof value.gamesPlayed === 'number' ? value.gamesPlayed : 0,
     actualGamesPlayed: typeof value.actualGamesPlayed === 'number' ? value.actualGamesPlayed : 0,
@@ -201,6 +206,13 @@ function buildWindow(
   summary: CycleAssetScoreSummary | null,
   previous: FantasyAssetCycleWindow | null,
 ): FantasyAssetCycleWindow {
+  // A completed slot window is an immutable competitive boundary. A delayed
+  // scorer that started before a successful retry must not downgrade it with
+  // older incomplete input or move its settled points/ownership.
+  if (previous?.status === 'complete') {
+    return previous;
+  }
+
   const rosterSlotId = getRosterSlotId(pick);
   const pickWindowCycleNumber = getPickWindowCycleNumber(pick, cycleNumber);
   const windowId = getWindowId(pick, pickWindowCycleNumber);
@@ -230,6 +242,12 @@ function buildWindow(
       summary?.appearanceGameIds ?? normalizeNumberArray(previous?.appearanceGameIds),
     gameScores: summary?.gameScores ?? normalizeNumberRecord(previous?.gameScores),
     gameStates: summary?.gameStates ?? normalizeGameStateRecord(previous?.gameStates),
+    gameInputCompleteness:
+      summary?.gameInputCompleteness ??
+      normalizeNhlFinalInputCompletenessRecord(previous?.gameInputCompleteness),
+    incompleteFinalGameIds:
+      summary?.incompleteFinalGameIds ??
+      normalizeNumberArray(previous?.incompleteFinalGameIds),
     scheduledGames: summary?.scheduledGames ?? previous?.scheduledGames ?? 0,
     gamesPlayed: summary?.gamesPlayed ?? previous?.gamesPlayed ?? 0,
     actualGamesPlayed: summary?.actualGamesPlayed ?? previous?.actualGamesPlayed ?? 0,
@@ -281,6 +299,8 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
       appearanceGameIds: window.appearanceGameIds,
       gameScores: window.gameScores,
       gameStates: window.gameStates,
+      gameInputCompleteness: window.gameInputCompleteness ?? {},
+      incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       scheduledGames: window.scheduledGames,
       gamesPlayed: window.gamesPlayed,
       actualGamesPlayed: window.actualGamesPlayed,
