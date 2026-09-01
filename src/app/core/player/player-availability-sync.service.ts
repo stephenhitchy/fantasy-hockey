@@ -444,9 +444,12 @@ export function startGlobalPlayerAvailabilityListener(): void {
     void globalListenerReadyPromise.catch(() => undefined);
   }
 
-  stopGlobalListener = monitorFirestoreListener('availability:global', () => onSnapshot(
+  const startReason = globalListenerRetryCount > 0 ? 'retry' : 'initial';
+
+  stopGlobalListener = monitorFirestoreListener('availability:global', (listenerObserver) => onSnapshot(
     getGlobalAvailabilityReference(),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       globalListenerRetryCount = 0;
       clearGlobalListenerRetry();
       updateGlobalDocumentState(snapshot.exists() ? snapshot.data() : {});
@@ -456,6 +459,7 @@ export function startGlobalPlayerAvailabilityListener(): void {
       globalListenerReadyPromise = null;
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to listen for the global player-availability report.');
@@ -477,7 +481,7 @@ export function startGlobalPlayerAvailabilityListener(): void {
       );
       scheduleGlobalListenerRetry(userId);
     },
-  ));
+  ), { startReason });
 }
 
 export function stopGlobalPlayerAvailabilityListener(): void {

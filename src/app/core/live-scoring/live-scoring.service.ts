@@ -270,9 +270,10 @@ export function listenToSharedCycleScoring(
   callback: (snapshot: SharedCycleScoringSnapshot | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return monitorFirestoreListener('scoring:snapshot', () => onSnapshot(
+  return monitorFirestoreListener('scoring:snapshot', (listenerObserver) => onSnapshot(
     getCycleSnapshotRef(leagueId, cycleNumber),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.exists()
           ? normalizeSnapshot(
@@ -284,6 +285,7 @@ export function listenToSharedCycleScoring(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalized =
         error instanceof Error ? error : new Error('Unable to load shared cycle scoring.');
 
@@ -301,9 +303,10 @@ export function listenToSharedLiveScoringControl(
   callback: (control: SharedLiveScoringControl | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return monitorFirestoreListener('scoring:control', () => onSnapshot(
+  return monitorFirestoreListener('scoring:control', (listenerObserver) => onSnapshot(
     getControlRef(leagueId),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.exists()
           ? normalizeControl(snapshot.data() as Partial<SharedLiveScoringControl>)
@@ -311,6 +314,7 @@ export function listenToSharedLiveScoringControl(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalized =
         error instanceof Error ? error : new Error('Unable to load shared live-scoring status.');
 

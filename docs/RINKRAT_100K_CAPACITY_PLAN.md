@@ -14,6 +14,19 @@ The dependency-free model reads current Functions source settings and combines t
 
 This is deliberately labeled a **capacity estimate**, not a live load test. It does not create 100,000 authenticated browsers or Firestore streams.
 
+## D1N listener-evidence correction
+
+D1N-A makes both Projection V11 browser streams visible to the existing client-health listener
+monitor and replaces the Available Players route's fixed four-listener assumption with the
+source-audited formula `6 + managersPerLeague + assumedActiveCycles`. The current one-active-cycle
+assumption produces 17 listeners for a ten-manager league and 19 for a twelve-manager league.
+
+This is still a planning estimate. Collection-listener document fanout is not implied by listener
+count. D1N-B now records bounded first-snapshot observed-document evidence, source metadata, lifecycle
+cleanup, and per-session p50/p95/max route envelopes for all 25 browser snapshot streams. Those
+observed document counts are not exact billed Firestore reads. The five authenticated high-risk route
+profiles remain explicit assumptions until they are sampled with non-production fixtures. See
+`docs/RINKRAT_SCALE_D1N_CAPACITY_EVIDENCE.md`.
 
 ## P1F rollout-control update
 

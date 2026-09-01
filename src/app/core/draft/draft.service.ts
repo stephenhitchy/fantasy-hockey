@@ -735,10 +735,11 @@ export function listenToFantasyDraft(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return monitorFirestoreListener('draft:state', () => onSnapshot(
+  return monitorFirestoreListener('draft:state', (listenerObserver) => onSnapshot(
     getDraftRef(leagueId),
     { includeMetadataChanges: true },
     (snapshot) => {
+      listenerObserver.next(snapshot);
       reportDraftSnapshotState(snapshot.metadata, onState);
 
       if (!snapshot.exists()) {
@@ -749,6 +750,7 @@ export function listenToFantasyDraft(
       callback(normalizeDraft(snapshot.data() as Partial<FantasyDraft>));
     },
     (error) => {
+      listenerObserver.error();
       reportDraftListenerError(error, 'Unable to load the league draft.', onError);
     },
   ));
@@ -762,14 +764,16 @@ export function listenToDraftPicks(
 ): () => void {
   const picksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
 
-  return monitorFirestoreListener('draft:picks', () => onSnapshot(
+  return monitorFirestoreListener('draft:picks', (listenerObserver) => onSnapshot(
     picksQuery,
     { includeMetadataChanges: true },
     (snapshot) => {
+      listenerObserver.next(snapshot);
       reportDraftSnapshotState(snapshot.metadata, onState);
       callback(snapshot.docs.map((pickDoc) => pickDoc.data() as DraftPick));
     },
     (error) => {
+      listenerObserver.error();
       reportDraftListenerError(error, 'Unable to load draft picks.', onError);
     },
   ));
@@ -782,10 +786,11 @@ export function listenToDraftQueue(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return monitorFirestoreListener('draft:queue-owner', () => onSnapshot(
+  return monitorFirestoreListener('draft:queue-owner', (listenerObserver) => onSnapshot(
     getDraftQueueRef(leagueId, ownerId),
     { includeMetadataChanges: true },
     (snapshot) => {
+      listenerObserver.next(snapshot);
       reportDraftSnapshotState(snapshot.metadata, onState);
       callback(
         normalizeDraftQueue(
@@ -795,6 +800,7 @@ export function listenToDraftQueue(
       );
     },
     (error) => {
+      listenerObserver.error();
       reportDraftListenerError(error, 'Unable to load your draft queue.', onError);
     },
   ));
@@ -806,10 +812,11 @@ export function listenToDraftQueues(
   onError?: (error: Error) => void,
   onState?: (state: DraftRealtimeSnapshotState) => void,
 ): () => void {
-  return monitorFirestoreListener('draft:queues', () => onSnapshot(
+  return monitorFirestoreListener('draft:queues', (listenerObserver) => onSnapshot(
     getDraftQueuesRef(leagueId),
     { includeMetadataChanges: true },
     (snapshot) => {
+      listenerObserver.next(snapshot);
       reportDraftSnapshotState(snapshot.metadata, onState);
       callback(
         snapshot.docs.map((queueDocument) =>
@@ -818,6 +825,7 @@ export function listenToDraftQueues(
       );
     },
     (error) => {
+      listenerObserver.error();
       reportDraftListenerError(error, 'Unable to load draft queues.', onError);
     },
   ));
@@ -918,9 +926,10 @@ export function listenToOwnerTransactions(
     limit(50),
   );
 
-  return monitorFirestoreListener('draft:private-transactions', () => onSnapshot(
+  return monitorFirestoreListener('draft:private-transactions', (listenerObserver) => onSnapshot(
     transactionsQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.docs.map((transactionDoc) => normalizePrivateTransactionDocument(
           transactionDoc.id,
@@ -929,6 +938,7 @@ export function listenToOwnerTransactions(
       );
     },
     (error) => {
+      listenerObserver.error();
       reportDraftListenerError(error, 'Unable to load your private roster transactions.', onError);
     },
   ));
@@ -1042,9 +1052,10 @@ export function listenToLeagueWaivers(
     })));
   };
 
-  const stopWaivers = monitorFirestoreListener('draft:public-waiver-pool', () => onSnapshot(
+  const stopWaivers = monitorFirestoreListener('draft:public-waiver-pool', (listenerObserver) => onSnapshot(
     waiversQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       publicWaivers = snapshot.docs.map((waiverDoc) => {
         const data = waiverDoc.data() as Partial<FantasyWaiver>;
 
@@ -1068,6 +1079,7 @@ export function listenToLeagueWaivers(
       emit();
     },
     (error) => {
+      listenerObserver.error();
       waiversReady = true;
       publicWaivers = [];
       emit();
@@ -1075,9 +1087,10 @@ export function listenToLeagueWaivers(
     },
   ));
 
-  const stopClaims = monitorFirestoreListener('draft:private-waiver-claims', () => onSnapshot(
+  const stopClaims = monitorFirestoreListener('draft:private-waiver-claims', (listenerObserver) => onSnapshot(
     claimsQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       privateClaims = new Map(snapshot.docs.map((claimDoc) => {
         const claim = normalizePrivateWaiverClaimDocument(
           claimDoc.id,
@@ -1091,6 +1104,7 @@ export function listenToLeagueWaivers(
       emit();
     },
     (error) => {
+      listenerObserver.error();
       claimsReady = true;
       privateClaims = new Map();
       emit();
@@ -1986,4 +2000,3 @@ export async function processWaiver({
 export async function addDropDraftAsset(input: AddDropRosterAssetInput): Promise<void> {
   await addDropRosterAsset(input);
 }
-

@@ -13,6 +13,7 @@ import {
 import {
   getFirestoreListenerSnapshot,
   monitorFirestoreListener,
+  monitorFirestoreUnsubscribe,
   resetFirestoreListenerMonitorForTests,
 } from '../../src/app/core/observability/firestore-listener-monitor.ts';
 
@@ -106,6 +107,17 @@ test('Firestore listener monitor counts labels and unsubscribes exactly once', (
   stopSecond();
   assert.equal(secondUnsubscribeCount, 1);
   assert.equal(getFirestoreListenerSnapshot().total, 0);
+
+  let existingUnsubscribeCount = 0;
+  const stopExisting = monitorFirestoreUnsubscribe('projection:existing', () => {
+    existingUnsubscribeCount += 1;
+  });
+
+  assert.equal(getFirestoreListenerSnapshot().byLabel['projection:existing'], 1);
+  stopExisting();
+  stopExisting();
+  assert.equal(existingUnsubscribeCount, 1);
+  assert.equal(getFirestoreListenerSnapshot().total, 0);
 });
 
 test('all core Firestore streams register with the development listener monitor', async () => {
@@ -120,19 +132,25 @@ test('all core Firestore streams register with the development listener monitor'
     'src/app/core/cycle/cycle.service.ts',
     'src/app/core/live-scoring/live-scoring.service.ts',
     'src/app/core/playoffs/playoff.service.ts',
+    'src/app/core/projection/projection-snapshot.service.ts',
+    'src/app/core/league/league-activity.service.ts',
   ];
 
   let monitoredCount = 0;
 
   for (const file of files) {
     const source = await read(file);
-    const monitors = source.match(/monitorFirestoreListener\('/g) ?? [];
+    const monitors = source.match(/monitorFirestore(?:Listener|Unsubscribe)\(\s*'/g) ?? [];
     const snapshots = source.match(/(?<![A-Za-z0-9_])onSnapshot\(/g) ?? [];
+    const observations = source.match(/listenerObserver\.next\(/g) ?? [];
+    const errors = source.match(/listenerObserver\.error\(/g) ?? [];
     monitoredCount += monitors.length;
     assert.equal(monitors.length, snapshots.length, `${file} has an unmonitored onSnapshot stream.`);
+    assert.equal(observations.length, snapshots.length, `${file} has a stream without snapshot evidence.`);
+    assert.equal(errors.length, snapshots.length, `${file} has a stream without error evidence.`);
   }
 
-  assert.equal(monitoredCount, 21);
+  assert.equal(monitoredCount, 25);
 
   const [globalAvailability, manualAvailability] = await Promise.all([
     read('src/app/core/player/player-availability-sync.service.ts'),

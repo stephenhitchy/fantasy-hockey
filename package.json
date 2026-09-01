@@ -553,6 +553,9 @@
     "preverify:batchd1l": "npm run security:sync-repository-automation",
     "verify:batchd1l:core": "npm run verify:batchd1j2:core && npm run test:batchd1l && npm run capacity:100k && npm run validate:release-manifest",
     "verify:batchd1l": "npm run toolchain:verify && npm run verify:batchd1l:core && npm run security:dependency-audit",
+    "test:batchd1n:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1n-capacity-evidence/*.test.mjs",
+    "verify:batchd1n:core": "npm run verify:batchd1l:core && npm run test:batchd1n:run && npm run capacity:100k:game-night && npm run validate:release-manifest",
+    "verify:batchd1n": "npm run toolchain:verify && npm run verify:batchd1n:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
   },
   "private": true,

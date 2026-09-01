@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db } from '../firebase';
 import { functions } from '../firebase-functions';
 import { DraftableAsset } from '../draft/draft.models';
+import { monitorFirestoreListener } from '../observability/firestore-listener-monitor';
 import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
@@ -536,9 +537,10 @@ export function listenToSharedProjectionSnapshot(
   let requestGeneration = 0;
   let lastSnapshotId = '';
 
-  return onSnapshot(
+  return monitorFirestoreListener('projection:snapshot-pointer', (listenerObserver) => onSnapshot(
     getProjectionSnapshotRef(normalizedLeagueId, SNAPSHOT_POINTER_ID),
     (pointerSnapshot) => {
+      listenerObserver.next(pointerSnapshot);
       const metadata = pointerSnapshot.exists()
         ? normalizeMetadata(
             pointerSnapshot.data() as Partial<SharedProjectionSnapshotMetadata>,
@@ -580,13 +582,14 @@ export function listenToSharedProjectionSnapshot(
         });
     },
     (error) => {
+      listenerObserver.error();
       onError?.(
         error instanceof Error
           ? error
           : new Error('Unable to follow Projection V11 updates.'),
       );
     },
-  );
+  ));
 }
 
 interface ProjectionGenerationCallableRequest {
@@ -677,10 +680,13 @@ function waitForProjectionGeneration(
       );
     }, 9 * 60 * 1000);
 
-    unsubscribe = onSnapshot(
+    unsubscribe = monitorFirestoreListener(
+      'projection:generation-request',
+      (listenerObserver) => onSnapshot(
       requestRef,
       { includeMetadataChanges: true },
       (snapshot) => {
+        listenerObserver.next(snapshot);
         if (settled || !snapshot.exists() || snapshot.metadata.fromCache) {
           return;
         }
@@ -717,6 +723,7 @@ function waitForProjectionGeneration(
         }
       },
       (error) => {
+        listenerObserver.error();
         if (settled) {
           return;
         }
@@ -726,6 +733,7 @@ function waitForProjectionGeneration(
         unsubscribe();
         reject(error);
       },
+      ),
     );
   });
 }

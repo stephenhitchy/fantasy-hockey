@@ -92,9 +92,10 @@ export function listenToHistoricalReplayControl(
   callback: (control: HistoricalReplayControl | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return monitorFirestoreListener('replay:control', () => onSnapshot(
+  return monitorFirestoreListener('replay:control', (listenerObserver) => onSnapshot(
     getHistoricalReplayControlRef(leagueId),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.exists()
           ? normalizeControl(snapshot.data() as Partial<HistoricalReplayControl>)
@@ -102,6 +103,7 @@ export function listenToHistoricalReplayControl(
       );
     },
     (error) => {
+      listenerObserver.error();
       onError?.(
         error instanceof Error
           ? error

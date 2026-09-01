@@ -118,9 +118,10 @@ export function listenToLeagueTeams(
     orderBy('teamName', 'asc')
   );
 
-  return monitorFirestoreListener('team:list', () => onSnapshot(
+  return monitorFirestoreListener('team:list', (listenerObserver) => onSnapshot(
     teamsQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.docs.map((teamDoc) =>
           teamDoc.data() as FantasyTeam
@@ -128,6 +129,7 @@ export function listenToLeagueTeams(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to load league teams.');

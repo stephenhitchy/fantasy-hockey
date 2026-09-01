@@ -372,9 +372,10 @@ export function listenToCycleTeamWindows(
   callback: (teamWindows: FantasyTeamCycleWindows[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  return monitorFirestoreListener('cycle:team-windows', () => onSnapshot(
+  return monitorFirestoreListener('cycle:team-windows', (listenerObserver) => onSnapshot(
     getTeamWindowsCollectionRef(leagueId, cycleNumber),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.docs
           .map((windowDocument) =>
@@ -388,6 +389,7 @@ export function listenToCycleTeamWindows(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError =
         error instanceof Error ? error : new Error('Unable to load cycle-window progress.');
 

@@ -18,11 +18,22 @@ import {
   roundMetric,
 } from './client-performance.util';
 import {
+  beginFirestoreRouteObservation,
+  completeFirestoreRouteObservation,
   type FirestoreListenerSnapshot,
+  type FirestoreRouteObservation,
   getFirestoreListenerSnapshot,
   isClientHealthMonitorEnabled,
+  markFirestoreRouteNavigationSettled,
 } from './firestore-listener-monitor';
+import {
+  buildFirestoreRouteEnvelopes,
+  type FirestoreRouteEnvelope,
+} from './firestore-route-evidence.util';
 import { TelemetryService } from './telemetry.service';
+
+const FIRESTORE_ROUTE_SETTLE_MILLISECONDS = 3_000;
+const MAX_FIRESTORE_ROUTE_SAMPLES_PER_SESSION = 24;
 
 interface LayoutShiftPerformanceEntry extends PerformanceEntry {
   value?: number;
@@ -39,6 +50,7 @@ export interface ClientPerformanceSnapshot {
   metrics: ClientPerformanceMetrics;
   connection: ClientConnectionSnapshot;
   firestoreListeners: FirestoreListenerSnapshot;
+  firestoreRouteEnvelopes: FirestoreRouteEnvelope[];
   generatedAt: string;
 }
 
@@ -54,12 +66,15 @@ export class ClientPerformanceMonitorService implements OnDestroy {
   private routeStartedUrl = '/';
   private observers: PerformanceObserver[] = [];
   private settleTimer: number | null = null;
+  private firestoreRouteSettleTimer: number | null = null;
   private firstAnimationFrame: number | null = null;
   private secondAnimationFrame: number | null = null;
+  private firestoreRouteObservationToken: number | null = null;
   private metricsFlushed = false;
   private started = false;
   private latestRoute = '/';
   private readonly interactions = new Map<number, number>();
+  private readonly firestoreRouteObservations: FirestoreRouteObservation[] = [];
 
   private readonly metrics: ClientPerformanceMetrics = {
     firstContentfulPaintMilliseconds: null,
@@ -97,19 +112,25 @@ export class ClientPerformanceMonitorService implements OnDestroy {
     this.latestRoute = this.telemetry.sanitizedCurrentRoute();
     this.routeSubscription = router.events.subscribe((event) => {
       if (event instanceof NavigationStart) {
+        this.finishFirestoreRouteObservation('superseded');
         this.routeStartedAt = this.now();
         this.routeStartedUrl = event.url;
+        this.firestoreRouteObservationToken = beginFirestoreRouteObservation(
+          this.telemetry.sanitizedRoute(event.url),
+        );
         return;
       }
 
       if (event instanceof NavigationEnd) {
         this.latestRoute = this.telemetry.sanitizedRoute(event.urlAfterRedirects);
+        this.scheduleFirestoreRouteObservation();
         this.measureRouteReady(event.urlAfterRedirects);
         return;
       }
 
       if (event instanceof NavigationCancel || event instanceof NavigationError) {
         this.routeStartedAt = null;
+        this.finishFirestoreRouteObservation('cancelled');
       }
     });
 
@@ -129,6 +150,7 @@ export class ClientPerformanceMonitorService implements OnDestroy {
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
     this.routeSubscription = null;
+    this.finishFirestoreRouteObservation('cancelled');
 
     for (const observer of this.observers) {
       observer.disconnect();
@@ -145,6 +167,11 @@ export class ClientPerformanceMonitorService implements OnDestroy {
 
       if (this.settleTimer !== null) {
         window.clearTimeout(this.settleTimer);
+      }
+
+      if (this.firestoreRouteSettleTimer !== null) {
+        window.clearTimeout(this.firestoreRouteSettleTimer);
+        this.firestoreRouteSettleTimer = null;
       }
 
       if (this.firstAnimationFrame !== null) {
@@ -166,8 +193,97 @@ export class ClientPerformanceMonitorService implements OnDestroy {
       },
       connection: this.clientHealth.getSnapshot(),
       firestoreListeners: getFirestoreListenerSnapshot(),
+      firestoreRouteEnvelopes: buildFirestoreRouteEnvelopes(
+        this.firestoreRouteObservations,
+      ),
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  private scheduleFirestoreRouteObservation(): void {
+    const token = this.firestoreRouteObservationToken;
+
+    if (token === null || typeof window === 'undefined') {
+      return;
+    }
+
+    markFirestoreRouteNavigationSettled(token, this.latestRoute);
+
+    if (this.firestoreRouteSettleTimer !== null) {
+      window.clearTimeout(this.firestoreRouteSettleTimer);
+    }
+
+    this.firestoreRouteSettleTimer = window.setTimeout(() => {
+      this.firestoreRouteSettleTimer = null;
+      this.finishFirestoreRouteObservation('settled');
+    }, FIRESTORE_ROUTE_SETTLE_MILLISECONDS);
+  }
+
+  private finishFirestoreRouteObservation(
+    outcome: FirestoreRouteObservation['outcome'],
+  ): void {
+    if (this.firestoreRouteSettleTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.firestoreRouteSettleTimer);
+      this.firestoreRouteSettleTimer = null;
+    }
+
+    const token = this.firestoreRouteObservationToken;
+    this.firestoreRouteObservationToken = null;
+
+    if (token === null) {
+      return;
+    }
+
+    const observation = completeFirestoreRouteObservation(token, outcome);
+
+    if (!observation || outcome !== 'settled') {
+      return;
+    }
+
+    this.firestoreRouteObservations.push(observation);
+
+    if (
+      this.firestoreRouteObservations.length > MAX_FIRESTORE_ROUTE_SAMPLES_PER_SESSION
+    ) {
+      this.firestoreRouteObservations.shift();
+    }
+
+    this.telemetry.track('firestore_route_evidence', {
+      page_path: observation.route,
+      listener_start: observation.listenerCountStart,
+      listener_end: observation.listenerCountEnd,
+      listener_peak: observation.peakListenerCount,
+      listener_opened: observation.listenersOpened,
+      listener_closed: observation.listenersClosed,
+      navigation_cleanup: observation.navigationCleanupCount,
+      first_snapshot_count: observation.firstSnapshotCount,
+      first_snapshot_docs: observation.firstSnapshotDocumentCount,
+      first_snapshot_unknown: observation.unknownDocumentCountSnapshots,
+      first_snapshot_cache: observation.firstSnapshotFromCacheCount,
+      first_snapshot_server: observation.firstSnapshotFromServerCount,
+      cache_to_server: observation.cacheToServerTransitionCount,
+      reconnect_snapshot: observation.reconnectSnapshotCount,
+      retry_listener: observation.retryListenersOpened,
+      hidden_snapshot: observation.hiddenSnapshotCount,
+      listener_error: observation.listenerErrorCount,
+      listener_lifetime_max_ms: observation.maxClosedListenerLifetimeMilliseconds,
+      awaiting_first_snapshot: observation.awaitingFirstSnapshotCount,
+    });
+
+    if (isClientHealthMonitorEnabled()) {
+      console.info(
+        '[RinkRat client health] Firestore route evidence.',
+        JSON.stringify(observation),
+      );
+
+      if (
+        observation.awaitingFirstSnapshotCount > 0 ||
+        observation.listenerErrorCount > 0 ||
+        observation.peakListenerCount > 32
+      ) {
+        console.warn('[RinkRat client health] Firestore route evidence needs review.', observation);
+      }
+    }
   }
 
   private measureRouteReady(rawUrl: string): void {

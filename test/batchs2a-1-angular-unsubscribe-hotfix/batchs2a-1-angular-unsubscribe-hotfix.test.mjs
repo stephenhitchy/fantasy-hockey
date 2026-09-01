@@ -31,7 +31,13 @@ test('projection progress listener uses Firebase Unsubscribe instead of an undef
     /let unsubscribe\s*=\s*\(\)\s*=>\s*undefined;/,
     'the inferred () => undefined initializer recreates Angular TS2322 when onSnapshot returns () => void',
   );
-  assert.match(projectionSource, /unsubscribe\s*=\s*onSnapshot\(/);
+  assert.match(
+    projectionSource,
+    /unsubscribe\s*=\s*monitorFirestoreListener\(\s*'projection:generation-request',[\s\S]*?\(listenerObserver\)\s*=>\s*onSnapshot\(/,
+    'the monitored Firestore subscription must still assign a Firebase-compatible cleanup callback',
+  );
+  assert.match(projectionSource, /listenerObserver\.next\(snapshot\)/);
+  assert.match(projectionSource, /listenerObserver\.error\(\)/);
 });
 
 test('S2A.1 verification and permanent roadmap documentation are synchronized', () => {

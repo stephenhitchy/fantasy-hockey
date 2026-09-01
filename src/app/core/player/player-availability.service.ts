@@ -108,6 +108,7 @@ export const playerAvailabilityDatabaseRecords: Signal<
 let activeLeagueId = '';
 let activeUserId = '';
 let queuedListenerKey = '';
+let manualListenerRetryKey = '';
 let stopDatabaseListener: Unsubscribe | null = null;
 let manualDatabaseRecordsLoaded = false;
 
@@ -347,9 +348,14 @@ export function startPlayerAvailabilityListenerForLeague(
     where('source', '==', 'commissioner')
   );
 
-  stopDatabaseListener = monitorFirestoreListener('availability:commissioner-overrides', () => onSnapshot(
+  const listenerKey = `${resolvedLeagueId}::${currentUserId}`;
+  const startReason = manualListenerRetryKey === listenerKey ? 'retry' : 'initial';
+
+  stopDatabaseListener = monitorFirestoreListener('availability:commissioner-overrides', (listenerObserver) => onSnapshot(
     manualRecordsQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
+      manualListenerRetryKey = '';
       const nextRecords = new Map<
         number,
         PlayerAvailabilityDatabaseRecord
@@ -370,6 +376,8 @@ export function startPlayerAvailabilityListenerForLeague(
       manualDatabaseRecordsLoaded = true;
     },
     (error) => {
+      listenerObserver.error();
+      manualListenerRetryKey = listenerKey;
       console.error(
         'Unable to listen for player availability records.',
         error
@@ -383,7 +391,7 @@ export function startPlayerAvailabilityListenerForLeague(
       manualDatabaseRecordsLoaded = false;
       manualDatabaseRecordsSignal.set(new Map());
     }
-  ));
+  ), { startReason });
 }
 
 export function getPlayerAvailabilityDatabaseRecord(

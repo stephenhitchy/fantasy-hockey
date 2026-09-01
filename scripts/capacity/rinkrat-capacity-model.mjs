@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
 
-const ROUTE_PROFILES = Object.freeze({
+const STATIC_ROUTE_PROFILES = Object.freeze({
   dashboard: {
     label: 'Dashboard',
     listeners: 4,
@@ -35,11 +35,42 @@ const ROUTE_PROFILES = Object.freeze({
   },
   freeAgents: {
     label: 'Available Players',
-    listeners: 4,
     coldStartReads: 85,
     steadyReadsPerMinute: 2,
   },
 });
+
+const FREE_AGENTS_LISTENER_MODEL = Object.freeze({
+  fixedRouteListeners: 6,
+  rosterListenersPerTeam: 1,
+  assumedActiveCycles: 1,
+  teamWindowListenersPerActiveCycle: 1,
+});
+
+function buildRouteProfiles(managersPerLeague) {
+  const freeAgentsListenerEvidence = {
+    ...FREE_AGENTS_LISTENER_MODEL,
+    assumedTeamCount: managersPerLeague,
+  };
+
+  return Object.fromEntries(
+    Object.entries(STATIC_ROUTE_PROFILES).map(([route, profile]) => [
+      route,
+      route === 'freeAgents'
+        ? {
+            ...profile,
+            listeners:
+              freeAgentsListenerEvidence.fixedRouteListeners +
+              freeAgentsListenerEvidence.assumedTeamCount *
+                freeAgentsListenerEvidence.rosterListenersPerTeam +
+              freeAgentsListenerEvidence.assumedActiveCycles *
+                freeAgentsListenerEvidence.teamWindowListenersPerActiveCycle,
+            listenerEvidence: freeAgentsListenerEvidence,
+          }
+        : { ...profile },
+    ]),
+  );
+}
 
 const SCENARIOS = Object.freeze({
   balanced: {
@@ -119,9 +150,9 @@ function parseArgs(argv) {
   return options;
 }
 
-function weightedTotal(routeMix, field) {
+function weightedTotal(routeProfiles, routeMix, field) {
   return Object.entries(routeMix).reduce((total, [route, share]) => {
-    return total + share * ROUTE_PROFILES[route][field];
+    return total + share * routeProfiles[route][field];
   }, 0);
 }
 
@@ -355,12 +386,18 @@ function classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architectu
 export async function buildCapacityReport(options) {
   const scenario = SCENARIOS[options.scenario];
   const architecture = await inspectArchitecture();
+  const routeProfiles = buildRouteProfiles(options.managersPerLeague);
   const leagues = Math.ceil(options.users / options.managersPerLeague);
   const activeDraftLeagues = Math.round(leagues * scenario.activeDraftLeagueShare);
   const activeScoringLeagues = Math.round(leagues * scenario.activeScoringLeagueShare);
-  const listenersPerUser = weightedTotal(scenario.routeMix, 'listeners');
-  const coldStartReadsPerUser = weightedTotal(scenario.routeMix, 'coldStartReads');
+  const listenersPerUser = weightedTotal(routeProfiles, scenario.routeMix, 'listeners');
+  const coldStartReadsPerUser = weightedTotal(
+    routeProfiles,
+    scenario.routeMix,
+    'coldStartReads',
+  );
   const steadyReadsPerMinutePerUser = weightedTotal(
+    routeProfiles,
     scenario.routeMix,
     'steadyReadsPerMinute',
   );
@@ -402,12 +439,21 @@ export async function buildCapacityReport(options) {
       rosterActionRequestsPerSecond: Number(rosterActionRequestsPerSecond.toFixed(2)),
       scoringConcurrencyTargets,
     },
+    assumptions: {
+      routeProfiles,
+      listenerCounts:
+        'source-derived planning estimate; replace with measured route envelopes before scale certification',
+      documentReads:
+        'planning estimate; initial snapshot document counts are not yet measured by the client monitor',
+    },
     architecture,
     findings: classifyCapacity({ activeDraftLeagues, activeScoringLeagues, architecture, scenario }),
     caveats: [
       'This is a deterministic architecture model, not 100,000 real browser sessions.',
       'Real validation must use a separate billed staging project and distributed load generators.',
       'Firestore listener fanout depends on document/query shape and how users are distributed across leagues.',
+      'Available Players includes one roster listener per fantasy team and one team-window listener per assumed active cycle.',
+      'Cold-start and steady-read profiles remain planning assumptions until first-snapshot read telemetry is implemented.',
       'Never direct a 100,000-user test at the production Firebase project.',
     ],
   };

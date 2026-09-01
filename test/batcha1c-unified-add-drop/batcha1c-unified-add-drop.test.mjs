@@ -180,7 +180,11 @@ test('the browser follows only the exact current Projection V11 pointer and relo
   assert.match(projectionService, /metadata\.activeSnapshotId === lastSnapshotId/);
   assert.match(projectionService, /invalidateSharedProjectionReadCache\(normalizedLeagueId\)/);
   assert.match(projectionService, /loadSharedProjectionSnapshotById/);
-  assert.equal((projectionService.match(/return onSnapshot\(/g) ?? []).length, 1);
+  assert.equal((projectionService.match(/(?<![A-Za-z0-9_])onSnapshot\(/g) ?? []).length, 2);
+  assert.match(
+    projectionService,
+    /monitorFirestoreListener\('projection:snapshot-pointer'[\s\S]*getProjectionSnapshotRef\(normalizedLeagueId, SNAPSHOT_POINTER_ID\)/,
+  );
   assert.match(unifiedComponent, /listenToSharedProjectionSnapshot/);
   assert.match(unifiedComponent, /this\.playerPool\.set\(snapshot\.assets\)/);
   assert.match(unifiedComponent, /loadSharedProjectionSnapshotFresh/);

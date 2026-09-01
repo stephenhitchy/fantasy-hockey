@@ -191,9 +191,10 @@ export function listenToFantasyRoster(
   callback: (roster: FantasyRoster | null) => void,
   onError?: (error: Error) => void
 ): () => void {
-  return monitorFirestoreListener('roster:owner', () => onSnapshot(
+  return monitorFirestoreListener('roster:owner', (listenerObserver) => onSnapshot(
     getFantasyRosterRef(leagueId, ownerId),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       if (!snapshot.exists()) {
         callback(null);
         return;
@@ -206,6 +207,7 @@ export function listenToFantasyRoster(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to load the fantasy roster.');

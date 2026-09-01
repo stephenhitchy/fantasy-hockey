@@ -449,9 +449,10 @@ export function listenToLeagueActivity(
     limit(LEAGUE_ACTIVITY_LIMIT),
   );
 
-  return monitorFirestoreListener('league:activity', () => onSnapshot(
+  return monitorFirestoreListener('league:activity', (listenerObserver) => onSnapshot(
     activityQuery,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.docs
           .map((document) => normalizeLeagueActivity(document.id, document.data()))
@@ -459,6 +460,7 @@ export function listenToLeagueActivity(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to load League Wire.');
@@ -510,14 +512,16 @@ export function listenToPinnedLeagueAnnouncement(
     'pinned-announcement',
   );
 
-  return monitorFirestoreListener('league:pinned-announcement', () => onSnapshot(
+  return monitorFirestoreListener('league:pinned-announcement', (listenerObserver) => onSnapshot(
     announcementReference,
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(snapshot.exists()
         ? normalizePinnedLeagueAnnouncement(snapshot.data())
         : null);
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to load the pinned league announcement.');

@@ -230,9 +230,10 @@ export function listenToFantasyPlayoffs(
   callback: (playoffs: FantasyPlayoffs | null) => void,
   onError?: (error: Error) => void
 ): () => void {
-  return monitorFirestoreListener('playoffs:state', () => onSnapshot(
+  return monitorFirestoreListener('playoffs:state', (listenerObserver) => onSnapshot(
     getFantasyPlayoffsRef(leagueId),
     (snapshot) => {
+      listenerObserver.next(snapshot);
       callback(
         snapshot.exists()
           ? normalizeFantasyPlayoffs(
@@ -242,6 +243,7 @@ export function listenToFantasyPlayoffs(
       );
     },
     (error) => {
+      listenerObserver.error();
       const normalizedError = error instanceof Error
         ? error
         : new Error('Unable to load the playoff bracket.');

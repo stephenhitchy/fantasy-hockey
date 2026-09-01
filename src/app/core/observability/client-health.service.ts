@@ -1,6 +1,7 @@
 import { computed, Injectable, OnDestroy, signal } from '@angular/core';
 
 import { ReleaseUpdateService } from '../release/release-update.service';
+import { markFirestoreListenersReconnecting } from './firestore-listener-monitor';
 import { TelemetryService } from './telemetry.service';
 
 export type ClientConnectionNoticeState = 'offline' | 'restored';
@@ -128,6 +129,7 @@ export class ClientHealthService implements OnDestroy {
     }
 
     this.restoredNoticeVisible.set(true);
+    markFirestoreListenersReconnecting();
     this.telemetry.track('client_connection_restored', {
       page_path: this.telemetry.sanitizedCurrentRoute(),
       connection_type: this.effectiveConnectionType(),
