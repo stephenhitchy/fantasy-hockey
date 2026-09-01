@@ -59,15 +59,10 @@ async function readPackagedSourceRevision() {
 }
 
 async function resolveSourceRevision() {
-  const environmentRevision = [
-    process.env.RINKRAT_SOURCE_REVISION,
-    process.env.GITHUB_SHA,
-    process.env.VERCEL_GIT_COMMIT_SHA,
-    process.env.COMMIT_SHA,
-  ].find((value) => typeof value === 'string' && value.trim());
+  const explicitRevision = process.env.RINKRAT_SOURCE_REVISION;
 
-  if (environmentRevision) {
-    return environmentRevision.trim().slice(0, 80);
+  if (typeof explicitRevision === 'string' && explicitRevision.trim()) {
+    return explicitRevision.trim().slice(0, 80);
   }
 
   // Release ZIPs intentionally omit .git so the source tree is not duplicated.
@@ -110,7 +105,19 @@ async function resolveSourceRevision() {
     }
   }
 
-  return (await readPackagedSourceRevision()) ?? 'unversioned';
+  const packagedRevision = await readPackagedSourceRevision();
+
+  if (packagedRevision) {
+    return packagedRevision;
+  }
+
+  const providerRevision = [
+    process.env.GITHUB_SHA,
+    process.env.VERCEL_GIT_COMMIT_SHA,
+    process.env.COMMIT_SHA,
+  ].find((value) => typeof value === 'string' && value.trim());
+
+  return providerRevision?.trim().slice(0, 80) ?? 'unversioned';
 }
 
 const [runtimeSource, productionRuntimeSource, scoringSource, projectionSource, packageSource] =

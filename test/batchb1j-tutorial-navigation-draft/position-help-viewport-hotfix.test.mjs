@@ -51,10 +51,11 @@ test('the fixed position panel keeps desktop clamping and the mobile bottom shee
 });
 
 
-test('source-only release archives preserve the exact revision without shipping .git', async () => {
+test('source-only release archives preserve the exact revision despite an unrelated CI commit', async () => {
   const root = new URL('../../', import.meta.url);
   const stage = await mkdtemp(join(tmpdir(), 'rinkrat-packaged-revision-'));
   const revision = '0123456789abcdef0123456789abcdef01234567';
+  const unrelatedCiRevision = 'fedcba9876543210fedcba9876543210fedcba98';
   const files = [
     '.gitignore',
     'package.json',
@@ -75,10 +76,17 @@ test('source-only release archives preserve the exact revision without shipping 
     await mkdir(join(stage, 'public'), { recursive: true });
     await writeFile(join(stage, '.rinkrat-source-revision'), `${revision}\n`, 'utf8');
 
-    await runNode(['scripts/generate-release-manifest.mjs'], { cwd: stage });
+    await runNode(['scripts/generate-release-manifest.mjs'], {
+      cwd: stage,
+      env: {
+        ...process.env,
+        GITHUB_SHA: unrelatedCiRevision,
+      },
+    });
     const manifest = JSON.parse(await readFile(join(stage, 'public/release-manifest.json'), 'utf8'));
 
     assert.equal(manifest.sourceRevision, revision);
+    assert.notEqual(manifest.sourceRevision, unrelatedCiRevision);
     assert.notEqual(manifest.sourceRevision, 'unversioned');
   } finally {
     await rm(stage, { recursive: true, force: true });
