@@ -66,6 +66,9 @@ functions/.secret.local
 # Generated private-season freeze and recovery kits
 /.season-release/
 
+# Generated D1N staging Hosting configuration
+/.d1n-staging.firebase.json
+
 # Firebase CLI and Emulator Suite debug logs
 /*-debug.log
 /*-debug.*.log

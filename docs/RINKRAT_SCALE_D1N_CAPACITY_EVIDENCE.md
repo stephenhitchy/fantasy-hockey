@@ -161,9 +161,67 @@ offline-to-online reconnect sample was not manufactured. The reconnect generatio
 logic is unit-tested, but authenticated reconnect evidence and physical mobile-device evidence remain
 open. D1N-C must not claim that gate as complete.
 
-The connected Firebase account exposed only the production project. No separate billed staging
-project was available, and none was created or deployed from this task. Exact billed reads, Key
-Visualizer evidence, real-device reconnects, and staged concurrency remain unmeasured.
+The dedicated Firebase project `rinkrat-staging-d1nc-2026` now exists with billing enabled, one
+registered staging web app, Owner access for the active project account, and a project-filtered
+$25 USD monthly alert budget at 50%, 80%, 100%, and 100% forecast. The budget sends alerts; it is
+not a hard spending cap. No application, Firestore, Auth, Function, queue, Rule, index, or Hosting
+resource has been deployed there yet. Exact billed reads, Key Visualizer evidence, real-device
+reconnects, and staged concurrency remain unmeasured.
+
+## Billed staging isolation gate
+
+The source-controlled `staging` Angular configuration replaces the Firebase web identity at compile
+time with the exact D1N staging app, keeps the production-safe runtime configuration, and replaces
+App Check with a staging-only disabled baseline. Production Firebase and App Check source remain
+unchanged. The staging artifact therefore cannot silently connect to the production project.
+
+`npm run staging:d1n:prepare-hosting` generates an ignored, site-pinned
+`.d1n-staging.firebase.json` at the repository root. It retains the reviewed Hosting headers and
+Angular rewrite, removes all Function rewrites, and builds with `npm run build:staging`. The command
+never deploys.
+
+Before authenticated staging evidence can begin, Stephen must deliberately complete these
+non-production-only prerequisites:
+
+1. Create the staging `(default)` Firestore database in `us-west4`, matching the current production
+   database location for a more comparable latency envelope.
+2. Enable Email/Password authentication for the staging project.
+3. From a reviewed clean commit, deploy only the unchanged staging copies of Firestore Rules and
+   indexes; do not target the production project.
+4. Generate the staging Hosting config and deploy only the exact staging Hosting site.
+5. Verify the live staging `/release-manifest.json` reports that same clean commit before seeding.
+
+The intended manual selectors are:
+
+```bash
+firebase deploy --project rinkrat-staging-d1nc-2026 --only firestore:rules
+firebase deploy --project rinkrat-staging-d1nc-2026 --only firestore:indexes
+npm run staging:d1n:prepare-hosting
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --config .d1n-staging.firebase.json \
+  --only hosting
+```
+
+No Function deployment is required for route-listener evidence. Expected unavailable-callable
+messages must stay visible and excluded from listener measurements, as in the local fixture.
+
+After those prerequisites, seed only the bounded synthetic fixture using Application Default
+Credentials and a password supplied in the shell environment. The seeder refuses every project
+except the exact staging project, refuses Emulator Suite variables, requires an exact acknowledgement,
+never prints the password, and writes only the fixed synthetic fixture paths:
+
+```bash
+D1N_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+D1N_STAGING_ACK=seed-synthetic-fixture-in-rinkrat-staging-d1nc-2026 \
+D1N_STAGING_FIXTURE_PASSWORD='<20+ character secret>' \
+npm run staging:d1n:seed
+```
+
+Authenticated evidence must use `rinkratHealth=1`, at least 20 cold/warm/reconnect samples per route
+and viewport, controlled navigation to a listener-free route after each sample, and an immediate stop
+on any unexpected project identity, listener error, unknown document count, awaiting first snapshot,
+or listener count that fails to return to baseline.
 
 ## Reproducing the local fixture
 

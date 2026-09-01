@@ -58,6 +58,35 @@
                 }
               ]
             },
+            "staging": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1.25MB",
+                  "maximumError": "1.75MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "42kB",
+                  "maximumError": "45kB"
+                }
+              ],
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/app-runtime.config.ts",
+                  "with": "src/environments/app-runtime.config.production.ts"
+                },
+                {
+                  "replace": "src/environments/firebase-config.ts",
+                  "with": "src/environments/firebase-config.staging.ts"
+                },
+                {
+                  "replace": "src/environments/app-check.config.ts",
+                  "with": "src/environments/app-check.config.staging.ts"
+                }
+              ]
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,
@@ -77,6 +106,9 @@
             },
             "development": {
               "buildTarget": "fantasy-hockey:build:development"
+            },
+            "staging": {
+              "buildTarget": "fantasy-hockey:build:staging"
             }
           },
           "defaultConfiguration": "development"
