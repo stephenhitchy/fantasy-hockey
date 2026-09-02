@@ -115,12 +115,12 @@
 
 .g .empty-cycle-card h2 {
   margin: 0;
-  color: white;
+  color: var(--text-primary);
 }
 
 .g .empty-cycle-card p {
   margin: 10px 0 0;
-  color: #a9b9c9;
+  color: var(--text-secondary);
 }
 
 .g .projection-window-card {
@@ -1273,10 +1273,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(184, 212, 239, 0.24);
+  border: 1px solid var(--rr-color-action-secondary-border);
   border-radius: 999px;
-  background: rgba(184, 212, 239, 0.1);
-  color: #b8d4ef;
+  background: var(--rr-color-action-secondary);
+  color: var(--rr-color-on-action-secondary);
   font-size: 13px;
   font-weight: 900;
   padding: 9px 12px;
@@ -1284,8 +1284,12 @@
 }
 
 .g .schedule-preview-header-link:hover {
-  background: rgba(184, 212, 239, 0.18);
-  color: white;
+  background: color-mix(
+    in srgb,
+    var(--rr-color-action-secondary) 84%,
+    var(--rr-color-on-action-secondary)
+  );
+  color: var(--rr-color-on-action-secondary);
 }
 
 .g .my-team-header-link {

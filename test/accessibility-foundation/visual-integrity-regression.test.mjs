@@ -55,6 +55,10 @@ test('semantic link and secondary-action colors meet WCAG normal-text contrast i
     ['Light Ice link', '#1d344d', '#f8fafc'],
     ['dark secondary action', '#f4f8fb', '#101f31'],
     ['Light Ice secondary action', '#f4f8fb', '#1d344d'],
+    ['Rink Dark empty-state copy', '#aab3bf', '#202731'],
+    ['OLED Black empty-state copy', '#adb6c0', '#141920'],
+    ['Ice Gray empty-state copy', '#c0cad5', '#282f39'],
+    ['Light Ice empty-state copy', '#394757', '#eef3f7'],
     ['playoff primary copy', '#f4f8fb', '#203952'],
     ['playoff secondary copy', '#d8e8f4', '#203952'],
     ['playoff metadata', '#85dce6', '#203952'],
@@ -152,6 +156,27 @@ test('Standings, Playoffs, and Matchup protect narrow-screen labels and scores',
   assert.match(matchup, /@media \(max-width: 390px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 56px minmax\(0, 1fr\)/);
   assert.match(matchup, /@media \(max-width: 340px\)[\s\S]*\.mobile-score-team app-manager-avatar\s*\{\s*display:\s*none/);
   assert.match(matchup, /\.mobile-score-team > strong\s*\{\s*line-height:\s*1\.1/);
+});
+
+test('Matchup empty and error states inherit theme-safe text and action colors', async () => {
+  const matchup = await source('src/app/features/cycles/cycle-one/cycle-one.css');
+  const headingRule = matchup.match(/\.g \.empty-cycle-card h2\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  const paragraphRule = matchup.match(/\.g \.empty-cycle-card p\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  const actionRule = matchup.match(/\.g \.schedule-preview-header-link\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  const hoverRule = matchup.match(/\.g \.schedule-preview-header-link:hover\s*\{[\s\S]*?\}/)?.[0] ?? '';
+
+  assert.match(headingRule, /color:\s*var\(--text-primary\)/);
+  assert.match(paragraphRule, /color:\s*var\(--text-secondary\)/);
+  assert.match(
+    actionRule,
+    /border:\s*1px solid var\(--rr-color-action-secondary-border\)[\s\S]*background:\s*var\(--rr-color-action-secondary\)[\s\S]*color:\s*var\(--rr-color-on-action-secondary\)/,
+  );
+  assert.match(hoverRule, /var\(--rr-color-action-secondary\)[\s\S]*color:\s*var\(--rr-color-on-action-secondary\)/);
+
+  const emptyStateRules = `${headingRule}\n${paragraphRule}`;
+  const actionRules = `${actionRule}\n${hoverRule}`;
+  assert.doesNotMatch(emptyStateRules, /(?:color|background):\s*(?:#[0-9a-f]{3,8}\b|rgba?\()/i);
+  assert.doesNotMatch(actionRules, /(?:color|background|border):\s*(?:#[0-9a-f]{3,8}\b|rgba?\()/i);
 });
 
 test('visual repair preserves focus, disabled, loading, error, reduced-motion, and design-budget gates', async () => {
