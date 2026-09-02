@@ -69,14 +69,83 @@ The clean-source guard is expected to reject the uncommitted implementation. It 
 
 Before Production, use only the separate billed non-production project and a synthetic replay league:
 
-1. Deploy the exact clean commit's `processHistoricalReplayAdvance` Function only.
+1. Deploy the exact clean commit's `advanceHistoricalReplayDay` test driver and
+   `processHistoricalReplayAdvance` worker only. The driver is unchanged runtime required to admit
+   the bounded staging task; only the worker is part of the later Production deployment.
 2. Confirm the deployed Function revision completed successfully; a Hosting manifest alone does not prove Function source.
-3. Seed or reset a synthetic traded skater with source-team appearances, missed games, a legitimate zero, and a six-to-seven boundary.
-4. Advance one replay day and confirm schema-2 maps were written, incomplete games recovered, points and markers changed once, and Game 7 remained in the next window.
-5. Repeat or redeliver the task and confirm points, window ownership, transactions, standings, and playoffs do not duplicate.
+3. Seed only the fixed D1L synthetic league with the source-controlled staging tool.
+4. Exercise the worker with the source-controlled runner and confirm the schema-2 source-team map,
+   final-input completeness, positive source-team score, request completion, and duplicate delivery.
+5. Retain the emulator proof for legitimate zero, incomplete retry, and the six-to-seven boundary;
+   do not manufacture an NHL outage or alter a completed staging matchup to reproduce those cases.
 6. Inspect Function errors, retry counts, task age, Firestore write contention, and the saved `gameInputCompleteness` / `incompleteFinalGameIds` evidence.
 
 Do not combine this proof with D1N-C load ramps. Correctness comes first; load testing remains a separate staging-only slice.
+
+### One-codebase secret prerequisite
+
+Firebase resolves every declared `defineSecret` parameter while analyzing this repository's single
+Functions codebase, before applying a targeted Function filter. The unrelated email Functions
+declare `RESEND_API_KEY`, so a first Functions deployment to the isolated staging project requires
+Secret Manager and one enabled value even though neither replay Function binds or reads that secret.
+
+Never copy the Production Resend key into staging. Enable Secret Manager and create an inert,
+staging-only placeholder. If an email Function were accidentally deployed, the placeholder would be
+rejected by Resend instead of sending mail:
+
+```bash
+gcloud services enable secretmanager.googleapis.com \
+  --project rinkrat-staging-d1nc-2026
+
+firebase functions:secrets:set RESEND_API_KEY \
+  --project rinkrat-staging-d1nc-2026
+```
+
+At the hidden prompt, enter a unique inert noncredential. Do not reuse a real API key or put the
+chosen value in shell history or source control. Then deploy only the two staging replay endpoints
+from the exact clean candidate:
+
+```bash
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --only functions:advanceHistoricalReplayDay,functions:processHistoricalReplayAdvance
+```
+
+The Firebase CLI may enable Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc,
+Pub/Sub, Cloud Tasks, and related service identities required by these second-generation endpoints.
+That is staging infrastructure, not evidence that any Function finished deploying. Confirm the
+Functions list after the command succeeds.
+
+### Bounded fixture and runner
+
+The seeder refuses Production and every Emulator Suite target, requires the exact staging project,
+an explicit reset acknowledgement, Application Default Credentials, and a strong password supplied
+only through the process environment. It replaces only the fixed synthetic league after confirming
+every known document's fixture marker, refuses to take over a different Auth identity, and removes
+the preceding bounded request before issuing a new per-seed request identity. It then creates one
+synthetic commissioner, one complete-Draft bye matchup, and one active Brady Tkachuk window whose
+current team is FLA while the first 2025–26 source game belongs to OTT. It does not alter the D1N
+route fixture.
+
+```bash
+D1L_REPLAY_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+D1L_REPLAY_STAGING_ACK=reset-and-seed-rinkrat-d1l-replay-source-team-fixture-v1-in-rinkrat-staging-d1nc-2026 \
+D1L_REPLAY_STAGING_FIXTURE_PASSWORD='<20+ character staging-only password>' \
+npm run staging:d1l:seed-replay
+```
+
+The runner signs in only as that synthetic account, submits one deterministic request, waits for the
+server-owned request to complete, verifies the schema-2 map and scoring snapshot, redelivers the
+same request identity, and proves the simulated date, score, completed-game count, and data
+fingerprint remain stable. Its output contains bounded labels and aggregates, not the account ID,
+password, or raw roster identifiers:
+
+```bash
+D1L_REPLAY_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+D1L_REPLAY_STAGING_RUN_ACK=exercise-d1l-replay-source-team-in-rinkrat-staging-d1nc-2026 \
+D1L_REPLAY_STAGING_FIXTURE_PASSWORD='<same staging-only password>' \
+npm run staging:d1l:exercise-replay
+```
 
 ## Targeted release boundary
 
