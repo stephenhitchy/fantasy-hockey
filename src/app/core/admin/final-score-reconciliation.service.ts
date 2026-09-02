@@ -48,6 +48,9 @@ export interface FinalScoreReconciliationPage {
   scanComplete: boolean;
   canonicalGameReadLimitReached: boolean;
   teamWindowLimitReached: boolean;
+  windowGameLimitReached: boolean;
+  teamWindowStructureIncomplete: boolean;
+  teamDocumentCoverageChecked: boolean;
   findingsTruncated: boolean;
   summary: FinalScoreReconciliationSummary;
   findings: FinalScoreReconciliationFinding[];

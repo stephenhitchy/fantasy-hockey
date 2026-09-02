@@ -82,7 +82,7 @@
           generated {{ formatTimestamp(audit.generatedAt) }}.
         </p>
       </div>
-      <span class="outcome-state">{{ audit.scanComplete ? 'Scan complete' : 'Partial scan' }}</span>
+      <span class="outcome-state">{{ isAuditComplete(audit) ? 'Audit complete' : 'Audit incomplete' }}</span>
     </section>
 
     <dl class="reconciliation-summary">
@@ -112,10 +112,10 @@
       </div>
     </dl>
 
-    @if (audit.inspectionLimitsReached || audit.findingsTruncated) {
+    @if (audit.inspectionIncomplete || audit.findingsTruncated) {
       <p class="reconciliation-limit-warning" role="status">
-        @if (audit.inspectionLimitsReached) {
-          A server inspection limit was reached; this result is not complete evidence.
+        @if (audit.inspectionIncomplete) {
+          Some server evidence could not be completely inspected; this result is not complete evidence.
         }
         @if (audit.findingsTruncated) {
           Showing {{ audit.findings.length }} of {{ audit.summary.findingCount }} finding(s).
@@ -169,7 +169,7 @@
           }
         </div>
       </details>
-    } @else if (audit.scanComplete && !audit.inspectionLimitsReached) {
+    } @else if (isAuditComplete(audit)) {
       <p class="reconciliation-clear">
         No review or unverifiable findings were returned for this cycle.
       </p>

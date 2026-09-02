@@ -45,7 +45,7 @@ The saved direct-source version and canonical-source version use different deter
 
 ### Explicit unverifiable state
 
-A final is `unverifiable` when any required proof is absent or incomplete. This includes legacy completed windows without D1L evidence, invalid saved completeness, missing/invalid canonical documents, incomplete canonical final input, and missing canonical skater final settlement. The classifier does not calculate an authoritative replacement from partial evidence.
+A final is `unverifiable` when any required proof is absent or incomplete. This includes a missing finite saved score, legacy completed windows without D1L evidence, invalid saved completeness, missing/invalid or non-final canonical documents, non-finite canonical output, incomplete canonical final input, and missing canonical skater final settlement. The classifier does not calculate an authoritative replacement from partial evidence.
 
 A valid saved zero remains distinguishable: with complete saved evidence and complete canonical no-appearance/zero evidence, it is a verified match.
 
@@ -61,7 +61,8 @@ The detector reports storage-integrity candidates for:
 - scheduled, played, appearance, and remaining count mismatches;
 - a complete window that still has live, incomplete, or unplayed games;
 - a window total that does not equal its per-game score sum; and
-- a missing or malformed team-window structure that could otherwise hide finalized games; and
+- a missing or malformed team-window structure that could otherwise hide finalized games;
+- missing, duplicate, cross-team, cross-cycle, or unexpected roster-slot windows; and
 - a document that exceeds a bounded inspection limit.
 
 These checks are evidence only. They do not write the window, matchup, roster, transaction, standings, or playoff documents.
@@ -75,7 +76,8 @@ Displayed findings use a deterministic 12-character team pseudonym rather than a
 Server bounds are:
 
 ```text
-4 team documents per page
+4 team documents classified per page
+up to 32 expected team-document existence reads on the first page only
 32 windows per team document
 12 completed NHL games per window
 512 unique canonical game reads per page
@@ -91,6 +93,8 @@ Reaching any cap is visible and prevents a clean-audit conclusion.
 - A numeric legacy final without D1L provenance is unverifiable even if current canonical facts exist.
 - A saved final with an incomplete or malformed source contract is unverifiable.
 - A missing or malformed team-window structure makes the scan visibly incomplete; it cannot produce a clean result.
+- Missing cycle scope metadata, a missing expected team-window document, or an unexpected team-window document makes the scan visibly incomplete.
+- Each expected roster slot must have exactly one structurally valid window in the correct team document and cycle.
 - A canonical document without the relevant skater final settlement is unverifiable.
 - Current canonical evidence may contain a later NHL correction. A resulting difference is a candidate, not an automatic mutation.
 - Point-only, appearance-only, and combined differences remain distinct finding codes.
@@ -140,7 +144,8 @@ candidateGameCount
 unverifiableGameCount
 integrityIssueCount
 scanComplete
-inspectionLimitReached
+teamDocumentCoverageChecked
+inspectionIncomplete
 findingsTruncated
 ```
 

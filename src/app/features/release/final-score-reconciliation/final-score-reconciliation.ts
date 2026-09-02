@@ -12,7 +12,8 @@ interface FinalScoreReconciliationRun {
   cycleNumber: number;
   pagesScanned: number;
   scanComplete: boolean;
-  inspectionLimitsReached: boolean;
+  teamDocumentCoverageChecked: boolean;
+  inspectionIncomplete: boolean;
   findingsTruncated: boolean;
   summary: FinalScoreReconciliationSummary;
   findings: FinalScoreReconciliationFinding[];
@@ -112,8 +113,8 @@ export class FinalScoreReconciliation implements OnDestroy {
 
         if (page.scanComplete) {
           this.progressMessage.set(
-            aggregate.inspectionLimitsReached
-              ? 'The team scan finished, but a bounded inspection limit was reached.'
+            !this.isAuditComplete(aggregate)
+              ? 'The team scan finished, but some evidence could not be completely inspected.'
               : 'Detect-only scan complete. No score or league data was changed.',
           );
           return;
@@ -151,7 +152,7 @@ export class FinalScoreReconciliation implements OnDestroy {
   }
 
   getOutcomeLabel(run: FinalScoreReconciliationRun): string {
-    if (!run.scanComplete || run.inspectionLimitsReached) {
+    if (!this.isAuditComplete(run)) {
       return 'Audit incomplete';
     }
 
@@ -172,8 +173,7 @@ export class FinalScoreReconciliation implements OnDestroy {
 
   getOutcomeClass(run: FinalScoreReconciliationRun): string {
     if (
-      !run.scanComplete ||
-      run.inspectionLimitsReached ||
+      !this.isAuditComplete(run) ||
       run.summary.candidateGameCount > 0 ||
       run.summary.integrityIssueCount > 0
     ) {
@@ -183,6 +183,13 @@ export class FinalScoreReconciliation implements OnDestroy {
     return run.summary.unverifiableGameCount > 0
       ? 'reconciliation-outcome-warning'
       : 'reconciliation-outcome-pass';
+  }
+
+  isAuditComplete(run: FinalScoreReconciliationRun): boolean {
+    return run.scanComplete &&
+      run.teamDocumentCoverageChecked &&
+      !run.inspectionIncomplete &&
+      !run.findingsTruncated;
   }
 
   getFindingLabel(finding: FinalScoreReconciliationFinding): string {
@@ -235,7 +242,8 @@ export class FinalScoreReconciliation implements OnDestroy {
       cycleNumber: 0,
       pagesScanned: 0,
       scanComplete: false,
-      inspectionLimitsReached: false,
+      teamDocumentCoverageChecked: false,
+      inspectionIncomplete: false,
       findingsTruncated: false,
       summary: {
         teamDocumentCount: 0,
@@ -261,10 +269,14 @@ export class FinalScoreReconciliation implements OnDestroy {
       cycleNumber: page.cycleNumber,
       pagesScanned: current.pagesScanned + 1,
       scanComplete: page.scanComplete,
-      inspectionLimitsReached:
-        current.inspectionLimitsReached ||
+      teamDocumentCoverageChecked:
+        current.teamDocumentCoverageChecked || page.teamDocumentCoverageChecked,
+      inspectionIncomplete:
+        current.inspectionIncomplete ||
         page.canonicalGameReadLimitReached ||
-        page.teamWindowLimitReached,
+        page.teamWindowLimitReached ||
+        page.windowGameLimitReached ||
+        page.teamWindowStructureIncomplete,
       findingsTruncated: current.findingsTruncated || page.findingsTruncated ||
         current.findings.length + page.findings.length > MAX_DISPLAYED_FINDINGS,
       summary: {

@@ -211,6 +211,7 @@ test('a legitimate Team Goalie Unit zero uses its smaller complete source contra
 });
 
 test('missing or invalid saved final evidence remains explicitly unverifiable', () => {
+  const missingScore = reconcile(completedWindow({ gameScores: {} }));
   const missing = reconcile(completedWindow({ gameInputCompleteness: {} }));
   const invalid = reconcile(completedWindow({
     gameInputCompleteness: {
@@ -229,6 +230,10 @@ test('missing or invalid saved final evidence remains explicitly unverifiable', 
     },
   }));
 
+  assert.equal(missingScore.unverifiableGameCount, 1);
+  assert.equal(missingScore.candidateGameCount, 0);
+  assert.equal(missingScore.findings[0].status, 'unverifiable');
+  assert.equal(missingScore.findings[0].code, 'stored-final-score-missing');
   assert.equal(missing.unverifiableGameCount, 1);
   assert.equal(missing.findings[0].code, 'stored-final-evidence-missing');
   assert.equal(invalid.unverifiableGameCount, 1);
@@ -305,6 +310,28 @@ test('missing canonical skater final settlement is unverifiable even with a boxs
   assert.equal(result.findings[0].reason, 'final-settlement-missing');
 });
 
+test('non-final or non-finite canonical output remains unverifiable', () => {
+  const nonFinal = reconcile(completedWindow(), new Map([[1, canonicalGame({
+    facts: canonicalFacts({ gameState: 'live' }),
+  })]]));
+  const invalidFinalSettlement = appearedCanonicalFacts({ goals: 1 });
+  invalidFinalSettlement.skaters[0].goals = Number.NaN;
+  invalidFinalSettlement.finalSettlements[0].goals = Number.NaN;
+  const nonFinite = reconcile(completedWindow({
+    appearanceGameIds: [1],
+    actualGamesPlayed: 1,
+  }), new Map([[1, canonicalGame({ facts: invalidFinalSettlement })]]));
+
+  assert.equal(nonFinal.unverifiableGameCount, 1);
+  assert.equal(nonFinal.candidateGameCount, 0);
+  assert.equal(nonFinal.findings[0].code, 'canonical-final-evidence-incomplete');
+  assert.match(nonFinal.findings[0].reason, /not in a final state/);
+  assert.equal(nonFinite.unverifiableGameCount, 1);
+  assert.equal(nonFinite.candidateGameCount, 0);
+  assert.equal(nonFinite.findings[0].canonicalPoints, null);
+  assert.match(nonFinite.findings[0].reason, /structurally incomplete/);
+});
+
 test('window storage invariants report integrity candidates without double-counting games', () => {
   const result = reconcile(completedWindow({
     scheduledGameIds: [1, 1],
@@ -365,6 +392,7 @@ test('final-game and finding limits stay visible while aggregate counts remain a
   assert.equal(result.finalizedGameCount, 12);
   assert.ok(result.integrityIssueCount >= 1);
   assert.ok(result.findingCount >= 13);
+  assert.equal(result.inspectionLimitReached, true);
   assert.equal(result.findings.length, 0);
   assert.equal(result.findingsTruncated, true);
 });
@@ -387,7 +415,7 @@ test('missing and malformed team-window structures fail visibly closed', () => {
 
   assert.equal(malformed.inspectionIncomplete, true);
   assert.equal(malformed.allWindowCount, 4);
-  assert.equal(malformed.safeWindowValues.length, 2);
+  assert.equal(malformed.safeWindowValues.length, 1);
   assert.equal(malformed.finding.code, 'team-window-structure-invalid');
   assert.match(malformed.finding.reason, /3 saved team-window record/);
 
@@ -397,6 +425,105 @@ test('missing and malformed team-window structures fail visibly closed', () => {
   });
   assert.equal(complete.inspectionIncomplete, false);
   assert.equal(complete.finding, null);
+
+  for (const invalidWindow of [
+    completedWindow({ liveGameIds: undefined }),
+    completedWindow({ completedGameIds: [1, '2'] }),
+    completedWindow({ gamesPlayed: 0.5 }),
+    completedWindow({ ownerId: '' }),
+    completedWindow({ cycleNumber: undefined }),
+    completedWindow({ asset: { assetType: 'skater', assetKey: 'skater-7', position: 'C' } }),
+    completedWindow({ asset: { ...skaterAsset, assetKey: 'skater-8' } }),
+  ]) {
+    const invalid = reconciliation.inspectFinalScoreTeamWindowStructure({
+      rawWindows: [invalidWindow],
+      teamKey: 'team-abc123',
+    });
+
+    assert.equal(invalid.inspectionIncomplete, true);
+    assert.deepEqual(invalid.safeWindowValues, []);
+  }
+});
+
+test('cycle scope proves expected team-document coverage before a clean result', () => {
+  const complete = reconciliation.inspectFinalScoreCycleTeamWindowScope({
+    expectedRosterSlotIdsByOwner: {
+      'owner-a': ['C-1', 'LW-1'],
+      'owner-b': ['G-1'],
+    },
+    totalExpectedWindowCount: 3,
+    windowSchemaVersion: 1,
+  });
+
+  assert.deepEqual(complete.expectedTeamDocumentIds, ['owner-a', 'owner-b']);
+  assert.deepEqual(complete.expectedRosterSlotIdsByTeam, {
+    'owner-a': ['C-1', 'LW-1'],
+    'owner-b': ['G-1'],
+  });
+  assert.equal(complete.inspectionIncomplete, false);
+
+  for (const incomplete of [
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: undefined,
+      totalExpectedWindowCount: 0,
+      windowSchemaVersion: 1,
+    }),
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: { 'owner/a': ['C-1'] },
+      totalExpectedWindowCount: 1,
+      windowSchemaVersion: 1,
+    }),
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: { 'owner-a': ['C-1', 'C-1'] },
+      totalExpectedWindowCount: 2,
+      windowSchemaVersion: 1,
+    }),
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: { 'owner-a': ['C-1'] },
+      totalExpectedWindowCount: 2,
+      windowSchemaVersion: 1,
+    }),
+  ]) {
+    assert.equal(incomplete.inspectionIncomplete, true);
+    assert.match(incomplete.reason, /cannot|exceeds|malformed|inconsistent/);
+  }
+});
+
+test('team-window roster scope excludes duplicate, missing, and cross-cycle windows', () => {
+  const complete = reconciliation.inspectFinalScoreTeamWindowRosterScope({
+    safeWindowValues: [
+      completedWindow(),
+      completedWindow({
+        id: 'owner-a__LW-1__cycle-1',
+        rosterSlotId: 'LW-1',
+      }),
+    ],
+    expectedRosterSlotIds: ['C-1', 'LW-1'],
+    teamDocumentId: 'owner-a',
+    cycleNumber: 1,
+  });
+
+  assert.equal(complete.inspectionIncomplete, false);
+  assert.equal(complete.safeWindowValues.length, 2);
+
+  const incomplete = reconciliation.inspectFinalScoreTeamWindowRosterScope({
+    safeWindowValues: [
+      completedWindow(),
+      completedWindow({ id: 'duplicate', rosterSlotId: 'C-1' }),
+      completedWindow({
+        id: 'wrong-cycle',
+        rosterSlotId: 'LW-1',
+        cycleNumber: 2,
+      }),
+    ],
+    expectedRosterSlotIds: ['C-1', 'LW-1'],
+    teamDocumentId: 'owner-a',
+    cycleNumber: 1,
+  });
+
+  assert.equal(incomplete.inspectionIncomplete, true);
+  assert.equal(incomplete.safeWindowValues.length, 1);
+  assert.match(incomplete.reason, /1 expected window.*2 duplicate or out-of-scope/);
 });
 
 test('the callable is platform-admin-only, paged, bounded, pseudonymized, and read-only', async () => {
@@ -417,6 +544,12 @@ test('the callable is platform-admin-only, paged, bounded, pseudonymized, and re
   assert.match(implementation, /startAfter\(input\.afterTeamId\)/);
   assert.match(implementation, /FINAL_SCORE_RECONCILIATION_MAX_CANONICAL_GAME_READS/);
   assert.match(implementation, /inspectFinalScoreTeamWindowStructure/);
+  assert.match(implementation, /inspectFinalScoreTeamWindowRosterScope/);
+  assert.match(implementation, /inspectFinalScoreCycleTeamWindowScope/);
+  assert.match(implementation, /expectedTeamDocumentIds/);
+  assert.match(implementation, /missingTeamDocumentCount/);
+  assert.match(implementation, /teamDocumentCoverageChecked/);
+  assert.match(implementation, /windowGameLimitReached/);
   assert.match(implementation, /final-score-reconciliation:\$\{input\.leagueId\}:\$\{snapshot\.id\}/);
   assert.match(implementation, /writesPerformed: 0/);
   assert.match(implementation, /maxInstances: 3/);
@@ -443,11 +576,16 @@ test('the admin panel exposes bounded progress, retry, partial evidence, and no 
   assert.match(component, /leagueIdInput/);
   assert.match(component, /page\.leagueId !== leagueId/);
   assert.match(component, /requestGeneration/);
+  assert.match(component, /run\.teamDocumentCoverageChecked/);
   assert.match(component, /Partial read-only results remain visible/);
+  assert.match(component, /run\.teamDocumentCoverageChecked/);
+  assert.match(component, /!run\.inspectionIncomplete/);
+  assert.match(component, /!run\.findingsTruncated/);
   assert.match(template, /Run Detect-Only Audit/);
   assert.match(template, /Exact league ID/);
   assert.match(template, /Missing D1L\s+source evidence/);
   assert.match(template, /Retry/);
+  assert.match(template, /Audit incomplete/);
   assert.match(template, /role="status"/);
   assert.match(template, /role="alert"/);
   assert.match(styles, /@media \(max-width: 520px\)/);
