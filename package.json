@@ -568,6 +568,8 @@
     "preverify:batchd1n-staging": "npm run security:sync-repository-automation",
     "verify:batchd1n-staging:core": "npm run verify:batchd1n:core && npm run test:batchd1n-staging:run && npm run validate:release-manifest",
     "verify:batchd1n-staging": "npm run toolchain:verify && npm run verify:batchd1n-staging:core && npm run security:dependency-audit",
+    "test:batchb1l:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1l-roster-presentation/*.test.mjs",
+    "verify:batchb1l": "npm run toolchain:verify && npm run test:batchb1l:run && npm run verify:batchd1n-staging:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
   },
   "private": true,

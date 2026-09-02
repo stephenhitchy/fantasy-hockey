@@ -241,6 +241,8 @@
         <p>{{ rosterFilledCount() }} / {{ rosterTotalCount() }} active · Bench {{ benchFilledCount() }} / {{ benchTotalCount() }} · Injured Reserve (IR) {{ irFilledCount() }} / {{ irTotalCount() }}</p>
       </div>
 
+      <p class="roster-display-order-note">{{ getRosterDisplayOrderLabel() }}</p>
+
       <div class="availability-policy-note rr-notice rr-notice--info">
         <strong>Injured Reserve (IR) eligibility:</strong>
         Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve can be moved to an Injured Reserve (IR) slot.
@@ -285,7 +287,7 @@
                 </div>
 
                 <div class="fantasy-position-slots">
-                  @for (slot of getPositionSlots(group.position); track slot.slotId) {
+                  @for (slot of getPositionSlotsForDisplay(group.position); track slot.slotId) {
                     <article
                       class="fantasy-player-card rr-card"
                       [class.empty-slot-card]="!slot.asset"
@@ -365,6 +367,13 @@
                             </strong>
                             <span>Proj</span>
                           </div>
+
+                          <div class="roster-rank-metric">
+                            <strong>
+                              {{ getDisplayNumber(getRosterAssetDisplayMetric(asset)) }}
+                            </strong>
+                            <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
+                          </div>
                         </div>
 
                         <div class="roster-card-actions">
@@ -435,7 +444,7 @@
               </div>
 
               <div class="fantasy-position-slots defense-slots">
-                @for (slot of getPositionSlots('D'); track slot.slotId) {
+                @for (slot of getPositionSlotsForDisplay('D'); track slot.slotId) {
                   <article
                     class="fantasy-player-card rr-card"
                     [class.empty-slot-card]="!slot.asset"
@@ -507,6 +516,13 @@
                           </strong>
                           <span>Proj</span>
                         </div>
+
+                        <div class="roster-rank-metric">
+                          <strong>
+                            {{ getDisplayNumber(getRosterAssetDisplayMetric(asset)) }}
+                          </strong>
+                          <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
+                        </div>
                       </div>
 
                       <div class="roster-card-actions">
@@ -575,7 +591,7 @@
               </div>
 
               <div class="fantasy-position-slots">
-                @for (slot of getPositionSlots('G'); track slot.slotId) {
+                @for (slot of getPositionSlotsForDisplay('G'); track slot.slotId) {
                   <article
                     class="fantasy-player-card goalie-card rr-card"
                     [class.empty-slot-card]="!slot.asset"
@@ -646,6 +662,13 @@
                             {{ getDisplayNumber(getProjectedCycle(asset)) }}
                           </strong>
                           <span>Proj</span>
+                        </div>
+
+                        <div class="roster-rank-metric">
+                          <strong>
+                            {{ getDisplayNumber(getRosterAssetDisplayMetric(asset)) }}
+                          </strong>
+                          <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
                         </div>
                       </div>
 
@@ -781,6 +804,11 @@
                   <strong>{{ getDisplayNumber(getProjectedCycle(asset)) }}</strong>
                   <span>Proj</span>
                 </div>
+
+                <div class="roster-rank-metric">
+                  <strong>{{ getDisplayNumber(getRosterAssetDisplayMetric(asset)) }}</strong>
+                  <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
+                </div>
               </div>
 
               <div class="roster-card-actions">
@@ -804,7 +832,7 @@
                 <div class="roster-card-action-buttons bench-action-buttons">
                   <button
                     type="button"
-                    class="mini-roster-action"
+                    class="mini-roster-action roster-promote-action"
                     (click)="$event.stopPropagation(); beginBenchSwap(slot.slotId)"
                     [disabled]="rosterMoveLoading()"
                   >
@@ -943,7 +971,7 @@
                 <div class="ir-slot-actions">
                   <button
                     type="button"
-                    class="mini-roster-action activate-action"
+                    class="mini-roster-action activate-action roster-promote-action"
                     (click)="beginIrActivation(slot.slotId)"
                     [disabled]="!canActivateIrSlot(slot)"
                   >
@@ -1128,13 +1156,19 @@
               </div>
             </div>
 
-            <div class="ir-activation-target-list">
-              @for (targetSlot of getIrActivationTargetSlots(); track targetSlot.slotId) {
-                <label
-                  class="ir-activation-target"
-                  [class.selected-ir-activation-target]="isIrActivationTargetSelected(targetSlot.slotId)"
-                  [class.open-ir-activation-target]="!targetSlot.asset"
-                >
+            <fieldset class="ir-activation-choice-group">
+              <legend>
+                <span aria-hidden="true">1</span>
+                <strong>Choose the starting {{ activationAsset.position }} slot</strong>
+              </legend>
+
+              <div class="ir-activation-target-list">
+                @for (targetSlot of getIrActivationTargetSlots(); track targetSlot.slotId) {
+                  <label
+                    class="ir-activation-target"
+                    [class.selected-ir-activation-target]="isIrActivationTargetSelected(targetSlot.slotId)"
+                    [class.open-ir-activation-target]="!targetSlot.asset"
+                  >
                   <input
                     type="radio"
                     name="ir-activation-target"
@@ -1171,15 +1205,16 @@
                   } @else {
                     <span class="ir-open-slot-label">Open Slot</span>
                   }
-                </label>
-              }
-            </div>
+                  </label>
+                }
+              </div>
+            </fieldset>
 
             @if (getSelectedIrActivationTargetSlot(); as selectedTargetSlot) {
               @if (selectedTargetSlot.asset; as displacedStarter) {
                 <section class="ir-activation-bench-step" aria-labelledby="ir-activation-bench-title">
                   <div class="ir-activation-step-heading">
-                    <span class="eyebrow">Bench Destination</span>
+                    <span class="eyebrow">Step 2 · Bench Destination</span>
                     <h3 id="ir-activation-bench-title">
                       Where should {{ getRosterAssetName(displacedStarter) }} go?
                     </h3>
@@ -1288,9 +1323,15 @@
               <button type="button" class="ir-activation-close rr-button rr-button--quiet" aria-label="Close Injured Reserve bench move" (click)="cancelIrBenchActivation()" [disabled]="rosterMoveLoading()">×</button>
             </header>
 
-            <div class="ir-activation-target-list">
-              @for (targetSlot of getIrBenchActivationTargets(); track targetSlot.slotId) {
-                <label class="ir-activation-target" [class.selected-ir-activation-target]="irBenchActivationTargetSlotId() === targetSlot.slotId" [class.open-ir-activation-target]="!targetSlot.asset" [class.disabled-ir-activation-target]="isBenchSlotReservedForActiveSwap(targetSlot)">
+            <fieldset class="ir-activation-choice-group ir-activation-compact-choice-group">
+              <legend>
+                <span aria-hidden="true">1</span>
+                <strong>Choose the bench destination</strong>
+              </legend>
+
+              <div class="ir-activation-target-list">
+                @for (targetSlot of getIrBenchActivationTargets(); track targetSlot.slotId) {
+                  <label class="ir-activation-target ir-activation-target--no-logo" [class.selected-ir-activation-target]="irBenchActivationTargetSlotId() === targetSlot.slotId" [class.open-ir-activation-target]="!targetSlot.asset" [class.disabled-ir-activation-target]="isBenchSlotReservedForActiveSwap(targetSlot)">
                   <input type="radio" name="ir-bench-target" [value]="targetSlot.slotId" [checked]="irBenchActivationTargetSlotId() === targetSlot.slotId" [disabled]="isBenchSlotReservedForActiveSwap(targetSlot)" (change)="selectIrBenchActivationTarget(targetSlot.slotId)" />
                   <span class="ir-activation-radio-mark"></span>
                   <span class="ir-activation-target-copy">
@@ -1304,9 +1345,10 @@
                   } @else {
                     <span class="ir-open-slot-label">Open Slot</span>
                   }
-                </label>
-              }
-            </div>
+                  </label>
+                }
+              </div>
+            </fieldset>
 
             <div class="ir-activation-cycle-note">
               Bench players and goalie units are owned but do not score. This ownership move is immediate and does not change any active six-game count.

@@ -123,7 +123,7 @@ test('hockey definitions allow only one panel and stay inside the viewport', asy
   assert.match(template, /\[class\.positioned\]="panelPosition\(\)"/);
   assert.match(styles, /\.hockey-term-popover\s*\{[\s\S]*position:\s*fixed;/);
   assert.match(styles, /overflow:\s*auto;/);
-  assert.match(styles, /z-index:\s*1000;/);
+  assert.match(styles, /z-index:\s*calc\(var\(--rr-z-viewport-overlay, 2000\) \+ 10\);/);
   assert.match(styles, /@media \(max-width: 520px\)[\s\S]*bottom:/);
   assert.match(campStyles, /\.camp-lesson-card\s*\{[\s\S]*overflow:\s*visible;/);
 });

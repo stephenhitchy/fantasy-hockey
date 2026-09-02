@@ -408,6 +408,16 @@
     #0b111d;
 }
 
+.g .matchup-roster-order-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #c5d4e3;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.025em;
+  text-align: right;
+}
+
 .g .forward-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -518,6 +528,15 @@
   padding: 3px 4px;
   border-radius: 5px;
   background: rgba(12, 18, 29, 0.48);
+}
+
+.g .fantasy-player-score-stack .roster-rank-metric {
+  border: 1px solid color-mix(in srgb, var(--rr-info, #78b7ff) 42%, transparent);
+  background: color-mix(in srgb, var(--rr-info, #78b7ff) 18%, #0c121d);
+}
+
+.g .fantasy-player-score-stack .roster-rank-metric strong {
+  color: #eaf4ff;
 }
 
 .g .fantasy-player-score-stack strong,

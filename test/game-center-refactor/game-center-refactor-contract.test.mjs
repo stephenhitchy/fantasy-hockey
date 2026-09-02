@@ -55,7 +55,7 @@ describe('Batch 6A Game Center component boundaries', () => {
 
     assert.match(template, /presenter\.getOwnerThemeStyles\(ownerId\)/);
     assert.match(template, /presenter\.getTeamRosterProgressPercent\(ownerId\)/);
-    assert.match(template, /presenter\.getTeamPicksByPosition\(ownerId,/);
+    assert.match(template, /presenter\.getTeamPicksByPositionForDisplay\(ownerId,/);
     assert.match(template, /presenter\.getTeamBenchSlots\(ownerId\)/);
     assert.doesNotMatch(template, /teamAOwnerId|teamBOwnerId/);
   });

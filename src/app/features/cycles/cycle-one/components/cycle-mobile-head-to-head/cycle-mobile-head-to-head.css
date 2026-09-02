@@ -193,6 +193,15 @@
     margin-top: 10px;
   }
 
+  .mobile-roster-order-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--rr-mobile-text-micro);
+    font-weight: 800;
+    line-height: 1.3;
+    text-align: right;
+  }
+
   .mobile-live-position-section {
     min-width: 0;
     overflow: clip;
@@ -362,6 +371,13 @@
     color: color-mix(in srgb, var(--rr-ice-white) 70%, transparent);
     font-size: 12px;
     font-weight: 700;
+  }
+
+  .mobile-live-player-name .mobile-roster-rank {
+    color: color-mix(in srgb, var(--rr-info) 78%, var(--rr-ice-white));
+    font-family: var(--rr-font-numeric);
+    font-size: var(--rr-mobile-text-micro);
+    font-weight: 900;
   }
 
   .mobile-live-player-numbers {

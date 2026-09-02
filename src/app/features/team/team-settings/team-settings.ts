@@ -89,6 +89,12 @@ import {
 } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
 import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
+import {
+  getRosterDisplayMetric,
+  getRosterDisplayMetricLabel,
+  getRosterDisplayPhase as resolveRosterDisplayPhase,
+  orderRosterEntriesForDisplay,
+} from '../../../shared/roster-display-order/roster-display-order.util';
 import { ClientHealthService } from '../../../core/observability/client-health.service';
 import { CompetitiveActionMonitorService } from '../../../core/observability/competitive-action-monitor.service';
 import {
@@ -251,6 +257,13 @@ export class TeamSettings implements OnDestroy {
   );
 
   readonly irTotalCount = computed(() => this.roster()?.irSlots.length ?? 0);
+
+  readonly rosterDisplayPhase = computed(() => {
+    const pool = this.playerPool();
+    const referenceAssets = pool.length > 0 ? pool : this.picks().map((pick) => pick.asset);
+
+    return resolveRosterDisplayPhase(referenceAssets);
+  });
 
   readonly teamPointDifferential = computed(() => {
     const team = this.team();
@@ -2006,6 +2019,39 @@ export class TeamSettings implements OnDestroy {
 
   getPositionSlots(position: DraftPosition): FantasyRoster['activeSlots'] {
     return this.roster()?.activeSlots.filter((slot) => slot.position === position) ?? [];
+  }
+
+  getPositionSlotsForDisplay(position: DraftPosition): FantasyRoster['activeSlots'] {
+    return orderRosterEntriesForDisplay(
+      this.getPositionSlots(position),
+      (slot) => (slot.asset ? this.getRosterDisplayAsset(slot.asset) : null),
+      this.rosterDisplayPhase(),
+    );
+  }
+
+  getRosterDisplayOrderLabel(): string {
+    return `Top performer first by ${getRosterDisplayMetricLabel(this.rosterDisplayPhase()).toLowerCase()}`;
+  }
+
+  getRosterAssetDisplayMetric(asset: unknown): number | null {
+    const displayAsset = this.getRosterDisplayAsset(asset);
+
+    return displayAsset
+      ? getRosterDisplayMetric(displayAsset, this.rosterDisplayPhase())
+      : null;
+  }
+
+  getRosterAssetDisplayMetricLabel(): string {
+    return this.rosterDisplayPhase() === 'in-season' ? 'Season' : 'Season Proj';
+  }
+
+  private getRosterDisplayAsset(asset: unknown): DraftableAsset | null {
+    const assetKey = this.getRosterAssetKey(asset);
+    const currentProjectionAsset = assetKey
+      ? this.playerPool().find((candidate) => candidate.assetKey === assetKey) ?? null
+      : null;
+
+    return currentProjectionAsset ?? this.getRosterAssetProjection(asset);
   }
 
   getManagerName(): string {

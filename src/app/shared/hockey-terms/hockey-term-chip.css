@@ -47,7 +47,8 @@
 
 .hockey-term-popover {
   position: fixed;
-  z-index: 1000;
+  /* Portaled definitions must remain above Coach and other viewport dialogs. */
+  z-index: calc(var(--rr-z-viewport-overlay, 2000) + 10);
   top: 0;
   left: 0;
   display: grid;

@@ -272,7 +272,23 @@ app-team-settings .roster-manager-action-arrow {
 }
 
 app-team-settings .roster-manager-action--primary {
-  border-color: color-mix(in srgb, var(--rr-color-accent) 56%, var(--rr-color-border));
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--rr-info) 74%, var(--rr-ice-white));
+  background: var(--rr-info);
+  color: var(--rr-scoreboard);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--rr-info) 38%, var(--rr-scoreboard));
+}
+
+app-team-settings .roster-manager-action--primary small,
+app-team-settings .roster-manager-action--primary .roster-manager-action-arrow {
+  color: color-mix(in srgb, var(--rr-scoreboard) 82%, transparent);
+}
+
+app-team-settings .roster-manager-action--primary:hover:not(:disabled),
+app-team-settings .roster-manager-action--primary:focus-visible {
+  border-color: var(--rr-ice-white);
+  background: color-mix(in srgb, var(--rr-info) 84%, var(--rr-ice-white));
+  color: var(--rr-scoreboard);
 }
 
 app-team-settings .roster-manager-action--warning {
@@ -283,8 +299,8 @@ app-team-settings .roster-manager-action--danger {
   border-color: color-mix(in srgb, var(--rr-color-danger) 58%, var(--rr-color-border));
 }
 
-app-team-settings .roster-manager-action:hover:not(:disabled),
-app-team-settings .roster-manager-action:focus-visible {
+app-team-settings .roster-manager-action:hover:not(:disabled):not(.roster-manager-action--primary),
+app-team-settings .roster-manager-action:focus-visible:not(.roster-manager-action--primary) {
   border-color: var(--rr-color-accent);
   background: var(--rr-color-surface-strong);
 }
@@ -1711,4 +1727,3 @@ app-free-agents .free-agent-sheet-buttons button {
     animation: none;
   }
 }
-

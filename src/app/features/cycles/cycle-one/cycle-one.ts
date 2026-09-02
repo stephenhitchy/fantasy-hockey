@@ -11,6 +11,12 @@ import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 import { saveProjectionAccuracyForCycle } from '../../../core/projection/projection-accuracy.service';
 
 import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
+import {
+  getRosterDisplayMetric,
+  getRosterDisplayMetricLabel,
+  getRosterDisplayPhase as resolveRosterDisplayPhase,
+  orderRosterEntriesForDisplay,
+} from '../../../shared/roster-display-order/roster-display-order.util';
 
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -207,6 +213,12 @@ export class CycleOne implements OnDestroy {
   matchups = signal<FantasyMatchup[]>([]);
   picks = signal<DraftPick[]>([]);
   playerPool = signal<DraftableAsset[]>([]);
+  readonly rosterDisplayPhase = computed(() => {
+    const pool = this.playerPool();
+    const referenceAssets = pool.length > 0 ? pool : this.picks().map((pick) => pick.asset);
+
+    return resolveRosterDisplayPhase(referenceAssets);
+  });
   teamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
   previousTeamWindowsByOwner = signal<Record<string, FantasyTeamCycleWindows>>({});
   teamRostersByOwner = signal<Record<string, FantasyRoster | null>>({});
@@ -3120,13 +3132,43 @@ export class CycleOne implements OnDestroy {
     return this.getTeamPicks(ownerId).filter((pick) => pick.asset.position === position);
   }
 
+  getTeamPicksByPositionForDisplay(
+    ownerId: string | null,
+    position: DraftPosition,
+  ): DraftPick[] {
+    return orderRosterEntriesForDisplay(
+      this.getTeamPicksByPosition(ownerId, position),
+      (pick) => this.getRosterDisplayAsset(pick.asset),
+      this.rosterDisplayPhase(),
+    );
+  }
+
+  getRosterDisplayOrderLabel(): string {
+    return `Top performer first by ${getRosterDisplayMetricLabel(this.rosterDisplayPhase()).toLowerCase()}`;
+  }
+
+  getAssetRosterDisplayMetric(asset: DraftableAsset): number | null {
+    return getRosterDisplayMetric(
+      this.getRosterDisplayAsset(asset),
+      this.rosterDisplayPhase(),
+    );
+  }
+
+  getAssetRosterDisplayMetricLabel(): string {
+    return this.rosterDisplayPhase() === 'in-season' ? 'Season' : 'Season Proj';
+  }
+
+  private getRosterDisplayAsset(asset: DraftableAsset): DraftableAsset {
+    return this.playerPool().find((candidate) => candidate.assetKey === asset.assetKey) ?? asset;
+  }
+
   getMobileMatchupPositionGroups(matchup: FantasyMatchup): MobileMatchupPositionGroup[] {
     const positions = [...this.forwardPositions, ...this.defensePositions, ...this.goaliePositions];
 
     return positions
       .map((position) => {
-        const teamAPicks = this.getTeamPicksByPosition(matchup.teamAOwnerId, position);
-        const teamBPicks = this.getTeamPicksByPosition(matchup.teamBOwnerId, position);
+        const teamAPicks = this.getTeamPicksByPositionForDisplay(matchup.teamAOwnerId, position);
+        const teamBPicks = this.getTeamPicksByPositionForDisplay(matchup.teamBOwnerId, position);
         const rowCount = Math.max(teamAPicks.length, teamBPicks.length);
 
         return {

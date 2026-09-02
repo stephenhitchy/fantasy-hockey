@@ -2657,6 +2657,186 @@
   box-shadow: inset 0 -4px 0 var(--user-team-secondary);
 }
 
+/* Roster presentation repair: explicit ranking and theme-independent actions. */
+.roster-display-order-note {
+  width: fit-content;
+  margin: -4px 0 14px;
+  padding: 5px 9px;
+  border: 1px solid var(--rr-color-border);
+  border-radius: 999px;
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-xs);
+  font-weight: 800;
+}
+
+.fantasy-player-score-stack {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 132px;
+}
+
+.fantasy-player-score-stack .roster-rank-metric {
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 34%, transparent);
+  background: color-mix(in srgb, var(--rr-color-info) 10%, var(--rr-scoreboard));
+}
+
+.hero-add-drop-action,
+.mini-roster-action.roster-promote-action {
+  border: 2px solid color-mix(in srgb, var(--rr-info) 74%, var(--rr-ice-white));
+  background: var(--rr-info);
+  color: var(--rr-scoreboard);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--rr-info) 38%, var(--rr-scoreboard));
+  text-shadow: none;
+}
+
+.hero-add-drop-action:hover,
+.mini-roster-action.roster-promote-action:hover:not(:disabled) {
+  border-color: var(--rr-ice-white);
+  background: color-mix(in srgb, var(--rr-info) 84%, var(--rr-ice-white));
+  color: var(--rr-scoreboard);
+}
+
+.hero-add-drop-action:focus-visible,
+.mini-roster-action.roster-promote-action:focus-visible {
+  outline: 3px solid var(--rr-ice-white);
+  outline-offset: 3px;
+}
+
+.mini-roster-action.roster-promote-action:disabled {
+  background: var(--rr-color-surface-strong);
+  color: var(--rr-color-text-secondary);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.ir-activation-choice-group {
+  min-width: 0;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ir-activation-choice-group legend {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  color: var(--rr-ice-white);
+  font-size: 14px;
+}
+
+.ir-activation-choice-group legend > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 2px solid var(--rr-info);
+  border-radius: 50%;
+  background: var(--rr-scoreboard);
+  color: var(--rr-ice-white);
+  font-weight: 950;
+}
+
+.ir-activation-choice-group .ir-activation-target-list {
+  margin-top: 10px;
+}
+
+.ir-activation-target.ir-activation-target--no-logo {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+}
+
+.ir-activation-target:focus-within {
+  outline: 3px solid var(--rr-info);
+  outline-offset: 3px;
+}
+
+.ir-activation-target-copy strong {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ir-activation-target-copy small {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .fantasy-player-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .fantasy-player-score-stack {
+    grid-column: 2 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .roster-card-actions,
+  .bench-player-card .roster-card-actions {
+    grid-column: 1 / -1;
+  }
+
+  .ir-activation-target {
+    grid-template-columns: 18px 30px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ir-activation-target.ir-activation-target--no-logo {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+
+  .ir-waiver-warning,
+  .ir-bench-move-label,
+  .ir-open-slot-label {
+    grid-column: 2 / -1;
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .ir-activation-target--no-logo .ir-waiver-warning,
+  .ir-activation-target--no-logo .ir-open-slot-label {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .ir-activation-dialog {
+    max-height: 96dvh;
+    padding: 14px;
+  }
+
+  .ir-activation-dialog-header {
+    gap: 10px;
+  }
+
+  .ir-activation-dialog-header h2 {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .ir-activation-dialog-actions {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .ir-activation-cancel,
+  .ir-activation-confirm {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ir-activation-target {
+    transition: none;
+  }
+
+  .ir-activation-target:hover {
+    transform: none;
+  }
+}
+
 @media (max-width: 900px) {
   .quick-actions-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));

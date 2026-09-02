@@ -95,6 +95,9 @@
                       </div>
 
                       <div class="fantasy-roster-board">
+                        <p class="matchup-roster-order-note">
+                          {{ presenter.getRosterDisplayOrderLabel() }}
+                        </p>
                         <div class="forward-row">
                           @for (position of presenter.forwardPositions; track position) {
                             <section class="fantasy-position-group rr-data-panel">
@@ -104,7 +107,7 @@
 
                               <div class="fantasy-position-slots">
                                 @for (
-                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  pick of presenter.getTeamPicksByPositionForDisplay(ownerId, position);
                                   track pick.overallPick
                                 ) {
                                   <article
@@ -191,6 +194,16 @@
                                           }}
                                         </strong>
                                         <span>Proj</span>
+                                      </div>
+                                      <div class="roster-rank-metric">
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetRosterDisplayMetric(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>{{ presenter.getAssetRosterDisplayMetricLabel() }}</span>
                                       </div>
                                     </div>
                                     <div
@@ -264,7 +277,7 @@
 
                               <div class="fantasy-position-slots defense-slots">
                                 @for (
-                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  pick of presenter.getTeamPicksByPositionForDisplay(ownerId, position);
                                   track pick.overallPick
                                 ) {
                                   <article
@@ -352,6 +365,16 @@
                                         </strong>
                                         <span>Proj</span>
                                       </div>
+                                      <div class="roster-rank-metric">
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetRosterDisplayMetric(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>{{ presenter.getAssetRosterDisplayMetricLabel() }}</span>
+                                      </div>
                                     </div>
                                     <div
                                       class="window-game-markers"
@@ -422,7 +445,7 @@
 
                               <div class="fantasy-position-slots">
                                 @for (
-                                  pick of presenter.getTeamPicksByPosition(ownerId, position);
+                                  pick of presenter.getTeamPicksByPositionForDisplay(ownerId, position);
                                   track pick.overallPick
                                 ) {
                                   <article
@@ -509,6 +532,16 @@
                                           }}
                                         </strong>
                                         <span>Proj</span>
+                                      </div>
+                                      <div class="roster-rank-metric">
+                                        <strong>
+                                          {{
+                                            presenter.getProjectionDisplay(
+                                              presenter.getAssetRosterDisplayMetric(pick.asset)
+                                            )
+                                          }}
+                                        </strong>
+                                        <span>{{ presenter.getAssetRosterDisplayMetricLabel() }}</span>
                                       </div>
                                     </div>
                                     <div
