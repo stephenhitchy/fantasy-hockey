@@ -19,6 +19,7 @@ export interface FirestoreRouteEnvelope {
   cacheToServerTransitionCount: number;
   reconnectSnapshotCount: number;
   hiddenSnapshotCount: number;
+  pendingWriteSnapshotCount: number;
 }
 
 function nearestRank(values: number[], percentile: number): number {
@@ -89,6 +90,10 @@ export function buildFirestoreRouteEnvelopes(
       ),
       hiddenSnapshotCount: routeObservations.reduce(
         (total, observation) => total + observation.hiddenSnapshotCount,
+        0,
+      ),
+      pendingWriteSnapshotCount: routeObservations.reduce(
+        (total, observation) => total + observation.pendingWriteSnapshotCount,
         0,
       ),
     }));

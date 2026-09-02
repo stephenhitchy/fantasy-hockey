@@ -75,6 +75,13 @@ current page lifetime. Angular navigation can therefore remove the query paramet
 the cleanup sample for the destination route. Reloading a URL without the flag starts disabled
 again; the diagnostic does not write a cookie, local-storage value, or Firestore document.
 
+Pending-write snapshots are also attributed to the same stable, source-controlled listener labels
+already used by the local listener-count diagnostic. The page-lifetime diagnostic retains at most
+32 pending-write labels and folds any additional label into `other-listener`. Analytics receives
+only the aggregate pending-write snapshot count; it never receives the label map. This attribution
+reads only snapshot metadata and is intended to identify a route's pending-write producer without
+capturing a document field, document ID, league ID, manager ID, player ID, or game ID.
+
 ### Interpretation limits
 
 - `firstSnapshotDocumentCount` is the number of documents observed in the first SDK snapshot. It is
@@ -219,6 +226,24 @@ bounded five-second startup period, transfers focus to the replacement `h1` only
 still on the route target or document body, and disconnects on user focus, navigation, timeout, or
 component destruction. That repair remains source behavior until a reviewed Hosting-only staging
 deployment proves it in the live fixture.
+
+The repaired Hosting build was then verified at clean commit `60780a3`. Draft focus reached the
+replacement league `h1` after both cold and same-page entry at 320, 390, 430, and 1,440 pixel widths,
+with no horizontal document overflow. A four-tab authenticated pass collected 11 additional mobile
+and 12 desktop Draft samples, plus 12 samples per viewport for Available Players, Matchup, and
+Projection Lab. Draft remained at 5 listeners and 12 first-snapshot documents; Available Players at
+20 and 26; Matchup at 13 and 18; and Projection Lab at zero live listeners. All route-to-Support
+cleanup samples ended at zero listeners with no listener errors, unknown document counts, or
+listeners awaiting a first snapshot.
+
+Every additional Available Players sample reported one pending-write snapshot. The bounded label
+attribution in the follow-up source slice identifies `team:list` as the producer in the isolated
+emulator, including on a fresh browser origin. A before/after Admin read showed unchanged synthetic
+team document update times, so this evidence does not indicate a committed team mutation. The
+pending-write source still requires a controlled reconnect and clean-device comparison before it is
+classified as harmless cache behavior. League Home staging samples remain pending because switching
+the shared bounded fixture from live to scheduled Draft requires the separately held staging
+fixture credential.
 
 ## Billed staging isolation gate
 

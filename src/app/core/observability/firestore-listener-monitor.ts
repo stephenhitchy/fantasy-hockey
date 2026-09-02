@@ -44,6 +44,7 @@ export interface FirestoreListenerEvidence {
   reconnectSnapshotCount: number;
   hiddenSnapshotCount: number;
   pendingWriteSnapshotCount: number;
+  pendingWriteSnapshotCountByLabel: Record<string, number>;
 }
 
 export interface FirestoreListenerSnapshot {
@@ -89,6 +90,8 @@ interface MutableRouteObservation {
 }
 
 const activeListeners = new Map<number, ActiveListenerRecord>();
+const MAX_PENDING_WRITE_LABELS = 32;
+const OTHER_PENDING_WRITE_LABEL = 'other-listener';
 let nextListenerId = 1;
 let nextRouteObservationToken = 1;
 let reconnectGeneration = 0;
@@ -120,7 +123,34 @@ function createEmptyEvidence(): FirestoreListenerEvidence {
     reconnectSnapshotCount: 0,
     hiddenSnapshotCount: 0,
     pendingWriteSnapshotCount: 0,
+    pendingWriteSnapshotCountByLabel: {},
   };
+}
+
+function cloneEvidence(evidence: FirestoreListenerEvidence): FirestoreListenerEvidence {
+  return {
+    ...evidence,
+    pendingWriteSnapshotCountByLabel: { ...evidence.pendingWriteSnapshotCountByLabel },
+  };
+}
+
+function incrementPendingWriteLabel(
+  evidence: FirestoreListenerEvidence,
+  label: string,
+): void {
+  const counts = evidence.pendingWriteSnapshotCountByLabel;
+
+  if (counts[label] !== undefined) {
+    counts[label] += 1;
+    return;
+  }
+
+  if (Object.keys(counts).length < MAX_PENDING_WRITE_LABELS - 1) {
+    counts[label] = 1;
+    return;
+  }
+
+  counts[OTHER_PENDING_WRITE_LABEL] = (counts[OTHER_PENDING_WRITE_LABEL] ?? 0) + 1;
 }
 
 function isLocalHost(): boolean {
@@ -272,7 +302,10 @@ function observeListenerSnapshot(
     if (isCacheToServer) evidence.cacheToServerTransitionCount += 1;
     if (isReconnect) evidence.reconnectSnapshotCount += 1;
     if (snapshotVisibility(context) === 'hidden') evidence.hiddenSnapshotCount += 1;
-    if (snapshot.metadata?.hasPendingWrites === true) evidence.pendingWriteSnapshotCount += 1;
+    if (snapshot.metadata?.hasPendingWrites === true) {
+      evidence.pendingWriteSnapshotCount += 1;
+      incrementPendingWriteLabel(evidence, listener.label);
+    }
   });
 
   if (isFirstSnapshot && activeRouteObservation) {
@@ -363,7 +396,7 @@ export function getFirestoreListenerSnapshot(now: number = Date.now()): Firestor
     total: activeListeners.size,
     byLabel,
     longestActiveMilliseconds,
-    evidence: { ...sessionEvidence },
+    evidence: cloneEvidence(sessionEvidence),
   };
 }
 
@@ -466,7 +499,7 @@ export function completeFirestoreRouteObservation(
       0,
       observation.listenerIds.size - observation.firstSnapshotListenerIds.size,
     ),
-    ...observation.evidence,
+    ...cloneEvidence(observation.evidence),
   };
 }
 

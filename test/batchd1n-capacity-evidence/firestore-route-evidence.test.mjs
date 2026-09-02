@@ -43,6 +43,7 @@ function emptyEvidence(overrides = {}) {
     reconnectSnapshotCount: 0,
     hiddenSnapshotCount: 0,
     pendingWriteSnapshotCount: 0,
+    pendingWriteSnapshotCountByLabel: {},
     ...overrides,
   };
 }
@@ -155,6 +156,7 @@ test('listener evidence distinguishes empty, cached, server, reconnect, retry, h
   assert.equal(route.reconnectSnapshotCount, 1);
   assert.equal(route.hiddenSnapshotCount, 1);
   assert.equal(route.pendingWriteSnapshotCount, 1);
+  assert.deepEqual(route.pendingWriteSnapshotCountByLabel, { 'team:list': 1 });
   assert.equal(route.awaitingFirstSnapshotCount, 0);
   assert.equal(unsubscribeCount, 1);
 
@@ -171,6 +173,63 @@ test('listener evidence distinguishes empty, cached, server, reconnect, retry, h
   assert.equal(session.firstSnapshotCount, 2);
   assert.equal(session.firstSnapshotDocumentCount, 0);
   assert.equal(session.unknownDocumentCountSnapshots, 1);
+  assert.deepEqual(session.pendingWriteSnapshotCountByLabel, { 'team:list': 1 });
+});
+
+test('pending-write evidence remains bounded, label-only, and immutable after capture', () => {
+  resetFirestoreListenerMonitorForTests();
+  const routeToken = beginFirestoreRouteObservation('/leagues/:leagueId/players', 1_000);
+  const stops = [];
+
+  for (let index = 0; index < 40; index += 1) {
+    let observer = null;
+    const stop = monitorFirestoreListener(`fixture:listener-${index}`, (nextObserver) => {
+      observer = nextObserver;
+      return () => undefined;
+    });
+    observer.next({
+      size: 1,
+      metadata: { fromCache: true, hasPendingWrites: true },
+    });
+    stops.push(stop);
+  }
+
+  const route = completeFirestoreRouteObservation(routeToken, 'settled', 2_000);
+  assert.ok(route);
+  assert.equal(route.pendingWriteSnapshotCount, 40);
+  assert.equal(Object.keys(route.pendingWriteSnapshotCountByLabel).length, 32);
+  assert.equal(route.pendingWriteSnapshotCountByLabel['other-listener'], 9);
+  assert.equal(
+    Object.values(route.pendingWriteSnapshotCountByLabel).reduce((total, count) => total + count, 0),
+    40,
+  );
+
+  let laterObserver = null;
+  const stopLater = monitorFirestoreListener('fixture:later', (observer) => {
+    laterObserver = observer;
+    return () => undefined;
+  });
+  laterObserver.next({
+    exists: () => true,
+    metadata: { fromCache: false, hasPendingWrites: true },
+  });
+
+  assert.equal(
+    route.pendingWriteSnapshotCountByLabel['fixture:later'],
+    undefined,
+    'completed route evidence is not mutated by a later pending-write snapshot',
+  );
+
+  const session = getFirestoreListenerSnapshot().evidence;
+  session.pendingWriteSnapshotCountByLabel['fixture:listener-0'] = 999;
+  assert.equal(
+    getFirestoreListenerSnapshot().evidence.pendingWriteSnapshotCountByLabel['fixture:listener-0'],
+    1,
+    'debug snapshots do not expose the mutable session evidence object',
+  );
+
+  stopLater();
+  stops.forEach((stop) => stop());
 });
 
 test('route focus follows a replaced lazy-route heading without stealing manager focus', async () => {
@@ -221,6 +280,7 @@ test('route envelopes calculate bounded nearest-rank p50, p95, and max values', 
   assert.equal(envelope.maxAwaitingFirstSnapshots, 2);
   assert.equal(envelope.navigationCleanupCount, 2);
   assert.equal(envelope.reconnectSnapshotCount, 1);
+  assert.equal(envelope.pendingWriteSnapshotCount, 0);
 });
 
 test('all browser snapshot streams emit bounded metadata-only evidence', async () => {
@@ -276,6 +336,8 @@ test('all browser snapshot streams emit bounded metadata-only evidence', async (
   assert.match(performanceSource, /telemetry\.sanitizedRoute\(event\.url\)/);
   assert.match(performanceSource, /markFirestoreRouteNavigationSettled\(token, this\.latestRoute\)/);
   assert.match(performanceSource, /firestore_route_evidence/);
+  assert.match(performanceSource, /pending_write_snapshot: observation\.pendingWriteSnapshotCount/);
+  assert.doesNotMatch(performanceSource, /pending_write_snapshot_by_label/);
   assert.match(performanceSource, /Firestore route evidence\./);
   assert.match(healthSource, /markFirestoreListenersReconnecting\(\)/);
   assert.match(availabilitySource, /manualListenerRetryKey === listenerKey/);

@@ -268,6 +268,7 @@ export class ClientPerformanceMonitorService implements OnDestroy {
       reconnect_snapshot: observation.reconnectSnapshotCount,
       retry_listener: observation.retryListenersOpened,
       hidden_snapshot: observation.hiddenSnapshotCount,
+      pending_write_snapshot: observation.pendingWriteSnapshotCount,
       listener_error: observation.listenerErrorCount,
       listener_lifetime_max_ms: observation.maxClosedListenerLifetimeMilliseconds,
       awaiting_first_snapshot: observation.awaitingFirstSnapshotCount,
