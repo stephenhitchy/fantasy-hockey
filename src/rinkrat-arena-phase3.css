@@ -1439,7 +1439,7 @@ html[data-background-theme='light-ice'] app-free-agents .decision-asset-card :is
   app-league-standings .standings-header,
   app-point-leaders .point-leaders-header,
   app-playoff-bracket .playoff-hero {
-    padding: 24px 14px 16px 18px !important;
+    padding: 50px 14px 16px 18px !important;
   }
 
   app-team-settings .team-hero-card::before,

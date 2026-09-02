@@ -1,14 +1,17 @@
 :host {
+  display: block;
   position: relative;
   z-index: 1450;
+  min-height: 54px;
+  margin: 20px 0 0;
 }
 
 .coach-help-trigger {
-  position: fixed;
+  position: relative;
   z-index: 1450;
   right: auto;
   left: 20px;
-  bottom: 24px;
+  bottom: auto;
   display: flex;
   min-height: 54px;
   align-items: center;
@@ -213,7 +216,7 @@
   .coach-help-trigger {
     right: auto;
     left: max(10px, env(safe-area-inset-left));
-    bottom: calc(82px + env(safe-area-inset-bottom));
+    bottom: auto;
     min-height: 48px;
     padding: 5px;
   }
@@ -221,10 +224,6 @@
   .coach-trigger-avatar {
     width: 36px;
     height: 36px;
-  }
-
-  .coach-trigger-copy {
-    display: none;
   }
 
   .coach-help-backdrop {

@@ -61,7 +61,7 @@
 
 .public-site-footer a:hover,
 .public-site-footer a:focus-visible {
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   text-decoration: underline;
 }
 

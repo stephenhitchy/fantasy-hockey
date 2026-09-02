@@ -35,7 +35,7 @@
 .known-issues-link {
   display: inline-flex;
   margin-top: 14px;
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   font-weight: 900;
 }
 
@@ -230,7 +230,7 @@
 }
 
 .feedback-links a {
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   font-weight: 800;
 }
 

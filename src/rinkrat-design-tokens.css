@@ -144,6 +144,11 @@
   --rr-color-secondary: var(--user-team-secondary);
   --rr-color-on-secondary: var(--user-team-on-secondary);
   --rr-color-accent: var(--user-team-accent);
+  /* Readable actions must not inherit arbitrary NHL identity colors. */
+  --rr-color-link: var(--accent-cyan);
+  --rr-color-action-secondary: var(--rr-scoreboard-raised);
+  --rr-color-on-action-secondary: var(--rr-ice-white);
+  --rr-color-action-secondary-border: var(--border-strong);
   --rr-color-success: var(--rr-success);
   --rr-color-warning: var(--rr-warning);
   --rr-color-danger: var(--rr-danger);
@@ -357,4 +362,6 @@ html[data-background-theme='light-ice'] {
   --rr-phase3-board-raised: #203952;
   --rr-phase3-ice: #f7fafc;
   --rr-phase3-shadow: 6px 6px 0 rgba(73, 91, 111, 0.26);
+
+  --rr-color-link: var(--rr-scoreboard-raised);
 }

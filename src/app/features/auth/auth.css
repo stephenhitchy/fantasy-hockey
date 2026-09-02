@@ -781,7 +781,7 @@
 
 .auth-policy-links a:hover,
 .auth-policy-links a:focus-visible {
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   text-decoration: underline;
 }
 
