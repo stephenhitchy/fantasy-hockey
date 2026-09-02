@@ -7,6 +7,8 @@ import {
   alignHistoricalReplaySkaterData,
   alignHistoricalReplayTeamData,
   buildHistoricalReplaySkaterTimeline,
+  buildHistoricalReplaySkaterTimelineEntries,
+  normalizeHistoricalReplayAssetMap,
 } from '../../functions/src/shared/core/draft/historical-replay-player-data.util.ts';
 import {
   findPlayerNote,
@@ -69,6 +71,11 @@ const skaterGames = [
 ];
 
 test('replay skater timelines preserve source team games and trade segments', () => {
+  const timelineEntries = buildHistoricalReplaySkaterTimelineEntries(
+    skaterGames,
+    'CCC',
+    sourceSchedules,
+  );
   const timeline = buildHistoricalReplaySkaterTimeline(
     skaterGames,
     'CCC',
@@ -76,6 +83,54 @@ test('replay skater timelines preserve source team games and trade segments', ()
   );
 
   assert.deepEqual(timeline.map((entry) => entry.id), [101, 102, 103, 204, 205, 206]);
+  assert.deepEqual(
+    timelineEntries.map((entry) => entry.sourceTeamAbbreviation),
+    ['AAA', 'AAA', 'AAA', 'BBB', 'BBB', 'BBB'],
+  );
+});
+
+test('replay source maps reject legacy, mismatched, duplicate, and invalid asset evidence', () => {
+  const validMap = {
+    schemaVersion: 2,
+    assetKey: 'skater-7',
+    assetType: 'skater',
+    playerId: 7,
+    currentTeamAbbreviation: 'fla',
+    sourceSeason: '20252026',
+    sourceGameIds: [101, 102],
+    sourceGameDates: ['2025-10-01', '2025-10-03'],
+    sourceTeamAbbreviations: ['ott', 'OTT'],
+  };
+
+  assert.deepEqual(normalizeHistoricalReplayAssetMap(validMap), {
+    ...validMap,
+    currentTeamAbbreviation: 'FLA',
+    sourceTeamAbbreviations: ['OTT', 'OTT'],
+  });
+  assert.equal(
+    normalizeHistoricalReplayAssetMap({ ...validMap, schemaVersion: 1 }),
+    null,
+  );
+  assert.equal(
+    normalizeHistoricalReplayAssetMap({ ...validMap, sourceGameDates: ['2025-10-01'] }),
+    null,
+  );
+  assert.equal(
+    normalizeHistoricalReplayAssetMap({ ...validMap, sourceGameIds: [101, 101] }),
+    null,
+  );
+  assert.equal(
+    normalizeHistoricalReplayAssetMap({ ...validMap, playerId: null }),
+    null,
+  );
+  assert.equal(
+    normalizeHistoricalReplayAssetMap({
+      ...validMap,
+      assetType: 'team-goalie-unit',
+      playerId: 7,
+    }),
+    null,
+  );
 });
 
 test('replay alignment releases source stats by target date and retains future schedule markers', () => {

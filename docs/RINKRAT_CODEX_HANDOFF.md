@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-08-31
+Last updated: 2026-09-02
 
 ## Repository
 
@@ -65,6 +65,12 @@ RinkRat contains:
 - a legacy scoring path retained for rollback.
 
 The direct NHL path remains the proven fallback.
+
+The current D1L-B feature branch contains a replay-only correction for traded
+skaters: source-season games carry their historical team into final-input
+validation, missing source-team evidence fails closed, and legacy replay maps
+rebuild as validated schema-2 maps. This is not merged or deployed until its
+clean-commit staging proof passes. Live scoring behavior is unchanged.
 
 ## Current scoring-correction coverage
 
@@ -135,13 +141,14 @@ Do not increase concurrency based only on Historical Replay timing.
 
 ## Current priority order
 
-1. Verify and stabilize the current clean release.
-2. Collect live Canary scoring evidence.
-3. Build a detect-only finalized-score reconciler.
-4. Prove correction detection against archived and live NHL games.
-5. Add safe exact-once correction only after detection is trusted.
-6. Measure client listeners and route performance.
-7. Run staged load tests in a separate Firebase project.
+1. Review and prove the D1L-B replay source-team repair in the separate staging project.
+2. Finish authenticated D1N route, Draft-focus, cleanup, reconnect, multi-tab,
+   pending-write, and physical-device evidence.
+3. Run D1N-C load ramps only in staging at 100, 500, 2,000, and 5,000 operations.
+4. Review and stage commissioner member removal as its own Functions-plus-Hosting release.
+5. Review and stage the detect-only finalized-score reconciler separately.
+6. Prove correction detection against archived and live NHL games.
+7. Add safe exact-once correction only after detection is trusted.
 8. Increase worker concurrency only from measured evidence.
 
 ## Required update policy

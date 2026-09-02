@@ -594,6 +594,7 @@ export async function syncPlayoffWindowBankScores(input: {
   assignedPicks?: DraftPick[];
   assignedScoring?: CycleScoringResult | null;
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>;
+  replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>;
   gameLogSeason?: string;
 }): Promise<FantasyPlayoffWindowBank[]> {
   const banks = await getAllPlayoffWindowBanks(input.leagueId, input.playoffs);
@@ -628,6 +629,8 @@ export async function syncPlayoffWindowBankScores(input: {
       expectedRosterSlotIdsByOwner,
       previousResult,
       replayGamesByAssetKey: input.replayGamesByAssetKey,
+      replaySourceTeamAbbreviationByAssetGameId:
+        input.replaySourceTeamAbbreviationByAssetGameId,
       gameLogSeason: input.gameLogSeason,
     });
 

@@ -124,6 +124,39 @@ function validBoxscore({ appeared = true, skaterOverrides = {} } = {}) {
   };
 }
 
+function validHistoricalTradeBoxscore({ appeared = true } = {}) {
+  return {
+    homeTeam: { abbrev: 'OTT', score: 3 },
+    awayTeam: { abbrev: 'FLA', score: 2 },
+    playerByGameStats: {
+      homeTeam: {
+        forwards: appeared
+          ? [validSkaterLine(7, { goals: 1, points: 1, sog: 2 })]
+          : [],
+        defense: [],
+        goalies: [validGoalieLine(70, { goalsAgainst: 2, saves: 28 })],
+      },
+      awayTeam: {
+        forwards: [validSkaterLine(9)],
+        defense: [],
+        goalies: [validGoalieLine(90, { goalsAgainst: 3, saves: 27 })],
+      },
+    },
+  };
+}
+
+function historicalTradeReplayGame() {
+  return {
+    id: 1,
+    gameDate: '2026-10-01',
+    startTimeUTC: '2026-10-01T23:00:00Z',
+    gameType: 2,
+    gameState: 'FINAL',
+    homeTeam: { abbrev: 'FLA', score: 2 },
+    awayTeam: { abbrev: 'TBL', score: 1 },
+  };
+}
+
 function validPlayByPlay() {
   return {
     plays: [{
@@ -482,6 +515,110 @@ test('the real scorer settles a proven nonappearance as a reusable zero', async 
   assert.equal(window.actualGamesPlayed, 0);
   assert.equal(window.gameScores['1'], 0);
   assert.deepEqual(window.appearanceGameIds, []);
+  assert.equal(window.gameInputCompleteness['1'].complete, true);
+  assert.equal(window.gameInputCompleteness['1'].reusableFinal, true);
+});
+
+test('historical replay validates a traded skater against the source-season team and retries exactly once', async (t) => {
+  const tradedAsset = {
+    ...skaterAsset,
+    player: {
+      ...skaterAsset.player,
+      nhlTeamAbbreviation: 'FLA',
+    },
+  };
+  const replayGamesByAssetKey = {
+    [tradedAsset.assetKey]: [historicalTradeReplayGame()],
+  };
+  const mocks = mockDirectNhlSources(t, {
+    boxscoreByGameId: new Map([[1, validHistoricalTradeBoxscore()]]),
+    gameLog: [validPlayerLogEntry(1, {
+      teamAbbrev: 'OTT',
+      goals: 1,
+      points: 1,
+      shots: 2,
+      opponentAbbrev: 'FLA',
+    })],
+  });
+
+  const missingSourceTeam = await calculateTestCycle({
+    picks: [scoringPick(tradedAsset)],
+    replayGamesByAssetKey,
+    gameLogSeason: '20252026',
+  });
+  const incompleteWindow = missingSourceTeam.windowScores['owner-a__C-1__cycle-1'];
+
+  assert.equal(incompleteWindow.gamesPlayed, 0);
+  assert.deepEqual(incompleteWindow.incompleteFinalGameIds, [1]);
+  assert.equal(incompleteWindow.gameScores['1'], undefined);
+  assert.match(
+    incompleteWindow.gameInputCompleteness['1'].failures[0].detail,
+    /source-team identity is unavailable/i,
+  );
+
+  const recovered = await calculateTestCycle({
+    picks: [scoringPick(tradedAsset)],
+    replayGamesByAssetKey,
+    replaySourceTeamAbbreviationByAssetGameId: {
+      [tradedAsset.assetKey]: { 1: 'OTT' },
+    },
+    gameLogSeason: '20252026',
+    previousResult: missingSourceTeam,
+  });
+  const recoveredWindow = recovered.windowScores['owner-a__C-1__cycle-1'];
+  const boxscoreCallsAfterRecovery = mocks.boxscoreMock.mock.callCount();
+
+  assert.equal(recoveredWindow.gamesPlayed, 1);
+  assert.equal(recoveredWindow.actualGamesPlayed, 1);
+  assert.ok(recoveredWindow.currentScore > 0);
+  assert.deepEqual(recoveredWindow.completedGameIds, [1]);
+  assert.deepEqual(recoveredWindow.incompleteFinalGameIds, []);
+  assert.equal(recoveredWindow.gameInputCompleteness['1'].complete, true);
+
+  const duplicateRetry = await calculateTestCycle({
+    picks: [scoringPick(tradedAsset)],
+    replayGamesByAssetKey,
+    replaySourceTeamAbbreviationByAssetGameId: {
+      [tradedAsset.assetKey]: { 1: 'OTT' },
+    },
+    gameLogSeason: '20252026',
+    previousResult: recovered,
+  });
+  const duplicateWindow = duplicateRetry.windowScores['owner-a__C-1__cycle-1'];
+
+  assert.equal(mocks.boxscoreMock.mock.callCount(), boxscoreCallsAfterRecovery);
+  assert.equal(duplicateWindow.currentScore, recoveredWindow.currentScore);
+  assert.deepEqual(duplicateWindow.completedGameIds, [1]);
+});
+
+test('historical replay preserves a proven source-team nonappearance as a reusable zero', async (t) => {
+  const tradedAsset = {
+    ...skaterAsset,
+    player: {
+      ...skaterAsset.player,
+      nhlTeamAbbreviation: 'FLA',
+    },
+  };
+  mockDirectNhlSources(t, {
+    boxscoreByGameId: new Map([[1, validHistoricalTradeBoxscore({ appeared: false })]]),
+    gameLog: [],
+  });
+
+  const result = await calculateTestCycle({
+    picks: [scoringPick(tradedAsset)],
+    replayGamesByAssetKey: {
+      [tradedAsset.assetKey]: [historicalTradeReplayGame()],
+    },
+    replaySourceTeamAbbreviationByAssetGameId: {
+      [tradedAsset.assetKey]: { 1: 'OTT' },
+    },
+    gameLogSeason: '20252026',
+  });
+  const window = result.windowScores['owner-a__C-1__cycle-1'];
+
+  assert.equal(window.gamesPlayed, 1);
+  assert.equal(window.actualGamesPlayed, 0);
+  assert.equal(window.gameScores['1'], 0);
   assert.equal(window.gameInputCompleteness['1'].complete, true);
   assert.equal(window.gameInputCompleteness['1'].reusableFinal, true);
 });
@@ -1203,6 +1340,22 @@ test('the scorer retains settled failures and gates final reuse on complete evid
   assert.match(scorer, /incompleteFinalGameIds\.push\(game\.id\)/);
   assert.match(scorer, /if \(!completeness\.complete\)/);
   assert.match(scorer, /continue;\s*}\s*gameInputCompleteness\[gameIdKey\] = completeness/s);
+});
+
+test('replay source-team evidence is wired through regular and playoff scoring paths', async () => {
+  const [automation, scorer, playoffWindows] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read('functions/src/shared/core/cycle/cycle-scoring.service.ts'),
+    read('functions/src/shared/core/playoffs/playoff-window-bank.service.ts'),
+  ]);
+
+  assert.match(automation, /schemaVersion:\s*2/);
+  assert.match(automation, /normalizeHistoricalReplayAssetMap/);
+  assert.match(automation, /sourceTeamAbbreviationByAssetGameId/);
+  assert.match(automation, /replaySourceTeamAbbreviationByAssetGameId/);
+  assert.match(scorer, /requireSourceTeamAbbreviation:\s*Boolean\(input\.replayGamesByAssetKey\)/);
+  assert.match(scorer, /Historical replay source-team identity is unavailable/);
+  assert.match(playoffWindows, /replaySourceTeamAbbreviationByAssetGameId/);
 });
 
 test('canonical writes and durable work share a transaction and exact version identity', async () => {

@@ -144,6 +144,13 @@ export interface CalculateCycleScoringInput {
    */
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>;
 
+  /**
+   * Replay-only source-team identity for each mapped source game. Historical
+   * boxscores must be validated against the team the player belonged to in
+   * the source season, never the target-season team used for replay dates.
+   */
+  replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>;
+
   /** Source season used for historical player game logs during replay. */
   gameLogSeason?: string;
 
@@ -582,17 +589,30 @@ function getFinalGameInputCompleteness(input: {
   gameId: number;
   gameData: ScoringGameData | undefined;
   playerLogLoad: SkaterGameLogLoad | undefined;
+  sourceTeamAbbreviation?: string;
+  requireSourceTeamAbbreviation?: boolean;
 }): NhlFinalInputCompleteness {
   let boxscoreState = input.gameData?.boxscoreState ?? {
     availability: 'temporarily-unavailable' as const,
     detail: 'NHL boxscore result was omitted from the scoring batch.',
   };
-  const assetTeamAbbreviation = getAssetTeamAbbreviation(input.asset)
-    .trim()
+  const replaySourceTeamAbbreviation = input.sourceTeamAbbreviation
+    ?.trim()
     .toUpperCase();
+  const validReplaySourceTeamAbbreviation =
+    replaySourceTeamAbbreviation && /^[A-Z0-9]{2,4}$/.test(replaySourceTeamAbbreviation)
+      ? replaySourceTeamAbbreviation
+      : null;
+  const assetTeamAbbreviation = validReplaySourceTeamAbbreviation ??
+    getAssetTeamAbbreviation(input.asset).trim().toUpperCase();
   const boxscore = input.gameData?.boxscore;
 
-  if (boxscoreState.availability === 'available' && boxscore) {
+  if (input.requireSourceTeamAbbreviation && !validReplaySourceTeamAbbreviation) {
+    boxscoreState = {
+      availability: 'temporarily-unavailable',
+      detail: 'Historical replay source-team identity is unavailable for this final game.',
+    };
+  } else if (boxscoreState.availability === 'available' && boxscore) {
     boxscoreState = input.asset.assetType === 'skater'
       ? validateNhlFinalSkaterBoxscore({
           boxscore,
@@ -1133,6 +1153,11 @@ export async function calculateCycleScoring(
           gameId: game.id,
           gameData,
           playerLogLoad,
+          sourceTeamAbbreviation:
+            input.replaySourceTeamAbbreviationByAssetGameId
+              ?.[pick.asset.assetKey]
+              ?.[gameIdKey],
+          requireSourceTeamAbbreviation: Boolean(input.replayGamesByAssetKey),
         });
 
         if (!completeness.complete) {

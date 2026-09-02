@@ -69,6 +69,11 @@ import {
 import { syncCycleTeamWindows } from './shared/core/cycle/asset-cycle-window.service';
 import { FantasyCycle } from './shared/core/cycle/cycle.models';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
+import {
+  buildHistoricalReplaySkaterTimelineEntries,
+  HistoricalReplayAssetMap,
+  normalizeHistoricalReplayAssetMap,
+} from './shared/core/draft/historical-replay-player-data.util';
 import { SharedCycleScoringSnapshot } from './shared/core/live-scoring/live-scoring.models';
 import {
   decideCanonicalRequestCompletion,
@@ -541,18 +546,10 @@ interface CanonicalScoringAuthorityEligibility {
   reason: string;
 }
 
-interface HistoricalReplayAssetMap {
-  assetKey: string;
-  assetType: 'skater' | 'team-goalie-unit';
-  sourceSeason: string;
-  sourceGameIds: number[];
-  sourceGameDates: string[];
-  sourceTeamAbbreviations: string[];
-}
-
 interface ReplayRunContext {
   control: HistoricalReplayControl;
   gamesByAssetKey: Record<string, NhlTeamSeasonGame[]>;
+  sourceTeamAbbreviationByAssetGameId: Record<string, Record<string, string>>;
   snapshotSeason: string;
 }
 
@@ -3695,49 +3692,6 @@ function getAssetTeamAbbreviation(asset: DraftableAsset): string {
     : asset.teamAbbreviation;
 }
 
-function normalizeReplayAssetMap(
-  value: DocumentData | undefined,
-): HistoricalReplayAssetMap | null {
-  if (
-    !value ||
-    typeof value['assetKey'] !== 'string' ||
-    !Array.isArray(value['sourceGameIds'])
-  ) {
-    return null;
-  }
-
-  const sourceGameIds = value['sourceGameIds'].filter(
-    (entry: unknown): entry is number => typeof entry === 'number' && Number.isFinite(entry),
-  );
-
-  if (sourceGameIds.length === 0) {
-    return null;
-  }
-
-  return {
-    assetKey: value['assetKey'],
-    assetType:
-      value['assetType'] === 'team-goalie-unit'
-        ? 'team-goalie-unit'
-        : 'skater',
-    sourceSeason:
-      typeof value['sourceSeason'] === 'string'
-        ? value['sourceSeason']
-        : HISTORICAL_REPLAY_SOURCE_SEASON,
-    sourceGameIds,
-    sourceGameDates: Array.isArray(value['sourceGameDates'])
-      ? value['sourceGameDates'].filter(
-          (entry: unknown): entry is string => typeof entry === 'string',
-        )
-      : [],
-    sourceTeamAbbreviations: Array.isArray(value['sourceTeamAbbreviations'])
-      ? value['sourceTeamAbbreviations'].filter(
-          (entry: unknown): entry is string => typeof entry === 'string',
-        )
-      : [],
-  };
-}
-
 async function buildHistoricalSkaterTimeline(
   asset: DraftableAsset,
   sourceSeason: string,
@@ -3772,76 +3726,26 @@ async function buildHistoricalSkaterTimeline(
     schedules.set(team, await getNhlTeamSeasonSchedule(team, sourceSeason));
   }
 
-  const segments: Array<{ team: string; startDate: string | null }> = [];
-
-  for (const game of gameLogs) {
-    const team = game.teamAbbrev?.toUpperCase();
-
-    if (!team || segments.at(-1)?.team === team) {
-      continue;
-    }
-
-    segments.push({
-      team,
-      startDate: segments.length === 0 ? null : game.gameDate,
-    });
-  }
-
-  if (segments.length === 0) {
-    segments.push({
-      team: historicalTeams[0],
-      startDate: null,
-    });
-  }
-
-  const timeline: NhlTeamSeasonGame[] = [];
-  const seenGameIds = new Set<number>();
-
-  segments.forEach((segment, index) => {
-    const nextStartDate = segments[index + 1]?.startDate ?? null;
-    const schedule = schedules.get(segment.team) ?? [];
-
-    for (const game of schedule) {
-      const afterSegmentStart = !segment.startDate || game.gameDate >= segment.startDate;
-      const beforeNextSegment = !nextStartDate || game.gameDate < nextStartDate;
-
-      if (afterSegmentStart && beforeNextSegment && !seenGameIds.has(game.id)) {
-        seenGameIds.add(game.id);
-        timeline.push(game);
-      }
-    }
-  });
-
-  timeline.sort((first, second) => first.gameDate.localeCompare(second.gameDate));
-
-  // If transaction timing produces a short timeline, retain every historical
-  // appearance as a deterministic fallback instead of inventing statistics.
-  for (const log of gameLogs) {
-    if (!seenGameIds.has(log.gameId)) {
-      seenGameIds.add(log.gameId);
-      timeline.push({
-        id: log.gameId,
-        gameDate: log.gameDate,
-        gameType: 2,
-        gameState: 'FINAL',
-        homeTeam: { abbrev: log.homeRoadFlag === 'H' ? log.teamAbbrev : log.opponentAbbrev },
-        awayTeam: { abbrev: log.homeRoadFlag === 'R' ? log.teamAbbrev : log.opponentAbbrev },
-      });
-    }
-  }
-
-  timeline.sort((first, second) => first.gameDate.localeCompare(second.gameDate));
+  const timeline = buildHistoricalReplaySkaterTimelineEntries(
+    gameLogs.map((game) => ({
+      gameId: game.gameId,
+      gameDate: game.gameDate,
+      teamAbbreviation: game.teamAbbrev,
+    })),
+    asset.player.nhlTeamAbbreviation,
+    schedules,
+  );
 
   return {
+    schemaVersion: 2,
     assetKey: asset.assetKey,
     assetType: 'skater',
+    playerId: asset.player.id,
+    currentTeamAbbreviation: getAssetTeamAbbreviation(asset).trim().toUpperCase(),
     sourceSeason,
-    sourceGameIds: timeline.map((game) => game.id).slice(0, 82),
-    sourceGameDates: timeline.map((game) => game.gameDate).slice(0, 82),
-    sourceTeamAbbreviations: timeline.map((game) => {
-      const matchingLog = gameLogs.find((entry) => entry.gameId === game.id);
-      return matchingLog?.teamAbbrev?.toUpperCase() ?? historicalTeams[0];
-    }).slice(0, 82),
+    sourceGameIds: timeline.map((entry) => entry.game.id),
+    sourceGameDates: timeline.map((entry) => entry.game.gameDate),
+    sourceTeamAbbreviations: timeline.map((entry) => entry.sourceTeamAbbreviation),
   };
 }
 
@@ -3852,9 +3756,18 @@ async function buildHistoricalReplayAssetMap(
 ): Promise<HistoricalReplayAssetMap> {
   const reference = getHistoricalReplayAssetRef(leagueId, asset.assetKey);
   const snapshot = await reference.get();
-  const existing = normalizeReplayAssetMap(snapshot.data());
+  const existing = normalizeHistoricalReplayAssetMap(snapshot.data());
+  const assetType = asset.assetType;
+  const playerId = asset.assetType === 'skater' ? asset.player.id : null;
+  const currentTeamAbbreviation = getAssetTeamAbbreviation(asset).trim().toUpperCase();
 
-  if (existing?.sourceSeason === sourceSeason) {
+  if (
+    existing?.sourceSeason === sourceSeason &&
+    existing.assetKey === asset.assetKey &&
+    existing.assetType === assetType &&
+    existing.playerId === playerId &&
+    existing.currentTeamAbbreviation === currentTeamAbbreviation
+  ) {
     return existing;
   }
 
@@ -3867,12 +3780,15 @@ async function buildHistoricalReplayAssetMap(
     );
 
     mapping = {
+      schemaVersion: 2,
       assetKey: asset.assetKey,
       assetType: 'team-goalie-unit',
+      playerId: null,
+      currentTeamAbbreviation,
       sourceSeason,
       sourceGameIds: schedule.map((game) => game.id),
       sourceGameDates: schedule.map((game) => game.gameDate),
-      sourceTeamAbbreviations: schedule.map(() => asset.teamAbbreviation),
+      sourceTeamAbbreviations: schedule.map(() => currentTeamAbbreviation),
     };
   } else {
     mapping = await buildHistoricalSkaterTimeline(asset, sourceSeason);
@@ -3881,9 +3797,6 @@ async function buildHistoricalReplayAssetMap(
   await reference.set(
     {
       ...mapping,
-      schemaVersion: 1,
-      playerId: asset.assetType === 'skater' ? asset.player.id : null,
-      currentTeamAbbreviation: getAssetTeamAbbreviation(asset),
       createdAt: snapshot.exists
         ? snapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
         : FieldValue.serverTimestamp(),
@@ -3899,7 +3812,7 @@ async function buildReplayGamesByAssetKey(
   leagueId: string,
   picks: DraftPick[],
   control: HistoricalReplayControl,
-): Promise<Record<string, NhlTeamSeasonGame[]>> {
+): Promise<Pick<ReplayRunContext, 'gamesByAssetKey' | 'sourceTeamAbbreviationByAssetGameId'>> {
   const uniqueAssets = new Map<string, DraftableAsset>();
 
   for (const pick of picks) {
@@ -3938,7 +3851,8 @@ async function buildReplayGamesByAssetKey(
     });
   }
 
-  const result: Record<string, NhlTeamSeasonGame[]> = {};
+  const gamesByAssetKey: Record<string, NhlTeamSeasonGame[]> = {};
+  const sourceTeamAbbreviationByAssetGameId: Record<string, Record<string, string>> = {};
 
   for (const asset of assets) {
     const targetTeam = getAssetTeamAbbreviation(asset).toUpperCase();
@@ -3949,15 +3863,18 @@ async function buildReplayGamesByAssetKey(
       continue;
     }
 
-    result[asset.assetKey] = targetSchedule
+    const sourceTeamByGameId: Record<string, string> = {};
+    gamesByAssetKey[asset.assetKey] = targetSchedule
       .map((targetGame, index): NhlTeamSeasonGame | null => {
         const sourceGameId = mapping.sourceGameIds[index];
+        const sourceTeamAbbreviation = mapping.sourceTeamAbbreviations[index];
 
-        if (!sourceGameId) {
+        if (!sourceGameId || !sourceTeamAbbreviation) {
           return null;
         }
 
         const released = targetGame.gameDate <= (control.simulatedDate ?? '0000-00-00');
+        sourceTeamByGameId[String(sourceGameId)] = sourceTeamAbbreviation;
 
         return {
           ...targetGame,
@@ -3972,9 +3889,13 @@ async function buildReplayGamesByAssetKey(
         };
       })
       .filter((game): game is NhlTeamSeasonGame => Boolean(game));
+    sourceTeamAbbreviationByAssetGameId[asset.assetKey] = sourceTeamByGameId;
   }
 
-  return result;
+  return {
+    gamesByAssetKey,
+    sourceTeamAbbreviationByAssetGameId,
+  };
 }
 
 async function buildReplayRunContext(
@@ -3982,9 +3903,11 @@ async function buildReplayRunContext(
   picks: DraftPick[],
   control: HistoricalReplayControl,
 ): Promise<ReplayRunContext> {
+  const scoringMaps = await buildReplayGamesByAssetKey(leagueId, picks, control);
+
   return {
     control,
-    gamesByAssetKey: await buildReplayGamesByAssetKey(leagueId, picks, control),
+    ...scoringMaps,
     snapshotSeason: `replay-${control.targetSeason}-from-${control.sourceSeason}`,
   };
 }
@@ -4495,6 +4418,7 @@ async function persistServerScoring(
   season: string,
   scoringRules: ScoringRules,
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
+  replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>,
   gameLogSeason?: string,
   projectionRefreshPolicy: 'refresh-if-needed' | 'saved-only' = 'refresh-if-needed',
 ): Promise<boolean> {
@@ -4565,6 +4489,7 @@ async function persistServerScoring(
       assignedPicks: picks,
       assignedScoring: result,
       replayGamesByAssetKey,
+      replaySourceTeamAbbreviationByAssetGameId,
       gameLogSeason,
     });
 
@@ -5010,6 +4935,8 @@ async function runLeagueAutomation(
               ? previous.result
               : null,
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
+          replaySourceTeamAbbreviationByAssetGameId:
+            replayContext?.sourceTeamAbbreviationByAssetGameId,
           gameLogSeason: replayControl?.sourceSeason,
           nhlRefreshProfile: refreshCadence,
           onPhaseDuration: (phase, durationMilliseconds) => {
@@ -5070,6 +4997,7 @@ async function runLeagueAutomation(
             dataSeason,
             scoringRules,
             replayContext?.gamesByAssetKey,
+            replayContext?.sourceTeamAbbreviationByAssetGameId,
             replayControl?.sourceSeason,
             projectionRefreshPolicy,
           ),

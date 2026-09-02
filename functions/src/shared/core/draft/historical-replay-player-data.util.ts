@@ -17,6 +17,23 @@ export interface HistoricalReplayAlignedTeamData<T extends { gameId: number; gam
   schedule: NhlTeamSeasonGame[];
 }
 
+export interface HistoricalReplaySkaterTimelineEntry {
+  game: NhlTeamSeasonGame;
+  sourceTeamAbbreviation: string;
+}
+
+export interface HistoricalReplayAssetMap {
+  schemaVersion: 2;
+  assetKey: string;
+  assetType: 'skater' | 'team-goalie-unit';
+  playerId: number | null;
+  currentTeamAbbreviation: string;
+  sourceSeason: string;
+  sourceGameIds: number[];
+  sourceGameDates: string[];
+  sourceTeamAbbreviations: string[];
+}
+
 function normalizeTeamAbbreviation(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -24,6 +41,68 @@ function normalizeTeamAbbreviation(value: unknown): string | null {
 
   const normalized = value.trim().toUpperCase();
   return /^[A-Z0-9]{2,4}$/.test(normalized) ? normalized : null;
+}
+
+export function normalizeHistoricalReplayAssetMap(
+  value: Record<string, unknown> | undefined,
+): HistoricalReplayAssetMap | null {
+  const assetType = value?.['assetType'];
+  const playerId = value?.['playerId'];
+  const currentTeamAbbreviation = normalizeTeamAbbreviation(
+    value?.['currentTeamAbbreviation'],
+  );
+
+  if (
+    !value ||
+    value['schemaVersion'] !== 2 ||
+    typeof value['assetKey'] !== 'string' ||
+    value['assetKey'].trim().length === 0 ||
+    (assetType !== 'skater' && assetType !== 'team-goalie-unit') ||
+    (assetType === 'skater' && (!Number.isInteger(playerId) || Number(playerId) <= 0)) ||
+    (assetType === 'team-goalie-unit' && playerId !== null) ||
+    !currentTeamAbbreviation ||
+    typeof value['sourceSeason'] !== 'string' ||
+    !/^\d{8}$/.test(value['sourceSeason']) ||
+    !Array.isArray(value['sourceGameIds']) ||
+    !Array.isArray(value['sourceGameDates']) ||
+    !Array.isArray(value['sourceTeamAbbreviations'])
+  ) {
+    return null;
+  }
+
+  const sourceGameIds = value['sourceGameIds'];
+  const sourceGameDates = value['sourceGameDates'];
+  const sourceTeamAbbreviations = value['sourceTeamAbbreviations'];
+  const normalizedSourceTeams = sourceTeamAbbreviations.map(normalizeTeamAbbreviation);
+
+  if (
+    sourceGameIds.length === 0 ||
+    sourceGameIds.length > 82 ||
+    sourceGameIds.length !== sourceGameDates.length ||
+    sourceGameIds.length !== sourceTeamAbbreviations.length ||
+    !sourceGameIds.every(
+      (entry: unknown) => Number.isInteger(entry) && Number(entry) > 0,
+    ) ||
+    !sourceGameDates.every(
+      (entry: unknown) => typeof entry === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry),
+    ) ||
+    normalizedSourceTeams.some((entry) => !entry) ||
+    new Set(sourceGameIds).size !== sourceGameIds.length
+  ) {
+    return null;
+  }
+
+  return {
+    schemaVersion: 2,
+    assetKey: value['assetKey'].trim(),
+    assetType,
+    playerId: playerId as number | null,
+    currentTeamAbbreviation,
+    sourceSeason: value['sourceSeason'],
+    sourceGameIds: [...sourceGameIds] as number[],
+    sourceGameDates: [...sourceGameDates] as string[],
+    sourceTeamAbbreviations: normalizedSourceTeams as string[],
+  };
 }
 
 function regularSeasonSchedule(
@@ -62,11 +141,13 @@ function createReplayScheduleGame(
  * including trade segments. Source game statistics exist only for appearances;
  * the team schedules fill the missed games needed by the six-game markers.
  */
-export function buildHistoricalReplaySkaterTimeline<T extends HistoricalReplaySkaterGameRow>(
+export function buildHistoricalReplaySkaterTimelineEntries<
+  T extends HistoricalReplaySkaterGameRow,
+>(
   games: readonly T[],
   fallbackTeamAbbreviation: string,
   sourceSchedules: ReadonlyMap<string, readonly NhlTeamSeasonGame[]>,
-): NhlTeamSeasonGame[] {
+): HistoricalReplaySkaterTimelineEntry[] {
   const sortedAppearances = games
     .filter((game) => game.gameId > 0 && Boolean(game.gameDate))
     .slice()
@@ -111,7 +192,7 @@ export function buildHistoricalReplaySkaterTimeline<T extends HistoricalReplaySk
     segments.push({ team: fallbackTeam, startDate: null });
   }
 
-  const timeline: NhlTeamSeasonGame[] = [];
+  const timeline: HistoricalReplaySkaterTimelineEntry[] = [];
   const seenGameIds = new Set<number>();
 
   segments.forEach((segment, index) => {
@@ -124,7 +205,10 @@ export function buildHistoricalReplaySkaterTimeline<T extends HistoricalReplaySk
 
       if (afterSegmentStart && beforeNextSegment && !seenGameIds.has(game.id)) {
         seenGameIds.add(game.id);
-        timeline.push(game);
+        timeline.push({
+          game,
+          sourceTeamAbbreviation: segment.team,
+        });
       }
     }
   });
@@ -138,22 +222,45 @@ export function buildHistoricalReplaySkaterTimeline<T extends HistoricalReplaySk
     const team = normalizeTeamAbbreviation(game.teamAbbreviation) ??
       teamBySourceGameId.get(game.gameId) ??
       fallbackTeam;
+
+    if (!team) {
+      continue;
+    }
+
     seenGameIds.add(game.gameId);
     timeline.push({
-      id: game.gameId,
-      gameDate: game.gameDate,
-      gameType: 2,
-      gameState: 'FINAL',
-      homeTeam: { abbrev: team },
-      awayTeam: { abbrev: '' },
+      game: {
+        id: game.gameId,
+        gameDate: game.gameDate,
+        gameType: 2,
+        gameState: 'FINAL',
+        homeTeam: { abbrev: team },
+        awayTeam: { abbrev: '' },
+      },
+      sourceTeamAbbreviation: team,
     });
   }
 
   return timeline
     .sort((left, right) =>
-      left.gameDate.localeCompare(right.gameDate) || left.id - right.id,
+      left.game.gameDate.localeCompare(right.game.gameDate) ||
+      left.game.id - right.game.id,
     )
     .slice(0, 82);
+}
+
+export function buildHistoricalReplaySkaterTimeline<
+  T extends HistoricalReplaySkaterGameRow,
+>(
+  games: readonly T[],
+  fallbackTeamAbbreviation: string,
+  sourceSchedules: ReadonlyMap<string, readonly NhlTeamSeasonGame[]>,
+): NhlTeamSeasonGame[] {
+  return buildHistoricalReplaySkaterTimelineEntries(
+    games,
+    fallbackTeamAbbreviation,
+    sourceSchedules,
+  ).map((entry) => entry.game);
 }
 
 export function alignHistoricalReplaySkaterData<T extends HistoricalReplaySkaterGameRow>(
