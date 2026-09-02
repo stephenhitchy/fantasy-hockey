@@ -2686,3 +2686,22 @@
   }
 }
 
+@media (max-width: 390px) {
+  .g .mobile-matchup-scorebar {
+    grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+  }
+
+  .g .mobile-score-team > strong {
+    line-height: 1.1;
+  }
+}
+
+@media (max-width: 340px) {
+  .g .mobile-score-team app-manager-avatar {
+    display: none;
+  }
+
+  .g .mobile-score-team .manager-name-with-avatar {
+    gap: 0;
+  }
+}

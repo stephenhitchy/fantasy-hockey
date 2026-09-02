@@ -53,6 +53,6 @@
 }
 
 .legal-card a {
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   font-weight: 800;
 }

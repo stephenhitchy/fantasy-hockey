@@ -125,9 +125,9 @@
 }
 
 .rr-button--secondary {
-  --rr-button-background: var(--rr-color-secondary);
-  --rr-button-color: var(--rr-color-on-secondary);
-  --rr-button-border: color-mix(in srgb, var(--rr-color-secondary) 62%, var(--rr-ice-white));
+  --rr-button-background: var(--rr-color-action-secondary);
+  --rr-button-color: var(--rr-color-on-action-secondary);
+  --rr-button-border: var(--rr-color-action-secondary-border);
 }
 
 .rr-button--danger {

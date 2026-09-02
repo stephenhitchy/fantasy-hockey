@@ -1859,8 +1859,7 @@ body .draft-room-page :where(
   .queue-copy strong,
   .roster-progress-row strong,
   .upcoming-row strong,
-  .recent-pick-row strong,
-  .turn-clock-summary strong
+  .recent-pick-row strong
 ) {
   color: var(--text-primary) !important;
 }
@@ -1907,6 +1906,10 @@ body .draft-room-page :where(
   border-color: var(--border-soft) !important;
   background: var(--surface-2) !important;
   color: var(--text-primary) !important;
+}
+
+body .draft-room-page .turn-clock-summary:not(.turn-clock-urgent) strong {
+  color: var(--text-primary);
 }
 
 body .draft-room-page .draft-pick-track-item {
@@ -1970,27 +1973,6 @@ body .draft-room-page .draft-roster-needs :where(
   .draft-roster-need strong
 ) {
   color: #f4f7fb !important;
-}
-
-body .draft-room-page .draft-clock-bar:is(.clock-urgent, .clock-paused, .clock-stopped) :where(
-  .draft-clock-team strong,
-  .draft-clock-time strong
-) {
-  color: #172a42 !important;
-}
-
-body .draft-room-page .draft-clock-bar:is(.clock-urgent, .clock-paused, .clock-stopped) :where(
-  .draft-clock-team span,
-  .draft-clock-time span,
-  .draft-clock-time small,
-  .draft-clock-controls > span
-) {
-  color: #61758b !important;
-}
-
-body .draft-room-page .draft-clock-bar.clock-urgent .draft-clock-time strong,
-body .draft-room-page .turn-clock-summary.turn-clock-urgent strong {
-  color: #a62626 !important;
 }
 
 body .draft-room-page .draft-pick-track {

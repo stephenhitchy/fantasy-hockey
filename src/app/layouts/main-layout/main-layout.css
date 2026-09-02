@@ -252,7 +252,7 @@
 
 .site-footer a:hover,
 .site-footer a:focus-visible {
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   text-decoration: underline;
 }
 
@@ -432,4 +432,3 @@
   font-size: var(--rr-font-size-sm);
   font-weight: 800;
 }
-

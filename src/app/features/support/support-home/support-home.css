@@ -69,8 +69,12 @@
 .support-grid a {
   display: inline-block;
   margin-top: 10px;
-  color: var(--user-team-secondary);
+  color: var(--rr-color-link);
   font-weight: 900;
+}
+
+.support-grid a + a {
+  margin-left: var(--rr-space-3);
 }
 
 .support-checklist {
