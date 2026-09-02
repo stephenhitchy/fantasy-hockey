@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
@@ -94,6 +95,32 @@ function requireObject(value, label) {
 function requireArray(value, label) {
   assert.ok(Array.isArray(value), `${label} is missing.`);
   return value;
+}
+
+function fingerprintDigest(value, label) {
+  assert.equal(typeof value, 'string', `${label} is missing.`);
+  assert.ok(value.length > 0, `${label} is empty.`);
+  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+}
+
+export function buildPublicReplayEvidence(evidence) {
+  const {
+    scoringFingerprint,
+    dataFingerprint,
+    ...boundedEvidence
+  } = evidence;
+
+  return {
+    ...boundedEvidence,
+    scoringFingerprintDigest: fingerprintDigest(
+      scoringFingerprint,
+      'Scoring fingerprint',
+    ),
+    dataFingerprintDigest: fingerprintDigest(
+      dataFingerprint,
+      'Data fingerprint',
+    ),
+  };
 }
 
 function buildReplayEvidence({ requestId, requestData, control, assetMap, snapshot }) {
@@ -315,7 +342,7 @@ export async function runD1lReplayStagingEvidence(environment = process.env) {
       projectId: D1L_REPLAY_STAGING_PROJECT_ID,
       leagueLabel: 'd1l-replay-source-team-fixture',
       duplicateDeliveryStable: true,
-      ...evidence,
+      ...buildPublicReplayEvidence(evidence),
     };
   } finally {
     await signOut(getAuth(clientApp)).catch(() => undefined);

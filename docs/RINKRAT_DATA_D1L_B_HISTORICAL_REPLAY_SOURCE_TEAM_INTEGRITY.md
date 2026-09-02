@@ -138,7 +138,8 @@ The runner signs in only as that synthetic account, submits one deterministic re
 server-owned request to complete, verifies the schema-2 map and scoring snapshot, redelivers the
 same request identity, and proves the simulated date, score, completed-game count, and data
 fingerprint remain stable. Its output contains bounded labels and aggregates, not the account ID,
-password, or raw roster identifiers:
+password, raw scoring fingerprint, or raw roster identifiers. It reports only short one-way digests
+for fingerprint comparison:
 
 ```bash
 D1L_REPLAY_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \

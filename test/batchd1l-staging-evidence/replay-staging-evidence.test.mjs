@@ -14,6 +14,7 @@ import {
 } from '../../scripts/capacity/seed-d1l-replay-staging-fixture.mjs';
 import {
   assertD1lReplayStagingRunSafety,
+  buildPublicReplayEvidence,
   D1L_REPLAY_STAGING_FIREBASE_OPTIONS,
   D1L_REPLAY_STAGING_RUN_ACKNOWLEDGEMENT,
 } from '../../scripts/capacity/run-d1l-replay-staging-evidence.mjs';
@@ -129,6 +130,22 @@ test('the bounded fixture creates one complete-Draft league with one traded skat
   );
 });
 
+test('public evidence replaces raw scoring and roster fingerprints with bounded digests', () => {
+  const publicEvidence = buildPublicReplayEvidence({
+    requestStatus: 'completed',
+    scoringFingerprint: 'protected-scoring-rules::synthetic-owner-window',
+    dataFingerprint: 'synthetic-owner-window:21.2:complete',
+  });
+  const serialized = JSON.stringify(publicEvidence);
+
+  assert.equal(publicEvidence.requestStatus, 'completed');
+  assert.equal('scoringFingerprint' in publicEvidence, false);
+  assert.equal('dataFingerprint' in publicEvidence, false);
+  assert.match(publicEvidence.scoringFingerprintDigest, /^[a-f0-9]{16}$/);
+  assert.match(publicEvidence.dataFingerprintDigest, /^[a-f0-9]{16}$/);
+  assert.doesNotMatch(serialized, /protected-scoring-rules|synthetic-owner-window/);
+});
+
 test('the evidence runner checks source-team completeness and duplicate-delivery stability', async () => {
   const [seedSource, runnerSource, stagingConfig, packageSource] = await Promise.all([
     read('scripts/capacity/seed-d1l-replay-staging-fixture.mjs'),
@@ -149,6 +166,7 @@ test('the evidence runner checks source-team completeness and duplicate-delivery
   assert.match(runnerSource, /firstGameCompleteness\.reusableFinal, true/);
   assert.match(runnerSource, /duplicateDeliveryStable: true/);
   assert.match(runnerSource, /requestAttemptCount, 1/);
+  assert.match(runnerSource, /buildPublicReplayEvidence\(evidence\)/);
   assert.match(runnerSource, /duplicateEvidence\.dataFingerprint, evidence\.dataFingerprint/);
   assert.match(stagingConfig, new RegExp(D1L_REPLAY_STAGING_FIREBASE_OPTIONS.apiKey));
   assert.match(stagingConfig, new RegExp(D1L_REPLAY_STAGING_FIREBASE_OPTIONS.appId));
