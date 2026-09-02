@@ -95,6 +95,7 @@ let reconnectGeneration = 0;
 let lastWarningAt = 0;
 let activeRouteObservation: MutableRouteObservation | null = null;
 let sessionEvidence = createEmptyEvidence();
+let clientHealthMonitorEnabledForPage = false;
 
 function createEmptyEvidence(): FirestoreListenerEvidence {
   return {
@@ -339,7 +340,11 @@ function createMonitoredUnsubscribe(
 }
 
 export function isClientHealthMonitorEnabled(): boolean {
-  return isLocalHost() || hasExplicitDebugFlag();
+  if (!clientHealthMonitorEnabledForPage) {
+    clientHealthMonitorEnabledForPage = isLocalHost() || hasExplicitDebugFlag();
+  }
+
+  return clientHealthMonitorEnabledForPage;
 }
 
 export function getFirestoreListenerSnapshot(now: number = Date.now()): FirestoreListenerSnapshot {
@@ -495,4 +500,5 @@ export function resetFirestoreListenerMonitorForTests(): void {
   lastWarningAt = 0;
   activeRouteObservation = null;
   sessionEvidence = createEmptyEvidence();
+  clientHealthMonitorEnabledForPage = false;
 }
