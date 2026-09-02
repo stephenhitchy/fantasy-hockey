@@ -271,7 +271,7 @@ export class App implements OnDestroy {
     try {
       const [
         { getUserProfile },
-        { ensureLeagueProfileIcon, syncManagerNameForLeague },
+        { ensureLeagueProfileIcon },
       ] = await Promise.all([
         import('./core/user/user.service'),
         import('./core/league/league.service'),
@@ -283,12 +283,7 @@ export class App implements OnDestroy {
       }
 
       if (this.activeLeagueId) {
-        await Promise.all([
-          ensureLeagueProfileIcon(this.activeLeagueId),
-          profile?.username
-            ? syncManagerNameForLeague(this.activeLeagueId, profile.username)
-            : Promise.resolve(),
-        ]);
+        await ensureLeagueProfileIcon(this.activeLeagueId, profile?.username);
       }
     } catch (error: unknown) {
       console.warn('Unable to refresh the saved user theme.', error);

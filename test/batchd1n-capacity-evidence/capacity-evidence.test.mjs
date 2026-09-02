@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { buildLeagueIdentityRepair } from '../../src/app/core/league/league-identity-repair.util.ts';
+
 import { buildCapacityReport } from '../../scripts/capacity/rinkrat-capacity-model.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -9,6 +11,65 @@ const ROOT = new URL('../../', import.meta.url);
 async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
 }
+
+test('league identity refresh is a no-op when the stored identity already matches', () => {
+  assert.deepEqual(
+    buildLeagueIdentityRepair({
+      member: { profileIconId: 'rat-classic', username: 'D1N Commissioner' },
+      team: { profileIconId: 'rat-classic', managerName: 'D1N Commissioner' },
+      profileIconId: 'rat-classic',
+      username: 'D1N Commissioner',
+    }),
+    { member: null, team: null },
+  );
+});
+
+test('league identity refresh repairs only stale fields and ignores a blank username', () => {
+  assert.deepEqual(
+    buildLeagueIdentityRepair({
+      member: { profileIconId: 'rat-classic', username: 'Old Name' },
+      team: { profileIconId: 'rat-classic', managerName: 'D1N Commissioner' },
+      profileIconId: 'rat-classic',
+      username: ' D1N Commissioner ',
+    }),
+    {
+      member: { username: 'D1N Commissioner' },
+      team: null,
+    },
+  );
+
+  assert.deepEqual(
+    buildLeagueIdentityRepair({
+      member: { profileIconId: null, username: 'D1N Commissioner' },
+      team: { profileIconId: 'rat-classic', managerName: 'D1N Commissioner' },
+      profileIconId: 'rat-classic',
+      username: '   ',
+    }),
+    {
+      member: { profileIconId: 'rat-classic' },
+      team: null,
+    },
+  );
+});
+
+test('league entry combines username and icon repair without an unconditional sync write', async () => {
+  const [appSource, leagueSource] = await Promise.all([
+    read('src/app/app.ts'),
+    read('src/app/core/league/league.service.ts'),
+  ]);
+  const refreshStart = appSource.indexOf('private async refreshProfileTheme(');
+  const refreshEnd = appSource.indexOf('private enterLeagueContext(', refreshStart);
+  const refreshSource = appSource.slice(refreshStart, refreshEnd);
+
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(refreshEnd, -1);
+  assert.match(refreshSource, /ensureLeagueProfileIcon\(this\.activeLeagueId, profile\?\.username\)/);
+  assert.doesNotMatch(refreshSource, /syncManagerNameForLeague/);
+  assert.match(leagueSource, /const repair = buildLeagueIdentityRepair\(/);
+  assert.match(leagueSource, /if \(!repair\.member && !repair\.team\) \{[\s\S]*?return resolvedProfileIconId;/);
+  assert.match(leagueSource, /if \(repair\.member\) \{[\s\S]*?batch\.set\(/);
+  assert.match(leagueSource, /if \(repair\.team\) \{[\s\S]*?batch\.set\(/);
+});
 
 test('Projection V11 listeners are visible to the shared client-health monitor', async () => {
   const source = await read('src/app/core/projection/projection-snapshot.service.ts');
@@ -116,5 +177,9 @@ test('D1N documents the measurement boundary and does not claim a live load test
   assert.match(documentation, /Snapshots whose document count cannot be derived are counted separately as unknown/i);
   assert.match(documentation, /authenticated, non-production fixtures/i);
   assert.match(documentation, /separate\s+billed staging Firebase project/i);
+  assert.match(documentation, /This closes\s+the authenticated reconnect check/i);
+  assert.match(documentation, /It does not count as physical-device\s+evidence/i);
+  assert.match(documentation, /An unchanged identity is now a zero-write path/i);
+  assert.match(documentation, /until a reviewed clean commit is deployed to staging\s+Hosting/i);
   assert.match(documentation, /Scoring V4 and Projection V11 are unchanged/i);
 });
