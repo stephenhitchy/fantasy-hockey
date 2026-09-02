@@ -21,6 +21,16 @@ async function sha256(relativePath) {
   return createHash('sha256').update(content).digest('hex');
 }
 
+async function sha256FunctionsIndexBeforeD1M() {
+  const source = await read('functions/src/index.ts');
+  const d1mExport = '  getFinalScoreReconciliationPage,\n';
+
+  assert.equal(source.split(d1mExport).length - 1, 1);
+  return createHash('sha256')
+    .update(source.replace(d1mExport, ''))
+    .digest('hex');
+}
+
 test('navigation history treats Angular’s optional navigation trigger as imperative when absent', async () => {
   const source = await read('src/app/core/navigation/navigation-history.service.ts');
 
@@ -169,9 +179,9 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
     PROTECTED_SOURCE_HASHES.firestoreRules,
   );
   assert.equal(
-    await sha256('functions/src/index.ts'),
-    // L1A adds only the reviewed removeLeagueMemberSecure export; the
-    // current complete Functions index remains byte-for-byte pinned here.
+    await sha256FunctionsIndexBeforeD1M(),
+    // D1M adds only the reviewed getFinalScoreReconciliationPage export; the
+    // complete post-L1A Functions index remains byte-for-byte pinned here.
     '5f22b04ebdb3cbb34c95d7cc60c1f3a84cbc6efdf5f90781037160f6fdd46b1d',
   );
 });

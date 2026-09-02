@@ -1,0 +1,178 @@
+<section class="reconciliation-card" aria-labelledby="final-score-reconciliation-heading">
+  <header class="reconciliation-header">
+    <div>
+      <span class="reconciliation-eyebrow">Detect-only scoring integrity</span>
+      <h2 id="final-score-reconciliation-heading">Final Score Reconciliation</h2>
+      <p>
+        Compare saved finalized games with complete current canonical evidence. This audit never
+        changes points, windows, transactions, standings, playoffs, or scoring authority.
+      </p>
+    </div>
+    <span class="authority-badge">Read only</span>
+  </header>
+
+  <div class="reconciliation-controls">
+    <label for="reconciliation-league-id">
+      Exact league ID
+      <input
+        id="reconciliation-league-id"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        maxlength="128"
+        [placeholder]="currentLeagueId"
+        [value]="leagueIdInput()"
+        [disabled]="loading()"
+        (input)="setLeagueId($any($event.target).value)"
+      />
+    </label>
+    <label for="reconciliation-cycle-number">
+      Cycle number
+      <input
+        id="reconciliation-cycle-number"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        maxlength="4"
+        placeholder="Latest"
+        [value]="cycleNumberInput()"
+        [disabled]="loading()"
+        (input)="setCycleNumber($any($event.target).value)"
+      />
+    </label>
+    <button
+      type="button"
+      class="reconciliation-button"
+      [disabled]="loading()"
+      (click)="runAudit()"
+    >
+      {{ loading() ? 'Scanning bounded pages…' : 'Run Detect-Only Audit' }}
+    </button>
+  </div>
+
+  <p class="reconciliation-note">
+    Blank league ID uses the current league; blank cycle uses its latest saved cycle. Missing D1L
+    source evidence or canonical facts are unverifiable—never inferred as zero or treated as permission to correct a matchup.
+  </p>
+
+  @if (progressMessage()) {
+    <p class="reconciliation-message" role="status" aria-live="polite">
+      {{ progressMessage() }}
+    </p>
+  }
+
+  @if (errorMessage()) {
+    <div class="reconciliation-error" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button type="button" [disabled]="loading()" (click)="runAudit()">Retry</button>
+    </div>
+  }
+
+  @if (result(); as audit) {
+    <section
+      class="reconciliation-outcome"
+      [class]="getOutcomeClass(audit)"
+      aria-labelledby="reconciliation-outcome-heading"
+    >
+      <div>
+        <span class="reconciliation-eyebrow">{{ audit.leagueId }} · Cycle {{ audit.cycleNumber }}</span>
+        <h3 id="reconciliation-outcome-heading">{{ getOutcomeLabel(audit) }}</h3>
+        <p>
+          {{ audit.pagesScanned }} page(s), {{ audit.summary.teamDocumentCount }} team document(s),
+          generated {{ formatTimestamp(audit.generatedAt) }}.
+        </p>
+      </div>
+      <span class="outcome-state">{{ audit.scanComplete ? 'Scan complete' : 'Partial scan' }}</span>
+    </section>
+
+    <dl class="reconciliation-summary">
+      <div>
+        <dt>Final games inspected</dt>
+        <dd>{{ audit.summary.finalizedGameCount }}</dd>
+      </div>
+      <div>
+        <dt>Verified matches</dt>
+        <dd>{{ audit.summary.verifiedGameCount }}</dd>
+      </div>
+      <div>
+        <dt>Review candidates</dt>
+        <dd>{{ audit.summary.candidateGameCount }}</dd>
+      </div>
+      <div>
+        <dt>Unverifiable</dt>
+        <dd>{{ audit.summary.unverifiableGameCount }}</dd>
+      </div>
+      <div>
+        <dt>Window integrity issues</dt>
+        <dd>{{ audit.summary.integrityIssueCount }}</dd>
+      </div>
+      <div>
+        <dt>Windows inspected</dt>
+        <dd>{{ audit.summary.windowCount }}</dd>
+      </div>
+    </dl>
+
+    @if (audit.inspectionLimitsReached || audit.findingsTruncated) {
+      <p class="reconciliation-limit-warning" role="status">
+        @if (audit.inspectionLimitsReached) {
+          A server inspection limit was reached; this result is not complete evidence.
+        }
+        @if (audit.findingsTruncated) {
+          Showing {{ audit.findings.length }} of {{ audit.summary.findingCount }} finding(s).
+        }
+      </p>
+    }
+
+    @if (audit.findings.length > 0) {
+      <details class="reconciliation-findings">
+        <summary>
+          Review findings
+          <span>{{ audit.findings.length }} shown</span>
+        </summary>
+        <div class="finding-list">
+          @for (finding of audit.findings; track $index) {
+            <article [class.finding-candidate]="finding.status === 'candidate'">
+              <div class="finding-heading">
+                <div>
+                  <span>{{ finding.status }}</span>
+                  <h4>{{ getFindingLabel(finding) }}</h4>
+                </div>
+                <code>
+                  Team {{ finding.teamKey }}
+                  @if (finding.gameId !== null) { · NHL {{ finding.gameId }} }
+                </code>
+              </div>
+              <p>{{ finding.reason }}</p>
+              <dl>
+                <div>
+                  <dt>Asset / slot</dt>
+                  <dd>{{ finding.assetKey || 'Unavailable' }} · {{ finding.rosterSlotId || 'Unavailable' }}</dd>
+                </div>
+                <div>
+                  <dt>Saved / canonical</dt>
+                  <dd>{{ formatPoints(finding.storedPoints) }} / {{ formatPoints(finding.canonicalPoints) }}</dd>
+                </div>
+                <div>
+                  <dt>Point delta</dt>
+                  <dd>{{ formatPoints(finding.pointDelta) }}</dd>
+                </div>
+                <div>
+                  <dt>Saved source</dt>
+                  <dd>{{ formatSourceVersion(finding.storedSourceVersion) }}</dd>
+                </div>
+                <div>
+                  <dt>Canonical source</dt>
+                  <dd>{{ formatSourceVersion(finding.canonicalSourceVersion) }}</dd>
+                </div>
+              </dl>
+            </article>
+          }
+        </div>
+      </details>
+    } @else if (audit.scanComplete && !audit.inspectionLimitsReached) {
+      <p class="reconciliation-clear">
+        No review or unverifiable findings were returned for this cycle.
+      </p>
+    }
+  }
+</section>

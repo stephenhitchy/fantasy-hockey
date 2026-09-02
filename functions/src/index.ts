@@ -4016,6 +4016,7 @@ export {
   cleanupLeagueAutomationTaskHistory,
   clearExpiredOrErroredLiveScoringLease,
   dispatchDueLeagueAutomation,
+  getFinalScoreReconciliationPage,
   getLeagueAutomationQueueControlCenter,
   initializeSeasonAfterDraft,
   monitorLeagueAutomationSeasonSafety,

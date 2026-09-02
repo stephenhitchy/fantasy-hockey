@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   DocumentData,
+  FieldPath,
   FieldValue,
   Timestamp,
 } from 'firebase-admin/firestore';
@@ -66,8 +67,14 @@ import {
   calculateCycleScoring,
   CycleScoringResult,
 } from './shared/core/cycle/cycle-scoring.service';
-import { syncCycleTeamWindows } from './shared/core/cycle/asset-cycle-window.service';
-import { FantasyCycle } from './shared/core/cycle/cycle.models';
+import {
+  normalizeFantasyTeamCycleWindows,
+  syncCycleTeamWindows,
+} from './shared/core/cycle/asset-cycle-window.service';
+import {
+  FantasyAssetCycleWindow,
+  FantasyCycle,
+} from './shared/core/cycle/cycle.models';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import {
   buildHistoricalReplaySkaterTimelineEntries,
@@ -111,6 +118,12 @@ import type {
   CanonicalScoringParityGame,
   CanonicalScoringParityObservation,
 } from './shared/core/nhl/nhl-canonical-scoring-parity.util';
+import {
+  inspectFinalScoreTeamWindowStructure,
+  reconcileFinalizedWindow,
+  type FinalScoreReconciliationFinding,
+  type FinalScoreReconciliationWindowResult,
+} from './shared/core/nhl/final-score-reconciliation.util';
 import {
   summarizeCanonicalScoringAuthorityTask,
   type CanonicalScoringAuthorityDecision,
@@ -161,6 +174,11 @@ const LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 *
 const LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT = 500;
 const LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT = 200;
 const LEAGUE_AUTOMATION_ADMIN_AUDIT_LIMIT = 20;
+const FINAL_SCORE_RECONCILIATION_TEAM_PAGE_SIZE = 4;
+const FINAL_SCORE_RECONCILIATION_MAX_WINDOWS_PER_TEAM = 32;
+const FINAL_SCORE_RECONCILIATION_MAX_GAMES_PER_WINDOW = 12;
+const FINAL_SCORE_RECONCILIATION_MAX_CANONICAL_GAME_READS = 512;
+const FINAL_SCORE_RECONCILIATION_MAX_FINDINGS_PER_PAGE = 80;
 const LEAGUE_AUTOMATION_PRODUCTION_PROJECT_ID = 'nhl-fantasy-app-ab673';
 const LEAGUE_AUTOMATION_CANARY_CONFIRMATION = 'ENABLE CANARY';
 const LEAGUE_AUTOMATION_CANONICAL_AUTHORITY_CONFIRMATION =
@@ -444,6 +462,34 @@ interface LeagueAutomationQueueAdminSnapshot {
     revisionAfter: number;
     createdAt: string | null;
   }>;
+}
+
+interface FinalScoreReconciliationPageSummary {
+  teamDocumentCount: number;
+  windowCount: number;
+  finalizedGameCount: number;
+  verifiedGameCount: number;
+  candidateGameCount: number;
+  unverifiableGameCount: number;
+  integrityIssueCount: number;
+  findingCount: number;
+}
+
+interface FinalScoreReconciliationPage {
+  schemaVersion: 1;
+  generatedAt: string;
+  leagueId: string;
+  cycleNumber: number;
+  authority: 'detect-only';
+  writesPerformed: 0;
+  pageSize: number;
+  nextCursor: string;
+  scanComplete: boolean;
+  canonicalGameReadLimitReached: boolean;
+  teamWindowLimitReached: boolean;
+  findingsTruncated: boolean;
+  summary: FinalScoreReconciliationPageSummary;
+  findings: FinalScoreReconciliationFinding[];
 }
 
 interface LeagueAutomationTaskPayload {
@@ -6579,6 +6625,380 @@ export const monitorLeagueAutomationSeasonSafety = onSchedule(
       });
       throw error;
     }
+  },
+);
+
+
+function emptyFinalScoreReconciliationSummary(): FinalScoreReconciliationPageSummary {
+  return {
+    teamDocumentCount: 0,
+    windowCount: 0,
+    finalizedGameCount: 0,
+    verifiedGameCount: 0,
+    candidateGameCount: 0,
+    unverifiableGameCount: 0,
+    integrityIssueCount: 0,
+    findingCount: 0,
+  };
+}
+
+function mergeFinalScoreReconciliationWindowResult(input: {
+  summary: FinalScoreReconciliationPageSummary;
+  pageFindings: FinalScoreReconciliationFinding[];
+  result: FinalScoreReconciliationWindowResult;
+}): boolean {
+  input.summary.windowCount += input.result.windowCount;
+  input.summary.finalizedGameCount += input.result.finalizedGameCount;
+  input.summary.verifiedGameCount += input.result.verifiedGameCount;
+  input.summary.candidateGameCount += input.result.candidateGameCount;
+  input.summary.unverifiableGameCount += input.result.unverifiableGameCount;
+  input.summary.integrityIssueCount += input.result.integrityIssueCount;
+  input.summary.findingCount += input.result.findingCount;
+
+  const availableFindingSlots = Math.max(
+    0,
+    FINAL_SCORE_RECONCILIATION_MAX_FINDINGS_PER_PAGE - input.pageFindings.length,
+  );
+  input.pageFindings.push(...input.result.findings.slice(0, availableFindingSlots));
+
+  return input.result.findingsTruncated ||
+    input.result.findingCount > availableFindingSlots;
+}
+
+async function loadCurrentFinalScoreCanonicalGames(
+  gameIds: readonly number[],
+): Promise<Map<number, CanonicalScoringParityGame>> {
+  const references = gameIds.map((gameId) =>
+    db.doc(`nhlCanonicalGameFacts/${gameId}`)
+  );
+  const snapshots = references.length > 0
+    ? await db.getAll(...references)
+    : [];
+  const gamesById = new Map<number, CanonicalScoringParityGame>();
+
+  snapshots.forEach((snapshot, index) => {
+    const gameId = gameIds[index];
+
+    if (!snapshot.exists) {
+      return;
+    }
+
+    const data = snapshot.data() ?? {};
+    const sourceVersion = normalizeCanonicalSourceVersion(data['sourceVersion']);
+    const facts = normalizeCanonicalParityFacts(data['facts'], gameId);
+    const rawCompleteness = data['finalInputCompletenessByAssetType'];
+    const finalInputCompletenessByAssetType = rawCompleteness &&
+      typeof rawCompleteness === 'object' &&
+      !Array.isArray(rawCompleteness)
+        ? rawCompleteness as CanonicalScoringParityGame[
+            'finalInputCompletenessByAssetType'
+          ]
+        : undefined;
+
+    if (!sourceVersion || !facts) {
+      return;
+    }
+
+    gamesById.set(gameId, {
+      sourceVersion,
+      facts,
+      finalInputCompletenessByAssetType,
+    });
+  });
+
+  return gamesById;
+}
+
+async function resolveFinalScoreReconciliationCycleNumber(input: {
+  leagueId: string;
+  requestedCycleNumber: number | null;
+}): Promise<number> {
+  if (input.requestedCycleNumber !== null) {
+    const cycleSnapshot = await db.doc(
+      `leagues/${input.leagueId}/cycles/cycle-${input.requestedCycleNumber}`,
+    ).get();
+
+    if (!cycleSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        `Cycle ${input.requestedCycleNumber} was not found for this league.`,
+      );
+    }
+
+    return input.requestedCycleNumber;
+  }
+
+  const latestCycleSnapshot = await db
+    .collection(`leagues/${input.leagueId}/cycles`)
+    .orderBy('cycleNumber', 'desc')
+    .limit(1)
+    .get();
+  const latestCycle = latestCycleSnapshot.docs[0];
+  const cycleNumber = latestCycle?.data()['cycleNumber'];
+
+  if (
+    !latestCycle ||
+    typeof cycleNumber !== 'number' ||
+    !Number.isInteger(cycleNumber) ||
+    cycleNumber <= 0
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This league does not have a valid scoring cycle to inspect.',
+    );
+  }
+
+  return cycleNumber;
+}
+
+async function buildFinalScoreReconciliationPage(input: {
+  leagueId: string;
+  requestedCycleNumber: number | null;
+  afterTeamId: string;
+}): Promise<FinalScoreReconciliationPage> {
+  const league = await getServerLeague(input.leagueId);
+
+  if (!league) {
+    throw new HttpsError('not-found', 'League not found.');
+  }
+
+  const cycleNumber = await resolveFinalScoreReconciliationCycleNumber({
+    leagueId: input.leagueId,
+    requestedCycleNumber: input.requestedCycleNumber,
+  });
+  let teamWindowsQuery = db
+    .collection(`leagues/${input.leagueId}/cycles/cycle-${cycleNumber}/teamWindows`)
+    .orderBy(FieldPath.documentId())
+    .limit(FINAL_SCORE_RECONCILIATION_TEAM_PAGE_SIZE + 1);
+
+  if (input.afterTeamId) {
+    teamWindowsQuery = teamWindowsQuery.startAfter(input.afterTeamId);
+  }
+
+  const teamWindowsSnapshot = await teamWindowsQuery.get();
+  const teamDocuments = teamWindowsSnapshot.docs.slice(
+    0,
+    FINAL_SCORE_RECONCILIATION_TEAM_PAGE_SIZE,
+  );
+  const hasMoreTeamDocuments =
+    teamWindowsSnapshot.size > FINAL_SCORE_RECONCILIATION_TEAM_PAGE_SIZE;
+  const normalizedTeamWindows = teamDocuments.map((snapshot) => {
+    const teamKey = createHash('sha256')
+      .update(`final-score-reconciliation:${input.leagueId}:${snapshot.id}`)
+      .digest('hex')
+      .slice(0, 12);
+    const data = snapshot.data();
+    const structure = inspectFinalScoreTeamWindowStructure({
+      rawWindows: data['windows'],
+      teamKey,
+    });
+
+    return {
+      teamKey,
+      structure,
+      teamWindows: normalizeFantasyTeamCycleWindows(
+        snapshot.id,
+        cycleNumber,
+        {
+          ...data,
+          windows: structure.safeWindowValues as FantasyAssetCycleWindow[],
+        },
+      ),
+    };
+  });
+  const requestedCanonicalGameIds = new Set<number>();
+
+  for (const entry of normalizedTeamWindows) {
+    for (const window of entry.teamWindows.windows.slice(
+      0,
+      FINAL_SCORE_RECONCILIATION_MAX_WINDOWS_PER_TEAM,
+    )) {
+      const completedGameIds = [...new Set(window.completedGameIds
+        .filter((gameId) => Number.isInteger(gameId) && gameId > 0))]
+        .sort((left, right) => left - right)
+        .slice(0, FINAL_SCORE_RECONCILIATION_MAX_GAMES_PER_WINDOW);
+
+      for (const gameId of completedGameIds) {
+        requestedCanonicalGameIds.add(gameId);
+      }
+    }
+  }
+
+  const allCanonicalGameIds = [...requestedCanonicalGameIds]
+    .sort((left, right) => left - right);
+  const canonicalGameIds = allCanonicalGameIds.slice(
+    0,
+    FINAL_SCORE_RECONCILIATION_MAX_CANONICAL_GAME_READS,
+  );
+  const canonicalGameReadLimitIds = new Set(
+    allCanonicalGameIds.slice(FINAL_SCORE_RECONCILIATION_MAX_CANONICAL_GAME_READS),
+  );
+  const canonicalGamesById = await loadCurrentFinalScoreCanonicalGames(
+    canonicalGameIds,
+  );
+  const summary = emptyFinalScoreReconciliationSummary();
+  const findings: FinalScoreReconciliationFinding[] = [];
+  let findingsTruncated = false;
+  let teamWindowLimitReached = false;
+
+  summary.teamDocumentCount = teamDocuments.length;
+
+  for (const entry of normalizedTeamWindows) {
+    const windows = entry.teamWindows.windows.slice(
+      0,
+      FINAL_SCORE_RECONCILIATION_MAX_WINDOWS_PER_TEAM,
+    );
+
+    if (entry.structure.inspectionIncomplete && entry.structure.finding) {
+      teamWindowLimitReached = true;
+      summary.integrityIssueCount += 1;
+      summary.findingCount += 1;
+
+      if (findings.length < FINAL_SCORE_RECONCILIATION_MAX_FINDINGS_PER_PAGE) {
+        findings.push(entry.structure.finding);
+      } else {
+        findingsTruncated = true;
+      }
+    }
+
+    if (entry.structure.allWindowCount > windows.length) {
+      teamWindowLimitReached = true;
+      summary.integrityIssueCount += 1;
+      summary.findingCount += 1;
+
+      if (findings.length < FINAL_SCORE_RECONCILIATION_MAX_FINDINGS_PER_PAGE) {
+        findings.push({
+          status: 'candidate',
+          code: 'team-window-inspection-limit-reached',
+          teamKey: entry.teamKey,
+          rosterSlotId: '',
+          assetKey: '',
+          assetType: 'unknown',
+          gameId: null,
+          storedPoints: null,
+          canonicalPoints: null,
+          pointDelta: null,
+          storedAppeared: null,
+          canonicalAppeared: null,
+          storedSourceVersion: '',
+          canonicalSourceVersion: '',
+          reason:
+            `The team document exceeds the bounded ` +
+            `${FINAL_SCORE_RECONCILIATION_MAX_WINDOWS_PER_TEAM}-window inspection limit.`,
+        });
+      } else {
+        findingsTruncated = true;
+      }
+    }
+
+    for (const window of windows) {
+      findingsTruncated = mergeFinalScoreReconciliationWindowResult({
+        summary,
+        pageFindings: findings,
+        result: reconcileFinalizedWindow({
+          window,
+          teamKey: entry.teamKey,
+          canonicalGamesById,
+          canonicalGameReadLimitIds,
+          scoringRules: league.scoringRules,
+          maxFinalGames: FINAL_SCORE_RECONCILIATION_MAX_GAMES_PER_WINDOW,
+          maxFindings: FINAL_SCORE_RECONCILIATION_MAX_FINDINGS_PER_PAGE,
+        }),
+      }) || findingsTruncated;
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    leagueId: input.leagueId,
+    cycleNumber,
+    authority: 'detect-only',
+    writesPerformed: 0,
+    pageSize: FINAL_SCORE_RECONCILIATION_TEAM_PAGE_SIZE,
+    nextCursor: hasMoreTeamDocuments
+      ? teamDocuments.at(-1)?.id ?? ''
+      : '',
+    scanComplete: !hasMoreTeamDocuments,
+    canonicalGameReadLimitReached: canonicalGameReadLimitIds.size > 0,
+    teamWindowLimitReached,
+    findingsTruncated,
+    summary,
+    findings,
+  };
+}
+
+
+export const getFinalScoreReconciliationPage = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    maxInstances: 3,
+    cors: TRUSTED_WEB_ORIGINS,
+    invoker: 'public',
+  },
+  async (request): Promise<FinalScoreReconciliationPage> => {
+    const adminId = await requireLeagueAutomationPlatformAdmin(request);
+    const data = request.data && typeof request.data === 'object'
+      ? request.data as Record<string, unknown>
+      : {};
+    const leagueId = requireFirestoreDocumentId(
+      data['leagueId'],
+      'league ID',
+      FIRESTORE_LEAGUE_ID_OPTIONS,
+    );
+    const rawCycleNumber = data['cycleNumber'];
+    const requestedCycleNumber =
+      rawCycleNumber === null ||
+      typeof rawCycleNumber === 'undefined' ||
+      rawCycleNumber === ''
+        ? null
+        : typeof rawCycleNumber === 'number' &&
+          Number.isInteger(rawCycleNumber) &&
+          rawCycleNumber > 0 &&
+          rawCycleNumber <= 1_000
+          ? rawCycleNumber
+          : NaN;
+
+    if (Number.isNaN(requestedCycleNumber)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Cycle number must be a positive integer no greater than 1000.',
+      );
+    }
+
+    const afterTeamId = optionalFirestoreDocumentId(
+      data['afterTeamId'],
+      'team page cursor',
+      FIRESTORE_AUTH_USER_ID_OPTIONS,
+    ) ?? '';
+
+    const page = await buildFinalScoreReconciliationPage({
+      leagueId,
+      requestedCycleNumber,
+      afterTeamId,
+    });
+
+    console.info('Final-score reconciliation page inspected.', {
+      adminKey: createHash('sha256')
+        .update(`final-score-reconciliation-admin:${adminId}`)
+        .digest('hex')
+        .slice(0, 12),
+      leagueId,
+      cycleNumber: page.cycleNumber,
+      teamDocumentCount: page.summary.teamDocumentCount,
+      finalizedGameCount: page.summary.finalizedGameCount,
+      candidateGameCount: page.summary.candidateGameCount,
+      unverifiableGameCount: page.summary.unverifiableGameCount,
+      integrityIssueCount: page.summary.integrityIssueCount,
+      scanComplete: page.scanComplete,
+      inspectionLimitReached:
+        page.canonicalGameReadLimitReached || page.teamWindowLimitReached,
+      findingsTruncated: page.findingsTruncated,
+    });
+
+    return page;
   },
 );
 

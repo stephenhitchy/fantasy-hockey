@@ -93,11 +93,16 @@ Already present:
   supersession, stale-writer compare-and-set, and bounded cursor rotation;
 - canonical parity fallback when the requested final fact lacks complete,
   exact-version input evidence.
+- a locally implemented, platform-admin-only D1M-A detector that pages one
+  exact league/cycle, distinguishes verified, candidate, and unverifiable
+  finalized games, and performs no competitive writes. It is not deployed or
+  production-proven.
 
 Not fully finished:
 
-- a universal audit of every finalized stored RinkRat player/game score;
-- a detect-only discrepancy dashboard covering every eligible league;
+- durable scheduling/checkpoint storage for a universal audit of every
+  finalized stored RinkRat player/game score;
+- archived-game source reacquisition where canonical settlement is absent;
 - a safe replay mechanism for correcting already completed player windows;
 - exact-once correction proof across transactions, standings, playoffs, and
   Game 7 ownership.

@@ -20,6 +20,16 @@ async function sha256(relativePath) {
   return createHash('sha256').update(content).digest('hex');
 }
 
+async function sha256FunctionsIndexBeforeD1M() {
+  const source = await read('functions/src/index.ts');
+  const d1mExport = '  getFinalScoreReconciliationPage,\n';
+
+  assert.equal(source.split(d1mExport).length - 1, 1);
+  return createHash('sha256')
+    .update(source.replace(d1mExport, ''))
+    .digest('hex');
+}
+
 test('B1J exposes a complete inherited release gate instead of a missing npm script', async () => {
   const packageJson = JSON.parse(await read('package.json'));
 
@@ -184,9 +194,9 @@ test('B1J changes no protected scoring, projection formula, Rules, or Function a
   assert.equal(await sha256('src/app/core/projection/projection-v11.util.ts'), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
-    await sha256('functions/src/index.ts'),
-    // L1A adds only the reviewed removeLeagueMemberSecure export; the
-    // current complete Functions index remains byte-for-byte pinned here.
+    await sha256FunctionsIndexBeforeD1M(),
+    // D1M adds only the reviewed getFinalScoreReconciliationPage export; the
+    // complete post-L1A Functions index remains byte-for-byte pinned here.
     '5f22b04ebdb3cbb34c95d7cc60c1f3a84cbc6efdf5f90781037160f6fdd46b1d',
   );
 });
