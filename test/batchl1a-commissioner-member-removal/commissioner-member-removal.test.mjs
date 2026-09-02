@@ -119,6 +119,7 @@ async function seedLeague(overrides = {}) {
     active: false,
     joinCount: 2,
     expiresAt: Timestamp.fromMillis(Date.now() + 86_400_000),
+    ...overrides.invite,
   });
   batch.set(
     firestore.doc(`leagues/${leagueId}/members/${commissionerId}`),
@@ -232,6 +233,28 @@ test('pre-Draft guard fails closed for every protected history boundary', () => 
   assert.equal(getPreDraftMemberRemovalBlockReason({
     ...baseline,
     draftData: { status: 'scheduled' },
+  }), 'draft-locked');
+  assert.equal(getPreDraftMemberRemovalBlockReason({
+    ...baseline,
+    draftData: {
+      status: 'setup',
+      roundOneOrder: [],
+      draftedAssetKeys: [],
+      nextOverallPick: 1,
+    },
+  }), null);
+  assert.equal(getPreDraftMemberRemovalBlockReason({
+    ...baseline,
+    draftData: { status: 'setup' },
+  }), 'draft-locked');
+  assert.equal(getPreDraftMemberRemovalBlockReason({
+    ...baseline,
+    draftData: {
+      status: 'unexpected',
+      roundOneOrder: [],
+      draftedAssetKeys: [],
+      nextOverallPick: 1,
+    },
   }), 'draft-locked');
   assert.equal(getPreDraftMemberRemovalBlockReason({
     ...baseline,
@@ -409,6 +432,49 @@ test('saved Draft setup blocks removal without partial deletion', async () => {
   assert.equal(memberSnapshot.exists, true);
   assert.equal(teamSnapshot.exists, true);
   assert.equal(rosterSnapshot.exists, true);
+  assert.equal(lifecycleSnapshot.get('activeLeagueCount'), 1);
+  assert.equal(audits.empty, true);
+});
+
+test('invite expiry handling never reactivates expired or malformed authority', async () => {
+  const expiredInvite = await seedLeague({
+    invite: {
+      expiresAt: Timestamp.fromMillis(Date.now() - 1_000),
+    },
+  });
+  const expiredResult = await executePreDraftLeagueMemberRemoval({
+    commissionerId: expiredInvite.commissionerId,
+    request: removalRequest(expiredInvite),
+  });
+  const expiredInviteSnapshot = await firestore
+    .doc(`leagueInvites/${expiredInvite.inviteCode}`)
+    .get();
+
+  assert.equal(expiredResult.joinStatus, 'open');
+  assert.equal(expiredInviteSnapshot.get('active'), false);
+  assert.equal(expiredInviteSnapshot.get('joinCount'), 1);
+
+  const malformedInvite = await seedLeague({
+    invite: { expiresAt: null },
+  });
+  await assertHttpsError(
+    executePreDraftLeagueMemberRemoval({
+      commissionerId: malformedInvite.commissionerId,
+      request: removalRequest(malformedInvite),
+    }),
+    'failed-precondition',
+    'incomplete-invite-authority',
+  );
+
+  const [memberSnapshot, lifecycleSnapshot, audits] = await Promise.all([
+    firestore
+      .doc(`leagues/${malformedInvite.leagueId}/members/${malformedInvite.targetOwnerId}`)
+      .get(),
+    firestore.doc(`leagueLifecycleState/${malformedInvite.targetOwnerId}`).get(),
+    firestore.collection(`leagues/${malformedInvite.leagueId}/audit`).get(),
+  ]);
+
+  assert.equal(memberSnapshot.exists, true);
   assert.equal(lifecycleSnapshot.get('activeLeagueCount'), 1);
   assert.equal(audits.empty, true);
 });

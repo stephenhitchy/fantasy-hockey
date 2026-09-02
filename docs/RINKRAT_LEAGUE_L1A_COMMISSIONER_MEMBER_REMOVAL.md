@@ -74,7 +74,8 @@ browser-side prerequisite.
 - public or member-private transactions and waivers;
 - non-zero team record;
 - occupied or malformed roster state;
-- expired or missing invite documents;
+- expired, missing, or malformed invite-expiration authority;
+- malformed or unknown Draft documents;
 - concurrent duplicate requests;
 - replay after success; and
 - request-identifier reuse with a different payload.

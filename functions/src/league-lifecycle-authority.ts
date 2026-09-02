@@ -1906,8 +1906,16 @@ export async function executePreDraftLeagueMemberRemoval(input: {
         : leagueData['joinStatus'],
     });
     const inviteExpiresAtMilliseconds = timestampMilliseconds(inviteData['expiresAt']);
-    const inviteExpired = inviteExpiresAtMilliseconds !== null &&
-      inviteExpiresAtMilliseconds <= nowMilliseconds;
+
+    if (inviteExpiresAtMilliseconds === null) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This league invite expiration is invalid. Repair League HQ before removing a member.',
+        { reason: 'incomplete-invite-authority' },
+      );
+    }
+
+    const inviteExpired = inviteExpiresAtMilliseconds <= nowMilliseconds;
     const timestamp = FieldValue.serverTimestamp();
     const lifecycleData = lifecycleSnapshot.data() ?? {};
     const activeLeagueCount = lifecycleData['activeLeagueCount'];

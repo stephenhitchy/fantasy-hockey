@@ -194,6 +194,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function draftStateIsSafeForPreDraftMemberRemoval(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  const draft = asRecord(value);
+
+  return Boolean(
+    draft &&
+    draft['status'] === 'setup' &&
+    Array.isArray(draft['roundOneOrder']) &&
+    draft['roundOneOrder'].length === 0 &&
+    Array.isArray(draft['draftedAssetKeys']) &&
+    draft['draftedAssetKeys'].length === 0 &&
+    draft['nextOverallPick'] === 1,
+  );
+}
+
 function teamCompetitionStateIsEmpty(value: unknown): boolean {
   const team = asRecord(value);
 
@@ -254,7 +272,10 @@ export function getPreDraftMemberRemovalBlockReason(input: {
     return 'membership-state-unsafe';
   }
 
-  if (isDraftJoinLocked(input.draftData)) {
+  if (
+    isDraftJoinLocked(input.draftData) ||
+    !draftStateIsSafeForPreDraftMemberRemoval(input.draftData)
+  ) {
     return 'draft-locked';
   }
 
