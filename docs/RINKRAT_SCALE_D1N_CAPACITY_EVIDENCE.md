@@ -212,6 +212,14 @@ account, and a project-filtered $25 USD monthly alert budget at 50%, 80%, 100%, 
 The budget sends alerts; it is not a hard spending cap. Exact billed reads, Key Visualizer evidence,
 real-device reconnects, and staged Functions concurrency remain unmeasured.
 
+A later staging recheck at clean commit `c75ba05` reproduced the open Draft defect after both a cold
+route load and same-page entry: focus returned to `body` when the loading heading was replaced by
+the live Draft heading. The follow-up client repair watches only the existing main landmark for a
+bounded five-second startup period, transfers focus to the replacement `h1` only while focus is
+still on the route target or document body, and disconnects on user focus, navigation, timeout, or
+component destruction. That repair remains source behavior until a reviewed Hosting-only staging
+deployment proves it in the live fixture.
+
 ## Billed staging isolation gate
 
 The source-controlled `staging` Angular configuration replaces the Firebase web identity at compile

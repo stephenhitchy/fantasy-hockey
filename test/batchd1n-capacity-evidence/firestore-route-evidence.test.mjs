@@ -173,6 +173,18 @@ test('listener evidence distinguishes empty, cached, server, reconnect, retry, h
   assert.equal(session.unknownDocumentCountSnapshots, 1);
 });
 
+test('route focus follows a replaced lazy-route heading without stealing manager focus', async () => {
+  const layout = await read('src/app/layouts/main-layout/main-layout.ts');
+  const layoutSpec = await read('src/app/layouts/main-layout/main-layout.spec.ts');
+
+  assert.match(layout, /new MutationObserver/);
+  assert.match(layout, /repairReplacedRouteFocus/);
+  assert.match(layout, /activeElement !== focusedElement/);
+  assert.match(layout, /stopRouteFocusStabilityWatch/);
+  assert.match(layoutSpec, /stable route heading when a loading heading is replaced/);
+  assert.match(layoutSpec, /does not steal focus after a manager reaches a route control/);
+});
+
 test('route envelopes calculate bounded nearest-rank p50, p95, and max values', () => {
   const observations = [
     [8, 12],

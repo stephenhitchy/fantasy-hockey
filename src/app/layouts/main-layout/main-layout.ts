@@ -45,6 +45,9 @@ export class MainLayout implements AfterViewInit, OnDestroy {
   private lastAccessiblePath = '';
   private routeFocusTimer: number | null = null;
   private routeFocusMissedBeforeView = false;
+  private routeFocusObserver: MutationObserver | null = null;
+  private routeFocusObserverTimer: number | null = null;
+  private routeFocusedElement: HTMLElement | null = null;
 
   constructor(
     private readonly router: Router,
@@ -68,6 +71,8 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     if (this.routeFocusTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this.routeFocusTimer);
     }
+
+    this.stopRouteFocusStabilityWatch();
   }
 
   private handleRouteChange(rawUrl: string): void {
@@ -80,6 +85,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     }
 
     this.lastAccessiblePath = path;
+    this.stopRouteFocusStabilityWatch();
     const pageTitle = this.getDeepestRouteTitle(this.router.routerState.snapshot.root);
     const fullTitle = pageTitle === 'RinkRat Fantasy' ? pageTitle : `${pageTitle} | RinkRat Fantasy`;
 
@@ -135,6 +141,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     }
 
     target.focus({ preventScroll: true });
+    this.watchRouteFocusStability(main, target);
   }
 
   private repairMissedInitialRouteFocus(): void {
@@ -150,5 +157,61 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     }
 
     this.focusRouteHeadingOrMain();
+  }
+
+  private watchRouteFocusStability(main: HTMLElement, focusedElement: HTMLElement): void {
+    this.stopRouteFocusStabilityWatch();
+
+    if (typeof MutationObserver === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    this.routeFocusedElement = focusedElement;
+    this.routeFocusObserver = new MutationObserver(() => {
+      this.repairReplacedRouteFocus(main);
+    });
+    this.routeFocusObserver.observe(main, { childList: true, subtree: true });
+    this.routeFocusObserverTimer = window.setTimeout(() => {
+      this.stopRouteFocusStabilityWatch();
+    }, 5_000);
+  }
+
+  private repairReplacedRouteFocus(main: HTMLElement): void {
+    const focusedElement = this.routeFocusedElement;
+    const preferredTarget = main.querySelector<HTMLElement>('h1') ?? main;
+
+    if (!focusedElement || preferredTarget === focusedElement) {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+
+    if (
+      activeElement &&
+      activeElement !== document.body &&
+      activeElement !== main &&
+      activeElement !== focusedElement
+    ) {
+      this.stopRouteFocusStabilityWatch();
+      return;
+    }
+
+    if (!preferredTarget.hasAttribute('tabindex')) {
+      preferredTarget.setAttribute('tabindex', '-1');
+    }
+
+    preferredTarget.focus({ preventScroll: true });
+    this.routeFocusedElement = preferredTarget;
+  }
+
+  private stopRouteFocusStabilityWatch(): void {
+    this.routeFocusObserver?.disconnect();
+    this.routeFocusObserver = null;
+    this.routeFocusedElement = null;
+
+    if (this.routeFocusObserverTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.routeFocusObserverTimer);
+      this.routeFocusObserverTimer = null;
+    }
   }
 }
