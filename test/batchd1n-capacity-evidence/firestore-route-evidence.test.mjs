@@ -7,6 +7,7 @@ import {
   beginFirestoreRouteObservation,
   completeFirestoreRouteObservation,
   getFirestoreListenerSnapshot,
+  isClientHealthMonitorEnabled,
   markFirestoreListenersReconnecting,
   markFirestoreRouteNavigationSettled,
   monitorFirestoreListener,
@@ -45,6 +46,48 @@ function emptyEvidence(overrides = {}) {
     ...overrides,
   };
 }
+
+test('an explicit client-health flag remains active only for the current page lifetime', () => {
+  const originalWindow = globalThis.window;
+
+  try {
+    const localStorage = {
+      getItem: () => null,
+    };
+    globalThis.window = {
+      location: {
+        hostname: 'rinkrat-staging-d1nc-2026.web.app',
+        search: '?rinkratHealth=1',
+      },
+      localStorage,
+    };
+    resetFirestoreListenerMonitorForTests();
+
+    assert.equal(isClientHealthMonitorEnabled(), true);
+
+    globalThis.window.location.search = '';
+    assert.equal(
+      isClientHealthMonitorEnabled(),
+      true,
+      'SPA navigation keeps diagnostics available for cleanup evidence',
+    );
+
+    resetFirestoreListenerMonitorForTests();
+    assert.equal(
+      isClientHealthMonitorEnabled(),
+      false,
+      'a new page lifetime without an explicit flag does not inherit diagnostics',
+    );
+  } finally {
+    resetFirestoreListenerMonitorForTests();
+
+    if (originalWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+  }
+});
 
 test('listener evidence distinguishes empty, cached, server, reconnect, retry, hidden, error, and cleanup states', () => {
   resetFirestoreListenerMonitorForTests();

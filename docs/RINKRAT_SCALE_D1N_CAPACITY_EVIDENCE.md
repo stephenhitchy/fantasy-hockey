@@ -70,6 +70,10 @@ The browser retains at most 24 settled route samples per session. Its local clie
 calculates nearest-rank p50, p95, and maximum envelopes for peak listeners and first-snapshot
 documents. A `firestore_route_evidence` Analytics event carries the same bounded aggregate counts.
 The local `rinkratHealth=1` diagnostic additionally prints JSON evidence for manual verification.
+Once that explicit flag is observed, diagnostic logging remains enabled only in memory for the
+current page lifetime. Angular navigation can therefore remove the query parameter without hiding
+the cleanup sample for the destination route. Reloading a URL without the flag starts disabled
+again; the diagnostic does not write a cookie, local-storage value, or Firestore document.
 
 ### Interpretation limits
 
@@ -107,6 +111,8 @@ The local `rinkratHealth=1` diagnostic additionally prints JSON evidence for man
   evidence remain separate counters.
 - Route samples use sanitized templates and are capped at 24 per session.
 - p50, p95, and maximum envelopes use deterministic nearest-rank calculations.
+- An explicit health query remains active through same-page navigation so cleanup is observable,
+  but a new page load without an explicit query or local developer opt-in starts disabled.
 
 ## Manual verification status
 
@@ -161,12 +167,50 @@ offline-to-online reconnect sample was not manufactured. The reconnect generatio
 logic is unit-tested, but authenticated reconnect evidence and physical mobile-device evidence remain
 open. D1N-C must not claim that gate as complete.
 
-The dedicated Firebase project `rinkrat-staging-d1nc-2026` now exists with billing enabled, one
-registered staging web app, Owner access for the active project account, and a project-filtered
-$25 USD monthly alert budget at 50%, 80%, 100%, and 100% forecast. The budget sends alerts; it is
-not a hard spending cap. No application, Firestore, Auth, Function, queue, Rule, index, or Hosting
-resource has been deployed there yet. Exact billed reads, Key Visualizer evidence, real-device
-reconnects, and staged concurrency remain unmeasured.
+### Billed staging authenticated evidence
+
+The separate billed project `rinkrat-staging-d1nc-2026` was prepared manually without using
+Production. Its live Hosting manifest reported clean commit
+`f3b27d0000289df9233d7c8819a43bd51044d420`, Release Candidate 65, Production Scoring V4, and
+Projection V11. The deployed Firestore Rules matched that clean commit, the source-controlled index
+and TTL configuration was present, Email/Password authentication was enabled, and no Functions were
+deployed. The fixture seeder wrote only its fixed synthetic user and league paths.
+
+An initial authenticated pass collected 20 full-navigation samples per route: ten at 390 × 844 and
+ten at 1,440 × 1,000. Every sample settled with zero listener errors, zero unknown document counts,
+zero listeners awaiting a first snapshot, and no horizontal overflow. Viewport size did not change
+the observed envelope:
+
+| Sanitized route | Samples | Peak listeners p50/p95/max | First-snapshot documents p50/p95/max | Pending-write snapshots per sample | Route focus |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Available Players | 20 | 20 / 20 / 20 | 26 / 26 / 26 | 1 | Main landmark |
+| Matchup | 20 | 13 / 13 / 13 | 18 / 18 / 18 | 0 | Main landmark |
+| Draft, live fixture | 20 | 5 / 5 / 5 | 12 / 12 / 12 | 0 | Body; open defect |
+| League Home, scheduled-Draft fixture | 20 | 10 / 10 / 10 | 27 / 27 / 27 | 1 | Main landmark |
+| Projection Lab | 20 | 0 / 0 / 0 | 0 / 0 / 0 | 0 | Main landmark |
+
+The Projection Lab zero retains the same bounded-read limitation described above. The repeated one
+pending-write snapshot on Available Players and League Home is an investigation item, not a claimed
+pass. The current aggregate does not identify which shared listener produced it. Draft retained body
+focus in every mobile and desktop sample, reproducing the keyboard-focus defect.
+
+A separate four-tab Available Players pass remained stable in billed staging: all four tabs reached
+20 listeners and 26 first-snapshot documents with no error, unknown count, awaiting snapshot, or
+overflow. The three additional tabs were then closed. This is bounded stale-tab evidence, not a
+load-test or Functions-concurrency result.
+
+The deployed staging Hosting configuration intentionally contains no Function rewrite. Expected
+callable failures stayed visible. NHL proxy URLs therefore returned the Hosting shell and produced
+schedule JSON warnings, so this pass is valid only for Firestore route-listener evidence; it is not
+end-to-end NHL, callable, or production-parity evidence. No controlled reconnect or physical-device
+sample was completed. The page-lifetime diagnostic fix in this slice was not part of the measured
+`f3b27d0` deployment, so same-page navigation cleanup must be repeated after a reviewed Hosting-only
+staging update.
+
+The project has billing enabled, one registered staging web app, Owner access for the active project
+account, and a project-filtered $25 USD monthly alert budget at 50%, 80%, 100%, and 100% forecast.
+The budget sends alerts; it is not a hard spending cap. Exact billed reads, Key Visualizer evidence,
+real-device reconnects, and staged Functions concurrency remain unmeasured.
 
 ## Billed staging isolation gate
 
@@ -180,8 +224,7 @@ unchanged. The staging artifact therefore cannot silently connect to the product
 Angular rewrite, removes all Function rewrites, and builds with `npm run build:staging`. The command
 never deploys.
 
-Before authenticated staging evidence can begin, Stephen must deliberately complete these
-non-production-only prerequisites:
+The initial authenticated pass completed these non-production-only prerequisites manually:
 
 1. Create the staging `(default)` Firestore database in `us-west4`, matching the current production
    database location for a more comparable latency envelope.
@@ -218,10 +261,10 @@ D1N_STAGING_FIXTURE_PASSWORD='<20+ character secret>' \
 npm run staging:d1n:seed
 ```
 
-Authenticated evidence must use `rinkratHealth=1`, at least 20 cold/warm/reconnect samples per route
-and viewport, controlled navigation to a listener-free route after each sample, and an immediate stop
-on any unexpected project identity, listener error, unknown document count, awaiting first snapshot,
-or listener count that fails to return to baseline.
+The remaining authenticated gate must use `rinkratHealth=1`, reach at least 20 samples per route and
+viewport across the required cold, warm, and reconnect profiles, navigate to a listener-free route
+after each cleanup sample, and stop immediately on an unexpected project identity, listener error,
+unknown document count, awaiting first snapshot, or listener count that fails to return to baseline.
 
 ## Reproducing the local fixture
 
@@ -271,10 +314,12 @@ required.
 
 ## Next gate
 
-Complete the remaining authenticated evidence on real mobile and desktop clients with controlled
-offline-to-online reconnects. Investigate the Draft Room's initial body focus and confirm the
-multi-tab awaiting-snapshot behavior against a separate billed staging project rather than treating a
-single local emulator as production evidence.
+Merge and deploy only the reviewed Hosting slices that repair initial Draft focus and retain the
+explicit diagnostic through same-page navigation. Then complete ten additional samples per route at
+each viewport, including controlled navigation to a listener-free route, and investigate the shared
+pending-write snapshot. Complete the remaining authenticated evidence on real mobile and desktop
+clients with controlled offline-to-online reconnects. The four-tab billed-staging pass is useful
+bounded evidence but is not production evidence.
 
 Only after those profiles are accepted should D1N-C build the scoring and Draft load harness in that
 separate billed staging Firebase project. Follow with canonical fan-out scaling, Draft recovery
