@@ -44,6 +44,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
   private readonly routeSubscription: Subscription;
   private lastAccessiblePath = '';
   private routeFocusTimer: number | null = null;
+  private routeFocusMissedBeforeView = false;
 
   constructor(
     private readonly router: Router,
@@ -57,6 +58,7 @@ export class MainLayout implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.handleRouteChange(this.router.url);
+    this.repairMissedInitialRouteFocus();
   }
 
   ngOnDestroy(): void {
@@ -119,8 +121,11 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     const main = this.mainContent?.nativeElement;
 
     if (!main) {
+      this.routeFocusMissedBeforeView = true;
       return;
     }
+
+    this.routeFocusMissedBeforeView = false;
 
     const heading = main.querySelector<HTMLElement>('h1');
     const target = heading ?? main;
@@ -130,5 +135,20 @@ export class MainLayout implements AfterViewInit, OnDestroy {
     }
 
     target.focus({ preventScroll: true });
+  }
+
+  private repairMissedInitialRouteFocus(): void {
+    if (!this.routeFocusMissedBeforeView || typeof document === 'undefined') {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    this.routeFocusMissedBeforeView = false;
+
+    if (activeElement && activeElement !== document.body) {
+      return;
+    }
+
+    this.focusRouteHeadingOrMain();
   }
 }
