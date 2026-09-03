@@ -3,8 +3,9 @@
 **Purpose:** bounded, detect-only finalized-score reconciliation
 
 **Implementation state:** deployed to the isolated D1N staging project from clean
-commit `d23f05bff404dbd10de0996c2be9e61ad0761ca3`; bounded live behavior evidence
-is the next gate and Production remains unchanged
+runtime commit `d23f05bff404dbd10de0996c2be9e61ad0761ca3`; bounded live behavior evidence
+passed on 2026-09-03 using clean evidence-harness commit
+`4c72aeb095beacd63bfab8ff5ed51d5a7962c03a`; Production remains unchanged
 
 **Competitive authority:** unchanged; direct NHL scoring remains authoritative
 
@@ -198,6 +199,28 @@ is part of this protocol. Passing it proves only the bounded staging behavior
 of the exact deployed D1M callable. Production release still requires a clean
 merge commit, inherited gate/build, exact targeted selectors, deployed Function
 revision, live Hosting manifest, and post-release read-only smoke evidence.
+
+### Staging evidence result — 2026-09-03
+
+The bounded protocol passed against the active staging callable deployed from
+runtime commit `d23f05bff404dbd10de0996c2be9e61ad0761ca3`. The harness ran from clean
+commit `4c72aeb095beacd63bfab8ff5ed51d5a7962c03a` and proved:
+
+- the non-admin identity was rejected;
+- exact-repeat and blank/latest-cycle requests returned stable results;
+- the callable reported `authority: detect-only` and `writesPerformed: 0`;
+- the scan was complete and checked expected team-document coverage;
+- four finalized games produced one verified zero/no-appearance result, one
+  review candidate, and two explicit unverifiable results;
+- the three bounded finding codes were `canonical-game-missing`,
+  `score-and-appearance-mismatch`, and `stored-final-evidence-missing`; and
+- the competitive-document fingerprint was unchanged after every rejected and
+  successful request.
+
+The run used only the marked synthetic fixture in
+`rinkrat-staging-d1nc-2026`. It did not deploy resources, access Production,
+correct a score, or persist a reconciliation finding. This is behavior evidence
+for the staging revision, not evidence that local source equals Production.
 
 ## Observability
 
