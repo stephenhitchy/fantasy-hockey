@@ -93,10 +93,12 @@ Already present:
   supersession, stale-writer compare-and-set, and bounded cursor rotation;
 - canonical parity fallback when the requested final fact lacks complete,
   exact-version input evidence.
-- a locally implemented, platform-admin-only D1M-A detector that pages one
-  exact league/cycle, distinguishes verified, candidate, and unverifiable
-  finalized games, and performs no competitive writes. It is not deployed or
-  production-proven.
+- a platform-admin-only D1M-A detector that pages one exact league/cycle,
+  distinguishes verified, candidate, and unverifiable finalized games, and
+  performs no competitive writes. The exact runtime is deployed only to the
+  isolated D1N staging project; its bounded admin/non-admin, repeat-delivery,
+  latest-cycle, legitimate-zero, mismatch, unverifiable, and unchanged-state
+  evidence passed. It is not deployed or proven in Production.
 
 Not fully finished:
 
@@ -130,7 +132,10 @@ must not automatically rewrite production scores.
   Players envelope, returned to zero listeners on Support, and recorded zero
   `team:list` pending-write snapshots, listener errors, unknown counts, or
   awaiting-first-snapshot listeners.
-- The D1M detect-only reconciler remains on a separate, unmerged branch.
+- The D1M detect-only reconciler remains outside Production. Its isolated
+  staging runtime and synthetic behavior evidence passed; clean merge,
+  targeted Production release, exact Function revision, Hosting manifest, and
+  post-release read-only smoke evidence remain required.
 - App Check remains Monitor, scoring queue rollout remains unchanged, canonical
   authority is not being expanded, and direct NHL scoring remains the fallback.
 
