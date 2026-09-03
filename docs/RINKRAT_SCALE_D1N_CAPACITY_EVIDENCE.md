@@ -245,6 +245,30 @@ classified as harmless cache behavior. League Home staging samples remain pendin
 the shared bounded fixture from live to scheduled Draft requires the separately held staging
 fixture credential.
 
+A subsequent authenticated session ran against the current staging Hosting manifest at clean commit
+`b109a3c209448b2e107348b2c9be53be4aa46528`. Ten target-320 mobile samples and ten 1,440 × 1,000
+desktop samples of the scheduled-Draft League Home route were identical: 10 peak listeners, 27
+first-snapshot documents, one pending-write snapshot attributed to `team:list`, main-heading focus,
+no horizontal overflow, and no listener error, unknown document count, retry, or listener awaiting
+its first snapshot. Every navigation to Support closed all 10 listeners and returned the active
+listener count to zero.
+
+The same session completed a controlled browser disconnect and reconnect. Its page-lifetime
+diagnostic recorded one reconnect snapshot, 20 opened and 20 closed listeners, 18 navigation
+cleanups, 26 first-snapshot documents, zero listener errors, zero unknown-source snapshots, zero
+listeners remaining on Support, and the same single `team:list` pending-write snapshot. This closes
+the authenticated reconnect check for this browser session. It does not count as physical-device
+evidence; a real-phone pass remains open.
+
+Source tracing established that the pending write was not harmless metadata churn. League entry
+combined the existing icon repair with an unconditional member/team display-name batch, so an
+already-current identity still received two server-timestamp writes. The follow-up source repair
+reuses the existing member and team reads, compares both icon and display-name fields, and commits
+only the stale document patches. An unchanged identity is now a zero-write path, while a missing or
+stale icon or name remains repairable and repeat execution is idempotent. This remains source-only
+behavior until a reviewed clean commit is deployed to staging Hosting and a cold route sample proves
+that the `team:list` pending-write count falls to zero.
+
 ## Billed staging isolation gate
 
 The source-controlled `staging` Angular configuration replaces the Firebase web identity at compile

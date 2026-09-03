@@ -36,6 +36,7 @@ import {
   isProfileIconId,
   ProfileIconId,
 } from '../../shared/profile-icon/profile-icon.data';
+import { buildLeagueIdentityRepair } from './league-identity-repair.util';
 
 export interface League {
   id: string;
@@ -1183,6 +1184,7 @@ export async function migrateLeagueAuthoritySchema(
 
 export async function ensureLeagueProfileIcon(
   leagueId: string,
+  username?: string | null,
 ): Promise<ProfileIconId> {
   const user = auth.currentUser;
 
@@ -1201,7 +1203,10 @@ export async function ensureLeagueProfileIcon(
     ? (memberSnapshot.data() as Partial<LeagueMember>)
     : null;
   const teamData = teamSnapshot.exists()
-    ? (teamSnapshot.data() as Partial<{ profileIconId: ProfileIconId }>)
+    ? (teamSnapshot.data() as Partial<{
+        managerName: string;
+        profileIconId: ProfileIconId;
+      }>)
     : null;
   const resolvedProfileIconId = isProfileIconId(teamData?.profileIconId)
     ? teamData.profileIconId
@@ -1209,28 +1214,34 @@ export async function ensureLeagueProfileIcon(
       ? memberData.profileIconId
       : getRandomProfileIconId();
 
-  if (
-    memberData?.profileIconId === resolvedProfileIconId &&
-    teamData?.profileIconId === resolvedProfileIconId
-  ) {
+  const repair = buildLeagueIdentityRepair({
+    member: memberData,
+    team: teamData,
+    profileIconId: resolvedProfileIconId,
+    username: username ? normalizeUsername(username) : null,
+  });
+
+  if (!repair.member && !repair.team) {
     return resolvedProfileIconId;
   }
 
   const batch = writeBatch(db);
 
-  batch.set(
-    memberRef,
-    { profileIconId: resolvedProfileIconId, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
-  batch.set(
-    teamRef,
-    {
-      profileIconId: resolvedProfileIconId,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  if (repair.member) {
+    batch.set(
+      memberRef,
+      { ...repair.member, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  }
+
+  if (repair.team) {
+    batch.set(
+      teamRef,
+      { ...repair.team, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  }
 
   await batch.commit();
 
