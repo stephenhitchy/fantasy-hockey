@@ -170,7 +170,9 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
   );
   assert.equal(
     await sha256('functions/src/index.ts'),
-    '9d6ef3cb9e2bcc9426e8d1aedd0c17e9b71508cc7395ba660c1d286c807f14fc',
+    // L1A adds only the reviewed removeLeagueMemberSecure export; the
+    // current complete Functions index remains byte-for-byte pinned here.
+    '5f22b04ebdb3cbb34c95d7cc60c1f3a84cbc6efdf5f90781037160f6fdd46b1d',
   );
 });
 

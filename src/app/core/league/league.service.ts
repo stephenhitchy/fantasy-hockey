@@ -130,6 +130,25 @@ interface JoinLeagueSecureResponse {
   authoritySchemaVersion: number;
 }
 
+interface RemoveLeagueMemberSecureRequest {
+  requestId: string;
+  leagueId: string;
+  targetOwnerId: string;
+  confirmationTeamName: string;
+}
+
+export interface RemoveLeagueMemberSecureResponse {
+  removed: true;
+  leagueId: string;
+  targetOwnerId: string;
+  removedTeamName: string;
+  teamCount: number;
+  maxTeams: number;
+  joinStatus: 'open' | 'locked' | 'full';
+  idempotentReplay: boolean;
+  auditId: string;
+}
+
 interface UpdateLeagueCosmeticsSecureRequest {
   requestId: string;
   leagueId: string;
@@ -176,6 +195,12 @@ interface PendingLeagueJoinRequest {
   fingerprint: string;
   requestId: string;
   profileIconId: ProfileIconId;
+  createdAt: number;
+}
+
+interface PendingLeagueMemberRemovalRequest {
+  fingerprint: string;
+  requestId: string;
   createdAt: number;
 }
 
@@ -345,9 +370,12 @@ function normalizeUsername(username: string): string {
 
 const PENDING_LEAGUE_CREATION_STORAGE_KEY = 'rinkrat:pending-league-creation:v1';
 const PENDING_LEAGUE_JOIN_STORAGE_KEY = 'rinkrat:pending-league-join:v1';
+const PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY =
+  'rinkrat:pending-league-member-removal:v1';
 const PENDING_LEAGUE_REQUEST_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 let inMemoryPendingLeagueCreation: PendingLeagueCreationRequest | null = null;
 let inMemoryPendingLeagueJoin: PendingLeagueJoinRequest | null = null;
+let inMemoryPendingLeagueMemberRemoval: PendingLeagueMemberRemovalRequest | null = null;
 
 function createLeagueRequestId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
@@ -376,6 +404,14 @@ function getLeagueJoinFingerprint(input: {
   return JSON.stringify(input);
 }
 
+function getLeagueMemberRemovalFingerprint(input: {
+  leagueId: string;
+  targetOwnerId: string;
+  confirmationTeamName: string;
+}): string {
+  return JSON.stringify(input);
+}
+
 function isUsablePendingLeagueCreation(
   candidate: Partial<PendingLeagueCreationRequest> | null,
 ): candidate is PendingLeagueCreationRequest {
@@ -398,6 +434,18 @@ function isUsablePendingLeagueJoin(
     candidate?.fingerprint &&
     candidate.requestId &&
     isProfileIconId(candidate.profileIconId) &&
+    Date.now() - createdAt <= PENDING_LEAGUE_REQUEST_MAX_AGE_MS,
+  );
+}
+
+function isUsablePendingLeagueMemberRemoval(
+  candidate: Partial<PendingLeagueMemberRemovalRequest> | null,
+): candidate is PendingLeagueMemberRemovalRequest {
+  const createdAt = typeof candidate?.createdAt === 'number' ? candidate.createdAt : 0;
+
+  return Boolean(
+    candidate?.fingerprint &&
+    candidate.requestId &&
     Date.now() - createdAt <= PENDING_LEAGUE_REQUEST_MAX_AGE_MS,
   );
 }
@@ -524,6 +572,47 @@ function clearPendingLeagueJoin(requestId: string): void {
 
   inMemoryPendingLeagueJoin = null;
   clearPendingRequest(PENDING_LEAGUE_JOIN_STORAGE_KEY);
+}
+
+function readPendingLeagueMemberRemoval(): PendingLeagueMemberRemovalRequest | null {
+  const pending = readPendingRequest(
+    PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY,
+    inMemoryPendingLeagueMemberRemoval,
+    isUsablePendingLeagueMemberRemoval,
+  );
+  inMemoryPendingLeagueMemberRemoval = pending;
+  return pending;
+}
+
+function getOrCreatePendingLeagueMemberRemoval(
+  fingerprint: string,
+): PendingLeagueMemberRemovalRequest {
+  const existing = readPendingLeagueMemberRemoval();
+
+  if (existing?.fingerprint === fingerprint) {
+    return existing;
+  }
+
+  const pending: PendingLeagueMemberRemovalRequest = {
+    fingerprint,
+    requestId: createLeagueRequestId(),
+    createdAt: Date.now(),
+  };
+
+  inMemoryPendingLeagueMemberRemoval = pending;
+  writePendingRequest(PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY, pending);
+  return pending;
+}
+
+function clearPendingLeagueMemberRemoval(requestId: string): void {
+  const existing = readPendingLeagueMemberRemoval();
+
+  if (existing?.requestId !== requestId) {
+    return;
+  }
+
+  inMemoryPendingLeagueMemberRemoval = null;
+  clearPendingRequest(PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY);
 }
 
 async function requireFreshVerifiedEmail(actionLabel: string): Promise<void> {
@@ -903,6 +992,110 @@ export async function joinLeagueByInviteCode(
     return response.data.leagueId;
   } catch (error: unknown) {
     throw new Error(getCallableErrorMessage(error, 'join'));
+  }
+}
+
+function getMemberRemovalCallableErrorMessage(error: unknown): string {
+  const record = error && typeof error === 'object'
+    ? error as { code?: unknown; message?: unknown }
+    : {};
+  const code = typeof record.code === 'string' ? record.code : '';
+  const rawMessage = typeof record.message === 'string' ? record.message.trim() : '';
+  const message = rawMessage
+    .replace(/^FirebaseError:\s*/i, '')
+    .replace(/^\[functions\/[^\]]+\]\s*/i, '')
+    .trim();
+
+  if (message) {
+    return message;
+  }
+
+  if (code.includes('permission-denied')) {
+    return 'Only the current league commissioner can remove a member.';
+  }
+
+  if (code.includes('not-found')) {
+    return 'This member is no longer in the league. Refresh League HQ.';
+  }
+
+  if (code.includes('failed-precondition') || code.includes('aborted')) {
+    return 'The member could not be removed safely. Confirm the Draft has not been configured, then refresh League HQ.';
+  }
+
+  if (code.includes('already-exists')) {
+    return 'That removal request was already used. Refresh League HQ before trying again.';
+  }
+
+  return 'The member could not be removed. No league data was changed; try again.';
+}
+
+export async function removeLeagueMemberBeforeDraft(input: {
+  leagueId: string;
+  targetOwnerId: string;
+  confirmationTeamName: string;
+}): Promise<RemoveLeagueMemberSecureResponse> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('You must be logged in to remove a league member.');
+  }
+
+  await requireFreshVerifiedEmail('remove a league member');
+
+  const leagueId = input.leagueId.trim();
+  const targetOwnerId = input.targetOwnerId.trim();
+  const confirmationTeamName = input.confirmationTeamName.trim();
+
+  if (!leagueId || !targetOwnerId || !confirmationTeamName) {
+    throw new Error('Choose a member and type their team name exactly.');
+  }
+
+  if (targetOwnerId === user.uid) {
+    throw new Error('The commissioner cannot remove their own team.');
+  }
+
+  const fingerprint = getLeagueMemberRemovalFingerprint({
+    leagueId,
+    targetOwnerId,
+    confirmationTeamName,
+  });
+  const pending = getOrCreatePendingLeagueMemberRemoval(fingerprint);
+  const callable = httpsCallable<
+    RemoveLeagueMemberSecureRequest,
+    RemoveLeagueMemberSecureResponse
+  >(functions, 'removeLeagueMemberSecure', { timeout: 60_000 });
+
+  try {
+    const response = await callable({
+      requestId: pending.requestId,
+      leagueId,
+      targetOwnerId,
+      confirmationTeamName,
+    });
+
+    if (
+      response.data.removed !== true ||
+      response.data.leagueId !== leagueId ||
+      response.data.targetOwnerId !== targetOwnerId ||
+      response.data.removedTeamName !== confirmationTeamName ||
+      !Number.isInteger(response.data.teamCount) ||
+      response.data.teamCount < 1 ||
+      !Number.isInteger(response.data.maxTeams) ||
+      response.data.maxTeams < 2 ||
+      response.data.maxTeams > 12 ||
+      response.data.teamCount >= response.data.maxTeams ||
+      response.data.joinStatus !== 'open' ||
+      typeof response.data.idempotentReplay !== 'boolean' ||
+      typeof response.data.auditId !== 'string' ||
+      !response.data.auditId.startsWith('member-removed-')
+    ) {
+      throw new Error('The server could not confirm the member removal. Refresh League HQ.');
+    }
+
+    clearPendingLeagueMemberRemoval(pending.requestId);
+    return response.data;
+  } catch (error: unknown) {
+    throw new Error(getMemberRemovalCallableErrorMessage(error));
   }
 }
 

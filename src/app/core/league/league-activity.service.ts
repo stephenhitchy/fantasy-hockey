@@ -39,6 +39,7 @@ const CATEGORIES = new Set<LeagueActivityCategory>([
 const EVENT_TYPES = new Set<LeagueActivityEventType>([
   'league-created',
   'member-joined',
+  'member-removed',
   'league-presentation-updated',
   'draft-settings-saved',
   'draft-pick',
