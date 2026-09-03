@@ -89,11 +89,6 @@ import {
   syncPlayerAvailabilityFromEspn,
 } from '../../../core/player/player-availability-sync.service';
 
-import {
-  getPlayerWatchlist,
-  setPlayerWatchlistEntry,
-} from '../../../core/player/player-watchlist.service';
-
 import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rules';
 import { getLeagueById, League } from '../../../core/league/league.service';
 import { shareLeagueDraftCard } from '../../../core/league/league-draft-share-card.service';
@@ -122,6 +117,7 @@ import {
   mergeConfirmedDraftPick,
   type PendingDraftPickIdentity,
 } from './draft-pick-confirmation.util';
+import { matchesDraftPlayerSearch } from './draft-player-search.util';
 
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
@@ -143,8 +139,6 @@ type DraftFilter = 'ALL' | DraftPosition;
 
 type PlayerPoolSort =
   | 'DRAFT_VALUE'
-  | 'RELIABILITY'
-  | 'RATING'
   | 'PROJECTED_CYCLE'
   | 'PROJECTED_SEASON'
   | 'NAME'
@@ -219,12 +213,6 @@ export class DraftRoom implements OnDestroy {
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
-  watchlistOnly = signal(false);
-  watchedAssetKeys = signal<ReadonlySet<string>>(new Set());
-  watchlistLoaded = signal(false);
-  watchlistSavingAssetKey = signal('');
-  watchlistStatusMessage = signal('');
-  watchlistErrorMessage = signal('');
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
@@ -251,8 +239,6 @@ export class DraftRoom implements OnDestroy {
   setSortMode(value: string): void {
     const validSorts: PlayerPoolSort[] = [
       'DRAFT_VALUE',
-      'RELIABILITY',
-      'RATING',
       'PROJECTED_CYCLE',
       'PROJECTED_SEASON',
       'NAME',
@@ -311,29 +297,6 @@ export class DraftRoom implements OnDestroy {
     return typeof rank === 'number' ? `#${rank}` : '—';
   }
 
-  getAssetRating(asset: DraftableAsset): number | null {
-    const projectedCycle = this.getAssetDraftProjectedCycle(asset);
-
-    if (typeof projectedCycle !== 'number') {
-      return null;
-    }
-
-    const denominator =
-      asset.position === 'G' ? this.topGoalieDraftProjection() : this.topSkaterDraftProjection();
-
-    return Math.round((projectedCycle / denominator) * 100);
-  }
-
-  getAssetRatingDisplay(asset: DraftableAsset): string {
-    const rating = this.getAssetRating(asset);
-
-    return typeof rating === 'number' ? rating.toString() : '—';
-  }
-
-  getAssetRatingLabel(asset: DraftableAsset): string {
-    return asset.assetType === 'team-goalie-unit' ? 'Goalie Rating' : 'Player Rating';
-  }
-
   getMyPicksByPosition(position: DraftPosition): DraftPick[] {
     return this.picks().filter(
       (pick) => pick.ownerId === this.userId && pick.asset.position === position,
@@ -373,21 +336,6 @@ export class DraftRoom implements OnDestroy {
     );
 
     return Array.from({ length: openSlotCount }, (_, index) => index);
-  }
-
-  getAssetExpectedGamesDisplay(asset: DraftableAsset): string {
-    const expected = asset.expectedGamesAvailable;
-    const scheduled = asset.scheduledGamesInProjectionCycle;
-
-    if (typeof expected !== 'number' || typeof scheduled !== 'number') {
-      return '';
-    }
-
-    return `${expected.toFixed(1)}/${scheduled} games`;
-  }
-
-  getAssetAvailabilityLabel(asset: DraftableAsset): string {
-    return asset.availabilityLabel ?? 'Active';
   }
 
   getProjectionDisplay(value: number | null | undefined): string {
@@ -434,117 +382,6 @@ export class DraftRoom implements OnDestroy {
     return asset.projectedCyclePoints ?? poolAsset?.projectedCyclePoints ?? null;
   }
 
-  getAssetFloorAdjustedCycle(asset: DraftableAsset): number | null {
-    const poolAsset = this.playerPool().find(
-      (availableAsset) => availableAsset.assetKey === asset.assetKey,
-    );
-
-    return (
-      asset.floorAdjustedCyclePoints ??
-      poolAsset?.floorAdjustedCyclePoints ??
-      this.getAssetProjectedCycle(asset)
-    );
-  }
-
-  getAssetReliabilityRating(asset: DraftableAsset): number | null {
-    const poolAsset = this.playerPool().find(
-      (availableAsset) => availableAsset.assetKey === asset.assetKey,
-    );
-
-    return (
-      asset.draftReliabilityRating ??
-      poolAsset?.draftReliabilityRating ??
-      asset.reliabilityRating ??
-      poolAsset?.reliabilityRating ??
-      null
-    );
-  }
-
-  getAssetReliabilityDisplay(asset: DraftableAsset): string {
-    const rating = this.getAssetReliabilityRating(asset);
-
-    return typeof rating === 'number' ? Math.round(rating).toString() : '—';
-  }
-
-  getAssetRiskLabel(asset: DraftableAsset): string {
-    const rating = this.getAssetReliabilityRating(asset);
-
-    if (typeof rating !== 'number') {
-      return 'Risk: —';
-    }
-
-    if (rating >= 85) {
-      return 'Risk: Very Safe';
-    }
-
-    if (rating >= 75) {
-      return 'Risk: Safe';
-    }
-
-    if (rating >= 65) {
-      return 'Risk: Normal';
-    }
-
-    if (rating >= 55) {
-      return 'Risk: Volatile';
-    }
-
-    return 'Risk: Risky';
-  }
-
-  getAssetRecentFormAdjustment(asset: DraftableAsset): number | null {
-    const poolAsset = this.playerPool().find(
-      (availableAsset) => availableAsset.assetKey === asset.assetKey,
-    );
-
-    return asset.recentFormAdjustment ?? poolAsset?.recentFormAdjustment ?? null;
-  }
-
-  getAssetRecentFormLabel(asset: DraftableAsset): string {
-    const adjustment = this.getAssetRecentFormAdjustment(asset);
-
-    if (typeof adjustment !== 'number') {
-      return 'Form: —';
-    }
-
-    const prefix = adjustment > 0 ? '+' : '';
-
-    return `Form: ${prefix}${adjustment.toFixed(1)}`;
-  }
-
-  getAssetRecentFormClass(asset: DraftableAsset): string {
-    const adjustment = this.getAssetRecentFormAdjustment(asset);
-
-    if (typeof adjustment !== 'number' || Math.abs(adjustment) < 0.05) {
-      return 'form-neutral';
-    }
-
-    return adjustment > 0 ? 'form-positive' : 'form-negative';
-  }
-
-  getAssetProjectionDataLabel(asset: DraftableAsset): string {
-    const poolAsset = this.playerPool().find(
-      (availableAsset) => availableAsset.assetKey === asset.assetKey,
-    );
-
-    const source = asset.projectionDataSource ?? poolAsset?.projectionDataSource;
-
-    const gamesPlayed = asset.projectionGamesPlayed ?? poolAsset?.projectionGamesPlayed;
-
-    const sourceLabel =
-      source === 'current-season-form'
-        ? 'Current form'
-        : source === 'current-season-baseline'
-          ? 'Current baseline'
-          : source === 'previous-season-form'
-            ? 'Previous form'
-            : source === 'previous-season-baseline'
-              ? 'Previous baseline'
-              : 'Baseline';
-
-    return typeof gamesPlayed === 'number' ? `${sourceLabel} · ${gamesPlayed} GP` : sourceLabel;
-  }
-
   getAssetDraftValue(asset: DraftableAsset): number | null {
     if (typeof asset.draftScore === 'number') {
       return asset.draftScore;
@@ -562,29 +399,6 @@ export class DraftRoom implements OnDestroy {
 
     if (sortMode === 'DRAFT_VALUE') {
       return this.compareDraftValueThenProjection(first, second);
-    }
-
-    if (sortMode === 'RELIABILITY') {
-      const firstReliability = this.getAssetReliabilityRating(first) ?? -1;
-
-      const secondReliability = this.getAssetReliabilityRating(second) ?? -1;
-
-      if (secondReliability !== firstReliability) {
-        return secondReliability - firstReliability;
-      }
-
-      return this.compareDraftValueThenProjection(first, second);
-    }
-
-    if (sortMode === 'RATING') {
-      const firstRating = this.getAssetRating(first) ?? -1;
-      const secondRating = this.getAssetRating(second) ?? -1;
-
-      if (secondRating !== firstRating) {
-        return secondRating - firstRating;
-      }
-
-      return this.getAssetName(first).localeCompare(this.getAssetName(second));
     }
 
     if (sortMode === 'PROJECTED_CYCLE') {
@@ -942,28 +756,6 @@ export class DraftRoom implements OnDestroy {
     return replacementValues;
   });
 
-  readonly topSkaterDraftProjection = computed(() => {
-    const topProjection = Math.max(
-      1,
-      ...this.playerPool()
-        .filter((asset) => asset.position !== 'G')
-        .map((asset) => asset.draftProjectedCyclePoints ?? asset.projectedCyclePoints ?? 0),
-    );
-
-    return topProjection;
-  });
-
-  readonly topGoalieDraftProjection = computed(() => {
-    const topProjection = Math.max(
-      1,
-      ...this.playerPool()
-        .filter((asset) => asset.position === 'G')
-        .map((asset) => asset.draftProjectedCyclePoints ?? asset.projectedCyclePoints ?? 0),
-    );
-
-    return topProjection;
-  });
-
   readonly assetValueRankByKey = computed(() => {
     const ranks: Record<string, number> = {};
 
@@ -978,22 +770,18 @@ export class DraftRoom implements OnDestroy {
 
   readonly availableAssets = computed(() => {
     const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
-    const watchedAssetKeys = this.watchedAssetKeys();
-    const watchlistOnly = this.watchlistOnly();
-    const search = this.searchTerm().trim().toLowerCase();
+    const search = this.searchTerm();
     const positionFilter = this.positionFilter();
 
     return this.playerPool()
       .filter((asset) => !draftedAssetKeys.has(asset.assetKey))
-      .filter((asset) => !watchlistOnly || watchedAssetKeys.has(asset.assetKey))
       .filter((asset) => (positionFilter === 'ALL' ? true : asset.position === positionFilter))
-      .filter((asset) => {
-        if (!search) {
-          return true;
-        }
-
-        return this.getAssetName(asset).toLowerCase().includes(search);
-      })
+      .filter((asset) => matchesDraftPlayerSearch(search, [
+        this.getAssetName(asset),
+        this.getAssetTeamLabel(asset),
+        this.getPreviousTeamAbbreviation(asset),
+        this.getNewsNewTeamAbbreviation(asset),
+      ]))
       .sort((first, second) => this.compareDraftAssets(first, second))
       .slice(0, 120);
   });
@@ -1169,7 +957,6 @@ export class DraftRoom implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
-    void this.loadWatchlist();
 
     try {
       const [league, teams, myTeam] = await Promise.all([
@@ -2776,74 +2563,6 @@ export class DraftRoom implements OnDestroy {
     );
   }
 
-  isAssetWatched(asset: DraftableAsset): boolean {
-    return this.watchedAssetKeys().has(asset.assetKey);
-  }
-
-  isWatchlistSaving(asset: DraftableAsset): boolean {
-    return this.watchlistSavingAssetKey() === asset.assetKey;
-  }
-
-  toggleWatchlistFilter(): void {
-    if (!this.watchlistLoaded()) {
-      return;
-    }
-
-    this.watchlistOnly.update((value) => !value);
-  }
-
-  async toggleAssetWatchlist(asset: DraftableAsset): Promise<void> {
-    if (!this.watchlistLoaded() || this.watchlistSavingAssetKey()) {
-      return;
-    }
-
-    const watched = !this.isAssetWatched(asset);
-    this.watchlistSavingAssetKey.set(asset.assetKey);
-    this.watchlistStatusMessage.set('');
-    this.watchlistErrorMessage.set('');
-
-    try {
-      const result = await setPlayerWatchlistEntry({
-        assetKey: asset.assetKey,
-        watched,
-      });
-      this.watchedAssetKeys.set(new Set(result.assetKeys));
-      this.watchlistStatusMessage.set(
-        watched
-          ? `${this.getAssetName(asset)} added to your watchlist.`
-          : `${this.getAssetName(asset)} removed from your watchlist.`,
-      );
-    } catch (error: unknown) {
-      this.watchlistErrorMessage.set(
-        error instanceof Error ? error.message : 'Unable to update your watchlist right now.',
-      );
-    } finally {
-      this.watchlistSavingAssetKey.set('');
-    }
-  }
-
-  private async loadWatchlist(): Promise<void> {
-    this.watchlistLoaded.set(false);
-    this.watchlistErrorMessage.set('');
-
-    try {
-      const result = await getPlayerWatchlist();
-      if (!this.destroyed) {
-        this.watchedAssetKeys.set(new Set(result.assetKeys));
-      }
-    } catch (error: unknown) {
-      if (!this.destroyed) {
-        this.watchlistErrorMessage.set(
-          error instanceof Error ? error.message : 'Unable to load your watchlist right now.',
-        );
-      }
-    } finally {
-      if (!this.destroyed) {
-        this.watchlistLoaded.set(true);
-      }
-    }
-  }
-
   isAssetQueued(asset: DraftableAsset): boolean {
     return this.myQueue().assetKeys.includes(asset.assetKey);
   }
@@ -3279,10 +2998,6 @@ export class DraftRoom implements OnDestroy {
     return getDraftNewsOverrideForAsset(asset);
   }
 
-  hasDraftNews(asset: DraftableAsset): boolean {
-    return Boolean(this.getDraftNews(asset)?.note);
-  }
-
   hasOffseasonTeamChange(asset: DraftableAsset): boolean {
     const news = this.getDraftNews(asset);
 
@@ -3339,32 +3054,6 @@ export class DraftRoom implements OnDestroy {
 
   isPlayerAvailabilityIrEligible(asset: DraftableAsset): boolean {
     return this.getPlayerAvailability(asset)?.irEligible ?? false;
-  }
-
-  getDraftNewsNote(asset: DraftableAsset): string {
-    return this.getDraftNews(asset)?.note ?? '';
-  }
-
-  getDraftNewsTooltip(asset: DraftableAsset): string {
-    const news = this.getDraftNews(asset);
-
-    if (!news) {
-      return '';
-    }
-
-    const details: string[] = [];
-
-    if (this.hasOffseasonTeamChange(asset)) {
-      details.push(
-        `${this.getPreviousTeamAbbreviation(asset)} → ${this.getNewsNewTeamAbbreviation(asset)}`,
-      );
-    }
-
-    if (news.note) {
-      details.push(news.note);
-    }
-
-    return details.join(' · ');
   }
 
   getPositionRequirement(position: DraftPosition): number {

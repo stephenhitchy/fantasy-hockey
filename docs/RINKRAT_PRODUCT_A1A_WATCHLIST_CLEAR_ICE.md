@@ -43,6 +43,11 @@ Draft Room adds a compact star action beside the existing Queue action. The two 
 
 The page loads the watchlist once through the callable. It adds no Firestore listener.
 
+Current-season presentation note (FF1.1): Draft Room no longer renders the star or
+watched-only filter so the time-sensitive player cards can stay compact. Saved
+watchlists remain account-wide and available on the unified player/Add-Drop board;
+the Draft queue remains private and continues to be the only list used by Auto-Draft.
+
 ## Free Agents and Waivers
 
 Available Players and Waivers use the same watchlist and the same watched-only filter. Watching a player has no competitive effect and does not submit a claim, reserve a player, or change six-game timing.

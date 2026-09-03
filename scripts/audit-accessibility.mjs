@@ -38,7 +38,7 @@ for (const file of htmlFiles) {
 
   const closeButtons = html.match(/<button[^>]*>\s*×\s*<\/button>/gs) ?? [];
   for (const button of closeButtons) {
-    if (!/aria-label=/.test(button)) {
+    if (!/(?:aria-label|\[attr\.aria-label\])=/.test(button)) {
       unlabeledIconCloseButtons += 1;
       failures.push(`${relative}: × close button is missing an aria-label`);
     }

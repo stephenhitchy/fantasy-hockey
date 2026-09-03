@@ -104,23 +104,22 @@ test('the unified Add / Drop board exposes a compact watched filter and watch co
   assert.match(styles, /unified-player-actions[\s\S]*?min-height:\s*var\(--rr-mobile-control-min-height\)/);
 });
 
-test('Draft Room watchlists remain independent from the private auto-draft queue', async () => {
-  const [component, template, styles] = await Promise.all([
+test('the account watchlist remains available outside Draft while the Draft queue stays private', async () => {
+  const [component, template, styles, freeAgentsTemplate] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-room.html'),
     read('src/app/features/draft/draft-room/draft-room.css'),
+    read('src/app/features/free-agents/free-agents.html'),
   ]);
 
-  assert.match(component, /void this\.loadWatchlist\(\)/);
-  assert.match(component, /watchlistOnly = signal\(false\)/);
-  assert.match(component, /toggleAssetWatchlist/);
+  assert.doesNotMatch(component, /loadWatchlist|watchlistOnly|toggleAssetWatchlist/);
+  assert.doesNotMatch(template, /Watched \{\{ watchedAssetKeys\(\)\.size \}\}|draft-watchlist-button/);
   assert.match(component, /toggleAssetInQueue/);
-  assert.match(template, /Watched \{\{ watchedAssetKeys\(\)\.size \}\}/);
-  assert.match(template, /draft-watchlist-button/);
   assert.match(template, /\+ Queue/);
   assert.match(template, /Private list\. Auto-draft uses the first eligible queued player/);
+  assert.match(freeAgentsTemplate, /Watching' : 'Watch'/);
   assert.doesNotMatch(template, /Two consecutive expired turns automatically switch auto-draft on until/);
-  assert.match(styles, /draft-watchlist-filter,[\s\S]*?min-height:\s*44px/);
+  assert.doesNotMatch(styles, /draft-watchlist-filter|draft-watchlist-button/);
   assert.ok(Buffer.byteLength(styles, 'utf8') < 45_000);
 });
 

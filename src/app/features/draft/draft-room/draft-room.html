@@ -484,16 +484,6 @@
         </div>
       </section>
 
-      <p class="rr-visually-hidden" role="status" aria-live="polite">
-        {{ watchlistStatusMessage() }}
-      </p>
-
-      @if (watchlistErrorMessage()) {
-        <div class="draft-watchlist-error rr-notice rr-notice--danger" role="alert">
-          {{ watchlistErrorMessage() }}
-        </div>
-      }
-
       <section class="draft-layout">
         <main
           class="player-pool-panel rr-card rr-card--padded draft-mobile-panel"
@@ -542,26 +532,12 @@
   (ngModelChange)="setSortMode($event)"
 >
 <option value="DRAFT_VALUE">Sort: Season Draft Rank</option>
-<option value="RELIABILITY">Sort: Reliability</option>
-<option value="RATING">Sort: Season Rating</option>
 <option value="PROJECTED_CYCLE">Sort: Next 6 Games Projection</option>
 <option value="PROJECTED_SEASON">Sort: Season Outlook</option>
 <option value="NAME">Sort: Name</option>
 <option value="POSITION">Sort: Position</option>
 <option value="TEAM">Sort: NHL Team</option>
 </select>
-
-<button
-  type="button"
-  class="draft-watchlist-filter rr-button rr-button--quiet"
-  [class.draft-watchlist-filter-active]="watchlistOnly()"
-  [attr.aria-pressed]="watchlistOnly()"
-  [disabled]="!watchlistLoaded()"
-  (click)="toggleWatchlistFilter()"
->
-  <span aria-hidden="true">★</span>
-  Watched {{ watchedAssetKeys().size }}
-</button>
 </div>
 
           @if (playerPoolLoading()) {
@@ -652,129 +628,86 @@
                   }
 
                   <div class="asset-copy">
-  <strong>{{ getAssetName(asset) }}</strong>
-  <span>
-    {{ asset.position }}
-    ·
-    {{ getAssetTeamLabel(asset) }}
-  </span>
+                    <strong>{{ getAssetName(asset) }}</strong>
+                    <div class="asset-identity-meta">
+                      <span>{{ asset.position }} · {{ getAssetTeamLabel(asset) }}</span>
 
-@if (shouldShowPlayerAvailabilityBadge(asset)) {
-  <div
-    class="player-availability-row"
-    [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
-  >
-    <span
-      [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
-    >
-      ✚ {{ getPlayerAvailabilityLabel(asset) }}
-    </span>
+                      @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                        <span
+                          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
+                          [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
+                          [attr.aria-label]="
+                            getPlayerAvailabilityLabel(asset) +
+                            (isPlayerAvailabilityIrEligible(asset) ? '. Injured Reserve eligible.' : '.') +
+                            (getPlayerAvailabilityNote(asset) ? ' ' + getPlayerAvailabilityNote(asset) : '')
+                          "
+                        >
+                          <span aria-hidden="true">✚</span>
+                          {{ getPlayerAvailabilityLabel(asset) }}
+                          @if (isPlayerAvailabilityIrEligible(asset)) {
+                            <small>IR</small>
+                          }
+                        </span>
+                      }
+                    </div>
+                  </div>
 
-    @if (isPlayerAvailabilityIrEligible(asset)) {
-      <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
-    }
-
-    @if (getPlayerAvailabilityNote(asset); as availabilityNote) {
-      <small class="player-availability-note">{{ availabilityNote }}</small>
-    }
-  </div>
-}
-
-<div class="asset-projection-strip">
-  <small class="rank-pill">
-    Rank {{ getAssetValueRankDisplay(asset) }}
-  </small>
-
-  <small>
-    Rating:
-    {{ getAssetRatingDisplay(asset) }}
-  </small>
-
-  <small>
-    {{ getAssetRiskLabel(asset) }}
-  </small>
-
-  <small
-    [class]="'recent-form-pill ' + getAssetRecentFormClass(asset)"
-    [attr.title]="getAssetProjectionDataLabel(asset)"
-  >
-    {{ getAssetRecentFormLabel(asset) }}
-  </small>
-
-  @if (getAssetExpectedGamesDisplay(asset); as expectedGames) {
-    <small class="availability-projection-pill">
-      {{ getAssetAvailabilityLabel(asset) }} · {{ expectedGames }}
-    </small>
-  }
-
-  <small>
-    Next 6 Games:
-    {{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}
-  </small>
-
-  <small>
-    Season Outlook:
-    {{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}
-  </small>
-</div>
-
-@if (hasDraftNews(asset)) {
-  <div
-    class="asset-draft-news-row"
-    [attr.title]="getDraftNewsTooltip(asset)"
-  >
-    @if (getDraftNewsNote(asset); as note) {
-      <small class="draft-news-note">{{ note }}</small>
-    }
-  </div>
-}
-</div>
+                  <div class="asset-metrics" aria-label="Draft metrics">
+                    <span class="asset-metric rank-metric">
+                      <small>Rank</small>
+                      <strong>{{ getAssetValueRankDisplay(asset) }}</strong>
+                    </span>
+                    <span class="asset-metric">
+                      <small>Next 6</small>
+                      <strong>{{ getProjectionDisplay(getAssetProjectedCycle(asset)) }}</strong>
+                    </span>
+                    <span class="asset-metric">
+                      <small>Season</small>
+                      <strong>{{ getProjectionDisplay(getAssetProjectedSeason(asset)) }}</strong>
+                    </span>
+                  </div>
 
                   <div class="asset-actions">
                     <button
                       type="button"
-                      class="draft-watchlist-button rr-button rr-button--quiet"
-                      [class.draft-watchlist-button-active]="isAssetWatched(asset)"
-                      [attr.aria-pressed]="isAssetWatched(asset)"
-                      [attr.aria-label]="(isAssetWatched(asset) ? 'Remove ' : 'Add ') + getAssetName(asset) + (isAssetWatched(asset) ? ' from watchlist' : ' to watchlist')"
-                      [disabled]="!watchlistLoaded() || isWatchlistSaving(asset)"
-                      (click)="toggleAssetWatchlist(asset)"
-                    >
-                      <span aria-hidden="true">{{ isAssetWatched(asset) ? '★' : '☆' }}</span>
-                      {{ isAssetWatched(asset) ? 'Watching' : 'Watch' }}
-                    </button>
-
-                    <button
-                      type="button"
                       class="queue-button rr-button rr-button--secondary"
                       [class.queued]="isAssetQueued(asset)"
+                      [attr.aria-pressed]="isAssetQueued(asset)"
+                      [attr.aria-label]="
+                        (isAssetQueued(asset) ? 'Remove ' : 'Add ') +
+                        getAssetName(asset) +
+                        (isAssetQueued(asset) ? ' from your Draft queue' : ' to your Draft queue')
+                      "
                       (click)="toggleAssetInQueue(asset)"
                       [disabled]="queueSaving() || draft()?.status === 'complete' || !canUseDraftQueueActions()"
                     >
                       {{ isAssetQueued(asset) ? 'Queued' : '+ Queue' }}
                     </button>
 
-                    <button
-                      type="button"
-                      class="mobile-select-player-button rr-button rr-button--primary"
-                      [class.selected]="selectedAssetKey() === asset.assetKey"
-                      (click)="selectAssetForMobile(asset)"
-                      [disabled]="draft()?.status === 'complete'"
-                    >
-                      {{ selectedAssetKey() === asset.assetKey ? 'Selected' : 'Select' }}
-                    </button>
+                    @if (draft()?.status === 'live' && isMyTurn()) {
+                      <button
+                        type="button"
+                        class="mobile-select-player-button rr-button rr-button--primary"
+                        [class.selected]="selectedAssetKey() === asset.assetKey"
+                        [attr.aria-label]="'Select ' + getAssetName(asset) + ' for Draft confirmation'"
+                        (click)="selectAssetForMobile(asset)"
+                      >
+                        {{ selectedAssetKey() === asset.assetKey ? 'Selected' : 'Select' }}
+                      </button>
 
-                    <button
-                      type="button"
-                      class="draft-button rr-button rr-button--primary"
-                      (click)="selectAsset(asset)"
-                      [disabled]="
-                        !canDraftAsset(asset) ||
-                        makingPickAssetKey() !== null
-                      "
-                    >
-                      {{ getDraftButtonLabel(asset) }}
-                    </button>
+                      <button
+                        type="button"
+                        class="draft-button rr-button rr-button--commit"
+                        [attr.aria-label]="getDraftButtonLabel(asset) + ' ' + getAssetName(asset)"
+                        (click)="selectAsset(asset)"
+                        [disabled]="
+                          !canDraftAsset(asset) ||
+                          makingPickAssetKey() !== null
+                        "
+                      >
+                        {{ getDraftButtonLabel(asset) }}
+                      </button>
+                    }
                   </div>
                 </article>
               }
@@ -867,7 +800,11 @@
                     <div class="queue-row-actions">
                       <button
                         type="button"
-                        aria-label="Move queued player up"
+                        [attr.aria-label]="
+                          'Move ' +
+                          (entry.asset ? getAssetName(entry.asset) : 'unavailable player') +
+                          ' up in your Draft queue'
+                        "
                         (click)="moveQueueAsset(entry.assetKey, -1)"
                         [disabled]="entry.index === 0 || queueSaving() || !canUseDraftQueueActions()"
                       >
@@ -876,7 +813,11 @@
 
                       <button
                         type="button"
-                        aria-label="Move queued player down"
+                        [attr.aria-label]="
+                          'Move ' +
+                          (entry.asset ? getAssetName(entry.asset) : 'unavailable player') +
+                          ' down in your Draft queue'
+                        "
                         (click)="moveQueueAsset(entry.assetKey, 1)"
                         [disabled]="entry.index === queueEntries().length - 1 || queueSaving() || !canUseDraftQueueActions()"
                       >
@@ -886,7 +827,11 @@
                       <button
                         type="button"
                         class="remove-queue-button rr-button rr-button--quiet"
-                        aria-label="Remove queued player"
+                        [attr.aria-label]="
+                          'Remove ' +
+                          (entry.asset ? getAssetName(entry.asset) : 'unavailable player') +
+                          ' from your Draft queue'
+                        "
                         (click)="removeAssetFromQueue(entry.assetKey)"
                         [disabled]="queueSaving() || !canUseDraftQueueActions()"
                       >
@@ -995,63 +940,10 @@
         </span>
 
         @if (isPlayerAvailabilityIrEligible(pick.asset)) {
-          <small class="ir-eligible-copy">Injured Reserve (IR) eligible</small>
-        }
-
-        @if (getPlayerAvailabilityNote(pick.asset); as availabilityNote) {
-          <small class="player-availability-note">{{ availabilityNote }}</small>
+          <small class="ir-eligible-copy">IR eligible</small>
         }
       </div>
     }
-
-    <div class="drafted-player-projections">
-  <small class="rank-pill">
-    Rank {{ getAssetValueRankDisplay(pick.asset) }}
-  </small>
-
-  <small>
-    {{ getAssetRatingLabel(pick.asset) }}:
-    {{ getAssetRatingDisplay(pick.asset) }}
-  </small>
-
-  <small>
-    {{ getAssetRiskLabel(pick.asset) }}
-  </small>
-
-  <small
-    [class]="'recent-form-pill ' + getAssetRecentFormClass(pick.asset)"
-    [attr.title]="getAssetProjectionDataLabel(pick.asset)"
-  >
-    {{ getAssetRecentFormLabel(pick.asset) }}
-  </small>
-
-  @if (getAssetExpectedGamesDisplay(pick.asset); as expectedGames) {
-    <small class="availability-projection-pill">
-      {{ getAssetAvailabilityLabel(pick.asset) }} · {{ expectedGames }}
-    </small>
-  }
-
-  <small>
-    Next 6 Games:
-    {{ getProjectionDisplay(getAssetProjectedCycle(pick.asset)) }}
-  </small>
-
-  <small>
-    Season Outlook:
-    {{ getProjectionDisplay(getAssetProjectedSeason(pick.asset)) }}
-  </small>
-</div>
-
-@if (hasDraftNews(pick.asset)) {
-  <div
-    class="asset-draft-news-row drafted-news-row"
-    [attr.title]="getDraftNewsTooltip(pick.asset)"
-  >
-    @if (getDraftNewsNote(pick.asset); as note) {
-      <small class="draft-news-note">{{ note }}</small>
-    }
-  </div>
-}
   </div>
 </article>
         }
@@ -1072,7 +964,7 @@
         </aside>
       </section>
 
-      @if (selectedAsset(); as selectedAsset) {
+      @if (isMyTurn() ? selectedAsset() : null; as selectedAsset) {
         <section class="draft-mobile-selection-bar" aria-live="polite">
           <button
             type="button"

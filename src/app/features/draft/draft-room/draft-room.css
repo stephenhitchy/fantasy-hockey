@@ -224,22 +224,23 @@
 }
 .draft-asset-card {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(150px, 1fr) minmax(180px, 0.85fr) auto;
   align-items: center;
-  gap: 16px;
-  padding: 10px;
+  gap: 10px;
+  min-height: 58px;
+  padding: 7px 8px;
   border: 1px solid var(--rr-draft-room-migration-color-01);
   border-radius: 9px;
   background: var(--rr-draft-room-migration-color-05);
 }
 .draft-asset-card.has-team-change-logo {
-  grid-template-columns: 112px minmax(0, 1fr) auto;
+  grid-template-columns: 82px minmax(150px, 1fr) minmax(180px, 0.85fr) auto;
 }
 .asset-logo,
 .asset-logo-fallback {
   display: grid;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   place-items: center;
 }
 .asset-logo {
@@ -253,8 +254,8 @@
   font-weight: 800;
 }
 .asset-logo-fallback-small {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   font-size: 8px;
 }
 .asset-team-change-logo,
@@ -266,7 +267,7 @@
   min-width: 0;
 }
 .asset-team-change-logo {
-  width: 108px;
+  width: 80px;
 }
 .team-change-inline-arrow {
   flex: 0 0 auto;
@@ -278,40 +279,49 @@
 .asset-copy {
   min-width: 0;
 }
-.asset-copy strong,
-.asset-copy span {
+.asset-copy > strong,
+.asset-identity-meta > span:first-child {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.asset-copy strong {
+.asset-copy > strong {
   color: #1e314a;
   font-size: 14px;
 }
-.asset-copy span {
-  margin-top: 3px;
+.asset-identity-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.asset-identity-meta > span:first-child {
+  flex: 0 1 auto;
+  min-width: 0;
   color: var(--rr-draft-room-migration-color-18);
   font-size: 12px;
   font-weight: 700;
 }
-.draft-asset-card button {
-  padding: 8px 11px;
-  border: 0;
-  border-radius: 7px;
-  background: #17263d;
-  color: white;
-  cursor: pointer;
-  font: inherit;
+.asset-identity-meta .player-availability-pill {
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 3px 6px;
+}
+.asset-identity-meta .player-availability-pill small {
+  margin-left: 2px;
+  font-size: inherit;
+}
+.draft-asset-card .rr-button {
+  --rr-button-min-height: 40px;
+  --rr-button-padding: 8px 11px;
+
   font-size: 12px;
-  font-weight: 800;
 }
-.draft-asset-card button:hover:not(:disabled) {
-  background: var(--rr-draft-room-migration-color-19);
-}
-.draft-asset-card button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+.draft-asset-card .draft-button {
+  min-width: 96px;
+  letter-spacing: 0.02em;
 }
 .pool-loading,
 .pool-error {
@@ -474,9 +484,6 @@
   .drafted-player-row.has-team-change-logo {
     grid-template-columns: 82px minmax(0, 1fr);
   }
-  .draft-asset-card button {
-    grid-column: 1 / -1;
-  }
 }
 .pool-error-block {
   padding: 18px 0;
@@ -496,21 +503,40 @@
 .retry-pool-button:hover {
   background: #f4f8fc;
 }
-.asset-projection-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 5px;
+.asset-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(52px, 1fr));
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
-.asset-projection-strip small {
-  color: var(--rr-draft-room-migration-color-20);
-  font-size: 11px;
+.asset-metric {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  text-align: center;
+}
+.asset-metric small,
+.asset-metric strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-metric small {
+  color: var(--text-secondary);
+  font-size: 10px;
   font-weight: 800;
+  letter-spacing: 0.02em;
 }
-.asset-projection-strip .rank-pill,
-.drafted-player-projections .rank-pill {
-  color: var(--rr-draft-room-migration-color-08);
+.asset-metric strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
   font-weight: 900;
+}
+.rank-metric strong {
+  color: var(--rr-color-link);
 }
 .roster-card {
   max-height: 720px;
@@ -544,22 +570,22 @@
 }
 .drafted-player-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
-  gap: 13px;
-  padding: 10px;
+  gap: 9px;
+  padding: 7px 8px;
   border: 1px solid var(--rr-draft-room-migration-color-01);
   border-radius: 9px;
   background: var(--rr-draft-room-migration-color-05);
 }
 .drafted-player-row.has-team-change-logo {
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 .drafted-player-logo,
 .drafted-player-logo-fallback {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   place-items: center;
 }
 .drafted-player-logo {
@@ -582,7 +608,7 @@
 }
 .drafted-player-main {
   display: grid;
-  gap: 7px;
+  gap: 4px;
   min-width: 0;
 }
 .drafted-player-row strong,
@@ -600,16 +626,6 @@
   font-size: 11px;
   font-weight: 700;
 }
-.drafted-player-projections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.drafted-player-projections small {
-  color: var(--rr-draft-room-migration-color-20);
-  font-size: 11px;
-  font-weight: 800;
-}
 .empty-roster-slot {
   padding: 9px 10px;
   border: 1px dashed #c9d5e1;
@@ -622,32 +638,6 @@
 @media (max-width: 620px) {
   .pool-controls {
     grid-template-columns: 1fr;
-  }
-}
-.asset-draft-news-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 6px;
-}
-.draft-news-note {
-  color: #5c7087;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.drafted-news-row {
-  margin-top: 0;
-}
-@media (max-width: 620px) {
-  .asset-draft-news-row {
-    grid-column: 1 / -1;
-  }
-  .player-availability-pill,
-  .player-availability-note,
-  .draft-news-note {
-    white-space: normal;
   }
 }
 .player-availability-row {
@@ -706,12 +696,6 @@
   font-weight: 900;
   text-transform: uppercase;
 }
-.player-availability-note {
-  color: #5c7087;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-}
 .drafted-availability-row {
   margin-top: 0;
 }
@@ -719,8 +703,7 @@
   .player-availability-row {
     grid-column: 1 / -1;
   }
-  .player-availability-pill,
-  .player-availability-note {
+  .player-availability-pill {
     white-space: normal;
   }
 }
@@ -1024,22 +1007,15 @@
   border-color: #91c3a0;
 }
 .asset-actions {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 7px;
-  min-width: 90px;
+  min-width: 82px;
 }
 .queue-button.queued {
   border-color: #7aa78a;
   background: #e7f6ec;
   color: #22643b;
-}
-.draft-button {
-  border: 0;
-  background: var(--rr-draft-room-migration-color-13);
-  color: white;
-}
-.draft-button:hover:not(:disabled) {
-  background: #29496f;
 }
 .draft-button:disabled,
 .queue-button:disabled,
@@ -1181,16 +1157,10 @@
     min-height: 34px;
     padding: 6px 9px;
   }
-  .draft-asset-card,
-  .draft-asset-card.has-team-change-logo {
-    grid-template-columns: 46px minmax(0, 1fr);
-  }
-  .draft-asset-card.has-team-change-logo {
-    grid-template-columns: 112px minmax(0, 1fr);
-  }
   .asset-actions {
+    display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: 1fr 1.2fr;
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
     min-width: 0;
   }
   .queue-card-heading {
@@ -1218,34 +1188,6 @@
     grid-column: 1 / -1;
     justify-content: flex-end;
   }
-}
-.recent-form-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-weight: 900;
-}
-.recent-form-pill.form-positive {
-  background: #e7f8ed;
-  color: #20703d;
-}
-.recent-form-pill.form-negative {
-  background: #fff0f1;
-  color: #a63b49;
-}
-.recent-form-pill.form-neutral {
-  background: #eef2f6;
-  color: var(--rr-draft-room-migration-color-12);
-}
-.availability-projection-pill {
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: #fff4d8;
-  color: #75520e !important;
-  font-weight: 850;
-  white-space: nowrap;
 }
 .pool-loading-block,
 .pool-error-block {
@@ -1405,13 +1347,11 @@
   .draft-state-badge,
   .recent-pick-row > span,
   .recent-pick-row small,
-  .asset-projection-strip small,
+  .asset-metric small,
+  .asset-metric strong,
   .drafted-player-row span,
-  .drafted-player-projections small,
-  .draft-news-note,
   .player-availability-pill,
   .ir-eligible-copy,
-  .player-availability-note,
   .draft-injury-sync-banner span,
   .draft-pick-track-heading > span,
   .draft-pick-number,
@@ -1429,7 +1369,7 @@
   .queue-copy strong {
     font-size: var(--rr-mobile-text-player);
   }
-  .asset-copy span {
+  .asset-identity-meta > span:first-child {
     font-size: var(--rr-mobile-text-label);
   }
   .header-auto-draft-toggle,
@@ -1796,8 +1736,14 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--rr-info) 14%, transparent);
   }
   .asset-actions {
+    display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  }
+  .asset-metrics {
+    grid-column: 2;
+    grid-template-columns: repeat(3, minmax(48px, 1fr));
+    width: 100%;
   }
   .draft-button {
     display: none;
@@ -1957,9 +1903,3 @@
     width: 100%;
   }
 }
-.draft-watchlist-error{margin:0 0 12px}
-.draft-watchlist-filter,.draft-watchlist-button{min-height:44px;border-color:color-mix(in srgb,var(--rr-color-warning) 40%,var(--rr-color-border))}
-.draft-watchlist-filter{align-self:stretch;white-space:nowrap}
-.draft-watchlist-filter-active,.draft-watchlist-button-active{border-color:color-mix(in srgb,var(--rr-color-warning) 72%,var(--rr-color-border-strong));background:color-mix(in srgb,var(--rr-color-warning) 16%,var(--rr-color-surface-raised));color:var(--rr-color-text)}
-@media (min-width:621px){.pool-controls{grid-template-columns:minmax(0,1fr) 160px 190px auto}}
-@media (max-width:760px){.draft-watchlist-filter,.draft-watchlist-button{width:100%}.asset-actions{grid-template-columns:repeat(3,minmax(0,1fr))}}
