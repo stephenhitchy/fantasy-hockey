@@ -33,6 +33,8 @@ export type FinalScoreReconciliationFindingCode =
   | 'completed-game-not-scheduled'
   | 'incomplete-game-not-scheduled'
   | 'appearance-game-not-scheduled'
+  | 'game-score-not-scheduled'
+  | 'game-score-state-invalid'
   | 'completed-and-incomplete-game-overlap'
   | 'completed-game-state-not-final'
   | 'scheduled-game-count-mismatch'
@@ -134,6 +136,16 @@ export function inspectFinalScoreCycleTeamWindowScope(input: {
 
   const entries = Object.entries(expectedByOwner);
 
+  if (entries.length === 0) {
+    return {
+      expectedTeamDocumentIds: [],
+      expectedRosterSlotIdsByTeam: {},
+      inspectionIncomplete: true,
+      reason:
+        'The cycle has no expected team-window documents, so finalized games cannot be ruled out.',
+    };
+  }
+
   if (entries.length > maxTeamDocuments) {
     return {
       expectedTeamDocumentIds: [],
@@ -151,6 +163,7 @@ export function inspectFinalScoreCycleTeamWindowScope(input: {
     if (
       !isSafeFirestoreDocumentId(ownerId, FIRESTORE_AUTH_USER_ID_OPTIONS) ||
       !Array.isArray(rawSlotIds) ||
+      rawSlotIds.length === 0 ||
       rawSlotIds.length > maxWindowsPerTeam
     ) {
       return {
@@ -626,6 +639,56 @@ function getWindowStorageIssues(input: {
   const appearanceIds = positiveGameIds(window.appearanceGameIds);
   const scheduledSet = new Set(scheduledIds);
   const completedSet = new Set(completedIds);
+  const unexpectedScoreKeys = Object.keys(window.gameScores).filter((key) => {
+    if (!/^[1-9]\d*$/.test(key)) {
+      return true;
+    }
+
+    const gameId = Number(key);
+    return !Number.isSafeInteger(gameId) || !scheduledSet.has(gameId);
+  });
+
+  if (unexpectedScoreKeys.length > 0) {
+    const entryLabel = unexpectedScoreKeys.length === 1
+      ? 'entry is'
+      : 'entries are';
+
+    issues.push(storageIssue(
+      window,
+      teamKey,
+      'game-score-not-scheduled',
+      `${unexpectedScoreKeys.length} saved per-game score ${entryLabel} ` +
+        'outside this immutable window assignment.',
+    ));
+  }
+
+  const invalidStateScoreCount = Object.keys(window.gameScores).filter((key) => {
+    if (!/^[1-9]\d*$/.test(key)) {
+      return false;
+    }
+
+    const gameId = Number(key);
+    return Number.isSafeInteger(gameId) &&
+      scheduledSet.has(gameId) &&
+      (
+        window.gameStates[key] === undefined ||
+        window.gameStates[key] === 'scheduled'
+      );
+  }).length;
+
+  if (invalidStateScoreCount > 0) {
+    const entryLabel = invalidStateScoreCount === 1
+      ? 'entry has'
+      : 'entries have';
+
+    issues.push(storageIssue(
+      window,
+      teamKey,
+      'game-score-state-invalid',
+      `${invalidStateScoreCount} saved per-game score ${entryLabel} ` +
+        'no live or final game state.',
+    ));
+  }
 
   for (const gameId of duplicateGameIds(window.scheduledGameIds)) {
     issues.push(storageIssue(

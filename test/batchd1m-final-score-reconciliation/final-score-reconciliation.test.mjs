@@ -340,7 +340,7 @@ test('window storage invariants report integrity candidates without double-count
     appearanceGameIds: [1, 5, 5],
     liveGameIds: [4],
     gameStates: { '1': 'live', '2': 'final' },
-    gameScores: { '1': 0, '2': 1 },
+    gameScores: { '1': 0, '2': 1, '999': 7 },
     scheduledGames: 7,
     gamesPlayed: 5,
     actualGamesPlayed: 9,
@@ -357,6 +357,7 @@ test('window storage invariants report integrity candidates without double-count
     'completed-game-not-scheduled',
     'incomplete-game-not-scheduled',
     'appearance-game-not-scheduled',
+    'game-score-not-scheduled',
     'completed-and-incomplete-game-overlap',
     'completed-game-state-not-final',
     'scheduled-game-count-mismatch',
@@ -371,6 +372,42 @@ test('window storage invariants report integrity candidates without double-count
 
   assert.equal(result.finalizedGameCount, 2);
   assert.ok(result.integrityIssueCount >= 15);
+});
+
+test('an unscheduled score cannot hide inside an otherwise matching window total', () => {
+  const result = reconcile(completedWindow({
+    gameScores: { '1': 0, '999': 5 },
+    gameStates: { '1': 'final', '999': 'final' },
+    fantasyPoints: 5,
+  }));
+
+  assert.equal(result.verifiedGameCount, 1);
+  assert.equal(result.candidateGameCount, 0);
+  assert.equal(result.unverifiableGameCount, 0);
+  assert.equal(result.integrityIssueCount, 1);
+  assert.equal(result.findings[0].code, 'game-score-not-scheduled');
+  assert.match(result.findings[0].reason, /outside this immutable window assignment/);
+});
+
+test('a score for a future scheduled game cannot inflate an otherwise matching window', () => {
+  const result = reconcile(completedWindow({
+    status: 'active',
+    scheduledGameIds: [1, 2],
+    completedGameIds: [1],
+    gameScores: { '1': 0, '2': 5 },
+    gameStates: { '1': 'final', '2': 'scheduled' },
+    scheduledGames: 2,
+    gamesPlayed: 1,
+    gamesLeft: 1,
+    fantasyPoints: 5,
+  }));
+
+  assert.equal(result.verifiedGameCount, 1);
+  assert.equal(result.candidateGameCount, 0);
+  assert.equal(result.unverifiableGameCount, 0);
+  assert.equal(result.integrityIssueCount, 1);
+  assert.equal(result.findings[0].code, 'game-score-state-invalid');
+  assert.match(result.findings[0].reason, /no live or final game state/);
 });
 
 test('final-game and finding limits stay visible while aggregate counts remain accurate', () => {
@@ -463,6 +500,16 @@ test('cycle scope proves expected team-document coverage before a clean result',
   assert.equal(complete.inspectionIncomplete, false);
 
   for (const incomplete of [
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: {},
+      totalExpectedWindowCount: 0,
+      windowSchemaVersion: 1,
+    }),
+    reconciliation.inspectFinalScoreCycleTeamWindowScope({
+      expectedRosterSlotIdsByOwner: { 'owner-a': [] },
+      totalExpectedWindowCount: 0,
+      windowSchemaVersion: 1,
+    }),
     reconciliation.inspectFinalScoreCycleTeamWindowScope({
       expectedRosterSlotIdsByOwner: undefined,
       totalExpectedWindowCount: 0,

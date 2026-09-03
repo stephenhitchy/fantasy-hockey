@@ -56,6 +56,8 @@ The detector reports storage-integrity candidates for:
 - duplicate scheduled, completed, incomplete, or appearance game IDs;
 - completed or incomplete games outside the immutable scheduled set;
 - appearances outside the immutable scheduled set;
+- saved per-game score entries outside the immutable scheduled set;
+- saved scores attached to a missing or future scheduled game state;
 - a game marked both complete and incomplete;
 - a completed game whose saved state is not final;
 - scheduled, played, appearance, and remaining count mismatches;
@@ -93,12 +95,14 @@ Reaching any cap is visible and prevents a clean-audit conclusion.
 - A numeric legacy final without D1L provenance is unverifiable even if current canonical facts exist.
 - A saved final with an incomplete or malformed source contract is unverifiable.
 - A missing or malformed team-window structure makes the scan visibly incomplete; it cannot produce a clean result.
-- Missing cycle scope metadata, a missing expected team-window document, or an unexpected team-window document makes the scan visibly incomplete.
+- Missing or empty cycle scope metadata, an expected team with no roster slots, a missing expected team-window document, or an unexpected team-window document makes the scan visibly incomplete.
 - Each expected roster slot must have exactly one structurally valid window in the correct team document and cycle.
 - A canonical document without the relevant skater final settlement is unverifiable.
 - Current canonical evidence may contain a later NHL correction. A resulting difference is a candidate, not an automatic mutation.
 - Point-only, appearance-only, and combined differences remain distinct finding codes.
 - Duplicate IDs cannot inflate the number of finalized games inspected; duplicates are separate integrity findings.
+- An unscheduled per-game score cannot hide inside a matching saved window total; it is a separate integrity finding.
+- A score attached to a missing or future scheduled state cannot inflate a matching saved window total.
 - A paged retry can reread prior evidence safely because the operation performs no writes.
 - A route change invalidates the browser request generation so a late response cannot replace the next screen's state.
 - A partial scan or inspection cap is never labeled clean.
