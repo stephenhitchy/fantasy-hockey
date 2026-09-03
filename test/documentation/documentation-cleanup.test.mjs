@@ -47,6 +47,27 @@ test('root and canonical competitive roadmaps stay synchronized', async () => {
   assert.equal(rootRoadmap, canonicalRoadmap);
 });
 
+test('FF1 keeps invitation authorization separate from Draft authorization', async () => {
+  const [runbook, handoff, roadmap] = await Promise.all([
+    readFile(path.join(root, 'docs/RINKRAT_FF1_INVITATION_GATE_RUNBOOK.md'), 'utf8'),
+    readFile(path.join(root, 'docs/RINKRAT_CODEX_HANDOFF.md'), 'utf8'),
+    readFile(path.join(root, 'docs/RINKRAT_COMPETITIVE_ROADMAP.txt'), 'utf8'),
+  ]);
+
+  assert.match(runbook, /Passing this gate authorizes invitations only/i);
+  assert.match(runbook, /Stephen performs all\s+Production account, league, membership/i);
+  assert.match(runbook, /Production Hosting source: 1754f807/);
+  assert.match(runbook, /Repository review source: <current clean main revision>/);
+  assert.match(runbook, /Only documentation and test paths may appear/i);
+  assert.match(runbook, /Do not deploy a documentation-only commit/i);
+  assert.match(runbook, /Do not schedule or open a Draft in the reusable invitation\/removal league/i);
+  assert.match(runbook, /INV-01 through INV-18 are PASS/i);
+  assert.match(runbook, /never use a broad Firebase deployment/i);
+  assert.match(handoff, /RINKRAT_FF1_INVITATION_GATE_RUNBOOK\.md/);
+  assert.match(roadmap, /# \[x\] FF1\.13[\s\S]*1754f807/);
+  assert.match(roadmap, /\[ \] FF1\.9 Authorize real Drafts only after/i);
+});
+
 test('combined documentation and root README are present', async () => {
   assert.equal(await exists('docs/RINKRAT_PROJECT_DOCUMENTATION.md'), true);
   assert.equal(await exists('README.md'), true);

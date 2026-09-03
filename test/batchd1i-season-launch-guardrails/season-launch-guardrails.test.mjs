@@ -267,6 +267,6 @@ test('D1I scripts, documentation, and synchronized roadmaps are present', async 
   assert.match(scripts['verify:batchd1i:core'], /verify:batchd1h:core/);
   assert.match(readme, /RINKRAT_DATA_D1I_SEASON_LAUNCH_GUARDRAILS/);
   assert.match(docs, /automatic season fallback/i);
-  assert.match(rootRoadmap, /Version 1\.54\.8/);
+  assert.match(rootRoadmap, /^RINKRAT COMPETITIVE ROADMAP\nVersion 1\.54\.\d+/);
   assert.equal(rootRoadmap, docsRoadmap);
 });

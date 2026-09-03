@@ -110,7 +110,7 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `dc8138afe2493d5fdf89fb528bd91fa691fcdf91`, Release Candidate 65,
+  `1754f80736e9abef46b08cccef7142c021cdf3a8`, Release Candidate 65,
   Production Scoring V4, Projection V11.
 - Deployed Function inventory: 106 expected, 106 matched, no missing,
   unexpected, duplicate, or region-mismatched exports.
@@ -120,8 +120,12 @@ must not automatically rewrite production scores.
   fresh-auth/password and exact-team confirmation, server-owned transactional
   cleanup, audit publication, and idempotent retry behavior. Do not extend it
   into destructive post-Draft removal.
-- The D1N no-op identity-write repair and D1M detect-only reconciler remain on
-  separate, unmerged branches.
+- The D1N no-op identity-write repair is merged and deployed. An authenticated
+  staging sample reached the expected 20-listener/26-document Available
+  Players envelope, returned to zero listeners on Support, and recorded zero
+  `team:list` pending-write snapshots, listener errors, unknown counts, or
+  awaiting-first-snapshot listeners.
+- The D1M detect-only reconciler remains on a separate, unmerged branch.
 - App Check remains Monitor, scoring queue rollout remains unchanged, canonical
   authority is not being expanded, and direct NHL scoring remains the fallback.
 
@@ -150,7 +154,8 @@ Do not increase concurrency based only on Historical Replay timing.
 
 D1N currently provides privacy-safe route/listener envelopes in the separate
 billed staging project, authenticated high-risk-route samples, repaired Draft
-focus/same-page cleanup, and pending-write attribution to `team:list`.
+focus/same-page cleanup, pending-write attribution, and a deployed no-op
+identity-write repair that removed the observed `team:list` pending write.
 Controlled reconnect, multi-tab, physical-device evidence and the 100/500/
 2,000/5,000 staging ramps remain open. The 2,000/5,000 ramps are public-scale
 evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
@@ -189,23 +194,26 @@ playoff identities. Normal releases must not require reinvites or Draft
 recreation. Permit only narrow, tested, observable, reversible P0/P1 integrity,
 security, availability, accessibility, or objectively incorrect-result fixes.
 
+Use `docs/RINKRAT_FF1_INVITATION_GATE_RUNBOOK.md` for the disposable Production
+matrix. It keeps Production writes with Stephen, uses bounded evidence aliases,
+and defines the invitation-only exit decision and stop conditions.
+
 ## Current priority order
 
-1. Rebase, review, and release the D1N no-op identity-write repair.
-2. Run the exact current-Production disposable invitation and commissioner
+1. Run the exact current-Production disposable invitation and commissioner
    pre-Draft removal/reinvite matrix; authorize the real family-and-friends
    invitations only if it passes.
-3. Rebase, independently review, stage, and release D1M detect-only finalized-
+2. Rebase, independently review, stage, and release D1M detect-only finalized-
    score reconciliation. Do not add automatic correction.
-4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-5. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
+4. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
    and staging-only 100/500 operation evidence before Draft.
-6. Generate and independently review the D1J season-freeze kit, exact tag,
+5. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

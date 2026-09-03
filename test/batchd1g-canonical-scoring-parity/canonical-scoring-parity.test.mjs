@@ -305,6 +305,6 @@ test('D1G release scripts, documentation, and synchronized roadmaps are present'
   assert.match(scripts['verify:batchd1g:core'], /verify:batchd1f2:core/);
   assert.match(readme, /RINKRAT_DATA_D1G_CANONICAL_SCORING_PARITY/);
   assert.match(docs, /direct NHL scoring remains authoritative/i);
-  assert.match(rootRoadmap, /Version 1\.54\.8/);
+  assert.match(rootRoadmap, /^RINKRAT COMPETITIVE ROADMAP\nVersion 1\.54\.\d+/);
   assert.equal(rootRoadmap, docsRoadmap);
 });
