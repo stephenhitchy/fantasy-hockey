@@ -447,6 +447,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
         'src/shared/core/nhl/nhl-final-input-completeness.util.ts',
         'src/shared/core/playoffs/playoff-window-bank.service.ts',
+        // D1M adds an isolated, detect-only final-score reconciliation classifier.
+        'src/shared/core/nhl/final-score-reconciliation.util.ts',
       ]),
     }),
     'fbffd287343e1545f009e7576e897ecede44a7cdb8712f8366c4b036476eceef',
