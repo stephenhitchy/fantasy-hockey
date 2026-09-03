@@ -210,6 +210,26 @@ test('a legitimate Team Goalie Unit zero uses its smaller complete source contra
   assert.equal(result.unverifiableGameCount, 0);
 });
 
+test('one unsupported asset produces one unverifiable finalized game', () => {
+  const unknownAsset = {
+    assetType: 'unknown',
+    assetKey: 'unknown-7',
+    position: 'C',
+  };
+  const result = reconcile(completedWindow({
+    assetKey: unknownAsset.assetKey,
+    asset: unknownAsset,
+  }));
+
+  assert.equal(result.finalizedGameCount, 1);
+  assert.equal(result.verifiedGameCount, 0);
+  assert.equal(result.candidateGameCount, 0);
+  assert.equal(result.unverifiableGameCount, 1);
+  assert.equal(result.findingCount, 1);
+  assert.equal(result.findings[0].status, 'unverifiable');
+  assert.equal(result.findings[0].code, 'window-asset-invalid');
+});
+
 test('missing or invalid saved final evidence remains explicitly unverifiable', () => {
   const missingScore = reconcile(completedWindow({ gameScores: {} }));
   const missing = reconcile(completedWindow({ gameInputCompleteness: {} }));
@@ -595,6 +615,7 @@ test('the callable is platform-admin-only, paged, bounded, pseudonymized, and re
   assert.match(implementation, /inspectFinalScoreCycleTeamWindowScope/);
   assert.match(implementation, /expectedTeamDocumentIds/);
   assert.match(implementation, /missingTeamDocumentCount/);
+  assert.match(implementation, /latestCycle\.id !== `cycle-\$\{cycleNumber\}`/);
   assert.match(implementation, /teamDocumentCoverageChecked/);
   assert.match(implementation, /windowGameLimitReached/);
   assert.match(implementation, /final-score-reconciliation:\$\{input\.leagueId\}:\$\{snapshot\.id\}/);
@@ -652,7 +673,7 @@ test('D1M documents acceptance, observability, exact resources, and no correctio
   const scripts = JSON.parse(packageSource).scripts;
 
   assert.match(scripts['test:batchd1m:run'], /batchd1m-final-score-reconciliation/);
-  assert.match(scripts['verify:batchd1m:core'], /verify:batchd1n-staging:core/);
+  assert.match(scripts['verify:batchd1m:core'], /verify:batchl1a:core/);
   assert.match(design, /## Acceptance criteria/);
   assert.match(design, /## Edge cases/);
   assert.match(design, /## Observability/);

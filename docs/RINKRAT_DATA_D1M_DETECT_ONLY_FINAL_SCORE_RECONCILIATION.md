@@ -96,6 +96,7 @@ Reaching any cap is visible and prevents a clean-audit conclusion.
 - A saved final with an incomplete or malformed source contract is unverifiable.
 - A missing or malformed team-window structure makes the scan visibly incomplete; it cannot produce a clean result.
 - Missing or empty cycle scope metadata, an expected team with no roster slots, a missing expected team-window document, or an unexpected team-window document makes the scan visibly incomplete.
+- A latest-cycle document whose ID does not match its declared cycle number fails closed instead of redirecting the audit to another cycle path.
 - Each expected roster slot must have exactly one structurally valid window in the correct team document and cycle.
 - A canonical document without the relevant skater final settlement is unverifiable.
 - Current canonical evidence may contain a later NHL correction. A resulting difference is a candidate, not an automatic mutation.

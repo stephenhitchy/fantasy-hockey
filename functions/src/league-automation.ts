@@ -6800,7 +6800,8 @@ async function loadFinalScoreReconciliationCycleScope(input: {
     !latestCycle ||
     typeof cycleNumber !== 'number' ||
     !Number.isInteger(cycleNumber) ||
-    cycleNumber <= 0
+    cycleNumber <= 0 ||
+    latestCycle.id !== `cycle-${cycleNumber}`
   ) {
     throw new HttpsError(
       'failed-precondition',
