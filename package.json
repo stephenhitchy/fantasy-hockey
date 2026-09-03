@@ -590,6 +590,11 @@
     "preverify:batchd1m": "npm run security:sync-repository-automation",
     "verify:batchd1m:core": "npm run verify:batchl1a:core && npm run test:batchd1m:run && npm run test:batchd1m-staging:run && npm run capacity:100k && npm run validate:release-manifest",
     "verify:batchd1m": "npm run toolchain:verify && npm run verify:batchd1m:core && npm run security:dependency-audit",
+    "ff1:draft:preflight": "node scripts/release/ff1-draft-preflight.mjs",
+    "test:batchff1:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchff1-draft-gate/*.test.mjs",
+    "preverify:batchff1": "npm run security:sync-repository-automation",
+    "verify:batchff1:core": "npm run verify:batchd1m:core && npm run test:batchff1:run && npm run ff1:draft:preflight -- --source-only && npm run capacity:100k:draft-night && npm run validate:release-manifest",
+    "verify:batchff1": "npm run toolchain:verify && npm run verify:batchff1:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
   },
   "private": true,

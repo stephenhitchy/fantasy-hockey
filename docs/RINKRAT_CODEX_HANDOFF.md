@@ -95,10 +95,10 @@ Already present:
   exact-version input evidence.
 - a platform-admin-only D1M-A detector that pages one exact league/cycle,
   distinguishes verified, candidate, and unverifiable finalized games, and
-  performs no competitive writes. The exact runtime is deployed only to the
-  isolated D1N staging project; its bounded admin/non-admin, repeat-delivery,
-  latest-cycle, legitimate-zero, mismatch, unverifiable, and unchanged-state
-  evidence passed. It is not deployed or proven in Production.
+  performs no competitive writes. Its bounded staging admin/non-admin,
+  repeat-delivery, latest-cycle, legitimate-zero, mismatch, unverifiable, and
+  unchanged-state evidence passed. The exact read-only Function is ACTIVE in
+  Production; an unauthenticated Production request was denied as expected.
 
 Not fully finished:
 
@@ -117,10 +117,12 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `1754f80736e9abef46b08cccef7142c021cdf3a8`, Release Candidate 65,
+  `01e93ac522f99a090489fc3e7da1d6602937ffee`, Release Candidate 65,
   Production Scoring V4, Projection V11.
-- Deployed Function inventory: 106 expected, 106 matched, no missing,
-  unexpected, duplicate, or region-mismatched exports.
+- Deployed Function inventory: 107 expected, 107 matched, with no missing,
+  unexpected, duplicate, or region-mismatched exports after the D1M release.
+  The Draft/Projection-critical set and D1M detector are ACTIVE; repeat this
+  read-only evidence in the exact FF1 freeze record.
 - `processHistoricalReplayAdvance`, `removeLeagueMemberSecure`, and
   `publishLeagueAuditActivity` are ACTIVE.
 - Commissioner member removal is supported before Draft only. It uses
@@ -132,10 +134,11 @@ must not automatically rewrite production scores.
   Players envelope, returned to zero listeners on Support, and recorded zero
   `team:list` pending-write snapshots, listener errors, unknown counts, or
   awaiting-first-snapshot listeners.
-- The D1M detect-only reconciler remains outside Production. Its isolated
-  staging runtime and synthetic behavior evidence passed; clean merge,
-  targeted Production release, exact Function revision, Hosting manifest, and
-  post-release read-only smoke evidence remain required.
+- The D1M detect-only reconciler is merged and released. Production
+  `getFinalScoreReconciliationPage` is ACTIVE on Node 22 with a bounded maximum
+  of three instances; unauthenticated access fails closed. Authenticated
+  platform-admin read-only smoke evidence remains part of the FF1 lifecycle
+  rehearsal, and automatic correction remains out of scope.
 - App Check remains Monitor, scoring queue rollout remains unchanged, canonical
   authority is not being expanded, and direct NHL scoring remains the fallback.
 
@@ -184,19 +187,20 @@ evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command at this release is
-  `npm run verify:batchl1a`, followed by `npm run build:all`,
+- The inherited exact-source verification command after the FF1 gate merges is
+  `npm run verify:batchff1`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
 ## 2026–27 private-season freeze
 
-Invitation and Draft authorization are separate gates. League preparation may
-use disposable identities now. Send real invitations only after the exact
-current Production invitation/removal matrix passes. Do not conduct a real
-Draft until the exact-build six-team lifecycle, physical-device Draft
-rehearsal, D1M detect-only release, D1N reconnect/100/500 evidence, and D1J
-freeze/tag/rollback record pass with no unresolved P0/P1 integrity finding.
+Invitation and Draft authorization are separate gates. The owner reports the
+current invitation/removal paths passing on desktop Safari/Chrome and physical
+iPhone Safari and has accepted the missing Android invitation sample for the
+small observed cohort. Do not conduct a real Draft until the exact-build
+six-team lifecycle, physical iPhone and Android Draft rehearsal, D1N
+reconnect/100/500 evidence, and D1J freeze/tag/rollback record pass with no
+unresolved P0/P1 integrity finding.
 
 After the first real Draft, freeze competitive feature work. Preserve league,
 membership, team, roster, Draft, player-window, transaction, standings, and
@@ -208,17 +212,19 @@ Use `docs/RINKRAT_FF1_INVITATION_GATE_RUNBOOK.md` for the disposable Production
 matrix. It keeps Production writes with Stephen, uses bounded evidence aliases,
 and defines the invitation-only exit decision and stop conditions.
 
+Use `docs/RINKRAT_FF1_DRAFT_GATE_RUNBOOK.md` for the separate exact-release
+Draft/lifecycle matrix. Its preflight is read-only and authorizes evidence
+collection only; the final FF1.16 Draft go/no remains mandatory.
+
 ## Current priority order
 
-1. Run the exact current-Production disposable invitation and commissioner
-   pre-Draft removal/reinvite matrix; authorize the real family-and-friends
-   invitations only if it passes.
-2. Rebase, independently review, stage, and release D1M detect-only finalized-
-   score reconciliation. Do not add automatic correction.
-3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+1. Independently review and merge the FF1 Draft gate, run its full inherited
+   release gate on clean `main`, then run the read-only live preflight.
+2. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-4. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
+3. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
    and staging-only 100/500 operation evidence before Draft.
+4. Record the no-post-Draft-replacement or account-transfer decision.
 5. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
 6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
