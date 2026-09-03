@@ -279,14 +279,22 @@
 .asset-copy {
   min-width: 0;
 }
-.asset-copy > strong,
+.asset-name-row > strong,
 .asset-identity-meta > span:first-child {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.asset-copy > strong {
+.asset-name-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.asset-name-row > strong {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #1e314a;
   font-size: 14px;
 }
@@ -304,14 +312,42 @@
   font-size: 12px;
   font-weight: 700;
 }
-.asset-identity-meta .player-availability-pill {
+.draft-player-availability {
+  display: inline-flex;
   flex: 0 0 auto;
-  min-height: 20px;
-  padding: 3px 6px;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--rr-color-text-secondary);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
 }
-.asset-identity-meta .player-availability-pill small {
-  margin-left: 2px;
+.draft-player-availability-danger {
+  color: var(--rr-color-danger);
+}
+.draft-player-availability-warning {
+  color: var(--rr-color-warning);
+}
+.draft-player-availability .pixel-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+.draft-player-availability small {
+  color: inherit;
   font-size: inherit;
+  font-weight: 800;
+}
+.draft-player-availability-symbol {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  place-items: center;
+  font-size: 10px;
+  line-height: 1;
 }
 .draft-asset-card .rr-button {
   --rr-button-min-height: 40px;
@@ -611,6 +647,19 @@
   gap: 4px;
   min-width: 0;
 }
+.drafted-player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.drafted-player-name-row > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .drafted-player-row strong,
 .drafted-player-row span,
 .drafted-player-row small {
@@ -626,6 +675,19 @@
   font-size: 11px;
   font-weight: 700;
 }
+.drafted-player-row .draft-player-availability,
+.drafted-player-row .draft-player-availability span,
+.drafted-player-row .draft-player-availability small {
+  display: inline-flex;
+  margin-top: 0;
+  color: inherit;
+}
+.drafted-player-row .draft-player-availability-danger {
+  color: var(--rr-color-danger);
+}
+.drafted-player-row .draft-player-availability-warning {
+  color: var(--rr-color-warning);
+}
 .empty-roster-slot {
   padding: 9px 10px;
   border: 1px dashed #c9d5e1;
@@ -638,73 +700,6 @@
 @media (max-width: 620px) {
   .pool-controls {
     grid-template-columns: 1fr;
-  }
-}
-.player-availability-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 7px;
-}
-.player-availability-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 23px;
-  padding: 4px 8px;
-  border: 1px solid #bcc9d6;
-  border-radius: 999px;
-  background: #edf2f7;
-  color: #445a70;
-  font-size: 10px;
-  font-weight: 950;
-  line-height: 1;
-  white-space: nowrap;
-}
-.availability-day-to-day {
-  border-color: #dfbf67;
-  background: #fff7d8;
-  color: #735300;
-}
-.availability-out,
-.availability-injured-reserve,
-.availability-long-term-injured-reserve {
-  border-color: #df8d8d;
-  background: #ffeaea;
-  color: #8d2424;
-}
-.availability-suspended,
-.availability-personal-leave {
-  border-color: #c9a86b;
-  background: #fff2dc;
-  color: #765019;
-}
-.availability-unknown {
-  border-color: #aebdcb;
-  background: #eef2f6;
-  color: #52677b;
-}
-.availability-active {
-  border-color: #92c5a0;
-  background: #e9f8ed;
-  color: #23633a;
-}
-.ir-eligible-copy {
-  color: #8d2424;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-.drafted-availability-row {
-  margin-top: 0;
-}
-@media (max-width: 620px) {
-  .player-availability-row {
-    grid-column: 1 / -1;
-  }
-  .player-availability-pill {
-    white-space: normal;
   }
 }
 .injury-sync-waiting-card {
@@ -1350,8 +1345,7 @@
   .asset-metric small,
   .asset-metric strong,
   .drafted-player-row span,
-  .player-availability-pill,
-  .ir-eligible-copy,
+  .draft-player-availability,
   .draft-injury-sync-banner span,
   .draft-pick-track-heading > span,
   .draft-pick-number,

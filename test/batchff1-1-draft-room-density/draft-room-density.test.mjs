@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { getDraftPlayerAvailabilityDisplay } from '../../src/app/features/draft/draft-room/draft-player-availability.util.ts';
 import { matchesDraftPlayerSearch } from '../../src/app/features/draft/draft-room/draft-player-search.util.ts';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -28,7 +29,8 @@ test('Draft cards retain only identity, injury, rank, Next 6, Season, queue, and
   ]);
 
   assert.match(template, /class="asset-identity-meta"/);
-  assert.match(template, /getPlayerAvailabilityLabel\(asset\)/);
+  assert.match(template, /getDraftPlayerAvailabilityDisplay\(asset\)/);
+  assert.match(template, /class="pixel-icon icon-injury icon-sm"/);
   assert.match(template, /<small>Rank<\/small>/);
   assert.match(template, /<small>Next 6<\/small>/);
   assert.match(template, /<small>Season<\/small>/);
@@ -40,6 +42,48 @@ test('Draft cards retain only identity, injury, rank, Next 6, Season, queue, and
   assert.doesNotMatch(template, /drafted-player-projections|asset-draft-news-row/);
   assert.doesNotMatch(component, /getPlayerWatchlist|setPlayerWatchlistEntry|watchlistOnly/);
   assert.doesNotMatch(component, /'RELIABILITY'|'RATING'/);
+});
+
+test('Draft availability hides healthy source records and presents bounded injury timing', () => {
+  const base = {
+    playerId: 1,
+    playerName: 'Example Player',
+    label: 'Active',
+    shortLabel: 'Active',
+    irEligible: false,
+    note: '',
+    updatedAt: '2026-09-03T00:00:00.000Z',
+    source: 'firestore',
+  };
+
+  assert.equal(getDraftPlayerAvailabilityDisplay({ ...base, status: 'active' }), null);
+
+  assert.deepEqual(getDraftPlayerAvailabilityDisplay({
+    ...base,
+    status: 'injured-reserve',
+    label: 'Injured Reserve',
+    shortLabel: 'IR',
+    irEligible: true,
+    externalReturnDate: '2026-09-15',
+  }, new Date('2026-09-03T00:00:00.000Z')), {
+    icon: 'injury',
+    iconText: '',
+    shortLabel: 'IR',
+    timingLabel: 'Est. Sep 15',
+    ariaLabel: 'Injured Reserve. Est. Sep 15. Injured Reserve eligible.',
+    tone: 'danger',
+  });
+
+  const unavailableDate = getDraftPlayerAvailabilityDisplay({
+    ...base,
+    status: 'out',
+    label: 'Out',
+    shortLabel: 'Out',
+    irEligible: true,
+    externalReturnDate: 'not-a-date',
+  });
+  assert.equal(unavailableDate?.timingLabel, 'Return TBD');
+  assert.equal(unavailableDate?.ariaLabel, 'Out. Return TBD. Injured Reserve eligible.');
 });
 
 test('Draft actions remain gated by the existing authoritative live-turn contract', async () => {
@@ -101,15 +145,18 @@ test('Draft cards use one compact desktop line and a bounded mobile reflow', asy
 });
 
 test('the density slice adds no Draft write path or projection/scoring calculation', async () => {
-  const [component, searchUtility] = await Promise.all([
+  const [component, searchUtility, availabilityUtility] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-player-search.util.ts'),
+    read('src/app/features/draft/draft-room/draft-player-availability.util.ts'),
   ]);
 
   assert.match(component, /makeDraftPick/);
   assert.match(component, /getDraftDestinationForAsset/);
   assert.doesNotMatch(searchUtility, /firebase|firestore|httpsCallable|setDoc|updateDoc|transaction/i);
   assert.doesNotMatch(searchUtility, /projected|scoring|window|game/i);
+  assert.doesNotMatch(availabilityUtility, /firebase|firestore|httpsCallable|setDoc|updateDoc|transaction/i);
+  assert.doesNotMatch(availabilityUtility, /projected|scoring|window|game/i);
 });
 
 test('the roadmap separates completed source behavior from lobby and start-readiness work', async () => {

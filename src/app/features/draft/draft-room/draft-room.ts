@@ -79,8 +79,6 @@ import {
 
 import {
   getPlayerAvailabilityForPlayer,
-  getPlayerAvailabilityStatusClass,
-  shouldDisplayPlayerAvailability,
   startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
 
@@ -117,6 +115,10 @@ import {
   mergeConfirmedDraftPick,
   type PendingDraftPickIdentity,
 } from './draft-pick-confirmation.util';
+import {
+  DraftPlayerAvailabilityDisplay,
+  getDraftPlayerAvailabilityDisplay,
+} from './draft-player-availability.util';
 import { matchesDraftPlayerSearch } from './draft-player-search.util';
 
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
@@ -3032,28 +3034,16 @@ export class DraftRoom implements OnDestroy {
     return getPlayerAvailabilityForPlayer(asset.player);
   }
 
-  shouldShowPlayerAvailabilityBadge(asset: DraftableAsset): boolean {
+  getDraftPlayerAvailabilityDisplay(
+    asset: DraftableAsset,
+  ): DraftPlayerAvailabilityDisplay | null {
     const availability = this.getPlayerAvailability(asset);
 
-    return availability ? shouldDisplayPlayerAvailability(availability) : false;
-  }
-
-  getPlayerAvailabilityLabel(asset: DraftableAsset): string {
-    return this.getPlayerAvailability(asset)?.shortLabel ?? '';
-  }
-
-  getPlayerAvailabilityClass(asset: DraftableAsset): string {
-    const availability = this.getPlayerAvailability(asset);
-
-    return availability ? getPlayerAvailabilityStatusClass(availability.status) : '';
+    return availability ? getDraftPlayerAvailabilityDisplay(availability) : null;
   }
 
   getPlayerAvailabilityNote(asset: DraftableAsset): string {
     return this.getPlayerAvailability(asset)?.note ?? '';
-  }
-
-  isPlayerAvailabilityIrEligible(asset: DraftableAsset): boolean {
-    return this.getPlayerAvailability(asset)?.irEligible ?? false;
   }
 
   getPositionRequirement(position: DraftPosition): number {

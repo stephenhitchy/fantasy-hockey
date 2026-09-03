@@ -628,27 +628,33 @@
                   }
 
                   <div class="asset-copy">
-                    <strong>{{ getAssetName(asset) }}</strong>
-                    <div class="asset-identity-meta">
-                      <span>{{ asset.position }} · {{ getAssetTeamLabel(asset) }}</span>
+                    <div class="asset-name-row">
+                      <strong>{{ getAssetName(asset) }}</strong>
 
-                      @if (shouldShowPlayerAvailabilityBadge(asset)) {
+                      @if (getDraftPlayerAvailabilityDisplay(asset); as availability) {
                         <span
-                          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(asset)"
-                          [attr.title]="getPlayerAvailabilityNote(asset) || getPlayerAvailabilityLabel(asset)"
-                          [attr.aria-label]="
-                            getPlayerAvailabilityLabel(asset) +
-                            (isPlayerAvailabilityIrEligible(asset) ? '. Injured Reserve eligible.' : '.') +
-                            (getPlayerAvailabilityNote(asset) ? ' ' + getPlayerAvailabilityNote(asset) : '')
-                          "
+                          class="draft-player-availability"
+                          [class.draft-player-availability-danger]="availability.tone === 'danger'"
+                          [class.draft-player-availability-warning]="availability.tone === 'warning'"
+                          [attr.title]="getPlayerAvailabilityNote(asset) || availability.ariaLabel"
+                          [attr.aria-label]="availability.ariaLabel"
                         >
-                          <span aria-hidden="true">✚</span>
-                          {{ getPlayerAvailabilityLabel(asset) }}
-                          @if (isPlayerAvailabilityIrEligible(asset)) {
-                            <small>IR</small>
+                          @if (availability.icon === 'injury') {
+                            <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
+                          } @else {
+                            <span class="draft-player-availability-symbol" aria-hidden="true">
+                              {{ availability.iconText }}
+                            </span>
+                          }
+                          <span>{{ availability.shortLabel }}</span>
+                          @if (availability.timingLabel) {
+                            <small>· {{ availability.timingLabel }}</small>
                           }
                         </span>
                       }
+                    </div>
+                    <div class="asset-identity-meta">
+                      <span>{{ asset.position }} · {{ getAssetTeamLabel(asset) }}</span>
                     </div>
                   </div>
 
@@ -917,33 +923,39 @@
   }
 
   <div class="drafted-player-main">
-    <div>
+    <div class="drafted-player-name-row">
       <strong>{{ getAssetName(pick.asset) }}</strong>
-      <span>
-        {{ getAssetTeamLabel(pick.asset) }}
-        · Pick #{{ pick.overallPick }}
-        @if (isBenchDraftPick(pick)) {
-          · Bench
-        }
-      </span>
+
+      @if (getDraftPlayerAvailabilityDisplay(pick.asset); as availability) {
+        <span
+          class="draft-player-availability"
+          [class.draft-player-availability-danger]="availability.tone === 'danger'"
+          [class.draft-player-availability-warning]="availability.tone === 'warning'"
+          [attr.title]="getPlayerAvailabilityNote(pick.asset) || availability.ariaLabel"
+          [attr.aria-label]="availability.ariaLabel"
+        >
+          @if (availability.icon === 'injury') {
+            <span class="pixel-icon icon-injury icon-sm" aria-hidden="true"></span>
+          } @else {
+            <span class="draft-player-availability-symbol" aria-hidden="true">
+              {{ availability.iconText }}
+            </span>
+          }
+          <span>{{ availability.shortLabel }}</span>
+          @if (availability.timingLabel) {
+            <small>· {{ availability.timingLabel }}</small>
+          }
+        </span>
+      }
     </div>
 
-    @if (shouldShowPlayerAvailabilityBadge(pick.asset)) {
-      <div
-        class="player-availability-row drafted-availability-row"
-        [attr.title]="getPlayerAvailabilityNote(pick.asset) || getPlayerAvailabilityLabel(pick.asset)"
-      >
-        <span
-          [class]="'player-availability-pill ' + getPlayerAvailabilityClass(pick.asset)"
-        >
-          ✚ {{ getPlayerAvailabilityLabel(pick.asset) }}
-        </span>
-
-        @if (isPlayerAvailabilityIrEligible(pick.asset)) {
-          <small class="ir-eligible-copy">IR eligible</small>
-        }
-      </div>
-    }
+    <span>
+      {{ getAssetTeamLabel(pick.asset) }}
+      · Pick #{{ pick.overallPick }}
+      @if (isBenchDraftPick(pick)) {
+        · Bench
+      }
+    </span>
   </div>
 </article>
         }

@@ -15,6 +15,13 @@ player identity and actual injury state, Rank, Next 6, Season, and the available
 queue or Draft action. On narrow screens, the same information reflows into bounded
 rows so values remain legible and controls retain the shared mobile touch target.
 
+Healthy records from the shared injury feed no longer render an `Active` badge. The
+feed's `active` classification is not a guarantee that a player will dress. Actual
+injury states instead render a compact injury symbol beside the player name with the
+source-provided estimated return date, or `Return TBD` when no reliable date exists.
+Suspension, leave, and unknown states remain visible without being mislabeled as an
+injury.
+
 The Draft-only Watch action, watched-only filter, visible rating, reliability/risk,
 recent form, projected active-games tracker, and repeated news prose are removed
 from this surface. The account watchlist remains available in the player/Add-Drop
