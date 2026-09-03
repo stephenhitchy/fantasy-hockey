@@ -2,7 +2,9 @@
 
 **Purpose:** bounded, detect-only finalized-score reconciliation
 
-**Implementation state:** local feature-branch implementation and verification only; not deployed or proven against production
+**Implementation state:** deployed to the isolated D1N staging project from clean
+commit `d23f05bff404dbd10de0996c2be9e61ad0761ca3`; bounded live behavior evidence
+is the next gate and Production remains unchanged
 
 **Competitive authority:** unchanged; direct NHL scoring remains authoritative
 
@@ -134,6 +136,68 @@ npm run release:verify-clean-deploy-source
 ```
 
 The clean-deploy-source check is expected to reject an uncommitted worktree. Release conclusions require the exact clean Git commit, successful build/gate, live release manifest, and deployed Function evidence as separate checks.
+
+## Isolated staging evidence protocol
+
+The D1M staging harness is pinned to billed non-production project
+`rinkrat-staging-d1nc-2026`. It refuses Production, every Emulator Suite
+environment, a weak or missing fixture password, and any missing or incorrect
+operation acknowledgement. The fixed synthetic paths are replaced only when
+they already carry the exact D1M fixture marker. The harness cannot deploy a
+Firebase resource.
+
+The fixture contains one team and four finalized windows with deliberately
+bounded outcomes:
+
+- one verified zero / did-not-appear final with complete saved and canonical
+  evidence;
+- one complete-evidence score and appearance mismatch that must remain a
+  review candidate;
+- one complete saved final whose canonical game document is deliberately
+  absent and must remain unverifiable; and
+- one numeric saved final with missing saved D1L evidence that must remain
+  unverifiable even though a canonical document exists.
+
+A second synthetic Auth identity has no `platformAdmins` document. The live
+runner requires that non-admin request to fail with `permission-denied` before
+the platform-admin request is accepted. It then repeats the exact page request
+and resolves the same cycle through the blank/latest-cycle path. Every response
+must report `authority: detect-only`, `writesPerformed: 0`, a complete one-page
+scan, and the exact expected aggregate and finding codes.
+
+Before the first request and after every rejected, successful, repeated, and
+latest-cycle request, the runner calculates a competitive-document fingerprint
+over the fixed league, member, team, roster, cycle, matchup, team-window,
+platform-admin, and canonical documents plus bounded transaction and playoff
+absence. Any data or update-time change fails the run. Public output contains
+only aggregate labels and counts; it excludes account IDs, emails, passwords,
+player IDs, game IDs, source versions, scores, team pseudonyms, and raw roster
+identifiers.
+
+From a reviewed clean evidence commit, Stephen supplies a fresh shell-only
+password and runs:
+
+```bash
+export D1M_STAGING_FIXTURE_PASSWORD='Aa1!<fresh-random-secret>'
+
+D1M_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+D1M_STAGING_ACK=reset-and-seed-rinkrat-d1m-final-score-reconciliation-fixture-v1-in-rinkrat-staging-d1nc-2026 \
+D1M_STAGING_FIXTURE_PASSWORD="$D1M_STAGING_FIXTURE_PASSWORD" \
+npm run staging:d1m:seed-reconciliation
+
+D1M_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+D1M_STAGING_RUN_ACK=exercise-d1m-final-score-reconciliation-in-rinkrat-staging-d1nc-2026 \
+D1M_STAGING_FIXTURE_PASSWORD="$D1M_STAGING_FIXTURE_PASSWORD" \
+npm run staging:d1m:exercise-reconciliation
+
+unset D1M_STAGING_FIXTURE_PASSWORD
+```
+
+No Production write, deployment, migration, score correction, or manager data
+is part of this protocol. Passing it proves only the bounded staging behavior
+of the exact deployed D1M callable. Production release still requires a clean
+merge commit, inherited gate/build, exact targeted selectors, deployed Function
+revision, live Hosting manifest, and post-release read-only smoke evidence.
 
 ## Observability
 
