@@ -117,6 +117,48 @@ npm run release:verify-clean-deploy-source
 The clean-source gate must be run from a clean commit; an uncommitted worktree
 is expected to fail it.
 
+## Bounded staging fixture
+
+The source-controlled staging fixture uses two fixed synthetic, verified Auth
+accounts and one fixed synthetic pre-Draft league. Its target team has zero
+standings history, empty active/bench/IR slots, no cycles, picks, transactions,
+or waivers, and one empty Draft queue. The seeder refuses Emulator Suite
+connections, every project except `rinkrat-staging-d1nc-2026`, weak passwords,
+missing operation acknowledgement, conflicting Auth identities, and any fixed
+Firestore path that does not carry the exact fixture marker.
+
+Run the fixture only after the two targeted staging Functions are active:
+
+```text
+L1A_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+L1A_STAGING_ACK=reset-and-seed-rinkrat-l1a-member-removal-fixture-v1-in-rinkrat-staging-d1nc-2026 \
+L1A_STAGING_FIXTURE_PASSWORD="$L1A_STAGING_FIXTURE_PASSWORD" \
+npm run staging:l1a:seed-member-removal
+
+L1A_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+L1A_STAGING_RUN_ACK=exercise-l1a-member-removal-fixture-in-rinkrat-staging-d1nc-2026 \
+L1A_STAGING_FIXTURE_PASSWORD="$L1A_STAGING_FIXTURE_PASSWORD" \
+npm run staging:l1a:exercise-member-removal
+```
+
+The exercise signs in through the client SDK and invokes the deployed callable.
+It must prove that member, team, roster, and queue authority are removed; the
+invite reopens; lifecycle quota decrements once; exactly one audit becomes
+exactly one deterministic League Wire activity; duplicate delivery is a stable
+idempotent replay; and request-ID reuse with a different payload is rejected
+without another write. Its terminal output contains only bounded counts and
+labels—never an account ID, email, invite code, password, request ID, or audit
+ID. Reseeding resets only the exact marked fixture and preserves the final
+evidence state until that explicit reset.
+
+On 2026-09-03, this bounded exercise passed against the targeted staging
+Functions deployed from `d6b10678f8f0a46e07df1c24fa73be38694997ff`.
+It observed one completed request, four removed authority documents, an open
+one-team invite, a zero remaining lifecycle count, one audit, one League Wire
+activity, stable duplicate delivery, and rejected payload reuse. This is
+staging evidence only; it is not evidence that either Function is deployed
+from the eventual merge commit or that Production was changed.
+
 ## Deployment resources
 
 No deployment is performed as part of L1A. If the branch is reviewed, merged,
