@@ -1,6 +1,8 @@
 RINKRAT COMPETITIVE ROADMAP
 Version 1.54.8
 Created: 2026-08-07
+Last updated: 2026-09-03
+Current verified Production Hosting source: dc8138afe2493d5fdf89fb528bd91fa691fcdf91 (Release Candidate 65, Production Scoring V4, Projection V11)
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
 ================================================================================
@@ -33,6 +35,9 @@ Rules for maintaining this roadmap:
 5A. For routine additive batches, use a proportionate owner workflow: one automated verification gate, a targeted deployment, and a live-site smoke test. Use logs and read-only inspectors only for invisible security/data changes or when the site test fails.
 6. Avoid changing Production Scoring or Projection V11 in the middle of a live season unless a calculation is objectively wrong.
 7. Preserve RinkRat's identity. The goal is not to become a generic Yahoo or Fantrax clone.
+8. Distinguish recommendations, source implementation, merged code, deployed runtime, and live evidence. None of those states implies another.
+9. After the first real Draft, freeze competitive behavior for the season. Accept only narrowly scoped integrity, security, availability, and objectively incorrect-result fixes with exact regression and rollback evidence.
+10. Preserve league, membership, team, roster, Draft, window, and scoring identifiers across releases. A normal application update must never require managers to be reinvited or a completed Draft to be recreated.
 
 Suggested task labels:
 
@@ -49,12 +54,14 @@ CURRENT RECOMMENDED FOCUS:
 
 # [x] NEXT.1 Security Batch S1 — S1A, S1B, and S1C implementation complete; finish the S1 migration/regression exit gates before broader public use. (P0 / XL) — Completed 2026-08-07 in Security Batch S1C.
 # [x] NEXT.2 Security Batch S2 — Server generation, canonical catalog validation, read-only snapshots, deterministic hashes, Draft enforcement, and migration controls implemented. (P0 / L) — Completed 2026-08-07 in Security Batch S2B.
-[~] NEXT.3 Security Batch S3 — App Check monitor mode, exact-build evidence gates, guarded exact-league selected-callable canary controls, and a deterministic Firestore-backed shared NHL Shadow cache are implemented alongside authentication, identifier, proxy, CI, retention, and transaction-privacy hardening; collect the RC65 evidence matrix, prove the canary safely, then validate shared-cache parity in staging before any authoritative ingestion cutover. (P0 / L)
-[~] NEXT.4 Phase B1 — Beta Operations, release-freeze tooling, Draft/IR integrity fixes, the App Check canary control, the first Firestore restore drill, score-freshness clarity, categorized injury identity diagnostics, League Wire, owner-private transaction/waiver projections, final-matchup activity, commissioner transparency/announcements, round recaps, the full catalog-validated emoji reaction picker, Training-Camp-first verification sequencing, RC63 navigation reliability, RC64 progressive Training Camp/position help, and RC65 tutorial-return/navigation/Draft-readiness work are complete in source; finish the remaining numeric-typography/copy-density and Safari unlock-notification usability batches, the RC65 exact-build/browser validation report, rollback rehearsal, annotated beta tag, and observed first-season cohort before full chat, notification fanout, or trade features. (P0 / L)
+[~] NEXT.3 Security Batch S3 — App Check remains deliberately in Monitor, exact-build gates and guarded selected-callable controls are implemented, and the shared NHL cache remains non-authoritative. Complete current-device canary and abuse evidence before any enforcement change; do not promote App Check, queue mode, or canonical authority during the private season without a separately reviewed emergency need. (P0 / L)
+[~] NEXT.4 Phase B1 — The exact Production Hosting manifest is verified at dc8138afe2493d5fdf89fb528bd91fa691fcdf91 with Production Scoring V4 and Projection V11. Commissioner pre-Draft member removal, visual-integrity repairs, roster action clarity, deterministic performer ordering, Draft focus cleanup, replay source-team validation, and D1L finalized-input integrity are merged. Finish the exact-build invitation smoke matrix, current-build lifecycle/Draft rehearsal, release freeze, rollback evidence, and observed cohort before declaring the season Draft-ready. (P0 / L)
 # [x] NEXT.5 Security Operations Batch S4A — Add native Firestore backup schedules, production delete protection, optional PITR activation, source-controlled TTL field overrides, and a safe named-database restore rehearsal. (P0 / L) — Completed 2026-08-12 after the first isolated production-backup restore drill passed verification and the drill database was safely deleted.
-[~] NEXT.6 Beta Invite-Link Onboarding — B1E / RC60 implemented the scanner-safe public link and secure continuation; B1F / RC61 made saved profile state authoritative; B1G / RC62 withholds the first verification email until Training Camp is completed or explicitly deferred through Finish Later & Verify, then releases the retryable account email and resumes the saved invitation. B1H / RC63 preserves that authority while adding persistent navigation and recovery paths. B1I / RC64 makes Training Camp progressive without changing completion, deferral, verification, or secure-join authority. B1J / RC65 removes the quiz gate and preserves exact lesson return through the Scoring Guide. Complete the pinned B1J exact-build gate, retain the required RC62 Rules/Functions, deploy RC65 Hosting, and pass the supported desktop/mobile completion, finish-later, reload, account-choice, position-help, exact-return, navigation, Draft-readiness, and failure-recovery matrix before freezing the invite-beta tag or recruiting the observed cohort. (P0 / M)
-[~] NEXT.7 First Observed Manager Usability Pass — B1H / RC63 completed persistent navigation, history-aware return controls, high-value destination icons and visual priority, larger My Team navigation, reduced injury-report metadata, and Draft entry/reload recovery. B1I / RC64 introduced progressive game-like Training Camp, plain six-game teaching, the optional fantasy-football guide, and one-at-a-time viewport-safe position help. B1J / RC65 removes the quiz gate, preserves exact Scoring Guide return, simplifies global navigation, shares My Team/Matchup navigation, and lets the Draft Room open before rankings finish. Complete the site-wide numeric-typography/copy-density audit and Safari challenge-notification proof before returning to lower-priority roadmap work. (P0 / L)
-[~] NEXT.8 Season Scoring Safety — D1D through D1H establish the guarded near-live queue, TOI-aware canonical game facts, affected-league routing, phase timing, preseason certification, direct-versus-canonical parity, and one season-safe canonical-read Canary with direct fallback. D1I adds a two-strike automatic fallback watchdog and measured live queue-capacity gates. D1J adds exact-build scoring/private-season evidence exports plus a non-deploying season freeze, targeted rollback, incident, and launch kit. Deploy the exact cumulative release, keep Production in Shadow at freeze time, prove the watchdog and one queued Canary through real preseason games, collect at least 30 queue tasks across three days, rehearse rollback, generate the D1J freeze kit, and tag the exact deployed source before considering broader Primary. (P0 / L)
+[~] NEXT.6 Beta Invite-Link Onboarding — Scanner-safe links, explicit join intent, verified-email authority, Training Camp continuation, exact-return navigation, idempotent secure joining, and commissioner pre-Draft removal exist. Before sending the family-and-friends cohort, run the exact dc8138af disposable-league matrix for new account, existing account, completion, Finish Later, verification, reload, duplicate link, account choice, mobile Safari, Android Chrome, and removal/reinvite recovery. (P0 / M)
+[~] NEXT.7 First Observed Manager Usability Pass — Navigation, progressive onboarding, Draft load/focus recovery, semantic contrast, mobile headers, Coach accessibility, IR/Add-Drop/activation action clarity, player-overlay layering, and preseason/in-season roster ordering are implemented. Finish physical-device, 200% zoom, reconnect, multi-tab, and pending-write cleanup evidence before the first Draft. (P0 / L)
+[~] NEXT.8 Season Scoring Safety — D1D-D1J provide the guarded queue, direct fallback, parity, watchdog, capacity evidence, and season-freeze kit. D1L adds explicit incomplete final input, retry-safe final reuse, exact task parity scope, and durable idempotent canonical downstream work. The replay source-team repair passed bounded staging evidence and is live. Complete D1M detect-only reconciliation, exact current-build lifecycle proof, freeze/rollback rehearsal, and the private-season tag; keep direct NHL scoring authoritative and Production queue/canonical rollout modes unchanged. (P0 / L)
+[~] NEXT.9 Friends-and-Family Season Gate — Allow league preparation and a small disposable invitation pilot only after FF1 invitation gates pass. Do not hold a real Draft until the separate FF1 Draft gates pass. Freeze competitive features after the first real Draft. (P0 / L)
+[~] NEXT.10 D1N Capacity Evidence — Authenticated privacy-safe listener instrumentation and isolated billed staging exist; Draft focus and same-page cleanup are repaired, and pending writes are attributed to `team:list`. Finish the no-op identity-write repair, controlled reconnect/multi-tab/physical-device proof, then run staging-only D1N-C ramps at 100, 500, 2,000, and 5,000 operations without changing Production worker limits. (P0 / XL)
 
 ================================================================================
 NORTH STAR
@@ -111,7 +118,7 @@ CURRENT BASELINE — ALREADY COMPLETED
 # [x] F0.16 Completed a successful six-team end-to-end test.
 # [x] F0.17 Completed a deep RC9 product, architecture, and security audit.
 
-CURRENT AUDIT BASELINE:
+HISTORICAL RC9 AUDIT BASELINE — RETAINED FOR TREND ONLY, NOT A CURRENT GO/NO:
 
 - Controlled invite-beta score: 8.8 / 10
 - Broader public-launch score: 7.2 / 10
@@ -123,6 +130,37 @@ CURRENT AUDIT BASELINE:
 - Broad public scalability: 6.0 / 10
 
 The immediate gap is not core game design. It is public trust, commissioner authority, abuse resistance, live-season proof, social retention, and proven scale.
+
+CURRENT VERIFIED RELEASE POSITION — 2026-09-03:
+
+- Production Hosting serves exact source dc8138afe2493d5fdf89fb528bd91fa691fcdf91, Release Candidate 65, Production Scoring V4, and Projection V11.
+- The deployed Function inventory matches all 106 source exports by name and region. `processHistoricalReplayAdvance`, `removeLeagueMemberSecure`, and `publishLeagueAuditActivity` are ACTIVE. Inventory parity is not a substitute for the D1J exact-source season-freeze record.
+- Production Scoring V4, Projection V11, six-game ownership, seventh-game rollover, immutable started windows, server authority, and exact-once transaction behavior remain protected.
+- The product is suitable for a controlled 2–4 league, 10–30 manager family-and-friends beta after the invitation gate below passes. It is not yet authorized for a real Draft or unrestricted public scale.
+
+================================================================================
+PHASE FF1 — 2026–27 FRIENDS-AND-FAMILY SEASON FREEZE AND GO/NO
+Goal: Start a small observed season without reinvites, destructive migrations, Draft recreation, or midseason competitive changes.
+Invitation exit gate: exact current-build invitation/removal smoke evidence passes and stable competitive identities are preserved.
+Draft exit gate: exact current-build lifecycle, Draft, scoring, device, rollback, and freeze evidence passes with no unresolved P0/P1 integrity finding.
+================================================================================
+
+# [x] FF1.1 Fix the private-season scope at 2–4 leagues and approximately 10–30 observed family-and-friends managers; treat 2,000/5,000-client scale as a later public-scale gate rather than a blocker for this cohort. (P0 / Policy) — Adopted in the 2026-09-03 roadmap revision.
+[~] FF1.2 Bind the season baseline to exact Git, clean status, successful inherited gate/build, live Hosting manifest, and deployed Function inventory/revisions. (P0 / M) — Hosting is verified at dc8138af and the Function inventory is 106/106; finish the D1J exact-source evidence package, critical revision capture, annotated tag, and rollback rehearsal.
+[~] FF1.3 Run the exact current-Production disposable invitation matrix: new and existing account, Training Camp completion and Finish Later, manual verification send, secure join, reload, duplicate delivery, account choice, full/expired/locked states, mobile Safari, Android Chrome, and pre-Draft commissioner removal/reinvite recovery. (P0 / M)
+# [x] FF1.4 Freeze Production Scoring V4 and Projection V11 for the 2026–27 private season; require a versioned, evidence-backed emergency correction for any objectively wrong result and prohibit preference-driven formula or ranking changes after invitations begin. (P0 / Policy) — Adopted in the 2026-09-03 roadmap revision.
+[~] FF1.5 Repeat the complete six-team lifecycle on the exact season candidate: create, invite/join, schedule/open/complete Draft, add/drop, waiver, IR/activation, score six games, roll Game 7, settle standings/playoffs, and reload/retry duplicate actions. (P0 / L) — A prior six-team lifecycle passed on an older build; exact dc8138af-or-newer season-candidate proof remains required before a real Draft.
+[~] FF1.6 Rehearse one exact Projection V11 Draft on desktop and physical phones: snapshot version/hash, order, queue, auto-pick, pause/resume, clock deadline, reconnect, multi-tab stale state, completion, and post-Draft roster identity. (P0 / L)
+[~] FF1.7 Generate and independently review the D1J season-freeze kit, targeted Function/Hosting rollback plan, first-15-minute incident procedure, restore evidence, and annotated baseline tag. (P0 / M)
+[ ] FF1.8 Authorize real invitations only after FF1.2–FF1.4 pass with no unresolved invitation, identity, membership, or data-retention P0/P1. League setup may begin earlier only with disposable test identities. (P0 / Gate)
+[ ] FF1.9 Authorize real Drafts only after FF1.5–FF1.7, a recorded FF1.12 decision, FF1.13–FF1.15, and the formal FF1.16 go/no pass. Do not use a real family roster as the rehearsal. (P0 / Gate)
+# [x] FF1.10 Adopt the post-Draft change freeze: only P0/P1 integrity, security, availability, accessibility, or objectively incorrect-result fixes; every release must be small, targeted, regression-tested, observed, and reversible. No midseason feature work may change scoring, projections, eligibility, Draft authority, roster/window ownership, transactions, standings, or playoffs. (P0 / Policy) — Adopted in the 2026-09-03 roadmap revision.
+# [x] FF1.11 Preserve league/member/team/roster/Draft/window identifiers and backward-readable stored versions so normal releases never require reinvites or Draft recreation. Any existing-league migration must be additive, dry-run, backed up, compatibility-tested, and separately approved. (P0 / Policy) — Adopted in the 2026-09-03 roadmap revision.
+[ ] FF1.12 Before the real Draft, explicitly choose either (a) the pilot accepts no midseason manager replacement, or (b) implement and prove a separate post-Draft vacant-team/account-transfer workflow that preserves the team, roster, Draft history, scoring windows, transactions, standings, and playoffs. Never extend pre-Draft member removal into destructive post-Draft deletion. (P1 / Decision; implementation L if selected)
+[~] FF1.13 Rebase, review, and release the D1N no-op manager identity-write repair so authenticated routes do not produce unnecessary pending-write evidence before the season freeze. (P1 / S) — Implemented on `codex/d1n-noop-identity-write`; not merged or deployed as of 2026-09-03.
+[~] FF1.14 Rebase, independently review, stage, and release D1M detect-only finalized-score reconciliation before live season scoring; preserve evidence and alerts only, with no automatic correction of completed windows. (P0 / L) — Implemented separately on `codex/d1m-detect-only-final-score-reconciler`; not merged or deployed as of 2026-09-03.
+[~] FF1.15 Complete D1N physical-device/reconnect/multi-tab/listener-cleanup evidence and staging-only 100/500 operation ramps before Draft; retain 2,000/5,000 ramps as public-scale evidence that may continue without changing Production. (P0 / L)
+[ ] FF1.16 Record one formal go/no-go naming the exact release, open risks, support owner/deputy, rollback point, scoring/canonical/queue/App Check modes, invited leagues, and approval separately for invitations and Draft. (P0 / Gate)
 
 ================================================================================
 PHASE S1 — SERVER-AUTHORITATIVE LEAGUE LIFECYCLE
@@ -171,10 +209,11 @@ Exit gate: A malicious commissioner cannot change competitive rules, exceed leag
     Complete when: current leagues receive a server authority marker and continue operating without recreating data.
 
 # [x] S1.12 Update documentation, Release Readiness, and rollback instructions for the new league lifecycle. (P1 / S) — Completed 2026-08-07 in Security Batch S1C.
+# [x] S1.13 Add commissioner-controlled pre-Draft member removal with fresh-auth/password and exact-team confirmation, server-transaction cleanup, invite-capacity repair, immutable audit evidence, League Wire publication, malformed-authority fail-closed handling, and idempotent retry behavior. (P0 / L) — Completed and deployed 2026-09-03 in League Lifecycle Batch L1A; post-Draft removal is intentionally excluded.
 
 PHASE S1 EXIT CHECKLIST:
 
-[~] S1.G1 All S1 emulator tests pass. — S1C suites are installed; complete after `npm run verify:batchs1c` passes on the production development machine.
+# [x] S1.G1 All inherited S1/L1A emulator and regression tests pass. — Completed 2026-09-03 when `npm run verify:batchl1a` passed on clean merged source dc8138af.
 # [x] S1.G2 Existing six-team regression league still completes Draft, scoring, transactions, and playoffs. — Confirmed by the successful six-team manual lifecycle test before S1C.
 # [x] S1.G3 A commissioner using a modified client cannot change competitive settings. — Protected by server-only league updates and adversarial Rules tests in S1C.
 # [x] S1.G4 Two simultaneous final-slot join attempts result in exactly one successful join. — Confirmed during the S1B manual validation cycle.
@@ -310,7 +349,7 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [~] B1.13 Measure scoring freshness from NHL final/update to visible RinkRat result. (P0 / M) — B1B measures worker duration and explicitly tracks the missing source timestamp; complete when live ingestion records a trusted NHL update time and visible publication time.
 [~] B1.14 Measure Draft pick confirmation and next-turn handoff latency. (P0 / M) — B1B collects privacy-limited Draft-pick, queue, Auto-Draft, clock, and settings action durations; complete after live Draft samples are reviewed.
 [~] B1.15 Measure add/drop, waiver, IR, and roster-operation latency and uncertain outcomes. (P0 / M) — B1B collects action type, outcome, mean, p95, maximum, and error/uncertain totals; complete after live-season volume is sufficient.
-[~] B1.16 Measure Firestore listeners by route and confirm cleanup after navigation. (P0 / M) — B1B samples generalized route-ready duration and listener counts with session cooldowns; complete after supported-browser route evidence is reviewed.
+[~] B1.16 Measure Firestore listeners by route and confirm cleanup after navigation. (P0 / M) — D1N adds privacy-safe first-snapshot counts, cache/server origin, listener lifetime, route envelopes, reconnect/hidden/pending-write labels, and explicit cleanup. Twenty authenticated samples per high-risk route and Draft same-page cleanup reached baseline in isolated staging; complete after controlled reconnect, multi-tab, physical-device, and final pending-write evidence pass.
 [ ] B1.17 Measure reads, writes, Function duration, queue age, retries, and cost per active league/week. (P0 / M)
 
 [ ] B1.18 Conduct at least five observed beginner sessions without coaching the user. (P1 / M)
@@ -349,6 +388,9 @@ Exit gate: Multiple leagues complete several live weeks without integrity failur
 [~] B1.42 Complete RC65 B1J release proof: run the pinned Node 22.23.1 / npm 11.17.0 gate, deploy Hosting only after it passes, and complete the real-browser exact-return, simplified-navbar, shared-league-navigation, and slow/failing-projection Draft matrix. (P0 / M)
 [~] B1.43 Complete the observed-playtest flow correction as RC66 / Beta Batch B1K: require an explicit manual first verification-email send after Training Camp completion or Finish Later; return truthful sent/cooldown/already-verified state; add cleanup-aware Sign out to desktop and mobile global navigation; reuse one listener-free league quick-navigation surface across all eight core destinations, including Playoffs; remove the duplicate League Essentials page tiles from League HQ; and add one compact six-game fairness rationale without changing competitive authority. (P0 / M) — Source implemented 2026-08-25 as an unfrozen RC66/B1K candidate on the corrected RC65 baseline; complete after the pinned B1K gate, clean Angular/Functions builds, matching Functions-plus-Hosting deployment, and Chrome/Safari/iPhone/Android browser matrix pass.
 # [x] B1.44 Remove the duplicate League Essentials / Most-used league pages section from League HQ, add Playoffs to the shared league navigation, and place the same current-destination navigation on the Playoffs page without adding navigation-only listeners. (P1 / S) — Completed 2026-08-25 as the RC66/B1K.1 candidate cleanup.
+# [x] B1.45 Repair semantic link/action contrast, Playoff and Draft dark-theme text, Coach positioning/accessibility, narrow Standings/Playoffs headers, and Matchup error contrast across supported themes without changing competitive behavior. (P1 / M) — Completed and deployed 2026-09-02 in the Visual Integrity Repair.
+# [x] B1.46 Clarify IR activation, add/drop, and bench-to-active actions; repair Coach player-breakdown layering; and order My Team/Matchup players by Projection V11 before the season and season points after it begins while keeping unavailable evidence distinct from zero. (P1 / M) — Completed and deployed 2026-09-02 in the Roster Presentation repair.
+[~] B1.47 Eliminate unnecessary authenticated manager-identity writes that create `team:list` pending-write snapshots without changing manager identity or competitive state. (P1 / S) — Implemented on `codex/d1n-noop-identity-write`; rebase, focused review, merge, and staging proof remain.
 
 BETA INTEGRITY PASS CONDITIONS:
 
@@ -456,6 +498,9 @@ Goal: Turn RinkRat's transparent models into a proven competitive advantage.
 # [x] D1.28 Make Firestore restore verification scoring-version aware: accept canonical Production Scoring V4 and deliberately preserved legacy V3 leagues, report each version separately, and fail restored samples containing unsupported scoring versions. (P0 / S) — Completed 2026-08-19 in Scoring Batch V4A / Release Candidate 50.
 # [x] D1.29 Restore the missing `CURRENT_SCORING_RULES_VERSION` import in League HQ's verified Draft-snapshot fallback and add a focused regression guard so the RC50 Angular compiler can validate V4/V3 snapshot compatibility. (P0 / S) — Completed 2026-08-19 in Scoring Batch V4A.1 / Release Candidate 50; no scoring, projection, migration, or runtime behavior changed.
 [~] D1.30 Validate near-live scoring through an exact internal per-league queue Canary before any broad cadence change. (P0 / M) — D1D adds the guarded cadence; D1F adds TOI coalescing and affected routing; D1F.2 adds certification/timing; D1G proves shadow parity; D1H adds a one-league verified authority Canary with automatic direct fallback and a circuit breaker. Complete after multiple live NHL nights prove correctness, recovery, cost, parity, fallback, and freshness.
+# [x] D1.31 Enforce finalized-score input integrity and durable canonical notification: explicit incomplete final inputs, legitimate-zero distinction, retryability, complete-only final reuse, atomic/idempotent downstream outbox publication, duplicate-delivery safety, and parity limited to the exact task game/version set. (P0 / L) — Completed 2026-08-29 in D1L; direct NHL scoring remains authoritative and protected exact-once behavior is unchanged.
+# [x] D1.32 Validate historical traded skaters against their source-season team through schema-2 replay maps; fail closed on missing source-team evidence and prove complete final input, stable duplicate delivery, and exact score in bounded staging before targeted Production release. (P0 / M) — Completed and deployed 2026-09-02 in D1L-B Replay Source-Team Integrity.
+[~] D1.33 Add detect-only finalized-score reconciliation that reports discrepancies without automatically mutating completed matchups, points, transactions, windows, Game 7 ownership, standings, or playoffs. (P0 / L) — Implemented separately on `codex/d1m-detect-only-final-score-reconciler`; rebase, independent review, staging evidence, and targeted release remain.
 
 ================================================================================
 PHASE C1 — SOCIAL RETENTION AND LEAGUE COMMUNITY
@@ -607,12 +652,12 @@ Goal: Prove, rather than assume, that RinkRat can support increasing public traf
 [~] SC1.12 Index affected leagues from shared NHL game/team changes to avoid scanning unrelated leagues. (P0 / XL) — D1F builds a server-owned player/team impact index for the exact four-league Internal Test Canary ceiling and fails open to that bounded cohort when evidence is missing. Complete after incremental roster-trigger maintenance, sharding, and staging-scale fanout proof.
 [ ] SC1.13 Add bounded fanout and backpressure when many games finish together. (P0 / L)
 
-[ ] SC1.14 Reduce route listener counts based on measured P1A client-health data. (P1 / L)
+[~] SC1.14 Reduce route listener counts based on measured client-health data. (P1 / L) — D1N instruments exact route envelopes, repairs Draft focus/same-page cleanup, and identifies `team:list` as the pending-write source; finish the no-op identity repair and physical/reconnect evidence before further listener redesign.
 [ ] SC1.15 Add reconnect-storm protections and staggered resubscription where needed. (P0 / L)
 [ ] SC1.16 Add read-model/aggregation documents for high-fanout pages. (P1 / L)
 [ ] SC1.17 Add per-feature cost dashboards and budget alerts. (P0 / M)
 
-[ ] SC1.18 Create a separate billed staging Firebase project for load testing. (P0 / M)
+# [x] SC1.18 Create a separate billed staging Firebase project for load testing. (P0 / M) — Completed 2026-09-02 with isolated project `rinkrat-staging-d1nc-2026`, exact Hosting manifests, bounded synthetic fixtures, targeted Functions, and no use of Production data.
 [ ] SC1.19 Test 100 concurrent synthetic clients. (P0 / M)
 [ ] SC1.20 Test 500 concurrent synthetic clients. (P0 / M)
 [ ] SC1.21 Test 2,000 concurrent synthetic clients. (P0 / L)
@@ -787,6 +832,7 @@ RECOMMENDED RELEASE SEQUENCE FROM RC9
 [~] SEQ.9 Freeze and run the first live-season beta. — B1B evidence/triage, B1C freeze/rollback tooling, S4A Firestore recovery controls and completed restore drill, S3F canary controls, score-timing clarity, injury identity diagnostics, League Wire, transaction/waiver privacy, final-matchup activity, commissioner transparency, announcements, bounded regular-season round recaps, verified-member reactions, invite-link onboarding, the RC63 navigation-reliability pass, and the RC64 progressive-onboarding usability pass are complete; finish the numeric/copy and Safari unlock-notification batches, exact-build/deployed-browser validation, the application rollback rehearsal, annotated tag, and observed cohort before marking this sequence complete.
 [~] SEQ.10 Build evidence-backed social/notification/trade features from actual beta feedback. — The bounded League Wire foundation, owner-private transaction/waiver boundary, final-matchup layer, commissioner transparency, bounded announcements, and first round-recap layer are complete in C1A-C1F; measure usage and finish launch evidence before expanding into chat, reactions, notifications, player-level recap awards, or trades.
 [ ] SEQ.11 Progress Canary -> internal leagues -> staging Primary -> production Primary only after measured gates.
+[~] SEQ.12 Freeze and operate the 2026–27 family-and-friends season through FF1: pass the invitation gate, then the stricter Draft gate, tag the exact baseline, and allow only bounded emergency fixes after the first real Draft.
 
 ================================================================================
 COMPETITOR BENCHMARKS TO REVISIT ANNUALLY
@@ -1024,6 +1070,22 @@ Future entries:
 # [x] LOG.94 2026-08-27 — Prepared Operations Batch D1J.2 as the clean-release and release-evidence repair hotfix after inspecting the live validation export, deployed manifest, Control Center capture, and 105/105 Function audit: store oldest observed due age separately from oldest Canary/Primary-eligible due age; treat eligible age as backlog only while queued scoring is active; show old Shadow schedules as informational observation evidence because the legacy scorer remains authoritative; prevent historical, paused, or otherwise ineligible schedules from creating a false backlog after Canary activation; make Release Readiness and the invite-beta gate immediately reject missing, unversioned, or `-dirty` deployed source revisions; install Functions and Hosting predeploy checks before and after builds so Firebase cancels dirty deployments; disable legacy broad production npm deployment commands in favor of exact release selectors; retain the existing CLI freeze rejection as an independent safeguard; document that the current evidence still requires a six-team validation league, all 31 manual workflows, and review of one failed replay operation; change no Production Scoring V4 value, Projection V11 calculation, six-game ownership, seventh-game rollover, Draft/roster/waiver/IR/standings/playoff authority, Firestore Rule, index, TTL policy, App Check mode, queue mode, worker limit, or automatic promotion.
 
 # [x] LOG.95 2026-08-27 — Prepared Operations Hotfix D1J.2.1 to ignore Firebase CLI and Emulator Suite root debug logs, restore those ignore rules through repository automation, and require one-time removal of inherited tracked debug output so the strict clean-source deployment guard cannot be self-blocked by Firebase-generated diagnostics; changed no competitive runtime, scoring, projection, Rule, index, TTL, queue-mode, or worker-limit behavior.
+
+# [x] LOG.96 2026-08-29 — Completed D1L finalized-score input integrity and durable canonical notification: missing required final sources remain explicit/retryable rather than numeric zero, legitimate zero remains distinct, final reuse requires complete source evidence, canonical publication commits deterministic downstream work atomically, duplicate/stale delivery is idempotent, and parity compares only the exact task game/version set; preserved direct NHL authority, Scoring V4, Projection V11, six-game/Game 7 ownership, transactions, standings, and playoffs.
+
+# [x] LOG.97 2026-08-30 — Repaired release-gate integrity by excluding source-controlled instruction metadata without weakening runtime/package/configuration coverage, restricting generated `lib` exclusion so nested runtime/script `lib` directories still invalidate the fingerprint, adding mutation regressions, and returning the CSS quality count to the unchanged 595 budget.
+
+# [x] LOG.98 2026-09-01 — Completed D1N-A/B privacy-safe capacity evidence and isolated staging foundation: aggregate first-snapshot counts, cache/server origin, listener lifetime/cleanup, reconnect/hidden/pending-write labels, and route envelopes for Available Players, Matchup, Draft, League Home, and Projection; collected authenticated samples without persisting manager/league/team/player/game identifiers.
+
+# [x] LOG.99 2026-09-02 — Completed Draft focus/same-page cleanup and the Visual Integrity Repair: semantic contrast tokens, dark-theme Draft/Playoff text, Coach placement and accessible naming, mobile Standings/Playoff headers, Matchup error contrast, and narrow-screen/zoom/theme regression coverage; changed Hosting runtime only.
+
+# [x] LOG.100 2026-09-02 — Completed roster-presentation and action-clarity repairs: legible IR/add-drop/activation controls, repaired Coach player-breakdown stacking on desktop/mobile, Projection V11 preseason ordering, season-point in-season ordering, and explicit unavailable-versus-zero presentation on My Team and Matchup; separately attributed remaining pending-write evidence to `team:list`.
+
+# [x] LOG.101 2026-09-02 — Completed replay source-team integrity and bounded staging proof: schema-2 maps retain historical teams for traded skaters, missing evidence fails closed, a synthetic replay proved complete final input, 21.2 points, one game, completed request/control state, and duplicate-delivery stability; deployed only `processHistoricalReplayAdvance` plus the matching Hosting manifest to Production.
+
+# [x] LOG.102 2026-09-03 — Completed L1A commissioner pre-Draft member removal: fresh authentication/password and exact-team confirmation, server-authoritative transactional cleanup, quota/invite adjustment, immutable audit and League Wire publication, malformed-authority fail-closed behavior, and exactly-once retries; deployed only `removeLeagueMemberSecure`, `publishLeagueAuditActivity`, and matching Hosting, with post-Draft deletion explicitly excluded.
+
+# [x] LOG.103 2026-09-03 — Verified Production Hosting at dc8138afe2493d5fdf89fb528bd91fa691fcdf91 with Release Candidate 65, Production Scoring V4, and Projection V11; verified 106/106 Function inventory parity and ACTIVE critical Functions; adopted separate invitation and Draft gates, stable-ID/no-reinvite compatibility, and a strict post-Draft competitive freeze for the 2026–27 family-and-friends season.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

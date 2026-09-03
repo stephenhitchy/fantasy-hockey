@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 ## Repository
 
@@ -66,11 +66,13 @@ RinkRat contains:
 
 The direct NHL path remains the proven fallback.
 
-The current D1L-B feature branch contains a replay-only correction for traded
-skaters: source-season games carry their historical team into final-input
-validation, missing source-team evidence fails closed, and legacy replay maps
-rebuild as validated schema-2 maps. This is not merged or deployed until its
-clean-commit staging proof passes. Live scoring behavior is unchanged.
+The D1L-B replay-only correction for traded skaters is merged and deployed:
+source-season games carry their historical team into final-input validation,
+missing source-team evidence fails closed, and legacy replay maps rebuild as
+validated schema-2 maps. Its bounded staging fixture proved complete input,
+stable duplicate delivery, and the expected score before the targeted
+`processHistoricalReplayAdvance` Production release. Live scoring authority
+was not changed.
 
 ## Current scoring-correction coverage
 
@@ -105,6 +107,28 @@ Not fully finished:
 The first correction phase should detect and report discrepancies only. It
 must not automatically rewrite production scores.
 
+## Current verified release posture
+
+- Production Hosting manifest: exact source
+  `dc8138afe2493d5fdf89fb528bd91fa691fcdf91`, Release Candidate 65,
+  Production Scoring V4, Projection V11.
+- Deployed Function inventory: 106 expected, 106 matched, no missing,
+  unexpected, duplicate, or region-mismatched exports.
+- `processHistoricalReplayAdvance`, `removeLeagueMemberSecure`, and
+  `publishLeagueAuditActivity` are ACTIVE.
+- Commissioner member removal is supported before Draft only. It uses
+  fresh-auth/password and exact-team confirmation, server-owned transactional
+  cleanup, audit publication, and idempotent retry behavior. Do not extend it
+  into destructive post-Draft removal.
+- The D1N no-op identity-write repair and D1M detect-only reconciler remain on
+  separate, unmerged branches.
+- App Check remains Monitor, scoring queue rollout remains unchanged, canonical
+  authority is not being expanded, and direct NHL scoring remains the fallback.
+
+Inventory parity does not prove that every deployed Function revision contains
+the exact current Git source. Capture the D1J exact-source season-freeze record
+before authorizing a real Draft.
+
 ## Current capacity posture
 
 The live scoring queue was intentionally introduced with conservative worker
@@ -124,6 +148,13 @@ Capacity decisions must use:
 
 Do not increase concurrency based only on Historical Replay timing.
 
+D1N currently provides privacy-safe route/listener envelopes in the separate
+billed staging project, authenticated high-risk-route samples, repaired Draft
+focus/same-page cleanup, and pending-write attribution to `team:list`.
+Controlled reconnect, multi-tab, physical-device evidence and the 100/500/
+2,000/5,000 staging ramps remain open. The 2,000/5,000 ramps are public-scale
+evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -138,18 +169,45 @@ Do not increase concurrency based only on Historical Replay timing.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
+- The inherited exact-source verification command at this release is
+  `npm run verify:batchl1a`, followed by `npm run build:all`,
+  `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
+  clean commit.
+
+## 2026–27 private-season freeze
+
+Invitation and Draft authorization are separate gates. League preparation may
+use disposable identities now. Send real invitations only after the exact
+current Production invitation/removal matrix passes. Do not conduct a real
+Draft until the exact-build six-team lifecycle, physical-device Draft
+rehearsal, D1M detect-only release, D1N reconnect/100/500 evidence, and D1J
+freeze/tag/rollback record pass with no unresolved P0/P1 integrity finding.
+
+After the first real Draft, freeze competitive feature work. Preserve league,
+membership, team, roster, Draft, player-window, transaction, standings, and
+playoff identities. Normal releases must not require reinvites or Draft
+recreation. Permit only narrow, tested, observable, reversible P0/P1 integrity,
+security, availability, accessibility, or objectively incorrect-result fixes.
 
 ## Current priority order
 
-1. Review and prove the D1L-B replay source-team repair in the separate staging project.
-2. Finish authenticated D1N route, Draft-focus, cleanup, reconnect, multi-tab,
-   pending-write, and physical-device evidence.
-3. Run D1N-C load ramps only in staging at 100, 500, 2,000, and 5,000 operations.
-4. Review and stage commissioner member removal as its own Functions-plus-Hosting release.
-5. Review and stage the detect-only finalized-score reconciler separately.
-6. Prove correction detection against archived and live NHL games.
-7. Add safe exact-once correction only after detection is trusted.
-8. Increase worker concurrency only from measured evidence.
+1. Rebase, review, and release the D1N no-op identity-write repair.
+2. Run the exact current-Production disposable invitation and commissioner
+   pre-Draft removal/reinvite matrix; authorize the real family-and-friends
+   invitations only if it passes.
+3. Rebase, independently review, stage, and release D1M detect-only finalized-
+   score reconciliation. Do not add automatic correction.
+4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+   on desktop and physical phones, including reconnect and stale multi-tab.
+5. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
+   and staging-only 100/500 operation evidence before Draft.
+6. Generate and independently review the D1J season-freeze kit, exact tag,
+   targeted rollback, incident plan, and formal invitation/Draft go-no-go.
+7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+   competitive freeze.
+8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+   pagination/starvation protection, and App Check/abuse/queue-promotion proof
+   as separate reviewable work without changing Production rollout modes.
 
 ## Required update policy
 
