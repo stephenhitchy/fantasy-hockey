@@ -1,5 +1,5 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.54.10
+Version 1.54.11
 Created: 2026-08-07
 Last updated: 2026-09-03
 Current verified Production Hosting source: 01e93ac522f99a090489fc3e7da1d6602937ffee (Release Candidate 65, Production Scoring V4, Projection V11)
@@ -61,7 +61,7 @@ CURRENT RECOMMENDED FOCUS:
 [~] NEXT.7 First Observed Manager Usability Pass — Navigation, progressive onboarding, Draft load/focus recovery, semantic contrast, mobile headers, Coach accessibility, IR/Add-Drop/activation action clarity, player-overlay layering, and preseason/in-season roster ordering are implemented. Finish physical-device, 200% zoom, reconnect, multi-tab, and pending-write cleanup evidence before the first Draft. (P0 / L)
 [~] NEXT.8 Season Scoring Safety — D1D-D1J provide the guarded queue, direct fallback, parity, watchdog, capacity evidence, and season-freeze kit. D1L adds explicit incomplete final input, retry-safe final reuse, exact task parity scope, and durable idempotent canonical downstream work. The replay source-team repair and D1M detect-only reconciliation are live. Complete exact current-build lifecycle proof, authenticated read-only D1M smoke evidence, freeze/rollback rehearsal, and the private-season tag; keep direct NHL scoring authoritative and Production queue/canonical rollout modes unchanged. (P0 / L)
 [~] NEXT.9 Friends-and-Family Season Gate — Allow league preparation and a small disposable invitation pilot only after FF1 invitation gates pass. Do not hold a real Draft until the separate FF1 Draft gates pass. Freeze competitive features after the first real Draft. (P0 / L)
-[~] NEXT.10 D1N Capacity Evidence — Authenticated privacy-safe listener instrumentation and isolated billed staging exist; Draft focus and same-page cleanup are repaired; the no-op identity-write repair is merged and live; and a post-repair authenticated sample returned to zero listeners with zero pending-write snapshots. Finish controlled reconnect/multi-tab/physical-device proof, then run staging-only D1N-C ramps at 100, 500, 2,000, and 5,000 operations without changing Production worker limits. (P0 / XL)
+[~] NEXT.10 D1N Capacity Evidence — Authenticated listener instrumentation, isolated billed staging, Draft focus/cleanup, reconnect/four-tab samples, and the no-op identity-write repair exist. D1N-C-A now supplies a Production-refusing read-only preflight, physical-device evidence schema, fixed thresholds, exact two-worker staging boundary, and sequential 100/500/2,000/5,000 progression. Finish physical iPhone/Android proof, then build and run D1N-C-B without changing Production worker limits. (P0 / XL)
 
 ================================================================================
 NORTH STAR
@@ -159,7 +159,7 @@ Draft exit gate: exact current-build lifecycle, Draft, scoring, device, rollback
 [ ] FF1.12 Before the real Draft, explicitly choose either (a) the pilot accepts no midseason manager replacement, or (b) implement and prove a separate post-Draft vacant-team/account-transfer workflow that preserves the team, roster, Draft history, scoring windows, transactions, standings, and playoffs. Never extend pre-Draft member removal into destructive post-Draft deletion. (P1 / Decision; implementation L if selected)
 # [x] FF1.13 Rebase, review, and release the D1N no-op manager identity-write repair so authenticated routes do not produce unnecessary pending-write evidence before the season freeze. (P1 / S) — Completed 2026-09-03 on Production Hosting source 1754f807 after an authenticated staging sample returned from Available Players to zero listeners with zero pending-write snapshots, errors, unknown counts, or awaiting-first-snapshot listeners.
 # [x] FF1.14 Rebase, independently review, stage, and release D1M detect-only finalized-score reconciliation before live season scoring; preserve evidence and alerts only, with no automatic correction of completed windows. (P0 / L) — Completed 2026-09-03 on Production source 01e93ac5; the Function is ACTIVE, unauthenticated access fails closed, and automatic correction remains out of scope.
-[~] FF1.15 Complete D1N physical-device/reconnect/multi-tab/listener-cleanup evidence and staging-only 100/500 operation ramps before Draft; retain 2,000/5,000 ramps as public-scale evidence that may continue without changing Production. (P0 / L)
+[~] FF1.15 Complete D1N physical-device/reconnect/multi-tab/listener-cleanup evidence and staging-only 100/500 operation ramps before Draft; retain 2,000/5,000 ramps as public-scale evidence that may continue without changing Production. (P0 / L) — D1N-C-A fixes the prerequisites, metrics, thresholds, cost source, and stage progression; physical-phone evidence and the separate traffic generator remain open.
 [ ] FF1.16 Record one formal go/no-go naming the exact release, open risks, support owner/deputy, rollback point, scoring/canonical/queue/App Check modes, invited leagues, and approval separately for invitations and Draft. (P0 / Gate)
 
 ================================================================================
@@ -658,7 +658,7 @@ Goal: Prove, rather than assume, that RinkRat can support increasing public traf
 [ ] SC1.17 Add per-feature cost dashboards and budget alerts. (P0 / M)
 
 # [x] SC1.18 Create a separate billed staging Firebase project for load testing. (P0 / M) — Completed 2026-09-02 with isolated project `rinkrat-staging-d1nc-2026`, exact Hosting manifests, bounded synthetic fixtures, targeted Functions, and no use of Production data.
-[ ] SC1.19 Test 100 concurrent synthetic clients. (P0 / M)
+[~] SC1.19 Test 100 concurrent synthetic clients. (P0 / M) — D1N-C-A defines a 100-operation worker ramp rather than claiming 100 full browsers, requires physical-device evidence first, and fails closed on missing exact-source, queue, latency, concurrency, Firestore, cost, or invariant evidence. D1N-C-B traffic generation remains open.
 [ ] SC1.20 Test 500 concurrent synthetic clients. (P0 / M)
 [ ] SC1.21 Test 2,000 concurrent synthetic clients. (P0 / L)
 [ ] SC1.22 Test 5,000 concurrent synthetic clients. (P0 / L)
@@ -1094,6 +1094,8 @@ Future entries:
 # [x] LOG.106 2026-09-03 — Merged and released D1M detect-only final-score reconciliation on exact Production Hosting source 01e93ac522f99a090489fc3e7da1d6602937ffee; verified the bounded Function ACTIVE and unauthenticated access denied, retained direct NHL scoring and all competitive authority, and made no automatic correction.
 
 # [x] LOG.107 2026-09-03 — Prepared the FF1 Draft authorization gate as documentation, regression tests, and a read-only exact-release preflight: require clean synchronized main, immutable RC65/Scoring V4/Projection V11/six-game modes, a strict docs/test/tooling-only delta from live Hosting, ACTIVE critical Draft and D1M Functions, disposable six-team Draft and replay lifecycle evidence, physical devices, reconnect/stale-tab/exact-once proof, D1N 100/500 evidence, rollback rehearsal, manager-replacement decision, and formal go/no; changed no runtime or Firebase resource.
+
+# [x] LOG.108 2026-09-03 — Prepared D1N-C-A as a read-only staging-load preflight: refuse every target except the isolated billed staging project, require exact clean source and physical iPhone/Android route evidence, fix the sequential 100/500/2,000/5,000 operation stages, define zero-duplicate/zero-terminal-error invariants and p95/p99/queue/concurrency/Firestore/billed-cost gates, require only the two existing task workers, generate no traffic, and change no runtime, Firebase resource, Production mode, worker limit, or competitive authority.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

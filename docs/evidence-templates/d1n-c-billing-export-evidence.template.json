@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projectId": "rinkrat-staging-d1nc-2026",
+  "sourceRevision": "REPLACE_WITH_FULL_40_CHARACTER_REVISION",
+  "measurementSource": "cloud-billing-export",
+  "exportEnabled": false,
+  "firstExportObserved": false,
+  "stagingProjectFilterVerified": false,
+  "budgetAlertActive": false,
+  "currency": "USD",
+  "observedAt": "REPLACE_WITH_UTC_TIMESTAMP"
+}

@@ -173,6 +173,13 @@ Controlled reconnect, multi-tab, physical-device evidence and the 100/500/
 2,000/5,000 staging ramps remain open. The 2,000/5,000 ramps are public-scale
 evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
 
+D1N-C-A adds a read-only, Production-refusing load preflight and aggregate
+physical-device evidence schema. It fixes the 100/500/2,000/5,000 sequence,
+requires the immediately preceding stage to pass on the same revision, checks
+the isolated billed project and exact staging manifest, and requires only the
+two staging task workers. It does not generate traffic or deploy. The physical
+iPhone/Android evidence and D1N-C-B task generator remain open.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -218,12 +225,12 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge the FF1 Draft gate, run its full inherited
-   release gate on clean `main`, then run the read-only live preflight.
-2. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+1. Independently review and merge D1N-C-A, then collect its aggregate physical
+   iPhone/Android evidence on the exact staging build.
+2. Build D1N-C-B separately, deploy only its two reviewed staging workers and
+   matching staging manifest, and run/review 100 before 500.
+3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-3. Finish D1N controlled reconnect, cleanup, pending-write, physical-device,
-   and staging-only 100/500 operation evidence before Draft.
 4. Record the no-post-Draft-replacement or account-transfer decision.
 5. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.

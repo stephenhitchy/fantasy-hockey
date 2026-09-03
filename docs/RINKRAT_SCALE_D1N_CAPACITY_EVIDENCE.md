@@ -371,14 +371,16 @@ required.
 
 ## Next gate
 
-Merge and deploy only the reviewed Hosting slices that repair initial Draft focus and retain the
-explicit diagnostic through same-page navigation. Then complete ten additional samples per route at
-each viewport, including controlled navigation to a listener-free route, and investigate the shared
-pending-write snapshot. Complete the remaining authenticated evidence on real mobile and desktop
-clients with controlled offline-to-online reconnects. The four-tab billed-staging pass is useful
-bounded evidence but is not production evidence.
+The Draft focus, same-page diagnostic, and no-op identity-write repairs are now merged, and a
+post-repair staging sample returned to zero listeners and zero pending-write snapshots. The desktop
+reconnect and four-tab samples remain bounded evidence rather than physical-phone proof.
 
-Only after those profiles are accepted should D1N-C build the scoring and Draft load harness in that
-separate billed staging Firebase project. Follow with canonical fan-out scaling, Draft recovery
-pagination/starvation protection, and staged App Check/abuse/queue-promotion evidence. No large load
-test may target production.
+D1N-C-A now defines the next fail-closed boundary in
+`docs/RINKRAT_SCALE_D1N_C_LOAD_PREFLIGHT.md`. Complete the required privacy-safe physical iPhone and
+Android route/reconnect/focus/zoom samples on the exact staging build. Then merge the read-only
+preflight, deploy only the separately reviewed workers and matching manifest to the separate billed staging Firebase project,
+and run the 100-operation D1N-C-B harness only after the preflight passes. The 500 stage requires a
+passing reviewed 100-stage evidence file; 2,000 and 5,000 remain later public-scale evidence.
+
+Follow accepted ramps with canonical fan-out scaling, Draft recovery pagination/starvation
+protection, and staged App Check/abuse/queue-promotion evidence. No load test may target Production.

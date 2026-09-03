@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "projectId": "rinkrat-staging-d1nc-2026",
+  "sourceRevision": "REPLACE_WITH_FULL_40_CHARACTER_REVISION",
+  "capturedAt": "REPLACE_WITH_UTC_TIMESTAMP",
+  "profiles": {
+    "iphoneSafari": {
+      "physical": true,
+      "reconnectSnapshotCount": 0,
+      "draftFocusPass": false,
+      "zoom200Pass": false,
+      "routes": {
+        "availablePlayers": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "matchup": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "draft": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "leagueHome": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "projection": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false }
+      }
+    },
+    "androidChrome": {
+      "physical": true,
+      "reconnectSnapshotCount": 0,
+      "draftFocusPass": false,
+      "zoom200Pass": false,
+      "routes": {
+        "availablePlayers": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "matchup": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "draft": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "leagueHome": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false },
+        "projection": { "sampleCount": 0, "coldSampleCount": 0, "warmSampleCount": 0, "reconnectSampleCount": 0, "listenerErrorCount": 0, "unknownDocumentCount": 0, "awaitingFirstSnapshotCount": 0, "cleanupFinalListenerCount": 0, "pendingWriteSnapshotCount": 0, "horizontalOverflow": false }
+      }
+    },
+    "multiTab": {
+      "tabCount": 0,
+      "listenerErrorCount": 0,
+      "awaitingFirstSnapshotCount": 0,
+      "cleanupFinalListenerCount": 0,
+      "pendingWriteSnapshotCount": 0
+    }
+  }
+}
