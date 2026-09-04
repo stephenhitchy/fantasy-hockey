@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "projectId": "rinkrat-staging-d1nc-2026",
+  "sourceRevision": "REPLACE_WITH_FULL_40_CHARACTER_REVISION",
+  "runFingerprint": "REPLACE_WITH_64_CHARACTER_RUN_FINGERPRINT",
+  "measurementSource": "cloud-billing-export",
+  "windowStart": "REPLACE_WITH_UTC_TIMESTAMP",
+  "windowEnd": "REPLACE_WITH_UTC_TIMESTAMP",
+  "settledAt": "REPLACE_WITH_UTC_TIMESTAMP",
+  "incrementalUsd": 0,
+  "currency": "USD",
+  "settled": false
+}

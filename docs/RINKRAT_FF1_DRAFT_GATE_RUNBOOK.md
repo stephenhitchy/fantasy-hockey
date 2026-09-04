@@ -30,7 +30,7 @@ console. Stop on the first P0/P1 result and preserve the affected state.
 From a clean, synchronized `main` using Node 22.23.1 and npm 11.17.0:
 
 ```bash
-npm run verify:batchff1-17
+npm run verify:batchd1ncb
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source

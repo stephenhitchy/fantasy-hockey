@@ -400,6 +400,9 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
         // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
         'src/shared/core/projection/team-schedule-request-pacing.util.ts',
+        // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
+        'src/d1n-load-probe.service.ts',
+        'src/d1n-load-probe.util.ts',
       ]),
     }),
     '1e53a846c14fb3d00c4ad601b18d8265d3137003676618cb25e87399d087738b',

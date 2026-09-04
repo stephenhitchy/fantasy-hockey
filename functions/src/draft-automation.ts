@@ -31,6 +31,8 @@ import {
   sealSharedProjectionSnapshotIntegrity,
 } from './shared/core/projection/projection-snapshot.service';
 import { queueServerDraftProjectionSnapshotRefresh } from './projection-authority';
+import { processD1nLoadProbeIfPresent } from './d1n-load-probe.service';
+import type { D1nLoadProbeTaskPayload } from './d1n-load-probe.util';
 import {
   buildDraftAvailabilityRefreshTaskId,
   buildScheduledDraftStartTaskId,
@@ -187,6 +189,7 @@ interface DraftPickDeadlineTaskPayload {
   expectedOverallPick: number;
   expectedPickStartedAtMilliseconds: number;
   expectedDueAtMilliseconds: number;
+  d1nLoadProbe?: D1nLoadProbeTaskPayload;
 }
 
 interface DraftScheduledStartTaskPayload {
@@ -2632,6 +2635,10 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
   },
   async (request) => {
     const payload = request.data;
+
+    if (await processD1nLoadProbeIfPresent(payload, 'draft')) {
+      return;
+    }
 
     if (payload?.taskType === 'scheduled-start') {
       await processScheduledDraftStartTask(payload);

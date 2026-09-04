@@ -74,6 +74,7 @@ function physicalEvidence(overrides = {}) {
 function passingRamp(stage = 100) {
   return {
     schemaVersion: 1,
+    evidenceStatus: 'ready-for-independent-review',
     projectId: D1NC_STAGING_PROJECT_ID,
     sourceRevision: revision,
     stage,
@@ -92,13 +93,19 @@ function passingRamp(stage = 100) {
       draftDeadlineDriftMilliseconds: { p50: 100, p95: 500, p99: 1_000, max: 1_500 },
     },
     queue: {
+      measurementSource: 'worker-operation-backlog',
       peakDepth: 20,
       finalDepth: 0,
       oldestAgeMilliseconds: { p50: 1_000, p95: 5_000, p99: 10_000, max: 12_000 },
       drainMilliseconds: 20_000,
     },
     functions: { maximumScoringConcurrency: 4, maximumDraftConcurrency: 10, coldStarts: 2 },
-    firestore: { reads: 2_000, writes: 1_000, terminalAbortedOperations: 0 },
+    firestore: {
+      measurementSource: 'cloud-monitoring',
+      reads: 2_000,
+      writes: 1_000,
+      terminalAbortedOperations: 0,
+    },
     cost: {
       incrementalUsd: 1,
       currency: 'USD',
@@ -234,8 +241,10 @@ test('billing export evidence must be settled, staging-filtered, revision-bound,
 });
 
 test('a complete bounded ramp passes every fixed integrity, latency, queue, usage, and cost gate', () => {
-  assert.equal(evaluateRampEvidence(passingRamp(100)).ready, true);
-  assert.equal(evaluateRampEvidence(passingRamp(500)).ready, true);
+  for (const stage of [100, 500]) {
+    const result = evaluateRampEvidence(passingRamp(stage));
+    assert.equal(result.ready, true, result.issues.join('\n'));
+  }
 });
 
 test('missing cost, duplicate results, slow tails, backlog, or excess concurrency fail closed', () => {

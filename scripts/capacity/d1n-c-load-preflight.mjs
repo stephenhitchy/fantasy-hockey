@@ -11,6 +11,10 @@ import {
   inspectToolchain as evaluateToolchain,
   normalizeVersion,
 } from '../release/toolchain-preflight.util.mjs';
+import {
+  assertFf132StagingFunctionInventory,
+  verifyFf132DeployedFunctionSourceArchives,
+} from './run-ff132-server-owned-draft-preparation-staging-evidence.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -19,6 +23,7 @@ export const D1NC_STAGING_PROJECT_ID = 'rinkrat-staging-d1nc-2026';
 export const D1NC_PRODUCTION_PROJECT_ID = 'nhl-fantasy-app-ab673';
 export const D1NC_STAGING_URL = 'https://rinkrat-staging-d1nc-2026.web.app';
 export const D1NC_STAGING_DATABASE_LOCATION = 'us-west4';
+export const D1NC_STAGING_FUNCTION_REGION = 'us-central1';
 export const D1NC_RAMP_STAGES = Object.freeze([100, 500, 2_000, 5_000]);
 export const D1NC_REQUIRED_FUNCTIONS = Object.freeze([
   'processDraftClockDeadline',
@@ -312,6 +317,9 @@ export function evaluateRampEvidence(evidence) {
   const issues = [];
   const stage = finiteNumber(evidence?.stage);
   if (evidence?.schemaVersion !== 1) issues.push('ramp evidence schema must equal 1');
+  if (evidence?.evidenceStatus !== 'ready-for-independent-review') {
+    issues.push('ramp evidence is not finalized for independent review');
+  }
   if (evidence?.projectId !== D1NC_STAGING_PROJECT_ID) issues.push('ramp project mismatch');
   if (!D1NC_RAMP_STAGES.includes(stage)) issues.push('ramp stage is unsupported');
   if (!/^[0-9a-f]{40}$/i.test(String(evidence?.sourceRevision ?? ''))) {
@@ -365,6 +373,9 @@ export function evaluateRampEvidence(evidence) {
   }
 
   const peakDepth = requiredMetric(evidence?.queue, 'peakDepth', 'peak queue depth', issues);
+  if (evidence?.queue?.measurementSource !== 'worker-operation-backlog') {
+    issues.push('queue evidence must come from the worker operation backlog');
+  }
   const finalDepth = requiredMetric(evidence?.queue, 'finalDepth', 'final queue depth', issues);
   const queueAge = requiredPercentiles(evidence?.queue?.oldestAgeMilliseconds, 'queue age', issues);
   const queueAgeP95 = queueAge.p95;
@@ -396,6 +407,9 @@ export function evaluateRampEvidence(evidence) {
 
   const firestoreReads = requiredMetric(evidence?.firestore, 'reads', 'Firestore reads', issues);
   const firestoreWrites = requiredMetric(evidence?.firestore, 'writes', 'Firestore writes', issues);
+  if (evidence?.firestore?.measurementSource !== 'cloud-monitoring') {
+    issues.push('Firestore usage must come from Cloud Monitoring');
+  }
   if (firestoreReads === 0) issues.push('Firestore reads must prove workload activity');
   if (firestoreWrites === 0) issues.push('Firestore writes must prove workload activity');
   const aborted = requiredMetric(evidence?.firestore, 'terminalAbortedOperations', 'terminal Firestore aborts', issues);
@@ -540,7 +554,25 @@ async function inspectStagingProject() {
     functionValidation.inactive.length ? `Not ACTIVE: ${functionValidation.inactive.join(', ')}` : '',
     functionValidation.wrongRuntime.length ? `Wrong runtime: ${functionValidation.wrongRuntime.join(', ')}` : '',
   ].filter(Boolean).join('\n'));
-  return { functionValidation };
+  const detailedFunctionEntries = await Promise.all(
+    D1NC_REQUIRED_FUNCTIONS.map(async (name) => {
+      const result = await run('gcloud', [
+        'functions',
+        'describe',
+        name,
+        '--gen2',
+        `--region=${D1NC_STAGING_FUNCTION_REGION}`,
+        `--project=${D1NC_STAGING_PROJECT_ID}`,
+        '--format=json',
+      ]);
+      return JSON.parse(result.stdout || '{}');
+    }),
+  );
+  const exactFunctions = assertFf132StagingFunctionInventory(
+    detailedFunctionEntries,
+    D1NC_REQUIRED_FUNCTIONS,
+  );
+  return { functionValidation, exactFunctions };
 }
 
 async function readEvidenceFile(filePath) {
@@ -583,13 +615,15 @@ export async function main(argv = process.argv.slice(2)) {
     requireCondition(previousEvidence.sourceRevision === git.commit, 'Previous ramp evidence belongs to a different source revision.');
   }
 
-  await inspectStagingProject();
+  const staging = await inspectStagingProject();
+  await verifyFf132DeployedFunctionSourceArchives(staging.exactFunctions, git.commit);
   console.log('\nD1N-C staging-load preflight: PASS');
   console.log(`Toolchain: Node ${toolchain.node}, npm ${toolchain.npm}`);
   console.log(`Reviewed main and staging manifest: ${git.commit}`);
   console.log(`Staging project: ${D1NC_STAGING_PROJECT_ID}`);
   console.log(`Ramp stage authorized for harness execution: ${stage}`);
   console.log(`Required workers ACTIVE on Node 22: ${D1NC_REQUIRED_FUNCTIONS.length}/${D1NC_REQUIRED_FUNCTIONS.length}`);
+  console.log(`Required worker source archives matched clean Git: ${D1NC_REQUIRED_FUNCTIONS.length}/${D1NC_REQUIRED_FUNCTIONS.length}`);
   console.log('This preflight generated no traffic and modified no Firebase resource or document.');
   console.log('Production was not read except for project-number separation and was never a load target.');
   console.log(`Staging build: ${manifest.buildId}`);

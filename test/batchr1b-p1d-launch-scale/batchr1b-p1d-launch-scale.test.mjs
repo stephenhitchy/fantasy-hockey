@@ -463,6 +463,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
         // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
         'src/shared/core/projection/team-schedule-request-pacing.util.ts',
+        // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
+        'src/d1n-load-probe.service.ts',
+        'src/d1n-load-probe.util.ts',
       ]),
     }),
     '958f23683430f1a892ad73dd21b894580934aa62f0f2a9659747999798d80355',

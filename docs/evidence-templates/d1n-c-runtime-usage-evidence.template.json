@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "projectId": "rinkrat-staging-d1nc-2026",
+  "sourceRevision": "REPLACE_WITH_FULL_40_CHARACTER_REVISION",
+  "runFingerprint": "REPLACE_WITH_64_CHARACTER_RUN_FINGERPRINT",
+  "measurementSource": "cloud-monitoring",
+  "windowStart": "REPLACE_WITH_UTC_TIMESTAMP",
+  "windowEnd": "REPLACE_WITH_UTC_TIMESTAMP",
+  "observedAt": "REPLACE_WITH_UTC_TIMESTAMP",
+  "reads": 0,
+  "writes": 0,
+  "terminalAbortedOperations": 0
+}

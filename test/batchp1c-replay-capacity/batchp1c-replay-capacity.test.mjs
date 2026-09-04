@@ -262,6 +262,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
         // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
         'src/shared/core/projection/team-schedule-request-pacing.util.ts',
+        // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
+        'src/d1n-load-probe.service.ts',
+        'src/d1n-load-probe.util.ts',
   ]);
 
   assert.equal(

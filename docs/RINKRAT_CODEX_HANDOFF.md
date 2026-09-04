@@ -175,11 +175,14 @@ Controlled reconnect, multi-tab, physical-device evidence and the 100/500/
 evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
 
 D1N-C-A adds a read-only, Production-refusing load preflight and aggregate
-physical-device evidence schema. It fixes the 100/500/2,000/5,000 sequence,
-requires the immediately preceding stage to pass on the same revision, checks
-the isolated billed project and exact staging manifest, and requires only the
-two staging task workers. It does not generate traffic or deploy. The physical
-iPhone/Android evidence and D1N-C-B task generator remain open.
+physical-device evidence schema. D1N-C-B now supplies the separately reviewed
+source candidate for a bounded staging-only generator, transactional synthetic
+worker probes, duplicate-delivery evidence, and Cloud Monitoring/Billing
+finalization. It fixes the 100/500/2,000/5,000 sequence, requires the immediately
+preceding stage to pass on the same revision, checks the isolated billed project
+and exact staging manifest, and preserves the existing two worker limits. No
+load has been run by the implementation work. Physical iPhone/Android evidence,
+an exact staging deployment, and the 100/500 measurements remain open.
 
 ## Current Draft-room UX posture
 
@@ -590,7 +593,7 @@ lock was released.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchff1-17`, followed by `npm run build:all`,
+  exact-source command is `npm run verify:batchd1ncb`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -629,8 +632,9 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-4. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
-   build, then build D1N-C-B separately and review the 100 ramp before 500.
+4. Independently review and merge D1N-C-B, complete aggregate physical
+   iPhone/Android D1N evidence on that exact staging build, then review the 100
+   ramp and settled cost evidence before permitting 500.
 5. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.

@@ -16,6 +16,8 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
+import { processD1nLoadProbeIfPresent } from './d1n-load-probe.service';
+import type { D1nLoadProbeTaskPayload } from './d1n-load-probe.util';
 import { queueServerProjectionSnapshotRefresh } from './projection-authority';
 import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
@@ -530,6 +532,7 @@ interface LeagueAutomationTaskPayload {
   canonicalRequestedAtMilliseconds?: number;
   canonicalGameIds?: number[];
   canonicalGameVersions?: CanonicalLeagueAutomationGameVersion[];
+  d1nLoadProbe?: D1nLoadProbeTaskPayload;
 }
 
 interface DueLeagueAutomationSchedule {
@@ -8091,6 +8094,10 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
   },
   async (request) => {
     const payload = request.data;
+
+    if (await processD1nLoadProbeIfPresent(payload, 'scoring')) {
+      return;
+    }
 
     const leagueId = resolveSafeFirestoreDocumentId(
       payload?.leagueId,

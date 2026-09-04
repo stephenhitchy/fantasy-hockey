@@ -471,6 +471,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/team-schedule-input-completeness.util.ts',
     // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
     'shared/core/projection/team-schedule-request-pacing.util.ts',
+    // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
+    'd1n-load-probe.service.ts',
+    'd1n-load-probe.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 28,

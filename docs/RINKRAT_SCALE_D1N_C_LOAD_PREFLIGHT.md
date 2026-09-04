@@ -25,10 +25,12 @@ The 2,000 and 5,000 stages remain later public-scale evidence. No higher stage
 may start until the immediately preceding stage has a passing evidence file for
 the same exact source revision.
 
-D1N-C-B will build the fixture and task generator separately. It must use the
-real `processLeagueAutomationTask` and `processDraftClockDeadline` workers in
-staging, deterministic operation identities, bounded batches, explicit cleanup,
-and no direct Production dependency. D1N-C-A intentionally does not pretend
+D1N-C-B now supplies the separately reviewed fixture and task generator. It
+uses the real `processLeagueAutomationTask` and `processDraftClockDeadline`
+workers in staging, deterministic operation identities, bounded batches,
+transactional duplicate suppression, sharded evidence, explicit cleanup, and
+no direct Production dependency. See
+`docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md`. D1N-C-A still refuses to pretend
 that a stale/no-op task is representative scoring or Draft throughput.
 
 ## Physical-device prerequisite
@@ -117,9 +119,12 @@ Cloud Billing export, and ACTIVE Node 22 copies of only these worker Functions:
 - `processLeagueAutomationTask`
 - `processDraftClockDeadline`
 
-The preflight is read-only. A missing worker is a stop condition and not
-permission for a broad deployment. D1N-C-B must independently review the exact
-targeted staging deployment selectors before any ramp.
+The preflight is read-only. It downloads only the two immutable deployed source
+archives and requires each archive to match the clean Git source byte for byte
+before any task can be enqueued. A missing, stale, or mismatched worker is a
+stop condition and not permission for a broad deployment. The D1N-C-B runbook
+fixes the only permitted staging selectors and requires independent review
+before any ramp.
 
 For 500, 2,000, or 5,000, also pass `--previous-evidence` containing the passing
 immediately preceding stage. A failure, missing metric, delayed cost record, or
@@ -149,9 +154,10 @@ load.
 D1N-C-A changes documentation, tests, and local read-only tooling only. It
 requires no Firebase deployment. Rollback is a normal Git revert.
 
-D1N-C-B may later require only the two explicitly reviewed staging Function
-workers above plus the staging Hosting manifest used to bind the clean source
-revision. It must never target Production, broaden the selector, change worker
-limits, or change queue mode. Its rollback is deletion/restoration of only the
-synthetic fixture and staged task evidence after retention, followed by removal
-or restoration of those two staging workers if the reviewed plan requires it.
+D1N-C-B requires only the two explicitly reviewed staging Function workers
+above plus the staging Hosting manifest used to bind the clean source revision.
+It never targets Production, broadens the selector, changes worker limits, or
+changes queue mode. Its rollback retains evidence first, stops new load tasks,
+removes only the reviewed synthetic run when authorized, restores/removes only
+the two staging workers as applicable, and restores the preceding staging
+Hosting release last.
