@@ -81,6 +81,10 @@
             <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
               Enter Live Draft
             </a>
+          } @else if (draft()?.status === 'scheduled') {
+            <a class="primary-action rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft']">
+              {{ isDraftLobbyOpen() ? 'Enter Draft Lobby' : 'View Draft Schedule' }}
+            </a>
           } @else if (draft()?.status !== 'complete') {
             @if (isCommissioner()) {
               <a

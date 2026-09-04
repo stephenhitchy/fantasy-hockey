@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## Repository
 
@@ -180,6 +180,21 @@ the isolated billed project and exact staging manifest, and requires only the
 two staging task workers. It does not generate traffic or deploy. The physical
 iPhone/Android evidence and D1N-C-B task generator remain open.
 
+## Current Draft-room UX posture
+
+The compact Draft cards, bounded injury/return presentation, and player
+headshot-with-team-badge identity are merged. The FF1.18 one-hour Draft lobby
+is implemented on `codex/draft-one-hour-lobby` and awaits independent review,
+merge, and exact staging evidence. It reuses the existing private Draft queue
+and does not add a listener, collection, Function, or competitive write path.
+
+The lobby is presentation-only until the authoritative scheduled start. Picks,
+clock start/pause/resume, and Auto-Draft controls remain live-only; the existing
+server-authoritative Draft checks still gate every pick. FF1.19 remains a
+separate P0 slice: projection/injury readiness is still commissioner-client
+driven and can leave a visible preparation interval after the countdown reaches
+zero.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -194,8 +209,8 @@ iPhone/Android evidence and D1N-C-B task generator remain open.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command after the FF1 gate merges is
-  `npm run verify:batchff1`, followed by `npm run build:all`,
+- The inherited exact-source verification command after the FF1.18 slice merges is
+  `npm run verify:batchff1-2`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -225,18 +240,21 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge D1N-C-A, then collect its aggregate physical
-   iPhone/Android evidence on the exact staging build.
-2. Build D1N-C-B separately, deploy only its two reviewed staging workers and
-   matching staging manifest, and run/review 100 before 500.
-3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+1. Independently review and merge FF1.18, deploy only `hosting:app` to staging,
+   verify the exact manifest, and capture authenticated 320/390/430/desktop,
+   theme, zoom, focus, reconnect, multi-tab, and queue-convergence evidence.
+2. Implement FF1.19 separately so readiness is proven before scheduled start
+   and the server clock starts only after those prerequisites pass.
+3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+   build, then build D1N-C-B separately and review the 100 ramp before 500.
+4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-4. Record the no-post-Draft-replacement or account-transfer decision.
-5. Generate and independently review the D1J season-freeze kit, exact tag,
+5. Record the no-post-Draft-replacement or account-transfer decision.
+6. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

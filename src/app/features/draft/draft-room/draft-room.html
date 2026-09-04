@@ -30,7 +30,9 @@
 
     <header class="draft-room-header">
       <div>
-        <span class="eyebrow">Live League Draft</span>
+        <span class="eyebrow">
+          {{ isDraftLobbyOpen() ? 'Pre-Draft Lobby' : 'Live League Draft' }}
+        </span>
         <h1>{{ league()?.name }}</h1>
         <p>{{ draftProgressText() }}</p>
       </div>
@@ -60,6 +62,8 @@
               ? 'Draft Live'
               : draft()?.status === 'complete'
                 ? 'Draft Complete'
+                : isDraftLobbyOpen()
+                  ? 'Lobby Open'
                 : startTimeReached()
                   ? 'Updating Injuries'
                   : 'Draft Scheduled'
@@ -96,7 +100,8 @@
       </section>
     } @else if (
       draft()?.status === 'scheduled' &&
-      !startTimeReached()
+      !startTimeReached() &&
+      !isDraftLobbyOpen()
     ) {
       <section
         class="waiting-card scheduled-card"
@@ -106,6 +111,9 @@
         <span class="eyebrow">Draft Scheduled</span>
         <h2>{{ formatDraftStart() }}</h2>
         <p>{{ getCountdownText() }}</p>
+        <p class="draft-lobby-open-copy">
+          The read-only lobby opens {{ formatDraftLobbyOpen() }} for rankings, Draft order, and private queue preparation.
+        </p>
 
         <div class="pre-draft-preparation-row">
           <strong>{{ getPreDraftPreparationStatusLabel() }}</strong>
@@ -155,6 +163,29 @@
         }
       </section>
     } @else {
+      @if (isDraftLobbyOpen()) {
+        <section class="draft-lobby-banner rr-card rr-card--padded" aria-labelledby="draft-lobby-title">
+          <div class="draft-lobby-copy">
+            <span class="eyebrow">Queue-Only Preview</span>
+            <h2 id="draft-lobby-title">Draft Lobby Open</h2>
+            <p>
+              Review rankings and Draft order, then prepare your private queue. Picks and the Draft clock stay locked until the server opens the live Draft.
+            </p>
+          </div>
+
+          <div class="draft-lobby-start" role="status" aria-live="polite">
+            <span>Scheduled Start</span>
+            <strong>{{ formatDraftStart() }}</strong>
+            <small>{{ getCountdownText() }}</small>
+          </div>
+
+          <div class="draft-lobby-readiness">
+            <strong>{{ getPreDraftPreparationStatusLabel() }}</strong>
+            <span>{{ getPreDraftPreparationDescription() }}</span>
+          </div>
+        </section>
+      }
+
       <section
         class="draft-injury-sync-banner rr-notice rr-notice--info"
         [class.sync-success]="injurySyncState()?.status === 'success'"
@@ -188,33 +219,34 @@
         }
       </section>
 
-      @if (shouldShowDraftHandoffNotice()) {
-        <section
-          class="draft-turn-handoff-notice rr-notice"
-          [class.draft-turn-handoff-error]="draftHandoffError()"
-          role="status"
-          aria-live="polite"
-        >
-          <span class="draft-turn-handoff-icon" aria-hidden="true">⇥</span>
-          <div>
-            <strong>{{ getDraftHandoffTitle() }}</strong>
-            <span>{{ getDraftHandoffDetail() }}</span>
-          </div>
+      @if (draft()?.status === 'live') {
+        @if (shouldShowDraftHandoffNotice()) {
+          <section
+            class="draft-turn-handoff-notice rr-notice"
+            [class.draft-turn-handoff-error]="draftHandoffError()"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="draft-turn-handoff-icon" aria-hidden="true">⇥</span>
+            <div>
+              <strong>{{ getDraftHandoffTitle() }}</strong>
+              <span>{{ getDraftHandoffDetail() }}</span>
+            </div>
 
-          @if (draftHandoffError()) {
-            <button
-              type="button"
-              class="rr-button rr-button--secondary"
-              (click)="retryDraftTurnHandoff()"
-              [disabled]="draftHandoffRepairInProgress() || !browserOnline()"
-            >
-              Retry Turn Sync
-            </button>
-          } @else {
-            <span class="draft-turn-handoff-progress" aria-hidden="true"></span>
-          }
-        </section>
-      }
+            @if (draftHandoffError()) {
+              <button
+                type="button"
+                class="rr-button rr-button--secondary"
+                (click)="retryDraftTurnHandoff()"
+                [disabled]="draftHandoffRepairInProgress() || !browserOnline()"
+              >
+                Retry Turn Sync
+              </button>
+            } @else {
+              <span class="draft-turn-handoff-progress" aria-hidden="true"></span>
+            }
+          </section>
+        }
 
       @if (latestAutoPickNotice(); as autoPickNotice) {
         <section
@@ -355,6 +387,7 @@
           </button>
         }
       </section>
+      }
 
       <nav class="draft-mobile-tabs" aria-label="Draft room views" role="tablist">
         <button
@@ -435,7 +468,7 @@
             <article
               class="draft-pick-track-item rr-list-row"
               [class.completed-pick]="!!entry.pick"
-              [class.current-pick]="entry.preview.overallPick === currentPick()?.overallPick"
+              [class.current-pick]="draft()?.status === 'live' && entry.preview.overallPick === currentPick()?.overallPick"
               [attr.data-pick-number]="entry.preview.overallPick"
             >
               <span class="draft-pick-number">#{{ entry.preview.overallPick }}</span>
@@ -472,7 +505,7 @@
                   <small>
                     {{
                       entry.preview.overallPick === currentPick()?.overallPick
-                        ? 'On the clock'
+                        ? (isDraftLobbyOpen() ? 'First pick' : 'On the clock')
                         : 'Upcoming pick'
                     }}
                   </small>
@@ -497,7 +530,9 @@
               <p>{{ availableAssets().length }} shown · {{ availableAssetCount() }} available</p>
             </div>
 
-            @if (isMyTurn()) {
+            @if (isDraftLobbyOpen()) {
+              <span class="lobby-mode-badge rr-badge rr-badge--info">Lobby · Queue Only</span>
+            } @else if (isMyTurn()) {
               <span class="your-turn-badge rr-badge rr-badge--success">Your Turn</span>
             } @else {
               <span class="waiting-turn-badge rr-badge rr-badge--info">Waiting for Pick</span>
@@ -719,7 +754,7 @@
 
         <aside class="draft-sidebar">
           <section class="turn-card rr-card rr-card--padded">
-            <span class="eyebrow">Current Pick</span>
+            <span class="eyebrow">{{ isDraftLobbyOpen() ? 'First Pick' : 'Current Pick' }}</span>
 
             @if (currentPick(); as pick) {
               <h2>Pick #{{ pick.overallPick }}</h2>
@@ -730,7 +765,11 @@
                 <strong>{{ getTeamName(pick.ownerId) }}</strong>
               </span>
 
-              @if (isMyTurn()) {
+              @if (isDraftLobbyOpen()) {
+                <span class="waiting-message">
+                  {{ getTeamName(pick.ownerId) }} has the first selection when the live Draft opens.
+                </span>
+              } @else if (isMyTurn()) {
                 <span class="your-turn-message">
                   You are on the clock.
                 </span>
@@ -747,9 +786,10 @@
             <div
               class="turn-clock-summary"
               [class.turn-clock-urgent]="draftClockIsUrgent()"
+              [class.lobby-countdown]="isDraftLobbyOpen()"
             >
-              <span>Time Remaining</span>
-              <strong>{{ draftClockDisplay() }}</strong>
+              <span>{{ isDraftLobbyOpen() ? 'Draft Starts In' : 'Time Remaining' }}</span>
+              <strong>{{ isDraftLobbyOpen() ? getCountdownText() : draftClockDisplay() }}</strong>
             </div>
 
           </section>
@@ -767,7 +807,11 @@
             </div>
 
             <p class="queue-help rr-guidance-new-only">
-              Private list. Auto-draft uses the first eligible queued player while filling legal roster needs.
+              @if (isDraftLobbyOpen()) {
+                Private list. Reorder it now; enabling Auto-Draft remains a live-Draft action.
+              } @else {
+                Private list. Auto-draft uses the first eligible queued player while filling legal roster needs.
+              }
             </p>
 
             @if (queueEntries().length === 0) {
@@ -963,7 +1007,7 @@
         </aside>
       </section>
 
-      @if (isMyTurn() ? selectedAsset() : null; as selectedAsset) {
+      @if (draft()?.status === 'live' && isMyTurn() ? selectedAsset() : null; as selectedAsset) {
         <section class="draft-mobile-selection-bar" aria-live="polite">
           <button
             type="button"

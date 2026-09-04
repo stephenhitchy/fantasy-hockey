@@ -281,7 +281,7 @@ test('the roadmap separates completed source behavior from lobby and start-readi
 
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /\[~\] FF1\.17 Reduce Draft Room decision density/);
-  assert.match(roadmap, /\[ \] FF1\.18 Open a read-only one-hour pre-Draft lobby/);
+  assert.match(roadmap, /\[~\] FF1\.18 One-hour pre-Draft lobby implementation is complete in source/);
   assert.match(roadmap, /\[ \] FF1\.19 Remove the awkward post-countdown preparation wait/);
   assert.match(taskDoc, /source implementation complete; independent review and authenticated visual evidence pending/);
   assert.match(taskDoc, /only changed runtime resource is\s+`hosting:app`/);

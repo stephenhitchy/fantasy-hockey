@@ -147,6 +147,73 @@
   border-color: #bdd5ed;
   background: var(--rr-draft-room-migration-color-17);
 }
+.draft-lobby-open-copy {
+  max-width: 70ch;
+}
+.draft-lobby-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.75fr);
+  gap: 14px 20px;
+  margin-bottom: 14px;
+  border-color: color-mix(in srgb, var(--rr-info) 58%, var(--border-strong));
+  background: color-mix(in srgb, var(--rr-info) 9%, var(--surface-1));
+  color: var(--text-primary);
+}
+.draft-lobby-copy h2,
+.draft-lobby-copy p,
+.draft-lobby-start,
+.draft-lobby-readiness {
+  margin: 0;
+}
+.draft-lobby-copy h2 {
+  font-size: 22px;
+}
+.draft-lobby-copy p {
+  max-width: 68ch;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.draft-lobby-start {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--rr-info) 38%, var(--border-strong));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--rr-info));
+}
+.draft-lobby-start span,
+.draft-lobby-start small {
+  color: var(--text-secondary);
+}
+.draft-lobby-start span {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.draft-lobby-start strong {
+  font-size: 14px;
+}
+.draft-lobby-start small {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.draft-lobby-readiness {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 11px;
+  border-top: 1px solid color-mix(in srgb, var(--border-strong) 58%, transparent);
+}
+.draft-lobby-readiness span {
+  color: var(--text-secondary);
+}
+.lobby-mode-badge {
+  white-space: nowrap;
+}
 .complete-card {
   border-color: #cbcbed;
   background: #f8f8ff;
@@ -1053,6 +1120,11 @@
 .turn-clock-summary.turn-clock-urgent strong {
   color: #a22626;
 }
+.turn-clock-summary.lobby-countdown strong {
+  font-size: 15px;
+  line-height: 1.25;
+  text-align: right;
+}
 .auto-draft-toggle.enabled {
   border-color: #78a98a;
   background: #e6f6eb;
@@ -1135,6 +1207,14 @@
   color: #9a2e2e;
 }
 @media (max-width: 760px) {
+  .draft-lobby-banner {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+  .draft-lobby-readiness {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .draft-clock-bar {
     top: 6px;
     grid-template-columns: minmax(0, 1fr) auto;

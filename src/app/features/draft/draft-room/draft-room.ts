@@ -19,6 +19,10 @@ import {
 } from '../../../core/observability/competitive-action-monitor.service';
 
 import { repairDraftTurnHandoff } from '../../../core/draft/draft-authority.service';
+import {
+  getDraftLobbyOpenDate,
+  getDraftLobbyState,
+} from '../../../core/draft/draft-lobby.util';
 
 import {
   DraftableAsset,
@@ -633,13 +637,32 @@ export class DraftRoom implements OnDestroy {
       this.draftTurnHandoff().status === 'healthy',
   );
 
+  readonly draftLobbyState = computed(() =>
+    getDraftLobbyState({
+      draftStatus: this.draft()?.status,
+      scheduledStart: getScheduledStartDate(this.draft()),
+      now: new Date(this.now()),
+    }),
+  );
+
+  readonly isDraftLobbyOpen = computed(() => this.draftLobbyState() === 'open');
+
   readonly canUseDraftQueueActions = computed(
-    () =>
-      this.realtimeConnectionState() === 'connected' &&
-      this.pickSubmissionPhase() === 'idle' &&
-      !this.releaseUpdate.updateAvailable() &&
-      !this.draftHandoffRepairInProgress() &&
-      this.draftTurnHandoff().status === 'healthy',
+    () => {
+      const draft = this.draft();
+      const queuePhaseAllowsWrites = draft?.status === 'live' || this.isDraftLobbyOpen();
+      const liveTurnIsReady =
+        draft?.status !== 'live' || this.draftTurnHandoff().status === 'healthy';
+
+      return (
+        queuePhaseAllowsWrites &&
+        this.realtimeConnectionState() === 'connected' &&
+        this.pickSubmissionPhase() === 'idle' &&
+        !this.releaseUpdate.updateAvailable() &&
+        !this.draftHandoffRepairInProgress() &&
+        liveTurnIsReady
+      );
+    },
   );
 
   // Existing templates and draft-button helpers use this name. Drafting now
@@ -689,6 +712,10 @@ export class DraftRoom implements OnDestroy {
   });
 
   readonly draftStartDate = computed(() => getScheduledStartDate(this.draft()));
+
+  readonly draftLobbyOpenDate = computed(() =>
+    getDraftLobbyOpenDate(this.draftStartDate()),
+  );
 
   readonly startTimeReached = computed(() =>
     isDraftStartTimeReached(this.draft(), new Date(this.now())),
@@ -2637,7 +2664,12 @@ export class DraftRoom implements OnDestroy {
       return false;
     }
 
-    if (this.draftHandoffRepairInProgress() || this.draftTurnHandoff().status !== 'healthy') {
+    const draftIsLive = this.draft()?.status === 'live';
+
+    if (
+      this.draftHandoffRepairInProgress() ||
+      (draftIsLive && this.draftTurnHandoff().status !== 'healthy')
+    ) {
       this.errorMessage.set(
         'RinkRat is opening the next live draft turn. Wait for the next manager and clock to be confirmed before submitting another action.',
       );
@@ -2679,7 +2711,11 @@ export class DraftRoom implements OnDestroy {
   }
 
   async toggleMyAutoDraft(): Promise<void> {
-    if (this.queueSaving() || !this.ensureRealtimeActionReady('queue')) {
+    if (
+      this.draft()?.status !== 'live' ||
+      this.queueSaving() ||
+      !this.ensureRealtimeActionReady('queue')
+    ) {
       return;
     }
 
@@ -2850,7 +2886,7 @@ export class DraftRoom implements OnDestroy {
       await withOperationDeadline(
         saveDraftQueue(this.leagueId, this.userId, assetKeys, this.myQueue().autoDraftEnabled),
         20_000,
-        'RinkRat stopped waiting for the queue response. Refresh the live Draft Room before changing the queue again because the update may still have saved.',
+        'RinkRat stopped waiting for the queue response. Refresh the Draft Room before changing the queue again because the update may still have saved.',
       );
       actionHandle.finish('success');
     } catch (error: unknown) {
@@ -3409,6 +3445,19 @@ export class DraftRoom implements OnDestroy {
     }
 
     return startDate.toLocaleString(undefined, {
+      dateStyle: 'full',
+      timeStyle: 'short',
+    });
+  }
+
+  formatDraftLobbyOpen(): string {
+    const openDate = this.draftLobbyOpenDate();
+
+    if (!openDate) {
+      return 'after the commissioner schedules the Draft';
+    }
+
+    return openDate.toLocaleString(undefined, {
       dateStyle: 'full',
       timeStyle: 'short',
     });

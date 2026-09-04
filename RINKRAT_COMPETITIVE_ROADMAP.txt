@@ -1,7 +1,7 @@
 RINKRAT COMPETITIVE ROADMAP
-Version 1.54.12
+Version 1.54.13
 Created: 2026-08-07
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 Current verified Production Hosting source: 01e93ac522f99a090489fc3e7da1d6602937ffee (Release Candidate 65, Production Scoring V4, Projection V11)
 Purpose: Long-term tracker for taking RinkRat from a strong invite beta to a fantasy-hockey platform that can compete with Yahoo, ESPN, Fantrax, CBS, and the modern social experience associated with Sleeper.
 
@@ -162,7 +162,7 @@ Draft exit gate: exact current-build lifecycle, Draft, scoring, device, rollback
 [~] FF1.15 Complete D1N physical-device/reconnect/multi-tab/listener-cleanup evidence and staging-only 100/500 operation ramps before Draft; retain 2,000/5,000 ramps as public-scale evidence that may continue without changing Production. (P0 / L) — D1N-C-A fixes the prerequisites, metrics, thresholds, cost source, and stage progression; physical-phone evidence and the separate traffic generator remain open.
 [ ] FF1.16 Record one formal go/no-go naming the exact release, open risks, support owner/deputy, rollback point, scoring/canonical/queue/App Check modes, invited leagues, and approval separately for invitations and Draft. (P0 / Gate)
 [~] FF1.17 Reduce Draft Room decision density without changing Projection V11 or Draft authority: retain identity, actual injury state, Rank, Next 6, Season, queue, and the live-turn action; remove the Draft-only Watch UI and duplicated rating/risk/form/expected-games/news presentation; make skater headshots primary with a current-team badge and deterministic team-logo/text fallbacks while keeping goalie units team-logo-first; preserve mobile targets, accessible names, theme contrast, and account watchlists outside Draft. (P1 / S) — Source implementation and focused regression coverage are complete in FF1.1; independent review and exact-source authenticated staging screenshots remain open.
-[ ] FF1.18 Open a read-only one-hour pre-Draft lobby from a server-derived schedule so managers can inspect rankings/order, manage their private queue, and learn the room while every pick and clock-start path remains disabled until authoritative start. (P1 / M)
+[~] FF1.18 One-hour pre-Draft lobby implementation is complete in source: managers can inspect rankings/order, manage only their private queue, and learn the room while every pick, Auto-Draft, and clock path remains disabled until authoritative live state. Independent review, exact staging manifest verification, authenticated 320/390/430/desktop evidence, queue reconnect/duplicate-tab evidence, and the six-manager rehearsal remain required before completion. (P1 / M)
 [ ] FF1.19 Remove the awkward post-countdown preparation wait by preparing injury/projection prerequisites before start, exposing explicit preparing/ready/failure evidence, and starting the clock only after server-authoritative readiness; prove retry, duplicate delivery, delayed-source, reconnect, and rollback behavior. (P0 / M)
 
 ================================================================================
@@ -1099,6 +1099,8 @@ Future entries:
 # [x] LOG.107 2026-09-03 — Prepared the FF1 Draft authorization gate as documentation, regression tests, and a read-only exact-release preflight: require clean synchronized main, immutable RC65/Scoring V4/Projection V11/six-game modes, a strict docs/test/tooling-only delta from live Hosting, ACTIVE critical Draft and D1M Functions, disposable six-team Draft and replay lifecycle evidence, physical devices, reconnect/stale-tab/exact-once proof, D1N 100/500 evidence, rollback rehearsal, manager-replacement decision, and formal go/no; changed no runtime or Firebase resource.
 
 # [x] LOG.108 2026-09-03 — Prepared D1N-C-A as a read-only staging-load preflight: refuse every target except the isolated billed staging project, require exact clean source and physical iPhone/Android route evidence, fix the sequential 100/500/2,000/5,000 operation stages, define zero-duplicate/zero-terminal-error invariants and p95/p99/queue/concurrency/Firestore/billed-cost gates, require only the two existing task workers, generate no traffic, and change no runtime, Firebase resource, Production mode, worker limit, or competitive authority.
+
+# [x] LOG.109 2026-09-04 — Prepared FF1.18 as a one-hour pre-Draft lobby source candidate: derive the presentation window from the saved schedule, expose rankings/order/roster/private-queue preparation, keep pick/clock/Auto-Draft controls live-only, preserve the existing owner-only bounded queue path and server-authoritative Draft checks, route commissioners and managers into the scheduled room, add responsive/theme/accessibility and boundary regressions, require Hosting-only staging plus authenticated queue/reconnect/multi-tab evidence, and leave FF1.19 readiness as a separate P0 slice.
 
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 

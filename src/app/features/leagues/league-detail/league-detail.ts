@@ -27,6 +27,7 @@ import {
 } from '../../../core/cycle/cycle.service';
 
 import { FantasyDraft } from '../../../core/draft/draft.models';
+import { getDraftLobbyState } from '../../../core/draft/draft-lobby.util';
 
 import {
   activateScheduledDraftIfReady,
@@ -273,6 +274,16 @@ export class LeagueDetail implements OnDestroy {
 
   readonly scheduledStartDate = computed(() => getScheduledStartDate(this.draft()));
 
+  readonly draftLobbyState = computed(() =>
+    getDraftLobbyState({
+      draftStatus: this.draft()?.status,
+      scheduledStart: this.scheduledStartDate(),
+      now: new Date(this.now()),
+    }),
+  );
+
+  readonly isDraftLobbyOpen = computed(() => this.draftLobbyState() === 'open');
+
   readonly startTimeReached = computed(() => {
     const draft = this.draft();
 
@@ -330,6 +341,10 @@ export class LeagueDetail implements OnDestroy {
         : 'Opening Draft';
     }
 
+    if (this.isDraftLobbyOpen()) {
+      return 'Draft Lobby Open';
+    }
+
     return 'Draft Scheduled';
   });
 
@@ -355,7 +370,11 @@ export class LeagueDetail implements OnDestroy {
         : 'The server is opening the live draft automatically. This page will move you into the room when it is ready.';
     }
 
-    return 'The draft will become available at the scheduled time below.';
+    if (this.isDraftLobbyOpen()) {
+      return 'The read-only Draft lobby is open. Review rankings and order, and prepare your private queue before picks begin.';
+    }
+
+    return 'The read-only Draft lobby opens one hour before the scheduled start.';
   });
 
   readonly countdownText = computed(() => {
