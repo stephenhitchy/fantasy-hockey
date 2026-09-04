@@ -85,6 +85,11 @@ test('scheduled lobby exposes rankings, order, roster, and private queue without
   assert.match(template, /class="draft-lobby-banner[\s\S]*?Draft Lobby Open/);
   assert.match(template, /Queue-Only Preview/);
   assert.match(template, /id="draft-lobby-title"/);
+  assert.doesNotMatch(
+    template,
+    /class="draft-lobby-start"[^>]*(?:role="status"|aria-live)/,
+    'the one-second countdown must not become a repeating screen-reader live announcement',
+  );
   assert.match(template, /class="draft-pick-track-card/);
   assert.match(template, /class="player-pool-panel/);
   assert.match(template, /class="sidebar-card queue-card/);
