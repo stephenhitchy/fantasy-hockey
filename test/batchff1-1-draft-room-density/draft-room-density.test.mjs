@@ -131,9 +131,12 @@ test('Draft cards use one compact desktop line and a bounded mobile reflow', asy
     read('src/app/features/draft/draft-room/draft-room.css'),
     read('src/styles.css'),
   ]);
+  const playerNameRule = styles.match(/\.asset-name-row > strong\s*\{[\s\S]*?\}/)?.[0] ?? '';
 
   assert.match(styles, /grid-template-columns:\s*40px minmax\(150px, 1fr\) minmax\(180px, 0\.85fr\) auto/);
   assert.match(styles, /min-height:\s*58px/);
+  assert.match(playerNameRule, /color:\s*var\(--rr-color-text\)/);
+  assert.doesNotMatch(playerNameRule, /#[0-9a-f]{3,8}\b/i);
   assert.match(styles, /\.asset-metrics\s*\{[\s\S]*?repeat\(3, minmax\(52px, 1fr\)\)/);
   assert.match(styles, /\.asset-actions\s*\{[\s\S]*?display:\s*flex/);
   assert.match(styles, /repeat\(auto-fit, minmax\(104px, 1fr\)\)/);

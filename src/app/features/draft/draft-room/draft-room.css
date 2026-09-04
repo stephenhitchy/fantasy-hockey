@@ -295,7 +295,7 @@
 .asset-name-row > strong {
   flex: 1 1 auto;
   min-width: 0;
-  color: #1e314a;
+  color: var(--rr-color-text);
   font-size: 14px;
 }
 .asset-identity-meta {
