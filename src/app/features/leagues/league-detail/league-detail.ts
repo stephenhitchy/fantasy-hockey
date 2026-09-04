@@ -16,7 +16,6 @@ import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
 import { reauthenticateCurrentUserWithPassword } from '../../../core/auth/account-deletion.service';
-import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rules';
 
 import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
@@ -37,13 +36,7 @@ import {
 } from '../../../core/draft/draft.service';
 
 import {
-  generateSharedProjectionSnapshot,
-  isSharedProjectionSnapshotFreshForDraft,
-  loadSharedProjectionSnapshot,
-  loadSharedProjectionSnapshotMetadata,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
-  SHARED_PROJECTION_VERSION,
-  SharedProjectionGenerationReason,
 } from '../../../core/projection/projection-snapshot.service';
 
 import {
@@ -137,12 +130,6 @@ export class LeagueDetail implements OnDestroy {
   draftEntryInProgress = signal(false);
   draftEntryRecoveryVisible = signal(false);
   draftEntryError = signal('');
-  draftInjurySyncInProgress = signal(false);
-  draftInjurySyncMessage = signal('');
-  draftInjurySyncWarning = signal('');
-  preDraftPreparationInProgress = signal(false);
-  preDraftPreparationReady = signal(false);
-
   dailyInjuryRefreshInProgress = signal(false);
   dailyInjuryRefreshMessage = signal('');
   dailyInjuryRefreshError = signal('');
@@ -179,7 +166,6 @@ export class LeagueDetail implements OnDestroy {
   private destroyed = false;
   private activationFailureCount = 0;
   private activationRetryNotBefore = 0;
-  private preDraftPreparationAttemptKey = '';
   private redirectTimer: ReturnType<typeof setTimeout> | null = null;
   private draftEntryRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
@@ -336,9 +322,9 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.startTimeReached()) {
-      return this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running'
-        ? 'Updating Injuries'
-        : 'Opening Draft';
+      return draft.serverDraftReadinessStatus === 'ready'
+        ? 'Opening Draft'
+        : 'Draft Start Delayed';
     }
 
     if (this.isDraftLobbyOpen()) {
@@ -365,9 +351,9 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (this.startTimeReached()) {
-      return this.isCommissioner()
-        ? 'Finalizing the shared injury report and opening the live draft automatically.'
-        : 'The server is opening the live draft automatically. This page will move you into the room when it is ready.';
+      return draft.serverDraftReadinessStatus === 'ready'
+        ? 'The exact server start is opening the live Draft now.'
+        : 'The server did not verify the Draft board before zero, so the clock remains safely stopped while automatic retry continues.';
     }
 
     if (this.isDraftLobbyOpen()) {
@@ -396,9 +382,7 @@ export class LeagueDetail implements OnDestroy {
     const millisecondsRemaining = startDate.getTime() - this.now();
 
     if (millisecondsRemaining <= 0) {
-      return this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running'
-        ? 'Updating injury report...'
-        : 'Opening live draft...';
+      return 'Opening live draft...';
     }
 
     const totalSeconds = Math.floor(millisecondsRemaining / 1000);
@@ -973,7 +957,7 @@ export class LeagueDetail implements OnDestroy {
   }
 
   getDraftInjurySyncStatusLabel(): string {
-    if (this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running') {
+    if (this.injurySyncState()?.status === 'running') {
       return 'Refreshing Now';
     }
 
@@ -989,16 +973,8 @@ export class LeagueDetail implements OnDestroy {
   }
 
   getDraftInjurySyncDescription(): string {
-    if (this.draftInjurySyncInProgress() || this.injurySyncState()?.status === 'running') {
-      return 'The app is preparing today’s shared ESPN injury report. The draft will open after this one daily check finishes.';
-    }
-
-    if (this.draftInjurySyncWarning()) {
-      return this.draftInjurySyncWarning();
-    }
-
-    if (this.draftInjurySyncMessage()) {
-      return this.draftInjurySyncMessage();
+    if (this.injurySyncState()?.status === 'running') {
+      return 'The server is preparing today’s shared injury report before it seals the Draft board.';
     }
 
     const state = this.injurySyncState();
@@ -1016,7 +992,7 @@ export class LeagueDetail implements OnDestroy {
       );
     }
 
-    return `The app checks the shared daily injury report and prepares league rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
+    return `The server checks the shared daily injury report and prepares league rankings ${PRE_DRAFT_PROJECTION_WARMUP_MINUTES} minutes before the scheduled start.`;
   }
 
   getDraftInjurySyncTimeLabel(): string {
@@ -1036,203 +1012,6 @@ export class LeagueDetail implements OnDestroy {
       dateStyle: 'medium',
       timeStyle: 'short',
     })}`;
-  }
-
-  private getProjectionTeamCount(): number {
-    return Math.max(this.league()?.maxTeams ?? this.teams().length, 2);
-  }
-
-  private getRequiredGamesPerCycle(): number {
-    return this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
-  }
-
-  private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {
-    const metadata = await loadSharedProjectionSnapshotMetadata(this.leagueId);
-
-    const isFresh = isSharedProjectionSnapshotFreshForDraft(metadata, {
-      teamCount: this.getProjectionTeamCount(),
-      requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
-      scoringRulesVersion: this.league()?.scoringRulesVersion,
-      now: new Date(this.now()),
-    });
-
-    if (!isFresh) {
-      return false;
-    }
-
-    const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
-
-    if (!snapshot || snapshot.assets.length === 0) {
-      return false;
-    }
-
-    this.preDraftPreparationReady.set(true);
-    this.draftInjurySyncMessage.set(
-      'Shared season draft rankings, next-six-game projections, and injury data are ready.',
-    );
-
-    return true;
-  }
-
-  private async loadLastGoodDraftSnapshotIfAvailable(
-    refreshFailureDetail: string,
-  ): Promise<boolean> {
-    try {
-      const metadata = await loadSharedProjectionSnapshotMetadata(this.leagueId);
-
-      if (!metadata) {
-        return false;
-      }
-
-      const generatedAt = Date.parse(metadata.generatedAt);
-      const snapshotAgeMilliseconds = this.now() - generatedAt;
-      const isCompatible =
-        metadata.status === 'ready' &&
-        metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
-        metadata.scoringRulesVersion ===
-          (this.league()?.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) &&
-        metadata.assetCount > 0 &&
-        metadata.teamCount === this.getProjectionTeamCount() &&
-        metadata.requiredGamesPerCycle === this.getRequiredGamesPerCycle() &&
-        Number.isFinite(generatedAt) &&
-        snapshotAgeMilliseconds >= 0 &&
-        snapshotAgeMilliseconds <= 24 * 60 * 60 * 1000;
-
-      if (!isCompatible) {
-        return false;
-      }
-
-      const snapshot = await loadSharedProjectionSnapshot(this.leagueId);
-
-      if (!snapshot || snapshot.assets.length === 0) {
-        return false;
-      }
-
-      this.preDraftPreparationReady.set(true);
-      this.draftInjurySyncMessage.set(
-        `Using the last verified Version ${SHARED_PROJECTION_VERSION} projection snapshot from ${new Date(metadata.generatedAt).toLocaleString()}.`,
-      );
-      this.draftInjurySyncWarning.set(
-        `The live NHL statistics refresh was temporarily unavailable (${refreshFailureDetail}). The draft can still open with the last verified rankings.`,
-      );
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async prepareDraftData(
-    generationReason: SharedProjectionGenerationReason,
-  ): Promise<void> {
-    if (this.preDraftPreparationInProgress()) {
-      return;
-    }
-
-    this.preDraftPreparationInProgress.set(true);
-    this.preDraftPreparationReady.set(false);
-    this.draftInjurySyncInProgress.set(true);
-    this.draftInjurySyncWarning.set('');
-    this.draftInjurySyncMessage.set(
-      'Refreshing injuries and preparing one shared draft ranking before the scheduled start.',
-    );
-
-    try {
-      try {
-        const result = await syncPlayerAvailabilityFromEspn({
-          leagueId: this.leagueId,
-          trigger: 'draft-start',
-        });
-
-        this.draftInjurySyncMessage.set(
-          result.skipped
-            ? result.message
-            : `Today’s shared injury report is ready. ${result.matchedCount} injured skaters matched. Building shared projections now.`,
-        );
-      } catch (error: unknown) {
-        const detail =
-          error instanceof Error ? error.message : 'Unable to refresh ESPN injury data.';
-
-        this.draftInjurySyncWarning.set(
-          `The daily injury refresh failed: ${detail} The newest saved app-wide report will be used for projections.`,
-        );
-      }
-
-      const snapshot = await generateSharedProjectionSnapshot({
-        leagueId: this.leagueId,
-        teamCount: this.getProjectionTeamCount(),
-        requiredGamesPerCycle: this.getRequiredGamesPerCycle(),
-        generationReason,
-      });
-
-      this.preDraftPreparationReady.set(true);
-      this.draftInjurySyncMessage.set(
-        `Draft data ready: ${snapshot.metadata.assetCount} players and goalie units are prepared for every manager.`,
-      );
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : 'Unable to build shared projections.';
-      const fallbackLoaded = await this.loadLastGoodDraftSnapshotIfAvailable(detail);
-
-      if (!fallbackLoaded) {
-        throw error;
-      }
-    } finally {
-      this.draftInjurySyncInProgress.set(false);
-      this.preDraftPreparationInProgress.set(false);
-    }
-  }
-
-  private async maybeWarmPreDraftProjections(): Promise<void> {
-    const draft = this.draft();
-    const startDate = this.scheduledStartDate();
-
-    if (
-      !draft ||
-      draft.status !== 'scheduled' ||
-      !startDate ||
-      !this.isCommissioner() ||
-      this.preDraftPreparationInProgress() ||
-      this.activationInProgress
-    ) {
-      return;
-    }
-
-    const millisecondsRemaining = startDate.getTime() - this.now();
-
-    if (
-      millisecondsRemaining <= 0 ||
-      millisecondsRemaining > PRE_DRAFT_PROJECTION_WARMUP_MINUTES * 60 * 1000
-    ) {
-      return;
-    }
-
-    const attemptKey = [
-      startDate.getTime(),
-      this.getProjectionTeamCount(),
-      this.getRequiredGamesPerCycle(),
-    ].join(':');
-
-    if (this.preDraftPreparationAttemptKey === attemptKey) {
-      return;
-    }
-
-    if (await this.loadFreshDraftSnapshotIfAvailable()) {
-      this.preDraftPreparationAttemptKey = attemptKey;
-      return;
-    }
-
-    this.preDraftPreparationAttemptKey = attemptKey;
-
-    try {
-      await this.prepareDraftData('pre-draft');
-    } catch (error: unknown) {
-      const detail =
-        error instanceof Error ? error.message : 'Unable to prepare shared projections.';
-
-      this.draftInjurySyncWarning.set(
-        `Pre-draft preparation failed: ${detail} The app will retry at the scheduled start.`,
-      );
-    }
   }
 
   async enterDraftRoom(): Promise<void> {
@@ -1561,7 +1340,6 @@ export class LeagueDetail implements OnDestroy {
     this.scheduledDraftCheckInProgress = true;
 
     try {
-      await this.maybeWarmPreDraftProjections();
       await this.handleScheduledDraft();
     } finally {
       this.scheduledDraftCheckInProgress = false;
@@ -1585,9 +1363,10 @@ export class LeagueDetail implements OnDestroy {
     }
 
     if (!this.isCommissioner()) {
-      this.draftInjurySyncMessage.set(
-        'The server is opening the scheduled draft automatically. This page will move you into the room when it is ready.',
-      );
+      return;
+    }
+
+    if (draft.serverDraftReadinessStatus !== 'ready') {
       return;
     }
 
@@ -1598,12 +1377,6 @@ export class LeagueDetail implements OnDestroy {
     this.activationInProgress = true;
 
     try {
-      const snapshotReady = await this.loadFreshDraftSnapshotIfAvailable();
-
-      if (!snapshotReady) {
-        await this.prepareDraftData('draft-start-fallback');
-      }
-
       const activatedDraft = await activateScheduledDraftIfReady(
         this.leagueId,
         auth.currentUser?.uid,

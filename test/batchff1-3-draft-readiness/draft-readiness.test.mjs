@@ -221,7 +221,8 @@ test('manual activation and client presentation use the same server readiness ev
   assert.match(component, /Server Preparing Draft Data/);
   assert.match(component, /Preparation Retry Scheduled/);
   assert.match(component, /serverDraftReadinessMessage/);
-  assert.match(component, /return serverStatus[\s\S]*?serverStatus === 'ready'[\s\S]*?: this\.preDraftPreparationReady\(\)/);
+  assert.match(component, /return serverStatus === 'ready'/);
+  assert.doesNotMatch(component, /this\.preDraftPreparationReady\(\)/);
   assert.match(clientModel, /serverDraftReadinessStatus/);
   assert.match(serverModel, /serverDraftReadinessStatus/);
 });

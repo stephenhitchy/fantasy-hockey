@@ -357,11 +357,9 @@
 
         <div
           class="draft-injury-sync-card rr-notice rr-notice--info"
-          [class.sync-running]="
-            draftInjurySyncInProgress() || injurySyncState()?.status === 'running'
-          "
+          [class.sync-running]="injurySyncState()?.status === 'running'"
           [class.sync-success]="injurySyncState()?.status === 'success'"
-          [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
+          [class.sync-warning]="injurySyncState()?.status === 'error'"
         >
           <div>
             <span class="draft-section-eyebrow">Shared Injury Report</span>

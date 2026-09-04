@@ -36,7 +36,8 @@ reached zero while the Draft remained scheduled.
   commissioner activation command revalidate that evidence before changing
   the Draft to `live`.
 - The Draft Room displays server-owned waiting, preparing, ready, and retry
-  states. Existing browser preparation remains a convenience, not authority.
+  states. FF1.24 removes the superseded browser preparation path entirely so
+  it cannot delay or compete with the server-owned start.
 
 ## Acceptance criteria
 

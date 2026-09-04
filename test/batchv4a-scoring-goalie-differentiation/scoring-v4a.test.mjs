@@ -507,15 +507,11 @@ test('the permanent roadmap converts the launch gameplan into explicit product a
   assert.match(readme, /Scoring Batch V4A/);
 });
 
-test('League HQ imports the current scoring version used by verified Draft snapshot fallback', async () => {
+test('League HQ delegates verified Draft snapshot selection to server readiness', async () => {
   const source = await read('src/app/features/leagues/league-detail/league-detail.ts');
 
-  assert.match(
-    source,
-    /import \{ CURRENT_SCORING_RULES_VERSION \} from '\.\.\/\.\.\/\.\.\/core\/scoring\/scoring-rules';/,
-  );
-  assert.match(
-    source,
-    /metadata\.scoringRulesVersion ===\s*\(this\.league\(\)\?\.scoringRulesVersion \?\? CURRENT_SCORING_RULES_VERSION\)/,
-  );
+  assert.doesNotMatch(source, /CURRENT_SCORING_RULES_VERSION/);
+  assert.doesNotMatch(source, /generateSharedProjectionSnapshot/);
+  assert.match(source, /draft\.serverDraftReadinessStatus !== 'ready'/);
+  assert.match(source, /activateScheduledDraftIfReady/);
 });

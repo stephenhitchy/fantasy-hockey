@@ -31,9 +31,11 @@ import {
 } from './shared/core/projection/projection-snapshot.service';
 import { queueServerDraftProjectionSnapshotRefresh } from './projection-authority';
 import {
+  buildScheduledDraftStartTaskId,
   buildDraftReadinessRequestKey,
   draftReadinessMatchesSchedule,
   getDraftReadinessWindowState,
+  getScheduledDraftStartTaskState,
   isDraftAvailabilityEvidenceUsable,
 } from './draft-readiness.util';
 import {
@@ -164,12 +166,23 @@ interface DraftAutomationLease {
   token: string;
 }
 
-interface DraftClockTaskPayload {
+interface DraftPickDeadlineTaskPayload {
+  taskType?: 'pick-deadline';
   leagueId: string;
   expectedOverallPick: number;
   expectedPickStartedAtMilliseconds: number;
   expectedDueAtMilliseconds: number;
 }
+
+interface DraftScheduledStartTaskPayload {
+  taskType: 'scheduled-start';
+  leagueId: string;
+  expectedScheduledStartAtMilliseconds: number;
+}
+
+type DraftClockTaskPayload =
+  | DraftPickDeadlineTaskPayload
+  | DraftScheduledStartTaskPayload;
 
 export interface DraftTurnRepairResult {
   repaired: boolean;
@@ -685,13 +698,70 @@ function getDraftClockTaskQueue() {
   );
 }
 
-function buildDraftClockTaskId(payload: DraftClockTaskPayload): string {
+function buildDraftClockTaskId(payload: DraftPickDeadlineTaskPayload): string {
   return createHash('sha256')
     .update(
       `${payload.leagueId}:${payload.expectedOverallPick}:${payload.expectedPickStartedAtMilliseconds}:${payload.expectedDueAtMilliseconds}`,
     )
     .digest('hex')
     .slice(0, 40);
+}
+
+async function scheduleScheduledDraftStartTask(
+  leagueId: string,
+  draft: FantasyDraft,
+  now = new Date(),
+): Promise<'not-due' | 'scheduled' | 'error'> {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+  const windowState = getDraftReadinessWindowState({
+    draftStatus: draft.status,
+    scheduledStartMilliseconds,
+    nowMilliseconds: now.getTime(),
+  });
+
+  if (
+    scheduledStartMilliseconds === null ||
+    (windowState !== 'prepare' && windowState !== 'start-due')
+  ) {
+    return 'not-due';
+  }
+
+  const payload: DraftScheduledStartTaskPayload = {
+    taskType: 'scheduled-start',
+    leagueId,
+    expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
+  };
+
+  try {
+    await getDraftClockTaskQueue().enqueue(payload, {
+      id: buildScheduledDraftStartTaskId({
+        leagueId,
+        scheduledStartMilliseconds,
+      }),
+      scheduleTime: new Date(
+        Math.max(Date.now() + 250, scheduledStartMilliseconds + 250),
+      ),
+      dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
+    });
+
+    console.info('Scheduled exact Draft-start task.', {
+      leagueId,
+      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+    });
+
+    return 'scheduled';
+  } catch (error: unknown) {
+    if (isTaskAlreadyExistsError(error)) {
+      return 'scheduled';
+    }
+
+    console.error('Unable to schedule exact Draft-start task.', {
+      leagueId,
+      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+      error,
+    });
+    return 'error';
+  }
 }
 
 function isTaskAlreadyExistsError(error: unknown): boolean {
@@ -1956,6 +2026,18 @@ async function processLeagueDraftAutomation(
     let opened = false;
 
     if (draft.status === 'scheduled') {
+      const exactStartTaskStatus = await scheduleScheduledDraftStartTask(
+        leagueId,
+        draft,
+      );
+
+      if (exactStartTaskStatus === 'error') {
+        console.warn(
+          'The exact Draft-start task was unavailable; the minute worker remains the safe fallback.',
+          { leagueId },
+        );
+      }
+
       await prepareScheduledDraftReadiness(leagueId, draft);
       draftSnapshot = await draftRef.get();
       draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
@@ -2175,6 +2257,137 @@ export const runScheduledDraftAutomation = onSchedule(
   },
 );
 
+async function processScheduledDraftStartTask(
+  payload: DraftScheduledStartTaskPayload,
+): Promise<void> {
+  const leagueId = resolveSafeFirestoreDocumentId(
+    payload.leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const expectedScheduledStartMilliseconds = Math.trunc(
+    payload.expectedScheduledStartAtMilliseconds,
+  );
+
+  if (!leagueId || !Number.isFinite(expectedScheduledStartMilliseconds)) {
+    console.warn('Ignored malformed scheduled Draft-start task.', { payload });
+    return;
+  }
+
+  const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+  let draftSnapshot = await draftRef.get();
+
+  if (!draftSnapshot.exists) {
+    return;
+  }
+
+  let draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+  let taskState = getScheduledDraftStartTaskState({
+    draftStatus: draft.status,
+    expectedScheduledStartMilliseconds,
+    actualScheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
+    nowMilliseconds: Date.now(),
+  });
+
+  if (taskState === 'stale') {
+    console.info('Ignored stale scheduled Draft-start task.', {
+      leagueId,
+      expectedScheduledStartAt: new Date(
+        expectedScheduledStartMilliseconds,
+      ).toISOString(),
+    });
+    return;
+  }
+
+  if (taskState === 'early') {
+    const millisecondsUntilStart = expectedScheduledStartMilliseconds - Date.now();
+    await sleep(Math.min(millisecondsUntilStart, 5_000));
+    draftSnapshot = await draftRef.get();
+
+    if (!draftSnapshot.exists) {
+      return;
+    }
+
+    draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+    taskState = getScheduledDraftStartTaskState({
+      draftStatus: draft.status,
+      expectedScheduledStartMilliseconds,
+      actualScheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
+      nowMilliseconds: Date.now(),
+    });
+
+    if (taskState === 'stale') {
+      return;
+    }
+
+    if (taskState === 'early') {
+      throw new Error('Scheduled Draft-start task arrived early. Retrying at zero.');
+    }
+  }
+
+  const opened = await openScheduledDraftIfReady(leagueId);
+  draftSnapshot = await draftRef.get();
+
+  if (!draftSnapshot.exists) {
+    return;
+  }
+
+  draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+
+  if (draft.status === 'live' && draft.clockStatus === 'running') {
+    const deadlineScheduled = await ensureCurrentDraftClockTask(leagueId);
+
+    if (!deadlineScheduled) {
+      throw new Error('The Draft opened, but its first exact pick deadline was not scheduled.');
+    }
+
+    console.info('Exact scheduled Draft-start task opened the Draft.', {
+      leagueId,
+      opened,
+      scheduledStartAt: new Date(expectedScheduledStartMilliseconds).toISOString(),
+    });
+    return;
+  }
+
+  const result = await processLeagueDraftAutomation(leagueId);
+
+  if (result.status === 'error') {
+    throw new Error(result.message);
+  }
+
+  if (result.status === 'waiting' && result.message.includes('Another server worker')) {
+    throw new Error('Another Draft worker is preparing this start. Retrying shortly.');
+  }
+
+  const finalSnapshot = await draftRef.get();
+  const finalDraft = finalSnapshot.exists
+    ? normalizeDraft(finalSnapshot.data() as Partial<FantasyDraft>)
+    : null;
+
+  if (
+    finalDraft?.status === 'scheduled' &&
+    getScheduledStartMilliseconds(finalDraft) === expectedScheduledStartMilliseconds
+  ) {
+    throw new Error(
+      'The exact Draft-start task reached zero before server readiness completed. Retrying without starting an unverified clock.',
+    );
+  }
+
+  if (finalDraft?.status === 'live' && finalDraft.clockStatus === 'running') {
+    const deadlineScheduled = await ensureCurrentDraftClockTask(leagueId);
+
+    if (!deadlineScheduled) {
+      throw new Error('The Draft opened, but its first exact pick deadline was not scheduled.');
+    }
+  }
+
+  console.info('Exact scheduled Draft-start task completed.', {
+    leagueId,
+    status: result.status,
+    picksMade: result.picksMade,
+    message: result.message,
+  });
+}
+
 export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>(
   {
     region: FUNCTION_REGION,
@@ -2190,6 +2403,11 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
   },
   async (request) => {
     const payload = request.data;
+
+    if (payload?.taskType === 'scheduled-start') {
+      await processScheduledDraftStartTask(payload);
+      return;
+    }
 
     const leagueId = resolveSafeFirestoreDocumentId(
       payload?.leagueId,
@@ -2346,17 +2564,28 @@ export const continueServerDraftAutomation = onDocumentWritten(
       ? normalizeDraft(event.data.after.data() as Partial<FantasyDraft>)
       : null;
 
-    if (!after || after.status !== 'live' || after.clockStatus !== 'running') {
+    if (!after) {
       return;
     }
 
-    const meaningfulProgress =
-      !before ||
-      before.status !== after.status ||
-      before.clockStatus !== after.clockStatus ||
-      before.nextOverallPick !== after.nextOverallPick;
+    const scheduledStartChanged =
+      after.status === 'scheduled' &&
+      (
+        !before ||
+        before.status !== 'scheduled' ||
+        getScheduledStartMilliseconds(before) !== getScheduledStartMilliseconds(after)
+      );
+    const liveProgress =
+      after.status === 'live' &&
+      after.clockStatus === 'running' &&
+      (
+        !before ||
+        before.status !== after.status ||
+        before.clockStatus !== after.clockStatus ||
+        before.nextOverallPick !== after.nextOverallPick
+      );
 
-    if (!meaningfulProgress) {
+    if (!scheduledStartChanged && !liveProgress) {
       return;
     }
 
@@ -2374,6 +2603,10 @@ export const continueServerDraftAutomation = onDocumentWritten(
 
     if (result.status === 'error') {
       throw new Error(result.message);
+    }
+
+    if (scheduledStartChanged) {
+      return;
     }
 
     if (result.status === 'waiting' && result.message.includes('Another server worker')) {

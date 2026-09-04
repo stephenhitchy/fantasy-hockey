@@ -15,6 +15,11 @@ export type DraftReadinessWindowState =
   | 'start-due'
   | 'unavailable';
 
+export type ScheduledDraftStartTaskState =
+  | 'open'
+  | 'early'
+  | 'stale';
+
 export interface DraftAvailabilityEvidenceInput {
   revision: string | null;
   lastSuccessfulAt: string | null;
@@ -102,4 +107,37 @@ export function draftReadinessMatchesSchedule(input: {
     input.scheduledStartMilliseconds !== null &&
     Number.isFinite(input.readinessScheduledStartMilliseconds) &&
     input.readinessScheduledStartMilliseconds === input.scheduledStartMilliseconds;
+}
+
+export function buildScheduledDraftStartTaskId(input: {
+  leagueId: string;
+  scheduledStartMilliseconds: number;
+}): string {
+  return createHash('sha256')
+    .update(
+      `scheduled-draft-start:${input.leagueId}:${input.scheduledStartMilliseconds}`,
+    )
+    .digest('hex')
+    .slice(0, 40);
+}
+
+export function getScheduledDraftStartTaskState(input: {
+  draftStatus: string | null;
+  expectedScheduledStartMilliseconds: number;
+  actualScheduledStartMilliseconds: number | null;
+  nowMilliseconds: number;
+}): ScheduledDraftStartTaskState {
+  if (
+    input.draftStatus !== 'scheduled' ||
+    !Number.isFinite(input.expectedScheduledStartMilliseconds) ||
+    input.actualScheduledStartMilliseconds === null ||
+    !Number.isFinite(input.actualScheduledStartMilliseconds) ||
+    input.actualScheduledStartMilliseconds !== input.expectedScheduledStartMilliseconds
+  ) {
+    return 'stale';
+  }
+
+  return input.nowMilliseconds + 100 < input.expectedScheduledStartMilliseconds
+    ? 'early'
+    : 'open';
 }

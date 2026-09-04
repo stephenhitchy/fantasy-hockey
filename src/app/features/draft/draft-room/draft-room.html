@@ -189,7 +189,7 @@
       <section
         class="draft-injury-sync-banner rr-notice rr-notice--info"
         [class.sync-success]="injurySyncState()?.status === 'success'"
-        [class.sync-warning]="injurySyncState()?.status === 'error' || draftInjurySyncWarning()"
+        [class.sync-warning]="injurySyncState()?.status === 'error'"
       >
         <strong>Injury Report</strong>
         <span>{{ getDraftInjurySyncTimeLabel() }}</span>
