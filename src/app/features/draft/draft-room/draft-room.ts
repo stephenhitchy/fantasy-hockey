@@ -1275,11 +1275,18 @@ export class DraftRoom implements OnDestroy {
       this.draftBoardConnectionState() === 'connected' &&
       this.realtimeConnectionState() !== 'connected'
     ) {
+      if (this.isDraftLobbyOpen()) {
+        return 'The Draft board is current. Your private queue is still syncing; picks and the draft clock remain locked until the scheduled start.';
+      }
+
       return 'The live turn and picks are current. Your private queue is still syncing; drafting remains available.';
     }
 
     return this.realtimeListenerError() ||
-      getDraftConnectionStatusDetail(this.realtimeConnectionState());
+      getDraftConnectionStatusDetail(
+        this.realtimeConnectionState(),
+        this.isDraftLobbyOpen() ? 'lobby' : 'live',
+      );
   }
 
   getRealtimeConnectionClass(): string {

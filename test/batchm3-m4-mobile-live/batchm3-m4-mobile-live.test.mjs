@@ -145,6 +145,18 @@ test('draft connection state blocks actions until every critical listener is ser
 
   assert.equal(getDraftConnectionStatusLabel('connected'), 'Connected');
   assert.match(getDraftConnectionStatusDetail('offline'), /actions are paused/i);
+  assert.match(
+    getDraftConnectionStatusDetail('connected', 'lobby'),
+    /private queue is live[\s\S]*picks and the draft clock remain locked/i,
+  );
+  assert.doesNotMatch(
+    getDraftConnectionStatusDetail('connected', 'lobby'),
+    /server clock (?:is|are) live/i,
+  );
+  assert.match(
+    getDraftConnectionStatusDetail('stale', 'lobby'),
+    /before allowing another queue change/i,
+  );
 });
 
 test('auto-pick notices stay available until the manager dismisses the latest automatic pick', () => {
