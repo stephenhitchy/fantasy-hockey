@@ -581,50 +581,41 @@
               @for (asset of availableAssets(); track asset.assetKey) {
                 <article
                   class="draft-asset-card rr-list-row"
-                  [class.has-team-change-logo]="hasOffseasonTeamChange(asset)"
                   [class.mobile-selected-asset]="selectedAssetKey() === asset.assetKey"
                 >
-                  @if (hasOffseasonTeamChange(asset)) {
-                    <div
-                      class="asset-team-change-logo"
-                      [attr.aria-label]="getPreviousTeamAbbreviation(asset) + ' to ' + getNewsNewTeamAbbreviation(asset)"
-                    >
-                      @if (getPreviousTeamLogoUrl(asset); as previousLogoUrl) {
+                  @if (getDraftAssetPortrait(asset); as portrait) {
+                    <div class="asset-portrait" aria-hidden="true">
+                      @if (portrait.primaryImageUrl; as primaryImageUrl) {
                         <img
-                          class="asset-logo"
-                          [src]="previousLogoUrl"
-                          [alt]="getPreviousTeamAbbreviation(asset) + ' logo'"
+                          class="asset-portrait-image"
+                          [class.asset-headshot]="portrait.primaryKind === 'headshot'"
+                          [src]="primaryImageUrl"
+                          alt=""
+                          width="40"
+                          height="40"
+                          loading="lazy"
+                          decoding="async"
+                          (error)="markDraftImageUnavailable(primaryImageUrl)"
                         />
                       } @else {
-                        <span class="asset-logo-fallback asset-logo-fallback-small">
-                          {{ getPreviousTeamAbbreviation(asset) }}
+                        <span class="asset-logo-fallback">
+                          {{ portrait.fallbackLabel }}
                         </span>
                       }
 
-                      <span class="team-change-inline-arrow" aria-hidden="true">→</span>
-
-                      @if (getNewTeamLogoUrl(asset); as newLogoUrl) {
+                      @if (portrait.teamBadgeUrl; as teamBadgeUrl) {
                         <img
-                          class="asset-logo"
-                          [src]="newLogoUrl"
-                          [alt]="getNewsNewTeamAbbreviation(asset) + ' logo'"
+                          class="asset-team-badge"
+                          [src]="teamBadgeUrl"
+                          alt=""
+                          width="18"
+                          height="18"
+                          loading="lazy"
+                          decoding="async"
+                          (error)="markDraftImageUnavailable(teamBadgeUrl)"
                         />
-                      } @else {
-                        <span class="asset-logo-fallback asset-logo-fallback-small">
-                          {{ getNewsNewTeamAbbreviation(asset) }}
-                        </span>
                       }
                     </div>
-                  } @else if (getAssetLogoUrl(asset); as logoUrl) {
-                    <img
-                      class="asset-logo"
-                      [src]="logoUrl"
-                      [alt]="getAssetTeamLabel(asset) + ' logo'"
-                    />
-                  } @else {
-                    <span class="asset-logo-fallback">
-                      {{ getAssetTeamLabel(asset) }}
-                    </span>
                   }
 
                   <div class="asset-copy">
@@ -654,7 +645,12 @@
                       }
                     </div>
                     <div class="asset-identity-meta">
-                      <span>{{ asset.position }} · {{ getAssetTeamLabel(asset) }}</span>
+                      <span aria-hidden="true">
+                        {{ asset.position }} · {{ getAssetIdentityTeamLabel(asset) }}
+                      </span>
+                      <span class="rr-visually-hidden">
+                        {{ getAssetIdentityAriaLabel(asset) }}
+                      </span>
                     </div>
                   </div>
 
@@ -877,49 +873,40 @@
         ) {
           <article
             class="drafted-player-row rr-list-row"
-            [class.has-team-change-logo]="hasOffseasonTeamChange(pick.asset)"
           >
-  @if (hasOffseasonTeamChange(pick.asset)) {
-    <div
-      class="drafted-team-change-logo"
-      [attr.aria-label]="getPreviousTeamAbbreviation(pick.asset) + ' to ' + getNewsNewTeamAbbreviation(pick.asset)"
-    >
-      @if (getPreviousTeamLogoUrl(pick.asset); as previousLogoUrl) {
+  @if (getDraftAssetPortrait(pick.asset); as portrait) {
+    <div class="drafted-asset-portrait" aria-hidden="true">
+      @if (portrait.primaryImageUrl; as primaryImageUrl) {
         <img
-          class="drafted-player-logo"
-          [src]="previousLogoUrl"
-          [alt]="getPreviousTeamAbbreviation(pick.asset) + ' logo'"
+          class="drafted-asset-portrait-image"
+          [class.asset-headshot]="portrait.primaryKind === 'headshot'"
+          [src]="primaryImageUrl"
+          alt=""
+          width="36"
+          height="36"
+          loading="lazy"
+          decoding="async"
+          (error)="markDraftImageUnavailable(primaryImageUrl)"
         />
       } @else {
-        <span class="drafted-player-logo-fallback drafted-player-logo-fallback-small">
-          {{ getPreviousTeamAbbreviation(pick.asset) }}
+        <span class="drafted-player-logo-fallback">
+          {{ portrait.fallbackLabel }}
         </span>
       }
 
-      <span class="team-change-inline-arrow" aria-hidden="true">→</span>
-
-      @if (getNewTeamLogoUrl(pick.asset); as newLogoUrl) {
+      @if (portrait.teamBadgeUrl; as teamBadgeUrl) {
         <img
-          class="drafted-player-logo"
-          [src]="newLogoUrl"
-          [alt]="getNewsNewTeamAbbreviation(pick.asset) + ' logo'"
+          class="drafted-asset-team-badge"
+          [src]="teamBadgeUrl"
+          alt=""
+          width="16"
+          height="16"
+          loading="lazy"
+          decoding="async"
+          (error)="markDraftImageUnavailable(teamBadgeUrl)"
         />
-      } @else {
-        <span class="drafted-player-logo-fallback drafted-player-logo-fallback-small">
-          {{ getNewsNewTeamAbbreviation(pick.asset) }}
-        </span>
       }
     </div>
-  } @else if (getAssetLogoUrl(pick.asset); as logoUrl) {
-    <img
-      class="drafted-player-logo"
-      [src]="logoUrl"
-      [alt]="getAssetTeamLabel(pick.asset) + ' logo'"
-    />
-  } @else {
-    <span class="drafted-player-logo-fallback">
-      {{ getAssetTeamLabel(pick.asset) }}
-    </span>
   }
 
   <div class="drafted-player-main">

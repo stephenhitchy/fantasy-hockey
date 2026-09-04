@@ -233,18 +233,45 @@
   border-radius: 9px;
   background: var(--rr-draft-room-migration-color-05);
 }
-.draft-asset-card.has-team-change-logo {
-  grid-template-columns: 82px minmax(150px, 1fr) minmax(180px, 0.85fr) auto;
-}
-.asset-logo,
+.asset-portrait,
 .asset-logo-fallback {
   display: grid;
   width: 40px;
   height: 40px;
   place-items: center;
 }
-.asset-logo {
+.asset-portrait {
+  position: relative;
+}
+.asset-portrait-image {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--rr-draft-room-migration-color-01);
+  border-radius: 9px;
+  background: var(--rr-draft-room-migration-color-06);
   object-fit: contain;
+}
+.asset-headshot {
+  object-fit: cover;
+  object-position: center top;
+}
+.asset-team-badge,
+.drafted-asset-team-badge {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  border: 2px solid var(--rr-draft-room-migration-color-05);
+  border-radius: 50%;
+  background: var(--rr-draft-room-migration-color-11);
+  box-shadow: 0 1px 3px rgba(22, 36, 58, 0.2);
+  object-fit: contain;
+}
+.asset-team-badge {
+  right: -4px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
 }
 .asset-logo-fallback {
   border-radius: 6px;
@@ -252,29 +279,6 @@
   color: var(--rr-draft-room-migration-color-07);
   font-size: 8px;
   font-weight: 800;
-}
-.asset-logo-fallback-small {
-  width: 32px;
-  height: 32px;
-  font-size: 8px;
-}
-.asset-team-change-logo,
-.drafted-team-change-logo {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 7px;
-  min-width: 0;
-}
-.asset-team-change-logo {
-  width: 80px;
-}
-.team-change-inline-arrow {
-  flex: 0 0 auto;
-  color: #5f7388;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1;
 }
 .asset-copy {
   min-width: 0;
@@ -514,12 +518,6 @@
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 13px;
   }
-  .draft-asset-card.has-team-change-logo {
-    grid-template-columns: 100px minmax(0, 1fr);
-  }
-  .drafted-player-row.has-team-change-logo {
-    grid-template-columns: 82px minmax(0, 1fr);
-  }
 }
 .pool-error-block {
   padding: 18px 0;
@@ -614,18 +612,34 @@
   border-radius: 9px;
   background: var(--rr-draft-room-migration-color-05);
 }
-.drafted-player-row.has-team-change-logo {
-  grid-template-columns: 76px minmax(0, 1fr);
-}
-.drafted-player-logo,
+.drafted-asset-portrait,
 .drafted-player-logo-fallback {
   display: grid;
   width: 36px;
   height: 36px;
   place-items: center;
 }
-.drafted-player-logo {
+.drafted-asset-portrait {
+  position: relative;
+}
+.drafted-asset-portrait-image {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--rr-draft-room-migration-color-01);
+  border-radius: 8px;
+  background: var(--rr-draft-room-migration-color-06);
   object-fit: contain;
+}
+.drafted-asset-portrait-image.asset-headshot {
+  object-fit: cover;
+  object-position: center top;
+}
+.drafted-asset-team-badge {
+  right: -4px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
 }
 .drafted-player-logo-fallback {
   border-radius: 7px;
@@ -633,14 +647,6 @@
   color: var(--rr-draft-room-migration-color-07);
   font-size: 8px;
   font-weight: 800;
-}
-.drafted-player-logo-fallback-small {
-  width: 32px;
-  height: 32px;
-  font-size: 7px;
-}
-.drafted-team-change-logo {
-  width: 84px;
 }
 .drafted-player-main {
   display: grid;
@@ -1716,14 +1722,10 @@
     max-height: none;
     overflow: visible;
   }
-  .draft-asset-card,
-  .draft-asset-card.has-team-change-logo {
+  .draft-asset-card {
     grid-template-columns: 42px minmax(0, 1fr);
     gap: 9px;
     padding: 9px;
-  }
-  .draft-asset-card.has-team-change-logo {
-    grid-template-columns: 96px minmax(0, 1fr);
   }
   .draft-asset-card.mobile-selected-asset {
     border-color: color-mix(in srgb, var(--rr-info) 70%, transparent);

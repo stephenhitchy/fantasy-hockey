@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import {
+  resolveDraftAssetPortrait,
+} from '../../src/app/features/draft/draft-room/draft-asset-portrait.util.ts';
 import { getDraftPlayerAvailabilityDisplay } from '../../src/app/features/draft/draft-room/draft-player-availability.util.ts';
 import { matchesDraftPlayerSearch } from '../../src/app/features/draft/draft-room/draft-player-search.util.ts';
 
@@ -86,6 +89,103 @@ test('Draft availability hides healthy source records and presents bounded injur
   assert.equal(unavailableDate?.ariaLabel, 'Out. Return TBD. Injured Reserve eligible.');
 });
 
+test('Draft portraits prefer skater headshots, retain team identity, and fail over safely', () => {
+  const skater = {
+    assetType: 'skater',
+    assetKey: 'skater-1',
+    position: 'LW',
+    player: {
+      id: 1,
+      fullName: 'Example Skater',
+      position: 'LW',
+      nhlTeamAbbreviation: 'OTT',
+      headshotUrl: ' https://example.test/skater.png ',
+      teamLogoUrl: 'https://example.test/ott.svg',
+    },
+  };
+  const goalieUnit = {
+    assetType: 'team-goalie-unit',
+    assetKey: 'goalie-OTT',
+    position: 'G',
+    teamName: 'Ottawa Senators',
+    teamAbbreviation: 'OTT',
+    teamLogoUrl: 'https://example.test/ott.svg',
+  };
+
+  assert.deepEqual(resolveDraftAssetPortrait(skater), {
+    primaryImageUrl: 'https://example.test/skater.png',
+    primaryKind: 'headshot',
+    teamBadgeUrl: 'https://example.test/ott.svg',
+    fallbackLabel: 'OTT',
+  });
+  assert.deepEqual(resolveDraftAssetPortrait(skater, {
+    currentTeamLogoUrl: 'https://example.test/uta.svg',
+    currentTeamLabel: 'UTA',
+  }), {
+    primaryImageUrl: 'https://example.test/skater.png',
+    primaryKind: 'headshot',
+    teamBadgeUrl: 'https://example.test/uta.svg',
+    fallbackLabel: 'UTA',
+  });
+  assert.deepEqual(resolveDraftAssetPortrait(skater, {
+    failedImageUrls: new Set(['https://example.test/skater.png']),
+  }), {
+    primaryImageUrl: 'https://example.test/ott.svg',
+    primaryKind: 'team-logo',
+    teamBadgeUrl: null,
+    fallbackLabel: 'OTT',
+  });
+  assert.deepEqual(resolveDraftAssetPortrait(skater, {
+    failedImageUrls: new Set([
+      'https://example.test/skater.png',
+      'https://example.test/ott.svg',
+    ]),
+  }), {
+    primaryImageUrl: null,
+    primaryKind: 'fallback',
+    teamBadgeUrl: null,
+    fallbackLabel: 'OTT',
+  });
+  assert.deepEqual(resolveDraftAssetPortrait(goalieUnit), {
+    primaryImageUrl: 'https://example.test/ott.svg',
+    primaryKind: 'team-logo',
+    teamBadgeUrl: null,
+    fallbackLabel: 'OTT',
+  });
+  assert.deepEqual(resolveDraftAssetPortrait({
+    ...goalieUnit,
+    teamLogoUrl: ' ',
+  }), {
+    primaryImageUrl: null,
+    primaryKind: 'fallback',
+    teamBadgeUrl: null,
+    fallbackLabel: 'OTT',
+  });
+});
+
+test('Draft portrait markup is bounded, lazy, decorative, and preserves traded-team text', async () => {
+  const [component, template, styles] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-room.css'),
+  ]);
+
+  assert.match(template, /class="asset-portrait" aria-hidden="true"/);
+  assert.match(template, /class="asset-portrait-image"/);
+  assert.match(template, /class="asset-team-badge"/);
+  assert.match(template, /class="drafted-asset-portrait" aria-hidden="true"/);
+  assert.match(template, /loading="lazy"/);
+  assert.match(template, /decoding="async"/);
+  assert.match(template, /\(error\)="markDraftImageUnavailable\(/);
+  assert.match(template, /getAssetIdentityTeamLabel\(asset\)/);
+  assert.match(template, /class="rr-visually-hidden"[\s\S]*?getAssetIdentityAriaLabel\(asset\)/);
+  assert.doesNotMatch(template, /class="asset-team-change-logo"/);
+  assert.match(component, /failedDraftImageUrls = signal<ReadonlySet<string>>/);
+  assert.match(styles, /\.asset-headshot\s*\{[\s\S]*?object-fit:\s*cover/);
+  assert.match(styles, /\.asset-team-badge\s*\{[\s\S]*?width:\s*18px/);
+  assert.match(styles, /\.drafted-asset-team-badge\s*\{[\s\S]*?width:\s*16px/);
+});
+
 test('Draft actions remain gated by the existing authoritative live-turn contract', async () => {
   const [component, template] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
@@ -147,12 +247,15 @@ test('Draft cards use one compact desktop line and a bounded mobile reflow', asy
   assert.ok(Buffer.byteLength(styles, 'utf8') < 45_000);
 });
 
-test('the density slice adds no Draft write path or projection/scoring calculation', async () => {
-  const [component, searchUtility, availabilityUtility] = await Promise.all([
-    read('src/app/features/draft/draft-room/draft-room.ts'),
-    read('src/app/features/draft/draft-room/draft-player-search.util.ts'),
-    read('src/app/features/draft/draft-room/draft-player-availability.util.ts'),
-  ]);
+test('the density slice adds no Draft write path, image fetch path, or projection/scoring calculation', async () => {
+  const [component, searchUtility, availabilityUtility, portraitUtility, playerPoolService] =
+    await Promise.all([
+      read('src/app/features/draft/draft-room/draft-room.ts'),
+      read('src/app/features/draft/draft-room/draft-player-search.util.ts'),
+      read('src/app/features/draft/draft-room/draft-player-availability.util.ts'),
+      read('src/app/features/draft/draft-room/draft-asset-portrait.util.ts'),
+      read('src/app/core/draft/draft-player-pool.service.ts'),
+    ]);
 
   assert.match(component, /makeDraftPick/);
   assert.match(component, /getDraftDestinationForAsset/);
@@ -160,6 +263,11 @@ test('the density slice adds no Draft write path or projection/scoring calculati
   assert.doesNotMatch(searchUtility, /projected|scoring|window|game/i);
   assert.doesNotMatch(availabilityUtility, /firebase|firestore|httpsCallable|setDoc|updateDoc|transaction/i);
   assert.doesNotMatch(availabilityUtility, /projected|scoring|window|game/i);
+  assert.doesNotMatch(
+    portraitUtility,
+    /firebase|firestore|httpsCallable|fetch\(|setDoc|updateDoc|transaction/i,
+  );
+  assert.match(playerPoolService, /headshotUrl:\s*skater\.headshotUrl/);
 });
 
 test('the roadmap separates completed source behavior from lobby and start-readiness work', async () => {

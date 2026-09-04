@@ -108,6 +108,10 @@ import {
   assessDraftTurnHandoff,
   type DraftTurnHandoffAssessment,
 } from './draft-turn-handoff.util';
+import {
+  resolveDraftAssetPortrait,
+  type DraftAssetPortrait,
+} from './draft-asset-portrait.util';
 
 import {
   draftPickMatchesPending,
@@ -236,6 +240,7 @@ export class DraftRoom implements OnDestroy {
   draftHandoffRepairInProgress = signal(false);
   draftHandoffMessage = signal('');
   draftHandoffError = signal('');
+  failedDraftImageUrls = signal<ReadonlySet<string>>(new Set());
 
   readonly rosterPositions: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
   setSortMode(value: string): void {
@@ -2996,6 +3001,46 @@ export class DraftRoom implements OnDestroy {
     return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
   }
 
+  getDraftAssetPortrait(asset: DraftableAsset): DraftAssetPortrait {
+    return resolveDraftAssetPortrait(asset, {
+      currentTeamLogoUrl: this.hasOffseasonTeamChange(asset)
+        ? this.getNewTeamLogoUrl(asset)
+        : this.getAssetLogoUrl(asset),
+      currentTeamLabel: this.hasOffseasonTeamChange(asset)
+        ? this.getNewsNewTeamAbbreviation(asset)
+        : this.getAssetTeamLabel(asset),
+      failedImageUrls: this.failedDraftImageUrls(),
+    });
+  }
+
+  markDraftImageUnavailable(imageUrl: string): void {
+    this.failedDraftImageUrls.update((failedUrls) => {
+      if (failedUrls.has(imageUrl)) {
+        return failedUrls;
+      }
+
+      const nextFailedUrls = new Set(failedUrls);
+      nextFailedUrls.add(imageUrl);
+      return nextFailedUrls;
+    });
+  }
+
+  getAssetIdentityTeamLabel(asset: DraftableAsset): string {
+    if (!this.hasOffseasonTeamChange(asset)) {
+      return this.getAssetTeamLabel(asset);
+    }
+
+    return `${this.getPreviousTeamAbbreviation(asset)} → ${this.getNewsNewTeamAbbreviation(asset)}`;
+  }
+
+  getAssetIdentityAriaLabel(asset: DraftableAsset): string {
+    if (!this.hasOffseasonTeamChange(asset)) {
+      return `${asset.position}, ${this.getAssetTeamLabel(asset)}`;
+    }
+
+    return `${asset.position}, ${this.getPreviousTeamAbbreviation(asset)} to ${this.getNewsNewTeamAbbreviation(asset)}`;
+  }
+
   getDraftNews(asset: DraftableAsset): DraftPlayerNewsOverride | null {
     return getDraftNewsOverrideForAsset(asset);
   }
@@ -3012,12 +3057,6 @@ export class DraftRoom implements OnDestroy {
 
   getNewsNewTeamAbbreviation(asset: DraftableAsset): string {
     return this.getDraftNews(asset)?.newTeamAbbreviation ?? this.getAssetTeamLabel(asset);
-  }
-
-  getPreviousTeamLogoUrl(asset: DraftableAsset): string | undefined {
-    const abbreviation = this.getPreviousTeamAbbreviation(asset);
-
-    return abbreviation ? getDraftNewsTeamLogoUrl(abbreviation) : undefined;
   }
 
   getNewTeamLogoUrl(asset: DraftableAsset): string | undefined {

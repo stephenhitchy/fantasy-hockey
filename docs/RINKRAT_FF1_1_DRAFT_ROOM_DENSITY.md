@@ -33,6 +33,20 @@ or recalculated. The compact card changes presentation only. Search now fulfills
 existing label by matching player name, current team, previous team, or announced
 new team without changing result ranking.
 
+Skater cards and drafted-roster rows now use the existing player-pool headshot as
+their primary identity image, with the current NHL team logo retained as a small
+badge. Team goalie units remain team-logo-first because they represent the unit,
+not an individual goalie. A missing or failed headshot falls back to the current
+team logo, and a missing or failed logo falls back to the current team abbreviation
+without changing the card's dimensions. Traded skaters keep their previous-to-new
+team text while the badge identifies the announced current team.
+
+The images are decorative because the adjacent player and team text remains the
+accessible identity. They have fixed dimensions, asynchronous decoding, and lazy
+loading to avoid layout shift and an unnecessary eager image burst. A failed URL is
+suppressed for the rest of the Draft Room session. This treatment reuses the
+existing Draft payload and adds no NHL request, Firestore read, or listener.
+
 ## Authority boundary
 
 No pick, clock, queue, roster, projection, or scoring write path was added. The Draft
@@ -56,6 +70,12 @@ delete or mutate any saved watchlist.
   horizontal clipping and actions keep a minimum 44-pixel touch target.
 - Long names, team changes, missing projections, and actual injury states remain
   readable or have an accessible full label.
+- Skaters show a headshot and current-team badge when both are available; failed
+  headshots fall back to the team logo and then the team abbreviation.
+- Team goalie units keep their team logo as the primary identity image without a
+  redundant badge.
+- Portraits remain fixed-size and decorative, and image failures do not create
+  broken-image text, layout shift, or duplicate screen-reader announcements.
 - The final Draft action uses the shared high-visibility semantic commit treatment.
 - Queue state exposes `aria-pressed`; queue reorder/remove and Draft actions include
   the player name in their accessible label.
