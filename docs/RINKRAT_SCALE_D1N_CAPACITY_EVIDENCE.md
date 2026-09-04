@@ -318,6 +318,19 @@ D1N_STAGING_FIXTURE_PASSWORD='<20+ character secret>' \
 npm run staging:d1n:seed
 ```
 
+The fixed Draft fixture also includes a bounded visual-evidence set without increasing its document
+or projection-asset count: a healthy skater with portrait and team badge, an injured skater with a
+deterministic estimated return date, an intentionally broken portrait that must fall back to its
+team logo, one long player name, one traded-player name recognized by the existing Draft news map,
+one queued player, one abbreviation-only fallback, and one team-logo-first goalie unit. All working
+images are existing same-origin RinkRat assets; the one missing path is intentional and cannot make
+an external request. The availability example is explicitly synthetic and remains inside the fixed
+staging-only `appData/playerAvailability` document.
+
+This fixture proves presentation states only. It does not authorize a real Draft, simulate a waiting
+manager or completed Draft roster, replace physical-device evidence, or change any Projection V11,
+Draft, roster, or scoring decision.
+
 The remaining authenticated gate must use `rinkratHealth=1`, reach at least 20 samples per route and
 viewport across the required cold, warm, and reconnect profiles, navigate to a listener-free route
 after each cleanup sample, and stop immediately on an unexpected project identity, listener error,

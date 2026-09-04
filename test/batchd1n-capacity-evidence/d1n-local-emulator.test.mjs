@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -122,6 +122,103 @@ test('D1N fixture contains only bounded synthetic route data', () => {
     );
     assert.doesNotMatch(path, /nhl-fantasy-app-ab673/);
   }
+});
+
+test('D1N Draft fixture covers portraits, injury timing, team changes, queue state, and fallbacks', async () => {
+  const fixture = buildD1nFixtureDocuments(
+    'fixture-commissioner',
+    new Date('2026-09-01T00:00:00Z'),
+  );
+  const projectionChunk = fixture.documents.get(
+    'leagues/d1n-capacity-league/projectionSnapshots/fixture-v11/assets/chunk-000',
+  );
+  const availability = fixture.documents.get('appData/playerAvailability');
+  const commissionerQueue = fixture.documents.get(
+    'leagues/d1n-capacity-league/draft/current/queues/fixture-commissioner',
+  );
+  const assetsByKey = new Map(
+    projectionChunk.assets.map((asset) => [asset.assetKey, asset]),
+  );
+
+  assert.deepEqual(commissionerQueue.assetKeys, ['skater:10000']);
+  assert.deepEqual(assetsByKey.get('skater:10000').player, {
+    id: 10_000,
+    fullName: 'Fixture Healthy Headshot',
+    position: 'LW',
+    nhlTeamAbbreviation: 'MIN',
+    headshotUrl: '/assets/profile-icons/masked-veteran.webp',
+    teamLogoUrl: '/assets/team-identity-logos/MIN_light.svg',
+  });
+  assert.equal(
+    assetsByKey.get('skater:10001').player.fullName,
+    'Fixture Injured Headshot',
+  );
+  assert.equal(assetsByKey.get('skater:10001').availabilityStatus, 'injured-reserve');
+  assert.equal(assetsByKey.get('skater:10001').availabilityReturnDate, '2026-09-15');
+  assert.equal(
+    assetsByKey.get('skater:10002').player.headshotUrl,
+    '/assets/d1n-fixture/missing-headshot.webp',
+  );
+  assert.equal(
+    assetsByKey.get('skater:10002').player.teamLogoUrl,
+    '/assets/team-identity-logos/TBL_light.svg',
+  );
+  assert.equal(assetsByKey.get('skater:10003').player.fullName, 'Brady Tkachuk');
+  assert.equal(assetsByKey.get('skater:10003').player.nhlTeamAbbreviation, 'FLA');
+  assert.equal(
+    assetsByKey.get('skater:10004').player.fullName,
+    'Fixture Extraordinarily Long Player Name',
+  );
+  assert.deepEqual(assetsByKey.get('team-goalie-unit:fixture-91'), {
+    assetType: 'team-goalie-unit',
+    assetKey: 'team-goalie-unit:fixture-91',
+    position: 'G',
+    teamName: 'Fixture Minnesota Goalie Unit',
+    teamAbbreviation: 'MIN',
+    teamLogoUrl: '/assets/team-identity-logos/MIN_light.svg',
+    projectedCyclePoints: 15,
+    projectedSeasonPoints: 210,
+    draftRank: 91,
+    balancedRank: 91,
+    draftPositionRank: 1,
+    positionRank: 1,
+    projectionModelVersion: 11,
+    availabilityStatus: 'active',
+  });
+
+  const injuredRecord = availability.records.find((record) => record.playerId === 10_001);
+  assert.deepEqual(injuredRecord, {
+    playerId: 10_001,
+    playerName: 'Fixture Injured Headshot',
+    status: 'injured-reserve',
+    note: 'Synthetic Draft visual evidence only.',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    updatedBy: 'd1n-local-fixture',
+    externalStatus: 'Injured Reserve',
+    externalReturnDate: '2026-09-15',
+    syncedAt: '2026-09-01T00:00:00.000Z',
+  });
+
+  for (const asset of projectionChunk.assets) {
+    if (asset.assetType === 'skater') {
+      assert.doesNotMatch(asset.player.headshotUrl ?? '', /^https?:/);
+      assert.doesNotMatch(asset.player.teamLogoUrl ?? '', /^https?:/);
+    } else {
+      assert.doesNotMatch(asset.teamLogoUrl ?? '', /^https?:/);
+    }
+  }
+
+  await Promise.all([
+    'public/assets/profile-icons/masked-veteran.webp',
+    'public/assets/profile-icons/teal-captain.webp',
+    'public/assets/team-identity-logos/FLA_light.svg',
+    'public/assets/team-identity-logos/MIN_light.svg',
+    'public/assets/team-identity-logos/OTT_light.svg',
+    'public/assets/team-identity-logos/TBL_light.svg',
+  ].map((relativePath) => access(new URL(relativePath, ROOT))));
+  await assert.rejects(
+    access(new URL('public/assets/d1n-fixture/missing-headshot.webp', ROOT)),
+  );
 });
 
 test('D1N browser wiring preserves production config and routes every local SDK to loopback', async () => {

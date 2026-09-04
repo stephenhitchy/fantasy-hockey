@@ -99,6 +99,13 @@ staging release. Capture 320, 390, 430, and desktop widths with a normal skater,
 long name, a traded player, an injured/IR-eligible player, a goalie unit, a queued
 player, the active manager, and a waiting manager across all four themes.
 
+The source-controlled D1N route fixture now supplies the normal portrait/team-badge,
+long-name, traded-player, injured-with-return-date, queued, broken-portrait fallback,
+abbreviation fallback, and team-logo-first goalie states without adding documents or
+external image hosts. Waiting-manager and completed-roster evidence still require a
+separate authenticated Draft participant/state and must not be inferred from that
+fixture.
+
 ## Deployment, observability, and rollback
 
 If review and staging evidence pass, the only changed runtime resource is

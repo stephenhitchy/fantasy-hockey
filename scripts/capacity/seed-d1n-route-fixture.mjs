@@ -10,6 +10,38 @@ const PROJECTION_ASSET_COUNT = 100;
 const ACTIVITY_COUNT = 20;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const DRAFT_STATUSES = new Set(['live', 'scheduled']);
+const DRAFT_VISUAL_FIXTURE_ASSETS = new Map([
+  [1, {
+    fullName: 'Fixture Healthy Headshot',
+    nhlTeamAbbreviation: 'MIN',
+    headshotUrl: '/assets/profile-icons/masked-veteran.webp',
+    teamLogoUrl: '/assets/team-identity-logos/MIN_light.svg',
+  }],
+  [2, {
+    fullName: 'Fixture Injured Headshot',
+    nhlTeamAbbreviation: 'OTT',
+    headshotUrl: '/assets/profile-icons/teal-captain.webp',
+    teamLogoUrl: '/assets/team-identity-logos/OTT_light.svg',
+    availabilityStatus: 'injured-reserve',
+  }],
+  [3, {
+    fullName: 'Fixture Broken Headshot',
+    nhlTeamAbbreviation: 'TBL',
+    headshotUrl: '/assets/d1n-fixture/missing-headshot.webp',
+    teamLogoUrl: '/assets/team-identity-logos/TBL_light.svg',
+  }],
+  [4, {
+    fullName: 'Brady Tkachuk',
+    nhlTeamAbbreviation: 'FLA',
+    headshotUrl: '/assets/profile-icons/masked-veteran.webp',
+    teamLogoUrl: '/assets/team-identity-logos/FLA_light.svg',
+  }],
+  [5, {
+    fullName: 'Fixture Extraordinarily Long Player Name',
+    nhlTeamAbbreviation: 'MIN',
+    teamLogoUrl: '/assets/team-identity-logos/MIN_light.svg',
+  }],
+]);
 
 function parseEmulatorHost(value, label, expectedPort) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -210,19 +242,26 @@ function buildEmptyRoster() {
   };
 }
 
-function buildProjectionAssets() {
+function buildProjectionAssets(now) {
   const positions = ['LW', 'C', 'RW', 'D'];
 
   return Array.from({ length: PROJECTION_ASSET_COUNT }, (_, index) => {
     const rank = index + 1;
 
     if (index >= PROJECTION_ASSET_COUNT - 10) {
+      const isVisualGoalieUnit = rank === PROJECTION_ASSET_COUNT - 9;
+
       return {
         assetType: 'team-goalie-unit',
         assetKey: `team-goalie-unit:fixture-${rank}`,
         position: 'G',
-        teamName: `Fixture Goalie Unit ${rank}`,
-        teamAbbreviation: `F${String(rank).padStart(2, '0')}`,
+        teamName: isVisualGoalieUnit
+          ? 'Fixture Minnesota Goalie Unit'
+          : `Fixture Goalie Unit ${rank}`,
+        teamAbbreviation: isVisualGoalieUnit ? 'MIN' : `F${String(rank).padStart(2, '0')}`,
+        ...(isVisualGoalieUnit
+          ? { teamLogoUrl: '/assets/team-identity-logos/MIN_light.svg' }
+          : {}),
         projectedCyclePoints: 24 - index / 10,
         projectedSeasonPoints: 300 - index,
         draftRank: rank,
@@ -235,15 +274,25 @@ function buildProjectionAssets() {
     }
 
     const position = positions[index % positions.length];
+    const visualFixture = DRAFT_VISUAL_FIXTURE_ASSETS.get(rank);
     return {
       assetType: 'skater',
       assetKey: `skater:${10_000 + index}`,
       position,
       player: {
         id: 10_000 + index,
-        fullName: `Fixture ${position} ${String(rank).padStart(3, '0')}`,
+        fullName:
+          visualFixture?.fullName ?? `Fixture ${position} ${String(rank).padStart(3, '0')}`,
         position,
-        nhlTeamAbbreviation: `T${String((index % 32) + 1).padStart(2, '0')}`,
+        nhlTeamAbbreviation:
+          visualFixture?.nhlTeamAbbreviation ??
+          `T${String((index % 32) + 1).padStart(2, '0')}`,
+        ...(visualFixture?.headshotUrl
+          ? { headshotUrl: visualFixture.headshotUrl }
+          : {}),
+        ...(visualFixture?.teamLogoUrl
+          ? { teamLogoUrl: visualFixture.teamLogoUrl }
+          : {}),
       },
       projectedCyclePoints: 40 - index / 5,
       projectedSeasonPoints: 500 - index * 2,
@@ -252,7 +301,13 @@ function buildProjectionAssets() {
       draftPositionRank: Math.floor(index / positions.length) + 1,
       positionRank: Math.floor(index / positions.length) + 1,
       projectionModelVersion: 11,
-      availabilityStatus: 'active',
+      availabilityStatus: visualFixture?.availabilityStatus ?? 'active',
+      availabilityReturnDate:
+        visualFixture?.availabilityStatus === 'injured-reserve'
+          ? new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10)
+          : null,
       reliabilityRating: 80,
       projectionModelConfidence: 0.8,
     };
@@ -272,7 +327,7 @@ export function buildD1nFixtureDocuments(
     commissionerId,
     ...Array.from({ length: TEAM_COUNT - 1 }, (_, index) => `fixture-owner-${index + 2}`),
   ];
-  const projectionAssets = buildProjectionAssets();
+  const projectionAssets = buildProjectionAssets(now);
   const projectionSnapshotId = 'fixture-v11';
   const projectionMetadata = {
     snapshotId: projectionSnapshotId,
@@ -396,7 +451,7 @@ export function buildD1nFixtureDocuments(
     );
     documents.set(`leagues/${D1N_FIXTURE_LEAGUE_ID}/draft/current/queues/${ownerId}`, {
       ownerId,
-      assetKeys: [],
+      assetKeys: index === 0 ? ['skater:10000'] : [],
       autoDraftEnabled: false,
       consecutiveClockExpirations: 0,
       autoDraftActivatedByTimeout: false,
@@ -502,11 +557,20 @@ export function buildD1nFixtureDocuments(
       .map((asset) => ({
         playerId: asset.player.id,
         playerName: asset.player.fullName,
-        status: 'active',
-        note: '',
+        status: asset.availabilityStatus,
+        note:
+          asset.availabilityStatus === 'injured-reserve'
+            ? 'Synthetic Draft visual evidence only.'
+            : '',
         updatedAt: now.toISOString(),
         updatedBy: 'd1n-local-fixture',
-        externalStatus: 'Active',
+        externalStatus:
+          asset.availabilityStatus === 'injured-reserve'
+            ? 'Injured Reserve'
+            : 'Active',
+        ...(asset.availabilityReturnDate
+          ? { externalReturnDate: asset.availabilityReturnDate }
+          : {}),
         syncedAt: now.toISOString(),
       })),
     updatedAt: now,
