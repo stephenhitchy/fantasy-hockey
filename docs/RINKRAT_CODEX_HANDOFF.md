@@ -192,16 +192,21 @@ coverage remain open.
 The lobby is presentation-only until the authoritative scheduled start. Picks,
 clock start/pause/resume, and Auto-Draft controls remain live-only; the existing
 server-authoritative Draft checks still gate every pick. FF1.19 is merged and
-its exact `aa59ac7b` Hosting manifest plus three ACTIVE targeted staging
-Functions were verified after the clean deployment. The existing minute worker
+its three targeted staging Functions remain ACTIVE. The exact `e0a69017`
+staging Hosting manifest and FF1.20 guarded positive/duplicate evidence passed:
+readiness reached `ready` before zero on attempt one without a browser,
+duplicate delivery retained the same request/snapshot identity, the clock
+stayed stopped, and no pick was created. The existing minute worker
 prepares during the 20-minute window, binds a
 deterministic Projection V11 request to the exact schedule and hashed
 availability input, and starts the clock only with the exact verified
 request/snapshot/hash. The first no-browser execution correctly persisted
 `waiting-injury` and kept the clock stopped when the synthetic fixture lacked
-fresh daily injury evidence. The fixture now carries that evidence for the
-remaining positive and adversarial staging matrix. No queue or worker limit
-changed, and real Draft authorization remains blocked on the evidence below.
+fresh daily injury evidence. FF1.21 now supplies a separate Production-refusing
+adversarial source candidate for delayed input, reschedule supersession,
+changed availability, bounded retry, audit preservation, and safe restoration.
+No queue or worker limit changed, and real Draft authorization remains blocked
+on the evidence below.
 
 ## Release and deployment rules
 
@@ -217,8 +222,8 @@ changed, and real Draft authorization remains blocked on the evidence below.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.20 staging
-  evidence runner is `npm run verify:batchff1-4`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.21 staging
+  evidence runner is `npm run verify:batchff1-5`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -248,12 +253,11 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Prove no-browser T-20 preparation, exact ready-before-zero behavior,
-   missing/stale/changed injury input, task failure and bounded retry,
-   duplicate delivery, reschedule, reconnect, and rollback on staging. The
-   FF1.20 source candidate automates the positive no-browser/duplicate portion
-   and guarantees a safe synthetic reset; changed-input and forced-retry
-   exercises remain separate.
+1. Independently review, merge, and run FF1.21 against its exact staging
+   manifest to prove delayed input, reschedule supersession, changed injury
+   input, explicit terminal-task backoff/retry, zero picks, and safe reset.
+   FF1.20 already proved the positive no-browser/duplicate path. Then complete
+   controlled reconnect and rollback evidence.
 2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
 3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal

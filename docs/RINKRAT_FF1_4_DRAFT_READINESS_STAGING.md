@@ -1,7 +1,7 @@
 # FF1.20 — Guarded Draft Readiness Staging Evidence
 
-Status: source candidate; it must be independently reviewed, merged, and bound
-to the exact staging Hosting manifest before execution.
+Status: merged and passed on isolated staging source
+`e0a69017b70fca2f41b816d792600d9c430c1b99`.
 
 ## Purpose
 
@@ -56,6 +56,14 @@ npm run staging:ff1:exercise-readiness
 
 The command uses Application Default Credentials and the existing Cloud
 Scheduler job. It does not require or print the fixture password.
+
+## Staging result
+
+The exact clean staging manifest matched `e0a69017`. No-browser preparation
+reached `ready` before zero on attempt one. Repeated scheduler delivery retained
+the same request and snapshot identities, the Draft stayed scheduled with its
+clock stopped, and no pick was created. The runner restored the Draft seven
+days ahead and preserved the request/snapshot records for audit.
 
 ## Deployment resources
 

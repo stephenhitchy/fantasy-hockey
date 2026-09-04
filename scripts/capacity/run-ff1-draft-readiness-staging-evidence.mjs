@@ -15,9 +15,9 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 600_000;
 const EVIDENCE_START_OFFSET_MILLISECONDS = 19 * 60 * 1000;
 const SAFE_RESET_OFFSET_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const POLL_INTERVAL_MILLISECONDS = 2_000;
-const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+export const FF1_READINESS_SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const GIT_REVISION_PATTERN = /^[a-f0-9]{40}$/;
-const TERMINAL_REQUEST_STATUSES = new Set(['ready', 'error']);
+export const FF1_READINESS_TERMINAL_REQUEST_STATUSES = new Set(['ready', 'error']);
 const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
 
 const READINESS_FIELDS = Object.freeze([
@@ -137,7 +137,12 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitForSnapshot(readSnapshot, predicate, timeoutMilliseconds, label) {
+export async function waitForFf1ReadinessSnapshot(
+  readSnapshot,
+  predicate,
+  timeoutMilliseconds,
+  label,
+) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMilliseconds) {
@@ -153,7 +158,7 @@ async function waitForSnapshot(readSnapshot, predicate, timeoutMilliseconds, lab
   throw new Error(`${label} did not complete before the staging timeout.`);
 }
 
-function triggerDraftScheduler() {
+export function triggerFf1DraftScheduler() {
   runCommand('gcloud', [
     'scheduler',
     'jobs',
@@ -167,11 +172,11 @@ function triggerDraftScheduler() {
   ]);
 }
 
-function deletedReadinessFields(FieldValue) {
+export function deletedFf1ReadinessFields(FieldValue) {
   return Object.fromEntries(READINESS_FIELDS.map((field) => [field, FieldValue.delete()]));
 }
 
-async function assertSyntheticFixtureSafety(firestore) {
+export async function assertSyntheticFf1FixtureSafety(firestore) {
   const leagueRef = firestore.doc(`leagues/${D1N_FIXTURE_LEAGUE_ID}`);
   const draftRef = firestore.doc(`leagues/${D1N_FIXTURE_LEAGUE_ID}/draft/current`);
   const [leagueSnapshot, draftSnapshot, picksSnapshot, overridesSnapshot, availabilitySnapshot] =
@@ -228,8 +233,8 @@ async function assertSyntheticFixtureSafety(firestore) {
   };
 }
 
-async function prepareSyntheticReadinessRun(firestore, FieldValue, scheduledStartAt) {
-  const { commissionerId, draftRef } = await assertSyntheticFixtureSafety(firestore);
+export async function prepareSyntheticFf1ReadinessRun(firestore, FieldValue, scheduledStartAt) {
+  const { commissionerId, draftRef } = await assertSyntheticFf1FixtureSafety(firestore);
   assert.equal(typeof commissionerId, 'string');
   assert.ok(commissionerId.length > 0);
 
@@ -258,7 +263,7 @@ async function prepareSyntheticReadinessRun(firestore, FieldValue, scheduledStar
     transaction.set(
       draftRef,
       {
-        ...deletedReadinessFields(FieldValue),
+        ...deletedFf1ReadinessFields(FieldValue),
         status: 'scheduled',
         scheduledStartAt,
         startedAt: null,
@@ -281,10 +286,10 @@ async function prepareSyntheticReadinessRun(firestore, FieldValue, scheduledStar
   return draftRef;
 }
 
-async function restoreSafeSyntheticDraft(draftRef, FieldValue) {
+export async function restoreSafeSyntheticFf1Draft(draftRef, FieldValue) {
   await draftRef.set(
     {
-      ...deletedReadinessFields(FieldValue),
+      ...deletedFf1ReadinessFields(FieldValue),
       status: 'scheduled',
       scheduledStartAt: new Date(Date.now() + SAFE_RESET_OFFSET_MILLISECONDS),
       startedAt: null,
@@ -343,12 +348,12 @@ export async function runFf1DraftReadinessStagingEvidence(environment = process.
     assert.equal(app.options.projectId, D1N_STAGING_PROJECT_ID);
     const firestore = getFirestore(app);
     const scheduledStartAt = new Date(Date.now() + EVIDENCE_START_OFFSET_MILLISECONDS);
-    draftRef = await prepareSyntheticReadinessRun(firestore, FieldValue, scheduledStartAt);
+    draftRef = await prepareSyntheticFf1ReadinessRun(firestore, FieldValue, scheduledStartAt);
 
-    triggerDraftScheduler();
-    triggerDraftScheduler();
+    triggerFf1DraftScheduler();
+    triggerFf1DraftScheduler();
 
-    const preparingDraft = await waitForSnapshot(
+    const preparingDraft = await waitForFf1ReadinessSnapshot(
       () => draftRef.get(),
       (snapshot) => {
         const data = snapshot.data() ?? {};
@@ -365,13 +370,13 @@ export async function runFf1DraftReadinessStagingEvidence(environment = process.
     assert.notEqual(preparing.serverDraftReadinessStatus, 'error');
     assert.equal(preparing.status, 'scheduled');
     assert.equal(preparing.clockStatus, 'stopped');
-    assert.match(preparing.serverDraftReadinessAvailabilityRevision, SHA256_PATTERN);
+    assert.match(preparing.serverDraftReadinessAvailabilityRevision, FF1_READINESS_SHA256_PATTERN);
     assert.equal(typeof preparing.serverDraftReadinessProjectionRequestId, 'string');
     const requestId = preparing.serverDraftReadinessProjectionRequestId;
     const requestRef = firestore.doc(`projectionGenerationRequests/${requestId}`);
-    const terminalRequest = await waitForSnapshot(
+    const terminalRequest = await waitForFf1ReadinessSnapshot(
       () => requestRef.get(),
-      (snapshot) => TERMINAL_REQUEST_STATUSES.has(snapshot.data()?.status ?? ''),
+      (snapshot) => FF1_READINESS_TERMINAL_REQUEST_STATUSES.has(snapshot.data()?.status ?? ''),
       timeoutMilliseconds,
       'The Projection V11 readiness task',
     );
@@ -381,11 +386,11 @@ export async function runFf1DraftReadinessStagingEvidence(environment = process.
     assert.equal(request.leagueId, D1N_FIXTURE_LEAGUE_ID);
     assert.equal(request.generationReason, 'pre-draft');
     assert.equal(request.availabilityRevision, preparing.serverDraftReadinessAvailabilityRevision);
-    assert.match(request.snapshotContentHash, SHA256_PATTERN);
+    assert.match(request.snapshotContentHash, FF1_READINESS_SHA256_PATTERN);
 
-    triggerDraftScheduler();
+    triggerFf1DraftScheduler();
 
-    const readyDraftSnapshot = await waitForSnapshot(
+    const readyDraftSnapshot = await waitForFf1ReadinessSnapshot(
       () => draftRef.get(),
       (snapshot) => snapshot.data()?.serverDraftReadinessStatus === 'ready',
       timeoutMilliseconds,
@@ -411,8 +416,8 @@ export async function runFf1DraftReadinessStagingEvidence(environment = process.
       attemptCount: readyDraft.serverDraftReadinessAttemptCount,
     };
 
-    triggerDraftScheduler();
-    triggerDraftScheduler();
+    triggerFf1DraftScheduler();
+    triggerFf1DraftScheduler();
     await wait(10_000);
 
     const [duplicateDraftSnapshot, picksSnapshot] = await Promise.all([
@@ -449,7 +454,7 @@ export async function runFf1DraftReadinessStagingEvidence(environment = process.
     });
   } finally {
     if (draftRef) {
-      await restoreSafeSyntheticDraft(draftRef, FieldValue);
+      await restoreSafeSyntheticFf1Draft(draftRef, FieldValue);
     }
     await deleteApp(app);
   }

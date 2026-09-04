@@ -104,8 +104,12 @@ build:all`, `git diff --check`, and the clean-source guard from a clean commit.
   stopped. This proves the missing-freshness path fails closed.
 - The shared D1N fixture now emits the exact current-UTC-day success evidence
   (`lastSuccessfulSyncAt` and `lastDailySyncKey`) required to exercise the
-  positive readiness path. Positive, changed-input, retry, duplicate-delivery,
-  reschedule, reconnect, rollback, and six-manager evidence remain open.
+  positive readiness path. On exact staging source `e0a69017`, FF1.20 reached
+  ready before zero on attempt one without a browser, retained one
+  request/snapshot identity under duplicate delivery, kept the clock stopped,
+  created no pick, and reset safely. Changed-input, retry, reschedule,
+  reconnect, rollback, and six-manager evidence remain open under FF1.21 and
+  the later lifecycle rehearsal.
 
 ## Staging release boundary
 

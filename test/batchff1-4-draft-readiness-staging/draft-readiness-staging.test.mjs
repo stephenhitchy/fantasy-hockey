@@ -129,15 +129,15 @@ test('the runner is no-browser, duplicate-safe, audit-preserving, and always res
   );
   assert.match(source, /readCleanGitRevision\(\)/);
   assert.match(source, /verifyFf1ReadinessStagingManifest\(sourceRevision\)/);
-  assert.match(source, /triggerDraftScheduler\(\);[\s\S]*?triggerDraftScheduler\(\);/);
+  assert.match(source, /triggerFf1DraftScheduler\(\);[\s\S]*?triggerFf1DraftScheduler\(\);/);
   assert.match(source, /assert\.deepEqual\(duplicateIdentity, stableIdentity\)/);
   assert.match(source, /picksSnapshot\.empty, true/);
   assert.match(source, /record\?\.updatedBy === 'd1n-local-fixture'/);
   assert.match(source, /draft\.roundOneOrder\[0\][\s\S]*?commissionerId/);
-  assert.match(source, /finally \{[\s\S]*?restoreSafeSyntheticDraft/);
+  assert.match(source, /finally \{[\s\S]*?restoreSafeSyntheticFf1Draft/);
   assert.match(source, /SAFE_RESET_OFFSET_MILLISECONDS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.ok(
-    source.indexOf('await restoreSafeSyntheticDraft') < source.indexOf('await deleteApp(app)'),
+    source.indexOf('await restoreSafeSyntheticFf1Draft') < source.indexOf('await deleteApp(app)'),
   );
   assert.doesNotMatch(source, /firebase\s+deploy/);
   assert.doesNotMatch(source, /functions:|hosting:app|firestore:rules/);
