@@ -1,6 +1,7 @@
 # FF1.19 — Server Draft Readiness Before Zero
 
-Status: source implementation candidate; staging evidence and independent review are still required.
+Status: merged and deployed to the isolated staging project on exact source
+`aa59ac7b02e98b40467268d4a56972780d646873`; staging evidence is in progress.
 
 ## Problem
 
@@ -92,9 +93,23 @@ Source and emulator/fixture coverage must prove:
 The inherited gate is `npm run verify:batchff1-3`, followed by `npm run
 build:all`, `git diff --check`, and the clean-source guard from a clean commit.
 
+## Staging evidence to date
+
+- The live staging manifest exactly matched
+  `aa59ac7b02e98b40467268d4a56972780d646873`. All three targeted Functions were
+  independently confirmed ACTIVE after the clean, targeted deployment; exact
+  source attribution relies on that deployment's clean-source guard and log.
+- A no-browser minute-worker execution found the scheduled synthetic Draft and
+  persisted `waiting-injury` while leaving the Draft scheduled and its clock
+  stopped. This proves the missing-freshness path fails closed.
+- The shared D1N fixture now emits the exact current-UTC-day success evidence
+  (`lastSuccessfulSyncAt` and `lastDailySyncKey`) required to exercise the
+  positive readiness path. Positive, changed-input, retry, duplicate-delivery,
+  reschedule, reconnect, rollback, and six-manager evidence remain open.
+
 ## Staging release boundary
 
-After independent review and a clean exact commit, deploy only:
+The staging implementation release used only:
 
 - `functions:processProjectionGenerationTask`
 - `functions:runScheduledDraftAutomation`

@@ -184,20 +184,24 @@ iPhone/Android evidence and D1N-C-B task generator remain open.
 
 The compact Draft cards, bounded injury/return presentation, player
 headshot-with-team-badge identity, and FF1.18 one-hour Draft lobby are merged.
-The lobby is deployed on exact staging source `26d91536`. Authenticated 319px
-and desktop presentation, keyboard focus, hard reload, listener cleanup, and
-duplicate-tab private-queue convergence passed. Exact 390/430, all-theme, 200%
-zoom, controlled reconnect, and physical-device coverage remain open.
+Authenticated 319px and desktop presentation, keyboard focus, hard reload,
+listener cleanup, and duplicate-tab private-queue convergence passed. Exact
+390/430, all-theme, 200% zoom, controlled reconnect, and physical-device
+coverage remain open.
 
 The lobby is presentation-only until the authoritative scheduled start. Picks,
 clock start/pause/resume, and Auto-Draft controls remain live-only; the existing
-server-authoritative Draft checks still gate every pick. FF1.19 is now a
-separate source candidate on `codex/ff1-draft-readiness`: the existing minute
-worker prepares during the 20-minute window, binds a deterministic Projection
-V11 request to the exact schedule and hashed availability input, and starts the
-clock only with the exact verified request/snapshot/hash. It adds no queue or
-worker-limit change. Independent review and targeted staging evidence remain
-required before merge or Draft authorization.
+server-authoritative Draft checks still gate every pick. FF1.19 is merged and
+its exact `aa59ac7b` Hosting manifest plus three ACTIVE targeted staging
+Functions were verified after the clean deployment. The existing minute worker
+prepares during the 20-minute window, binds a
+deterministic Projection V11 request to the exact schedule and hashed
+availability input, and starts the clock only with the exact verified
+request/snapshot/hash. The first no-browser execution correctly persisted
+`waiting-injury` and kept the clock stopped when the synthetic fixture lacked
+fresh daily injury evidence. The fixture now carries that evidence for the
+remaining positive and adversarial staging matrix. No queue or worker limit
+changed, and real Draft authorization remains blocked on the evidence below.
 
 ## Release and deployment rules
 
@@ -213,7 +217,8 @@ required before merge or Draft authorization.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command for the FF1.19 candidate is
+- The inherited exact-source verification command for FF1.19 and its staging
+  evidence fixture is
   `npm run verify:batchff1-3`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
@@ -244,24 +249,19 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review the FF1.19 source candidate, merge only if clean, then
-   deploy the exact clean commit to staging using only
-   `functions:processProjectionGenerationTask`,
-   `functions:runScheduledDraftAutomation`, `functions:executeDraftCommand`,
-   and `hosting:app`.
-2. Prove no-browser T-20 preparation, exact ready-before-zero behavior,
+1. Prove no-browser T-20 preparation, exact ready-before-zero behavior,
    missing/stale/changed injury input, task failure and bounded retry,
    duplicate delivery, reschedule, reconnect, and rollback on staging.
-3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-5. Record the no-post-Draft-replacement or account-transfer decision.
-6. Generate and independently review the D1J season-freeze kit, exact tag,
+4. Record the no-post-Draft-replacement or account-transfer decision.
+5. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

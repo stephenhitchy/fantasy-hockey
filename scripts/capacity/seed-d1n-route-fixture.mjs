@@ -595,6 +595,8 @@ export function buildD1nFixtureDocuments(
   documents.set('appData/playerAvailability', {
     schemaVersion: 1,
     status: 'success',
+    lastSuccessfulSyncAt: now,
+    lastDailySyncKey: now.toISOString().slice(0, 10),
     records: projectionAssets
       .filter((asset) => asset.assetType === 'skater')
       .slice(0, 20)

@@ -165,6 +165,12 @@ test('D1N Draft fixture covers portraits, injury timing, team changes, queue sta
     projectionChunk.assets.map((asset) => [asset.assetKey, asset]),
   );
 
+  assert.equal(availability.status, 'success');
+  assert.deepEqual(
+    availability.lastSuccessfulSyncAt,
+    new Date('2026-09-01T00:00:00Z'),
+  );
+  assert.equal(availability.lastDailySyncKey, '2026-09-01');
   assert.deepEqual(commissionerQueue.assetKeys, ['skater:10000']);
   assert.deepEqual(assetsByKey.get('skater:10000').player, {
     id: 10_000,
