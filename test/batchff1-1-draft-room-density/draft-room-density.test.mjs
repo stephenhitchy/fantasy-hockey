@@ -282,7 +282,7 @@ test('the roadmap separates completed source behavior from lobby and start-readi
   assert.equal(roadmap, docsRoadmap);
   assert.match(roadmap, /\[~\] FF1\.17 Reduce Draft Room decision density/);
   assert.match(roadmap, /\[~\] FF1\.18 One-hour pre-Draft lobby is merged and deployed/);
-  assert.match(roadmap, /\[~\] FF1\.19 Server-owned pre-start readiness is implemented as a source candidate/);
+  assert.match(roadmap, /\[~\] FF1\.19 Server-owned pre-start readiness is merged and deployed to isolated staging/);
   assert.match(taskDoc, /source implementation complete; independent review and authenticated visual evidence pending/);
   assert.match(taskDoc, /only changed runtime resource is\s+`hosting:app`/);
   assert.match(taskDoc, /intentionally not implemented in this Hosting-only\s+slice/);

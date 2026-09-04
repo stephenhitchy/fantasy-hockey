@@ -217,9 +217,8 @@ changed, and real Draft authorization remains blocked on the evidence below.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command for FF1.19 and its staging
-  evidence fixture is
-  `npm run verify:batchff1-3`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.20 staging
+  evidence runner is `npm run verify:batchff1-4`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -251,7 +250,10 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 1. Prove no-browser T-20 preparation, exact ready-before-zero behavior,
    missing/stale/changed injury input, task failure and bounded retry,
-   duplicate delivery, reschedule, reconnect, and rollback on staging.
+   duplicate delivery, reschedule, reconnect, and rollback on staging. The
+   FF1.20 source candidate automates the positive no-browser/duplicate portion
+   and guarantees a safe synthetic reset; changed-input and forced-retry
+   exercises remain separate.
 2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
 3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
