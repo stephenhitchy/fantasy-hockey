@@ -49,6 +49,13 @@ League HQ sends both commissioners and managers to the scheduled Draft page. Wit
 
 Existing client-health evidence continues to record the Draft listeners, first snapshots, cache/server origin, reconnects, pending writes, navigation cleanup, and listener lifetime. Existing competitive-action evidence records queue actions and all live Draft operations. No user, league, team, player, game, or queue identifier is added to telemetry by this slice.
 
+The guarded D1N emulator and staging seeders accept
+`D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES` only as an integer from 1 through
+10,080. The default remains seven days. A bounded value such as `45` places the
+synthetic scheduled Draft inside the presentation-only lobby window without a
+manual Firestore edit. The staging seeder retains its exact non-production
+project, acknowledgement, and secret-password requirements.
+
 ## Deployment boundary and rollback
 
 After independent review, a clean commit, successful inherited gate/build, and exact live-manifest verification, staging and eventual production require only a targeted `hosting:app` deployment.

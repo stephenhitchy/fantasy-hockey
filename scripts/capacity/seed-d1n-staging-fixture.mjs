@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import {
   buildD1nFixtureDocuments,
   D1N_FIXTURE_EMAIL,
+  resolveD1nFixtureDraftStartOffsetMinutes,
   resolveD1nFixtureDraftStatus,
 } from './seed-d1n-route-fixture.mjs';
 import { D1N_STAGING_PROJECT_ID } from './prepare-d1n-staging-hosting.mjs';
@@ -50,6 +51,7 @@ export function assertD1nStagingSeedSafety(environment = process.env) {
   return {
     password,
     draftStatus: resolveD1nFixtureDraftStatus(environment),
+    draftStartOffsetMinutes: resolveD1nFixtureDraftStartOffsetMinutes(environment),
   };
 }
 
@@ -94,6 +96,7 @@ export async function seedD1nStagingFixture(environment = process.env) {
 
     const fixture = buildD1nFixtureDocuments(user.uid, new Date(), {
       draftStatus: safety.draftStatus,
+      draftStartOffsetMinutes: safety.draftStartOffsetMinutes,
     });
     const firestore = getFirestore(app);
     const writer = firestore.bulkWriter();
@@ -109,6 +112,7 @@ export async function seedD1nStagingFixture(environment = process.env) {
       leagueId: 'd1n-capacity-league',
       email: D1N_FIXTURE_EMAIL,
       draftStatus: safety.draftStatus,
+      draftStartOffsetMinutes: safety.draftStartOffsetMinutes,
       ...fixture.aggregate,
     };
   } finally {

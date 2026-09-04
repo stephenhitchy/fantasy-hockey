@@ -10,6 +10,9 @@ const PROJECTION_ASSET_COUNT = 100;
 const ACTIVITY_COUNT = 20;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const DRAFT_STATUSES = new Set(['live', 'scheduled']);
+const DEFAULT_DRAFT_START_OFFSET_MINUTES = 7 * 24 * 60;
+const MIN_DRAFT_START_OFFSET_MINUTES = 1;
+const MAX_DRAFT_START_OFFSET_MINUTES = 7 * 24 * 60;
 const DRAFT_VISUAL_FIXTURE_ASSETS = new Map([
   [1, {
     fullName: 'Fixture Healthy Headshot',
@@ -82,6 +85,34 @@ export function resolveD1nFixtureDraftStatus(environment = process.env) {
   }
 
   return status;
+}
+
+export function resolveD1nFixtureDraftStartOffsetMinutes(environment = process.env) {
+  const rawOffset = environment.D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES?.trim();
+
+  if (!rawOffset) {
+    return DEFAULT_DRAFT_START_OFFSET_MINUTES;
+  }
+
+  if (!/^\d+$/.test(rawOffset)) {
+    throw new Error(
+      `D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES must be an integer from ${MIN_DRAFT_START_OFFSET_MINUTES} to ${MAX_DRAFT_START_OFFSET_MINUTES}.`,
+    );
+  }
+
+  const offsetMinutes = Number(rawOffset);
+
+  if (
+    !Number.isSafeInteger(offsetMinutes) ||
+    offsetMinutes < MIN_DRAFT_START_OFFSET_MINUTES ||
+    offsetMinutes > MAX_DRAFT_START_OFFSET_MINUTES
+  ) {
+    throw new Error(
+      `D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES must be an integer from ${MIN_DRAFT_START_OFFSET_MINUTES} to ${MAX_DRAFT_START_OFFSET_MINUTES}.`,
+    );
+  }
+
+  return offsetMinutes;
 }
 
 function emulatorUrl(endpoint, pathname) {
@@ -317,10 +348,23 @@ function buildProjectionAssets(now) {
 export function buildD1nFixtureDocuments(
   commissionerId,
   now = new Date(),
-  { draftStatus = 'live' } = {},
+  {
+    draftStatus = 'live',
+    draftStartOffsetMinutes = DEFAULT_DRAFT_START_OFFSET_MINUTES,
+  } = {},
 ) {
   if (!DRAFT_STATUSES.has(draftStatus)) {
     throw new Error('The D1N fixture draft status must be live or scheduled.');
+  }
+
+  if (
+    !Number.isSafeInteger(draftStartOffsetMinutes) ||
+    draftStartOffsetMinutes < MIN_DRAFT_START_OFFSET_MINUTES ||
+    draftStartOffsetMinutes > MAX_DRAFT_START_OFFSET_MINUTES
+  ) {
+    throw new Error(
+      `The D1N fixture Draft start offset must be an integer from ${MIN_DRAFT_START_OFFSET_MINUTES} to ${MAX_DRAFT_START_OFFSET_MINUTES} minutes.`,
+    );
   }
 
   const ownerIds = [
@@ -471,7 +515,7 @@ export function buildD1nFixtureDocuments(
     draftedAssetKeys: [],
     scheduledStartAt:
       draftStatus === 'scheduled'
-        ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+        ? new Date(now.getTime() + draftStartOffsetMinutes * 60 * 1000)
         : null,
     pickSeconds: 120,
     clockStatus: 'paused',
